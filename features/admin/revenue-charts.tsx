@@ -65,6 +65,7 @@ export function RevenueCharts({
   const clicks: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.clicks }));
   const visits: AreaPoint[] = slice(visitors ?? []).map((d) => ({ label: fmtDay(d.date), value: d.visitors }));
   const downloads: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.downloads }));
+  const installs: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.installs }));
   const newVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.newVisitors }));
   const returningVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.returningVisitors }));
 
@@ -74,6 +75,27 @@ export function RevenueCharts({
   const totalNewVisitors = newVisitors.reduce((n, p) => n + p.value, 0);
   const totalReturningVisitors = returningVisitors.reduce((n, p) => n + p.value, 0);
   const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : null;
+
+  /*
+    Installs today / this week / this month (owner, 2026-08-23: "how many
+    installs was made that day, week, month").
+
+    Summed off the SAME gap-free daily grid the chart draws, so the tiles and
+    the line can never disagree — a separate query for the tiles is how two
+    numbers describing one thing start drifting apart, which this dashboard has
+    already had to fix once (see the `analytics_downloads` sourcing note in
+    lib/monetization/revenue-series.ts).
+
+    Trailing windows, not calendar ones: "last 7 days" is comparable on any day
+    of the week, whereas a calendar week reads as a collapse every Monday
+    morning for no real reason. `series.days` is UTC and oldest-first, so the
+    tail is the most recent N days.
+  */
+  const tail = (n: number) => series.days.slice(Math.max(0, series.days.length - n));
+  const sumInstalls = (n: number) => tail(n).reduce((sum, d) => sum + d.installs, 0);
+  const installsToday = sumInstalls(1);
+  const installsWeek = sumInstalls(7);
+  const installsMonth = sumInstalls(30);
 
   return (
     <section className="rounded-3xl border border-border bg-card p-5 shadow-card sm:p-6">
@@ -216,6 +238,62 @@ export function RevenueCharts({
           slot={4}
           className={visits.length > 0 ? undefined : "lg:col-span-2"}
         />
+
+        {/*
+          App installs — the same treatment downloads and visitors get (owner,
+          2026-08-23). Counted from `pwa_installed`, the browser's own
+          `appinstalled` event, so it is completed installs rather than taps on
+          our Install button.
+
+          `slot={3}`: the palette has four entries keyed to the MEASURE, and
+          installs sit in the same "audience growth" family as the visitor
+          charts rather than inventing a fifth colour the tokens do not define.
+        */}
+        <AdminAreaChart
+          title="App installs"
+          subtitle={`${installsMonth.toLocaleString()} in the last 30 days · Android & desktop only`}
+          points={installs}
+          slot={3}
+          className={visits.length > 0 ? undefined : "lg:col-span-2"}
+        />
+      </div>
+
+      {/*
+        The three windows the owner asked for, read straight off the chart's own
+        grid. Rendered UNDER the chart for the same reason the charts sit under
+        the revenue tiles: the line answers "how did we get here", these answer
+        "where are we now", and that is the order somebody reads them in.
+      */}
+      <div className="mt-5 rounded-2xl border border-border/70 bg-secondary/25 p-4">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <p className="text-sm font-bold">App installs</p>
+          <p className="text-xs text-muted-foreground">Completed installs, trailing windows</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Today", value: installsToday },
+            { label: "Last 7 days", value: installsWeek },
+            { label: "Last 30 days", value: installsMonth },
+          ].map((s) => (
+            <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
+              <p className="text-2xl font-extrabold tabular-nums tracking-tight">
+                {s.value.toLocaleString()}
+              </p>
+              <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
+        {/*
+          Stated on the panel, not buried in a comment: iOS fires no install
+          event of any kind (Apple exposes nothing about Add to Home Screen), so
+          this is an undercount rather than a total. An operator reading a
+          dashboard deserves to know which way a number is wrong.
+        */}
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+          Counted from the browser&rsquo;s own install event, so these are installs that
+          finished — not taps on the Install button. iPhone and iPad report nothing when
+          someone adds Frenz to their Home Screen, so real installs are higher than this.
+        </p>
       </div>
     </section>
   );

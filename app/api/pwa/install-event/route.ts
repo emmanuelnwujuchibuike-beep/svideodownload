@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { trackEvent } from "@/lib/analytics/events";
+import { notifyAdminsOfInstall } from "@/lib/analytics/install-alert";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,6 +46,26 @@ export async function POST(request: Request) {
 
   const { event, platform } = parsed.data;
   trackEvent(event, { userId, metadata: platform ? { platform } : undefined });
+
+  /*
+    Push the admins on a COMPLETED install (owner, 2026-08-23: "let a push
+    notification be sent to the admin on every install").
+
+    Gated on `pwa_installed` specifically — the browser's own `appinstalled`
+    event — not on `pwa_install_accepted`, which only means somebody tapped
+    Install in our sheet and can still be followed by the OS cancelling. An
+    alert that fires on intent would tell the owner about installs that never
+    happened.
+
+    Deliberately NOT awaited: this is a fire-and-forget beacon called with
+    `keepalive` from a page that is often mid-unload, and the client discards
+    the response. Blocking it on a push fan-out would add latency to a request
+    nobody is waiting for, and `notifyAdminsOfInstall` already swallows its own
+    failures.
+  */
+  if (event === "pwa_installed") {
+    void notifyAdminsOfInstall({ platform: platform ?? null, userId });
+  }
 
   return NextResponse.json({ ok: true });
 }

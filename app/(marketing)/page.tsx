@@ -7,7 +7,6 @@ import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { ProductGrid } from "@/components/landing/product-grid";
 import { PlatformShowcase } from "@/components/landing/platform-showcase";
-import { StatsCounter } from "@/components/landing/stats-counter";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
@@ -192,8 +191,16 @@ export default function HomePage() {
           affordance this codebase keeps having to remove.
         */}
 
-        {/* Stats band (four-up icons). */}
-        <StatsCounter />
+        {/*
+          🔴 REMOVED 2026-08-23 — the four-up stats band (owner).
+
+          "12 Platforms supported" was real (derived from the registry), but it
+          sat beside "4 Watermark-free sources" and "17 Features shipped" —
+          numbers a visitor cannot check and that read as invented, which is
+          exactly the pattern flagged in the standing no-fabricated-stats rule.
+          A counter nobody can verify costs more trust than it buys, and the
+          platform count is already stated honestly by PlatformShowcase below.
+        */}
 
         {/* Everything you need — the six-feature grid. */}
         <FeaturesGrid />

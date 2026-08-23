@@ -63,6 +63,19 @@ export function AppTopbar() {
     point regardless of sign-in state.
   */
   const onFeedIndex = pathname === "/feed";
+  /*
+    The full product name in the Downloads header (owner, 2026-08-23: "put the
+    text frenzsave with the brand style like it is with the brand text frenz…
+    in the top header in the download page close to the search icon").
+
+    Scoped to /downloads rather than shown app-wide, because this bar is shared
+    by every signed-in surface and the ones that are a FEED — feed, reels,
+    messages — deliberately give their middle slot to their own tabs. Dropping a
+    wordmark beside those would compete with the thing the screen is actually
+    about. Downloads is the app's front door and the only one of them with an
+    empty space next to the search icon.
+  */
+  const onDownloads = pathname === "/downloads";
   const inputRef = useRef<HTMLInputElement | null>(null);
   // The feed lifts its For You/Following control up here (owner spec) —
   // every other page's search bar is untouched, since only the feed ever
@@ -152,6 +165,21 @@ export function AppTopbar() {
             </IconTile>
           </Link>
         </PressIcon>
+        {/*
+          The wordmark, in the same `text-gradient` the `Frenz` lockup uses
+          (components/brand/frenz-logo.tsx), so it reads as one brand rather
+          than a second treatment of the same name. Text only — no mark: the
+          logo is already the app icon this screen was launched from, and
+          repeating it here would announce the brand twice in one bar.
+        */}
+        {onDownloads ? (
+          <Link
+            href="/downloads"
+            className="text-gradient shrink-0 text-[17px] font-bold tracking-tight"
+          >
+            Frenzsave
+          </Link>
+        ) : null}
         {/*
           🔴 CREATE, MOVED HERE FROM THE BOTTOM NAV (owner, 2026-08-16: "move
           the + button to top just like [Facebook/Instagram] style, don't

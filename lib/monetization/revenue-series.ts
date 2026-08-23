@@ -56,6 +56,22 @@ export interface DayPoint {
   /** Completed downloads (owner, 2026-08-16: "make a download chart in
    *  revenue just like visitors, ad clicks and impression chart"). */
   downloads: number;
+  /**
+   * PWA installs actually COMPLETED (owner, 2026-08-23: "how many installs were
+   * made that day, week, month like download, visitors").
+   *
+   * Counts `pwa_installed` only — the browser's own `appinstalled` event, which
+   * fires on real success and nothing else. Deliberately NOT
+   * `pwa_install_accepted`: that records the moment somebody taps "Install" in
+   * our sheet, and an install can still fail or be cancelled by the OS after
+   * that point. Counting the tap would inflate the number with intentions.
+   *
+   * Honest limit, worth knowing before reading the chart: iOS fires no
+   * equivalent event at all — Apple gives web pages no visibility into
+   * Add-to-Home-Screen — so this line is Chromium (Android + desktop) installs.
+   * It undercounts total installs rather than guessing at the iOS share.
+   */
+  installs: number;
 }
 
 export interface RevenueSeries {
@@ -90,7 +106,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
-    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0 });
+    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0, installs: 0 });
   }
 
   const empty: RevenueSeries = { days: [...grid.values()], capped: false, rangeDays: days };
@@ -136,7 +152,30 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
         ROW_CAP,
       );
 
-    const [impr, clicks, dl] = await Promise.all([pull("ad_impressions"), pull("ad_clicks"), pullDownloads()]);
+    /*
+      Installs come from the unified `events` table, filtered to the one event
+      that means an install really happened. Same paging discipline as the rest:
+      PostgREST caps a response at 1000 rows whatever `.limit()` says.
+    */
+    const pullInstalls = async () =>
+      paginatedSelect<{ created_at: string }>(
+        (from, to) =>
+          db
+            .from("events")
+            .select("created_at")
+            .eq("type", "pwa_installed")
+            .gte("created_at", since)
+            .order("created_at", { ascending: true })
+            .range(from, to),
+        ROW_CAP,
+      );
+
+    const [impr, clicks, dl, inst] = await Promise.all([
+      pull("ad_impressions"),
+      pull("ad_clicks"),
+      pullDownloads(),
+      pullInstalls(),
+    ]);
 
     for (const r of impr.rows) {
       const cell = grid.get(r.created_at.slice(0, 10));
@@ -150,8 +189,16 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       const cell = grid.get(r.created_at.slice(0, 10));
       if (cell) cell.downloads += 1;
     }
+    for (const r of inst.rows) {
+      const cell = grid.get(r.created_at.slice(0, 10));
+      if (cell) cell.installs += 1;
+    }
 
-    return { days: [...grid.values()], capped: impr.capped || clicks.capped || dl.capped, rangeDays: days };
+    return {
+      days: [...grid.values()],
+      capped: impr.capped || clicks.capped || dl.capped || inst.capped,
+      rangeDays: days,
+    };
   } catch {
     // An unmigrated or unreachable table yields the ZERO grid, not an error
     // state: the dashboard still renders, and a flat zero line is honest about

@@ -53,3 +53,15 @@ yarn-error.log*
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# ── Android signing material — NEVER commit ──────────────────────────────────
+# The TWA keystore signs releases as Frenzsave. Anyone holding it can publish an
+# app that Android trusts as ours, and Play will reject a future update signed
+# with a different key — so it is both a security risk and unrecoverable if lost.
+# Kept outside the repo entirely (see docs/ANDROID_APP.md); these patterns exist
+# so an accidental copy into the working tree can never be staged.
+*.keystore
+*.jks
+signing-key-info.txt
+*Google Play package*.zip
+*.aab

@@ -247,6 +247,30 @@ export const config = {
       because a middleware invocation makes the response uncacheable at the edge
       — a static file that could have been served from the CDN never was.
     */
-    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    /*
+      🔴 `.well-known` and `.apk` EXCLUDED 2026-08-23 — both are Android-install
+      blockers, and both were silently broken by being matched here.
+
+      • `/.well-known/assetlinks.json` is fetched by ANDROID ITSELF, with no
+        cookies and no browser session, to verify the app owns this domain. A
+        request entering the auth path can be redirected, delayed, or served
+        with `Cache-Control: private` — any of which fails verification, and the
+        only symptom is the installed app showing a Chrome address bar with no
+        error anywhere to explain it. Google's spec also requires this path be
+        served directly, without redirects.
+
+      • `/downloads/frenzsave.apk` is a static binary in `public/`. Every other
+        static asset here is excluded by EXTENSION (svg/png/jpg/…), and `.apk`
+        was simply not on that list — so the APK download was the one static
+        file in the app still routed through Supabase auth. That makes the
+        response uncacheable at the edge (a ~40 MB binary re-fetched from the
+        origin every time) and puts a session round-trip, with its redirect
+        paths, in front of a file the browser is expecting to stream to the
+        download manager.
+
+      Both are public, contain no user data, and have nothing this middleware
+      can usefully do to them.
+    */
+    "/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|opengraph-image|twitter-image|launch.html|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp|apk)$).*)",
   ],
 };

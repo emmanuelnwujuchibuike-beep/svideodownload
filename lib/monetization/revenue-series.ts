@@ -72,6 +72,22 @@ export interface DayPoint {
    * It undercounts total installs rather than guessing at the iOS share.
    */
   installs: number;
+  /**
+   * Rewarded ads STARTED — a visitor chose to watch one to unlock a download
+   * (owner, 2026-08-23: "add reward ad activity in the revenue, the chart and
+   * information like how other revenue information there are").
+   */
+  rewardsStarted: number;
+  /**
+   * Rewarded ads that were VERIFIED and unlocked the download.
+   *
+   * Both halves are charted because the gap between them is the only number
+   * that says whether rewarded ads actually work. Charting completions alone
+   * would look like a flawless funnel by construction — every reward that
+   * exists completed — and hide every abandoned or failed watch, which is the
+   * figure worth acting on. See the note in lib/platform/events-registry.ts.
+   */
+  rewardsGranted: number;
 }
 
 export interface RevenueSeries {
@@ -106,7 +122,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
-    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0, installs: 0 });
+    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0, installs: 0, rewardsStarted: 0, rewardsGranted: 0 });
   }
 
   const empty: RevenueSeries = { days: [...grid.values()], capped: false, rangeDays: days };
@@ -157,6 +173,22 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       that means an install really happened. Same paging discipline as the rest:
       PostgREST caps a response at 1000 rows whatever `.limit()` says.
     */
+    /* Rewarded-ad lifecycle, from the same unified `events` table. One helper
+       for both event types — they differ only by `type`, and two near-identical
+       pagers would be two places to forget the row cap. */
+    const pullEvent = async (type: string) =>
+      paginatedSelect<{ created_at: string }>(
+        (from, to) =>
+          db
+            .from("events")
+            .select("created_at")
+            .eq("type", type)
+            .gte("created_at", since)
+            .order("created_at", { ascending: true })
+            .range(from, to),
+        ROW_CAP,
+      );
+
     const pullInstalls = async () =>
       paginatedSelect<{ created_at: string }>(
         (from, to) =>
@@ -170,11 +202,13 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
         ROW_CAP,
       );
 
-    const [impr, clicks, dl, inst] = await Promise.all([
+    const [impr, clicks, dl, inst, rewardStart, rewardGrant] = await Promise.all([
       pull("ad_impressions"),
       pull("ad_clicks"),
       pullDownloads(),
       pullInstalls(),
+      pullEvent("reward_started"),
+      pullEvent("reward_granted"),
     ]);
 
     for (const r of impr.rows) {
@@ -193,10 +227,18 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       const cell = grid.get(r.created_at.slice(0, 10));
       if (cell) cell.installs += 1;
     }
+    for (const r of rewardStart.rows) {
+      const cell = grid.get(r.created_at.slice(0, 10));
+      if (cell) cell.rewardsStarted += 1;
+    }
+    for (const r of rewardGrant.rows) {
+      const cell = grid.get(r.created_at.slice(0, 10));
+      if (cell) cell.rewardsGranted += 1;
+    }
 
     return {
       days: [...grid.values()],
-      capped: impr.capped || clicks.capped || dl.capped || inst.capped,
+      capped: impr.capped || clicks.capped || dl.capped || inst.capped || rewardStart.capped || rewardGrant.capped,
       rangeDays: days,
     };
   } catch {

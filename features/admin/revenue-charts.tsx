@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, Info } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, Info, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
 import { AdminAreaChart, type AreaPoint } from "@/features/admin/area-chart";
 import type { RevenueSeries } from "@/lib/monetization/revenue-series";
@@ -52,6 +53,8 @@ export function RevenueCharts({
   visitorSplit?: { date: string; newVisitors: number; returningVisitors: number }[];
 }) {
   const [range, setRange] = useState<7 | 30 | 90>(30);
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
 
   // The filter narrows an already-fetched window rather than refetching: at 90
   // days this is 90 numbers, and a round-trip to slice an array is latency for
@@ -66,6 +69,8 @@ export function RevenueCharts({
   const visits: AreaPoint[] = slice(visitors ?? []).map((d) => ({ label: fmtDay(d.date), value: d.visitors }));
   const downloads: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.downloads }));
   const installs: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.installs }));
+  const rewardsStarted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsStarted }));
+  const rewardsGranted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsGranted }));
   const newVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.newVisitors }));
   const returningVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.returningVisitors }));
 
@@ -97,6 +102,22 @@ export function RevenueCharts({
   const installsWeek = sumInstalls(7);
   const installsMonth = sumInstalls(30);
 
+  /*
+    Rewarded-ad activity over the SELECTED range, so these read against the
+    charts directly beneath them rather than a fixed window that would disagree
+    with the line the admin is looking at.
+
+    The completion rate is the point of the pair. It is left null rather than
+    shown as 0% when nobody started one — 0% reads as "rewarded ads are
+    failing", which is a very different statement from "nobody was offered one
+    yet", and this dashboard has a standing rule against printing a number it
+    cannot stand behind.
+  */
+  const totalRewardsStarted = rewardsStarted.reduce((n, p) => n + p.value, 0);
+  const totalRewardsGranted = rewardsGranted.reduce((n, p) => n + p.value, 0);
+  const rewardCompletion =
+    totalRewardsStarted > 0 ? Math.round((totalRewardsGranted / totalRewardsStarted) * 100) : null;
+
   return (
     <section className="rounded-3xl border border-border bg-card p-5 shadow-card sm:p-6">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -106,23 +127,51 @@ export function RevenueCharts({
             Every series below is a counted total. Nothing is projected or estimated.
           </p>
         </div>
-        {/* Filters in ONE row above the charts, and they drive every panel — a
-            per-panel range would let two charts disagree about the window. */}
-        <div role="group" aria-label="Date range" className="flex items-center gap-1 rounded-xl bg-secondary/50 p-1">
-          {([7, 30, 90] as const).map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRange(r)}
-              aria-pressed={range === r}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                range === r ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r}d
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/*
+            Refresh WITHOUT leaving the section (owner, 2026-08-23: "put a
+            refresh button in revenue section so I can refresh revenue stat
+            while still inside the section and see current live stat").
+
+            `router.refresh()` re-runs the server components that fetched this
+            data and swaps in the result — it does NOT remount the page or reset
+            client state, so the selected date range survives and the admin stays
+            exactly where they were scrolled. A full reload would lose both, and
+            re-fetching only this panel would let it disagree with the revenue
+            tiles above it, which read from the same server pass.
+
+            `isPending` comes from a transition, so the spinner reflects the real
+            in-flight fetch rather than a timer guessing at one.
+          */}
+          <button
+            type="button"
+            onClick={() => startTransition(() => router.refresh())}
+            disabled={isPending}
+            aria-label="Refresh revenue statistics"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-secondary/50 px-3 py-2 text-xs font-semibold transition hover:bg-secondary disabled:opacity-60"
+          >
+            <RefreshCw aria-hidden className={cn("h-3.5 w-3.5", isPending && "animate-spin")} />
+            {isPending ? "Refreshing…" : "Refresh"}
+          </button>
+
+          {/* Filters in ONE row above the charts, and they drive every panel — a
+              per-panel range would let two charts disagree about the window. */}
+          <div role="group" aria-label="Date range" className="flex items-center gap-1 rounded-xl bg-secondary/50 p-1">
+            {([7, 30, 90] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRange(r)}
+                aria-pressed={range === r}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                  range === r ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {r}d
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -256,6 +305,65 @@ export function RevenueCharts({
           slot={3}
           className={visits.length > 0 ? undefined : "lg:col-span-2"}
         />
+
+        {/*
+          Rewarded ads, as two charts rather than one (owner, 2026-08-23: "add
+          reward ad activity in the revenue, the chart and information like how
+          other revenue information there are").
+
+          Started and completed are plotted separately, at their own honest
+          scales, for the same reason this whole panel is a grid instead of one
+          multi-line chart: the two series differ in magnitude, and overlaying
+          them would need a second axis — the most misleading thing a chart can
+          do. Read across the shared x-axis; the gap between the lines IS the
+          drop-off.
+        */}
+        <AdminAreaChart
+          title="Reward ads started"
+          subtitle={`${totalRewardsStarted.toLocaleString()} opened in the last ${range} days`}
+          points={rewardsStarted}
+          slot={2}
+        />
+        <AdminAreaChart
+          title="Reward ads completed"
+          subtitle={
+            rewardCompletion === null
+              ? `${totalRewardsGranted.toLocaleString()} verified in the last ${range} days`
+              : `${totalRewardsGranted.toLocaleString()} verified · ${rewardCompletion}% completion`
+          }
+          points={rewardsGranted}
+          slot={1}
+        />
+      </div>
+
+      {/*
+        The reward funnel in numbers, mirroring the installs panel below it so
+        the two read as one family rather than two inventions.
+      */}
+      <div className="mt-5 rounded-2xl border border-border/70 bg-secondary/25 p-4">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <p className="text-sm font-bold">Reward ads</p>
+          <p className="text-xs text-muted-foreground">Last {range} days</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Started", value: totalRewardsStarted.toLocaleString() },
+            { label: "Completed", value: totalRewardsGranted.toLocaleString() },
+            // "—" not "0%" when nothing started: see the note on rewardCompletion.
+            { label: "Completion", value: rewardCompletion === null ? "—" : `${rewardCompletion}%` },
+          ].map((s) => (
+            <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
+              <p className="text-2xl font-extrabold tabular-nums tracking-tight">{s.value}</p>
+              <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+          Counted server-side when a reward session is opened and again when one is verified — never
+          from the ad player&rsquo;s own &ldquo;finished&rdquo; claim, which is exactly what the
+          verification step exists to distrust. Revenue per reward isn&rsquo;t shown because no ad
+          network reports earnings back to this system.
+        </p>
       </div>
 
       {/*

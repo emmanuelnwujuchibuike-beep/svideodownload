@@ -62,8 +62,28 @@ interface PreviewCardProps {
  * Two different numbers on purpose — the owner asked for both. The cap is what
  * a free batch may contain; the threshold is when the product should say why.
  */
+/*
+  🔴 SETTLED 2026-08-23 after two corrections in the same conversation. Final
+  instruction, verbatim: "note, I never said change limit from 20 to 30, leave
+  batch limit to be 20" and "select all should show the upgrade prompt for
+  above 20".
+
+  So BOTH numbers are 20, and they mean two different things:
+   • `FREE_BATCH_SELECT_LIMIT` — the most a free batch may ever contain.
+   • `FREE_SELECT_ALL_PROMPT_AT` — the size above which "Select all" stops
+     silently clamping and shows the upgrade sheet instead.
+
+  They are kept as separate constants even though they currently share a value,
+  because they answer different questions and have already been set apart once.
+  Collapsing them into one would make the next change to either silently move
+  the other.
+
+  🔴 The sheet is an UPGRADE prompt, never an error (owner was explicit: "not
+  an error prompt, show error or anything like that"). Hitting a plan ceiling
+  is a sales moment; an error toast frames a working product as broken.
+*/
 const FREE_BATCH_SELECT_LIMIT = 20;
-const FREE_SELECT_ALL_PROMPT_AT = 30;
+const FREE_SELECT_ALL_PROMPT_AT = 20;
 
 export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const videoFormats = useMemo(
@@ -1023,7 +1043,10 @@ function BatchLimitSheet({
           </Link>
           {kind === "selectAll" ? (
             <button type="button" onClick={onSelectMax} className="btn-lux btn-lux-secondary w-full justify-center">
-              Select {FREE_BATCH_SELECT_LIMIT} for free
+              {/* min(), because a 25-item batch can only ever give 20 — but a
+                  22-item one gives 20 too, and "Select 20" must not appear on a
+                  batch that has fewer than that. */}
+              Select {Math.min(total, FREE_BATCH_SELECT_LIMIT)} for free
             </button>
           ) : (
             <button type="button" onClick={onClose} className="btn-lux btn-lux-secondary w-full justify-center">

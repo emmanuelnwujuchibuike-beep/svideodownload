@@ -86,14 +86,84 @@ export async function POST(request: Request) {
     So the write and the notification are now independent. The email goes out
     whatever the database does, and says so when the row could not be kept.
   */
+  /*
+    🔴 FIND-THEN-WRITE, NOT `upsert({ onConflict })` (owner, 2026-08-23:
+    "rating doesn't show in admin, all previous ratings aren't showing
+    anything").
+
+    This was silently discarding EVERY rating ever submitted. Migration 0111
+    dedupes with two PARTIAL unique indexes — `(user_id) WHERE user_id IS NOT
+    NULL` and `(visitor_id) WHERE user_id IS NULL AND visitor_id IS NOT NULL` —
+    which is the right model (a guest who later signs in must not be blocked,
+    and one null user_id must not block every guest). But PostgreSQL can only
+    infer a PARTIAL index for `ON CONFLICT` when the statement repeats that
+    index's WHERE predicate, and PostgREST has no way to send one. So every
+    write raised 42P10, "there is no unique or exclusion constraint matching
+    the ON CONFLICT specification".
+
+    Reproduced directly against the live database before changing anything:
+    the old upsert returned 400/42P10 while a plain insert returned 201. The
+    table was present and completely empty, which is why the dashboard looked
+    broken rather than pending — `getRatings` correctly reported "available,
+    zero rows", because that was true.
+
+    The write and the email were already independent (see the note above), so
+    every rating still reached a person — the email was simply the only copy.
+
+    Selecting first is what the partial indexes cost us; they stay, because the
+    alternative is a single constraint that gets the semantics wrong. The
+    unique violation is still caught below, so the index remains the real
+    guarantee and this is only the fast path.
+  */
   let stored = false;
   try {
     const db = createAdminClient();
-    // Matches the partial unique indexes in 0111: a member is unique by
-    // user_id, a guest by visitor_id.
-    const conflict = userId ? "user_id" : "visitor_id";
-    const { error } = await db.from("app_ratings").upsert(row, { onConflict: conflict });
-    stored = !error;
+
+    const findExisting = async (): Promise<string | null> => {
+      if (userId) {
+        const { data } = await db.from("app_ratings").select("id").eq("user_id", userId).maybeSingle();
+        return (data?.id as string | undefined) ?? null;
+      }
+      if (visitorId) {
+        // `is("user_id", null)` mirrors the guest index's predicate exactly —
+        // without it a guest could match a signed-in member's row that happens
+        // to carry the same visitor id from before they created an account.
+        const { data } = await db
+          .from("app_ratings")
+          .select("id")
+          .is("user_id", null)
+          .eq("visitor_id", visitorId)
+          .maybeSingle();
+        return (data?.id as string | undefined) ?? null;
+      }
+      // No identity at all (a guest with cookies blocked): nothing to dedupe
+      // against, so this is always a fresh row. Better a duplicate rating than
+      // a discarded one.
+      return null;
+    };
+
+    const existingId = await findExisting();
+    if (existingId) {
+      const { error } = await db.from("app_ratings").update(row).eq("id", existingId);
+      stored = !error;
+    } else {
+      const { error } = await db.from("app_ratings").insert(row);
+      if (!error) {
+        stored = true;
+      } else if (error.code === "23505") {
+        /*
+          Lost a race: another request inserted this rater's row between the
+          select and the insert. The partial index did its job — treat it as
+          the update it should have been rather than dropping the rating, which
+          is the failure this whole block exists to end.
+        */
+        const raced = await findExisting();
+        if (raced) {
+          const { error: updateError } = await db.from("app_ratings").update(row).eq("id", raced);
+          stored = !updateError;
+        }
+      }
+    }
   } catch {
     stored = false;
   }

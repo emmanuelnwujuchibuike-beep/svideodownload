@@ -4,7 +4,7 @@ import { Check, ChevronRight, Compass, Download, ExternalLink, X } from "lucide-
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
-import { apkAvailable, startApkDownload } from "@/lib/pwa/android-apk";
+import { ANDROID_APK_PATH, apkAvailable } from "@/lib/pwa/android-apk";
 import { recordDecline } from "@/lib/pwa/decline-tracker";
 import { reportInstallEvent } from "@/lib/pwa/install-analytics";
 import { classifyInstallPlatform } from "@/lib/pwa/platform";
@@ -229,7 +229,6 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
   */
   const isAndroid = env.os === "android";
   const [apkStatus, setApkStatus] = useState<"checking" | "ready" | "missing">("checking");
-  const [apkStarted, setApkStarted] = useState(false);
 
   useEffect(() => {
     if (!isAndroid) return;
@@ -241,25 +240,31 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
   }, [isAndroid]);
 
   /*
-    Synchronous. No `await`, no promise, nothing between the tap and the click —
-    see the note above. `void` on the beacon because `reportInstallEvent` is
-    already fire-and-forget; awaiting it here would reintroduce the exact bug.
+    🔴 A REAL ANCHOR THE PERSON TAPS — not a synthesized click (owner,
+    2026-08-23: the sheet showed "Download started" with no download happening).
+
+    The previous attempt built an <a> in JS and called `.click()` on it from a
+    button handler. Verified NOT to be the file or the plumbing: the APK is live
+    in production (200, 1,778,517 bytes, application/vnd.android.package-archive),
+    and the service worker falls through for `.apk` untouched. Android Chrome
+    simply did not honour the synthetic click — and because our code optimistically
+    flipped to a success state straight afterwards, the UI cheerfully announced a
+    download that never began, which is worse than the original failure.
+
+    A genuine tap on a genuine <a href download> has no activation question to
+    get wrong: the browser handles it as a normal link, shows its own download
+    progress and its own "open / install" affordance, which is exactly the
+    native behaviour asked for and far better than anything reimplemented here.
+
+    So no click synthesis, and no self-declared success — the browser owns both.
+    `onClick` only fires the analytics beacon; it never preventDefaults, so the
+    navigation the anchor performs is untouched.
   */
-  const downloadApk = () => {
-    if (apkStatus !== "ready") return;
-    startApkDownload();
-    setApkStarted(true);
+  const onApkTap = () => {
     // An accepted install INTENT — deliberately not `pwa_installed`, which is
     // reserved for the browser's own `appinstalled` event and must keep meaning
     // "the app is actually on the device".
     reportInstallEvent("pwa_install_accepted", platform);
-    /*
-      The sheet deliberately stays OPEN and switches to a "download started"
-      state. Closing instantly was the other half of what read as a failure:
-      Android hands the transfer to the download manager with no visible change
-      on the page, so a sheet that vanishes at the same moment looks like the
-      tap dismissed it rather than started anything.
-    */
   };
 
   const install = async () => {
@@ -348,18 +353,18 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
              wrong instructions entirely. Says what the download is and what
              Android will ask for, because "install blocked" from an unknown
              source is the step people actually get stuck on. */
-          apkStarted ? (
-            <p className="mt-4 rounded-2xl bg-emerald-500/10 px-3 py-2.5 text-[13px] leading-snug text-emerald-700 dark:text-emerald-400">
-              <strong>Download started.</strong> Check your notifications or Downloads folder, open{" "}
-              <span className="font-mono">frenzsave.apk</span>, and tap Install. If Android warns
-              about an unknown source, allow it for your browser and tap Install again.
-            </p>
-          ) : (
-            <p className="mt-4 rounded-2xl bg-secondary/45 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
-              Downloads the Frenz app (.apk). Android will ask you to confirm the install — if it
-              warns about an unknown source, allow it for your browser and tap Install.
-            </p>
-          )
+          /*
+            One quiet line, and no self-declared success state (owner: the green
+            "Download started" panel "looks unprofessional… it should show the
+            download progress"). The browser already shows real progress and a
+            real "open" action in its own download UI — reimplementing that from
+            a page that cannot observe the transfer would only ever be a
+            decoration that guesses.
+          */
+          <p className="mt-4 rounded-2xl bg-secondary/45 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
+            Downloads the Frenz app (.apk). If Android warns about an unknown source, allow it for
+            your browser, then tap Install.
+          </p>
         ) : canPromptNatively ? (
           <p className="mt-4 rounded-2xl bg-secondary/45 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
             One tap — {env.label.split(" on ")[0]} will ask you to confirm, then Frenz appears with your
@@ -408,21 +413,30 @@ export function InstallModal({ onClose }: { onClose: () => void }) {
                Disabled only while the on-open availability check is still in
                flight, which is a single HEAD request — never gated on an await
                that runs INSIDE the tap. */
-            apkStarted ? (
-              <button type="button" onClick={close} className="btn-lux btn-lux-primary w-full justify-center">
-                <Check className="h-4 w-4" /> Done
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={downloadApk}
-                disabled={apkStatus === "checking"}
-                className="btn-lux btn-lux-primary w-full justify-center disabled:opacity-70"
-              >
-                <Download className="h-4 w-4" />
-                {apkStatus === "checking" ? "Preparing…" : "Download the app"}
-              </button>
-            )
+            /*
+              An <a>, not a <button> — see the note on `onApkTap`. `download`
+              names the saved file; the browser takes it from here and shows its
+              own progress and install affordance.
+
+              `aria-disabled` rather than removing the href while the on-open
+              availability check is in flight: that check is a single HEAD
+              request and is normally done before the sheet finishes animating,
+              and a link that vanishes and reappears is worse than one that is
+              briefly inert.
+            */
+            <a
+              href={ANDROID_APK_PATH}
+              download="frenzsave.apk"
+              onClick={onApkTap}
+              aria-disabled={apkStatus === "checking"}
+              className={cn(
+                "btn-lux btn-lux-primary w-full justify-center",
+                apkStatus === "checking" && "pointer-events-none opacity-70",
+              )}
+            >
+              <Download className="h-4 w-4" />
+              {apkStatus === "checking" ? "Preparing…" : "Download the app"}
+            </a>
           ) : canPromptNatively ? (
             /* A REAL native install — only rendered when the browser actually
                parked a `beforeinstallprompt`. Never a fake button that opens

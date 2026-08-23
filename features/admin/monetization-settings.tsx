@@ -29,6 +29,11 @@ type ToggleKey = {
 const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
   { key: "adsense", label: "Google AdSense", hint: "AdSense banner and video units" },
   { key: "monetag", label: "Monetag", hint: "Multitag + per-type tags (In-Page Push, Push, Vignette, OnClick) — configure below" },
+  {
+    key: "offerium",
+    label: "Offerium",
+    hint: "Rewarded ads / offerwall. Needs the SDK URL and IDs below AND the two server env secrets before it can serve — see the panel below.",
+  },
   { key: "adsterra", label: "Adsterra", hint: "Adsterra network banners (retired — off by default)" },
   { key: "propellerads", label: "PropellerAds", hint: "PropellerAds network units (retired — off by default)" },
   { key: "affiliates", label: "Affiliate offers", hint: "Affiliate CTA on the download-result page" },
@@ -89,8 +94,18 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const setText = (key: "adsensePublisherId" | "adsTxt" | "verificationTags" | "monetagSnippet" | "googleTagId", value: string) =>
-    setState((s) => ({ ...s, [key]: value }));
+  const setText = (
+    key:
+      | "adsensePublisherId"
+      | "adsTxt"
+      | "verificationTags"
+      | "monetagSnippet"
+      | "googleTagId"
+      | "offeriumSdkUrl"
+      | "offeriumPublisherId"
+      | "offeriumPlacementId",
+    value: string,
+  ) => setState((s) => ({ ...s, [key]: value }));
 
   const persist = async (next: MonetizationSettings) => {
     setBusy(true);
@@ -554,6 +569,115 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
               /ads.txt
             </a>{" "}
             as soon as you save — add other networks&apos; lines here too, one per line.
+          </p>
+        </div>
+      </div>
+
+      {/*
+        Offerium — rewarded ads / offerwall (owner, 2026-08-23: "put a slot in
+        admin dashboard where I can set up all Offerium API, SDK, and all").
+
+        Only the PUBLIC values are editable here. The API key and postback
+        signing secret are server-side env vars on purpose and are deliberately
+        NOT fields — this panel is saved to a database row and an allowlisted
+        subset of these settings is served publicly by /api/ads/config, so a
+        signing secret in this form would be a reward-forgery primitive. The
+        panel states where they go instead, so an operator is not left guessing.
+      */}
+      <div className="mt-6 space-y-4 border-t border-border/60 pt-5">
+        <div>
+          <h3 className="text-sm font-semibold">Offerium — rewarded ads</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            Paste the values from your Offerium publisher dashboard. All three, plus the two
+            server secrets below, must be present before a rewarded ad is offered to anyone.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="offerium-sdk" className="mb-1 block text-xs font-medium text-muted-foreground">
+            SDK / script URL
+          </label>
+          <input
+            id="offerium-sdk"
+            value={state.offeriumSdkUrl}
+            onChange={(e) => setText("offeriumSdkUrl", e.target.value)}
+            placeholder="https://…"
+            className="h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Must be <code className="font-mono">https</code> — a browser blocks an http script on
+            this site, so an http URL would simply never load.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="offerium-pub" className="mb-1 block text-xs font-medium text-muted-foreground">
+              Publisher ID
+            </label>
+            <input
+              id="offerium-pub"
+              value={state.offeriumPublisherId}
+              onChange={(e) => setText("offeriumPublisherId", e.target.value)}
+              className="h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label htmlFor="offerium-placement" className="mb-1 block text-xs font-medium text-muted-foreground">
+              Placement / zone ID
+            </label>
+            <input
+              id="offerium-placement"
+              value={state.offeriumPlacementId}
+              onChange={(e) => setText("offeriumPlacementId", e.target.value)}
+              className="h-10 w-full rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="offerium-fallback" className="mb-1 block text-xs font-medium text-muted-foreground">
+            If Offerium is unavailable
+          </label>
+          <select
+            id="offerium-fallback"
+            value={state.offeriumFallback}
+            onChange={(e) =>
+              setState((s) => ({ ...s, offeriumFallback: e.target.value === "block" ? "block" : "allow" }))
+            }
+            className="h-10 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          >
+            <option value="allow">Allow the normal download (recommended)</option>
+            <option value="block">Keep it locked and show a retry</option>
+          </select>
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Neither option ever grants the reward. &ldquo;Allow&rdquo; falls back to the normal
+            non-rewarded rules so a broken ad network can&apos;t lock people out of content they
+            could otherwise reach.
+          </p>
+        </div>
+
+        {/*
+          The honest status. An operator who flips the master switch on and sees
+          nothing happen needs to know exactly which piece is missing — and that
+          the two secrets are not fields on this form by design.
+        */}
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+          <p className="flex items-start gap-2">
+            <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <strong>Not serving yet.</strong> The live Offerium integration (loading their SDK
+              and verifying reward postbacks) is not implemented — it needs Offerium&apos;s official
+              publisher documentation for the callback parameters and signature scheme, which
+              hasn&apos;t been supplied. These fields save correctly and are ready for it; nothing
+              is guessed in the meantime.
+            </span>
+          </p>
+          <p className="mt-2 pl-6">
+            The two secrets are <strong>server environment variables</strong>, not fields here:{" "}
+            <code className="font-mono">OFFERIUM_API_KEY</code> and{" "}
+            <code className="font-mono">OFFERIUM_POSTBACK_SECRET</code>. A signing secret stored in
+            this form could be used to forge &ldquo;reward completed&rdquo; callbacks.
           </p>
         </div>
       </div>

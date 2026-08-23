@@ -104,6 +104,42 @@ const schema = z.object({
       message: "Publisher ID must look like ca-pub-1234567890123456",
     })
     .default(""),
+  /*
+    Offerium — public config only (owner, 2026-08-23). The API key and postback
+    signing secret are intentionally NOT accepted here: this payload is written
+    to a settings row an admin edits and an allowlisted subset is served
+    publicly, so a signing secret arriving through this endpoint would be a
+    reward-forgery primitive. They are server env vars — see
+    lib/monetization/offerium.ts.
+  */
+  offerium: z.boolean().default(false),
+  /*
+    Refused unless it is empty or a well-formed https URL. An http script is
+    blocked outright by the browser on an https page, and a malformed one throws
+    at construction — both fail silently at render with no ad and no
+    explanation, so the save is the right place to catch it.
+  */
+  offeriumSdkUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine(
+      (v) => {
+        if (v === "") return true;
+        try {
+          return new URL(v).protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "SDK URL must be a full https:// URL" },
+    )
+    .default(""),
+  offeriumPublisherId: z.string().trim().max(120).default(""),
+  offeriumPlacementId: z.string().trim().max(120).default(""),
+  // "allow" falls back to normal download rules; "block" keeps the gate shut.
+  // Neither ever grants the reward.
+  offeriumFallback: z.enum(["allow", "block"]).default("allow"),
   // Free text: several networks each contribute a line, and the AdSense line
   // ends in an account-specific hash that cannot be derived or checked here.
   adsTxt: z.string().max(8000).default(""),

@@ -135,6 +135,54 @@ export interface MonetizationSettings {
    * See lib/monetization/monetag.ts and features/monetization/monetag-placements.tsx.
    */
   monetagPlacements: MonetagPlacement[];
+  /* ── Offerium (rewarded / offerwall) ──────────────────────────────────────
+     Owner, 2026-08-23: "put a slot in admin dashboard where I can set up all
+     Offerium API, SDK, and all."
+
+     🔴 PUBLIC CONFIG ONLY. Everything in this block is safe to reach a browser
+     — an SDK URL and the ids that identify the publisher/placement are sent to
+     the ad network by the client anyway, so they are not secrets.
+
+     The SECRETS — the API key and the postback signing secret — deliberately do
+     NOT live here and must never be added to this interface. This settings
+     object is persisted in a database row an admin edits, and the fields chosen
+     from it are served publicly by /api/ads/config; a signing secret in that
+     path is a forged-reward primitive, because anyone holding it can mint a
+     "reward completed" callback. They belong in server-only environment
+     variables (OFFERIUM_API_KEY / OFFERIUM_POSTBACK_SECRET) read exclusively in
+     server code — see lib/monetization/offerium.ts.
+
+     ⚠️ NOT YET WIRED TO A LIVE INTEGRATION. These fields are the admin surface
+     and the storage for it; no Offerium SDK is loaded and no postback is
+     verified yet, because that requires Offerium's official publisher
+     documentation (their exact SDK URL shape, callback parameters and signature
+     scheme) which has not been supplied. Inventing an endpoint or a signature
+     format would produce something that silently fails against the real
+     service, so the integration point is left explicit and unbuilt rather than
+     guessed. `offeriumConfigured()` below is what any future call site must
+     gate on. */
+  /** Master switch. Off = no Offerium code loads and no reward is offered. */
+  offerium: boolean;
+  /**
+   * The SDK/script URL Offerium gives the publisher, pasted verbatim from their
+   * dashboard. Stored rather than hard-coded so a change of SDK host or version
+   * is an admin edit, not a deploy. Validated as an https URL before use.
+   */
+  offeriumSdkUrl: string;
+  /** Public publisher/app identifier from the Offerium dashboard. */
+  offeriumPublisherId: string;
+  /** Public placement/zone identifier for the rewarded unit. */
+  offeriumPlacementId: string;
+  /**
+   * What the admin wants to happen when Offerium is unavailable — it fails to
+   * load, times out, or a reward cannot be verified. NEVER grants the reward:
+   * "allow" means fall back to the normal, non-rewarded download rules for that
+   * item, which is the safe default because a broken ad network must not lock a
+   * visitor out of content they could otherwise have. "block" keeps the gate
+   * closed and shows a retry.
+   */
+  offeriumFallback: "allow" | "block";
+
   /** Affiliate offers on the download-result page. */
   affiliates: boolean;
   /** Curated "Recommended Tools" sections (homepage/footer/sidebar/blog). */
@@ -287,6 +335,13 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   monetagAllPages: true,
   monetagSurfaces: [],
   monetagPlacements: [],
+  /* Offerium ships OFF and unconfigured. It stays off until an admin pastes
+     real values AND the server-side secrets exist — see `offeriumConfigured`. */
+  offerium: false,
+  offeriumSdkUrl: "",
+  offeriumPublisherId: "",
+  offeriumPlacementId: "",
+  offeriumFallback: "allow",
   affiliates: true,
   recommendedTools: true,
   interstitial: false,

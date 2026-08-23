@@ -194,6 +194,35 @@ function FeedPostCardImpl({
   }, [item.viaRepostId, item.id]);
 
   /*
+    🔴 Comments prefetch-ahead (owner, 2026-08-18: "make the comment to open
+    faster... loading should only be in bad network otherwise it should
+    never load[s]"). The existing `onPointerEnter` warm-up two lines down is
+    desktop-hover-only — on a touch device it never fires before the tap
+    that opens the sheet, so every mobile open used to be a cold fetch.
+    Same rootMargin/one-shot-disconnect technique FeedImage already uses to
+    prefetch its media ahead of viewport (features/media/feed-image.tsx) —
+    by the time a card has been on screen long enough to actually read and
+    tap Comment, this has almost always already resolved into
+    lib/social/comments-cache.ts's cache, so CommentsSheet's own load below
+    resolves instantly instead of showing its loading placeholder.
+  */
+  useEffect(() => {
+    const el = articleRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          prefetchPostComments(item.id);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "1200px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [item.id]);
+
+  /*
     Opening it is the signal that actually matters — an impression is free, a
     tap is a decision. Wrapping `onOpen` here rather than attributing at each of
     the five call sites below means a new way to open a card cannot silently

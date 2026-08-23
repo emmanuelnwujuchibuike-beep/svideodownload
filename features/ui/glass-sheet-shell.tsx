@@ -44,6 +44,24 @@ export function GlassSheetShell({
   defaultHeightVh = 68,
   backdropZ = 95,
   panelZ = 96,
+  /**
+   * 🔴 Content-hugging height (owner, 2026-08-18 — comments sheet with a
+   * single comment: "opens inside an overlay... is supposed to open above
+   * very visible professionally and premium", i.e. not a fixed-size box
+   * with a dead gap under a short list). When true, the sheet opens at
+   * whatever height its ACTUAL content needs (measured via ResizeObserver,
+   * so it re-fits as async data loads in or a comment is added), clamped
+   * between MIN_VH and `defaultHeightVh` — so it never grows past what a
+   * caller already considered a sensible ceiling, only shrinks BELOW it for
+   * genuinely short content. The drag gesture is untouched: dragging still
+   * works exactly as before and, once the visitor drags, their choice wins
+   * over any further auto-fit for the rest of this open session.
+   *
+   * Off by default — every other consumer of this shared shell (image
+   * viewer, reel viewer, the two share sheets) keeps its exact existing
+   * fixed-`defaultHeightVh` behavior unless it explicitly opts in.
+   */
+  fitContent = false,
   children,
 }: {
   open: boolean;
@@ -56,6 +74,7 @@ export function GlassSheetShell({
   defaultHeightVh?: number;
   backdropZ?: number;
   panelZ?: number;
+  fitContent?: boolean;
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -68,15 +87,53 @@ export function GlassSheetShell({
   const startY = useRef(0);
   const startHeight = useRef(defaultHeightVh);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const contentInnerRef = useRef<HTMLDivElement | null>(null);
+  // Once the visitor drags, THEIR height wins for the rest of this open
+  // session — auto-fit stops recomputing over it. Reset each time it opens.
+  const userAdjustedRef = useRef(false);
 
   useEffect(() => {
     if (open) {
       setHeightVh(defaultHeightVh);
       setDragY(0);
+      userAdjustedRef.current = false;
       onOpen?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  /*
+   * fitContent's actual measurement. `contentInnerRef` wraps `children`
+   * WITHOUT its own height constraint (only its scrollable ANCESTOR below
+   * has one), so its rendered height is the content's true natural size —
+   * `scrollHeight` on the ancestor itself would just report the ancestor's
+   * own fixed height back whenever content is shorter than it (scrollHeight
+   * is defined as at least clientHeight), which is exactly the measurement
+   * that would fail to detect "this content is short, shrink the sheet".
+   * A ResizeObserver (not a one-shot measurement) re-fits automatically as
+   * comments load in async, a new comment is posted, or the keyboard opens.
+   */
+  useEffect(() => {
+    if (!fitContent || !open) return;
+    const el = contentInnerRef.current;
+    if (!el) return;
+    const recompute = () => {
+      if (userAdjustedRef.current) return;
+      const vh = window.innerHeight / 100;
+      const headerPx = headerRef.current?.offsetHeight ?? 0;
+      const neededVh = (headerPx + el.scrollHeight) / vh + 4; // + a little breathing room
+      setHeightVh(Math.min(defaultHeightVh, Math.max(MIN_VH, neededVh)));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    window.addEventListener("resize", recompute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", recompute);
+    };
+  }, [fitContent, open, defaultHeightVh]);
 
   // Escape closes (every sheet in this app supported this before the three
   // forked wrappers were consolidated into this shell — a real regression
@@ -105,6 +162,7 @@ export function GlassSheetShell({
 
   const onGrabStart = (clientY: number) => {
     setDragging(true);
+    userAdjustedRef.current = true;
     startY.current = clientY;
     startHeight.current = heightVh;
   };
@@ -162,6 +220,7 @@ export function GlassSheetShell({
           >
             {overlay ? <div className="absolute inset-0 z-10">{overlay}</div> : null}
             <div
+              ref={headerRef}
               className="shrink-0 touch-none px-5 pt-3"
               onTouchStart={(e) => onGrabStart(e.touches[0]?.clientY ?? 0)}
               onTouchMove={(e) => onGrabMove(e.touches[0]?.clientY ?? 0)}
@@ -180,7 +239,10 @@ export function GlassSheetShell({
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-1">
-              {children}
+              {/* Unconstrained wrapper — see fitContent's measurement note above
+                  for why this can't just be scrollHeight on the scrollable
+                  parent. A plain passthrough div when fitContent is off. */}
+              <div ref={contentInnerRef}>{children}</div>
             </div>
           </motion.div>
         </div>

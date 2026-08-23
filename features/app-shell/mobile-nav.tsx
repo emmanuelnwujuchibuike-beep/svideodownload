@@ -205,19 +205,26 @@ export function MobileNav({
   // prefetches below (onWarm/onPointerDown), which stay on: those only spend
   // bandwidth once the user has already shown real intent to navigate there.
   //
-  // 🔴 `/feed` warmed from HERE specifically (owner, 2026-08-18: "i want the
-  // feed page start loading immediately the landing page and download page
-  // opens... just like the history page"). This component is what's mounted
-  // on both of those — the marketing nav and `/downloads`' own bare
-  // `<MobileNav />` — so it's the one place a single addition reaches both
-  // without duplicating the effect. Paired with the new `feed/loading.tsx`
-  // (mirroring `home/loading.tsx`): that gives the route a static Suspense
+  // 🔴 `/feed` and `profileHref` warmed from HERE specifically (owner,
+  // 2026-08-18: "i want the feed page start loading immediately the landing
+  // page and download page opens... just like the history page"). This
+  // component is what's mounted on both of those — the marketing nav and
+  // `/downloads`' own bare `<MobileNav />` — so it's the one place a single
+  // addition reaches both without duplicating the effect. Paired with each
+  // route's own `loading.tsx` (feed/home/account all have one, mirroring
+  // `home/loading.tsx`'s original): that gives the route a static Suspense
   // boundary to actually prefetch INTO — without it, this prefetch had
   // nothing to warm but the page's own inline (non-prefetchable) Suspense.
+  //
+  // `/account` (Settings) ADDED (owner, 2026-08-23: "feed page, profile page
+  // and settings page... load immediately the Download page opens... like
+  // the history page") — feed and profile were already here; settings was
+  // the one signed-in destination this effect hadn't reached yet, even
+  // though `account/loading.tsx` already existed for it to warm into.
   useEffect(() => {
     if (isSlowConnection()) return;
     const id = setTimeout(() => {
-      for (const r of ["/home", "/friends", "/messages", "/feed", profileHref]) router.prefetch(r);
+      for (const r of ["/home", "/friends", "/messages", "/feed", "/account", profileHref]) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
   }, [router, profileHref]);

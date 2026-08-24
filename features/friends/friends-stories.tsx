@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -58,17 +58,44 @@ export function FriendsStories({
 
   return (
     <div className="mb-5">
-      {/* Friends / Following segmented toggle */}
-      <div className="mb-3 inline-flex rounded-full border border-border/60 bg-card/60 p-0.5 text-xs font-semibold">
+      {/*
+        Friends / Following selector.
+
+        The active pill is one absolutely-positioned element translated between
+        the halves rather than two buttons swapping colours, so switching reads
+        as the control responding. `transform` only — no width animation and
+        nothing that triggers layout. Same language as /explore's sort control,
+        so the two surfaces feel like one product.
+
+        A neutral/dark active pill, not a purple one: this sits directly above
+        the story ring and the brand gradient already lives there.
+      */}
+      <div
+        role="tablist"
+        aria-label="Stories"
+        className="relative mb-3.5 inline-flex rounded-full border border-border/60 bg-secondary/70 p-1 text-[13px] font-semibold"
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-foreground shadow-[0_2px_8px_-2px_rgba(0,0,0,0.35)]",
+            "transition-transform duration-250 ease-[var(--ease-out)] motion-reduce:transition-none",
+          )}
+          style={{ transform: scope === "following" ? "translateX(100%)" : "translateX(0)" }}
+        />
         {(["friends", "following"] as const).map((s) => (
           <button
             key={s}
             type="button"
+            role="tab"
             onClick={() => setScope(s)}
-            aria-pressed={scope === s}
+            aria-selected={scope === s}
             className={cn(
-              "rounded-full px-4 py-1.5 capitalize transition",
-              scope === s ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+              // 36px tall with the padding — a comfortable target without the
+              // control growing into the story row below it.
+              "relative z-10 min-w-[112px] rounded-full px-4 py-1.5 capitalize",
+              "transition-colors duration-200 motion-reduce:transition-none",
+              scope === s ? "text-background" : "text-muted-foreground",
             )}
           >
             {s} stories
@@ -132,8 +159,23 @@ export function FriendsStories({
         })}
 
         {otherGroups.length === 0 ? (
-          <div className="flex flex-1 items-center px-2 text-xs text-muted-foreground">
-            {scope === "friends" ? "No friend stories right now." : "No stories from people you follow yet."}
+          /*
+            The empty state, sized to the story ring beside it rather than to
+            the page — a dashed neutral panel that says "stories land here",
+            occupying only the row it belongs to. Deliberately no illustration
+            and no extra copy: the existing sentence is the whole message, and
+            the brief rules out growing it.
+          */
+          <div className="flex min-w-0 flex-1 items-center gap-3 self-stretch rounded-2xl border border-dashed border-border px-3.5 py-2.5">
+            <span
+              aria-hidden
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+            >
+              <Sparkles className="h-[18px] w-[18px]" />
+            </span>
+            <p className="min-w-0 text-[13px] leading-snug text-muted-foreground">
+              {scope === "friends" ? "No friend stories right now." : "No stories from people you follow yet."}
+            </p>
           </div>
         ) : null}
       </div>

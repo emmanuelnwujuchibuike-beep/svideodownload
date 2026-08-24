@@ -9,6 +9,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Send,
   Star,
   UserMinus,
   UserPlus,
@@ -36,6 +37,28 @@ import { cn } from "@/lib/utils";
 
 const DAY = 24 * 60 * 60 * 1000;
 type Tab = "all" | "online" | "favorites" | "active" | "new";
+
+/**
+ * A header tool: neutral, bordered, and a real 44px target.
+ *
+ * 🔴 Declared at module scope, NOT inside `FriendsHub`. A component defined in
+ * a render body is a new type on every render, so React unmounts and remounts
+ * its subtree each time — here that would tear down and rebuild both header
+ * links on every keystroke of the friend search.
+ */
+function ToolButton({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      prefetch
+      aria-label={label}
+      title={label}
+      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-card text-muted-foreground transition-transform duration-150 hover:text-foreground active:scale-[0.95] motion-reduce:transition-none motion-reduce:active:scale-100"
+    >
+      {children}
+    </Link>
+  );
+}
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
@@ -162,25 +185,22 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-[-0.02em]">Friends</h1>
-        <div className="flex items-center gap-0.5">
-          <Link
-            href="/friends/circles"
-            aria-label="Circles"
-            title="Circles"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-          >
-            <Users className="h-5 w-5" />
-          </Link>
-          <Link
-            href="/friends/trust"
-            aria-label="Trust Center"
-            title="Trust Center"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-          >
-            <ShieldCheck className="h-5 w-5" />
-          </Link>
+      {/*
+        The heading and its two tools. "Friends" carries the page, so it gains
+        weight and loses tracking; the tools become real bordered icon buttons
+        with a 44px target instead of bare glyphs that were hard to hit and read
+        as decoration. They are deliberately neutral — competing with the title
+        is exactly what the brief rules out.
+      */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="text-[clamp(1.75rem,7.5vw,2rem)] font-extrabold leading-none tracking-[-0.035em]">Friends</h1>
+        <div className="flex items-center gap-2">
+          <ToolButton href="/friends/circles" label="Circles">
+            <Users className="h-[18px] w-[18px]" />
+          </ToolButton>
+          <ToolButton href="/friends/trust" label="Trust Center">
+            <ShieldCheck className="h-[18px] w-[18px]" />
+          </ToolButton>
         </div>
       </div>
 
@@ -242,33 +262,46 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 
       {catchUp.length > 0 ? (
         <section className="mb-6">
-          <h2 className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <Sparkles className="h-4 w-4 text-muted-foreground" /> Catch up
+          <h2 className="mb-3 flex items-center gap-2 text-[19px] font-semibold tracking-[-0.015em]">
+            <Sparkles className="h-[19px] w-[19px] text-primary" aria-hidden /> Catch up
           </h2>
-          <ul className="space-y-1.5">
+          {/*
+            The card: a soft surface with a whisper of the brand tint, a
+            hairline border and one very soft shadow. The wording and the data
+            are untouched — only the hierarchy changed, so the name and the
+            date carry weight and the connecting words do not.
+
+            `items-start` + `gap-3` with a wrapping text column: on a narrow
+            phone the message wraps under itself and the button keeps its size
+            rather than being crushed, which is the failure the brief calls out.
+          */}
+          <ul className="space-y-2">
             {catchUp.map((f) => (
               <li
                 key={f.user.id}
-                className="flex items-center gap-3 rounded-2xl border border-violet-500/20 bg-gradient-to-r from-blue-500/[0.06] to-violet-500/[0.06] px-3.5 py-2.5"
+                className="flex items-center gap-3 rounded-[18px] border border-border/70 bg-gradient-to-r from-primary/[0.04] to-accent/[0.04] px-3.5 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
               >
                 <ProfileAvatar user={f.user} size="sm" />
-                <p className="min-w-0 flex-1 text-sm">
+                <p className="min-w-0 flex-1 text-[14.5px] leading-snug text-muted-foreground">
                   {f.lastChatAt ? (
                     <>
-                      It&apos;s been <strong className="font-semibold">{timeAgo(f.lastChatAt)}</strong> since you chatted with{" "}
-                      <strong className="font-semibold">{f.user.displayName}</strong>.
+                      It&apos;s been <strong className="font-semibold text-foreground">{timeAgo(f.lastChatAt)}</strong> since you
+                      chatted with <strong className="font-semibold text-foreground">{f.user.displayName}</strong>.
                     </>
                   ) : (
                     <>
-                      You and <strong className="font-semibold">{f.user.displayName}</strong> haven&apos;t chatted yet.
+                      You and <strong className="font-semibold text-foreground">{f.user.displayName}</strong> haven&apos;t chatted
+                      yet.
                     </>
                   )}
                 </p>
                 <Link
                   href={`/messages/new/${f.user.id}`}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-violet-500/25 transition hover:opacity-95"
+                  prefetch
+                  aria-label={`Say hello to ${f.user.displayName}`}
+                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 text-[13px] font-semibold text-white shadow-[0_4px_12px_-4px_rgba(99,102,241,0.6)] transition-transform duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
                 >
-                  <Hand className="h-3.5 w-3.5" /> Say hello
+                  <Hand className="h-4 w-4" aria-hidden /> Say hello
                 </Link>
               </li>
             ))}
@@ -302,24 +335,46 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
 
       {outgoing.length > 0 ? (
         <section className="mb-6">
-          <h2 className="mb-2.5 text-sm font-semibold text-muted-foreground">Sent requests</h2>
-          <ul className="space-y-1.5">
+          <h2 className="mb-3 flex items-center gap-2 text-[19px] font-semibold tracking-[-0.015em]">
+            <Send className="h-[18px] w-[18px] text-primary" aria-hidden /> Sent requests
+          </h2>
+          {/*
+            Same radius, avatar size, row height and button height as the
+            catch-up cards above — the two sections are one design system, which
+            is what the brief asks for and what the old page did not do.
+
+            Cancel is SECONDARY and soft: a tinted pill in the destructive hue
+            rather than a bright red button. It should read as available, not as
+            the thing to press.
+          */}
+          <ul className="space-y-2">
             {outgoing.map((req) => (
-              <li key={req.id} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-3.5 py-2.5">
+              <li
+                key={req.id}
+                className="flex items-center gap-3 rounded-[18px] border border-border/70 bg-card px-3.5 py-3"
+              >
                 <ProfileAvatar user={req.user} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <Link href={`/u/${req.user.handle}`} className="text-sm font-semibold hover:underline">
-                    {req.user.displayName}
-                  </Link>
-                  <span className="ml-1.5 text-xs text-muted-foreground">{timeAgo(req.createdAt)} ago</span>
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <Link
+                      href={`/u/${req.user.handle}`}
+                      prefetch
+                      className="truncate text-[15px] font-semibold hover:underline"
+                    >
+                      {req.user.displayName}
+                    </Link>
+                    <span className="shrink-0 text-[12.5px] text-muted-foreground">{timeAgo(req.createdAt)} ago</span>
+                  </div>
+                  <p className="mt-0.5 text-[12.5px] text-muted-foreground">Request sent</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => cancel(req)}
                   disabled={busyId === req.id}
-                  className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-rose-500/10 hover:text-rose-500 disabled:opacity-60"
+                  aria-label={`Cancel friend request to ${req.user.displayName}`}
+                  className="inline-flex h-9 shrink-0 items-center justify-center rounded-full bg-rose-500/10 px-3.5 text-[13px] font-semibold text-rose-600 transition-transform duration-150 active:scale-[0.97] disabled:opacity-60 dark:text-rose-400 motion-reduce:transition-none motion-reduce:active:scale-100"
                 >
-                  {busyId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cancel"}
+                  {busyId === req.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Cancel"}
                 </button>
               </li>
             ))}

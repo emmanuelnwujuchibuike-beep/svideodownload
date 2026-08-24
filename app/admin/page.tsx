@@ -38,6 +38,8 @@ import { getFlags } from "@/lib/platform/flags";
 import { getFlagOverrides } from "@/lib/platform/flags-store";
 import { getExperiments } from "@/lib/platform/experiments";
 import { getExperimentOverrides, getExperimentStats } from "@/lib/platform/experiments-store";
+import { StreakMonitor } from "@/features/admin/streak-monitor";
+import { getStreakMetrics } from "@/lib/streaks/admin";
 import { PlatformCatalog } from "@/features/admin/platform-catalog";
 import { getRegistries } from "@/lib/platform/registries";
 import { getServices } from "@/lib/platform/services";
@@ -379,6 +381,14 @@ export default async function AdminPage() {
             <PlanManager subscribers={subscribers} />
           </AdminPanel>
 
+          {/* Streak retention. Streamed like every panel below it, so its
+              handful of count queries can never hold up the figures above. */}
+          <AdminPanel id="streaks">
+            <Suspense fallback={<StreakMonitorSkeleton />}>
+              <StreakMonitorLoader />
+            </Suspense>
+          </AdminPanel>
+
           {/*
             Everything below streams. Each panel awaits only its OWN queries, so
             a slow moderation count cannot hold up the revenue figures the
@@ -594,6 +604,28 @@ export default async function AdminPage() {
   );
 }
 
+async function StreakMonitorLoader() {
+  return <StreakMonitor metrics={await getStreakMetrics()} />;
+}
+
+/** Matches StreakMonitor's real height, so the panel does not jump when it streams in. */
+function StreakMonitorSkeleton() {
+  return (
+    <div className="mt-6 space-y-4 rounded-3xl border border-border/70 bg-card p-6" aria-hidden>
+      <div className="h-5 w-28 animate-pulse rounded bg-secondary/60" />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-24 animate-pulse rounded-2xl bg-secondary/40" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-28 animate-pulse rounded-2xl bg-secondary/40" />
+        ))}
+      </div>
+    </div>
+  );
+}
 /** Reserves roughly a panel's height so a streaming section does not jump. */
 function PanelSkeleton() {
   return (

@@ -96,6 +96,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "Who is paying, on which plan, through which provider.",
   },
   {
+    id: "streaks",
+    label: "Streaks",
+    category: "audience",
+    icon: "Flame",
+    blurb:
+      "Daily-streak retention: how many people are on a run, how long, how many are about to lose one, and whether the 2pm reminders are reaching them. Includes anonymous visitors, who have streaks too.",
+  },
+  {
     id: "moderation",
     label: "Moderation",
     category: "audience",

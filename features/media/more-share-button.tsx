@@ -5,7 +5,7 @@ import { MoreHorizontal } from "lucide-react";
 import { toast } from "@/features/ui/toast";
 
 /**
- * The "…" on a Popular-videos card.
+ * The "…" on a media card — Popular videos on /search, discovery tiles on /explore.
  *
  * ── It does ONE real thing ────────────────────────────────────────────────
  * A dropdown menu here would mean a portal, an outside-click listener and a
@@ -19,7 +19,7 @@ import { toast } from "@/features/ui/toast";
  * with a toast where it doesn't (desktop). No import beyond the toast, no
  * listener, no state.
  */
-export function VideoMoreButton({ href, title }: { href: string; title: string }) {
+export function MoreShareButton({ href, title }: { href: string; title: string }) {
   const share = async () => {
     const url = new URL(href, window.location.origin).toString();
     if (typeof navigator.share === "function") {

@@ -2190,3 +2190,23 @@ body:has(.frenz-canvas-page) {
     animation: frenz-streak-fade 200ms linear both;
   }
 }
+
+/* ── Explore category rail — 2026-08-24 ─────────────────────────────────────
+   One line of chips, natively scrolled. `overscroll-behavior-x: contain` is
+   what stops a flick at the end of the row chaining into the page or into
+   iOS's back-swipe; `touch-action` is left at its default so a vertical drag
+   that starts on the rail still scrolls the feed. No scrollbar, no JS. */
+.explore-rail {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.explore-rail::-webkit-scrollbar {
+  display: none;
+}
+.explore-rail > * {
+  flex: none;
+}

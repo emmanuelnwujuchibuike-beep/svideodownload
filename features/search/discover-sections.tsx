@@ -6,7 +6,7 @@ import { FollowPill } from "@/features/search/follow-pill";
 import { Avatar, CreatorPortrait, SafeImage, VideoCover } from "@/features/search/media";
 import { NameLine, SectionCard, SectionHeader } from "@/features/search/search-primitives";
 import { SearchAction } from "@/features/search/tag-chip";
-import { VideoMoreButton } from "@/features/search/video-more-button";
+import { MoreShareButton } from "@/features/media/more-share-button";
 import { TRENDING_CARD_COUNT, type DiscoverVideo, type SearchDiscover } from "@/lib/social/discover";
 import type { TrendingTag } from "@/lib/social/hashtags";
 import type { SuggestedCreator } from "@/lib/social/suggest";
@@ -297,7 +297,7 @@ function VideoCard({ video: v }: { video: DiscoverVideo }) {
             tickClassName="h-3 w-3"
           />
         </Link>
-        <VideoMoreButton href={v.href} title={v.title} />
+        <MoreShareButton href={v.href} title={v.title} />
       </div>
     </article>
   );

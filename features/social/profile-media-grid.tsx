@@ -2,13 +2,30 @@
 
 import { Heart, Images, Layers, MessageCircle, Pin, Play, Repeat2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 
 import { PostCover } from "@/components/social/post-grid";
 import { FeedVideo } from "@/features/media/feed-video";
-import { ProfileVideoPlayer } from "@/features/social/profile-video-player";
+import dynamic from "next/dynamic";
+
+import { useProfileMediaViewer } from "@/features/social/use-profile-media-viewer";
 import type { PostCard } from "@/lib/social/posts";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+/*
+  The REAL viewers — the same ones the feed and Explore open (owner, 2026-08-24:
+  "I want all engagement should be on the screen like a reels without needing to
+  click on open post"). Code-split: a profile visit that never opens media must
+  not carry the reels engine.
+*/
+const ReelsFeed = dynamic(() => import("@/features/reels/reels-feed").then((m) => m.ReelsFeed), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
+});
+const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
+const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) => m.PostViewer), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 z-[85] bg-black" aria-hidden />,
+});
 
 /**
  * Profile content grid — a high-class, Instagram/TikTok-style grid. Photos/posts
@@ -30,8 +47,18 @@ export function ProfileMediaGrid({
   view?: "grid" | "list";
   emptyText?: string;
 }) {
-  const videos = posts.filter((p) => p.mediaKind === "video" && p.mediaUrl);
-  const [playIndex, setPlayIndex] = useState<number | null>(null);
+  /*
+    🔴 EVERY media tile now opens the real viewer, not just videos. Photos used
+    to navigate to /p/[id] — a full page load away from the profile — which is
+    the other half of "too hard for users to engage". Videos opened a bespoke
+    player with no engagement rail at all.
+
+     (not a videos-only subset) is handed to the hook so swiping up/down
+    moves through the grid in the order it is displayed, across photos AND
+    videos, which is what "Every media should go to the next when slide down or
+    up" asks for.
+  */
+  const viewer = useProfileMediaViewer(posts);
 
   if (posts.length === 0) {
     return (
@@ -41,19 +68,24 @@ export function ProfileMediaGrid({
     );
   }
 
-  const openVideo = (p: PostCard) => {
-    const idx = videos.findIndex((v) => v.id === p.id);
-    setPlayIndex(idx < 0 ? 0 : idx);
-  };
   const isPlayable = (p: PostCard) => p.mediaKind === "video" && !!p.mediaUrl;
 
-  const player = (
-    <ProfileVideoPlayer
-      posts={playIndex !== null ? videos : null}
-      startIndex={playIndex ?? 0}
-      onClose={() => setPlayIndex(null)}
-    />
-  );
+  /*
+    One viewer mount for the whole grid. Which one opens depends on the TAPPED
+    media: a video gets the reels experience (engagement rail, wow, comments,
+    menu, clear-screen, vertical paging); photos and albums get the image
+    viewer, which has its own engagement and swipe; anything else falls back to
+    the post viewer rather than to a dead end.
+  */
+  const player = viewer.items ? (
+    viewer.isVideo ? (
+      <ReelsFeed initialItems={viewer.items} initialOffset={null} startId={viewer.startId ?? undefined} onClose={viewer.close} />
+    ) : viewer.isImage ? (
+      <ImageViewer item={viewer.items.find((i) => i.id === viewer.startId) ?? viewer.items[0]!} onClose={viewer.close} />
+    ) : (
+      <PostViewer item={viewer.items.find((i) => i.id === viewer.startId) ?? viewer.items[0]!} startWithComments={false} onClose={viewer.close} />
+    )
+  ) : null;
 
   // X-style list: one full-size item per row. Videos show a full-length,
   // play-in-place preview (like the feed); photos show full-size, all clearly
@@ -72,7 +104,7 @@ export function ProfileMediaGrid({
                   src={p.mediaUrl}
                   poster={p.thumbnailUrl}
                   postId={p.id}
-                  onExpand={() => openVideo(p)}
+                  onExpand={() => void viewer.open(p)}
                   className="aspect-[4/5] w-full"
                 />
               ) : (
@@ -108,7 +140,7 @@ export function ProfileMediaGrid({
             <button
               key={p.id}
               type="button"
-              onClick={() => openVideo(p)}
+              onClick={() => void viewer.open(p)}
               className={cn("group relative block overflow-hidden rounded-xl bg-neutral-950 text-left", aspect)}
             >
               <Tile post={p} />
@@ -117,6 +149,14 @@ export function ProfileMediaGrid({
             <Link
               key={p.id}
               href={`/p/${p.id}`}
+              onClick={(e) => {
+                // Modified clicks navigate normally — only a plain tap opens the
+                // in-place viewer (the same interception PostGrid uses).
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+                e.preventDefault();
+                void viewer.open(p);
+              }}
+              aria-busy={viewer.loadingId === p.id}
               className={cn("group relative block overflow-hidden rounded-xl bg-neutral-950", aspect)}
             >
               <Tile post={p} />

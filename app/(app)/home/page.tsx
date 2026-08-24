@@ -250,6 +250,9 @@ async function SmartFeedSection({ viewerId, quietMode }: { viewerId: string; qui
       initialSeed={seed}
       friendCount={friends}
       quietMode={quietMode}
+      // Server-decided ad cadence, so the first slot is composed into the
+      // initial HTML rather than appearing after hydration (2026-08-24).
+      initialAdInterval={page.adInterval}
     />
   );
 }

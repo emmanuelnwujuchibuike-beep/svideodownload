@@ -27,7 +27,26 @@ export type AdZone =
   | "download_history_top"
   | "download_history_bottom"
   | "mobile_bottom_banner"
-  | "exit_intent_popup";
+  | "exit_intent_popup"
+  /*
+    In-feed native slot — one after every N posts in the social feed
+    (2026-08-24). The server decides where these exist, in
+    lib/feed/ad-slots.ts, and this zone decides only what fills them.
+
+    🔴 The most valuable placement on the site and the most dangerous: it is
+    inside an infinite scroll containing autoplaying video. Anything seeded
+    here must be lightweight. A row whose script autoplays audio, or which
+    pulls a heavy SDK, degrades the whole feed rather than one page — see
+    features/feed/feed-ad-slot.tsx for the isolation guarantees the SLOT
+    provides and cannot provide on the creative's behalf.
+
+    ⚠️ This comment contains no semicolon, deliberately, and neither should
+    any comment added to this union. `ad-slots.test.ts` recovers the member
+    list by slicing the source at the first statement terminator, so one
+    appearing inside a comment truncates the list early and silently drops
+    every zone below it from the type/runtime agreement check.
+  */
+  | "feed_inline";
 
 export type DeviceType = "mobile" | "desktop";
 

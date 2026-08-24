@@ -37,6 +37,9 @@ export const AD_ZONES = [
      than vanishing from the list they were created in. */
   "mobile_bottom_banner",
   "exit_intent_popup",
+  // In-feed native slot — one after every N posts (2026-08-24). Appended last
+  // so existing rows keep their position in the admin list.
+  "feed_inline",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -298,6 +301,19 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     supportsSkip: false,
     prefetch: false,
     deprecated: true,
+  },
+  feed_inline: {
+    label: "In-feed (social feed)",
+    description:
+      "Native slot between posts in the social feed — one after every 4 posts, decided server-side. Loads only once the reader is within ~600px of it. Keep it LIGHT: this renders inside an infinite scroll full of autoplaying video, so a heavy SDK or an audio-autoplay creative degrades the whole feed rather than a single page.",
+    // Persistent: no dismiss control. A close button on an item in an infinite
+    // feed is a control whose effect vanishes as soon as it scrolls away.
+    persistent: true,
+    supportsSkip: false,
+    // 🔴 Never prefetched. Prefetching is precisely what the slot's own
+    // IntersectionObserver exists to avoid — it would pull every upcoming ad
+    // in the feed up front and undo the whole lazy-loading design.
+    prefetch: false,
   },
   exit_intent_popup: {
     label: "Exit intent",

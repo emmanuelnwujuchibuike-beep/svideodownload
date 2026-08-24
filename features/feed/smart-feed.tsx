@@ -12,11 +12,13 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
 import { setTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { ContinueInReels } from "@/features/feed/continue-in-reels";
+import { FeedAdSlot } from "@/features/feed/feed-ad-slot";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
 import { FeedTopbarTabs } from "@/features/feed/feed-topbar-tabs";
 import { SparkCard } from "@/features/feed/spark-card";
+import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { haptic } from "@/lib/motion/haptics";
 import { acceptFeedItems, dedupeFeedItems, mediaIdentity, seenFromItems } from "@/lib/social/feed-dedupe";
 import type { FeedItem, HomeFeedSort } from "@/lib/social/home-feed";
@@ -94,9 +96,20 @@ export function SmartFeed({
   initialSeed,
   friendCount = 0,
   quietMode = false,
+  initialAdInterval = FEED_AD_INTERVAL,
 }: {
   initialItems: FeedItem[];
   initialNextOffset: number | null;
+  /**
+   * Insert an ad slot after every N posts; 0 for none.
+   *
+   * 🔴 Server-decided (2026-08-24). The core requirement of the in-feed ad
+   * brief is that the ad NETWORK must not be what determines where an ad
+   * appears — Frenzsave's server composes the sequence and the network only
+   * fills the slot. Defaulted rather than required so every existing call site
+   * keeps working unchanged; the two real ones pass the server's value.
+   */
+  initialAdInterval?: number;
   /** This refresh's reshuffle token, minted server-side per request (see
    *  home/page.tsx). Every page request below reuses it so the whole scroll
    *  agrees on ONE arrangement; a new one is minted only on an explicit
@@ -117,6 +130,14 @@ export function SmartFeed({
   const seedRef = useRef<string>(initialSeed ?? newFeedSeed());
   const [items, setItems] = useState<FeedItem[]>(() => balanceByKind(initialItems));
   const [nextOffset, setNextOffset] = useState<number | null>(initialNextOffset);
+  /*
+    The cadence, as last stated by the server. Held in state so a later page
+    can change it (an operator edit mid-scroll, say) without a remount, but
+    deliberately NOT reset on tab switch — the tab caches hold posts, and
+    re-reading the cadence per tab would let two tabs disagree about where ads
+    go while sharing one scroll position.
+  */
+  const [adInterval, setAdInterval] = useState<number>(initialAdInterval);
   const [loading, setLoading] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [error, setError] = useState(false);
@@ -340,10 +361,26 @@ export function SmartFeed({
       try {
         // Through the shared SDK — same client/path (auth, dedupe, retry, timeout)
         // the native apps use.
-        const data = await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/home-feed", {
-          method: "GET",
-          query: { sort: s, offset, limit: PAGE, seed: seedRef.current },
-        });
+        const data = await getApi().action<{ items: FeedItem[]; nextOffset: number | null; adInterval?: number }>(
+          "/api/home-feed",
+          {
+            method: "GET",
+            /*
+              🔴 `offset` IS A POST OFFSET AND ADS NEVER TOUCH IT (2026-08-24).
+              Callers pass `nextOffset` (the server's own post cursor) or
+              `items.length` — and `items` holds posts only, because ad slots
+              are composed at RENDER time in `buildSmartStream` and never enter
+              this array. If an ad ever counted here the cursor would run ahead
+              of the dataset and the feed would silently skip real posts.
+            */
+            query: { sort: s, offset, limit: PAGE, seed: seedRef.current },
+          },
+        );
+        // The server restates the cadence on every page, so it can change
+        // mid-scroll without a reload. Optional for back-compat with a cached
+        // response predating the field — falling back to the current value
+        // rather than to 0, which would make ads vanish on one stale page.
+        if (typeof data.adInterval === "number") setAdInterval(data.adInterval);
         const entry = cacheRef.current![s] ?? { items: [], nextOffset: null, seen: new Set<string>() };
         if (replace) {
           const deduped = dedupeFeedItems(data.items);
@@ -720,9 +757,27 @@ export function SmartFeed({
   const pullProgress = Math.min(1, pull / PULL_THRESHOLD);
 
   /* ── Build the smart stream from the loaded items ─────────────────────── */
+  /*
+    Ad slots are composed HERE, alongside spark cards, by the same pure
+    function (2026-08-24). Two consequences worth stating:
+
+    1. This `useMemo` runs during SERVER RENDER too — `SmartFeed` is a client
+       component, but Next still renders it to HTML — so the first ad slot is
+       part of the initial markup rather than something that appears after
+       hydration. That is what makes the sequence server-decided in practice as
+       well as in principle.
+
+    2. `adInterval` comes from the SERVER payload, not from reading the
+       constant here. The ad network is never consulted about WHERE a slot
+       goes, and a future change (an operator setting, a per-plan or
+       per-experiment cadence) needs no client change at all.
+
+    Deps are unchanged apart from `adInterval`, so this recomputes exactly as
+    often as it did before — appending a page, not on every render.
+  */
   const stream = useMemo(
-    () => buildSmartStream(items, { deck, sparkEvery: 6, balance: false }),
-    [items, deck],
+    () => buildSmartStream(items, { deck, sparkEvery: 6, balance: false, adEvery: adInterval }),
+    [items, deck, adInterval],
   );
 
   return (
@@ -858,6 +913,21 @@ export function SmartFeed({
                   {stream.map((slot, index) =>
                     slot.type === "post" ? (
                       <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} priority={index < 2} />
+                    ) : slot.type === "ad" ? (
+                      /*
+                        🔴 KEYED ON `anchorId`, NEVER ON THE INDEX OR THE
+                        ORDINAL (2026-08-24). `anchorId` is the id of the post
+                        this slot follows, so hiding/muting a post ABOVE it does
+                        not change this slot's React identity. An index or an
+                        `feed-ad-N` ordinal would renumber on every removal,
+                        React would unmount and remount each slot below, and
+                        every visible ad would reload — the reinitialisation the
+                        brief's §10 prohibits.
+
+                        The component itself renders nothing but a reserved box
+                        until the reader is within ~600px; see feed-ad-slot.tsx.
+                      */
+                      <FeedAdSlot key={`ad-${slot.anchorId}`} slotId={slot.slotId} />
                     ) : (
                       <div key={slot.card.id} className="my-4 first:mt-0">
                         <SparkCard card={slot.card} />

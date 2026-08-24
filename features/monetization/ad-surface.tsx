@@ -41,11 +41,24 @@ export function AdSurface({
   /** Constrains the card. Match it to the content column it sits under. */
   maxWidth = "max-w-2xl",
   label = "Sponsored",
+  onResolved,
 }: {
   zone: AdZone;
   className?: string;
   maxWidth?: string;
   label?: string | null;
+  /**
+   * Mirrors `AdSlot`'s own `onResolved` up to this surface's parent.
+   *
+   * Added for the in-feed placement (2026-08-24), which reserves vertical space
+   * BEFORE the ad answers so a late arrival cannot shove posts downward, and
+   * therefore has to know when to release that reservation. This component
+   * already computes the answer for its own `hidden` class — a parent that
+   * needed it was otherwise forced to duplicate the whole card treatment just
+   * to get at it, which is exactly the divergence this component exists to
+   * prevent.
+   */
+  onResolved?: (hasAd: boolean) => void;
 }) {
   const { showAds, ready } = useShowAds();
   const [hasAd, setHasAd] = useState<boolean | null>(null);
@@ -86,7 +99,14 @@ export function AdSurface({
           after it answers is impossible — it is the thing that asks — and
           moving it between branches would remount it into a second request.
         */}
-        <AdSlot zone={zone} dismissible={false} onResolved={setHasAd} />
+        <AdSlot
+          zone={zone}
+          dismissible={false}
+          onResolved={(has) => {
+            setHasAd(has);
+            onResolved?.(has);
+          }}
+        />
       </div>
     </div>
   );

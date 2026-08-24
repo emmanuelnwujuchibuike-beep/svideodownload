@@ -76,7 +76,18 @@ async function FeedData() {
 
   return (
     <AppContent>
-      <SmartFeed initialItems={page.items} initialNextOffset={page.nextOffset} initialSeed={seed} friendCount={friends} />
+      {/* `initialAdInterval` is the server's own decision about ad cadence —
+          see lib/feed/ad-slots.ts. This route is the PUBLIC feed and renders
+          for logged-out visitors too; the slots are composed identically, and
+          FeedAdSlot's own premium check is what suppresses them for
+          subscribers. Posts never depend on an ad resolving. */}
+      <SmartFeed
+        initialItems={page.items}
+        initialNextOffset={page.nextOffset}
+        initialSeed={seed}
+        friendCount={friends}
+        initialAdInterval={page.adInterval}
+      />
     </AppContent>
   );
 }

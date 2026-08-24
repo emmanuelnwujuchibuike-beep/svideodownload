@@ -1,4 +1,5 @@
 import { cacheDelete, getCached } from "@/lib/cache";
+import { FEED_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -133,7 +134,38 @@ export interface FeedItem {
 
 export interface FeedPage {
   items: FeedItem[];
+  /**
+   * 🔴 A POST OFFSET, AND ONLY EVER A POST OFFSET.
+   *
+   * Advertising slots are composed on top of this list at render time and are
+   * never rows in it (2026-08-24). Nothing may add to this because an ad was
+   * shown — doing so advances the cursor past real posts, which surfaces as
+   * "posts are missing from my feed" and is essentially untraceable back to
+   * advertising. See `countPosts` in lib/feed/ad-slots.ts.
+   */
   nextOffset: number | null;
+  /**
+   * Insert an ad slot after every N posts; 0 means none.
+   *
+   * The SERVER decides this — the brief's core requirement is that the ad
+   * network must not be what determines where an ad appears. It travels in the
+   * payload rather than being read from the constant on the client so that the
+   * cadence can later become an operator setting (or vary by surface, plan or
+   * experiment) with no client change at all: one server value feeds every
+   * render path.
+   */
+  adInterval: number;
+}
+
+/**
+ * The "nothing to show" page.
+ *
+ * Still carries `adInterval` so the shape is uniform — a caller must never have
+ * to check whether the field is present, and an empty feed with no posts simply
+ * composes no slots (ads are only ever placed BETWEEN posts).
+ */
+function emptyFeedPage(): FeedPage {
+  return { items: [], nextOffset: null, adInterval: FEED_AD_INTERVAL };
 }
 
 export interface Row {
@@ -592,7 +624,7 @@ export async function getHomeFeed(opts: {
   const reshuffles = sort === "for_you" || (sort === "following" && format === "reel");
   const seed = reshuffles ? opts.seed : undefined;
   const exclude = opts.excludeIds?.length ? [...new Set(opts.excludeIds)] : undefined;
-  if (!hasSupabase) return { items: [], nextOffset: null };
+  if (!hasSupabase) return emptyFeedPage();
   // Cached briefly per (viewer, sort, format, page) so SSR seeding + client
   // revalidation stay cheap. Feed freshness within 20s is fine.
   // `seed` MUST be part of the key: it changes the returned ORDER, so sharing
@@ -654,7 +686,7 @@ async function loadHomeFeed(
       followingIds = ((follows ?? []) as { following_id: string }[]).map((f) => f.following_id);
     }
     if (sort === "following" && followingIds.length === 0) {
-      return { items: [], nextOffset: null };
+      return emptyFeedPage();
     }
 
     // Candidate window.
@@ -713,7 +745,7 @@ async function loadHomeFeed(
 
     const { data } = await q;
     let rows = (data as Row[]) ?? [];
-    if (rows.length === 0) return { items: [], nextOffset: null };
+    if (rows.length === 0) return emptyFeedPage();
     // Personalization (Feature 17 Part 13) only ever applies to "for_you" —
     // same rule as rankForYou itself: "following"/"recent"/"trending" stay a
     // plain, literal view. A muted category is excluded outright (mirrors
@@ -1028,9 +1060,9 @@ async function loadHomeFeed(
         /* surfacing is best-effort */
       }
     }
-    return { items, nextOffset };
+    return { items, nextOffset, adInterval: FEED_AD_INTERVAL };
   } catch {
-    return { items: [], nextOffset: null };
+    return emptyFeedPage();
   }
 }
 

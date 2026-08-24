@@ -1,3 +1,5 @@
+import { FEED_AD_MIN_INTERVAL } from "@/lib/feed/ad-slots";
+
 import type { FeedItem } from "./home-feed";
 
 /**
@@ -141,19 +143,51 @@ export function buildSparkDeck(ctx: SparkContext = {}): SparkCard[] {
 
 export type SmartSlot =
   | { type: "post"; item: FeedItem; reason: SmartReason | null }
-  | { type: "spark"; card: SparkCard };
+  | { type: "spark"; card: SparkCard }
+  /**
+   * An advertisement position. Carries no creative and makes no request — see
+   * lib/feed/ad-slots.ts for the WHERE and features/feed/feed-ad-slot.tsx for
+   * the WHEN. `anchorId` is the React key (why: ad-slots.ts's own note).
+   */
+  | { type: "ad"; slotId: string; anchorId: string };
 
 /**
- * Weave posts and Spark Cards into a single ordered stream. A spark card is
- * dropped in every `sparkEvery` posts (default 6), cycling through the deck, so
- * discovery moments feel occasional and intentional. Balancing runs first.
+ * Weave posts, Spark Cards and ad slots into a single ordered stream.
+ *
+ * A spark card is dropped in every `sparkEvery` posts (default 6), cycling
+ * through the deck, so discovery moments feel occasional and intentional.
+ * Balancing runs first.
+ *
+ * ── Ads are composed HERE, with everything else (2026-08-24) ───────────────
+ * This function is the feed's single composition point, and it is pure — which
+ * is what lets the ad sequence be decided by the server: `SmartFeed` calls it
+ * during server render, so the first ad slot is present in the initial HTML
+ * rather than appearing after hydration.
+ *
+ * 🔴 ADS ARE PLACED AGAINST THE POST COUNT, NOT THE SLOT COUNT. Spark cards
+ * occupy positions in the output but are not posts, so counting emitted slots
+ * would let a spark card shift the ad rhythm and produce "3 posts, spark, ad".
+ * The `posts` counter below is incremented only for real posts, which is the
+ * same discipline `countPosts` enforces on the pagination cursor.
  */
 export function buildSmartStream(
   items: FeedItem[],
-  opts: { deck?: SparkCard[]; sparkEvery?: number; startIndex?: number; balance?: boolean } = {},
+  opts: {
+    deck?: SparkCard[];
+    sparkEvery?: number;
+    startIndex?: number;
+    balance?: boolean;
+    /**
+     * Insert an ad slot after every N posts. Omit or pass 0 to insert none —
+     * which is what a premium member, or a feed with advertising switched off,
+     * passes. The value comes from the server (see FEED_AD_INTERVAL).
+     */
+    adEvery?: number;
+  } = {},
 ): SmartSlot[] {
   const deck = opts.deck ?? [];
   const sparkEvery = Math.max(3, opts.sparkEvery ?? 6);
+  const adEvery = opts.adEvery && opts.adEvery > 0 ? Math.max(FEED_AD_MIN_INTERVAL, Math.floor(opts.adEvery)) : 0;
   // Balancing is skipped when the caller already balanced each page on arrival
   // (prevents the loaded feed from visibly reshuffling as new pages append).
   const balanced = opts.balance === false ? items : balanceByKind(items);
@@ -166,6 +200,21 @@ export function buildSmartStream(
     if (deck.length && globalIndex % sparkEvery === 0) {
       const card = deck[Math.floor(globalIndex / sparkEvery - 1) % deck.length];
       if (card) slots.push({ type: "spark", card });
+    }
+    /*
+      No TRAILING slot: the last loaded post is directly above the
+      infinite-scroll sentinel, so a slot there would already be inside the ad
+      observer's 600px root margin at mount — every batch would load an ad the
+      reader has not reached. It also puts an ad, rather than content, exactly
+      where "load more" fires.
+    */
+    const isLast = i === balanced.length - 1;
+    if (adEvery && globalIndex % adEvery === 0 && !isLast) {
+      slots.push({
+        type: "ad",
+        slotId: `feed-ad-${globalIndex / adEvery}`,
+        anchorId: item.id,
+      });
     }
   });
   return slots;

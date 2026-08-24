@@ -1,8 +1,10 @@
 "use client";
 
 import { Clock, Search, TrendingUp, X } from "lucide-react";
-import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { NotificationBell } from "@/features/app-shell/notification-bell";
+import { SearchCommitProvider } from "@/features/search/search-commit";
 import { SearchResultsView } from "@/features/search/search-results-view";
 import {
   clearRecentSearches,
@@ -201,29 +203,48 @@ export function SearchExperience({
 
   const searching = query.length > 0;
 
+  /*
+    A stable identity for the provider value, so a keystroke re-render of THIS
+    component never invalidates the context for every card below it.
+  */
+  const commitFn = useMemo(() => (term: string, t?: SearchType) => commit(term, t ?? type), [commit, type]);
+
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <SearchCommitProvider value={commitFn}>
+    {/* `-mt-4` cancels AppContent's own `pt-4` below `lg`, so the header this
+        page took over from the topbar sits flush against the top of the screen
+        rather than floating 16px under the status bar. From `lg` the real
+        topbar is back and that breathing room is wanted again. */}
+    <div className="mx-auto -mt-4 w-full max-w-3xl lg:mt-0">
       {/*
+        🔴 THE FIELD IS THE TOP HEADER ON MOBILE (owner, 2026-08-24: "on the
+        search page the search icon shouldnt be there, only the search
+        placeholder that is supposed to be at the top header where the search
+        icon is").
+
+        `AppTopbar` hides itself on this route below `lg` (one condition,
+        exactly the pattern `/messages` already uses), so there is no longer a
+        near-empty bar holding a magnifier above a search field that does the
+        same job. This row takes its place: the field where the icon was, the
+        notification bell where the bell was. The topbar drops its own bell on
+        this route so it is never mounted twice.
+
         Sticky, not fixed. A `fixed` bar is what fights the iOS viewport when
         the keyboard opens; a sticky one rides the document and stays put on
-        its own. It offsets below the app topbar (which is itself `sticky
-        top-0`) and below the announcement bar when one is showing, both read
-        from the tokens those components publish — no measurement, no
-        ResizeObserver, no scroll listener.
-      */}
-      {/*
-        The header's ground is the CANVAS colour, not `bg-background`. On this
-        page `AppContent canvas` tints the body to `--frenz-canvas` (a light
-        neutral in light mode, the app's deep background in dark), so a
-        `bg-background` bar would be a white strip sitting on grey until the
-        moment it sticks. Matching the canvas means it is invisible at rest and
-        becomes an opaque ground only once content is passing beneath it.
+        its own. On mobile it pins to the very top and owns the status-bar
+        inset itself; from `lg` the topbar is back, so it tucks beneath it —
+        offset from the tokens the topbar and announcement bar publish, with
+        no measurement, no ResizeObserver and no scroll listener.
+
+        Its ground is the CANVAS colour, not `bg-background`: this page uses
+        `AppContent canvas`, so a `bg-background` bar would be a white strip
+        sitting on grey until the moment it stuck.
       */}
       <div
-        className="sticky z-20 -mx-3 bg-[hsl(var(--frenz-canvas))] px-3 pb-1 pt-1 sm:-mx-4 sm:px-4"
-        style={{ top: "calc(4rem + var(--frenz-safe-top) + var(--frenz-announce-h, 0px))" }}
+        className="sticky top-0 z-20 -mx-3 bg-[hsl(var(--frenz-canvas))] px-3 pb-1 pt-[var(--frenz-safe-top)] sm:-mx-4 sm:px-4 lg:top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))] lg:pt-1"
       >
-        <form role="search" onSubmit={submit} className="relative">
+        <div className="flex items-center gap-2">
+        <form role="search" onSubmit={submit} className="relative min-w-0 flex-1">
           <label htmlFor="frenz-search" className="sr-only">
             Search Frenzsave
           </label>
@@ -277,6 +298,12 @@ export function SearchExperience({
             <X className="h-4 w-4" aria-hidden />
           </button>
         </form>
+        {/* The bell the hidden topbar would have shown. `lg:hidden` because
+            from `lg` the topbar is back and owns it again. */}
+        <span className="shrink-0 lg:hidden">
+          <NotificationBell />
+        </span>
+        </div>
 
         <SearchTabs active={type} onPick={pickTab} />
       </div>
@@ -285,8 +312,10 @@ export function SearchExperience({
         id="search-panel"
         role="tabpanel"
         aria-labelledby={`search-tab-${type}`}
+        // No bottom padding of its own: AppContent's `pb-24` already clears the
+        // mobile nav, and adding a second nav-height pad stacked ~10rem of dead
+        // space under the last card.
         className="pt-3"
-        style={{ paddingBottom: "calc(var(--frenz-bottom-nav) + 1rem)" }}
       >
         {searching ? (
           <SearchResultsView
@@ -314,6 +343,7 @@ export function SearchExperience({
         )}
       </div>
     </div>
+    </SearchCommitProvider>
   );
 }
 

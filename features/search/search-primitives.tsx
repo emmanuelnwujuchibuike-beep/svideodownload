@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -6,7 +5,7 @@ import { VerifiedTick } from "@/components/badges/identity-badges";
 import { cn } from "@/lib/utils";
 
 /**
- * The shared visual vocabulary of /search — avatars, section cards, headers.
+ * The shared visual vocabulary of /search — section cards, headers, name lines.
  *
  * 🔴 NO `"use client"` HERE, DELIBERATELY. Everything in this file is pure and
  * hook-free, so the server-rendered discovery sections can use it as RSC and
@@ -14,56 +13,12 @@ import { cn } from "@/lib/utils";
  * results view (which is a client component) can import exactly the same
  * pieces. One vocabulary, two rendering modes — the alternative was two sets
  * of near-identical card components that drift apart.
+ *
+ * Images live in `media.tsx` instead, and that file IS client — an `onError`
+ * fallback is the only way to survive an expired source-CDN thumbnail, and
+ * `onError` needs a client component. Keeping them apart is what stops one
+ * unavoidable client leaf from converting this whole vocabulary.
  */
-
-/**
- * A round avatar. Always `next/image`: `next.config.ts` allows any https
- * remote and keeps 32/64/128/256 rungs specifically so avatars download at
- * their real size in AVIF/WebP rather than as a full-resolution JPEG. Explicit
- * width/height means the circle occupies its space before the bytes arrive, so
- * it can never shift the row it is in.
- */
-export function Avatar({
-  src,
-  name,
-  size,
-  className,
-}: {
-  src: string | null | undefined;
-  name: string;
-  size: number;
-  className?: string;
-}) {
-  if (src) {
-    // The width/height ATTRIBUTES are what reserve the space (the browser
-    // derives the aspect ratio from them), so no inline size is needed — and
-    // an inline size would beat any className a call site passes, which is the
-    // kind of override that only shows up as a 1px crop months later.
-    return (
-      <Image
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        loading="lazy"
-        decoding="async"
-        className={cn("shrink-0 rounded-full bg-secondary object-cover", className)}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden
-      style={{ width: size, height: size, fontSize: Math.max(11, Math.round(size * 0.4)) }}
-      className={cn(
-        "srch-ring flex shrink-0 items-center justify-center rounded-full font-bold text-white",
-        className,
-      )}
-    >
-      {name.trim().charAt(0).toUpperCase() || "?"}
-    </span>
-  );
-}
 
 /** A name + optional verification seal, truncating as one unit. */
 export function NameLine({

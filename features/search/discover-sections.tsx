@@ -1,10 +1,11 @@
 import { Flame, Play, Plus, UserRound, Users } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FollowPill } from "@/features/search/follow-pill";
-import { Avatar, NameLine, SectionCard, SectionHeader } from "@/features/search/search-primitives";
+import { Avatar, CreatorPortrait, SafeImage, VideoCover } from "@/features/search/media";
+import { NameLine, SectionCard, SectionHeader } from "@/features/search/search-primitives";
+import { SearchAction } from "@/features/search/tag-chip";
 import { VideoMoreButton } from "@/features/search/video-more-button";
 import { TRENDING_CARD_COUNT, type DiscoverVideo, type SearchDiscover } from "@/lib/social/discover";
 import type { TrendingTag } from "@/lib/social/hashtags";
@@ -16,23 +17,24 @@ import { formatCompactNumber } from "@/lib/utils";
  * Popular videos.
  *
  * ── 🔴 EVERY SECTION HERE IS A SERVER COMPONENT ───────────────────────────
- * This is the entire first screen, and it ships as HTML with no component
- * JavaScript at all. The only client code in the whole block is a Follow pill
- * and a share button — small leaves at the edges, not a client boundary around
- * the tree. `SearchExperience` receives this as a `ReactNode` prop, so putting
- * an interactive search field on top of it does NOT drag it across the
- * client boundary; it stays RSC output the client shell simply positions.
+ * This is the entire first screen, and it ships as HTML. The only client code
+ * is a handful of leaves — a Follow pill, a share button, the image wrappers
+ * that need `onError`, and the tag cards that run a search in place.
+ * `SearchExperience` receives all of this as `ReactNode` props, so putting an
+ * interactive search field above it does NOT drag it across the client
+ * boundary; it stays RSC output the client shell positions.
  *
- * That is why this page can carry four rails of imagery and still paint its
- * first screen without waiting on hydration.
+ * ── 🔴 EVERY CROSS-ROUTE LINK PREFETCHES ──────────────────────────────────
+ * Owner, 2026-08-24: "everything is suppose to prefetch immediately as the
+ * search page opens so nothing loads when clicked". Next's App Router only
+ * prefetches a dynamic route's `loading.tsx` boundary by default, which is
+ * why a tap still felt like it was fetching. `prefetch` here is explicit, and
+ * viewport-triggered — a card three screens down the rail costs nothing until
+ * it is scrolled near, at which point its destination is already warm.
+ *
+ * Searches, by contrast, never navigate at all — see `search-commit.tsx`.
  */
 
-/**
- * The three browse cards. Rendered BELOW the client shell's recent/trending
- * shortcuts, which is why the circular row is a separate export — the
- * reference puts those circles directly under the tabs, above everything else,
- * and the shortcuts sit between them and these cards.
- */
 export function DiscoverSections({
   discover,
   canFollow,
@@ -79,7 +81,7 @@ export function DiscoveryRow({
       {creators.map((c) => (
         <Circle key={c.id} href={`/u/${c.handle}`} label={c.handle} verified={c.isVerified}>
           {/* 62px = the 70px ring minus its 2.5px gradient edge and 2px gap. */}
-          <Avatar src={c.avatarUrl} name={c.displayName} size={62} />
+          <Avatar src={c.avatarUrl} size={62} />
         </Circle>
       ))}
     </nav>
@@ -106,7 +108,7 @@ function Circle({
   children: React.ReactNode;
 }) {
   return (
-    <Link href={href} className="srch-press flex w-[74px] flex-col items-center gap-1.5">
+    <Link href={href} prefetch className="srch-press flex w-[74px] flex-col items-center gap-1.5">
       <span className="srch-ring relative flex h-[70px] w-[70px] items-center justify-center rounded-full p-[2.5px]">
         <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-background p-[2px]">
           {children}
@@ -147,9 +149,11 @@ function TrendingNow({ tags }: { tags: TrendingTag[] }) {
 
 function TrendingTagCard({ tag, rank }: { tag: TrendingTag; rank: number }) {
   return (
-    <Link
-      href={`/search?q=%23${encodeURIComponent(tag.tag)}&type=hashtag`}
-      className="srch-press flex items-center gap-3 rounded-2xl bg-secondary/70 p-2.5 pr-2.5"
+    <SearchAction
+      term={`#${tag.tag}`}
+      type="hashtag"
+      ariaLabel={`Search #${tag.tag}`}
+      className="srch-press flex w-full items-center gap-3 rounded-2xl bg-secondary/70 p-2.5 text-left"
     >
       {/* The top three read as a ranking; the rest are just positions. */}
       <span
@@ -166,20 +170,26 @@ function TrendingTagCard({ tag, rank }: { tag: TrendingTag; rank: number }) {
           {formatCompactNumber(tag.postCount)} {tag.postCount === 1 ? "post" : "posts"}
         </span>
       </span>
-      {tag.thumbnailUrl ? (
-        <Image
-          src={tag.thumbnailUrl}
-          alt=""
-          width={44}
-          height={44}
-          loading="lazy"
-          decoding="async"
-          className="h-11 w-11 shrink-0 rounded-xl bg-secondary object-cover"
-        />
-      ) : (
-        <span aria-hidden className="srch-ring h-11 w-11 shrink-0 rounded-xl opacity-70" />
-      )}
-    </Link>
+      <TagThumb src={tag.thumbnailUrl} />
+    </SearchAction>
+  );
+}
+
+/** A tag's cover, degrading to a neutral tile rather than a broken-image glyph. */
+export function TagThumb({ src, className = "h-11 w-11" }: { src: string | null; className?: string }) {
+  return (
+    <SafeImage
+      src={src ?? ""}
+      alt=""
+      width={44}
+      height={44}
+      loading="lazy"
+      decoding="async"
+      fallback={
+        <span aria-hidden className={`shrink-0 rounded-xl bg-secondary ${className}`} />
+      }
+      className={`shrink-0 rounded-xl bg-secondary object-cover ${className}`}
+    />
   );
 }
 
@@ -202,16 +212,8 @@ function SuggestedForYou({ creators, canFollow }: { creators: SuggestedCreator[]
             key={c.id}
             className="w-[144px] rounded-2xl border border-border/60 bg-secondary/50 p-2.5"
           >
-            <Link href={`/u/${c.handle}`} className="srch-press block">
-              <Image
-                src={c.avatarUrl ?? "/brand/frenz-logo-tile.png"}
-                alt=""
-                width={128}
-                height={160}
-                loading="lazy"
-                decoding="async"
-                className="mb-2.5 h-[150px] w-full rounded-xl bg-secondary object-cover"
-              />
+            <Link href={`/u/${c.handle}`} prefetch className="srch-press block">
+              <CreatorPortrait src={c.avatarUrl} className="mb-2.5 h-[150px] w-full rounded-xl" />
               <NameLine name={c.displayName} verified={c.isVerified} className="text-[13.5px] font-semibold" />
               <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">@{c.handle}</span>
               <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">
@@ -251,30 +253,22 @@ function PopularVideos({ videos }: { videos: DiscoverVideo[] }) {
 }
 
 /**
- * 🔴 A COVER IMAGE, NEVER A `<video>`. Ten `<video preload="metadata">` tiles
- * in one rail is ten media pipelines and ten range requests for artwork the
- * poster already provides — and it is how a page ends up with several clips
- * playing at once. Nothing on this page autoplays, and nothing here is a video
- * element at all; the reel itself plays in the reels viewer, one at a time,
- * where the shared video coordinator can enforce that.
+ * Nothing here ever autoplays. `VideoCover` paints the stored cover when there
+ * is one and the media's own first frame when there is not — see the extended
+ * note on it in media.tsx for why that one exception exists and how bounded it
+ * is.
  */
 function VideoCard({ video: v }: { video: DiscoverVideo }) {
   return (
     <article className="w-[164px]">
-      <Link href={v.href} prefetch={false} className="srch-press block">
+      <Link href={v.href} prefetch className="srch-press block">
         <span className="relative block aspect-[9/16] w-full overflow-hidden rounded-2xl bg-secondary">
-          {v.thumbnailUrl ? (
-            <Image
-              src={v.thumbnailUrl}
-              alt=""
-              fill
-              sizes="164px"
-              loading="lazy"
-              className="object-cover"
-            />
-          ) : (
-            <span aria-hidden className="srch-ring absolute inset-0 opacity-40" />
-          )}
+          <VideoCover
+            thumbnailUrl={v.thumbnailUrl}
+            mediaUrl={v.mediaUrl}
+            mediaKind={v.mediaKind}
+            sizes="164px"
+          />
           {/* Play indicator — a mark on the artwork, not a control. */}
           <span
             aria-hidden
@@ -290,8 +284,12 @@ function VideoCard({ video: v }: { video: DiscoverVideo }) {
         <span className="mt-1 block truncate text-[13.5px] font-semibold">{v.title}</span>
       </Link>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <Link href={`/u/${v.publisher.handle}`} className="srch-press flex min-w-0 flex-1 items-center gap-1.5">
-          <Avatar src={v.publisher.avatarUrl} name={v.publisher.displayName} size={20} />
+        <Link
+          href={`/u/${v.publisher.handle}`}
+          prefetch
+          className="srch-press flex min-w-0 flex-1 items-center gap-1.5"
+        >
+          <Avatar src={v.publisher.avatarUrl} size={20} />
           <NameLine
             name={v.publisher.handle}
             verified={v.publisher.isVerified}

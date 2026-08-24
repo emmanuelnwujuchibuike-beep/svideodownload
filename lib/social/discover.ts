@@ -26,6 +26,16 @@ export interface DiscoverVideo {
   href: string;
   title: string;
   thumbnailUrl: string | null;
+  /**
+   * The media file, so a post with NO stored cover can still show its real
+   * first frame instead of a blank tile (owner, 2026-08-24). Verified against
+   * the live table: the offending posts have `thumbnail_url = NULL` AND
+   * `stream_uid = NULL` — Cloudflare Stream is not configured here, so the mp4
+   * is genuinely the only source of a cover. See `VideoCover` in
+   * features/search/media.tsx.
+   */
+  mediaUrl: string | null;
+  mediaKind: string;
   viewsCount: number;
   publisher: {
     handle: string;
@@ -67,6 +77,8 @@ export async function getSearchDiscover(viewerId: string | null): Promise<Search
       href: postHref(item),
       title: item.title,
       thumbnailUrl: item.thumbnailUrl,
+      mediaUrl: item.mediaUrl,
+      mediaKind: item.mediaKind,
       viewsCount: item.viewsCount,
       publisher: {
         handle: item.publisher.handle,

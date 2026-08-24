@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
+import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { UserMenu } from "@/features/auth/user-menu";
@@ -35,13 +36,23 @@ export function AppTopbar() {
   */
   const { handle } = useEntitlements();
   /*
-    The Search DESTINATION is reached from this header, not from the bottom
-    bar — that bar's tab set (Home / Friends / Reels / Chats / Profile, or the
-    Downloader's four) has no Search slot, and adding one would change primary
-    navigation for every signed-in surface. So "the Search item is active" is
-    honoured where the Search item actually lives: this glyph, tinted with the
-    same `text-primary` the bottom nav uses for its selected tab, plus
-    `aria-current` so it is announced as the current page too.
+    🔴 THIS BAR STANDS DOWN ON /search, BELOW `lg` (owner, 2026-08-24: "on the
+    search page the search icon shouldnt be there, only the search placeholder
+    that is supposed to be at the top header where the search icon is, remove
+    the search icon on the search page").
+
+    On that route this bar held a magnifier that opened the page you were
+    already on, above a search field doing the same job — a whole header row
+    of duplicate affordance. Rather than delete the icon and leave an empty
+    bar behind it, the SEARCH PAGE takes the row: it renders the field where
+    the magnifier was and the bell where the bell was (see
+    features/search/search-experience.tsx). Same one-condition mechanism
+    `/messages` already uses to own its own top chrome.
+
+    Below, `searchActive` also removes this bar's own notification bell and
+    both of its search entry points, so nothing is ever mounted twice and the
+    desktop layout (where this bar returns at `lg`) keeps no redundant
+    magnifier either.
   */
   const searchActive = pathname === "/search" || pathname.startsWith("/search?");
   const [q, setQ] = useState("");
@@ -115,6 +126,30 @@ export function AppTopbar() {
     return () => setTopbarHidden(false);
   }, []);
 
+  /*
+    🔴 WARM /search FROM EVERY PAGE THAT OFFERS IT (owner, 2026-08-24: "the
+    search landing page should prefetch when any page that has the search
+    button opens, to avoid loading, so it opens like the history page").
+
+    This bar IS "any page that has the search button" — it is mounted by
+    `(app)/layout.tsx` on every signed-in surface, so one effect here reaches
+    downloads, feed, history, home and the rest without touching any of them.
+    Exactly the recipe `mobile-nav.tsx` already uses to make its own tabs open
+    on the first tap: fire after mount so it never blocks first paint, and skip
+    it entirely on data-saver/2G, since this spends bandwidth whether or not
+    the visitor ever taps search.
+
+    `app/(app)/search/loading.tsx` is what makes this work at all — a dynamic
+    route with no `loading.tsx` has no static Suspense boundary for the router
+    to prefetch INTO, which is the trap that made earlier prefetches look like
+    no-ops. /search has one, same as /history.
+  */
+  useEffect(() => {
+    if (searchActive || isSlowConnection()) return;
+    const id = setTimeout(() => router.prefetch("/search"), 400);
+    return () => clearTimeout(id);
+  }, [router, searchActive]);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const term = q.trim();
@@ -153,29 +188,34 @@ export function AppTopbar() {
         // was built, reshaped twice for seam/intensity issues, and then
         // explicitly removed in one conversation.
         "border-b border-border/20 bg-background",
-        onMessagesIndex && "hidden lg:flex",
+        (onMessagesIndex || searchActive) && "hidden lg:flex",
       )}
     >
       {/* Far-left: search + create — kept apart from the action cluster so
           the right side never gets crowded. */}
       <div className="flex shrink-0 items-center gap-2">
-        {/* Mobile search entry (the search box is tablet+ only) */}
+        {/* Mobile search entry (the search box is tablet+ only) — never on
+            /search itself, which renders the real field in this row instead. */}
+        {searchActive ? null : (
         <PressIcon className="relative sm:hidden">
           <Link
             href="/search"
             aria-label="Search"
             aria-current={searchActive ? "page" : undefined}
+            onPointerEnter={() => router.prefetch("/search")}
+            onPointerDown={() => router.prefetch("/search")}
             onClick={() => {
               haptic("light");
               playSound("tap");
             }}
             className="flex h-11 w-11 items-center justify-center"
           >
-            <IconTile className={searchActive ? "text-primary" : undefined}>
+            <IconTile>
               <IoSearchOutline className="h-[26px] w-[26px]" />
             </IconTile>
           </Link>
         </PressIcon>
+        )}
         {/*
           The wordmark, in the same `text-gradient` the `Frenz` lockup uses
           (components/brand/frenz-logo.tsx), so it reads as one brand rather
@@ -255,26 +295,34 @@ export function AppTopbar() {
           <div className="flex flex-1 items-center justify-center">{center}</div>
           {/* Desktop search fallback — the inline pill is off-screen while the
               slot is active, so ⌘K/search still needs a reachable entry point. */}
+          {searchActive ? null : (
           <PressIcon className="hidden sm:inline-flex">
             <Link
             href="/search"
             aria-label="Search"
             aria-current={searchActive ? "page" : undefined}
+            onPointerEnter={() => router.prefetch("/search")}
+            onPointerDown={() => router.prefetch("/search")}
             onClick={() => {
               haptic("light");
               playSound("tap");
             }}
             className="flex h-11 w-11 items-center justify-center"
           >
-              <IconTile className={searchActive ? "text-primary" : undefined}>
+              <IconTile>
                 <IoSearchOutline className="h-[26px] w-[26px]" />
               </IconTile>
             </Link>
           </PressIcon>
+          )}
         </>
       ) : (
         <>
-          {/* Search — pill, Instagram/Snapchat style (desktop, fills the middle) */}
+          {/* Search — pill, Instagram/Snapchat style (desktop, fills the middle).
+              On /search the page owns the field, so this becomes a bare spacer:
+              the right cluster still reaches the far edge, and there is no
+              second search affordance anywhere in the bar. */}
+          {searchActive ? <div className="hidden flex-1 sm:block" /> : (
           <form onSubmit={submit} className="relative hidden max-w-xl flex-1 sm:block">
             <IoSearchOutline className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
             <input
@@ -289,6 +337,7 @@ export function AppTopbar() {
               ⌘K
             </kbd>
           </form>
+          )}
 
           {/* Mobile spacer — pushes the action cluster to the far right */}
           <div className="flex-1 sm:hidden" />
@@ -355,9 +404,15 @@ export function AppTopbar() {
             mockup's other right-side circle (two-people) is the feed's own
             Following segment, rendered by FeedTopbarTabs in the center slot
             — adding a separate Friends icon here duplicated it and pushed
-            this bell off-screen. */}
-        <span className="lg:hidden">
-          <NotificationBell />
+            this bell off-screen.
+
+            🔴 NOT on /search: this bar is `display:none` below `lg` there, but
+            a hidden element is still MOUNTED, and the search page renders its
+            own bell in the row it took over. Two NotificationBells would mean
+            two PWA app-icon badge writers for one count. Rendered, not hidden,
+            is the distinction that matters. */}
+        <span className={searchActive ? "hidden" : "lg:hidden"}>
+          {searchActive ? null : <NotificationBell />}
         </span>
 
         <div className="hidden sm:block">

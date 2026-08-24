@@ -2,12 +2,13 @@
 
 import { Hash, MapPin, Music, RotateCw, SearchX } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { PostGrid } from "@/components/social/post-grid";
 import { FollowPill } from "@/features/search/follow-pill";
-import { Avatar, NameLine } from "@/features/search/search-primitives";
+import { Avatar, SafeImage } from "@/features/search/media";
+import { NameLine } from "@/features/search/search-primitives";
+import { SearchAction } from "@/features/search/tag-chip";
 import { Skeleton, SkeletonSection } from "@/features/ui/skeleton";
 import type { TrendingTag } from "@/lib/social/hashtags";
 import type { PlaceResult } from "@/lib/social/places";
@@ -25,6 +26,12 @@ import { formatCompactNumber } from "@/lib/utils";
  * is how much lands in the DOM on the first frame, so each list renders a
  * page of 12 and reveals the rest on demand. No observer, no scroll listener:
  * one button, one state flip.
+ *
+ * ── A row either NAVIGATES or SEARCHES, never both ────────────────────────
+ * People, sounds and posts lead somewhere else, so they are prefetching links.
+ * Hashtags and places lead back to this very page, so they are NOT links at
+ * all — they run the search in place. See `search-commit.tsx` for the report
+ * that forced that distinction.
  */
 
 const FIRST_PAGE = 12;
@@ -108,7 +115,7 @@ export function SearchResultsView({
   );
 }
 
-function Group({ title, children }: { title: string | null; children: React.ReactNode }) {
+function Group({ title, children }: { title: string | null; children: ReactNode }) {
   return (
     <section>
       {title ? (
@@ -128,7 +135,7 @@ function Paged<T>({
   more,
 }: {
   items: T[];
-  render: (item: T) => React.ReactNode;
+  render: (item: T) => ReactNode;
   more: string;
 }) {
   const [all, setAll] = useState(false);
@@ -151,30 +158,73 @@ function Paged<T>({
 
 /* ── Rows ──────────────────────────────────────────────────────────────── */
 
-/** The shared row shell: a tappable surface with an icon/avatar, two lines and
-    an optional trailing control. */
-function Row({
-  href,
+const ROW = "flex min-w-0 flex-1 items-center gap-3 text-left";
+const ROW_LI =
+  "flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors duration-150 hover:bg-secondary/60";
+
+function RowBody({
   leading,
   title,
   subtitle,
-  trailing,
 }: {
-  href: string;
-  leading: React.ReactNode;
-  title: React.ReactNode;
-  subtitle: React.ReactNode;
-  trailing?: React.ReactNode;
+  leading: ReactNode;
+  title: ReactNode;
+  subtitle: ReactNode;
 }) {
   return (
-    <li className="flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors duration-150 hover:bg-secondary/60">
-      <Link href={href} className="flex min-w-0 flex-1 items-center gap-3">
-        {leading}
-        <span className="min-w-0 flex-1">
-          {title}
-          <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{subtitle}</span>
-        </span>
+    <>
+      {leading}
+      <span className="min-w-0 flex-1">
+        {title}
+        <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{subtitle}</span>
+      </span>
+    </>
+  );
+}
+
+/** A row that goes somewhere else. `prefetch` so the tap is instant. */
+function LinkRow({
+  href,
+  trailing,
+  ...body
+}: {
+  href: string;
+  leading: ReactNode;
+  title: ReactNode;
+  subtitle: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <li className={ROW_LI}>
+      <Link href={href} prefetch className={ROW}>
+        <RowBody {...body} />
       </Link>
+      {trailing}
+    </li>
+  );
+}
+
+/** A row that re-runs the search on this page. Never a navigation. */
+function ActionRow({
+  term,
+  type,
+  ariaLabel,
+  trailing,
+  ...body
+}: {
+  term: string;
+  type: SearchType;
+  ariaLabel: string;
+  leading: ReactNode;
+  title: ReactNode;
+  subtitle: ReactNode;
+  trailing?: ReactNode;
+}) {
+  return (
+    <li className={ROW_LI}>
+      <SearchAction term={term} type={type} ariaLabel={ariaLabel} className={ROW}>
+        <RowBody {...body} />
+      </SearchAction>
       {trailing}
     </li>
   );
@@ -182,9 +232,9 @@ function Row({
 
 function PersonRow({ person: p, canFollow }: { person: SearchPerson; canFollow: boolean }) {
   return (
-    <Row
+    <LinkRow
       href={`/u/${p.handle}`}
-      leading={<Avatar src={p.avatarUrl} name={p.displayName} size={46} />}
+      leading={<Avatar src={p.avatarUrl} size={46} />}
       title={<NameLine name={p.displayName} verified={p.isVerified} className="text-[14.5px] font-semibold" />}
       subtitle={`@${p.handle} · ${formatCompactNumber(p.followersCount)} followers`}
       trailing={
@@ -200,25 +250,27 @@ function PersonRow({ person: p, canFollow }: { person: SearchPerson; canFollow: 
 }
 
 function TagRow({ tag }: { tag: TrendingTag }) {
+  const glyph = (
+    <span className="srch-ring flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl text-white">
+      <Hash className="h-5 w-5" aria-hidden />
+    </span>
+  );
   return (
-    <Row
-      href={`/search?q=%23${encodeURIComponent(tag.tag)}&type=hashtag`}
+    <ActionRow
+      term={`#${tag.tag}`}
+      type="hashtag"
+      ariaLabel={`Search #${tag.tag}`}
       leading={
-        tag.thumbnailUrl ? (
-          <Image
-            src={tag.thumbnailUrl}
-            alt=""
-            width={46}
-            height={46}
-            loading="lazy"
-            decoding="async"
-            className="h-[46px] w-[46px] shrink-0 rounded-2xl bg-secondary object-cover"
-          />
-        ) : (
-          <span className="srch-ring flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl text-white">
-            <Hash className="h-5 w-5" aria-hidden />
-          </span>
-        )
+        <SafeImage
+          src={tag.thumbnailUrl ?? ""}
+          alt=""
+          width={46}
+          height={46}
+          loading="lazy"
+          decoding="async"
+          fallback={glyph}
+          className="h-[46px] w-[46px] shrink-0 rounded-2xl bg-secondary object-cover"
+        />
       }
       title={<span className="block truncate text-[14.5px] font-semibold">#{tag.tag}</span>}
       subtitle={`${formatCompactNumber(tag.postCount)} ${tag.postCount === 1 ? "post" : "posts"}`}
@@ -227,25 +279,25 @@ function TagRow({ tag }: { tag: TrendingTag }) {
 }
 
 function SoundRow({ sound: s }: { sound: Sound }) {
+  const glyph = (
+    <span className="srch-ring flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl text-white">
+      <Music className="h-5 w-5" aria-hidden />
+    </span>
+  );
   return (
-    <Row
+    <LinkRow
       href={`/sound/${s.id}`}
       leading={
-        s.coverArtUrl ? (
-          <Image
-            src={s.coverArtUrl}
-            alt=""
-            width={46}
-            height={46}
-            loading="lazy"
-            decoding="async"
-            className="h-[46px] w-[46px] shrink-0 rounded-2xl bg-secondary object-cover"
-          />
-        ) : (
-          <span className="srch-ring flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl text-white">
-            <Music className="h-5 w-5" aria-hidden />
-          </span>
-        )
+        <SafeImage
+          src={s.coverArtUrl ?? ""}
+          alt=""
+          width={46}
+          height={46}
+          loading="lazy"
+          decoding="async"
+          fallback={glyph}
+          className="h-[46px] w-[46px] shrink-0 rounded-2xl bg-secondary object-cover"
+        />
       }
       title={<span className="block truncate text-[14.5px] font-semibold">{s.title}</span>}
       subtitle={`${s.artistLabel} · ${formatCompactNumber(s.usageCount)} reels`}
@@ -255,8 +307,11 @@ function SoundRow({ sound: s }: { sound: Sound }) {
 
 function PlaceRow({ place: p }: { place: PlaceResult }) {
   return (
-    <Row
-      href={`/search?q=${encodeURIComponent(p.label)}&type=people`}
+    <ActionRow
+      // A place answers "who is here?", so tapping one lists those people.
+      term={p.label}
+      type="people"
+      ariaLabel={`Find creators in ${p.label}`}
       leading={
         <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
           <MapPin className="h-5 w-5" aria-hidden />
@@ -268,7 +323,7 @@ function PlaceRow({ place: p }: { place: PlaceResult }) {
         p.avatars.length ? (
           <span className="flex -space-x-2 pr-1" aria-hidden>
             {p.avatars.map((a, i) => (
-              <Avatar key={i} src={a} name="?" size={24} className="ring-2 ring-card" />
+              <Avatar key={i} src={a} size={24} className="ring-2 ring-card" />
             ))}
           </span>
         ) : undefined

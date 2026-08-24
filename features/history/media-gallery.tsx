@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Music,
   Play,
+  RotateCcw,
   Trash2,
   Video,
 } from "lucide-react";
@@ -464,6 +465,24 @@ function GalleryTile({
   const picked = !!selection?.selected.has(item.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  /* Absent status means completed (types/index.ts) — a bare `!== "completed"`
+     would badge every pre-2026-08-23 record in the visitor's own localStorage
+     as failed. */
+  const isRetryable = (item.status ?? "completed") !== "completed";
+  /* Same payload the tile menu's "Download again" submits — kept as one
+     function so the two can't drift into re-submitting different things. */
+  const retry = () =>
+    startDownload({
+      url: item.url,
+      formatId: item.formatId,
+      kind: item.kind,
+      title: item.title,
+      thumbnail: item.thumbnail,
+      platform: item.platform,
+      platformName: item.platformName,
+      qualityLabel: item.qualityLabel,
+      durationSeconds: item.durationSeconds ?? null,
+    });
 
   // Close on any outside tap. A menu pinned to a tile in a scrolling grid that
   // stays open while you scroll away is worse than no menu.
@@ -563,6 +582,44 @@ function GalleryTile({
         {Icon ? <Icon className="h-3.5 w-3.5" /> : <KindIcon className="h-3.5 w-3.5" />}
       </span>
 
+      {/*
+        FAILED / CANCELLED, IN GRID VIEW TOO (owner, 2026-08-23: "i dont see the
+        failed cancelled in history to retry").
+
+        The list row had a badge from the start; this tile had nothing, and Grid
+        is the view this gallery opens in — so on the default screen a failed
+        download was indistinguishable from a file the visitor actually has.
+        Retry is a real button rather than a menu entry for the same reason it
+        is one in the list row: the whole point of keeping the record is that
+        getting the file is one obvious tap away.
+
+        Hidden while selecting, matching every other per-tile control — a
+        button that starts a download beside a selection you are still building
+        is a mis-tap with a real consequence.
+      */}
+      {isRetryable && !selecting ? (
+        <span className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-1.5">
+          <span
+            className={cn(
+              "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white",
+              item.status === "failed" ? "bg-rose-600/90" : "bg-black/70",
+            )}
+          >
+            {item.status === "failed" ? "Failed" : "Cancelled"}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); tap(); retry(); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-label={`Retry ${item.title}`}
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-white/95 px-1.5 py-0.5 text-[10px] font-bold text-neutral-900 transition active:scale-[0.94]"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Retry
+          </button>
+        </span>
+      ) : null}
+
       {/* In select mode the corner shows the tick instead of the menu — opening
           a menu mid-selection is an easy mis-tap with an annoying result. */}
       {selecting ? (
@@ -608,20 +665,10 @@ function GalleryTile({
                 onClick={() => { onToggleFavorite(); setMenuOpen(false); }}
               />
               <TileAction
-                icon={<Download className="h-3.5 w-3.5" />}
-                label="Download again"
+                icon={isRetryable ? <RotateCcw className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+                label={isRetryable ? "Retry download" : "Download again"}
                 onClick={() => {
-                  startDownload({
-                    url: item.url,
-                    formatId: item.formatId,
-                    kind: item.kind,
-                    title: item.title,
-                    thumbnail: item.thumbnail,
-                    platform: item.platform,
-                    platformName: item.platformName,
-                    qualityLabel: item.qualityLabel,
-                    durationSeconds: item.durationSeconds ?? null,
-                  });
+                  retry();
                   setMenuOpen(false);
                 }}
               />
@@ -707,6 +754,10 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, sel
   const activate = selecting ? () => { tap(); selection!.onToggle(item.id); } : onOpen;
   const [copied, setCopied] = useState(false);
   const [redownloading, setRedownloading] = useState(false);
+  /* Absent status means completed — see the badge's note below and the field's
+     own note in types/index.ts. Never write this as `!== "completed"` against
+     a bare `item.status`. */
+  const isRetryable = (item.status ?? "completed") !== "completed";
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
   const Icon = BRAND_ICONS[item.platform];
   const KindIcon = KIND_ICON[item.kind] ?? Video;
@@ -785,9 +836,13 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, sel
           none. A bare `!== "completed"` check would badge everyone's entire
           existing library as failed. See the field's note in types/index.ts.
 
-          Retrying needs no new control — selecting a row and using the existing
-          re-download action re-submits it from the url/format the record
-          already carries.
+          🔴 THE BADGE ALONE WAS NOT ENOUGH (owner, 2026-08-23: "i dont see the
+          failed cancelled in history to retry"). The original note here argued
+          that retrying "needs no new control" because the row already has a
+          Re-download action — but that action is one unlabelled download glyph
+          among five identical icon buttons, and nothing connected it to the
+          failure. An explicit Retry sits in the actions row below for exactly
+          these records; see `isRetryable` there.
         */}
         {(item.status ?? "completed") !== "completed" ? (
           <p
@@ -835,9 +890,28 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, sel
             {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
           </IconButton>
         </span>
-        <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
-          {redownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-        </IconButton>
+        {/*
+          A failed or cancelled record gets a LABELLED Retry instead of the
+          icon-only Re-download. Same handler and same submitted payload — the
+          difference is entirely that it is legible. "Re-download" is also
+          simply the wrong word for a file that was never downloaded once.
+        */}
+        {isRetryable ? (
+          <button
+            type="button"
+            onClick={() => { tap(); reDownload(); }}
+            disabled={redownloading}
+            aria-label={`Retry ${item.title}`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition active:scale-[0.94] disabled:opacity-60"
+          >
+            {redownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            Retry
+          </button>
+        ) : (
+          <IconButton label="Re-download" onClick={reDownload} disabled={redownloading}>
+            {redownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          </IconButton>
+        )}
         <IconButton label="Remove" onClick={onRemove}>
           <Trash2 className="h-4 w-4" />
         </IconButton>

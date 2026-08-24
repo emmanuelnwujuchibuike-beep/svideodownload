@@ -826,13 +826,22 @@ export function searchEngineFor(host: string): string | null {
 export interface VisitorSplitDay {
   /** ISO date, `YYYY-MM-DD`, UTC. */
   date: string;
-  newVisitors: number;
-  returningVisitors: number;
+  /**
+   * 🔴 NULL MEANS NOT MEASURED, NOT ZERO.
+   *
+   * Only the un-migrated fallback path below can produce a null, and only for
+   * a day its capped scan could not fully cover. Rendering that as 0 is the
+   * exact bug this type change exists to stop (owner, 2026-08-23: "returning
+   * visitors in admin is glitching, showing 0"); chart code must SKIP a null
+   * point rather than coerce it.
+   */
+  newVisitors: number | null;
+  returningVisitors: number | null;
 }
 
 export interface VisitorSplitSeries {
   days: VisitorSplitDay[];
-  /** True if the bounded active-visitor scan hit its row cap — returning counts may be a floor. */
+  /** True if the bounded active-visitor scan hit its row cap — days it could not reach are null. */
   capped: boolean;
 }
 
@@ -858,6 +867,57 @@ export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeri
 
   try {
     const db = createAdminClient();
+
+    /*
+      ── PRIMARY PATH: one exact aggregate, no row cap ────────────────────────
+      `analytics_visitor_split_daily` (migration 0127) groups the whole window
+      in Postgres and returns new/returning per UTC day directly. Both numbers
+      come from the same GROUP BY over the same rows, so they cannot disagree
+      the way two separately-sourced terms could — which is exactly what broke
+      the subtraction approach below.
+    */
+    const { data: daily, error: dailyErr } = await db.rpc("analytics_visitor_split_daily", {
+      p_since: boundaries[0]!.toISOString(),
+    });
+    if (!dailyErr && Array.isArray(daily)) {
+      const byDay = new Map<string, { newVisitors: number; returningVisitors: number }>();
+      for (const r of daily as { day: string; new_visitors: number; returning_visitors: number }[]) {
+        byDay.set(String(r.day).slice(0, 10), {
+          newVisitors: Number(r.new_visitors) || 0,
+          returningVisitors: Number(r.returning_visitors) || 0,
+        });
+      }
+      // Days with no traffic are genuinely zero (the RPC returns no row for
+      // them), which is a different thing from the "not measured" zeros the
+      // fallback can produce — hence the gap-free fill here is correct.
+      return {
+        days: boundaries.slice(0, n).map((d) => {
+          const date = isoDayUtc(d);
+          return { date, ...(byDay.get(date) ?? { newVisitors: 0, returningVisitors: 0 }) };
+        }),
+        capped: false,
+      };
+    }
+
+    /*
+      ── FALLBACK: migration 0127 not applied yet ─────────────────────────────
+      Keeps the dashboard working on an un-migrated database, with the two bugs
+      that produced the owner's report fixed:
+
+      1. 🔴 SCAN THE NEWEST EVENTS, NOT THE OLDEST. This ordered ASCENDING and
+         stopped at the cap, so once 30 days of traffic exceeded 50 000 rows it
+         discarded the most RECENT days — the ones the chart is actually read
+         for. Descending truncates the far end of the window instead, which is
+         already scrolling off the left edge.
+
+      2. 🔴 NEVER SUBTRACT A COMPLETE TERM FROM A TRUNCATED ONE. `newVisitors`
+         comes from an RPC that sees every row; `active` came from the capped
+         scan. On 2026-08-23 that was 92 new against a partial 82 active, and
+         `max(0, 82 - 92)` rendered as "0 returning" for a day whose real
+         figure was 52. A day the scan did not fully cover is now reported as
+         UNKNOWN (null) rather than zero, so the chart shows a gap instead of a
+         confident wrong number.
+    */
     const cumulativeNew = await Promise.all(
       boundaries.map(async (d) => {
         const { data, error } = await db.rpc("analytics_visitor_split", { p_since: d.toISOString() });
@@ -874,7 +934,7 @@ export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeri
           .select("visitor_id, received_at")
           .eq("is_bot", false)
           .gte("received_at", boundaries[0]!.toISOString())
-          .order("received_at", { ascending: true })
+          .order("received_at", { ascending: false })
           .range(from, to),
       VISITOR_SPLIT_ROW_CAP,
     );
@@ -887,14 +947,24 @@ export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeri
       else activeByDay.set(day, new Set([r.visitor_id]));
     }
 
+    /*
+      The oldest event the capped scan actually reached. Rows arrive newest-
+      first, so everything before this timestamp is unscanned — and the day it
+      falls on is only PARTIALLY scanned, so it is unreliable too. Only days
+      strictly after it can be trusted. Without a cap there is no horizon and
+      every day in the window is fully covered.
+    */
+    const oldestScanned = capped ? rows[rows.length - 1]?.received_at.slice(0, 10) : null;
+
     const out: VisitorSplitDay[] = [];
     for (let i = 0; i < n; i++) {
       const date = isoDayUtc(boundaries[i]!);
       const hi = cumulativeNew[i];
       const lo = cumulativeNew[i + 1];
-      const newVisitors = hi == null || lo == null ? 0 : Math.max(0, hi - lo);
+      const newVisitors = hi == null || lo == null ? null : Math.max(0, hi - lo);
+      const covered = !oldestScanned || date > oldestScanned;
       const active = activeByDay.get(date)?.size ?? 0;
-      const returningVisitors = Math.max(0, active - newVisitors);
+      const returningVisitors = covered && newVisitors != null ? Math.max(0, active - newVisitors) : null;
       out.push({ date, newVisitors, returningVisitors });
     }
     return { days: out, capped };

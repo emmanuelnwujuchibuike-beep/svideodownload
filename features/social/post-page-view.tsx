@@ -28,6 +28,7 @@ import { PostDownloadButton } from "@/features/social/post-download-button";
 import { PostEngagement } from "@/features/social/post-engagement";
 import { ReportButton } from "@/features/social/report-button";
 import { getUserPlan } from "@/lib/monetization/plan";
+import { titleFromCaption } from "@/lib/social/caption";
 import { canComment, getViewerReactions, listComments } from "@/lib/social/engagement";
 import { getPoll } from "@/lib/social/polls";
 import { PostMedia } from "@/features/social/post-media";
@@ -59,14 +60,25 @@ const COMMENT_GATE_MSG: Record<string, string> = {
  * this single builder never has to know which route it's being called from.
  */
 export function postPageMetadata(post: PublicPost, canonicalPath: string): Metadata {
+  /*
+    🔴 THE CAPTION IS NOT THE TITLE TAG (2026-08-23). `posts.title` holds the
+    caption verbatim, and the caption limit moved from 300 characters to 250
+    words — so passing it through raw would emit `<title>` elements over a
+    thousand characters long. `titleFromCaption` takes the first sentence or a
+    word-boundary trim; the full caption is still rendered on the page itself
+    and still carried in the description/OG description below, so nothing is
+    hidden from a reader or a crawler, it is just no longer crammed into the
+    one element that must stay short.
+  */
+  const title = titleFromCaption(post.title) || post.title;
   return {
-    title: post.title,
+    title,
     description: post.description ?? `Watch & download from ${post.platform} on FrenzSave.`,
     alternates: { canonical: canonicalPath },
     robots: { index: post.indexable, follow: post.indexable },
     openGraph: {
       type: "video.other",
-      title: post.title,
+      title,
       description: post.description ?? undefined,
       images: post.thumbnail_url ? [{ url: post.thumbnail_url }] : undefined,
     },
@@ -271,7 +283,14 @@ export async function PostPageView({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <PostDownloadButton postId={post.id} sourceUrl={post.source_url} mediaKind={post.media_kind} title={post.title} />
+            {/* No Download on a text post — there is no file, and its
+                `source_url` is the synthesised `frenz:text:` URI (migration
+                0128), which the download pipeline would try and fail to
+                resolve. A button that can only ever error is worse than no
+                button. */}
+            {post.media_kind !== "text" ? (
+              <PostDownloadButton postId={post.id} sourceUrl={post.source_url} mediaKind={post.media_kind} title={post.title} />
+            ) : null}
             {post.isOwner ? (
               <>
                 <PostEditButton

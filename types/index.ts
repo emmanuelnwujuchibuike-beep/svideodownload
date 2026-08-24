@@ -44,6 +44,23 @@ export interface Platform {
 export type MediaKind = "video" | "audio" | "image";
 
 /**
+ * What a POST's media can be — the three downloadable kinds plus `"text"`.
+ *
+ * 🔴 `"text"` is deliberately NOT part of `MediaKind` above. That type
+ * describes a FILE being fetched — `MediaFormat.kind`, `DownloadRecord.kind`,
+ * every extractor's output — and there is no such thing as downloading "a
+ * text". Widening it would have forced a meaningless fourth case through the
+ * quality ladder, the download manager, history and every extractor in the
+ * app. A post is the only thing that can be text, so the widening is its own
+ * type.
+ *
+ * Introduced 2026-08-23 with migration 0128 (owner: "when ever i try to make a
+ * write up post, it shows this error") — Creation Studio offered Text, Heading
+ * and Quote blocks and then refused to publish anything built only from them.
+ */
+export type PostMediaKind = MediaKind | "text";
+
+/**
  * Reference to authenticated Telegram (MTProto) media, when there's no public CDN
  * URL to proxy. The download service re-resolves it through the worker's Telegram
  * client at download time (see server/services/telegram-mtproto.ts).

@@ -35,6 +35,7 @@ import { useEntitlements } from "@/features/auth/use-entitlements";
 
 import { WowOutline, WowSolid } from "@/components/brand/wow-icon";
 import { RichText } from "@/components/social/rich-text";
+import { FeedCaption } from "@/features/feed/feed-caption";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { fireWowFeedback } from "@/features/ui/wow-burst";
@@ -760,17 +761,28 @@ function FeedPostCardImpl({
               a crawler's DOM parser see the real navigation. */}
           {title ? (
             <div className="pb-3 pt-0.5">
-              <Link
-                href={postHref(item)}
-                onClick={(e) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
-                  e.preventDefault();
-                  open(item);
-                }}
-                className="block text-[15px] leading-relaxed"
-              >
-                <RichText text={title} />
-              </Link>
+              {/*
+                Clamped to seven lines with See more / Show less (owner,
+                2026-08-23) — see feed-caption.tsx for why the controls are
+                siblings of this link rather than nested inside it, and why the
+                overflow is measured rather than counted. The <Link> itself is
+                unchanged: it is still the crawlable, real href the 2026-08-18
+                SEO audit added, and a plain click still opens the in-app
+                viewer.
+              */}
+              <FeedCaption text={title}>
+                <Link
+                  href={postHref(item)}
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+                    e.preventDefault();
+                    open(item);
+                  }}
+                  className="block"
+                >
+                  <RichText text={title} />
+                </Link>
+              </FeedCaption>
               {item.category ? (
                 // Was /explore?q=%23category (a search results page); now the
                 // real indexable hub — see category-hub-view.tsx's note on
@@ -813,7 +825,17 @@ function FeedPostCardImpl({
               />
             </div>
           ) : item.mediaKind === "video" && (item.streamUid || item.mediaUrl) ? (
-            <div className="relative mb-3 overflow-hidden rounded-2xl">
+            /*
+              🔴 `mb-3` MOVED OFF THIS WRAPPER onto the views row below it
+              (2026-08-23). The row is now the last thing in this block, so it
+              owns the gap to whatever follows; leaving the margin here as well
+              would double it.
+
+              `overflow-hidden` also had to go: it was clipping the media's
+              rounded corners, which the inner box already draws for itself,
+              and keeping it would have clipped the views row right off.
+            */
+            <div className="relative">
               <FeedVideo
                 src={item.mediaUrl}
                 streamUid={item.streamUid}
@@ -829,18 +851,33 @@ function FeedPostCardImpl({
                 height={item.mediaHeight ?? undefined}
                 priority={priority}
               >
-                {item.viewsCount > 0 || item.durationSec ? (
+                {/*
+                  🔴 DURATION STAYS ON THE VIDEO; VIEWS MOVED OUT (owner,
+                  2026-08-23: "Move video count to at the bottom of the video
+                  card, outside the bottom right of the video card").
+
+                  Only the views count moved. A clip's length is a property of
+                  the media itself — it is what every video player in the world
+                  overlays on the frame, and it is what a reader checks BEFORE
+                  deciding to watch. The view count is a property of the post,
+                  which is why it now sits outside the frame with the rest of
+                  the post's metadata.
+
+                  This badge also vacated the top-LEFT for the same reason the
+                  play/pause pair could take the top-right: the frame's corners
+                  were getting crowded.
+                */}
+                {item.durationSec ? (
                   <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                    {item.viewsCount > 0 ? `${formatCompactNumber(item.viewsCount)} views` : null}
-                    {item.viewsCount > 0 && item.durationSec ? " · " : null}
-                    {item.durationSec ? formatDuration(item.durationSec) : null}
+                    {formatDuration(item.durationSec)}
                   </span>
                 ) : null}
                 {engagementRow(true)}
               </FeedVideo>
+              <ViewsRow count={item.viewsCount} />
             </div>
           ) : item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl) ? (
-            <div className="relative mb-3 overflow-hidden rounded-2xl">
+            <div className="relative">
               <FeedImage
                 src={item.mediaUrl || item.thumbnailUrl!}
                 alt={item.title}
@@ -853,14 +890,28 @@ function FeedPostCardImpl({
                 }}
                 onExpand={() => open(item)}
               >
-                {item.viewsCount > 0 ? (
-                  <span className="pointer-events-none absolute left-2.5 top-2.5 z-10 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                    {formatCompactNumber(item.viewsCount)} views
-                  </span>
-                ) : null}
                 {engagementRow(true)}
               </FeedImage>
+              <ViewsRow count={item.viewsCount} />
             </div>
+          ) : item.mediaKind === "text" ? (
+            /*
+              🔴 A TEXT POST RENDERS NO MEDIA BOX AT ALL (2026-08-23, alongside
+              migration 0128).
+
+              Without this branch a write-up fell through to the generic
+              fallback below, which paints a 16:9 black box with a Play glyph
+              in the middle — an invitation to watch a video that does not
+              exist. The caption above IS the post; there is nothing else to
+              show, and an empty frame under it would be worse than nothing.
+
+              `null` rather than an empty element so the caption's own bottom
+              padding is the only spacing, and so `overlayEngagement` (which is
+              already false for this kind) puts the action row inline beneath
+              the words, exactly as it does for any other post with no media to
+              blend onto.
+            */
+            null
           ) : item.mediaKind === "audio" ? (
         <button type="button" onClick={() => open(item)} className="block w-full text-left" aria-label="Play">
           <div className="mb-3 flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/15">
@@ -1045,6 +1096,35 @@ export const FeedPostCard = memo(
     a.reason?.label === b.reason?.label &&
     a.reason?.tone === b.reason?.tone,
 );
+
+/**
+ * The post's view count, under the media box and aligned to its right edge.
+ *
+ * Owner, 2026-08-23: "Move video count to at the bottom of the video card,
+ * outside the bottom right of the video card."
+ *
+ * It used to be a translucent chip overlaid on the top-left of the frame. Two
+ * things were wrong with that. It sat ON the picture, competing with the first
+ * thing a reader looks at and obscuring a corner of every single post; and the
+ * bottom edge of the frame is already occupied by the blended engagement row,
+ * so there was nowhere INSIDE the box for it to go. Out here it reads as what
+ * it is — metadata about the post, not part of the image — and it needs no
+ * scrim to stay legible, because it is on the card's own surface rather than
+ * on an unpredictable video frame.
+ *
+ * Renders nothing at zero: "0 views" on a post someone just opened is a
+ * discouraging and slightly wrong claim (their own view is not counted yet),
+ * and an empty row is better than a meaningless number. `mb-3` is the gap the
+ * media wrapper used to own — see the wrapper's note.
+ */
+function ViewsRow({ count }: { count: number }) {
+  if (count <= 0) return <div className="mb-3" />;
+  return (
+    <p className="mb-3 mt-1 text-right text-[11px] font-medium tabular-nums text-muted-foreground">
+      {formatCompactNumber(count)} views
+    </p>
+  );
+}
 
 function ActionButton({
   icon: Icon,

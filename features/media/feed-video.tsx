@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Volume2, VolumeX } from "lucide-react";
+import { Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAdaptiveSource } from "@/features/media/use-adaptive-source";
@@ -123,6 +123,22 @@ export function FeedVideo({
   const [burst, setBurst] = useState(0);
   const [muted, setMuted] = useState(true);
   const [showPause, setShowPause] = useState(false);
+  /*
+    Whether the clip is paused RIGHT NOW, for the explicit play/pause control
+    (owner, 2026-08-23: "Add a play button at the top of every video next to
+    the sound button... The paused and play button should show so users can
+    click on it to play, and users can click on it to pause").
+
+    Deliberately separate from the `userPaused` ref beside it. That ref answers
+    "did a person deliberately stop this?", which is what the autoplay
+    observers consult before resuming; this answers "what does the button need
+    to draw?", which also changes when the browser stalls, when another clip
+    claims playback through the coordinator, or when a source swap interrupts.
+    Driving the icon from the ref would leave it showing Pause over a video
+    that is not moving. Seeded `true` because nothing plays before the first
+    `onPlay` fires.
+  */
+  const [paused, setPaused] = useState(true);
   const [covered, setCovered] = useState(true);
   // Priority clips (the feed's first couple of cards) attach their source
   // immediately rather than waiting on the IntersectionObserver below to
@@ -301,6 +317,34 @@ export function FeedVideo({
     setShowPause(false);
     void v.play().catch(() => {});
   };
+
+  /**
+   * The explicit play/pause button's handler.
+   *
+   * 🔴 Sets `userPaused` as well as calling pause(), which is what makes the
+   * pause STICK. Without it the in-view IntersectionObserver's next tick — or
+   * any `playIfReady` call from a source becoming ready — would immediately
+   * resume the clip, so the button would appear to do nothing on a video
+   * sitting in the middle of the viewport. Pressing play clears the flag the
+   * same way `resumePlay` does, so autoplay-on-scroll behaves normally again
+   * afterwards.
+   *
+   * `stopPropagation` because this button sits inside the media box: without
+   * it the tap would also reach the card's own handlers.
+   */
+  const togglePlay = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const v = video.current;
+    if (!v) return;
+    if (v.paused) {
+      userPaused.current = false;
+      setShowPause(false);
+      void v.play().catch(() => {});
+    } else {
+      userPaused.current = true;
+      v.pause();
+    }
+  }, []);
 
   // ── Feed video gesture model ─────────────────────────────────────────────
   //   • single tap   → open the full-screen reels (after a short grace
@@ -540,10 +584,12 @@ export function FeedVideo({
           if (resumeAt !== null && Math.abs(v.currentTime - resumeAt) > 1) v.currentTime = resumeAt;
         }}
         onPause={() => {
+          setPaused(true);
           const v = video.current;
           if (v) savePlaybackPosition(postId, v.currentTime, v.duration);
         }}
         onPlay={() => {
+          setPaused(false);
           video.current && claimPlayback(video.current);
         }}
         onPlaying={() => {
@@ -583,15 +629,45 @@ export function FeedVideo({
         </span>
       ) : null}
 
-      {/* Mute toggle */}
-      <button
-        type="button"
-        onClick={toggleMute}
-        aria-label={muted ? "Unmute" : "Mute"}
-        className="absolute right-2.5 top-2.5 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
-      >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+      {/*
+        Play/pause + mute, as one control cluster in the top-right (owner,
+        2026-08-23: "Add a play button at the top of every video next to the
+        sound button... it should blend inside the video").
+
+        ── Why an explicit button when tap-and-hold already pauses ───────────
+        Press-and-hold pauses only WHILE held, and it is undiscoverable — there
+        is nothing on screen suggesting it exists. This is the ordinary,
+        visible control every video player has, and it latches: press once to
+        stop, press again to resume.
+
+        It shares the mute button's exact treatment (translucent black,
+        backdrop-blurred, same size) so the two read as one cluster rather than
+        as a control bolted on beside one — "blend inside the video" rather
+        than sit on top of it. The pair moved into a flex row so neither has to
+        know the other's width.
+
+        The top-LEFT corner is now free: the views badge that used to live
+        there moved out below the card (feed-post-card.tsx), which is what
+        makes room for this without crowding the frame.
+      */}
+      <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={togglePlay}
+          aria-label={paused ? "Play" : "Pause"}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+        >
+          {paused ? <Play className="ml-0.5 h-4 w-4 fill-white" /> : <Pause className="h-4 w-4 fill-white" />}
+        </button>
+        <button
+          type="button"
+          onClick={toggleMute}
+          aria-label={muted ? "Unmute" : "Mute"}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md transition hover:bg-black/65"
+        >
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+      </div>
 
       {/*
         🔴 EXPAND BUTTON REMOVED (owner, 2026-08-18: "remove the zoom button on

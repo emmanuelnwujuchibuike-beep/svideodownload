@@ -1,9 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+
+import type { PostMediaKind } from "@/types";
 
 import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
+import { normalizeCaption } from "./caption";
 import { type Category } from "./categories";
 import { friendIdSet } from "./friend-ids";
 import { slugifyTitle } from "./post-url";
@@ -21,7 +24,16 @@ import { attachSoundToPost, createSound } from "./sounds";
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export type MediaKind = "video" | "image" | "audio";
+/**
+ * A post's media kind.
+ *
+ * Re-exported from `@/types` (as `PostMediaKind`) rather than redeclared here,
+ * which it was until 2026-08-23 — two independent copies of the same union in
+ * two files is how `"text"` came to be addable to one of them and not the
+ * other. The name stays `MediaKind` locally so the many call sites in this
+ * file are unaffected.
+ */
+export type MediaKind = PostMediaKind;
 export type Visibility = "public" | "followers" | "private";
 
 /** Normalises a source URL for dedupe (strip tracking params + trailing slash). */
@@ -65,10 +77,15 @@ export async function getContentSettings(): Promise<ContentSettings> {
 /* --------------------------------- publish ------------------------------ */
 
 export interface PublishInput {
-  sourceUrl: string;
+  /**
+   * The media's source. Omitted for a text-only post, which has none — see
+   * `synthesizeTextSourceUrl` and migration 0128 for why one is invented
+   * rather than the column being made nullable.
+   */
+  sourceUrl?: string;
   platform: string;
   sourceAuthor?: string | null;
-  mediaKind: MediaKind;
+  mediaKind: PostMediaKind;
   title: string;
   description?: string | null;
   category?: Category | null;
@@ -78,6 +95,18 @@ export interface PublishInput {
   /** Natural pixel size of an uploaded image (lets the feed use next/image). */
   mediaWidth?: number | null;
   mediaHeight?: number | null;
+}
+
+/**
+ * A stand-in `source_url` for a post that genuinely has no source.
+ *
+ * Not a URL a browser can resolve, and not meant to be — nothing dereferences
+ * `posts.source_url` for a text post, because every render path branches on
+ * `media_kind` first. It exists to satisfy the NOT NULL column and to give the
+ * dedupe index a unique value per row.
+ */
+function synthesizeTextSourceUrl(): string {
+  return `frenz:text:${randomUUID()}`;
 }
 
 export type PublishResult =
@@ -115,16 +144,31 @@ export async function publishPost(
       return { ok: false, error: "Set a username (handle) before publishing.", code: "forbidden" };
     }
 
+    /*
+      A text-only post has no source. `source_url` is NOT NULL and takes part
+      in the (publisher_id, source_url_hash) anti-spam dedupe index, so one is
+      synthesised per post — unique by construction, so two identical write-ups
+      never collide and produce "You've already published this link" about a
+      link that was never used. See migration 0128.
+    */
+    const sourceUrl =
+      input.mediaKind === "text" ? synthesizeTextSourceUrl() : (input.sourceUrl ?? "").trim();
+    if (!sourceUrl) return { ok: false, error: "Nothing to publish.", code: "error" };
+
     const { data, error } = await db
       .from("posts")
       .insert({
         publisher_id: publisherId,
-        source_url: input.sourceUrl.trim(),
-        source_url_hash: urlHash(input.sourceUrl),
+        source_url: sourceUrl,
+        source_url_hash: urlHash(sourceUrl),
         platform: input.platform,
         source_author: input.sourceAuthor ?? null,
         media_kind: input.mediaKind,
-        title: input.title.trim().slice(0, 300),
+        /* The caption. `normalizeCaption` (lib/social/caption.ts) enforces the
+           250-word limit, normalises CRLF and collapses runs of blank lines —
+           applied here, on the server, because a composer's limit is a
+           courtesy to the person typing and never a boundary. */
+        title: normalizeCaption(input.title),
         description: input.description?.trim().slice(0, 5000) ?? null,
         category: input.category ?? null,
         thumbnail_url: input.thumbnailUrl ?? null,
@@ -189,7 +233,11 @@ export async function publishPost(
       throwing (Sounds' migration 0125 may not even be applied everywhere
       yet), so a failure here can never take down a successful publish.
     */
-    if (input.platform === "frenz" && input.mediaKind !== "image") {
+    /* `"text"` joins `"image"` in being excluded: a write-up has no audio
+       track, and `sourceUrl` here would be the synthesised `frenz:text:` URI —
+       registering that as a playable sound would put an entry on the Sounds
+       platform that can never load. */
+    if (input.platform === "frenz" && input.mediaKind !== "image" && input.mediaKind !== "text") {
       try {
         const sound = await createSound({
           createdBy: publisherId,
@@ -197,7 +245,7 @@ export async function publishPost(
           title: "Original audio",
           artistLabel: prof.handle ? `@${prof.handle}` : "Original audio",
           coverArtUrl: input.thumbnailUrl ?? null,
-          audioUrl: input.sourceUrl.trim(),
+          audioUrl: sourceUrl,
           waveformPeaks: [],
           durationSec: input.durationSec ?? 0,
         });

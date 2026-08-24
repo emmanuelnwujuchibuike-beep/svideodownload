@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isDoubleTap } from "./use-tap-or-double-tap";
+import { isDoubleTap, isRealTap } from "./use-tap-or-double-tap";
 
 /**
  * The "Most important acceptance criterion" from the owner's feed-interaction
@@ -42,5 +42,38 @@ describe("isDoubleTap", () => {
     expect(isDoubleTap(1_260, 1_000, 250)).toBe(false); // 260ms gap, 250ms threshold
     expect(isDoubleTap(1_200, 1_000, 250)).toBe(true); // 200ms gap, 250ms threshold
     expect(isDoubleTap(1_340, 1_000, 350)).toBe(true); // 340ms gap, 350ms threshold
+  });
+});
+
+/**
+ * Owner, 2026-08-23: "Liking a single post from a post that has the engagement
+ * on the card still opens the post in reels."
+ *
+ * The blended engagement row sits INSIDE FeedImage's gesture container and
+ * stops pointerdown, but not pointerup. Without the `started` half of this
+ * predicate the hook received a lone pointerup, could not tell it from a real
+ * tap on the photo, and scheduled the expand — so tapping Wow both liked the
+ * post AND opened the reel viewer on top of it.
+ */
+describe("isRealTap", () => {
+  it("is a tap when a pointerdown landed and the pointer stayed put", () => {
+    expect(isRealTap(true, false)).toBe(true);
+  });
+
+  it("🔴 is NOT a tap when no pointerdown landed on the element", () => {
+    // The regression: an overlaid control swallowed pointerdown, so this
+    // handler only ever saw the bubbling pointerup.
+    expect(isRealTap(false, false)).toBe(false);
+  });
+
+  it("is NOT a tap when the pointer moved (drag or scroll)", () => {
+    expect(isRealTap(true, true)).toBe(false);
+  });
+
+  it("stale `moved` from a previous gesture cannot resurrect a tap", () => {
+    // Both flags false-ish in the wrong direction is the dangerous combination:
+    // `moved` resets to false between gestures, so `started` is the only thing
+    // standing between a stray pointerup and an unwanted navigation.
+    expect(isRealTap(false, true)).toBe(false);
   });
 });

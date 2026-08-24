@@ -54,17 +54,44 @@ function FriendActivityRow({ item }: { item: FriendActivityEntry }) {
     <li>
       <Link
         href={href}
-        className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-3.5 py-2.5 transition hover:bg-card"
+        className="flex items-center gap-2.5 rounded-2xl border border-border/60 bg-card/60 px-3 py-2.5 transition hover:bg-card sm:gap-3 sm:px-3.5"
       >
         <Avatar url={item.actor.avatarUrl} name={item.actor.displayName} />
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+        {/* The kind glyph is a nicety, not information — the sentence already
+            says what happened. It goes first on a narrow screen, where every
+            millimetre belongs to the text. */}
+        <span className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground sm:flex">
           <Icon className="h-3 w-3" />
         </span>
+        {/*
+          🔴 RESPONSIVE ON EVERY WIDTH (owner, 2026-08-23: "move the one left to
+          be responsive on all devices" — with a screenshot of rows running off
+          the right edge of the phone).
+
+          `min-w-0` alone was not enough. The row is a flex line, and a flex
+          item's default `min-width:auto` refuses to shrink below its content;
+          the timestamp beside it then got pushed past the card's edge by a long
+          post title. `min-w-0` lets this cell shrink, and `line-clamp-2` is
+          what actually bounds it — two lines of real wrapped text rather than
+          the single ellipsed line a `truncate` would give, because the actor's
+          name and the action are worth reading in full on a phone.
+
+          Note the sibling that was deleted from friends-hub.tsx got this wrong
+          in the other direction: it put `truncate` on an INLINE <span>, where
+          `overflow:hidden` does not clip at all, so the text simply escaped the
+          card. Blocks clip; inlines do not.
+        */}
         <span className="min-w-0 flex-1 text-sm">
-          <strong className="font-semibold">{item.actor.displayName}</strong>{" "}
-          <span className="text-muted-foreground">{copyFor(item)}</span>
+          <span className="line-clamp-2 break-words">
+            <strong className="font-semibold">{item.actor.displayName}</strong>{" "}
+            <span className="text-muted-foreground">{copyFor(item)}</span>
+          </span>
         </span>
-        <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(item.createdAt)}</span>
+        {/* `tabular-nums` stops "1h"/"11h" jittering the row's right edge as the
+            list re-renders. */}
+        <span className="shrink-0 self-start pt-0.5 text-[11px] tabular-nums text-muted-foreground">
+          {timeAgo(item.createdAt)}
+        </span>
       </Link>
     </li>
   );

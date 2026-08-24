@@ -25,6 +25,7 @@ import { closeStudio, useStudioOpen } from "@/features/create/studio/studio-stor
 import { captureVideoPoster } from "@/lib/media/video-poster";
 import { readImageSize } from "@/lib/media/read-image-size";
 import { haptic } from "@/lib/motion/haptics";
+import { normalizeCaption } from "@/lib/social/caption";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 
@@ -173,13 +174,28 @@ function StudioInner() {
       return;
     }
     const media = blocks.find((b) => (b.type === "image" || b.type === "video") && b.url);
-    if (!media) {
-      setErr("Add a photo or video to publish (text-only posts are coming soon).");
+    const texts = blocks.filter((b) => b.type === "heading" || b.type === "text" || b.type === "quote").map((b) => (b.text ?? "").trim()).filter(Boolean);
+    /*
+      🔴 TEXT-ONLY POSTS PUBLISH (owner, 2026-08-23, with a screenshot: "when
+      ever i try to make a write up post, it shows this error").
+
+      This used to hard-refuse with "text-only posts are coming soon" — a
+      studio that offers Text, Heading and Quote blocks and then declines to
+      publish anything made only of them. The block was in `posts.media_kind`,
+      whose CHECK constraint allowed only video/image/audio; migration 0128
+      adds `'text'` and lib/social/posts.ts synthesises the `source_url` such a
+      post has no natural value for.
+
+      What is still refused is an EMPTY post — no media and no words is not a
+      post, and the message now says which of the two is missing rather than
+      demanding media that was never required.
+    */
+    if (!media && texts.length === 0) {
+      setErr("Write something, or add a photo or video, before publishing.");
       return;
     }
-    const texts = blocks.filter((b) => b.type === "heading" || b.type === "text" || b.type === "quote").map((b) => (b.text ?? "").trim()).filter(Boolean);
     const heading = blocks.find((b) => b.type === "heading" && b.text?.trim());
-    const title = (heading?.text || texts[0] || "New post").slice(0, 300);
+    const title = normalizeCaption(heading?.text || texts[0] || "New post");
     const description = texts.join("\n\n").slice(0, 5000) || null;
 
     setBusy(true);
@@ -190,19 +206,21 @@ function StudioInner() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sourceUrl: media.url,
+          // Omitted entirely for a text post — the server synthesises one
+          // rather than accepting a placeholder from the client.
+          ...(media ? { sourceUrl: media.url } : {}),
           platform: "frenz",
-          mediaKind: media.type,
+          mediaKind: media ? media.type : "text",
           title,
           description,
-          thumbnailUrl: media.type === "image" ? media.url : media.poster ?? null,
+          thumbnailUrl: media ? (media.type === "image" ? media.url : media.poster ?? null) : null,
           visibility: "public",
           // 🔴 No longer image-only (owner, 2026-08-17: video posts still
           // glitched to a wrong size on entry) — `onPickMedia` above now
           // captures a video block's dimensions the same way it always did
           // for images, via `captureVideoPoster`'s own video-element read.
-          mediaWidth: media.width ?? null,
-          mediaHeight: media.height ?? null,
+          mediaWidth: media?.width ?? null,
+          mediaHeight: media?.height ?? null,
         }),
       });
       const json = await res.json();
@@ -211,11 +229,13 @@ function StudioInner() {
         setPublishing("idle");
         return;
       }
-      // Store the media so it plays natively (best-effort).
-      if (json.id) void fetch(`/api/posts/${json.id}/store-media`, { method: "POST" }).catch(() => {});
+      // Store the media so it plays natively (best-effort). Skipped for a text
+      // post — there is no media to store, and the endpoint would resolve the
+      // synthesised `frenz:text:` URI, fail, and log a spurious error.
+      if (json.id && media) void fetch(`/api/posts/${json.id}/store-media`, { method: "POST" }).catch(() => {});
       // Kick off adaptive-streaming ingestion for videos (best-effort, env-gated —
       // no-ops without Stream credentials). Gives the reel instant HLS/ABR playback.
-      if (json.id && media.type === "video") void fetch(`/api/posts/${json.id}/stream-ingest`, { method: "POST" }).catch(() => {});
+      if (json.id && media?.type === "video") void fetch(`/api/posts/${json.id}/stream-ingest`, { method: "POST" }).catch(() => {});
       haptic("medium");
       setPublishing("done");
       clearDraft();

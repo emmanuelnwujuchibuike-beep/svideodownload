@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { cacheDelete, getCached } from "@/lib/cache";
+import { CAPTION_MAX_CHARS, normalizeCaption } from "@/lib/social/caption";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -57,7 +58,9 @@ const mediaItem = z.object({
 const schema = z.object({
   mediaUrl: z.string().url().max(2048),
   mediaKind: z.enum(["image", "video"]),
-  caption: z.string().trim().max(300).optional(),
+  // 250 words, backed by a character ceiling — see lib/social/caption.ts for
+  // why a word limit needs both. Was a flat 300 characters (~50 words).
+  caption: z.string().trim().max(CAPTION_MAX_CHARS).optional(),
   /** Cover image captured from the first frame of a video upload. */
   thumbnailUrl: z.string().url().max(2048).optional(),
   /**
@@ -157,7 +160,13 @@ export async function POST(request: Request) {
         media_kind: mediaKind,
         // No caption → store an empty title (the feed/reel simply shows no
         // caption). Never invent an automatic "My video"/"My photo".
-        title: (caption ?? "").slice(0, 300),
+        //
+        // `normalizeCaption` rather than a bare slice: the composer's limit is
+        // a courtesy to whoever is typing, not a boundary — this endpoint is
+        // also called by the app's own retry paths. It enforces the word cap
+        // and normalises CRLF/blank-line runs so a caption cannot render as a
+        // page of empty space under `whitespace-pre-line`.
+        title: normalizeCaption(caption ?? ""),
         media_url: mediaUrl,
         thumbnail_url: cover,
         // Falls back to the album's own item-0 dimensions when the top-level

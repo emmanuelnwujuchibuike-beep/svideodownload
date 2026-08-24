@@ -30,6 +30,7 @@ import { PhotoEditor } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
+import { CAPTION_MAX_CHARS, CAPTION_MAX_WORDS, clampWords, countWords } from "@/lib/social/caption";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,13 +82,17 @@ export function PostComposer({
   }, [isAlbum]);
 
   // Auto-grow the field the way Facebook's does, capped so the tray stays
-  // reachable without scrolling on a small screen.
+  // reachable without scrolling on a small screen. The cap rose with the word
+  // limit (2026-08-23): at 220px a 250-word caption spent most of its life
+  // scrolling inside a box barely taller than the keyboard's autocomplete bar.
   useEffect(() => {
     const el = textRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 340)}px`;
   }, [caption]);
+
+  const captionWords = countWords(caption);
 
   const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
     media.accept(e.target.files);
@@ -238,16 +243,43 @@ export function PostComposer({
               </div>
             </div>
 
-            {/* FB's borderless "What's on your mind" field */}
+            {/*
+              FB's borderless "What's on your mind" field.
+
+              🔴 250 WORDS, NOT 300 CHARACTERS (owner, 2026-08-23: "caption
+              should have a limit of 250 words"). `maxLength={300}` was a
+              CHARACTER cap — about 50 words — so a caption of any real length
+              was cut off mid-sentence as it was typed, with nothing on screen
+              explaining why the keyboard had stopped responding.
+
+              Enter inserts a newline and always did; what was missing was
+              somewhere for those newlines to survive to (see RichText's
+              `whitespace-pre-line` note) and room to write more than a
+              sentence. `rows` grows with the text so a multi-paragraph caption
+              is visible while it is being written instead of scrolling inside
+              a two-line box.
+            */}
             <textarea
               ref={textRef}
               value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              maxLength={300}
+              onChange={(e) => setCaption(clampWords(e.target.value))}
+              maxLength={CAPTION_MAX_CHARS}
               rows={2}
               placeholder={`What's on your mind, ${firstName}?`}
               className="w-full resize-none bg-transparent text-lg leading-relaxed outline-none placeholder:text-muted-foreground"
             />
+            {/* Only once it is worth knowing about — a counter over an empty
+                field is noise, and this one exists to warn, not to nag. */}
+            {captionWords > CAPTION_MAX_WORDS * 0.6 ? (
+              <p
+                className={cn(
+                  "text-right text-[11px] tabular-nums",
+                  captionWords >= CAPTION_MAX_WORDS ? "font-semibold text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+                )}
+              >
+                {captionWords}/{CAPTION_MAX_WORDS} words
+              </p>
+            ) : null}
 
             {/* Media */}
             {items.length === 0 ? (

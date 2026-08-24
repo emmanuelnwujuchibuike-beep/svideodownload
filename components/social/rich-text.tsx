@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
 /**
  * Renders caption/description text with #hashtags, @mentions, and bare URLs
  * turned into links — the standard "professional" social affordance. Hashtags
@@ -66,5 +68,24 @@ export function RichText({
   }
   if (last < text.length) nodes.push(text.slice(last));
 
-  return <span className={className}>{nodes}</span>;
+  /*
+    🔴 `whitespace-pre-line` IS WHAT MAKES PARAGRAPHS SURVIVE (owner,
+    2026-08-23: "I want caption in feed and reels to be able to give paragraph
+    when I give them a keyboard").
+
+    The newlines were never lost — they were stored, fetched and handed to this
+    component intact. HTML simply collapses them: by default every run of
+    whitespace, line breaks included, renders as a single space, so a caption
+    typed as three paragraphs came out as one wall of text on every surface
+    that renders through here (feed, reels, post page, comments, messages).
+
+    `pre-line` rather than `pre-wrap`: it honours newlines but still COLLAPSES
+    runs of spaces and, critically, still wraps normally. `pre-wrap` would
+    preserve every leading space and stray double-space too, which on a
+    narrow reel caption produces ragged indentation nobody typed on purpose.
+
+    It leads the class list so a caller's own `className` still wins — reels
+    already passes its own text/colour utilities through here.
+  */
+  return <span className={cn("whitespace-pre-line", className)}>{nodes}</span>;
 }

@@ -18,6 +18,23 @@ export function isDoubleTap(now: number, lastTapAt: number, doubleTapMs: number)
 }
 
 /**
+ * Whether a pointerup should be treated as a real tap on this element.
+ *
+ * Pure and exported for the same reason `isDoubleTap` is: this is the decision
+ * that regressed. Extracting the hold-then-open pattern out of `FeedVideo`
+ * dropped its `started` check, which is what let a tap on an OVERLAID control
+ * (the blended Wow/Comment/Save row inside FeedImage) open the reel viewer —
+ * that row stops pointerdown but not pointerup, so the hook saw a pointerup it
+ * never had a pointerdown for and treated it as a tap on the photo.
+ *
+ *   `started` — a pointerdown for this gesture actually landed on the element.
+ *   `moved`   — the pointer travelled past the tolerance: a drag or a scroll.
+ */
+export function isRealTap(started: boolean, moved: boolean): boolean {
+  return started && !moved;
+}
+
+/**
  * Disambiguates a single tap from a double tap on the SAME element, so a
  * single tap can safely trigger a delayed action (opening a full-screen
  * viewer) while a double tap CANCELS it and fires a different action instead
@@ -99,9 +116,32 @@ export function useTapOrDoubleTap({
   );
 
   const onPointerUp = useCallback(() => {
+    /*
+      🔴 A POINTERUP WITH NO MATCHING POINTERDOWN IS NOT A TAP (owner,
+      2026-08-23: "liking a single post from a post that has the engagement on
+      the card still opens the post in reels").
+
+      The blended engagement row renders INSIDE FeedImage's container (as
+      `children`), so its buttons sit under the same pointer handlers as the
+      photo. That row already calls `stopPropagation()` on pointerDOWN — but
+      only pointerdown. The matching pointerUP still bubbled up to here, and
+      this handler had no way to tell it apart from a genuine tap on the
+      photo: `startPt` was null and `moved` held whatever the PREVIOUS
+      interaction left behind, so a tap on Wow/Comment/Save scheduled `onTap`
+      and the reel viewer opened ~350ms later, on top of the like.
+
+      `started` is the guard, and it is the same one `FeedVideo`'s own inline
+      gesture machine has always had (`const started = startPt.current !==
+      null` in its `endHold`) — this hook simply lost it when the pattern was
+      extracted, which is why only the image/carousel surfaces showed the bug.
+      Fixing it here rather than adding a second `stopPropagation` to the row
+      covers every child that will ever be placed over these surfaces, instead
+      of requiring each one to remember.
+    */
+    const started = startPt.current !== null;
     const wasMoved = moved.current;
     startPt.current = null;
-    if (wasMoved) return; // a drag/scroll, not a tap
+    if (!isRealTap(started, wasMoved)) return;
 
     const now = Date.now();
     if (isDoubleTap(now, lastTapAt.current, doubleTapMs)) {

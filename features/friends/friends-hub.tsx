@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   Check,
   Compass,
   Hand,
@@ -277,31 +276,29 @@ export function FriendsHub({ initial }: { initial: FriendsOverview }) {
         </section>
       ) : null}
 
-      {initial.activity.length > 0 ? (
-        <section className="mb-6">
-          <h2 className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <Activity className="h-4 w-4 text-muted-foreground" /> Friend activity
-          </h2>
-          <ul className="space-y-1.5">
-            {initial.activity.map((a) => (
-              <li key={a.postId}>
-                <Link
-                  href={`/p/${a.postId}`}
-                  className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/60 px-3.5 py-2.5 transition hover:bg-card"
-                >
-                  <ProfileAvatar user={a.user} size="sm" online={online.has(a.user.id)} />
-                  <span className="min-w-0 flex-1 text-sm">
-                    <strong className="font-semibold">{a.user.displayName}</strong>{" "}
-                    <span className="text-muted-foreground">published{a.mediaKind === "video" ? " a video" : ""} ·</span>{" "}
-                    <span className="truncate">{a.title}</span>
-                  </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(a.createdAt)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {/*
+        🔴 SECOND "Friend activity" LIST REMOVED (owner, 2026-08-23: "there are
+        two friends activity in friends page, remove one").
+
+        /friends rendered this inline list AND `<FriendActivityFeed>` (see
+        app/(app)/friends/page.tsx) one after the other — two headings, two
+        lists, largely the same posts.
+
+        This is the one that went, and the standalone component stayed, because
+        this one is a strict SUBSET: it only ever showed published posts (it
+        keys on `a.postId` and hard-codes the word "published"), while
+        FriendActivityFeed covers posts, stories, likes and follows with an
+        icon per kind and a real empty state. Keeping the richer surface loses
+        nothing; keeping this one would have lost three of the four activity
+        kinds.
+
+        It was also the broken one: its caption put `truncate` on an INLINE
+        <span>, where `overflow:hidden` does not clip, so a long post title ran
+        straight off the right edge of the card instead of ellipsing — the
+        overflow in the owner's screenshot. `initial.activity` is still fetched
+        by `friendsOverview` and used elsewhere; nothing about the data layer
+        changes here.
+      */}
 
       {outgoing.length > 0 ? (
         <section className="mb-6">

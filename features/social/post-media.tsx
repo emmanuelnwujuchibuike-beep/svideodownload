@@ -54,6 +54,15 @@ export function PostMedia({ item }: { item: FeedItem }) {
   const isVideo = item.mediaKind === "video" && (item.mediaUrl || item.streamUid);
   const isImage = item.mediaKind === "image" && (item.mediaUrl || item.thumbnailUrl);
 
+  /*
+    A text post has no media, and must not fall through to the cover-preview
+    fallback at the bottom of this function — that paints a 16:9 black box with
+    a Play glyph, i.e. an invitation to watch a video that does not exist
+    (2026-08-23, migration 0128). The write-up itself is rendered by the page
+    around this component; there is simply nothing for this slot to show.
+  */
+  if (item.mediaKind === "text") return null;
+
   // Album post → the full swipeable carousel (counter, dots, in-view video
   // autoplay), never just the cover. Tapping any slide opens the EXACT one
   // tapped, in fullscreen, still swipeable through every other item — an

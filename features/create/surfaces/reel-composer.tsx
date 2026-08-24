@@ -14,6 +14,7 @@ import {
 import { CreateDone } from "@/features/create/surfaces/post-composer";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
+import { CAPTION_MAX_CHARS, CAPTION_MAX_WORDS, clampWords, countWords } from "@/lib/social/caption";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,6 +46,7 @@ export function ReelComposer() {
   const media = useComposerMedia(REEL_RULES);
   const { items, active, err } = media;
   const { caption, setCaption, clearDraft } = useCaptionDraft("reel");
+  const captionWords = countWords(caption);
 
   const [busy, setBusy] = useState(false);
   const [busyText, setBusyText] = useState<string | null>(null);
@@ -201,15 +203,31 @@ export function ReelComposer() {
       {active ? (
         <div className="shrink-0 border-t border-white/10 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3">
           <div className="relative">
+            {/*
+              🔴 250 WORDS, NOT 300 CHARACTERS (owner, 2026-08-23) — same change
+              as post-composer.tsx; see its note. `rows` grows with the text so
+              a caption written as paragraphs is readable while it is typed,
+              capped at 6 so the Publish control stays above the keyboard on a
+              phone. Enter has always inserted a newline here; RichText's
+              `whitespace-pre-line` is what finally makes those breaks show up
+              on the reel.
+            */}
             <textarea
               value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              maxLength={300}
-              rows={2}
+              onChange={(e) => setCaption(clampWords(e.target.value))}
+              maxLength={CAPTION_MAX_CHARS}
+              rows={Math.min(6, Math.max(2, caption.split("\n").length))}
               placeholder="Write a caption…"
-              className="w-full resize-none rounded-2xl bg-white/10 px-4 py-3 pr-14 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-white/40 focus:ring-2 focus:ring-white/30"
+              className="w-full resize-none rounded-2xl bg-white/10 px-4 py-3 pb-6 pr-14 text-sm text-white outline-none ring-1 ring-white/10 placeholder:text-white/40 focus:ring-2 focus:ring-white/30"
             />
-            <span className="pointer-events-none absolute bottom-2.5 right-3 text-[10px] tabular-nums text-white/40">{caption.length}/300</span>
+            <span
+              className={cn(
+                "pointer-events-none absolute bottom-2.5 right-3 text-[10px] tabular-nums",
+                captionWords >= CAPTION_MAX_WORDS ? "font-semibold text-amber-300" : "text-white/40",
+              )}
+            >
+              {captionWords}/{CAPTION_MAX_WORDS} words
+            </span>
           </div>
 
           {sound ? (

@@ -49,8 +49,12 @@ export function RevenueCharts({
   mrrComplete: boolean;
   /** Daily visitors from the analytics RPC — real buckets, may be absent. */
   visitors?: { date: string; visitors: number }[];
-  /** Daily new-vs-returning split — see getVisitorSplitSeries, capped at 30 days. */
-  visitorSplit?: { date: string; newVisitors: number; returningVisitors: number }[];
+  /**
+   * Daily new-vs-returning split — see getVisitorSplitSeries, capped at 30 days.
+   * A null count means NOT MEASURED for that day (the un-migrated fallback
+   * could not reach it), never zero — those points are dropped below.
+   */
+  visitorSplit?: { date: string; newVisitors: number | null; returningVisitors: number | null }[];
 }) {
   const [range, setRange] = useState<7 | 30 | 90>(30);
   const router = useRouter();
@@ -71,8 +75,20 @@ export function RevenueCharts({
   const installs: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.installs }));
   const rewardsStarted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsStarted }));
   const rewardsGranted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsGranted }));
-  const newVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.newVisitors }));
-  const returningVisitors: AreaPoint[] = slice(visitorSplit ?? []).map((d) => ({ label: fmtDay(d.date), value: d.returningVisitors }));
+  /*
+    🔴 A NULL DAY IS DROPPED, NOT PLOTTED AS ZERO (owner, 2026-08-23:
+    "returning visitors in admin is glitching, showing 0"). An unmeasured day
+    charted at zero is indistinguishable from a real day with no returning
+    visitors, and it also drags the total down — which is how a day whose true
+    figure was 52 came to read as 0. Dropping it leaves a visible gap, which is
+    the honest rendering of "we could not measure this".
+  */
+  const definedDays = <K extends "newVisitors" | "returningVisitors">(key: K): AreaPoint[] =>
+    slice(visitorSplit ?? [])
+      .filter((d): d is (typeof d) & Record<K, number> => d[key] != null)
+      .map((d) => ({ label: fmtDay(d.date), value: d[key] }));
+  const newVisitors: AreaPoint[] = definedDays("newVisitors");
+  const returningVisitors: AreaPoint[] = definedDays("returningVisitors");
 
   const totalImpr = impressions.reduce((n, p) => n + p.value, 0);
   const totalClicks = clicks.reduce((n, p) => n + p.value, 0);

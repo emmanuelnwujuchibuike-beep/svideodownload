@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, Image as ImageIcon, Music, Play } from "lucide-react";
+import { Eye, FileText, Image as ImageIcon, Music, Play } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import type { FeedItem } from "@/lib/social/home-feed";
 import type { PostCard } from "@/lib/social/posts";
 import { postHref } from "@/lib/social/post-url";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import type { PostMediaKind } from "@/types";
 
 // Same code-split, instant, no-navigation viewers the Home feed uses — a grid
 // tap opens straight into one of these instead of `/p/[id]` (owner: "the
@@ -25,7 +26,16 @@ const PostViewer = dynamic(() => import("@/features/feed/post-viewer").then((m) 
 });
 const ImageViewer = dynamic(() => import("@/features/feed/image-viewer").then((m) => m.ImageViewer), { ssr: false });
 
-const KIND_ICON = { video: Play, image: ImageIcon, audio: Music } as const;
+/* `text` (2026-08-23, migration 0128) is a write-up with no media at all, so a
+   grid tile has nothing to paint but a glyph — the caption is the whole post.
+   Typed against PostMediaKind so a future kind cannot be added without the
+   compiler pointing here. */
+const KIND_ICON: Record<PostMediaKind, typeof Play> = {
+  video: Play,
+  image: ImageIcon,
+  audio: Music,
+  text: FileText,
+};
 
 /**
  * A post's cover image. Prefers the stored thumbnail; for videos without one it

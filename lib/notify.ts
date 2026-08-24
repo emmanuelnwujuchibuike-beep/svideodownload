@@ -7,12 +7,51 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * Env (set on the Vercel frontend, where analytics/admin run):
  *   RESEND_API_KEY    – your Resend API key
  *   ALERT_EMAIL_TO    – comma-separated recipients (falls back to ADMIN_EMAILS)
- *   ALERT_EMAIL_FROM  – verified sender; defaults to Resend's onboarding address
- *                       (works out-of-the-box to your own Resend account email)
+ *   ALERT_EMAIL_FROM  – verified sender, as `Name <you@your-domain.com>` or a
+ *                       bare address. A NAME ON ITS OWN is not a valid sender
+ *                       and Resend 422s it — `resolveAlertFrom` below salvages
+ *                       that case rather than letting every email fail
+ *                       silently. Unset defaults to Resend's onboarding
+ *                       address, which only delivers to your own Resend
+ *                       account email.
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim();
-const FROM = process.env.ALERT_EMAIL_FROM?.trim() || "FrenzSave <onboarding@resend.dev>";
+
+/** Resend's shared sender. Only delivers to the Resend account owner's own address. */
+const DEFAULT_SENDER = "onboarding@resend.dev";
+
+/**
+ * Resolve the `from` header Resend will accept.
+ *
+ * 🔴 A BARE DISPLAY NAME 422s EVERY SEND. `ALERT_EMAIL_FROM` was set to
+ * "Svideodownload" — no address. That is truthy, so it replaced the working
+ * default, and Resend answered:
+ *
+ *   422 validation_error — Invalid `from` field. The email address needs to
+ *   follow the `email@example.com` or `Name <email@example.com>` format.
+ *
+ * Every admin email had been failing on it, and nothing said so (see the
+ * digest route). Rather than fail on a value that is obviously an intended
+ * DISPLAY NAME, keep the name and attach the default sender — the operator
+ * gets the branding they asked for and a working send, and the warning names
+ * the fix. An address that is already well-formed is passed through untouched.
+ */
+export function resolveAlertFrom(raw: string | undefined | null): string {
+  const configured = raw?.trim();
+  if (!configured) return `FrenzSave <${DEFAULT_SENDER}>`;
+
+  // `Name <a@b.c>` — already valid.
+  if (/^[^<>]*<\s*[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+\s*>$/.test(configured)) return configured;
+  // Bare `a@b.c` — also valid.
+  if (/^[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+$/.test(configured)) return configured;
+
+  // Anything else is a display name (or malformed). Salvage it as one.
+  const name = configured.replace(/[<>]/g, "").trim();
+  return name ? `${name} <${DEFAULT_SENDER}>` : `FrenzSave <${DEFAULT_SENDER}>`;
+}
+
+const FROM = resolveAlertFrom(process.env.ALERT_EMAIL_FROM);
 
 function recipients(): string[] {
   const raw = process.env.ALERT_EMAIL_TO || process.env.ADMIN_EMAILS || "";

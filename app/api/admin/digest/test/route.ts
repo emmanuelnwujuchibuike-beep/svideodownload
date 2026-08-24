@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getAdminUser } from "@/lib/admin/guard";
 import { buildDigest } from "@/lib/analytics/digest";
 import { digestEmailHtml, digestEmailSubject } from "@/lib/analytics/digest-email";
-import { alertsEnabled, sendAdminEmail } from "@/lib/notify";
+import { alertsEnabled, diagnoseEmail, sendAdminEmail } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +41,30 @@ export async function POST(request: Request) {
   try {
     const data = await buildDigest(parsed.data.period);
     const sent = await sendAdminEmail(`[TEST] ${digestEmailSubject(data)}`, digestEmailHtml(data));
-    if (!sent) return NextResponse.json({ error: "Resend rejected the email — check server logs." }, { status: 502 });
+    if (!sent) {
+      /*
+        "Check server logs" is not an answer anyone can act on from a dashboard.
+        `diagnoseEmail` already resolves the config and returns Resend's exact
+        status and body; it just was not wired to anything. It performs one more
+        real send, which is acceptable here because we are already on the
+        failure path and the whole point of this button is to find out why.
+      */
+      const why = await diagnoseEmail();
+      return NextResponse.json(
+        {
+          error: "Resend rejected the email.",
+          from: why.from,
+          to: why.recipients,
+          status: why.status,
+          resend: why.body ?? why.error,
+          hint:
+            why.from.includes("onboarding@resend.dev")
+              ? "The default onboarding@resend.dev sender may only deliver to the Resend account owner's own address. Either sign the Resend account up with that recipient, or verify a domain and set ALERT_EMAIL_FROM."
+              : "ALERT_EMAIL_FROM must be a sender on a domain verified in Resend.",
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({ ok: true, metrics: data.metrics.length, warnings: data.warnings });
   } catch (err) {
     console.error("[digest/test] failed:", err);

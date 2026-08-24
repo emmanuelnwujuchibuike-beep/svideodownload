@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { cronAuthorized } from "@/lib/cron/auth";
 import { buildDigest, type DigestPeriod } from "@/lib/analytics/digest";
 import { digestEmailHtml, digestEmailSubject } from "@/lib/analytics/digest-email";
-import { alertsEnabled, sendAdminAlertOnce, type AlertOutcome } from "@/lib/notify";
+import { alertsEnabled, diagnoseEmail, sendAdminAlertOnce, type AlertOutcome } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,11 +84,26 @@ async function run(request: Request) {
     else rejected.push(period);
   }
 
+  if (rejected.length === 0) {
+    return NextResponse.json({ ok: true, sent, ...(duplicate.length ? { duplicate } : {}) });
+  }
+
+  /*
+    Say WHY in the response. Reaching this route at all requires the cron
+    credential, so the resolved sender and recipients are no more exposed here
+    than the send itself is — and "it was rejected" without the reason is the
+    thing that made this take days to notice.
+  */
+  const why = await diagnoseEmail();
   return NextResponse.json({
-    ok: rejected.length === 0,
+    ok: false,
     sent,
     ...(duplicate.length ? { duplicate } : {}),
-    ...(rejected.length ? { rejected, hint: "Resend refused it — check ALERT_EMAIL_FROM is a verified sender, or that ALERT_EMAIL_TO is the Resend account's own address." } : {}),
+    rejected,
+    from: why.from,
+    to: why.recipients,
+    status: why.status,
+    resend: why.body ?? why.error,
   });
 }
 

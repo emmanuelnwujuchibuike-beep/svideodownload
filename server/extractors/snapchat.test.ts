@@ -31,6 +31,27 @@ describe("stripSnapWatermark", () => {
     expect(out).not.toContain("mo=");
   });
 
+  /*
+    🔴 Regression guard for "Spotlight now downloads with watermark"
+    (owner, 2026-08-24). Measured against the live clip snapchat.com/t/zWJDbGIN:
+
+      bolt-gcdn.sc-cdn.net/y/<id>.27.<tok>   → 206 video/mp4  (the real file)
+      the same path rewritten to .1034.       → 404
+      …and .1023/.256/.128/.64/…/.0.          → 404, all of them
+
+    Rewriting on that host therefore handed the pipeline a URL that does not
+    exist; the download failed and fell back to yt-dlp, whose Spotlight
+    extractor returns a WATERMARKED render. The watermark came from the
+    fallback, triggered by our own 404.
+  */
+  it("does NOT rewrite on a host that has no .1034. rendition (bolt-gcdn)", () => {
+    const live =
+      "https://bolt-gcdn.sc-cdn.net/y/ozcsuISdRBcfOKb3N9CKU.27.IRZXSOY?mo=U3BvdGxpZ2h0U2hhcmluZw&uc=46";
+    // Returned untouched: a working watermarked file beats a dead URL that
+    // silently downgrades the whole download to yt-dlp.
+    expect(stripSnapWatermark(live)).toBe(live);
+  });
+
   it("detects the watermark from the SpotlightSharing media-option alone", () => {
     // A non-.27. rendition can still carry the sharing overlay via `mo`.
     const out = stripSnapWatermark(

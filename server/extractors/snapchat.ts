@@ -148,6 +148,20 @@ function cleanUrl(u: string): string {
  * Snapchat media URL. If the clean rendition is ever unavailable the proxy
  * download fails and the pipeline falls back to yt-dlp — never a broken file.
  */
+/**
+ * CDN hosts on which the clean `.1034.` rendition is known to be served.
+ *
+ * Verified live 2026-08-24: `bolt-gcdn.sc-cdn.net` — where Snapchat now hosts
+ * Spotlight — 404s on `.1034.` and on every other rendition number, so
+ * rewriting there hands the pipeline a dead URL. `cf-st.sc-cdn.net` is the host
+ * the rewrite was originally derived against and still works.
+ *
+ * An allowlist rather than a denylist on purpose: a NEW unknown host should
+ * keep the URL that Snapchat actually served (a working, if watermarked,
+ * download) rather than gamble on a rendition that may not exist and fail.
+ */
+const REWRITABLE_HOSTS = ["cf-st.sc-cdn.net"];
+
 export function stripSnapWatermark(u: string): string {
   try {
     const url = new URL(u);
@@ -175,6 +189,39 @@ export function stripSnapWatermark(u: string): string {
       live watermarked URL to re-derive, and the pipeline falls back to yt-dlp
       rather than serving a broken file.
     */
+    /*
+      🔴 THE REWRITE ONLY APPLIES WHERE `.1034.` ACTUALLY EXISTS (2026-08-24).
+
+      Measured against a live watermarked Spotlight clip
+      (snapchat.com/t/zWJDbGIN → bolt-gcdn.sc-cdn.net/y/<id>.27.<tok>):
+
+        .27.  (as served)      → 206 video/mp4   ✅ the real file
+        .1034. (our rewrite)   → 404             ❌ dead
+        .1023/.256/.128/…/.0.  → 404             ❌ every rendition is dead
+        .27. with mo+uc removed → byte-identical to the original (same sha256)
+
+      So on this host the rewrite produced a URL that does not exist. The
+      download then FAILED and the pipeline fell back to yt-dlp — whose
+      Spotlight extractor returns a watermarked render. That is precisely the
+      "Snapchat Spotlight now downloads with watermark" report: the watermark
+      was coming from the fallback, caused by us handing out a 404.
+
+      Snapchat has moved Spotlight to `bolt-gcdn`, where the page exposes only
+      two renditions of a clip — `.27.` (the video, carrying SpotlightSharing)
+      and `.256.` (DfLargeThumbnail). There is no clean video rendition to
+      rewrite TO. `cf-st` still serves the story originals the `.1034.` trick
+      was derived from, so that path is unchanged and still covered by tests.
+
+      Returning the ORIGINAL here is strictly better than returning a 404: the
+      download succeeds, direct from the CDN with no transcode. It does not
+      remove the watermark, because Snapchat no longer publishes a version
+      without one for these clips — that is a change on their side, not
+      something this function can rewrite around.
+    */
+    if (!REWRITABLE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`))) {
+      return u;
+    }
+
     url.pathname = url.pathname.replace(/(\/[a-z]\/[^./]+)\.\d+\./i, "$1.1034.");
     url.searchParams.delete("mo");
     url.searchParams.delete("uc");

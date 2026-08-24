@@ -107,8 +107,25 @@ async function loadRow(identity: StreakIdentity): Promise<Row | null> {
 }
 
 /**
- * Load-or-create. `upsert` on the identity's partial unique index, so two
- * simultaneous first-ever requests produce one row rather than a conflict.
+ * Load-or-create.
+ *
+ * 🔴 INSERT-THEN-REREAD, NOT UPSERT — and this was a real bug, caught by
+ * exercising the endpoint against the live database rather than by reading the
+ * code. `upsert(..., { onConflict: "anon_id" })` fails with Postgres 42P10,
+ * "no unique or exclusion constraint matching the ON CONFLICT specification",
+ * because the identity indexes in migration 0130 are PARTIAL
+ * (`where anon_id is not null` — they have to be, since the other identity
+ * column is NULL on every row of the opposite kind, and NULLs never conflict in
+ * a plain unique index). ON CONFLICT cannot infer a partial index unless the
+ * statement repeats its predicate, which PostgREST cannot express.
+ *
+ * The symptom was silent: the insert errored, the engine's catch returned a
+ * neutral state, and every visitor's streak sat at 0 forever while the API
+ * cheerfully returned 200.
+ *
+ * A plain insert with a duplicate-key fallback is race-safe in the same way and
+ * does not care whether the index is partial: whoever loses re-reads the row
+ * the winner just created.
  */
 async function ensureRow(identity: StreakIdentity, timezone: string | null): Promise<Row | null> {
   const existing = await loadRow(identity);
@@ -117,10 +134,10 @@ async function ensureRow(identity: StreakIdentity, timezone: string | null): Pro
   const { column, value } = where(identity);
   const { data, error } = await createAdminClient()
     .from("streaks")
-    .upsert({ [column]: value, timezone }, { onConflict: column })
+    .insert({ [column]: value, timezone })
     .select(SELECT)
     .maybeSingle();
-  // A lost upsert race still leaves a row — read it back rather than failing.
+  // A lost race still leaves a row — read back rather than failing.
   if (error) return await loadRow(identity);
   return (data as Row | null) ?? null;
 }

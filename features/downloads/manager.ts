@@ -527,6 +527,9 @@ async function run(id: string) {
       quality: task.qualityLabel,
       fileSize: received,
       durationMs: Math.round(performance.now() - startedAt),
+      // >1 means this download failed or was cancelled at least once first —
+      // the server turns that into the admin "succeeded in N tries" push.
+      attempts: task.attempts ?? 1,
     });
     addDownload({
       url: task.url,
@@ -568,6 +571,34 @@ async function run(id: string) {
 
     patch(id, { status: "failed", error: reason });
     trackDownload("failed", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel, errorReason: reason });
+
+    /*
+      Keep the FAILED attempt in history so it can be retried later (owner,
+      2026-08-23: "add downloads failed and cancelled in history so users can
+      retry at any day").
+
+      Until now `addDownload` was only called on success, so a failure vanished
+      the moment its card was dismissed and the link was gone with it — the
+      person had to find the original post again. The record carries everything
+      a retry needs (url, formatId, kind, quality), which is exactly what the
+      history tile's Retry re-submits.
+
+      `addDownload` de-duplicates on url+formatId+kind, so a later successful
+      attempt at the same thing REPLACES this row rather than leaving a failure
+      sitting next to its own success.
+    */
+    addDownload({
+      url: task.url,
+      platform: task.platform,
+      platformName: task.platformName,
+      title: task.title,
+      thumbnail: task.thumbnail ?? null,
+      formatId: task.formatId,
+      kind: task.kind,
+      qualityLabel: task.qualityLabel,
+      status: "failed",
+      failureReason: reason,
+    });
 
     /*
       🔴 The daily cap gets its OWN toast, not the generic one (owner,
@@ -798,6 +829,22 @@ export function cancelDownload(id: string) {
       platform: task.platform,
       mediaKind: task.kind,
       quality: task.qualityLabel,
+    });
+
+    /* Cancelled attempts are kept in history too, for the same reason failures
+       are: the link is the thing worth not losing, and "I stopped it, I'll grab
+       it later" is the most ordinary reason of all to want it back. */
+    addDownload({
+      url: task.url,
+      platform: task.platform,
+      platformName: task.platformName,
+      title: task.title,
+      thumbnail: task.thumbnail ?? null,
+      formatId: task.formatId,
+      kind: task.kind,
+      qualityLabel: task.qualityLabel,
+      status: "cancelled",
+      failureReason: null,
     });
   }
   controllers.get(id)?.abort();

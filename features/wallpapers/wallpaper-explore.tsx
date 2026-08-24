@@ -105,12 +105,14 @@ const WallpaperLimitSheet = dynamic(
 
 /** How many the Popular section shows before "View all" opens the rest. */
 const POPULAR_PREVIEW = 12;
-/** Grid tiles rendered per batch — the initial paint, and each scroll-triggered
- *  step after it. Keeps the DOM/image count proportional to how far someone has
- *  actually scrolled instead of mounting the whole (up to 600-wallpaper) library
- *  at once (owner, 2026-08-16: "wallpaper page appears to be trying to load too
- *  much content at once"). */
-const GRID_BATCH = 24;
+/**
+ * How many wallpapers the grid shows before "See more" (owner, 2026-08-23).
+ *
+ * Replaces a 24-per-batch infinite scroll. A fixed first page is what makes the
+ * footer and everything below the grid reachable again on a 600-wallpaper
+ * library — with the observer, the page grew as fast as you could scroll it.
+ */
+const WALLPAPER_PREVIEW = 30;
 
 export function WallpaperExplore({
   items,
@@ -275,36 +277,50 @@ export function WallpaperExplore({
   const capped = ranked && hasEngagement && !filtering && !expanded;
 
   /*
-    Progressive grid — only the uncapped path needs it, since "capped" already
-    caps itself at POPULAR_PREVIEW. Windowed rather than the whole `filtered`
-    array so a library of hundreds never mounts hundreds of tiles the instant
-    the page (or a filter) renders; `sentinelRef` below grows it as the visitor
-    actually scrolls near the bottom.
+    🔴 THIRTY, THEN AN EXPLICIT "See more" (owner, 2026-08-23: "make wallpapers
+    in wallpaper page to show only 30 wallpaper and a see more button that
+    brings all out in grid, so users can scroll to the bottom easily when they
+    didn't press see more, and put a see less button at the top and end").
+
+    This REPLACES an infinite scroll: an IntersectionObserver grew the grid by
+    24 every time the visitor neared the bottom. That is precisely what the
+    owner is describing as the problem — with a 600-wallpaper library the page
+    kept growing as you scrolled, so the footer and everything under the grid
+    were unreachable in practice. A fixed first page with a real button hands
+    the length of the page back to the person.
+
+    The observer is gone rather than merely capped: keeping it would mean the
+    grid still grew on its own while a "See more" button sat there claiming to
+    be the way to see more.
   */
-  const [visibleCount, setVisibleCount] = useState(GRID_BATCH);
+  const [showAll, setShowAll] = useState(false);
+  /* Any change to the filters starts a fresh list, so an expansion from the
+     previous one must not silently carry over into it. */
   useEffect(() => {
-    setVisibleCount(GRID_BATCH);
+    setShowAll(false);
   }, [category, type, query, sort, expanded]);
 
-  const shown = capped ? filtered.slice(0, POPULAR_PREVIEW) : filtered.slice(0, visibleCount);
-  const hasMore = !capped && shown.length < filtered.length;
+  const shown = capped
+    ? filtered.slice(0, POPULAR_PREVIEW)
+    : showAll
+      ? filtered
+      : filtered.slice(0, WALLPAPER_PREVIEW);
+  const hasMore = !capped && !showAll && filtered.length > WALLPAPER_PREVIEW;
+  /* The "See less" pair only makes sense once the grid was actually expanded —
+     and only when collapsing would really remove something. */
+  const canCollapse = !capped && showAll && filtered.length > WALLPAPER_PREVIEW;
 
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!hasMore) return;
-    const node = sentinelRef.current;
-    if (!node || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((c) => Math.min(filtered.length, c + GRID_BATCH));
-        }
-      },
-      { rootMargin: "800px 0px" },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, filtered.length]);
+  /*
+    Collapsing from the BOTTOM button would otherwise leave the viewport
+    somewhere inside a grid that no longer extends that far, which reads as the
+    page having jumped. Returning to the grid heading is the one position that
+    is still meaningful after the list shrinks.
+  */
+  const gridTopRef = useRef<HTMLDivElement>(null);
+  const collapse = useCallback(() => {
+    setShowAll(false);
+    gridTopRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, []);
 
   const open = useCallback((wallpaper: Wallpaper) => {
     haptic("light");
@@ -694,7 +710,8 @@ export function WallpaperExplore({
             </p>
           ) : (
             <>
-              <div className="mb-3 flex items-end justify-between gap-3">
+              {/* Scroll target for "See less" — see `collapse`. */}
+              <div ref={gridTopRef} className="mb-3 flex items-end justify-between gap-3">
                 <h2 className="truncate text-lg font-bold tracking-tight">{heading}</h2>
                 {capped && filtered.length > POPULAR_PREVIEW ? (
                   <button
@@ -703,6 +720,17 @@ export function WallpaperExplore({
                     className="shrink-0 text-sm font-semibold text-primary transition active:scale-95"
                   >
                     View all
+                  </button>
+                ) : canCollapse ? (
+                  /* The TOP "See less" the owner asked for: once the whole
+                     library is on screen, the way back has to be reachable
+                     without scrolling to the very bottom of it. */
+                  <button
+                    type="button"
+                    onClick={collapse}
+                    className="shrink-0 text-sm font-semibold text-primary transition active:scale-95"
+                  >
+                    See less
                   </button>
                 ) : (
                   <span className="shrink-0 text-xs font-semibold text-muted-foreground">
@@ -744,11 +772,28 @@ export function WallpaperExplore({
                 </div>
               )}
 
-              {/* Grows `visibleCount` when it nears the viewport — the rest of
-                  the (already in-memory) library mounts in batches as the
-                  visitor actually scrolls, instead of all at once up front. */}
+              {/*
+                The end-of-grid control. "See more" states how many are still
+                hidden rather than saying "See more" alone — the count is what
+                tells someone whether one more tap is worth it on a library this
+                size, and it costs nothing to say.
+              */}
               {hasMore ? (
-                <div ref={sentinelRef} aria-hidden className="h-px w-full" />
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6D5CFF] to-[#8B5CF6] px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition active:scale-[0.99]"
+                >
+                  See more · {(filtered.length - WALLPAPER_PREVIEW).toLocaleString()} more
+                </button>
+              ) : canCollapse ? (
+                <button
+                  type="button"
+                  onClick={collapse}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-card px-6 py-3.5 text-sm font-bold text-foreground shadow-soft ring-1 ring-inset ring-border/60 transition active:scale-[0.99]"
+                >
+                  See less
+                </button>
               ) : null}
             </>
           )}

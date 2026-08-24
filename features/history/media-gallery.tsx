@@ -775,6 +775,35 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, sel
         className="min-w-0 flex-1 text-left"
       >
         <p className="truncate text-sm font-semibold leading-tight">{item.title}</p>
+        {/*
+          Failed and cancelled attempts now live in history so they can be
+          retried later (owner, 2026-08-23), which only helps if you can TELL
+          them apart from the files you actually have.
+
+          🔴 `?? "completed"` is load-bearing: history is the visitor's own
+          localStorage and every record written before `status` existed has
+          none. A bare `!== "completed"` check would badge everyone's entire
+          existing library as failed. See the field's note in types/index.ts.
+
+          Retrying needs no new control — selecting a row and using the existing
+          re-download action re-submits it from the url/format the record
+          already carries.
+        */}
+        {(item.status ?? "completed") !== "completed" ? (
+          <p
+            className={cn(
+              "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+              item.status === "failed"
+                ? "bg-rose-500/10 text-rose-600 dark:text-rose-300"
+                : "bg-secondary text-muted-foreground",
+            )}
+          >
+            {item.status === "failed" ? "Failed" : "Cancelled"}
+            {item.status === "failed" && item.failureReason ? (
+              <span className="font-medium normal-case opacity-80">· {item.failureReason}</span>
+            ) : null}
+          </p>
+        ) : null}
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
           {item.platformName} · {item.qualityLabel} · {formatBytes(estimateBytes(item))}
         </p>

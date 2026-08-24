@@ -4,6 +4,7 @@ import { z } from "zod";
 import { geoFromHeaders, isBotUA, parseUA } from "@/lib/analytics/enrich";
 import type { DownloadStatus } from "@/lib/analytics/types";
 import { notifyAdminsOfDownloadOutcome } from "@/lib/analytics/download-failure-alert";
+import { notifyAdminsOfRetrySuccess } from "@/lib/analytics/retry-success-alert";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -243,6 +244,36 @@ export async function POST(request: Request) {
   */
   for (const e of parsed.events) {
     const status = STATUS_FROM_TYPE[e.type];
+
+    /*
+      A download that failed or was cancelled and then SUCCEEDED on a later
+      attempt (owner, 2026-08-23). Sits in the same loop as the failure alert
+      and for the same reason it reads `parsed.events` rather than
+      `downloadRows`: this is about what HAPPENED, not about the download's
+      final status, and "latest wins" would erase the interim history the alert
+      is reporting on.
+
+      `attempts` is sent by the client only on completion (features/downloads/
+      manager.ts). Anything ≤ 1 is a first-time success — the normal case — and
+      is filtered inside the alert so nobody is pushed for the thing that is
+      supposed to happen.
+    */
+    if (status === "completed" && e.downloadId) {
+      const p = e.properties ?? {};
+      const attempts = typeof p.attempts === "number" ? p.attempts : 0;
+      if (attempts > 1) {
+        after(() =>
+          notifyAdminsOfRetrySuccess({
+            downloadId: e.downloadId!,
+            attempts,
+            platform: str(p.platform),
+            mediaKind: str(p.mediaKind),
+            userId,
+          }),
+        );
+      }
+    }
+
     if (status !== "failed" && status !== "cancelled") continue;
     if (!e.downloadId) continue;
     const p = e.properties ?? {};

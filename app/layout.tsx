@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
@@ -42,6 +42,40 @@ import "./globals.css";
  * Tailwind's `font-sans` with no per-component change.
  */
 const displaySans = Inter({ subsets: ["latin"], variable: "--font-sans" });
+
+/**
+ * The BRAND face — used only for the "Frenz" / "Frenzsave" wordmark in the top
+ * header (owner, 2026-08-23: "make the frenz and frenzsave brand text at the top
+ * header of the pages to be in a decorative stylish font").
+ *
+ * ── Why Outfit, and why only one weight ───────────────────────────────────────
+ * Inter is deliberately a face that is not meant to be noticed (see its note
+ * above) — exactly wrong for a wordmark, which is the one place on the page that
+ * should be. Outfit is a geometric display sans: distinctly styled next to
+ * Inter, still legible at 17px, and it does not read as a novelty font, which
+ * matters on a product that carries a payment flow. Only `700` ships, because
+ * the wordmark is the only thing that uses it and every extra weight is a
+ * separate file.
+ *
+ * ── Protecting the budget it sits on ──────────────────────────────────────────
+ * This is a NEW font file on a page held to a 275 kB gzipped ceiling and an LCP
+ * target under 1.6s, so both of its risky defaults are turned off:
+ *
+ *  • `display: "swap"` — the wordmark paints immediately in Inter and swaps when
+ *    Outfit lands. It never blocks first paint. A brand mark is the one string
+ *    where a brief fallback is genuinely harmless; nobody fails to recognise it.
+ *  • `preload: false` — a preload would put this font in the first wave,
+ *    competing for bandwidth with the LCP element on every single page. The
+ *    wordmark is small and already legible in the fallback, so it can wait.
+ *    This is the same trade the landing perf work made for the ad scripts.
+ */
+const brandDisplay = Outfit({
+  subsets: ["latin"],
+  weight: ["700"],
+  variable: "--font-brand",
+  display: "swap",
+  preload: false,
+});
 
 // ISR: static pages (incl. the global footer's admin-managed Recommended Tools)
 // regenerate at most once a minute, so monetization changes go live without a
@@ -356,7 +390,7 @@ export default function RootLayout({
         {/* GA4 / Google Ads / Tag Manager, from an admin-set ID. */}
         <GoogleTag />
       </head>
-      <body className={`${displaySans.variable} font-sans`}>
+      <body className={`${displaySans.variable} ${brandDisplay.variable} font-sans`}>
         {/* Monetag (site-wide) — the owner's network alongside AdSense. The admin
             snippets are parsed server-side into safe tags, then injected on the
             client ONLY for visitors who should see ads, so Pro/Business stay

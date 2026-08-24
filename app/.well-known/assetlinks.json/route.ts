@@ -41,8 +41,35 @@ export const dynamic = "force-static";
  * they might assume was never deployed.
  */
 
-const PACKAGE_NAME = process.env.ANDROID_PACKAGE_NAME?.trim() ?? "";
-const FINGERPRINTS = (process.env.ANDROID_CERT_FINGERPRINTS ?? "")
+/*
+  ── Defaults that match the APK COMMITTED TO THIS REPO ────────────────────────
+  Owner, 2026-08-23: "android installed still shows as browser with the top
+  browser url, instead of full native pwa" — because this endpoint was serving
+  `[]`, because the env vars were never set.
+
+  These are no longer env-ONLY. Nothing here is secret: the entire file is
+  served publicly to anyone who asks, by design, and a package name plus a
+  certificate fingerprint are both public properties of a shipped APK. Since
+  `public/downloads/frenzsave.apk` is IN this repository, its signing
+  fingerprint is already effectively committed alongside it — keeping the
+  pairing in the same repo is what makes them impossible to get out of step.
+
+  Requiring configuration for a value that ships in the repo anyway bought no
+  security and cost the feature: the app installed and ran with a browser URL
+  bar, with nothing on screen explaining why.
+
+  🔴 These are DEFAULTS, not constants. The env vars still win, which is what a
+  re-signed APK or Play App Signing needs — Play re-signs your upload, so the
+  fingerprint that matters there is the one under "App signing key
+  certificate", not this one. Set `ANDROID_CERT_FINGERPRINTS` then, and replace
+  the APK here at the same time.
+*/
+const DEFAULT_PACKAGE_NAME = "com.frenzsave.twa";
+const DEFAULT_FINGERPRINTS =
+  "7D:D1:1D:AE:B7:3F:71:11:DF:19:54:71:27:32:53:15:2A:1B:23:0E:6D:64:02:4A:2A:82:F0:40:50:42:F6:79";
+
+const PACKAGE_NAME = process.env.ANDROID_PACKAGE_NAME?.trim() || DEFAULT_PACKAGE_NAME;
+const FINGERPRINTS = (process.env.ANDROID_CERT_FINGERPRINTS || DEFAULT_FINGERPRINTS)
   .split(",")
   .map((f) => f.trim().toUpperCase())
   // A SHA-256 fingerprint is 32 colon-separated hex bytes. Filtering on shape

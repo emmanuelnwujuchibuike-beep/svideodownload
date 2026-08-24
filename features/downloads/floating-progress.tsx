@@ -27,6 +27,7 @@ import { playSound } from "@/lib/notifications/sound-fx";
 import { useUser } from "@/features/auth/use-user";
 import {
   cancelDownload,
+  clearFinished,
   dismissTask,
   getCompletedCount,
   getServerSnapshot,
@@ -342,6 +343,12 @@ export function FloatingDownloadProgress({
   const failedTasks = tasks.filter((t) => t.status === "failed");
   const completedTasks = tasks.filter((t) => t.status === "completed");
   const finished = failedTasks[0] ?? completedTasks[0];
+  /* Everything the "Close all" control would clear — completed, failed AND
+     cancelled, matching clearFinished() exactly so the count never promises
+     more than the button removes. */
+  const finishedCount = tasks.filter(
+    (t) => t.status === "completed" || t.status === "failed" || t.status === "canceled",
+  ).length;
   const task = active ?? finished;
   /*
     "Review video" is reward-gated — a second, independent reward context
@@ -617,7 +624,14 @@ export function FloatingDownloadProgress({
                       in a headline that only mentions the failures. */}
                   {mixedOutcome ? (
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {completedTasks.length} saved, {failedTasks.length} didn't.
+                      {/* `&apos;` — a raw apostrophe here is a
+                          react/no-unescaped-entities ERROR. Pre-existing, and
+                          fixed in passing because this file is already open:
+                          local `next build` tolerates it but a stricter lint
+                          pass does not, and this project has been bitten before
+                          by a build that was green locally and failed on
+                          Vercel's ESLint. */}
+                      {completedTasks.length} saved, {failedTasks.length} didn&apos;t.
                     </p>
                   ) : null}
                 </>
@@ -896,6 +910,34 @@ export function FloatingDownloadProgress({
                 <X className="h-3 w-3" strokeWidth={3.2} />
                 {running ? "Cancel" : "Close"}
               </button>
+
+              {/*
+                CLOSE ALL (owner, 2026-08-23: "put a close all button on batch
+                download so users don't have to close downloads one after the
+                other").
+
+                This card shows ONE task at a time, so after a batch, dismissing
+                the top one just reveals the next — eight files meant eight taps.
+
+                Only rendered when more than one finished task is actually
+                stacked up, and never while something is still transferring:
+                `clearFinished()` removes completed/failed/cancelled tasks and
+                deliberately leaves running, queued and paused ones alone, so
+                this can never abort a download in progress. Showing it with a
+                single card would be a second control that does exactly what the
+                button beside it already does.
+              */}
+              {!running && finishedCount > 1 ? (
+                <button
+                  type="button"
+                  onClick={clearFinished}
+                  aria-label={`Close all ${finishedCount} finished downloads`}
+                  title="Close all finished downloads"
+                  className="inline-flex items-center justify-center gap-1 rounded-full border border-border/70 px-2.5 py-1.5 text-[10px] font-bold text-muted-foreground transition hover:bg-secondary active:scale-95"
+                >
+                  Close all {finishedCount}
+                </button>
+              ) : null}
             </div>
           </div>
       </div>

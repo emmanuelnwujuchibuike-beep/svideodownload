@@ -264,6 +264,13 @@ export function trackDownload(
      */
     sourceUrl?: string | null;
     title?: string | null;
+    /**
+     * Total attempts including the successful one. Sent on `completed` only —
+     * it is what lets the server tell a first-time success from a download that
+     * needed retrying, which is the difference the admin retry-success alert
+     * exists to report (see lib/analytics/retry-success-alert.ts).
+     */
+    attempts?: number | null;
   },
 ): void {
   const type: AnalyticsEventType =

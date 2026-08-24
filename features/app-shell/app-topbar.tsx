@@ -175,7 +175,7 @@ export function AppTopbar() {
         {onDownloads ? (
           <Link
             href="/downloads"
-            className="text-gradient shrink-0 text-[17px] font-bold tracking-tight"
+            className="font-brand text-gradient shrink-0 text-[17px] font-bold"
           >
             Frenzsave
           </Link>

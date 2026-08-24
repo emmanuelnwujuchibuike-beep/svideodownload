@@ -189,6 +189,21 @@ export interface DownloadRecord {
    * be a claim about the file rather than a gap in what we know.
    */
   durationSeconds?: number | null;
+  /**
+   * How the download ENDED (owner, 2026-08-23: "add downloads failed and
+   * cancelled in history so users can retry at any day").
+   *
+   * 🔴 OPTIONAL, and absent means COMPLETED. History lives in the visitor's own
+   * localStorage, so every record written before this field existed has no
+   * status — treating a missing value as anything other than "completed" would
+   * retroactively mark everyone's entire existing history as failed. Read it
+   * with `record.status ?? "completed"` and never with a bare equality check
+   * against "completed".
+   */
+  status?: "completed" | "failed" | "cancelled";
+  /** Why it failed, when the manager captured a reason. Never shown for a
+   *  completed record. */
+  failureReason?: string | null;
   createdAt: number;
   favorite: boolean;
 }

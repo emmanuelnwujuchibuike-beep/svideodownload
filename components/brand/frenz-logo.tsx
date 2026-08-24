@@ -134,7 +134,11 @@ export function FrenzWordmark({
       ) : (
         mark
       )}
-      <span className={cn("text-gradient text-[17px] tracking-tight", textClassName)}>Frenz</span>
+      {/* `font-brand` is the display face (globals.css, wired in app/layout.tsx).
+          Applied here so every surface rendering the lockup picks it up from one
+          place, and `tracking-tight` is dropped because that class carries its
+          own, tighter letter-spacing tuned for a logotype. */}
+      <span className={cn("font-brand text-gradient text-[17px]", textClassName)}>Frenz</span>
     </span>
   );
 }

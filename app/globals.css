@@ -203,6 +203,24 @@
     );
   }
 
+  /*
+    The wordmark face (owner, 2026-08-23). Scoped to a class rather than applied
+    through `font-sans` so it reaches ONLY the brand text — the whole point of a
+    display face is that it is not the interface font, and letting it leak into
+    headings would undo both the typography and the reason Inter was chosen (see
+    app/layout.tsx).
+
+    Falls back to the UI stack, which is what renders while the font swaps in and
+    on any device that never gets it. `--font-brand` is defined by next/font in
+    the root layout.
+  */
+  .font-brand {
+    font-family: var(--font-brand), var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    /* Display faces sit loose at wordmark sizes; a touch negative reads as a
+       set logotype rather than as running text that happens to be bold. */
+    letter-spacing: -0.02em;
+  }
+
   /* Blue→purple gradient text — hero headings, brand moments */
   .text-gradient {
     @apply bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 bg-clip-text text-transparent;

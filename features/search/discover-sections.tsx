@@ -1,7 +1,6 @@
 import { Flame, Play, Plus, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 
-import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FollowPill } from "@/features/search/follow-pill";
 import { Avatar, CreatorPortrait, SafeImage, VideoCover } from "@/features/search/media";
 import { NameLine, SectionCard, SectionHeader } from "@/features/search/search-primitives";
@@ -66,12 +65,9 @@ export function DiscoveryRow({
   if (creators.length === 0 && !viewerHandle) return null;
   return (
     <nav aria-label="Discover creators" className="srch-rail -mx-3 gap-3.5 px-3 pb-1 pt-0.5">
-      <Circle href="/explore" label="Frenzsave">
-        <span className="srch-ring flex h-full w-full items-center justify-center rounded-full">
-          <FrenzLogo size={40} tile className="rounded-full" />
-        </span>
-      </Circle>
-
+      {/* The brand's own circle used to lead this row; removed at the owner's
+          request (2026-08-24) — a logo tile among faces is the one thing here
+          that is not a person to discover. */}
       <Circle href={viewerHandle ? `/u/${viewerHandle}` : "/login?next=/search"} label="Your story" badge>
         <span className="flex h-full w-full items-center justify-center rounded-full bg-secondary text-muted-foreground">
           <UserRound className="h-7 w-7" aria-hidden />

@@ -2210,3 +2210,23 @@ body:has(.frenz-canvas-page) {
 .explore-rail > * {
   flex: none;
 }
+
+/* ── Add-friends search field — 2026-08-24 ──────────────────────────────────
+   Focus is a border + ring change on cheap properties, transitioned over
+   180ms. No shadow animation (the most expensive thing a phone can be asked
+   to repaint) and no layout-affecting property, so focusing cannot nudge the
+   field or the list under it. */
+.frnd-field {
+  transition:
+    border-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out);
+}
+.frnd-field:focus {
+  border-color: hsl(var(--primary) / 0.55);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.14);
+}
+@media (prefers-reduced-motion: reduce) {
+  .frnd-field {
+    transition: none;
+  }
+}

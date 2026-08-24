@@ -740,6 +740,26 @@ async function ProfileData({
                   <AppModeSwitcher />
                 </div>
 
+                {/*
+                  Daily streak.
+
+                  🔴 THIS BRANCH, NOT THE OTHER ONE. This file has two full
+                  returns: this one is inside `if (profile.isOwner)` — your own
+                  profile — and the second is the VISITOR view. The card first
+                  went into the visitor branch guarded by `profile.isOwner`,
+                  which is a condition that is false everywhere in that branch
+                  by construction, so it rendered for nobody. No guard is needed
+                  here: reaching this code already means you are the owner.
+
+                  It DISPLAYS ONLY — opening a profile never replays the
+                  celebration. That is raised solely by StreakTracker from the
+                  server's `shouldCelebrate`, which is already false once the
+                  day has been marked.
+                */}
+                <div className="mt-6 px-4 sm:px-6">
+                  <StreakProfileCard />
+                </div>
+
                 {/* The sections this profile shows — resolved by the Universal
                     Profile Engine from the member's type, their module choices
                     and (for a visitor) their relationship. */}
@@ -1128,25 +1148,10 @@ async function ProfileData({
               </div>
             </div>
 
-            {/*
-              Daily streak — OWNER ONLY.
-
-              A streak is personal: the RLS policy in migration 0130 lets you
-              read your own row and nobody else's, and `useStreak()` reads the
-              VIEWER's streak — so rendering this on a visitor's view would
-              show them their own number under someone else's name. Gated on
-              `profile.isOwner` so it can only ever appear on your own profile.
-
-              🔴 It DISPLAYS ONLY. Opening a profile never replays the
-              celebration — that is raised solely by StreakTracker, from the
-              server's `shouldCelebrate`, which is already false once the day
-              has been marked. This component has no path to it.
-            */}
-            {profile.isOwner ? (
-              <div className="mt-6 px-4 sm:px-6">
-                <StreakProfileCard />
-              </div>
-            ) : null}
+            {/* No streak card here: this is the VISITOR branch, and a streak is
+                personal — `useStreak()` reads the viewer's own, which would show
+                them their number under someone else's name. It lives in the
+                owner branch above. */}
             {/* Content sections — fetched once, switched instantly client-side.
                 Hidden entirely for private accounts. */}
             {!profile.restricted ? (

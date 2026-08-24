@@ -41,6 +41,7 @@ import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileCardLink } from "@/features/profile/profile-card-link";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
 import { CreatorNotificationsButton } from "@/features/social/creator-notifications-button";
+import { CreatorNotifyNudgeHost } from "@/features/social/creator-notify-nudge";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
 import { PostGridSkeleton } from "@/features/ui/page-skeletons";
@@ -789,6 +790,7 @@ async function ProfileData({
           </div>
         </main>
         <Toaster />
+        <CreatorNotifyNudgeHost />
       </>
     );
   }
@@ -1033,6 +1035,7 @@ async function ProfileData({
                     ) : null}
                     <FollowButton
                       targetId={profile.id}
+                      targetHandle={profile.handle}
                       initialFollowing={profile.isFollowing}
                       canFollow={!!me}
                       followsYou={followsYou}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { HistoryCompleteAd } from "@/features/history/history-complete-ad";
 import { HistoryPanel } from "@/features/history/history-panel";
 import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
 import { ReviewPlayerMount } from "@/features/downloads/review-player-mount";
@@ -58,6 +59,20 @@ export default function HistoryPage() {
         <div className="mx-auto mt-6 max-w-6xl px-2 sm:px-4">
           <DownloadHistoryAd position="bottom" maxWidth="max-w-3xl" />
         </div>
+        {/*
+          🔴 THE AFTER-DOWNLOAD AD, ON THIS PAGE TOO (owner, 2026-08-24: "all
+          Downloads must trigger the Download complete ad").
+
+          Retrying from history starts a real transfer, but this route never
+          mounted the completion ad — /downloads and the landing page get it
+          via DownloadPageCore/download-box, and this page renders neither. So
+          a retry was the one download that finished with no ad at all.
+
+          It subscribes to the manager's own completion beat and renders
+          nothing until a transfer actually finishes, so mounting it costs a
+          subscription and no markup.
+        */}
+        <HistoryCompleteAd />
       </main>
       {/* Mounts the story-style review player so tapping a tile opens INSTANTLY on
           this page (owner) — without this, /history has no Downloader mounting it,

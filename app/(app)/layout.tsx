@@ -20,6 +20,7 @@ import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presenc
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { InboxRealtimeTracker } from "@/features/social/inbox";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
+import { CreatorNotifyNudgeHost } from "@/features/social/creator-notify-nudge";
 import { Toaster } from "@/features/ui/toast";
 
 /**
@@ -95,6 +96,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <InboxMobileChrome />
       <FloatingMessages />
       <Toaster />
+      {/* Drops down after a follow/friend-request to offer that person's
+          notifications (owner, 2026-08-24). Mounted beside Toaster because it is
+          the same kind of app-wide, imperatively-raised layer. */}
+      <CreatorNotifyNudgeHost />
       {/* Floating-reaction layer — Wow taps rise from the tap point. */}
       <ReactionFloatLayer />
       {/* Live in-app drop-down notification. */}

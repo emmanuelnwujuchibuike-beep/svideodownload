@@ -25,6 +25,8 @@ import { startDownload } from "@/features/downloads/manager";
 import { openPlayerQueue } from "@/features/downloads/player-store";
 import { estimateBytes } from "@/features/history/usage";
 import { PublishSoundSheet } from "@/features/history/publish-sound-sheet";
+import { useGatedRetry } from "@/features/history/use-gated-retry";
+import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { BRAND_ICONS } from "@/lib/platform-icons";
@@ -181,6 +183,9 @@ export function MediaGallery({
   // Feature 15 Part 7 — one sheet instance for the whole gallery (grid + list
   // both open it via the same handler), rather than one per tile.
   const [publishTarget, setPublishTarget] = useState<DownloadRecord | null>(null);
+  /* Retries go through the same reward-ad policy a first attempt does — see
+     use-gated-retry.ts. One instance for the whole gallery. */
+  const retry = useGatedRetry();
 
   // Load persisted view prefs after mount (client-only — the panels this renders
   // in only paint after the local history loads, so there is no SSR mismatch).
@@ -377,6 +382,7 @@ export function MediaGallery({
                       onToggleFavorite={() => onToggleFavorite(item.id)}
                       onRemove={() => onRemove(item.id)}
                       onPublishSound={() => setPublishTarget(item)}
+                      onRetry={() => retry.begin(item)}
                       selection={selection}
                     />
                   ))}
@@ -388,13 +394,13 @@ export function MediaGallery({
       ) : view === "grid" ? (
         <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {shown.map((item, i) => (
-            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} selection={selection} />
+            <GalleryTile key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
           ))}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border/70 bg-card">
           {shown.map((item, i) => (
-            <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} selection={selection} />
+            <ListRow key={item.id} item={item} onOpen={() => openAt(i)} onToggleFavorite={() => onToggleFavorite(item.id)} onRemove={() => onRemove(item.id)} onPublishSound={() => setPublishTarget(item)} onRetry={() => retry.begin(item)} selection={selection} />
           ))}
         </div>
       )}
@@ -416,6 +422,24 @@ export function MediaGallery({
       ) : null}
 
       <PublishSoundSheet open={!!publishTarget} onClose={() => setPublishTarget(null)} item={publishTarget} />
+
+      {/*
+        Reward gate for RETRIES (owner, 2026-08-24: "every retry downloads should
+        follow same ad system like others"). Both retry controls route through
+        `useGatedRetry`, which asks the same `rewardAdsFor` policy a first attempt
+        does — so a large video retry costs an ad and a single image never does.
+        Mounted once here rather than per tile: one gate for the whole gallery,
+        and a tile that scrolls out of view mid-ad cannot take the ad with it.
+      */}
+      <RewardedAdGate
+        open={retry.gated}
+        durationSec={retry.ads[0]?.durationSec ?? 30}
+        skipAfterSec={retry.ads[0]?.skipAfterSec ?? null}
+        step={retry.ads.length > 1 ? 1 : undefined}
+        totalSteps={retry.ads.length > 1 ? retry.ads.length : undefined}
+        onReward={retry.grantOne}
+        onCancel={retry.cancel}
+      />
     </div>
   );
 }
@@ -449,6 +473,7 @@ function GalleryTile({
   onToggleFavorite,
   onRemove,
   onPublishSound,
+  onRetry,
   selection,
 }: {
   item: DownloadRecord;
@@ -456,6 +481,10 @@ function GalleryTile({
   onToggleFavorite: () => void;
   onRemove: () => void;
   onPublishSound: () => void;
+  /* Retry a failed/cancelled record THROUGH the reward gate — never call
+     startDownload directly from a retry control, or the ad policy is skipped
+     (owner, 2026-08-24). Supplied by MediaGallery via useGatedRetry. */
+  onRetry: () => void;
   selection?: GallerySelection;
 }) {
   const platform = PLATFORMS[item.platform] ?? PLATFORMS.generic;
@@ -609,7 +638,7 @@ function GalleryTile({
           </span>
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); tap(); retry(); }}
+            onClick={(e) => { e.stopPropagation(); tap(); onRetry(); }}
             onPointerDown={(e) => e.stopPropagation()}
             aria-label={`Retry ${item.title}`}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-md bg-white/95 px-1.5 py-0.5 text-[10px] font-bold text-neutral-900 transition active:scale-[0.94]"
@@ -668,7 +697,8 @@ function GalleryTile({
                 icon={isRetryable ? <RotateCcw className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
                 label={isRetryable ? "Retry download" : "Download again"}
                 onClick={() => {
-                  retry();
+                  if (isRetryable) onRetry();
+                  else retry();
                   setMenuOpen(false);
                 }}
               />
@@ -746,7 +776,7 @@ function TileAction({
  * (a Remove button next to a selection you are building is a mis-tap with an
  * irreversible result), and the state is announced through `aria-pressed`.
  */
-function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, selection }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void; onPublishSound: () => void; selection?: GallerySelection }) {
+function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, onRetry, selection }: { item: DownloadRecord; onOpen: () => void; onToggleFavorite: () => void; onRemove: () => void; onPublishSound: () => void; onRetry: () => void; selection?: GallerySelection }) {
   const selecting = !!selection?.active;
   const picked = !!selection?.selected.has(item.id);
   /* One handler for both hit areas — the thumbnail and the text block are two
@@ -899,7 +929,7 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, sel
         {isRetryable ? (
           <button
             type="button"
-            onClick={() => { tap(); reDownload(); }}
+            onClick={() => { tap(); onRetry(); }}
             disabled={redownloading}
             aria-label={`Retry ${item.title}`}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition active:scale-[0.94] disabled:opacity-60"

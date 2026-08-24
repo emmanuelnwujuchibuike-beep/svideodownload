@@ -4,7 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2, UserCheck, UserPlus, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { promptCreatorNotifications } from "@/features/social/creator-notify-nudge";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -178,6 +180,11 @@ export function AddFriendButton({
           const res = await post({ action: "request", note: note || undefined });
           if (res.ok) {
             setState("outgoing");
+            // Same prompt a follow raises — see creator-notify-nudge.tsx. Fired
+            // on the REQUEST rather than on acceptance because this is the
+            // moment the person is thinking about this account; the preference
+            // is stored regardless of whether the request is later accepted.
+            promptCreatorNotifications({ userId: targetId, handle: targetHandle, reason: "requested" });
             return true;
           }
           // They already requested you — flip to Accept/Decline instead of erroring.
@@ -219,6 +226,10 @@ function RequestModal({
 }) {
   const [note, setNote] = useState("");
   const [phase, setPhase] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  /* Portals need a real `document`, which does not exist during server render —
+     see the note above the `createPortal` call. */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (open) {
@@ -240,7 +251,32 @@ function RequestModal({
     }
   };
 
-  return (
+  /*
+    🔴 PORTALLED TO <body> — THIS IS THE "UNPROFESSIONAL SQUARE" FIX (owner,
+    2026-08-24, with a screenshot of the request sheet on a profile: a hard-
+    edged grey rectangle behind the card instead of a full-screen dim).
+
+    The markup below was always correct: `fixed inset-0` with a `bg-black/50`
+    scrim should cover the viewport. It did not, because `position: fixed`
+    does NOT resolve against the viewport when any ancestor establishes a
+    containing block — which `transform`, `filter`, `backdrop-filter` and
+    `will-change` all do. The profile page has several (the hero's
+    `backdrop-blur` chrome, the living-glow layer), so the scrim was being
+    clipped to whichever ancestor happened to qualify: a box with square
+    corners, ending partway down the screen, exactly as photographed.
+
+    This is the same trap already recorded for the messaging menus
+    ([[messaging-ui-verification-bugs]]) and worked around in `wow-burst.tsx`.
+    A portal is the fix rather than hunting the offending ancestor: the sheet
+    then has no ancestor but <body>, so no page can ever re-introduce this by
+    adding a blur somewhere above it.
+
+    `mounted` gates the portal because `document` does not exist during server
+    render — without it this would throw on the server rather than render.
+  */
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <motion.div
@@ -335,6 +371,7 @@ function RequestModal({
           </motion.div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

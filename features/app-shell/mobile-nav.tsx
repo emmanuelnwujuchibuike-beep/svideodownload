@@ -436,7 +436,9 @@ export function MobileNav({
               Feed — no pathname list to keep extending as new pages surface
               the same gap.
             */}
-            <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} onWarm={router.prefetch} />
+            {/* The Feed tab pulses to invite a first visit (owner, 2026-08-24) — never
+                while you are already on /feed. */}
+            <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} attract={!pathname.startsWith("/feed")} onWarm={router.prefetch} />
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
             <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
           </>
@@ -536,6 +538,7 @@ function NavTab({
   badge = 0,
   onWarm,
   guard,
+  attract = false,
 }: {
   label: string;
   href: string;
@@ -544,6 +547,14 @@ function NavTab({
   active: boolean;
   badge?: number;
   onWarm?: (href: string) => void;
+  /**
+   * Draw attention to this tab with the shared `attract-loop` pulse (owner,
+   * 2026-08-24). Pure CSS — a 15s cycle whose first 2s are a delay and whose
+   * movement occupies about a second, so nothing is scheduled between pulses.
+   * Suppressed while the tab is ACTIVE by the call site: animating the page
+   * someone is already on is noise.
+   */
+  attract?: boolean;
   /** When set, intercepts the tap: prevents navigation and runs the guard instead
    *  (used to offer the Full Bleed switch for a gated Downloader-mode tab). */
   guard?: () => void;
@@ -570,7 +581,16 @@ function NavTab({
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
-          <Glyph strokeWidth={2.1} className={cn("h-7 w-7 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE)} />
+          {/* The glow sits BEHIND the glyph and is purely decorative — it never
+              takes pointer events and is removed entirely under
+              prefers-reduced-motion (see globals.css). */}
+          {attract ? (
+            <span
+              aria-hidden
+              className="attract-loop-glow pointer-events-none absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-blue-500/60 to-violet-500/60 blur-md"
+            />
+          ) : null}
+          <Glyph strokeWidth={2.1} className={cn("h-7 w-7 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE, attract && "attract-loop")} />
           {badge > 0 ? (
             <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">
               {badge > 9 ? "9+" : badge}

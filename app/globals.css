@@ -1802,3 +1802,100 @@ body:has(.frenz-canvas-page) {
 
    Do not re-add it. The matching `theme-color` override that made the PWA status
    strip lavender on /downloads was removed with it — see the note in that page. */
+
+/*
+  ── "Attract" pulse for the Feed entry point ────────────────────────────────
+  Owner, 2026-08-24: "Make the feed button icon should to animate after 2secs of
+  landing in landing page and Download page premiumly and luxuriously around to
+  attract users to click. Animation should be scheduled every 15secs after first
+  2secs of landing."
+
+  🔴 PURE CSS, NO JAVASCRIPT, NO TIMERS. The landing page has a 1.6-second
+  budget and framer-motion is deliberately absent from it, so a JS-driven
+  attention loop is exactly the wrong tool: it would need a mounted component,
+  two timers per surface, and it would keep the main thread busy on a schedule
+  forever. One keyframe animation gets the same result on the compositor.
+
+  The 2s delay and the 15s cadence are expressed as ONE animation rather than a
+  delay plus a repeat: the cycle is 15s long, `animation-delay` holds the first
+  one back by 2s, and only the first ~1.6s of each cycle contains movement —
+  the remaining ~89% of the timeline is a held rest state. So the browser
+  schedules nothing between pulses and the rhythm is exact by construction.
+
+  Percentages: 15s cycle → 1% ≈ 150ms.
+    0%      rest
+    2-11%   the gesture (≈300ms in, ≈1.35s of motion)
+    11-100% rest again
+*/
+@keyframes frenz-attract {
+  0%,
+  2% {
+    transform: scale(1) rotate(0deg);
+  }
+  /* A rise-and-tilt rather than a bounce — the brief asked for "premium and
+     luxurious", and a spring-y bob on a nav icon reads as a notification
+     badge demanding attention rather than an invitation. */
+  4.5% {
+    transform: scale(1.14) rotate(-7deg);
+  }
+  7% {
+    transform: scale(1.1) rotate(6deg);
+  }
+  9% {
+    transform: scale(1.06) rotate(-3deg);
+  }
+  11%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* The soft glow that swells with the gesture. Separated from the transform so
+   the two can carry different easing without fighting over one property. */
+@keyframes frenz-attract-glow {
+  0%,
+  2% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  5.5% {
+    opacity: 0.55;
+    transform: scale(1.5);
+  }
+  11%,
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+.attract-loop {
+  /* `transform` only — no layout, no paint, so this runs entirely on the
+     compositor and cannot cost a frame during scroll. */
+  animation: frenz-attract 15s ease-in-out 2s infinite;
+  transform-origin: center;
+  /* Promotes once rather than on every cycle. Bounded to this small element,
+     so it is not the blanket `will-change` that costs memory elsewhere. */
+  will-change: transform;
+}
+
+.attract-loop-glow {
+  animation: frenz-attract-glow 15s ease-out 2s infinite;
+  transform-origin: center;
+}
+
+/*
+  🔴 Honour the OS setting. An element that pulses forever is precisely what
+  `prefers-reduced-motion` exists to stop — for some people it is a vestibular
+  trigger, not a preference. The Feed link is fully usable without it, so the
+  animation is simply removed rather than substituted.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .attract-loop,
+  .attract-loop-glow {
+    animation: none;
+  }
+  .attract-loop-glow {
+    opacity: 0;
+  }
+}

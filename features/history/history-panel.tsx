@@ -12,6 +12,7 @@ import {
   Layers,
   Music2,
   Play,
+  RotateCcw,
   Search,
   Share2,
   Trash2,
@@ -246,7 +247,7 @@ export function HistoryPanel({
   embedded?: boolean;
 }) {
   const { items, toggleFavorite, removeDownload, clearHistory } = useHistory();
-  const [tab, setTab] = useState<"recent" | "favorites">("recent");
+  const [tab, setTab] = useState<"recent" | "favorites" | "failed">("recent");
   const [kind, setKind] = useState<KindFilter>("all");
   const [query, setQuery] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -264,6 +265,24 @@ export function HistoryPanel({
   }, []);
 
   const favCount = useMemo(() => items.filter((i) => i.favorite).length, [items]);
+  /*
+    Failed + cancelled (owner, 2026-08-24: "I still don't see the cancelled and
+    failed Downloads button that shows the failed and cancelled Download their
+    thumbnail or favicon like in grid just like downloads in history so users
+    can click on it and it shows retry download").
+
+    Those records have been stored since 2026-08-23 and badged wherever they
+    appear, but there was no way to FIND them — they sat mixed into a long
+    date-ordered list, so a failure from last week was effectively lost.
+
+    🔴 `?? "completed"` is load-bearing: history is the visitor's own
+    localStorage and every record written before `status` existed has none. A
+    bare `!== "completed"` would put everyone's entire library in this tab.
+  */
+  const failedCount = useMemo(
+    () => items.filter((i) => (i.status ?? "completed") !== "completed").length,
+    [items],
+  );
   const usedBytes = useMemo(() => totalUsedBytes(items), [items]);
   const counts = useMemo<Record<KindFilter, number>>(
     () => ({
@@ -276,8 +295,16 @@ export function HistoryPanel({
   );
 
   const filtered = useMemo(() => {
-    let base = tab === "favorites" ? items.filter((i) => i.favorite) : items;
-    if (tab !== "favorites" && kind !== "all") base = base.filter((i) => i.kind === kind);
+    let base =
+      tab === "favorites"
+        ? items.filter((i) => i.favorite)
+        : tab === "failed"
+          ? items.filter((i) => (i.status ?? "completed") !== "completed")
+          : items;
+    // The kind chips narrow the plain list only — inside Favorites or Failed the
+    // tab IS the filter, and stacking a second one hides records the person came
+    // here specifically to find.
+    if (tab === "recent" && kind !== "all") base = base.filter((i) => i.kind === kind);
     const q = query.trim().toLowerCase();
     if (!q) return base;
     return base.filter((i) => i.title.toLowerCase().includes(q) || i.platformName.toLowerCase().includes(q));
@@ -529,13 +556,25 @@ export function HistoryPanel({
             filter, not a fifth media type. */}
         <div className="-mx-2 mt-4 flex gap-2 overflow-x-auto px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {KIND_FILTERS.map((f) => (
-            <Chip key={f.key} active={tab !== "favorites" && kind === f.key} onClick={() => { setTab("recent"); setKind(f.key); }}>
+            <Chip key={f.key} active={tab === "recent" && kind === f.key} onClick={() => { setTab("recent"); setKind(f.key); }}>
               {f.label} <Count>{counts[f.key]}</Count>
             </Chip>
           ))}
           <Chip active={tab === "favorites"} onClick={() => setTab(tab === "favorites" ? "recent" : "favorites")}>
             <Heart className={cn("h-3.5 w-3.5", tab === "favorites" && "fill-current")} /> Favorites <Count>{favCount}</Count>
           </Chip>
+          {/*
+            Failed & cancelled. Shown only when there ARE any: a permanent
+            "Failed 0" chip is a standing accusation that something is broken
+            when nothing is, and it costs a slot in a row that scrolls on a
+            phone. It appears the moment a download fails, which is exactly
+            when someone starts looking for it.
+          */}
+          {failedCount > 0 ? (
+            <Chip active={tab === "failed"} onClick={() => setTab(tab === "failed" ? "recent" : "failed")}>
+              <RotateCcw className="h-3.5 w-3.5" /> Failed <Count>{failedCount}</Count>
+            </Chip>
+          ) : null}
         </div>
 
         {/*

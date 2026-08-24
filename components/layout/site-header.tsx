@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Crown, LogOut, UserCircle, X } from "lucide-react";
+import { ArrowRight, Crown, LayoutGrid, LogOut, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -676,11 +676,21 @@ export function SiteHeader({
                     else in the interim, same as any other un-translated string
                     in this file outside that one array.
                   */}
+                  {/* Its icon carries the shared attract pulse (owner,
+                      2026-08-24: "the feed button icon should animate after
+                      2secs of landing... every 15secs"). Pure CSS — see
+                      globals.css — so it costs the landing page no JavaScript
+                      and no timer, which matters on a route held to a
+                      1.6-second budget. */}
                   <Link
                     href="/feed"
                     onClick={closeMenu}
                     className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary"
                   >
+                    <span aria-hidden className="relative inline-flex">
+                      <span className="attract-loop-glow pointer-events-none absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-blue-500/60 to-violet-500/60 blur-md" />
+                      <LayoutGrid className="attract-loop h-4 w-4" />
+                    </span>
                     Watch the feed
                   </Link>
                   {/*

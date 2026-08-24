@@ -2,6 +2,8 @@ import { isEnabled } from "@/lib/platform/flags-store";
 import { sendPushToAnon, sendPushToUser } from "@/lib/push/web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { recordStreakNotification } from "./notifications";
+
 import { addDays, localDay, localHour, reminderEligible, safeZone } from "./calc";
 import type { StreakRecord } from "./types";
 
@@ -44,6 +46,8 @@ export interface ReminderRunResult {
   eligible: number;
   /** Reminders actually claimed and dispatched. */
   sent: number;
+  /** "Your streak ended" announcements claimed and dispatched. */
+  lost?: number;
   skippedDisabled?: boolean;
 }
 
@@ -55,6 +59,15 @@ interface CandidateRow {
   last_activity_date: string | null;
   last_reminder_date: string | null;
   timezone: string | null;
+}
+
+interface LostRow {
+  id: string;
+  user_id: string | null;
+  current_streak: number;
+  last_activity_date: string | null;
+  timezone: string | null;
+  lost_notified_date: string | null;
 }
 
 export async function runStreakReminders(now: Date = new Date()): Promise<ReminderRunResult> {
@@ -134,12 +147,83 @@ export async function runStreakReminders(now: Date = new Date()): Promise<Remind
       };
       if (row.user_id) await sendPushToUser(row.user_id, payload);
       else if (row.anon_id) await sendPushToAnon(row.anon_id, payload);
+      // The push is the nudge; this is the record that survives dismissing it.
+      // Deliberately after the send: a notification row is worth less than the
+      // push, so it must never be able to prevent one.
+      await recordStreakNotification(row.user_id, "streak_reminder", row.current_streak, today);
       sent += 1;
     }
 
-    return { ok: true, candidates: rows.length, eligible, sent };
+    const lost = await announceLostStreaks(now);
+    return { ok: true, candidates: rows.length, eligible, sent, lost };
   } catch {
     // A failed run is a missed nudge, never an incident. The next hour retries.
     return { ...empty, ok: false };
   }
+}
+
+/**
+ * "Your streak ended" — announced once, when it actually ends.
+ *
+ * ── 🔴 WHY THIS NEEDS ITS OWN SWEEP ─────────────────────────────────────────
+ * Nothing in this product ever *observes* a streak breaking. `current_streak`
+ * is only recalculated when someone is active, so a member who stops visiting
+ * keeps a stale positive number forever and no code path runs for them. The
+ * reminder loop above cannot cover it either: it deliberately only looks at
+ * streaks whose last activity was within two days, which is precisely the set
+ * that has NOT been lost yet.
+ *
+ * ── 🔴 CLAIM BEFORE SEND, LIKE THE REMINDER ─────────────────────────────────
+ * A broken streak stays broken until the member returns, so an unclaimed
+ * announcement would repeat every hour, forever — the loudest possible bug.
+ * `lost_notified_date` (0132) is written with a conditional UPDATE and only
+ * the run that wins it sends.
+ *
+ * The streak itself is NOT reset here. `applyActivity` recomputes it from
+ * `last_activity_date` on the member's next visit, and that remains the single
+ * place the number is decided; writing it from two places is how the two
+ * disagree.
+ */
+async function announceLostStreaks(now: Date): Promise<number> {
+  const db = createAdminClient();
+  const utcToday = localDay(now, "UTC");
+  /*
+    Three days rather than two: "lost" must be unambiguous in EVERY timezone.
+    At two days a member on UTC+14 whose streak is merely at risk would be told
+    it had ended. The restore window (§16) also lives in those first days, so
+    announcing a loss while it can still be restored would be wrong twice.
+  */
+  const { data } = await db
+    .from("streaks")
+    .select("id, user_id, current_streak, last_activity_date, timezone, lost_notified_date")
+    .gt("current_streak", 0)
+    .not("user_id", "is", null) // anonymous identities cannot hold a notification row
+    .lt("last_activity_date", addDays(utcToday, -3))
+    .limit(MAX_CANDIDATES);
+
+  let announced = 0;
+  for (const row of (data ?? []) as LostRow[]) {
+    const today = localDay(now, safeZone(row.timezone));
+    if (row.lost_notified_date === today) continue;
+
+    const { data: claimed } = await db
+      .from("streaks")
+      .update({ lost_notified_date: today })
+      .eq("id", row.id)
+      .or(`lost_notified_date.is.null,lost_notified_date.neq.${today}`)
+      .select("id");
+    if (!claimed || claimed.length === 0) continue;
+
+    if (row.user_id) {
+      await sendPushToUser(row.user_id, {
+        title: "Your streak ended",
+        body: `Your ${row.current_streak}-day streak has ended. Start a new one today.`,
+        url: "/",
+        tag: "streak-lost",
+      });
+    }
+    await recordStreakNotification(row.user_id, "streak_lost", row.current_streak, today);
+    announced += 1;
+  }
+  return announced;
 }

@@ -11,16 +11,19 @@ name: Cron - Admin digest
 # slip under load is normal and fine here — the route decides which
 # digest(s) are due for TODAY, not for this exact minute).
 on:
-  # 🔴 Schedule PAUSED (2026-08-16): failing every night because no credential
-  # was configured, and the daily failure emails were unwanted noise.
-  # Re-enable by uncommenting the two lines below ONCE a token exists:
-  #     npm run cron:token          → prints it once, stores only the hash
-  #     GitHub → Settings → Secrets and variables → Actions → CRON_SECRET
-  # No Vercel environment variable is involved any more — see the header of
-  # cron-streak-reminders.yml for why, and lib/cron/auth.ts for how. Until
-  # then, use the "Run workflow" button to send a digest on demand.
-  # schedule:
-  #   - cron: "0 1 * * *" # 1am UTC daily
+  # 🔴 RESUMED 2026-08-24, after being paused since 2026-08-16.
+  #
+  # It was failing every night because no credential was configured, and the
+  # nightly failure emails were unwanted noise. The cause has been fixed at the
+  # root: authorisation no longer depends on a Vercel environment variable
+  # (lib/cron/auth.ts), and the route was verified against production returning
+  # HTTP 200 before this was uncommented.
+  #
+  # This needs ONE thing to keep working: the Actions secret CRON_SECRET must
+  # hold the token minted by `npm run cron:token`. If it does not, every run
+  # fails loudly with a named error rather than sending nothing quietly.
+  schedule:
+    - cron: "0 1 * * *" # 1am UTC daily
   workflow_dispatch: {} # manual "Run workflow" button
 
 concurrency:

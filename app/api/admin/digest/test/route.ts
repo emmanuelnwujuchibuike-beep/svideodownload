@@ -13,10 +13,20 @@ export const maxDuration = 60;
 const schema = z.object({ period: z.enum(["daily", "weekly", "monthly"]) });
 
 /**
- * Admin-only "send now" button for the digest — verifies the whole pipeline
- * (aggregation → template → Resend) on demand, without waiting for the cron
- * or consuming its once-per-day dedupe lock (`sendAdminAlertOnce`'s
- * `admin_alerts` row), so testing today never blocks tonight's real send.
+ * Admin-only "Send digest now" — the real digest, on demand.
+ *
+ * ── 🔴 IT IS NOT A TEST SEND ────────────────────────────────────────────────
+ * Owner, 2026-08-24: "when i send a digest email from admin dashboard manually
+ * it should send the real dat and not test, test is when you do it from this
+ * machine". This used to prefix the subject with "[TEST]", which made the one
+ * button an admin can actually reach produce something they then had to
+ * mentally discount — and made a real early send impossible. The figures were
+ * always real; only the label claimed otherwise. The label is gone.
+ *
+ * It still does NOT consume the cron's once-per-day dedupe lock
+ * (`sendAdminAlertOnce`'s `admin_alerts` row), so sending now never suppresses
+ * tonight's scheduled digest. That is the one behaviour worth keeping: this is
+ * "send it early", not "send it instead".
  */
 export async function POST(request: Request) {
   const admin = await getAdminUser();
@@ -40,7 +50,7 @@ export async function POST(request: Request) {
 
   try {
     const data = await buildDigest(parsed.data.period);
-    const sent = await sendAdminEmail(`[TEST] ${digestEmailSubject(data)}`, digestEmailHtml(data));
+    const sent = await sendAdminEmail(digestEmailSubject(data), digestEmailHtml(data));
     if (!sent) {
       /*
         "Check server logs" is not an answer anyone can act on from a dashboard.

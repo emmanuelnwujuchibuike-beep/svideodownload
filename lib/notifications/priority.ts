@@ -65,6 +65,11 @@ const PRIORITY_BY_TYPE: Partial<Record<NotificationType, PushPriority>> = {
   download_failed: "medium",
   premium_expiring: "medium",
   friend_reminder: "medium",
+  // A streak is time-critical by definition — "today" is the whole point, and
+  // a nudge that arrives quietly after midnight is worse than none.
+  streak_reminder: "medium",
+  streak_lost: "medium",
+  streak_milestone: "medium",
   admin_broadcast: "high", // owner-sent, already high at its one call site — kept consistent here
 
   // low — passive/marketing-adjacent, the spec's "Low Priority" bucket

@@ -106,6 +106,16 @@ export const NOTIFICATIONS = [
   { id: "security_passkey_enrolled", label: "Passkey added", category: "security" },
   { id: "security_passkey_removed", label: "Passkey removed", category: "security" },
   /* ── system (categoryMutable:false ⇒ always shown regardless of category prefs) ── */
+  /* ── streaks (owner, 2026-08-24: "every streak reminder, lost and all stays
+        in notification") ──
+     Category "system" rather than "social": a streak is between a member and
+     the product, with no actor — and `social` muting is where people silence
+     other people's activity, which must not silence their own streak. Not
+     grouped: three of these a week at most, and collapsing "you reached 7 days"
+     into "you lost your streak" would be nonsense. */
+  { id: "streak_reminder", label: "Streak reminder", category: "system" },
+  { id: "streak_milestone", label: "Streak milestone", category: "system" },
+  { id: "streak_lost", label: "Streak lost", category: "system" },
   { id: "system", label: "System", category: "system", categoryMutable: false },
   { id: "admin_broadcast", label: "Announcement", category: "system", categoryMutable: false },
   { id: "post_under_review", label: "Post under review", category: "system" },

@@ -7,6 +7,7 @@ import {
   Crown,
   Download,
   Eye,
+  Flame,
   Heart,
   Megaphone,
   MessageCircle,
@@ -36,6 +37,9 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   friend_request: UserPlus,
   friend_accepted: PartyPopper,
   friend_reminder: MessageCircle,
+  streak_reminder: Flame,
+  streak_milestone: Flame,
+  streak_lost: Flame,
   message: MessageCircle,
   message_reaction: SmilePlus,
   message_mention: AtSign,
@@ -216,6 +220,19 @@ export function verbFor(type: NotificationType): string {
       return "A passkey was removed from your account";
     case "admin_broadcast":
       return "Frenz announcement";
+    /*
+      Streak notifications have NO ACTOR — they are between a member and their
+      own habit. `verbFor` is normally appended after an actor name, but these
+      types are never rendered that way (notification-card only prefixes an
+      actor when `n.actor` exists), so they read as complete sentences and the
+      day count rides in `data.streak`.
+    */
+    case "streak_reminder":
+      return "Your streak ends tonight — open Frenz to keep it 🔥";
+    case "streak_milestone":
+      return "New streak record — keep it going 🔥";
+    case "streak_lost":
+      return "Your streak ended. Start a new one today 🔥";
     case "post_under_review":
       return "Your post was hidden pending review";
     case "moderation_appeal_resolved":

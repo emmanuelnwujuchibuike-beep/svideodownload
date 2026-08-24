@@ -17,10 +17,12 @@ name: Cron - Streak reminders
 # cron-wallpaper-reminder.yml), so this uses the same proven pattern rather
 # than introducing a third mechanism.
 #
-# ── 🔴 SCHEDULE IS PAUSED UNTIL A TOKEN IS MINTED ────────────────────────────
-# Its two siblings are paused for exactly this reason: without a credential the
-# call 403s, and an hourly job that fails is 24 failure emails a day. One token
-# unblocks all three at once.
+# ── 🔴 RESUMED 2026-08-24 · REQUIRES THE ACTIONS SECRET `CRON_SECRET` ────────
+# All three of these were paused because without a credential the call 403s,
+# and an hourly job that fails is 24 failure emails a day. One token unblocks
+# all three, and the routes were verified against production before this was
+# uncommented. `CRON_SECRET` here is the GitHub Actions secret and must hold
+# the token printed by `npm run cron:token` — nothing in Vercel.
 #
 # NO VERCEL ENVIRONMENT VARIABLE IS NEEDED. The earlier instructions here said
 # to add `CRON_SECRET` in Vercel and redeploy; that route cost days, because a
@@ -43,8 +45,8 @@ name: Cron - Streak reminders
 # {"ok":true,"candidates":N,"eligible":N,"sent":N}. `eligible: 0` outside
 # anyone's local afternoon is correct, not a failure.
 on:
-  # schedule:
-  #   - cron: "0 * * * *" # every hour, on the hour
+  schedule:
+    - cron: "0 * * * *" # every hour, on the hour
   workflow_dispatch: {}
 
 concurrency:

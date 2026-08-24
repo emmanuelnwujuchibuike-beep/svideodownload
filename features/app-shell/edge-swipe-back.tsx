@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { takeBackTarget } from "@/lib/dom/back-target";
 import { isBodyScrollLocked } from "@/lib/dom/scroll-lock";
 import { isStandalone } from "@/lib/pwa/platform";
 
@@ -163,7 +164,26 @@ export function EdgeSwipeBack() {
         window.setTimeout(() => {
           release(null, null);
           el.current = null;
-          router.back();
+          /*
+            🔴 A PAGE MAY OVERRIDE WHERE "BACK" GOES (owner, 2026-08-24:
+            "backswipe from chat goes back to home feed, instead of to message
+            page"). A chat opened via `/messages/new/<userId>` arrives through a
+            SERVER redirect, which replaces the history entry — so there is no
+            inbox behind the thread and `back()` was correctly returning to
+            whatever came before, usually the home feed.
+
+            `replace`, not `push`: the chat entry becomes the inbox, so history
+            stays chat→inbox→wherever-you-were instead of growing a loop where
+            backing out of the inbox returns to the chat you just left. It is a
+            client navigation either way, so nothing reloads.
+
+            `takeBackTarget()` consumes the value, so the very next gesture
+            falls back to real history — an override is for one navigation, not
+            a mode.
+          */
+          const target = takeBackTarget();
+          if (target) router.replace(target);
+          else router.back();
         }, COMPLETE_MS);
         return;
       }

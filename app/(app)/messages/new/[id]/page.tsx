@@ -32,7 +32,14 @@ export default async function NewConversationPage({ params }: { params: Promise<
   if (!user) redirect(`/login?next=/messages/new/${recipientId}`);
 
   const res = await getOrCreateConversation(user.id, recipientId);
-  if (res.ok) redirect(`/messages/${res.id}`);
+  /*
+    🔴 `?from=new` IS LOAD-BEARING. This redirect REPLACES the history entry,
+    so the thread it lands on has no inbox behind it and a back gesture would
+    leave the messaging area entirely — the owner's "backswipe from chat goes
+    back to home feed" (2026-08-24). The marker is how the thread knows to send
+    "back" to the inbox rather than to raw history. See lib/dom/back-target.ts.
+  */
+  if (res.ok) redirect(`/messages/${res.id}?from=new`);
 
   // Couldn't start — bounce back to the recipient's profile if we can resolve it.
   // (Resolve the handle BEFORE redirecting; redirect() throws, so keep it out of

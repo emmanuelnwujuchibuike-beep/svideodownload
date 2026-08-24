@@ -7,6 +7,7 @@ import { ConversationRoom } from "@/features/social/conversation-room";
 import { ThreadAppearanceProvider } from "@/features/social/thread-appearance-context";
 import { ThreadHeader } from "@/features/social/thread-header";
 import { getConversation, type ConversationView } from "@/lib/social/messages";
+import { BackTarget } from "@/features/social/back-target";
 import { getActiveStoryForUser } from "@/lib/social/stories";
 import { createClient, getUserBounded } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/utils";
@@ -38,9 +39,24 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /** Thread panel — fills the Glass Split right pane (full-screen on mobile). */
-export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ConversationPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  /*
+    🔴 `from=new` is set by `/messages/new/[id]`'s server redirect, which
+    REPLACES the history entry — so a chat opened from a profile, friends-hub
+    or the compose launcher has NO inbox behind it, and the back gesture was
+    correctly returning to whatever came before (usually the home feed). The
+    marker lets this page say where "back" means. See lib/dom/back-target.ts.
+  */
+  searchParams: Promise<{ from?: string }>;
+}) {
   if (!hasSupabase) redirect("/login");
   const { id } = await params;
+  const { from } = await searchParams;
+  const enteredCold = from === "new";
   if (!UUID.test(id)) notFound();
 
   const supabase = await createClient();
@@ -201,6 +217,14 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         otherStoryGroup={otherStoryGroup}
         initialAppearance={convo.appearance}
       />
+
+      {/*
+        Only when this thread was entered through the get-or-create redirect,
+        which leaves no inbox in history. A chat opened normally from the inbox
+        has a real entry behind it and keeps ordinary `back()` behaviour —
+        overriding there would be worse, not better.
+      */}
+      {enteredCold ? <BackTarget href="/messages" /> : null}
     </ThreadAppearanceProvider>
   );
 }

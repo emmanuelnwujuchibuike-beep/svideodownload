@@ -7,6 +7,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveAdminUserIds } from "@/lib/support/chat";
 
 /**
+ * The admin push, as one exported value.
+ *
+ * Kept out of the send site so the notification smoke test can deliver the
+ * REAL notification rather than a lookalike — a test of copy that isn't the
+ * copy proves nothing about what the admin will actually receive.
+ */
+export function wallpaperReminderPush() {
+  return {
+    title: "Today's wallpaper is missing",
+    body: "No wallpaper uploaded yet today — add one to keep the library fresh.",
+    url: `${SITE_URL}/admin?section=wallpapers`,
+    tag: "wallpaper-reminder",
+  };
+}
+
+/**
  * Owner, 2026-08-16: "a daily reminder that triggers everyday by 10am and
  * sent to admin as push in app notification and email notifications that
  * when a wallpaper wasn't update everyday before 10am it should trigger and
@@ -71,12 +87,7 @@ export async function checkAndNotifyMissingDailyWallpaper(): Promise<{ notified:
       adminIds.map((id) =>
         sendSmartPush(
           id,
-          {
-            title: "Today's wallpaper is missing",
-            body: "No wallpaper uploaded yet today — add one to keep the library fresh.",
-            url: `${SITE_URL}/admin?section=wallpapers`,
-            tag: "wallpaper-reminder",
-          },
+          wallpaperReminderPush(),
           "high",
           "system",
         ).catch(() => {}),

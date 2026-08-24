@@ -33,8 +33,8 @@ const hasSupabase =
 /** Bounded per run so one job can never fan out unboundedly. */
 const MAX_CANDIDATES = 2000;
 
-const TITLE = "🔥 Don't lose your streak!";
-const BODY = "Come back to Frenzsave today to keep your streak alive.";
+export const STREAK_REMINDER_TITLE = "🔥 Don't lose your streak!";
+export const STREAK_REMINDER_BODY = "Come back to Frenzsave today to keep your streak alive.";
 
 export interface ReminderRunResult {
   ok: boolean;
@@ -125,8 +125,8 @@ export async function runStreakReminders(now: Date = new Date()): Promise<Remind
       if (!claimed || claimed.length === 0) continue; // another run won it
 
       const payload = {
-        title: TITLE,
-        body: BODY,
+        title: STREAK_REMINDER_TITLE,
+        body: STREAK_REMINDER_BODY,
         url: "/",
         // Collapse key: a second streak reminder replaces the first rather than
         // stacking, which is the difference between a nudge and nagging.

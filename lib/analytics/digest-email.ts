@@ -38,9 +38,9 @@ function trendChip(trendPct: number | null): string {
 }
 
 function statCard(m: DigestMetric): string {
-  return `<td style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff" valign="top">
-    <div style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.03em">${esc(m.label)}</div>
-    <div style="margin-top:4px;font-size:22px;font-weight:800;color:#0f172a;line-height:1.2">${fmt(m.value)}${trendChip(m.trendPct)}</div>
+  return `<td class="fz-stat" style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:12px;background-color:#ffffff" valign="top">
+    <div class="fz-muted" style="font-size:11px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.03em">${esc(m.label)}</div>
+    <div class="fz-strong" style="margin-top:4px;font-size:22px;font-weight:800;color:#0f172a;line-height:1.2">${fmt(m.value)}${trendChip(m.trendPct)}</div>
   </td>`;
 }
 
@@ -60,8 +60,8 @@ function statGrid(metrics: DigestMetric[]): string {
 
 function section(title: string, subtitle: string | null, inner: string): string {
   return `<tr><td style="padding:22px 26px 4px">
-    <h3 style="margin:0 0 2px;font-size:14px;font-weight:800;color:#0f172a;letter-spacing:.01em">${esc(title)}</h3>
-    ${subtitle ? `<p style="margin:0 0 12px;font-size:12px;color:#94a3b8">${esc(subtitle)}</p>` : `<div style="height:10px"></div>`}
+    <h3 class="fz-strong" style="margin:0 0 2px;font-size:14px;font-weight:800;color:#0f172a;letter-spacing:.01em">${esc(title)}</h3>
+    ${subtitle ? `<p class="fz-muted" style="margin:0 0 12px;font-size:12px;color:#94a3b8">${esc(subtitle)}</p>` : `<div style="height:10px"></div>`}
     ${inner}
   </td></tr>`;
 }
@@ -72,7 +72,7 @@ function section(title: string, subtitle: string | null, inner: string): string 
  *  show flattened bars rather than a broken layout — a documented, acceptable
  *  degrade rather than an attempt at full VML for a single admin-facing email. */
 function chartHtml(chart: { label: string; value: number }[], metricLabel: string): string {
-  if (chart.length === 0) return `<p style="font-size:12px;color:#94a3b8;margin:0">No data for this window yet.</p>`;
+  if (chart.length === 0) return `<p class="fz-muted" style="font-size:12px;color:#94a3b8;margin:0">No data for this window yet.</p>`;
   const max = Math.max(1, ...chart.map((p) => p.value));
   const MAX_H = 96;
   const showEvery = chart.length > 16 ? Math.ceil(chart.length / 16) : 1;
@@ -84,29 +84,29 @@ function chartHtml(chart: { label: string; value: number }[], metricLabel: strin
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>
           <td height="${MAX_H - h}" style="line-height:1px;font-size:1px">&nbsp;</td>
         </tr><tr>
-          <td height="${h}" style="background:linear-gradient(180deg,#6366f1,#8b5cf6);border-radius:3px 3px 0 0;line-height:1px;font-size:1px" title="${fmt(p.value)}">&nbsp;</td>
+          <td height="${h}" style="background:linear-gradient(180deg,#6366f1,#8b5cf6);background-color:#7c6bf0;border-radius:3px 3px 0 0;line-height:1px;font-size:1px" title="${fmt(p.value)}">&nbsp;</td>
         </tr></table>
-        <div style="font-size:8px;color:#94a3b8;margin-top:4px;white-space:nowrap">${showLabel ? esc(p.label) : "&nbsp;"}</div>
+        <div class="fz-muted" style="font-size:8px;color:#94a3b8;margin-top:4px;white-space:nowrap">${showLabel ? esc(p.label) : "&nbsp;"}</div>
       </td>`;
     })
     .join("");
-  return `<p style="margin:0 0 10px;font-size:11px;color:#6b7280">${esc(metricLabel)} per ${chart.length > 24 ? "day" : "hour"}</p>
+  return `<p class="fz-muted" style="margin:0 0 10px;font-size:11px;color:#6b7280">${esc(metricLabel)} per ${chart.length > 24 ? "day" : "hour"}</p>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table>`;
 }
 
 function topPagesHtml(pages: { label: string; views: number }[]): string {
-  if (pages.length === 0) return `<p style="font-size:12px;color:#94a3b8;margin:0">No page views recorded yet.</p>`;
+  if (pages.length === 0) return `<p class="fz-muted" style="font-size:12px;color:#94a3b8;margin:0">No page views recorded yet.</p>`;
   const max = Math.max(1, ...pages.map((p) => p.views));
   const rows = pages
     .map(
       (p, i) => `<tr>
-      <td style="padding:6px 0;font-size:13px;color:#0f172a;font-weight:600;width:20px">${i + 1}</td>
-      <td style="padding:6px 0;font-size:13px;color:#334155">${esc(p.label)}
-        <div style="margin-top:4px;height:5px;border-radius:3px;background:#eef2ff;width:100%">
-          <div style="height:5px;border-radius:3px;background:linear-gradient(90deg,#6366f1,#8b5cf6);width:${Math.max(4, Math.round((p.views / max) * 100))}%"></div>
+      <td class="fz-strong" style="padding:6px 0;font-size:13px;color:#0f172a;font-weight:600;width:20px">${i + 1}</td>
+      <td class="fz-muted" style="padding:6px 0;font-size:13px;color:#334155">${esc(p.label)}
+        <div class="fz-track" style="margin-top:4px;height:5px;border-radius:3px;background-color:#eef2ff;width:100%">
+          <div style="height:5px;border-radius:3px;background:linear-gradient(90deg,#6366f1,#8b5cf6);background-color:#7c6bf0;width:${Math.max(4, Math.round((p.views / max) * 100))}%"></div>
         </div>
       </td>
-      <td style="padding:6px 0 6px 10px;font-size:13px;color:#0f172a;font-weight:700;text-align:right;white-space:nowrap">${fmt(p.views)}</td>
+      <td class="fz-strong" style="padding:6px 0 6px 10px;font-size:13px;color:#0f172a;font-weight:700;text-align:right;white-space:nowrap">${fmt(p.views)}</td>
     </tr>`,
     )
     .join("");
@@ -148,20 +148,60 @@ export function digestEmailHtml(data: DigestData): string {
       </td></tr>`
     : "";
 
-  return `<!doctype html><html><body style="margin:0;background:#f1f5f9;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb">
-    <tr><td style="height:5px;background:linear-gradient(90deg,#2563eb,#7c3aed)"></td></tr>
+  /*
+    🔴 THE TOTAL DOWNLOADS FIGURE VANISHED IN DARK MODE (owner, 2026-08-24).
+
+    It was #1e1b4b text on a panel whose only background was a linear-gradient.
+    Dark-mode clients that auto-invert do so per DECLARED COLOR: they invert
+    `color` and `background-color`, but a gradient is a background IMAGE and is
+    left alone. The text went pale, the panel stayed pale, and the number
+    disappeared — while every other figure, sitting on a solid white
+    background-color, inverted in step and stayed readable. That is why exactly
+    one number broke and the rest were fine.
+
+    Two fixes, because no single one covers every client:
+      1. Declare `color-scheme`. Apple Mail and iOS then stop force-inverting
+         and honour the palette below instead of inventing their own.
+      2. Never put text over a gradient. Every surface carrying text now has a
+         solid `background-color` that inverts together with it, so even a
+         client that ignores all of this keeps its contrast.
+
+    The media query is the intentional dark palette for clients that support
+    it; rule 2 is what protects the clients that don't. Kept in the source
+    rather than as an HTML comment — the reasoning is for us, and every byte
+    of it would otherwise ship in each email.
+  */
+  return `<!doctype html><html><head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    @media (prefers-color-scheme: dark) {
+      .fz-body   { background:#0b1120 !important; }
+      .fz-card   { background:#111a2e !important; border-color:#1f2a44 !important; }
+      .fz-hero   { background-color:#1c2444 !important; border-color:#33406b !important; }
+      .fz-stat   { background-color:#18213a !important; border-color:#27324f !important; }
+      .fz-strong { color:#f8fafc !important; }
+      .fz-eyebrow{ color:#c4b5fd !important; }
+      .fz-muted  { color:#94a3b8 !important; }
+      .fz-track  { background-color:#27324f !important; }
+    }
+  </style>
+  </head><body class="fz-body" style="margin:0;background:#f1f5f9;padding:24px 12px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="fz-card" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb">
+    <tr><td style="height:5px;background:linear-gradient(90deg,#2563eb,#7c3aed);background-color:#7c3aed"></td></tr>
     <tr><td style="padding:26px 26px 18px">
-      <p style="margin:0 0 2px;font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.06em;text-transform:uppercase">FrenzSave · admin report</p>
-      <h1 style="margin:0;font-size:22px;font-weight:800;color:#0f172a">${TITLE[data.period]}</h1>
-      <p style="margin:6px 0 0;font-size:13px;color:#64748b">${esc(data.windowLabel)}</p>
+      <p class="fz-eyebrow" style="margin:0 0 2px;font-size:11px;font-weight:700;color:#7c3aed;letter-spacing:.06em;text-transform:uppercase">FrenzSave · admin report</p>
+      <h1 class="fz-strong" style="margin:0;font-size:22px;font-weight:800;color:#0f172a">${TITLE[data.period]}</h1>
+      <p class="fz-muted" style="margin:6px 0 0;font-size:13px;color:#64748b">${esc(data.windowLabel)}</p>
     </td></tr>
 
     <tr><td style="padding:0 26px 18px">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#eef2ff,#f5f3ff);border-radius:16px;border:1px solid #e0e7ff">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="fz-hero" style="background-color:#eef2ff;border-radius:16px;border:1px solid #e0e7ff">
         <tr><td style="padding:18px 20px">
-          <div style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.03em">Total downloads</div>
-          <div style="margin-top:4px;font-size:34px;font-weight:800;color:#1e1b4b">${fmt(totalDownloads.value)}${trendChip(totalDownloads.trendPct)}</div>
+          <div class="fz-eyebrow" style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:.03em">Total downloads</div>
+          <div class="fz-strong" style="margin-top:4px;font-size:34px;font-weight:800;color:#1e1b4b">${fmt(totalDownloads.value)}${trendChip(totalDownloads.trendPct)}</div>
         </td></tr>
       </table>
     </td></tr>
@@ -176,9 +216,9 @@ export function digestEmailHtml(data: DigestData): string {
     ${section(data.chartMetricLabel, "Trend across the window.", chartHtml(data.chart, data.chartMetricLabel))}
 
     <tr><td style="padding:18px 26px 26px">
-      <p style="margin:0;font-size:11px;color:#94a3b8">Generated ${esc(new Date(data.generatedAt).toUTCString())}. Figures are rolling windows ending at send time, not calendar-aligned days/weeks/months.</p>
+      <p class="fz-muted" style="margin:0;font-size:11px;color:#94a3b8">Generated ${esc(new Date(data.generatedAt).toUTCString())}. Figures are rolling windows ending at send time, not calendar-aligned days/weeks/months.</p>
     </td></tr>
   </table>
-  <p style="text-align:center;color:#94a3b8;font-size:11px;margin:14px 0 0">FrenzSave · automated admin digest</p>
+  <p class="fz-muted" style="text-align:center;color:#94a3b8;font-size:11px;margin:14px 0 0">FrenzSave · automated admin digest</p>
   </body></html>`;
 }

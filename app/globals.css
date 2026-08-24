@@ -2039,3 +2039,83 @@ body:has(.frenz-canvas-page) {
     scroll-snap-type: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GLOBAL MEDIA PROTECTION — 2026-08-24
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner: long-pressing a wallpaper raised iOS's own image sheet (Save to
+   Photos / Copy / Copy Subject / Look Up). This is the half of the fix that
+   costs no JavaScript at all — and it is the half that actually solves iOS,
+   because `-webkit-touch-callout` is precisely the property that sheet obeys.
+
+   🔴 SCOPED BY ELEMENT TYPE, NOT BY A MARKER CLASS. There are 112 files
+   rendering images here and 28 rendering video. A `data-protected` attribute
+   every one of them had to remember would be wrong within a week, and every
+   new component would start out unprotected. Selecting the media elements
+   themselves means lazy-loaded, infinite-scrolled, modal, fullscreen and
+   not-yet-written media are all covered with no integration step — and with
+   zero runtime, since the rules are in the stylesheet before hydration.
+
+   🔴 IT PROTECTS THE MEDIA, NOT THE PAGE. Nothing here touches `touch-action`,
+   `pointer-events` or any ancestor of the media, so scrolling, swiping, reels
+   gestures, video playback, buttons, links, inputs, forms and ordinary text
+   selection are untouched. Long-press a paragraph and iOS still offers to
+   select and copy it; long-press a photo and it does not offer to save it.
+
+   🔴 NOT DRM. Media in a browser can always be extracted — screenshots,
+   devtools, the network tab. This removes the one-gesture path, so saving is a
+   deliberate act through Frenzsave's own download UI. Those downloads are
+   completely unaffected: `lib/media/save-to-device.ts` uses the Web Share API
+   and `<a download>` from a blob, neither of which involves a context menu or
+   a drag.
+
+   Overriding: `[data-media-unprotected]` restores native behaviour for a
+   subtree. Tailwind utilities also still win, because this sits in the base
+   layer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  img,
+  video,
+  picture,
+  canvas {
+    /* The iOS Safari / iOS PWA fix — this is the property the "Save to Photos"
+       sheet reads. Also inherited, which is why marking a wrapper (below)
+       covers everything inside it. */
+    -webkit-touch-callout: none;
+    /* Android Chrome's long-press selection, and the desktop drag-select that
+       turns a photo into a draggable blue block. */
+    -webkit-user-select: none;
+    user-select: none;
+    /* Drag-to-desktop / drag-to-another-app. Non-standard but honoured by
+       WebKit and Blink; the `dragstart` listener in lib/dom/media-protection.ts
+       covers the engines that ignore it. */
+    -webkit-user-drag: none;
+  }
+
+  /*
+    For a full-bleed viewer whose touch target is a WRAPPER rather than the
+    image — a reels deck, a fullscreen wallpaper — where iOS would otherwise
+    resolve the callout from the container. `-webkit-touch-callout` inherits,
+    so one attribute on the wrapper covers its whole subtree.
+
+    Deliberately does NOT set `user-select`: a wrapper can contain a caption,
+    and making captions unselectable is a regression, not a protection.
+  */
+  [data-media-protected] {
+    -webkit-touch-callout: none;
+  }
+
+  /* The escape hatch, for a surface that genuinely wants the native menu. */
+  [data-media-unprotected],
+  [data-media-unprotected] img,
+  [data-media-unprotected] video,
+  [data-media-unprotected] picture,
+  [data-media-unprotected] canvas {
+    -webkit-touch-callout: default;
+    -webkit-user-select: auto;
+    user-select: auto;
+    -webkit-user-drag: auto;
+  }
+}

@@ -430,6 +430,7 @@ function ImageStage({
       // On large screens this sits BESIDE the app sidebar (which stays fixed,
       // same as every other page) and splits into media + a persistent comments
       // sidebar — same split-pane pattern as PostViewer.
+      data-media-protected
       className="fixed inset-0 z-[85] flex bg-black lg:left-64"
       role="dialog"
       aria-modal="true"

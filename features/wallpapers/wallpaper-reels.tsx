@@ -298,6 +298,7 @@ export function WallpaperReels({
 
   return (
     <div
+      data-media-protected
       className="fixed inset-0 z-[100] bg-black"
       onTouchStart={(e) => {
         // Only from the top, and only a single finger — a pinch is a zoom.

@@ -518,6 +518,12 @@ export function ReelDeck({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
+      /* Full-bleed media surface: the touch target is this deck, not the frame
+         inside it, so iOS resolves its long-press callout from here. One
+         inherited property covers the whole subtree — see the media-protection
+         block in app/globals.css. Suppresses the callout only; every gesture
+         this deck owns (swipe, hold-to-pause, double-tap) is untouched. */
+      data-media-protected
       className={cn(
         // pointer-events-auto: reels-feed.tsx's tab-slide wrapper (variant
         // "page") is `pointer-events-none` so its full-viewport box never

@@ -261,7 +261,7 @@ export function WallpaperInterstitial({ onClose }: { onClose: () => void }) {
   const canSkip = left <= 0;
 
   return (
-    <div className="fixed inset-0 z-[120] flex flex-col bg-black/95 backdrop-blur-sm">
+    <div data-media-protected className="fixed inset-0 z-[120] flex flex-col bg-black/95 backdrop-blur-sm">
       <div className="flex justify-end p-4" style={{ paddingTop: "calc(var(--frenz-safe-top, 0px) + 1rem)" }}>
         <button
           type="button"

@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
+import { MediaProtection } from "@/features/media/media-protection";
+
 /**
  * The app-wide islands that do NOT need to exist during the first hydration
  * task — mounted one paint later.
@@ -98,6 +100,24 @@ export function DeferredShell() {
 
   return (
     <>
+      {/*
+        App-wide media protection — two delegated listeners, nothing rendered.
+
+        Statically imported rather than `next/dynamic`ed like its five
+        neighbours, deliberately: the module is a few hundred bytes, and a
+        sixth code-split chunk would cost a network round trip worth more than
+        the bytes it saves. It is still off the critical path — this whole
+        component mounts two frames after first paint.
+
+        Waiting those two frames is free here: the iOS half of the protection
+        is pure CSS (see globals.css) and therefore active before hydration,
+        and the half this mounts only answers a right-click or a ~500ms
+        long-press, neither of which can complete in 32ms.
+
+        Per this file's own rule: it touches no navigation, no history and no
+        DOM tree — only `contextmenu` and `dragstart`.
+      */}
+      <MediaProtection />
       <CommandCenterMount />
       <RegisterServiceWorker />
       <GlobalErrorCapture />

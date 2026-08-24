@@ -17,7 +17,7 @@ import type { PostCard } from "@/lib/social/posts";
  * to full screen, tap once centre to pause."
  *
  * ── Every one of those already exists, in ReelsFeed ────────────────────────
- * The profile grid opened `ProfileVideoPlayer` — a second, weaker player with
+ * The profile grid opened a bespoke `ProfileVideoPlayer` (deleted 2026-08-24) — a second, weaker player with
  * its own gesture handling, no engagement rail, and an "Open post" link
  * standing in for the interactions it could not offer. Meanwhile `ReelsFeed`
  * has the engagement rail, the wow burst, the comments sheet, the post menu,

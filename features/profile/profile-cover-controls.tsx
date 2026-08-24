@@ -7,6 +7,8 @@ import { useState } from "react";
 
 import type { MenuUser } from "./profile-menu-panel";
 
+import { Portal } from "@/components/ui/portal";
+
 // Was a plain static import — ~32kB of profile-menu UI, its full nav icon
 // set, and (transitively, via the Language row) the entire ~50-locale
 // message catalogue, all riding into every profile page's first load
@@ -38,8 +40,32 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
 
   return (
     <>
+      {/*
+        🔴 FIXED + PORTALLED, so they stay pinned while the profile scrolls
+        (owner, 2026-08-24: "make this three buttons in profile float and stick
+        to the top when scrolling").
+
+        They were `absolute` inside the cover section, so they scrolled away
+        with the artwork — reachable only by scrolling back to the very top,
+        which on a long profile is the whole page.
+
+        The portal is not optional here. A `fixed` element resolves against the
+        nearest ancestor carrying `transform`, `filter`, `backdrop-filter` or
+        `will-change`, and this page has several (the blurred hero chrome, the
+        living-glow layer) — plus the page-transition wrapper is transformed for
+        the duration of every navigation and the whole time a back-swipe is
+        being dragged. Any one of those would pin these buttons to a box that is
+        itself moving, which is precisely the clipped-overlay bug reported twice
+        already. With `<body>` as the only ancestor they are pinned to the
+        viewport, unconditionally. See components/ui/portal.tsx.
+
+        Their existing `bg-black/40 backdrop-blur-md` was already built to sit
+        on a cover photo of any brightness, so it reads correctly over page
+        content too once they are no longer over the artwork.
+      */}
+      <Portal>
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between px-3 lg:hidden"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex items-start justify-between px-3 lg:hidden"
         style={{ paddingTop: "calc(var(--frenz-safe-top, 0px) + 0.75rem)" }}
       >
         <Link
@@ -71,6 +97,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
           </button>
         </div>
       </div>
+      </Portal>
 
       {ready ? <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} /> : null}
     </>

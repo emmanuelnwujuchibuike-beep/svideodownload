@@ -255,6 +255,31 @@ export async function publishPost(
       }
     }
 
+    /*
+      Notify anyone who explicitly asked to hear about this creator's posts
+      (owner, 2026-08-23). Opt-in only — `posts` defaults false, so this is a
+      no-op for everyone who has not deliberately turned it on, and a public
+      account with no subscribers costs one indexed lookup that returns nothing.
+
+      Fire-and-forget, exactly like the sound registration above: publishing
+      must never fail because a notification could not be delivered, and
+      migration 0129 may not be applied everywhere yet.
+    */
+    /*
+      🔴 IMPORTED LAZILY, ON PURPOSE. `creator-notify-emit` reaches the push
+      stack (publishNotification → sendSmartPush → …), which pulls in a
+      `server-only` module. A top-level import here would drag that whole graph
+      into everything that imports this file — including `home-feed.ts`, whose
+      unit tests then fail to load with "This module cannot be imported from a
+      Client Component module" before a single assertion runs.
+
+      Deferring it also means the push stack is never parsed on the far more
+      common read paths through this module; only an actual publish pays for it.
+    */
+    void import("./creator-notify-emit")
+      .then((m) => m.notifyNewPost(publisherId, id, input.title))
+      .catch(() => {});
+
     return { ok: true, id };
   } catch {
     return { ok: false, error: "Couldn't publish.", code: "error" };

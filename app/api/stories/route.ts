@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { cacheDelete, getCached } from "@/lib/cache";
 import { CAPTION_MAX_CHARS, normalizeCaption } from "@/lib/social/caption";
+import { notifyNewStory } from "@/lib/social/creator-notify-emit";
 import { bustHomeFeedCache } from "@/lib/social/home-feed";
 import { getActiveStories, type StoryScope } from "@/lib/social/stories";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -143,6 +144,12 @@ export async function POST(request: Request) {
       .single();
     if (error) return NextResponse.json({ error: "Couldn't post story." }, { status: 500 });
     storyId = story.id as string;
+
+    /* Notify anyone who explicitly asked to hear about this person's stories
+       (owner, 2026-08-23). Opt-in only, so this is a no-op unless someone
+       deliberately turned it on. Fire-and-forget — a story must never fail to
+       post because a notification could not be delivered. */
+    void notifyNewStory(user.id).catch(() => {});
   }
 
   // Publish a public post backed by the upload (photo or video).

@@ -5,8 +5,31 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { AdminAreaChart, type AreaPoint } from "@/features/admin/area-chart";
+import { AdminSectionTabs, AdminTabPanel, type AdminTab } from "@/features/admin/section-tabs";
 import type { RevenueSeries } from "@/lib/monetization/revenue-series";
 import { cn } from "@/lib/utils";
+
+/**
+ * The sticky sub-nav's buttons (owner, 2026-08-23: "the top nav should have
+ * buttons like ad impression button, that opens only ad impression chart and
+ * all detailed information, and visitors button at the top nav that opens open
+ * visitors charts and all detailed information").
+ *
+ * Grouped by the QUESTION each answers rather than one tab per chart: "Ad
+ * impressions" and "Ad clicks" are read together (a click count without its
+ * impression count has no meaning, and the CTR needs both), and the three
+ * visitor charts are one measure split three ways. A tab per chart would trade
+ * one long scroll for a long tab row, which is the same problem wearing a
+ * different hat.
+ */
+const TABS: AdminTab[] = [
+  { id: "overview", label: "Overview" },
+  { id: "ads", label: "Ads" },
+  { id: "visitors", label: "Visitors" },
+  { id: "downloads", label: "Downloads" },
+  { id: "installs", label: "Installs" },
+  { id: "rewards", label: "Reward ads" },
+];
 
 /**
  * The revenue & engagement dashboard — a GRID of single-measure panels sharing
@@ -57,6 +80,12 @@ export function RevenueCharts({
   visitorSplit?: { date: string; newVisitors: number | null; returningVisitors: number | null }[];
 }) {
   const [range, setRange] = useState<7 | 30 | 90>(30);
+  /*
+    Which group of panels is on screen. "overview" first because it holds MRR —
+    the one figure worth seeing without asking for it — and because a section
+    that opens on a filtered view should open on its least surprising one.
+  */
+  const [tab, setTab] = useState<string>("overview");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -199,7 +228,28 @@ export function RevenueCharts({
         </p>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/*
+        🔴 STICKY SUB-NAV (owner, 2026-08-23, asked three times): "in revenue,
+        there should be a top nav that sticks at the top when scrolled, and the
+        top nav should have buttons like ad impression button, that opens only
+        ad impression chart and all detailed information, and visitors button
+        ... so i can easily locate them each by their at the top without
+        scrolling down too much."
+
+        Every panel below used to render at once, in one long grid — eleven
+        charts and three detail blocks, which is precisely the "scrolling down
+        too much" being reported. Each tab now shows ONE group and hides the
+        rest, so the section is only as tall as what was asked for. See
+        section-tabs.tsx for why these filter rather than scroll to anchors.
+
+        The date range and Refresh stay ABOVE the bar, outside the tabs,
+        because they apply to every panel — moving them inside would imply they
+        were per-tab, and a range that silently differed between tabs is
+        exactly the disagreement the single filter row was added to prevent.
+      */}
+      <AdminSectionTabs tabs={TABS} active={tab} onChange={setTab} />
+
+      <AdminTabPanel id="overview" active={tab} className="grid gap-4 lg:grid-cols-2">
         {/*
           MRR as a STAT TILE, not a chart. It is one value with no history —
           "sometimes the answer is not a chart" is exactly this case, and drawing
@@ -242,7 +292,9 @@ export function RevenueCharts({
           from. If earnings ever become available — an operator-entered monthly
           figure would be the honest route — this is where that panel goes.
         */}
+      </AdminTabPanel>
 
+      <AdminTabPanel id="ads" active={tab} className="grid gap-4 lg:grid-cols-2">
         <AdminAreaChart
           title="Ad impressions"
           subtitle={`${totalImpr.toLocaleString()} in the last ${range} days`}
@@ -255,6 +307,37 @@ export function RevenueCharts({
           points={clicks}
           slot={2}
         />
+        {/* The figures an ad panel is actually read for, under the charts they
+            come from — the same "line first, figures second" order the reward
+            and install blocks already use. */}
+        <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 lg:col-span-2">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <p className="text-sm font-bold">Ad performance</p>
+            <p className="text-xs text-muted-foreground">Last {range} days</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Impressions", value: totalImpr.toLocaleString() },
+              { label: "Clicks", value: totalClicks.toLocaleString() },
+              // "—" not "0%" when nothing was served: a CTR with no impressions
+              // behind it is undefined, not zero.
+              { label: "CTR", value: ctr === null ? "—" : `${ctr.toFixed(2)}%` },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
+                <p className="text-2xl font-extrabold tabular-nums tracking-tight">{s.value}</p>
+                <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            Counted from this app&rsquo;s own impression and click records. Earnings are not shown
+            because AdSense and Monetag report them only in their own dashboards — see the note in
+            this file on why an assumed RPM is not an acceptable substitute.
+          </p>
+        </div>
+      </AdminTabPanel>
+
+      <AdminTabPanel id="visitors" active={tab} className="grid gap-4 lg:grid-cols-2">
         {visits.length > 0 ? (
           <AdminAreaChart
             title="Visitors"
@@ -289,6 +372,26 @@ export function RevenueCharts({
           />
         ) : null}
         {/*
+          🔴 SAYS "NOT MEASURED", NEVER DRAWS A FLAT ZERO LINE. Each chart above
+          renders only when it has points, so before this tab existed their
+          absence was invisible inside a longer page. On a tab of its own, all
+          three missing would leave a blank panel that reads as a broken screen.
+
+          The two reasons are genuinely different and are named separately: the
+          analytics RPCs (migration 0115) not being present at all, versus a day
+          the capped fallback scan could not cover (see getVisitorSplitSeries).
+        */}
+        {visits.length === 0 && newVisitors.length === 0 && returningVisitors.length === 0 ? (
+          <p className="flex items-start gap-2 rounded-2xl border border-dashed border-border/70 p-5 text-xs text-muted-foreground lg:col-span-2">
+            <Info aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            No visitor series available for this window. That means it was not measured — not that
+            nobody visited. Check that the analytics functions from migration 0115 are applied.
+          </p>
+        ) : null}
+      </AdminTabPanel>
+
+      <AdminTabPanel id="downloads" active={tab} className="grid gap-4 lg:grid-cols-2">
+        {/*
           Downloads, counted from `analytics_downloads` where status = "completed"
           — the client-confirmed lifecycle table, not the legacy `downloads` table
           that logs every attempt as "completed" the instant it's requested (see
@@ -301,9 +404,11 @@ export function RevenueCharts({
           subtitle={`${totalDownloads.toLocaleString()} completed in the last ${range} days`}
           points={downloads}
           slot={4}
-          className={visits.length > 0 ? undefined : "lg:col-span-2"}
+          className="lg:col-span-2"
         />
+      </AdminTabPanel>
 
+      <AdminTabPanel id="installs" active={tab} className="grid gap-4">
         {/*
           App installs — the same treatment downloads and visitors get (owner,
           2026-08-23). Counted from `pwa_installed`, the browser's own
@@ -319,9 +424,48 @@ export function RevenueCharts({
           subtitle={`${installsMonth.toLocaleString()} in the last 30 days · Android & desktop only`}
           points={installs}
           slot={3}
-          className={visits.length > 0 ? undefined : "lg:col-span-2"}
         />
 
+        {/*
+          The three windows the owner asked for, read straight off the chart's own
+          grid. Rendered UNDER the chart for the same reason the charts sit under
+          the revenue tiles: the line answers "how did we get here", these answer
+          "where are we now", and that is the order somebody reads them in.
+        */}
+        <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4">
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <p className="text-sm font-bold">App installs</p>
+            <p className="text-xs text-muted-foreground">Completed installs, trailing windows</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Today", value: installsToday },
+              { label: "Last 7 days", value: installsWeek },
+              { label: "Last 30 days", value: installsMonth },
+            ].map((s) => (
+              <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
+                <p className="text-2xl font-extrabold tabular-nums tracking-tight">
+                  {s.value.toLocaleString()}
+                </p>
+                <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          {/*
+            Stated on the panel, not buried in a comment: iOS fires no install
+            event of any kind (Apple exposes nothing about Add to Home Screen), so
+            this is an undercount rather than a total. An operator reading a
+            dashboard deserves to know which way a number is wrong.
+          */}
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            Counted from the browser&rsquo;s own install event, so these are installs that
+            finished — not taps on the Install button. iPhone and iPad report nothing when
+            someone adds Frenz to their Home Screen, so real installs are higher than this.
+          </p>
+        </div>
+      </AdminTabPanel>
+
+      <AdminTabPanel id="rewards" active={tab} className="grid gap-4 lg:grid-cols-2">
         {/*
           Rewarded ads, as two charts rather than one (owner, 2026-08-23: "add
           reward ad activity in the revenue, the chart and information like how
@@ -350,13 +494,12 @@ export function RevenueCharts({
           points={rewardsGranted}
           slot={1}
         />
-      </div>
 
       {/*
-        The reward funnel in numbers, mirroring the installs panel below it so
-        the two read as one family rather than two inventions.
+        The reward funnel in numbers, under the charts it summarises — the same
+        "line first, figures second" order every other panel here uses.
       */}
-      <div className="mt-5 rounded-2xl border border-border/70 bg-secondary/25 p-4">
+      <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 lg:col-span-2">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <p className="text-sm font-bold">Reward ads</p>
           <p className="text-xs text-muted-foreground">Last {range} days</p>
@@ -381,44 +524,7 @@ export function RevenueCharts({
           network reports earnings back to this system.
         </p>
       </div>
-
-      {/*
-        The three windows the owner asked for, read straight off the chart's own
-        grid. Rendered UNDER the chart for the same reason the charts sit under
-        the revenue tiles: the line answers "how did we get here", these answer
-        "where are we now", and that is the order somebody reads them in.
-      */}
-      <div className="mt-5 rounded-2xl border border-border/70 bg-secondary/25 p-4">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <p className="text-sm font-bold">App installs</p>
-          <p className="text-xs text-muted-foreground">Completed installs, trailing windows</p>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Today", value: installsToday },
-            { label: "Last 7 days", value: installsWeek },
-            { label: "Last 30 days", value: installsMonth },
-          ].map((s) => (
-            <div key={s.label} className="rounded-xl bg-card px-3 py-3 text-center shadow-soft">
-              <p className="text-2xl font-extrabold tabular-nums tracking-tight">
-                {s.value.toLocaleString()}
-              </p>
-              <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{s.label}</p>
-            </div>
-          ))}
-        </div>
-        {/*
-          Stated on the panel, not buried in a comment: iOS fires no install
-          event of any kind (Apple exposes nothing about Add to Home Screen), so
-          this is an undercount rather than a total. An operator reading a
-          dashboard deserves to know which way a number is wrong.
-        */}
-        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-          Counted from the browser&rsquo;s own install event, so these are installs that
-          finished — not taps on the Install button. iPhone and iPad report nothing when
-          someone adds Frenz to their Home Screen, so real installs are higher than this.
-        </p>
-      </div>
+      </AdminTabPanel>
     </section>
   );
 }

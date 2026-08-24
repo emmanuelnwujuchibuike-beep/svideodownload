@@ -6,6 +6,7 @@ import {
 import {
   BadgeCheck,
   Ban,
+  Bell,
   BellOff,
   Bookmark,
   Check,
@@ -63,6 +64,9 @@ const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet")
 const ShareSheet = dynamic(() => import("@/features/social/share-sheet").then((m) => m.ShareSheet), { ssr: false });
 const ShareQrSheet = dynamic(() => import("@/features/social/share-qr-sheet").then((m) => m.ShareQrSheet), { ssr: false });
 const ContentPreferencesSheet = dynamic(() => import("@/features/social/content-preferences-sheet").then((m) => m.ContentPreferencesSheet), { ssr: false });
+// Per-creator notification switches — opened from the overflow menu, so its
+// chunk must never be part of a feed's initial load.
+const CreatorNotificationsSheet = dynamic(() => import("@/features/social/creator-notifications-sheet").then((m) => m.CreatorNotificationsSheet), { ssr: false });
 const ReportSheet = dynamic(() => import("@/features/social/report-sheet").then((m) => m.ReportSheet), { ssr: false });
 const CommentsSheet = dynamic(() => import("@/features/social/comments-sheet").then((m) => m.CommentsSheet), { ssr: false });
 import { floatReaction } from "@/features/ui/reaction-float";
@@ -159,6 +163,8 @@ function FeedPostCardImpl({
   const [repostersReady, setRepostersReady] = useState(false);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [prefsReady, setPrefsReady] = useState(false);
+  const [notifPrefsOpen, setNotifPrefsOpen] = useState(false);
+  const [notifPrefsReady, setNotifPrefsReady] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReady, setReportReady] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -725,6 +731,19 @@ function FeedPostCardImpl({
                       {!item.isOwner ? (
                         <>
                           <MenuItem icon={UserPlus} label={following ? "Unfollow creator" : "Follow creator"} onClick={toggleFollow} />
+                          {/*
+                            Sits directly ABOVE "Mute creator" deliberately: the
+                            two are the same decision at different strengths
+                            (turn some of their activity up / turn all of it
+                            off), and someone reaching for Mute because one
+                            notification annoyed them should see the narrower
+                            control first.
+                          */}
+                          <MenuItem
+                            icon={Bell}
+                            label="Notifications"
+                            onClick={() => { setMenuOpen(false); setNotifPrefsReady(true); setNotifPrefsOpen(true); }}
+                          />
                           <MenuItem icon={BellOff} label="Mute creator" onClick={muteCreator} />
                         </>
                       ) : null}
@@ -1057,6 +1076,17 @@ function FeedPostCardImpl({
       ) : null}
 
       {repostersReady ? <RepostersSheet postId={item.id} open={repostersOpen} onClose={() => setRepostersOpen(false)} /> : null}
+
+      {/* Per-creator notification switches (owner, 2026-08-23). Mounted lazily
+          like every other sheet on this card — see `notifPrefsReady`. */}
+      {notifPrefsReady ? (
+        <CreatorNotificationsSheet
+          userId={item.publisher.id}
+          handle={item.publisher.handle}
+          open={notifPrefsOpen}
+          onClose={() => setNotifPrefsOpen(false)}
+        />
+      ) : null}
 
       {prefsReady ? (
         <ContentPreferencesSheet

@@ -198,6 +198,11 @@ export const OWNER_COLUMN: Record<string, string> = {
   notifications: "user_id",
   notification_settings: "user_id",
   notification_sound_prefs: "user_id",
+  /* Keyed on `viewer_id` — the person whose export this is, and whose choice
+     the row records. Deliberately NOT `target_id`: exporting rows where you are
+     the TARGET would hand someone a list of who has notifications switched on
+     for them, which is other people's data, not theirs. */
+  creator_notification_prefs: "viewer_id",
   push_subscriptions: "user_id",
   push_delivery_log: "user_id",
 

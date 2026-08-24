@@ -40,6 +40,7 @@ import { Toaster } from "@/features/ui/toast";
 import { LivingGlow } from "@/features/profile/living-glow";
 import { ProfileCardLink } from "@/features/profile/profile-card-link";
 import { ShareProfileButton } from "@/features/profile/share-profile-button";
+import { CreatorNotificationsButton } from "@/features/social/creator-notifications-button";
 import { FollowButton } from "@/features/social/follow-button";
 import { ProfileActions } from "@/features/social/profile-actions";
 import { PostGridSkeleton } from "@/features/ui/page-skeletons";
@@ -1048,6 +1049,24 @@ async function ProfileData({
                       >
                         <MessageCircle className="h-4 w-4" /> Message
                       </Link>
+                    ) : null}
+                    {/*
+                      The bell (owner, 2026-08-23: "make users to be able to turn
+                      on and off another users post notification, stories
+                      notification, feed or share notification").
+
+                      A profile is where people go looking for this — it is where
+                      every other app puts it, and it is the one screen that is
+                      unambiguously ABOUT this person. The same sheet is also
+                      reachable from any post's overflow menu, for the far more
+                      common case of already looking at something they made.
+
+                      Signed-in and not-your-own-profile only: there is nothing
+                      to configure about your own activity, and the API rejects
+                      that case anyway.
+                    */}
+                    {isViewer ? (
+                      <CreatorNotificationsButton userId={profile.id} handle={profile.handle} />
                     ) : null}
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { sendPushToUser } from "@/lib/push/web-push";
 import { shareLimiter } from "@/lib/rate-limit";
 import { publishNotification } from "@/lib/notifications/publish";
+import { wantsCreatorNotification } from "@/lib/social/creator-notifications";
 import { checkShareSpam, type ShareHistoryEntry } from "@/lib/social/share/antispam";
 import { getOrCreateConversation, sendMessage } from "@/lib/social/messages";
 import { getPost } from "@/lib/social/posts";
@@ -152,18 +153,33 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // emitted anywhere — this is that missing call. Skipped when throttled —
   // that's the whole point of the verdict.
   if (post.publisher.id !== user.id && !throttled) {
-    void publishNotification({
-      userId: post.publisher.id,
-      type: "share",
-      actorId: user.id,
-      postId: id,
-      push: {
-        title: "Your post was shared",
-        body: sent > 1 ? `Shared with ${sent} people.` : "Someone shared your post.",
-        genericBody: "Someone shared your post.",
-        url: `/p/${id}`,
-      },
-    }).catch(() => {});
+    /*
+      🔴 HONOURS THE AUTHOR'S PER-SHARER PREFERENCE (owner, 2026-08-23: "turn
+      on and off another users ... share notification"). `shares` defaults TRUE
+      (see lib/social/creator-notifications.ts), and `wantsCreatorNotification`
+      returns the default on any failure — so an unapplied migration 0129 or an
+      unreachable table can never silently suppress a notification that would
+      otherwise have been sent. The check is on (author wants to hear about
+      SHARER), which is the direction that lets an author mute one particular
+      person who shares their work constantly without muting shares entirely.
+    */
+    void wantsCreatorNotification(post.publisher.id, user.id, "shares")
+      .then((wants) => {
+        if (!wants) return;
+        return publishNotification({
+          userId: post.publisher.id,
+          type: "share",
+          actorId: user.id,
+          postId: id,
+          push: {
+            title: "Your post was shared",
+            body: sent > 1 ? `Shared with ${sent} people.` : "Someone shared your post.",
+            genericBody: "Someone shared your post.",
+            url: `/p/${id}`,
+          },
+        });
+      })
+      .catch(() => {});
   }
 
   return NextResponse.json({ ok: true, sent, throttled });

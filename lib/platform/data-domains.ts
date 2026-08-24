@@ -251,11 +251,17 @@ export const DATA_DOMAINS: DataDomain[] = [
     id: "notifications",
     name: "Notifications",
     owner: "lib/social (notifications), lib/push",
-    description: "Notifications, per-category settings, broadcasts and push delivery.",
+    description:
+      "Notifications, per-category settings, per-creator subscriptions, broadcasts and push delivery.",
     tables: [
       "notifications",
       "notification_settings",
       "notification_sound_prefs",
+      // Per-viewer, per-creator opt-ins (migration 0129). Belongs here rather
+      // than in the social-graph domain: it is not follow state — you can want
+      // notifications from someone you have not followed, and it decides what
+      // gets DELIVERED, which is this domain's whole subject.
+      "creator_notification_prefs",
       "notification_broadcasts",
       "push_subscriptions",
       "push_delivery_log",

@@ -18,8 +18,36 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY?.trim();
 
-/** Resend's shared sender. Only delivers to the Resend account owner's own address. */
-const DEFAULT_SENDER = "onboarding@resend.dev";
+/**
+ * The address admin mail falls back to when `ALERT_EMAIL_FROM` supplies none.
+ *
+ * 🔴 DELIBERATELY NOT `onboarding@resend.dev`. That is Resend's shared sender
+ * and it only delivers to the Resend account owner's own address, so it caps
+ * who can ever receive an alert — and fails in a way that reads as a config
+ * problem rather than a design one.
+ *
+ * The sign-in path already solved this: lib/email/resend.ts sends from
+ * `RESEND_FROM` on a domain verified in Resend, and its mail demonstrably
+ * arrives (app/api/auth/otp/route.ts hard-errors when Resend is unconfigured
+ * and has no other route, so a delivered code IS the proof). Reuse exactly
+ * that sender rather than maintaining a second, weaker default — and reuse the
+ * value, not a new local part, so this cannot drift from what is verified.
+ */
+const OTP_SENDER_DEFAULT = "Frenz <login@frenzsave.com>"; // mirrors lib/email/resend.ts
+
+/** Resend accepts `a@b.c` or `Name <a@b.c>`, and nothing else. */
+function hasSendableAddress(value: string): boolean {
+  return (
+    /^[^<>]*<\s*[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+\s*>$/.test(value) ||
+    /^[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+$/.test(value)
+  );
+}
+
+/** The exact sender the sign-in path uses — the one proven to deliver. */
+export function verifiedSender(rawResendFrom: string | undefined | null): string {
+  const raw = rawResendFrom?.trim();
+  return raw && hasSendableAddress(raw) ? raw : OTP_SENDER_DEFAULT;
+}
 
 /**
  * Resolve the `from` header Resend will accept.
@@ -32,26 +60,25 @@ const DEFAULT_SENDER = "onboarding@resend.dev";
  *   follow the `email@example.com` or `Name <email@example.com>` format.
  *
  * Every admin email had been failing on it, and nothing said so (see the
- * digest route). Rather than fail on a value that is obviously an intended
- * DISPLAY NAME, keep the name and attach the default sender — the operator
- * gets the branding they asked for and a working send, and the warning names
- * the fix. An address that is already well-formed is passed through untouched.
+ * digest route).
+ *
+ * 🔴 AN UNUSABLE VALUE IS DISCARDED, NOT SALVAGED. An earlier attempt kept the
+ * name and bolted the default address onto it, which sent as "Svideodownload
+ * <onboarding@resend.dev>" — a working email wearing the wrong identity. Two
+ * things were wrong with that: "Svideodownload" is the repository's name and
+ * "Frenz" is the brand (the sign-in email has always said Frenz), and
+ * `onboarding@resend.dev` is Resend's shared sender, which only delivers to
+ * the Resend account owner. Members must not see two different senders for
+ * the same product, so a value that cannot be used is dropped in favour of the
+ * sender the sign-in path already proves. A well-formed address is honoured
+ * exactly as written.
  */
-export function resolveAlertFrom(raw: string | undefined | null): string {
+export function resolveAlertFrom(raw: string | undefined | null, fallback: string): string {
   const configured = raw?.trim();
-  if (!configured) return `FrenzSave <${DEFAULT_SENDER}>`;
-
-  // `Name <a@b.c>` — already valid.
-  if (/^[^<>]*<\s*[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+\s*>$/.test(configured)) return configured;
-  // Bare `a@b.c` — also valid.
-  if (/^[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+$/.test(configured)) return configured;
-
-  // Anything else is a display name (or malformed). Salvage it as one.
-  const name = configured.replace(/[<>]/g, "").trim();
-  return name ? `${name} <${DEFAULT_SENDER}>` : `FrenzSave <${DEFAULT_SENDER}>`;
+  return configured && hasSendableAddress(configured) ? configured : fallback;
 }
 
-const FROM = resolveAlertFrom(process.env.ALERT_EMAIL_FROM);
+const FROM = resolveAlertFrom(process.env.ALERT_EMAIL_FROM, verifiedSender(process.env.RESEND_FROM));
 
 function recipients(): string[] {
   const raw = process.env.ALERT_EMAIL_TO || process.env.ADMIN_EMAILS || "";

@@ -39,12 +39,18 @@ export async function checkAndNotifyMissingDailyWallpaper(): Promise<{ notified:
   if (error) return { notified: false, reason: "wallpapers table unavailable" };
   if ((data ?? []).length > 0) return { notified: false, reason: "already uploaded today" };
 
-  // `sendAdminAlertOnce` is the dedupe backstop against a duplicated cron
-  // trigger within the same day — it silently no-ops on a lock it's already
-  // holding, so its resolution doesn't distinguish "sent" from "already sent
-  // today"; the meaningful gate already happened above (no wallpaper found).
+  /*
+    `sendAdminAlertOnce` is the dedupe backstop against a duplicated cron
+    trigger within the same day; the meaningful gate already happened above
+    (no wallpaper found).
+
+    🔴 IT NOW REPORTS WHETHER RESEND TOOK IT. This used to discard the result
+    and answer "reminder dispatched" unconditionally — which was false for
+    every send while ALERT_EMAIL_FROM was malformed. "Dispatched" should mean
+    dispatched; a rejection has to reach the caller or nobody learns of it.
+  */
   const dateKey = startOfToday.toISOString().slice(0, 10);
-  await sendAdminAlertOnce(
+  const outcome = await sendAdminAlertOnce(
     `wallpaper-reminder:${dateKey}`,
     "wallpaper_reminder",
     "No wallpaper uploaded today yet",
@@ -80,5 +86,18 @@ export async function checkAndNotifyMissingDailyWallpaper(): Promise<{ notified:
     /* push is best-effort */
   }
 
-  return { notified: true, reason: "no admin wallpaper today — reminder dispatched" };
+  const emailNote =
+    outcome === "sent"
+      ? "email sent"
+      : outcome === "duplicate"
+        ? "email already sent today"
+        : outcome === "disabled"
+          ? "email not configured"
+          : "EMAIL REJECTED by Resend";
+  // `notified` stays true when the push went out even if the email did not —
+  // but it must never claim an email that Resend refused.
+  return {
+    notified: outcome !== "rejected",
+    reason: `no admin wallpaper today — ${emailNote}`,
+  };
 }

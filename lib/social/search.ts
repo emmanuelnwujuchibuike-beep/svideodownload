@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { flagsOf, isAccountVisibleTo, relationTo } from "./account-visibility";
 import { friendIdSet } from "./friend-ids";
+import { searchTags, type TrendingTag } from "./hashtags";
+import { searchPlaces, type PlaceResult } from "./places";
 import type { MediaKind, PostCard } from "./posts";
 import { searchSounds, type Sound } from "./sounds";
 
@@ -111,26 +113,49 @@ export async function searchPosts(q: string, opts: { kind?: MediaKind; limit?: n
   }
 }
 
-export type SearchType = "all" | "people" | "video" | "image" | "audio" | "sound";
+/**
+ * `hashtag` and `place` joined the set with the Search & Explore redesign
+ * (2026-08-24) — see lib/social/hashtags.ts and lib/social/places.ts for why
+ * neither needed a new table. The existing names are unchanged: `/api/search`
+ * is already called with `type=people` from the friends discovery search and
+ * the comment @-mention autocomplete, and renaming them would break both.
+ */
+export type SearchType = "all" | "people" | "video" | "image" | "audio" | "sound" | "hashtag" | "place";
 
 export interface SearchResult {
   people: SearchPerson[];
   posts: PostCard[];
   sounds: Sound[];
+  tags: TrendingTag[];
+  places: PlaceResult[];
+}
+
+/** The "nothing matched" shape, so no call site has to spell out five keys. */
+export function emptySearchResult(): SearchResult {
+  return { people: [], posts: [], sounds: [], tags: [], places: [] };
 }
 
 export async function searchAll(q: string, type: SearchType, viewerId: string | null = null): Promise<SearchResult> {
   const term = clean(q);
-  if (!term) return { people: [], posts: [], sounds: [] };
-  if (type === "people") return { people: await searchPeople(q, 30, viewerId), posts: [], sounds: [] };
-  if (type === "sound") return { people: [], posts: [], sounds: await searchSounds(q, 30) };
+  if (!term) return emptySearchResult();
+  if (type === "people") return { ...emptySearchResult(), people: await searchPeople(q, 30, viewerId) };
+  if (type === "sound") return { ...emptySearchResult(), sounds: await searchSounds(q, 30) };
+  if (type === "hashtag") return { ...emptySearchResult(), tags: await searchTags(q, 30) };
+  if (type === "place") return { ...emptySearchResult(), places: await searchPlaces(q, viewerId, 30) };
   if (type === "video" || type === "image" || type === "audio") {
-    return { people: [], posts: await searchPosts(q, { kind: type, limit: 30 }), sounds: [] };
+    return { ...emptySearchResult(), posts: await searchPosts(q, { kind: type, limit: 30 }) };
   }
-  const [people, posts, sounds] = await Promise.all([
+  /*
+    "Top" is the only type that fans out. Each branch stays small — this is the
+    tab that renders first, so its cost is the cost of every search — and the
+    five reads run concurrently rather than in series.
+  */
+  const [people, posts, sounds, tags, places] = await Promise.all([
     searchPeople(q, 8, viewerId),
     searchPosts(q, { limit: 24 }),
     searchSounds(q, 6),
+    searchTags(q, 6),
+    searchPlaces(q, viewerId, 4),
   ]);
-  return { people, posts, sounds };
+  return { people, posts, sounds, tags, places };
 }

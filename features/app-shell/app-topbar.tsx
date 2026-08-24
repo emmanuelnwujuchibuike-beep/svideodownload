@@ -34,6 +34,16 @@ export function AppTopbar() {
     !!handle` — the same class of bug, fixed the same way there already).
   */
   const { handle } = useEntitlements();
+  /*
+    The Search DESTINATION is reached from this header, not from the bottom
+    bar — that bar's tab set (Home / Friends / Reels / Chats / Profile, or the
+    Downloader's four) has no Search slot, and adding one would change primary
+    navigation for every signed-in surface. So "the Search item is active" is
+    honoured where the Search item actually lives: this glyph, tinted with the
+    same `text-primary` the bottom nav uses for its selected tab, plus
+    `aria-current` so it is announced as the current page too.
+  */
+  const searchActive = pathname === "/search" || pathname.startsWith("/search?");
   const [q, setQ] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   // The owner's Messages mockup starts straight at the big "Messages" title —
@@ -154,13 +164,14 @@ export function AppTopbar() {
           <Link
             href="/search"
             aria-label="Search"
+            aria-current={searchActive ? "page" : undefined}
             onClick={() => {
               haptic("light");
               playSound("tap");
             }}
             className="flex h-11 w-11 items-center justify-center"
           >
-            <IconTile>
+            <IconTile className={searchActive ? "text-primary" : undefined}>
               <IoSearchOutline className="h-[26px] w-[26px]" />
             </IconTile>
           </Link>
@@ -248,13 +259,14 @@ export function AppTopbar() {
             <Link
             href="/search"
             aria-label="Search"
+            aria-current={searchActive ? "page" : undefined}
             onClick={() => {
               haptic("light");
               playSound("tap");
             }}
             className="flex h-11 w-11 items-center justify-center"
           >
-              <IconTile>
+              <IconTile className={searchActive ? "text-primary" : undefined}>
                 <IoSearchOutline className="h-[26px] w-[26px]" />
               </IconTile>
             </Link>

@@ -1918,3 +1918,124 @@ body:has(.frenz-canvas-page) {
     opacity: 0;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Search & Explore (/search) — 2026-08-24
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The page is built from the app's EXISTING semantic tokens, not a palette of
+   its own: `bg-background` (page), `bg-card` (section surface), `bg-secondary`
+   (surface-secondary / inner tiles), `border-border`, `text-foreground`,
+   `text-muted-foreground`, `text-primary` (electric blue accent) and
+   `text-accent` (royal purple, the secondary accent). Switching theme is
+   therefore a variable swap on `.dark` and nothing else — no remount, no
+   refetch, no JavaScript, and both themes cost exactly the same to render.
+
+   🔴 NO backdrop-filter ANYWHERE ON THIS PAGE. The brief asks for glass "used
+   sparingly", and the honest answer for this layout is: nowhere. The only
+   candidate was the sticky search header, and everything behind it is an
+   OPAQUE page background — a blur there has nothing to blur, so it would be
+   pure GPU cost for zero pixels of difference. The premium surface reads come
+   from translucent solid fills + a hairline border instead, which is what
+   `.srch-glass` below is. Do not "restore" the blur; measure it first.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Horizontal rails (tabs, creator circles, video cards).
+
+   Native scrolling only — no JS, no rAF, no transform tricks. `overscroll-
+   behavior-x: contain` is what stops a flick at the end of a rail chaining
+   into the page (or into iOS's back-swipe), which is the "accidental
+   horizontal page scroll" this page must never do. `touch-action` is left at
+   its default on purpose: pinning it to `pan-x` would make a vertical drag
+   that STARTS on a rail fail to scroll the page, which reads as a frozen
+   screen. */
+.srch-rail {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.srch-rail::-webkit-scrollbar {
+  display: none;
+}
+.srch-rail > * {
+  scroll-snap-align: start;
+  flex: none;
+}
+
+/* A translucent surface with a hairline edge — the "glass" of this page, at
+   the cost of a plain background-color. Used only on small controls (the
+   search field, the visual-search button, the video card's overlay chips). */
+.srch-glass {
+  background-color: hsl(var(--card) / 0.72);
+  border: 1px solid hsl(var(--border) / 0.9);
+}
+.dark .srch-glass {
+  background-color: hsl(var(--card) / 0.82);
+  /* A whisper of the purple accent in the edge, exactly as the reference has
+     it. Static — never animated, never blurred. */
+  border-color: hsl(var(--accent) / 0.22);
+}
+
+/* Focus state for the search field. A ring + a STATIC shadow: a box-shadow
+   that animates is one of the most expensive things a phone can be asked to
+   paint, so the shadow is present from the start and only its opacity-free
+   ring changes. Transition is 180ms on cheap properties. */
+.srch-field {
+  transition:
+    border-color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
+}
+.srch-field:focus-within {
+  border-color: hsl(var(--primary) / 0.55);
+  background-color: hsl(var(--card));
+}
+
+/* The active tab's underline — a static brand gradient, no animation loop. */
+.srch-tab-underline {
+  background-image: linear-gradient(90deg, hsl(var(--brand-blue)), hsl(var(--brand-purple)));
+  box-shadow: 0 2px 10px -2px hsl(var(--brand-purple) / 0.55);
+}
+
+/* Circular avatar ring for the discovery row. A CSS gradient painted once as
+   the element's own background, with the avatar sitting on an inset disc —
+   not an animated conic sweep, which would repaint every frame. */
+.srch-ring {
+  background-image: linear-gradient(135deg, hsl(var(--brand-blue)), hsl(var(--brand-purple)));
+}
+
+/* Below-the-fold sections skip layout + paint until they approach the
+   viewport. `contain-intrinsic-size` supplies a placeholder height so the
+   scrollbar never jumps as they are realised. */
+.srch-defer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
+/* Press feedback: transform + opacity only, ~150ms, and disabled outright
+   under `prefers-reduced-motion`. */
+.srch-press {
+  transition:
+    transform 150ms var(--ease-out),
+    opacity 150ms var(--ease-out);
+}
+.srch-press:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .srch-press,
+  .srch-field {
+    transition: none;
+  }
+  .srch-press:active {
+    transform: none;
+  }
+  .srch-rail {
+    scroll-behavior: auto;
+    scroll-snap-type: none;
+  }
+}

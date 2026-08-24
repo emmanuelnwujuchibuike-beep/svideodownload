@@ -73,6 +73,8 @@ export const SEARCHABLE_ENTITIES: SearchableEntity[] = [
   { id: "topics", label: "Topic pillars", indexId: "entities", source: "lib/seo/topics.ts", status: "live", permissionAware: false, indexable: true },
   { id: "commands", label: "Commands & destinations", indexId: "command", source: "lib/navigation/registry.ts", status: "live", permissionAware: true, indexable: false, note: "⌘K palette; gated by canAccess/requiresAuth, so a visitor never sees a destination they can't open." },
   { id: "messages", label: "Direct messages", indexId: "messages", source: "app/api/messages/search/route.ts", status: "live", permissionAware: true, indexable: false, note: "Only a conversation's own participants can search it; never crawlable, never in the public index." },
+  { id: "hashtags", label: "Hashtags", indexId: "social", source: "lib/social/hashtags.ts", status: "live", permissionAware: false, indexable: false, note: "Derived from captions + the fixed category taxonomy — there is no hashtag table. Every count shown is an exact count query, never the size of the sampling window. No canonical page of its own yet; a tag resolves to /search." },
+  { id: "places", label: "Places", indexId: "social", source: "lib/social/places.ts", status: "live", permissionAware: true, indexable: false, note: "Grouped from profile_details city/country, and ONLY for members whose own discovery settings opted into location search (0113). Never crawlable." },
 ];
 
 /* ──────────────────────────────── indexes ───────────────────────────────────
@@ -182,7 +184,8 @@ export const DISCOVERY_SURFACES: DiscoverySurface[] = [
   { id: "discover-people", name: "Discover people", source: "features/friends/discover.tsx", status: "live", description: "A location-aware grid of creators you don't yet follow." },
   { id: "command-centre", name: "Command centre (⌘K)", source: "features/navigation/command-center.tsx", status: "live", description: "Instant navigation and actions across every workspace." },
   { id: "suggestions", name: "Friend suggestions", source: "features/friends/suggestions-launcher.tsx", status: "live", description: "People-you-may-know recommendations." },
-  { id: "search-results", name: "Universal search results", source: "features/search/search-results.tsx", status: "live", description: "The /search page over people and posts." },
+  { id: "search-results", name: "Universal search results", source: "features/search/search-results-view.tsx", status: "live", description: "The /search results view — people, hashtags, sounds, places and posts, per tab." },
+  { id: "search-discover", name: "Search discovery screen", source: "features/search/discover-sections.tsx", status: "live", description: "The /search empty state: creator circles, Trending Now, Suggested for you, Popular videos. Server-rendered." },
   { id: "related-links", name: "Related content links", source: "lib/content/graph/traverse.ts", status: "live", description: "Internal links derived from graph traversal (siblingsOf/relatedFor) rather than hand-written — sibling and next-step relations." },
 ];
 

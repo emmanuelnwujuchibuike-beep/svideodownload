@@ -40,6 +40,17 @@ export interface PushPayload {
    * the ids that public/sw/push.js's notificationclick handler recognizes —
    * an unrecognized id just falls back to a normal open/focus. */
   actions?: { action: string; title: string }[];
+  /**
+   * Show the system notification even when the app is open and visible.
+   *
+   * 🔴 SMOKE TEST ONLY. Normally the service worker suppresses the OS
+   * notification while a window is visible, because the in-app drop-down is
+   * already showing that event (owner rule, 2026-07-16). A test push writes no
+   * `notifications` row, so without this the tester sees nothing at all and
+   * reads a working pipeline as broken. Set only by
+   * /api/cron/notification-test, which is behind the cron credential.
+   */
+  force?: boolean;
   /** The other user a friend-request action button acts on — lets the SW
    * call POST /api/friends/{actorId} directly without opening a window. */
   actorId?: string;

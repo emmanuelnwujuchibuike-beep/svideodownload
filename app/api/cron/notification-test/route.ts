@@ -47,6 +47,13 @@ const KINDS = ["streak", "wallpaper"] as const;
 type Kind = (typeof KINDS)[number];
 
 function payloadFor(kind: Kind) {
+  /*
+    🔴 `force` IS WHAT MAKES THIS VISIBLE. The service worker suppresses the
+    system notification whenever a window is visible, because the in-app
+    drop-down normally shows that event instead. A test push writes no
+    `notifications` row, so without this flag a tester with the app open sees
+    NEITHER — silence from a send Apple accepted with a 201. Requires SW v17.
+  */
   if (kind === "streak") {
     return {
       title: STREAK_REMINDER_TITLE,
@@ -55,9 +62,10 @@ function payloadFor(kind: Kind) {
       // Distinct from the production tag so a test can never collapse over,
       // or be collapsed by, a real reminder sitting on the lock screen.
       tag: "streak-reminder-test",
+      force: true,
     };
   }
-  return { ...wallpaperReminderPush(), tag: "wallpaper-reminder-test" };
+  return { ...wallpaperReminderPush(), tag: "wallpaper-reminder-test", force: true };
 }
 
 async function run(request: Request) {
@@ -121,6 +129,15 @@ async function run(request: Request) {
     devices,
     sent,
     ...(failed.length ? { failed } : {}),
+    /*
+      🔴 SAY WHAT "sent" MEANS. It means the push SERVICE accepted the message,
+      not that a device displayed it. Apple returns 201 for endpoints belonging
+      to installs that no longer exist, so a subscription list that has
+      accumulated over weeks reports a perfect result while the phone in your
+      hand shows nothing. That is not hypothetical — it happened on the first
+      run of this route. Per-endpoint outcomes are in `push_delivery_log`.
+    */
+    note: `"sent" means the push service accepted it (Apple returns 201 even for endpoints from an uninstalled PWA). ${devices} subscription(s) on file; only the current install will display. Per-endpoint results are in push_delivery_log.`,
   });
 }
 

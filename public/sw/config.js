@@ -6,6 +6,13 @@
  * activation. */
 var SWX = (self.SWX = self.SWX || {});
 
+// v17 (2026-08-24): push.js honours a `force` flag so the notification smoke
+// test (/api/cron/notification-test) displays even with the app open. Without
+// the bump, every already-installed device keeps the v16 push handler and the
+// test stays invisible on exactly the devices being tested — which is how this
+// was found: the server reported 201 from Apple for every endpoint while the
+// phone showed nothing.
+//
 // v16 (2026-08-23): routes.js now bails out of the worker entirely for
 // `/downloads/` and `.apk`/`.aab`/`.zip`. A `<a href download>` click is issued
 // as `mode: "navigate"`, so the Android APK was being answered by the generic
@@ -33,7 +40,7 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v16";
+SWX.VERSION = "v17";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

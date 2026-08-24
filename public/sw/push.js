@@ -54,7 +54,25 @@ self.addEventListener("push", (event) => {
   // The badge still updates either way, and a hidden/backgrounded tab still
   // gets the real notification — being open somewhere in the background is NOT
   // "in the app".
+  // 🔴 `force` EXISTS FOR THE SMOKE TEST, AND ONLY FOR IT.
+  //
+  // The suppression above is right for a real notification, because the
+  // in-app drop-down is already showing that exact event. It is WRONG for a
+  // deliberate test: the drop-down is driven by a realtime `notifications`
+  // row insert, and a test push writes no row — so with the app open the
+  // tester sees NEITHER the system notification (suppressed here) nor the
+  // drop-down (nothing to render). Silence, from a send the server correctly
+  // reported as delivered. That is precisely the failure this test exists to
+  // rule out, so it must not be able to produce it.
+  //
+  // Only /api/cron/notification-test sets this, and that route is behind the
+  // cron credential — no product code path can turn a normal notification
+  // into one that double-shows.
   async function show() {
+    if (data.force) {
+      await self.registration.showNotification(title, options);
+      return;
+    }
     const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const appIsOpen = clients.some((c) => c.visibilityState === "visible");
     if (appIsOpen) return; // the in-app drop-down owns this one

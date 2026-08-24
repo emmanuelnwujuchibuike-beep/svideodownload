@@ -143,6 +143,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
   const isPremiumBatch = !adsReady || !showAds;
   useEffect(() => setSelected(new Set()), [metadata.id]);
 
+
   /*
     What can be batch-downloaded.
 
@@ -172,6 +173,52 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     [metadata.formats],
   );
   const batchItems = separateItems.length > 1 ? separateItems : tab === "image" ? imageFormats : [];
+
+  /*
+    🔴 CLOSE THE OPTIMISTIC WINDOW (owner, 2026-08-24: "Some users still select
+    more than 20").
+
+    The optimism above is right and stays: telling a paying member to upgrade
+    because their entitlement had not resolved yet is the worst false positive
+    on this screen. But it left a real hole — while `adsReady` was false the cap
+    was not enforced AT ALL, so a free member who started ticking immediately
+    could pass 20, and nothing ever re-checked once the answer arrived. The
+    selection simply stayed over the cap.
+
+    That is not cosmetic. `/api/download` charges quota per BATCH ("one charge
+    per batch") and does not police how many items a batch contains, so an
+    over-selected batch really does download more than 20 for one charge.
+
+    So: stay optimistic while loading, then reconcile the moment the truth
+    lands. A member who was genuinely over the cap is trimmed back to it and
+    shown the same upgrade sheet they would have seen; a Pro member is never
+    touched, because the effect only acts when the resolved answer says free.
+  */
+  useEffect(() => {
+    if (!adsReady || !showAds) return; // still unknown, or genuinely premium
+    if (selected.size <= FREE_BATCH_SELECT_LIMIT) return;
+    /*
+      Computed OUTSIDE the state updater on purpose. Raising the upgrade sheet
+      from inside a `setSelected(prev => …)` callback would be a side effect in
+      a state updater — React is free to invoke those more than once (it does in
+      StrictMode), which would fire the sheet twice.
+
+      Reading `selected` from this render's closure is correct here: the effect
+      only runs when the ENTITLEMENT changes, and at that instant the closure
+      holds the current selection.
+    */
+    const keep = batchItems
+      .filter((f) => selected.has(f.formatId))
+      // Keep the first N in the picker's own order, so the trim is predictable
+      // rather than dropping whichever items a Set happens to iterate last.
+      .slice(0, FREE_BATCH_SELECT_LIMIT)
+      .map((f) => f.formatId);
+    setSelected(new Set(keep));
+    setUpgradePrompt({ kind: "cap", total: batchItems.length });
+    // Deliberately NOT depending on `selected`/`batchItems`: this reconciles a
+    // late entitlement answer, so it must fire on that answer and nothing else.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adsReady, showAds]);
   const isBatchable = batchItems.length > 1;
   const toggleSelect = (formatId: string) =>
     setSelected((prev) => {

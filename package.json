@@ -35,6 +35,7 @@
     "design:adoption": "node scripts/design-adoption.mjs",
     "metrics:engineering": "node scripts/engineering-metrics.mjs",
     "seo:audit": "node scripts/seo-audit.mjs",
+    "cron:token": "node scripts/cron-token.mjs",
     "deps:audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {

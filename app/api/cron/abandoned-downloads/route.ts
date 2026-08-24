@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { notifyAdminsOfDownloadOutcome } from "@/lib/analytics/download-failure-alert";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -45,11 +45,6 @@ const ABANDONED_AFTER_MINUTES = 30;
  *  runs rather than alerting on thousands of rows in one burst. */
 const BATCH_LIMIT = 200;
 
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 interface StuckRow {
   download_id: string;
@@ -62,7 +57,7 @@ interface StuckRow {
 }
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

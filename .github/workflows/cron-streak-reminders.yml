@@ -17,17 +17,26 @@ name: Cron - Streak reminders
 # cron-wallpaper-reminder.yml), so this uses the same proven pattern rather
 # than introducing a third mechanism.
 #
-# ── 🔴 SCHEDULE IS PAUSED UNTIL `CRON_SECRET` EXISTS ─────────────────────────
-# Its two siblings are paused for exactly this reason: without the secret the
-# call 403s, and an hourly job that fails is 24 failure emails a day. Setting
-# the secret unblocks all three at once. To enable:
+# ── 🔴 SCHEDULE IS PAUSED UNTIL A TOKEN IS MINTED ────────────────────────────
+# Its two siblings are paused for exactly this reason: without a credential the
+# call 403s, and an hourly job that fails is 24 failure emails a day. One token
+# unblocks all three at once.
 #
-#   1. Generate one:            openssl rand -hex 32
-#   2. Vercel → Project → Settings → Environment Variables → add CRON_SECRET
-#      for Production, then REDEPLOY (env vars only apply to new deployments).
-#   3. GitHub → repo → Settings → Secrets and variables → Actions →
-#      New repository secret → name CRON_SECRET, same value.
-#   4. Uncomment the `schedule:` block below (and in the other two workflows).
+# NO VERCEL ENVIRONMENT VARIABLE IS NEEDED. The earlier instructions here said
+# to add `CRON_SECRET` in Vercel and redeploy; that route cost days, because a
+# variable that exists but holds the EMPTY STRING is falsy in the route and
+# indistinguishable from a wrong one from outside — every failure looked like
+# the same opaque 403. The credential now lives in the database instead, where
+# it can be minted, rotated and inspected without a deploy. See lib/cron/auth.ts.
+#
+#   1. Mint one (prints the token once, stores only its SHA-256):
+#          npm run cron:token
+#   2. GitHub → repo → Settings → Secrets and variables → Actions →
+#      CRON_SECRET = that value.
+#   3. Uncomment the `schedule:` block below (and in the other two workflows).
+#
+# The env-var path still works and is still tried first, so Vercel Cron's own
+# signed requests to `trending` and `profile-snapshots` are unaffected.
 #
 # Verify before enabling: Actions → this workflow → "Run workflow"
 # (workflow_dispatch). A healthy run returns HTTP 200 with a JSON body like

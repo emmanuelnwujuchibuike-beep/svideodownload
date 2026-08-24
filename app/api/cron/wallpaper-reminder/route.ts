@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { checkAndNotifyMissingDailyWallpaper } from "@/lib/analytics/wallpaper-reminder";
 
 export const runtime = "nodejs";
@@ -17,14 +17,9 @@ export const dynamic = "force-dynamic";
  * the `CRON_SECRET` bearer header, or fold into whichever scheduler ends up
  * covering the other unregistered crons.
  */
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const result = await checkAndNotifyMissingDailyWallpaper();

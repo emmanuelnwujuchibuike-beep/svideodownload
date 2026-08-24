@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ACCOUNT_DELETION_GRACE_DAYS } from "@/lib/account/deletion";
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,14 +16,9 @@ export const dynamic = "force-dynamic";
  * automatically; this route doesn't hand-roll a 30-table cascade itself.
  * Same cron auth pattern as every other scheduled route in this app.
  */
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const db = createAdminClient();

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,14 +16,9 @@ export const dynamic = "force-dynamic";
  * an honest, real approximation rather than a client-side timer that could
  * be bypassed. Same auth pattern as the other cron routes in this app.
  */
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const db = createAdminClient();

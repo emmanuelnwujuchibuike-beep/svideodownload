@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { cronAuthorized } from "@/lib/cron/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -34,11 +35,11 @@ function unauthorized() {
 }
 
 export async function GET(request: Request) {
-  // Vercel Cron signs its requests; anything else must present the secret.
-  const secret = process.env.CRON_SECRET;
-  const auth = request.headers.get("authorization");
+  // Vercel Cron signs its own requests — the platform strips `x-vercel-cron`
+  // from anything arriving off the public internet, so its presence is proof.
+  // Everything else goes through the shared check (lib/cron/auth.ts).
   const isVercelCron = request.headers.get("x-vercel-cron") !== null;
-  if (!isVercelCron && (!secret || auth !== `Bearer ${secret}`)) return unauthorized();
+  if (!isVercelCron && !(await cronAuthorized(request))) return unauthorized();
 
   const db = createAdminClient();
   const capturedOn = new Date().toISOString().slice(0, 10);

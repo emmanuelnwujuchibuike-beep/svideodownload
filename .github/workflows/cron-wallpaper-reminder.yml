@@ -4,9 +4,10 @@ name: Cron - Wallpaper upload reminder
 # Actions supplies the clock for app/api/cron/wallpaper-reminder/route.ts.
 on:
   # 🔴 Schedule PAUSED (2026-08-16) — same reason and same fix as
-  # cron-digest.yml: CRON_SECRET was never set, so this failed nightly.
-  # Re-enable by uncommenting once CRON_SECRET is set in BOTH this repo's
-  # Actions secrets and Vercel's Production env vars (redeploy after).
+  # cron-digest.yml: no credential was configured, so this failed nightly.
+  # Re-enable by uncommenting once `npm run cron:token` has been run and its
+  # output is in this repo's Actions secret CRON_SECRET. No Vercel environment
+  # variable is involved any more — see lib/cron/auth.ts.
   # schedule:
   #   - cron: "0 10 * * *" # 10am UTC daily
   workflow_dispatch: {}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { buildDigest, type DigestPeriod } from "@/lib/analytics/digest";
 import { digestEmailHtml, digestEmailSubject } from "@/lib/analytics/digest-email";
 import { alertsEnabled, sendAdminAlertOnce } from "@/lib/notify";
@@ -35,11 +35,6 @@ export const maxDuration = 60;
  * the same digest twice — the same mechanism `download-failure-alert.ts`
  * already uses for outcome alerts.
  */
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 function duePeriods(now: Date): DigestPeriod[] {
   const due: DigestPeriod[] = ["daily"];
@@ -55,7 +50,7 @@ async function sendOne(period: DigestPeriod, dateKey: string): Promise<void> {
 }
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   if (!alertsEnabled()) {

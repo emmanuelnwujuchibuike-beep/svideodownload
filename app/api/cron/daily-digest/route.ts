@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { computeDigestStats, formatDigestBody, isDigestEligible, type DigestSettingsRow } from "@/lib/social/digest";
 import { markDigestSent } from "@/lib/social/notification-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -37,18 +37,13 @@ const BATCH_SIZE = 200;
 const MAX_USERS_PER_RUN = 2_000;
 const MIN_HOURS_BETWEEN_DIGESTS = 20; // slightly under 24h so a daily cadence never drifts later each day
 
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 interface SettingsRow extends DigestSettingsRow {
   user_id: string;
 }
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

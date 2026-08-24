@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { cronAuthorized } from "@/lib/cron/auth";
 import { runStreakReminders } from "@/lib/streaks/reminders";
 
 export const runtime = "nodejs";
@@ -16,22 +16,18 @@ export const dynamic = "force-dynamic";
  * once-per-day guarantee comes from `last_reminder_date`, not from the
  * schedule. See lib/streaks/reminders.ts.
  *
- * Authorised exactly like every other cron here: a `CRON_SECRET` bearer token,
- * or an admin session for the manual "run now" case.
+ * Authorised exactly like every other cron here — see lib/cron/auth.ts: the
+ * `CRON_SECRET` env var, a database-backed token (`npm run cron:token`), or an
+ * admin session for the manual "run now" case.
  *
  * NOT registered in vercel.json — the Hobby plan's two-cron budget is already
  * spent by `trending` and `profile-snapshots` (same situation as
  * `wallpaper-reminder` and `digest`). Trigger it from whichever external
  * scheduler covers the other unregistered crons, hourly:  0 * * * *
  */
-async function authorized(request: Request): Promise<boolean> {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return !!(await getAdminUser());
-}
 
 async function run(request: Request) {
-  if (!(await authorized(request))) {
+  if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   return NextResponse.json(await runStreakReminders());

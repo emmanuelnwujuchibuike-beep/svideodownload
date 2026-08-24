@@ -1,0 +1,71 @@
+name: Cron - Streak reminders
+
+# Supplies the clock for app/api/cron/streak-reminders/route.ts.
+#
+# ── 🔴 WHY HOURLY, AND WHY NOT VERCEL ────────────────────────────────────────
+# "2 PM" is twenty-four different instants — one per timezone. A single daily
+# run at a fixed UTC hour reaches one band of the world and silently never
+# fires for everyone else. So this runs EVERY HOUR and the job itself asks,
+# per person, "is it past 14:00 where THEY are, and have they been here today?"
+# The once-per-day guarantee comes from `last_reminder_date` in the database,
+# never from the schedule — see lib/streaks/reminders.ts.
+#
+# Vercel cannot do this on the current plan: Hobby allows two cron jobs and
+# only DAILY schedules, and both slots are already spent by `trending` and
+# `profile-snapshots` in vercel.json. GitHub Actions is free for this repo and
+# is already the clock for two other routes (cron-digest.yml,
+# cron-wallpaper-reminder.yml), so this uses the same proven pattern rather
+# than introducing a third mechanism.
+#
+# ── 🔴 SCHEDULE IS PAUSED UNTIL `CRON_SECRET` EXISTS ─────────────────────────
+# Its two siblings are paused for exactly this reason: without the secret the
+# call 403s, and an hourly job that fails is 24 failure emails a day. Setting
+# the secret unblocks all three at once. To enable:
+#
+#   1. Generate one:            openssl rand -hex 32
+#   2. Vercel → Project → Settings → Environment Variables → add CRON_SECRET
+#      for Production, then REDEPLOY (env vars only apply to new deployments).
+#   3. GitHub → repo → Settings → Secrets and variables → Actions →
+#      New repository secret → name CRON_SECRET, same value.
+#   4. Uncomment the `schedule:` block below (and in the other two workflows).
+#
+# Verify before enabling: Actions → this workflow → "Run workflow"
+# (workflow_dispatch). A healthy run returns HTTP 200 with a JSON body like
+# {"ok":true,"candidates":N,"eligible":N,"sent":N}. `eligible: 0` outside
+# anyone's local afternoon is correct, not a failure.
+on:
+  # schedule:
+  #   - cron: "0 * * * *" # every hour, on the hour
+  workflow_dispatch: {}
+
+concurrency:
+  # Never let two sweeps overlap. The job claims `last_reminder_date` before it
+  # sends, so an overlap could not double-notify — but a queued second run is
+  # pure waste.
+  group: cron-streak-reminders
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/streak-reminders
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/streak-reminders"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — see the header of this workflow for setup steps."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::Streak-reminders cron returned HTTP $status"
+            exit 1
+          fi

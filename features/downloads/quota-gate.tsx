@@ -9,6 +9,8 @@ import type { BillingPlan } from "@/lib/monetization/types";
 import { upgradeCta } from "@/lib/monetization/upgrade-cta";
 import { formatBytes } from "@/lib/utils";
 
+import { Portal } from "@/components/ui/portal";
+
 /**
  * The storage gate.
  *
@@ -61,7 +63,11 @@ export function QuotaGate({
     };
   }, [open, onClose]);
 
+  /* Portalled: a `fixed inset-0` overlay is clipped to any transformed,
+     filtered or blurred ancestor, which several surfaces have. See
+     components/ui/portal.tsx for the full explanation. */
   return (
+    <Portal>
     <AnimatePresence>
       {open ? (
         <motion.div
@@ -156,5 +162,6 @@ export function QuotaGate({
         </motion.div>
       ) : null}
     </AnimatePresence>
+    </Portal>
   );
 }

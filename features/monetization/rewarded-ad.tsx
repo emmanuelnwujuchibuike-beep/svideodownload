@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
 
+import { Portal } from "@/components/ui/portal";
+
 function beacon(kind: "impression" | "click", adId: string) {
   navigator.sendBeacon?.(
     "/api/track",
@@ -157,7 +159,11 @@ export function RewardedAdGate({
     lastT.current = t;
   };
 
+  /* Portalled: a `fixed inset-0` overlay is clipped to any transformed,
+     filtered or blurred ancestor, which several surfaces have. See
+     components/ui/portal.tsx for the full explanation. */
   return (
+    <Portal>
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
@@ -324,5 +330,6 @@ export function RewardedAdGate({
         </motion.div>
       </motion.div>
     </AnimatePresence>
+    </Portal>
   );
 }

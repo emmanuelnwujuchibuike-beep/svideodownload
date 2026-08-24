@@ -12,6 +12,7 @@ import {
   type CreatorNotificationChannel,
   type CreatorNotificationPrefs,
 } from "@/lib/social/creator-notification-channels";
+import { Portal } from "@/components/ui/portal";
 import { cn } from "@/lib/utils";
 
 /**
@@ -92,7 +93,10 @@ export function CreatorNotificationsSheet({
     }
   };
 
+  /* Portalled — a `fixed inset-0` scrim is clipped to any transformed/blurred
+     ancestor, and a profile page has several. See components/ui/portal.tsx. */
   return (
+    <Portal>
     <div
       role="dialog"
       aria-modal="true"
@@ -173,5 +177,6 @@ export function CreatorNotificationsSheet({
         </p>
       </div>
     </div>
+    </Portal>
   );
 }

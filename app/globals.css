@@ -697,8 +697,27 @@
      column so the bottom nav showed through it. The `translate3d(...)` keyframes
      still GPU-promote the layer for the animation's duration, so the slide stays
      smooth without the hint. */
-  .page-transition-forward { animation: page-in-forward 520ms cubic-bezier(0.32, 0.72, 0, 1); }
-  .page-transition-back    { animation: page-in-back 520ms cubic-bezier(0.32, 0.72, 0, 1); }
+  /*
+     🔴 520ms → 300/260ms (owner, 2026-08-24: "the pages transition and
+     backswipe... is too heavy and feels slow... it should be exact like a
+     native fast app, without a delay").
+
+     This reverses the 2026-07-17 tuning quoted above, and the reason that
+     tuning went the wrong way is worth keeping: the complaint then was that
+     the slide was "not smooth", and duration was raised to fix it. Smoothness
+     and duration are different things — a long animation is not a smooth one,
+     it is a slow one, and half a second of movement between two pages that are
+     BOTH already rendered is pure waiting.
+
+     The real numbers: iOS UINavigationController pushes at ~350ms and pops
+     FASTER than it pushes, because a back navigation goes somewhere you have
+     already seen and does not need to be explained. 300/260 matches that
+     asymmetry. The curve keeps its iOS shape but sheds the long tail —
+     (0.32,0.72,0,1) spends its last third barely moving, which at 520ms is a
+     third of a second of almost-nothing that reads exactly as lag.
+  */
+  .page-transition-forward { animation: page-in-forward 300ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .page-transition-back    { animation: page-in-back 260ms cubic-bezier(0.22, 1, 0.36, 1); }
   /* Reduced motion: a quick fade instead of any slide. */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-forward,

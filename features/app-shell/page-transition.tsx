@@ -152,7 +152,13 @@ export function PageTransition({
      */
     if (typeof window === "undefined") {
       cls.current = "";
-      return <div className={`${wrapperClassName} ${cls.current}`}>{children}</div>;
+      return (
+    // `data-page-transition` is the handle EdgeSwipeBack grabs to move this
+    // wrapper with the finger — see edge-swipe-back.tsx. Nothing else reads it.
+    <div data-page-transition className={`${wrapperClassName} ${cls.current}`}>
+      {children}
+    </div>
+  );
     }
 
     // Maintain the stack even for no-slide routes so a LATER navigation still
@@ -172,5 +178,11 @@ export function PageTransition({
     }
   }
 
-  return <div className={`${wrapperClassName} ${cls.current}`}>{children}</div>;
+  return (
+    // `data-page-transition` is the handle EdgeSwipeBack grabs to move this
+    // wrapper with the finger — see edge-swipe-back.tsx. Nothing else reads it.
+    <div data-page-transition className={`${wrapperClassName} ${cls.current}`}>
+      {children}
+    </div>
+  );
 }

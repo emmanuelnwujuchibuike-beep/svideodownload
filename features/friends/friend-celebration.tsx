@@ -3,6 +3,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, PartyPopper, X } from "lucide-react";
 
+import { Portal } from "@/components/ui/portal";
+
 /**
  * Acceptance celebration (Friend Request spec): a glass card with a blue→purple
  * light burst and soft particles — "You and {name} are now friends" — with
@@ -19,7 +21,11 @@ export function FriendCelebration({
   onStartChat: () => void;
   onClose: () => void;
 }) {
+  /* Portalled: a `fixed inset-0` overlay is clipped to any transformed,
+     filtered or blurred ancestor, which several surfaces have. See
+     components/ui/portal.tsx for the full explanation. */
   return (
+    <Portal>
     <AnimatePresence>
       {open ? (
         <motion.div
@@ -107,6 +113,7 @@ export function FriendCelebration({
         </motion.div>
       ) : null}
     </AnimatePresence>
+    </Portal>
   );
 }
 

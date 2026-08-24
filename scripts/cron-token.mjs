@@ -40,53 +40,66 @@ const sha256 = (s) => createHash("sha256").update(s, "utf8").digest("hex");
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
 
-if (args.includes("--show")) {
-  const { data, error } = await db.from("settings").select("value").eq("key", KEY).maybeSingle();
-  if (error) {
-    console.error("Could not read settings:", error.message);
-    process.exit(1);
-  }
-  if (!data?.value?.sha256) {
-    console.log("No cron token configured. Run `npm run cron:token` to mint one.");
-  } else {
+/*
+ * Everything runs inside main() and returns an exit CODE rather than calling
+ * process.exit() mid-flight. Killing the process while the Supabase client
+ * still holds open libuv handles trips an assertion on Windows
+ * ("!(handle->flags & UV_HANDLE_CLOSING)") — harmless, but it prints after a
+ * successful run and reads like a failure.
+ */
+async function main() {
+  if (args.includes("--show")) {
+    const { data, error } = await db.from("settings").select("value").eq("key", KEY).maybeSingle();
+    if (error) {
+      console.error("Could not read settings:", error.message);
+      return 1;
+    }
+    if (!data?.value?.sha256) {
+      console.log("No cron token configured. Run `npm run cron:token` to mint one.");
+      return 0;
+    }
     // The digest is safe to show; it is not a credential.
-    console.log(`Configured. digest ${data.value.sha256.slice(0, 12)}…  set ${data.value.updated_at}`);
+    console.log(
+      `Configured. digest ${data.value.sha256.slice(0, 12)}…  set ${data.value.updated_at}`,
+    );
+    return 0;
   }
-  process.exit(0);
-}
 
-const supplied = args[0];
-if (supplied !== undefined && supplied.length < MIN_LENGTH) {
-  console.error(
-    `Refusing a ${supplied.length}-character token — lib/cron/auth.ts ignores anything ` +
-      `shorter than ${MIN_LENGTH}, so it would never authorise and the failure would ` +
-      `look exactly like a wrong value.`,
+  const supplied = args[0];
+  if (supplied !== undefined && supplied.length < MIN_LENGTH) {
+    console.error(
+      `Refusing a ${supplied.length}-character token — lib/cron/auth.ts ignores anything ` +
+        `shorter than ${MIN_LENGTH}, so it would never authorise and the failure would ` +
+        `look exactly like a wrong value.`,
+    );
+    return 1;
+  }
+
+  const token = supplied ?? randomBytes(32).toString("hex");
+
+  const { error } = await db.from("settings").upsert(
+    { key: KEY, value: { sha256: sha256(token), updated_at: new Date().toISOString() } },
+    { onConflict: "key" },
   );
-  process.exit(1);
-}
 
-const token = supplied ?? randomBytes(32).toString("hex");
+  if (error) {
+    console.error("Could not store the token:", error.message);
+    return 1;
+  }
 
-const { error } = await db
-  .from("settings")
-  .upsert({ key: KEY, value: { sha256: sha256(token), updated_at: new Date().toISOString() } }, {
-    onConflict: "key",
-  });
-
-if (error) {
-  console.error("Could not store the token:", error.message);
-  process.exit(1);
-}
-
-console.log("");
-console.log("  Cron token stored (only its SHA-256 digest is in the database).");
-console.log("");
-if (!supplied) {
-  console.log("  Copy this into the GitHub repo secret CRON_SECRET — it is shown once:");
   console.log("");
-  console.log(`      ${token}`);
+  console.log("  Cron token stored (only its SHA-256 digest is in the database).");
   console.log("");
+  if (!supplied) {
+    console.log("  Copy this into the GitHub repo secret CRON_SECRET — it is shown once:");
+    console.log("");
+    console.log(`      ${token}`);
+    console.log("");
+  }
+  console.log("  GitHub → Settings → Secrets and variables → Actions → CRON_SECRET");
+  console.log("  Then: Actions → any Cron workflow → Run workflow. Expect HTTP 200.");
+  console.log("");
+  return 0;
 }
-console.log("  GitHub → Settings → Secrets and variables → Actions → CRON_SECRET");
-console.log("  Then: Actions → any Cron workflow → Run workflow. Expect HTTP 200.");
-console.log("");
+
+process.exitCode = await main();

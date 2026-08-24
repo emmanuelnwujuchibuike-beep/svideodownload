@@ -113,6 +113,30 @@ export async function diagnoseEmail(): Promise<{
 }
 
 /**
+ * What actually became of an alert.
+ *
+ * 🔴 THIS USED TO RETURN `void`, AND THAT HID A REAL FAILURE. Resend was
+ * rejecting the admin digest (the default `onboarding@resend.dev` sender may
+ * only deliver to the Resend account owner's own address), but the cron route
+ * had no way to see it: `sendAdminAlertOnce` swallowed the outcome by design
+ * — "alerts must never throw into the caller" — so the digest reported
+ * `{"ok":true,"sent":["daily"]}` for an email that was never delivered.
+ *
+ * Not throwing is still right; a failed alert must not break the job that
+ * raised it. Reporting nothing is what was wrong. Callers may still ignore
+ * this value, but the ones that describe their own outcome must not.
+ */
+export type AlertOutcome =
+  /** Resend accepted it. */
+  | "sent"
+  /** Already alerted for this key — a legitimate skip, not a failure. */
+  | "duplicate"
+  /** Resend refused it, or the request failed. The dedupe lock was rolled back. */
+  | "rejected"
+  /** No API key or no recipients configured. */
+  | "disabled";
+
+/**
  * Sends an alert at most once per `dedupeKey`, using a unique row in
  * `admin_alerts` as the lock. If the email fails to send the lock row is
  * removed so the alert can be retried later. Safe under concurrency — only the
@@ -123,23 +147,26 @@ export async function sendAdminAlertOnce(
   kind: string,
   subject: string,
   html: string,
-): Promise<void> {
-  if (!alertsEnabled()) return;
+): Promise<AlertOutcome> {
+  if (!alertsEnabled()) return "disabled";
   try {
     const supabase = createAdminClient();
     const { error } = await supabase
       .from("admin_alerts")
       .insert({ key: dedupeKey, kind, subject });
     // Duplicate key (already alerted) or table missing → nothing to do.
-    if (error) return;
+    if (error) return "duplicate";
 
     const sent = await sendAdminEmail(subject, html);
     if (!sent) {
       // Roll back the lock so a later event can retry this alert.
       await supabase.from("admin_alerts").delete().eq("key", dedupeKey);
+      return "rejected";
     }
+    return "sent";
   } catch {
     /* alerts must never throw into the caller */
+    return "rejected";
   }
 }
 

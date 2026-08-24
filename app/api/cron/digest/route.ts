@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { cronAuthorized } from "@/lib/cron/auth";
 import { buildDigest, type DigestPeriod } from "@/lib/analytics/digest";
 import { digestEmailHtml, digestEmailSubject } from "@/lib/analytics/digest-email";
-import { alertsEnabled, sendAdminAlertOnce } from "@/lib/notify";
+import { alertsEnabled, sendAdminAlertOnce, type AlertOutcome } from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,9 +44,9 @@ function duePeriods(now: Date): DigestPeriod[] {
   return due;
 }
 
-async function sendOne(period: DigestPeriod, dateKey: string): Promise<void> {
+async function sendOne(period: DigestPeriod, dateKey: string): Promise<AlertOutcome> {
   const data = await buildDigest(period);
-  await sendAdminAlertOnce(`digest:${period}:${dateKey}`, "digest", digestEmailSubject(data), digestEmailHtml(data));
+  return sendAdminAlertOnce(`digest:${period}:${dateKey}`, "digest", digestEmailSubject(data), digestEmailHtml(data));
 }
 
 async function run(request: Request) {
@@ -61,17 +61,35 @@ async function run(request: Request) {
   const dateKey = now.toISOString().slice(0, 10);
   const periods = duePeriods(now);
 
+  /*
+    🔴 REPORT WHAT RESEND ACTUALLY DID. This used to push every period into
+    `sent` unless sendOne THREW — and sendAdminAlertOnce is documented never to
+    throw, so a rejected email reported {"ok":true,"sent":["daily"]} while the
+    admin dashboard's own test button correctly said Resend had refused it.
+    Two surfaces disagreeing about the same send is how a dead digest survives.
+  */
   const sent: DigestPeriod[] = [];
+  const duplicate: DigestPeriod[] = [];
+  const rejected: DigestPeriod[] = [];
   for (const period of periods) {
+    let outcome: AlertOutcome;
     try {
-      await sendOne(period, dateKey);
-      sent.push(period);
+      outcome = await sendOne(period, dateKey);
     } catch (err) {
       console.error(`[digest] ${period} digest failed:`, err);
+      outcome = "rejected";
     }
+    if (outcome === "sent") sent.push(period);
+    else if (outcome === "duplicate") duplicate.push(period);
+    else rejected.push(period);
   }
 
-  return NextResponse.json({ ok: true, sent });
+  return NextResponse.json({
+    ok: rejected.length === 0,
+    sent,
+    ...(duplicate.length ? { duplicate } : {}),
+    ...(rejected.length ? { rejected, hint: "Resend refused it — check ALERT_EMAIL_FROM is a verified sender, or that ALERT_EMAIL_TO is the Resend account's own address." } : {}),
+  });
 }
 
 export const GET = run; // Vercel/external cron uses GET

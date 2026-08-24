@@ -106,13 +106,34 @@ async function sendOnce(s: SubRow, body: string, topic: string | undefined): Pro
  * "Push delivery" monitor (features/admin/push-delivery-monitor.tsx).
  */
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+  return sendPushToIdentity({ kind: "user", id: userId }, payload);
+}
+
+/**
+ * The same delivery for an ANONYMOUS identity (streak reminders, 2026-08-24).
+ *
+ * 🔴 The sender is shared, not copied. Retry, 404/410 pruning and the
+ *  rows the admin monitor reads are non-trivial and hard-won;
+ * a second implementation for anonymous endpoints would be a second place for a
+ * stale endpoint to rot. Only the SELECT filter and the logged identity column
+ * differ.
+ */
+export async function sendPushToAnon(anonId: string, payload: PushPayload): Promise<void> {
+  return sendPushToIdentity({ kind: "anon", id: anonId }, payload);
+}
+
+type PushIdentity = { kind: "user" | "anon"; id: string };
+
+async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload): Promise<void> {
+  const userId = identity.kind === "user" ? identity.id : null;
+  const anonId = identity.kind === "anon" ? identity.id : null;
   if (!ensureConfigured()) return;
   try {
     const db = createAdminClient();
     const { data } = await db
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
-      .eq("user_id", userId);
+      .eq(identity.kind === "user" ? "user_id" : "anon_id", identity.id);
     const subs = (data as SubRow[]) ?? [];
     if (subs.length === 0) return;
 
@@ -122,7 +143,8 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     const body = JSON.stringify(deliverable);
     const dead: string[] = [];
     const logRows: {
-      user_id: string;
+      user_id: string | null;
+      anon_id: string | null;
       subscription_id: string;
       tag: string | null;
       status: "sent" | "retried" | "failed" | "pruned";
@@ -146,21 +168,22 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       subs.map(async (s) => {
         const first = await sendOnce(s, body, topic);
         if (first.ok) {
-          logRows.push({ user_id: userId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
+          logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
           return;
         }
         if (first.code === 404 || first.code === 410) {
           dead.push(s.id); // gone — prune it, no retry
-          logRows.push({ user_id: userId, subscription_id: s.id, tag, status: "pruned", status_code: first.code, error: first.message ?? null, attempt: 1 });
+          logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "pruned", status_code: first.code, error: first.message ?? null, attempt: 1 });
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 400));
         const retry = await sendOnce(s, body, topic);
         if (retry.ok) {
-          logRows.push({ user_id: userId, subscription_id: s.id, tag, status: "retried", status_code: 201, error: null, attempt: 2 });
+          logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "retried", status_code: 201, error: null, attempt: 2 });
         } else {
           logRows.push({
             user_id: userId,
+            anon_id: anonId,
             subscription_id: s.id,
             tag,
             status: "failed",

@@ -31,6 +31,7 @@ import type { TopContent } from "@/features/profile/identity-analytics";
 import { notificationsToActivity } from "@/features/profile/activity-map";
 import { listNotifications } from "@/lib/social/notifications";
 import { ProfileSections } from "@/features/profile/profile-sections";
+import { StreakProfileCard } from "@/features/streaks/streak-profile-card";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
 import { friendIdSet } from "@/lib/social/friend-ids";
@@ -1127,6 +1128,25 @@ async function ProfileData({
               </div>
             </div>
 
+            {/*
+              Daily streak — OWNER ONLY.
+
+              A streak is personal: the RLS policy in migration 0130 lets you
+              read your own row and nobody else's, and `useStreak()` reads the
+              VIEWER's streak — so rendering this on a visitor's view would
+              show them their own number under someone else's name. Gated on
+              `profile.isOwner` so it can only ever appear on your own profile.
+
+              🔴 It DISPLAYS ONLY. Opening a profile never replays the
+              celebration — that is raised solely by StreakTracker, from the
+              server's `shouldCelebrate`, which is already false once the day
+              has been marked. This component has no path to it.
+            */}
+            {profile.isOwner ? (
+              <div className="mt-6 px-4 sm:px-6">
+                <StreakProfileCard />
+              </div>
+            ) : null}
             {/* Content sections — fetched once, switched instantly client-side.
                 Hidden entirely for private accounts. */}
             {!profile.restricted ? (

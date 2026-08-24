@@ -320,6 +320,15 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational", "event-log"],
   },
   {
+    id: "streaks",
+    name: "Streaks",
+    owner: "lib/streaks",
+    description:
+      "Daily-activity streaks for BOTH accounts and anonymous browser identities. `streaks` holds one row per identity (exactly one of user_id/anon_id, enforced by a CHECK); `streak_daily_activity` is the per-day ledger whose composite primary key is what makes crediting idempotent across tabs and devices.",
+    tables: ["streaks", "streak_daily_activity"],
+    storage: ["relational"],
+  },
+  {
     id: "configuration",
     name: "Configuration",
     owner: "lib/platform",

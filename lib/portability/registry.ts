@@ -186,6 +186,14 @@ export const PORTABILITY: PortabilitySpec[] = [
     retention: "Settings persist; delivery history is short-lived.",
   },
   {
+    domain: "streaks",
+    dataClass: "personal",
+    holds: "Your daily streak — the current and longest run, the days you were active, and your timezone.",
+    purpose: "To count consecutive days you have opened Frenzsave, and to remind you before a streak lapses.",
+    retention:
+      "Kept while the account exists. A streak that was built anonymously belongs to a browser cookie rather than to a person, and becomes part of your account only if you sign in on that browser.",
+  },
+  {
     domain: "content",
     dataClass: "operational",
     holds: "The published help, guides and knowledge base.",

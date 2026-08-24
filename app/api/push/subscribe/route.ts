@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { readAnonId } from "@/lib/streaks/identity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,22 @@ export async function POST(request: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+  /*
+    🔴 ANONYMOUS BROWSERS MAY SUBSCRIBE TOO (streaks, 2026-08-24).
+
+    An installed PWA that has never signed in is exactly the visitor the streak
+    reminder exists for, and until now this route turned them away with a 401.
+    They register against their httpOnly streak identity instead — the same
+    cookie the streak engine already treats as authoritative — so a subscription
+    always belongs to precisely one identity (enforced by a CHECK in 0130).
+
+    A visitor with NEITHER is still rejected: without an identity there would be
+    nothing to address a push to.
+  */
+  const anonId = user ? null : readAnonId(request);
+  if (!user && !anonId) {
+    return NextResponse.json({ error: "No streak identity." }, { status: 401 });
+  }
 
   let json: unknown;
   try {
@@ -36,7 +52,8 @@ export async function POST(request: Request) {
   // previous account on this browser), so an RLS upsert would 500 on re-subscribe.
   const { error } = await createAdminClient().from("push_subscriptions").upsert(
     {
-      user_id: user.id,
+      user_id: user?.id ?? null,
+      anon_id: anonId,
       endpoint,
       p256dh: keys.p256dh,
       auth: keys.auth,

@@ -62,6 +62,13 @@ export const NOT_EXPORTED: Record<string, string> = {
   asset_usage: "Links assets to places they appear. Not personal data.",
   post_media: "Attachments belonging to a post; the post itself is exported.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
+  /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —
+     the same shape as `post_media` above. The streak itself IS exported, and it
+     carries the summary these rows produce (current run, longest run, total
+     active days, start date). Their remaining purpose is idempotency: the
+     composite primary key is what stops a day being credited twice. */
+  streak_daily_activity:
+    "Per-day credit ledger belonging to a streak; the streak itself is exported, including the totals these rows produce.",
   collection_items: "Membership rows for a collection; the collection is exported.",
   gateway_config: "Payment gateway configuration. Operational, not personal.",
   notification_broadcasts: "Announcements sent to everyone. Not about you.",
@@ -205,6 +212,13 @@ export const OWNER_COLUMN: Record<string, string> = {
   creator_notification_prefs: "viewer_id",
   push_subscriptions: "user_id",
   push_delivery_log: "user_id",
+
+  /* streaks */
+  /* Keyed on `user_id`, which also means an ANONYMOUS streak is not exportable
+     — correctly so: an anonymous row is addressed only by an httpOnly cookie,
+     and there is no verified person to hand it to. It becomes exportable the
+     moment it is merged into an account (lib/streaks/engine.ts). */
+  streaks: "user_id",
 
   /* learning */
   learning_progress: "user_id",

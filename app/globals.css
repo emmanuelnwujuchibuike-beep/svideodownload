@@ -2119,3 +2119,74 @@ body:has(.frenz-canvas-page) {
     -webkit-user-drag: auto;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STREAKS — 2026-08-24
+   ═══════════════════════════════════════════════════════════════════════════
+
+   🔴 CSS ONLY. No animation library, no Lottie, no GIF, no canvas. The landing
+   page has a 1.6s LCP target and a 270 kB budget, and a streak flame is not
+   allowed to spend either. Everything below is `transform`/`opacity` on a
+   handful of small elements, which the compositor handles without a main-thread
+   frame — the same discipline `.attract-loop` above already follows.
+
+   🔴 THE PERSISTENT FLAME IS DELIBERATELY TINY. It is a 2-property keyframe on
+   one ~16px glyph. No animated blur, no box-shadow animation, no particles:
+   those are the effects that heat a cheap Android in a scrolling list.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* The hero chip's flame: a slow, shallow breath. Barely noticeable by design —
+   "subtle premium", not a dancing icon. */
+@keyframes frenz-flame {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50%      { transform: scale(1.09) translateY(-1px); }
+}
+
+.streak-flame {
+  animation: frenz-flame 2.6s ease-in-out infinite;
+  transform-origin: 50% 85%;
+  /* Promotes once rather than every cycle, and bounded to one small glyph. */
+  will-change: transform;
+}
+
+/* ── The once-a-day celebration ──────────────────────────────────────────────
+   Three staggered entrances on three elements. No confetti and no particle
+   system (§29): the premium reading comes from timing and easing, not volume. */
+@keyframes frenz-streak-in {
+  from { opacity: 0; transform: scale(0.86) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes frenz-streak-flare {
+  0%   { opacity: 0; transform: scale(0.6); }
+  45%  { opacity: 0.55; transform: scale(1.05); }
+  100% { opacity: 0.3; transform: scale(1); }
+}
+@keyframes frenz-streak-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.streak-celebration-scrim { animation: frenz-streak-fade 220ms var(--ease-out) both; }
+.streak-celebration-flare { animation: frenz-streak-flare 900ms var(--ease-out) both; }
+.streak-celebration-mark  { animation: frenz-streak-in 520ms var(--ease-spring) 80ms both; }
+.streak-celebration-count { animation: frenz-streak-in 520ms var(--ease-spring) 180ms both; }
+.streak-celebration-sub   { animation: frenz-streak-in 420ms var(--ease-out) 300ms both; }
+
+/*
+  🔴 Honour the OS setting (§22). Reduced motion removes the MOVEMENT and keeps
+  the MEANING: the flame, the number and the words all still render, they simply
+  arrive as a plain fade. A streak must never be communicated by animation
+  alone, which is why every one of these elements carries its own text.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .streak-flame {
+    animation: none;
+    will-change: auto;
+  }
+  .streak-celebration-flare,
+  .streak-celebration-mark,
+  .streak-celebration-count,
+  .streak-celebration-sub {
+    animation: frenz-streak-fade 200ms linear both;
+  }
+}

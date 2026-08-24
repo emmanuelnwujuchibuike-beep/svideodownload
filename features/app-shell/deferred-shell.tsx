@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { MediaProtection } from "@/features/media/media-protection";
+import { StreakTracker } from "@/features/streaks/streak-tracker";
 
 /**
  * The app-wide islands that do NOT need to exist during the first hydration
@@ -118,6 +119,15 @@ export function DeferredShell() {
         DOM tree — only `contextmenu` and `dragstart`.
       */}
       <MediaProtection />
+      {/*
+        Daily streak: records today's activity once per page open and raises
+        the celebration when the SERVER says to. Mounted here so landing,
+        download, wallpapers, feed and profile all credit the same day through
+        one call, two frames after first paint — it can never compete with LCP,
+        hero rendering or PWA startup. The celebration itself is code-split and
+        only fetched on the one day a year it plays.
+      */}
+      <StreakTracker />
       <CommandCenterMount />
       <RegisterServiceWorker />
       <GlobalErrorCapture />

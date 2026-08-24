@@ -118,6 +118,32 @@ export const FLAGS: FeatureFlag[] = [
     clientReadable: true,
     consumer: "client via useFlag('smart-assistant-widget') — widget re-mount pending",
   },
+  {
+    /*
+      The streak system's kill switch (brief §21). ON by default because the
+      feature ships enabled; the point of the flag is that it can be turned OFF
+      without deleting anyone's streak — every route reads it and degrades to a
+      neutral state, so the tables keep their data and flipping it back restores
+      every user exactly where they were.
+    */
+    id: "streak-system",
+    label: "Daily streaks",
+    description:
+      "Records daily activity and shows the streak chip, celebration and profile card. OFF makes every streak route return a neutral state — no recording, no UI — WITHOUT touching stored streaks.",
+    category: "product",
+    defaultEnabled: true,
+    consumer: "server — app/api/streak/* via isEnabled()",
+  },
+  {
+    id: "streak-notifications",
+    label: "Streak reminders",
+    description:
+      "The 2pm 'don't lose your streak' push. OFF stops the scheduled job sending, and nothing else — streaks keep accruing. Requires streak-system.",
+    category: "product",
+    defaultEnabled: true,
+    requires: "streak-system",
+    consumer: "server — app/api/cron/streak-reminders",
+  },
 ];
 
 /* --------------------------------- resolve --------------------------------- */

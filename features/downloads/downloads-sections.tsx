@@ -26,6 +26,7 @@ import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
+import { StreakHeroIndicator } from "@/features/streaks/streak-hero-indicator";
 
 /**
  * The download page's sections, built to the owner's reference
@@ -97,12 +98,27 @@ export function DownloadsHero() {
             Download from the platforms you already use, then share, connect and explore — all in{" "}
             <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>
-          <div className="mt-4 inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
-            <Pill icon={Zap} label="Fast" />
-            <Divider />
-            <Pill icon={Lock} label="Secure" />
-            <Divider />
-            <Pill icon={Shield} label="Private" />
+          {/*
+            The trust pills and the streak chip share one row.
+
+            🔴 The chip sits BESIDE the pills, not inside their plate, and it
+            renders `null` whenever there is no streak — so this hero is
+            byte-for-byte what it was before for a first-time visitor, and the
+            H1 above (the LCP element) is untouched either way. A returning
+            visitor's chip paints in the first client render from a display
+            cache, so it never arrives late and shifts this row. See
+            StreakHeroIndicator for why that matters on a page with a 1.6s LCP
+            target.
+          */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
+              <Pill icon={Zap} label="Fast" />
+              <Divider />
+              <Pill icon={Lock} label="Secure" />
+              <Divider />
+              <Pill icon={Shield} label="Private" />
+            </span>
+            <StreakHeroIndicator />
           </div>
         </div>
 

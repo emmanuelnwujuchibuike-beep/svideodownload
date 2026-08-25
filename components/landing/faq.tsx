@@ -27,7 +27,7 @@ const FAQS: { q: string; a: string }[] = [
       against — a claim of bypassing someone else's privacy, which this
       product does not do and never has.
     */
-    a: "TikTok, Instagram, YouTube, Telegram, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads — including Stories, and, if you sign in with your own Telegram account, the channels and chats you're already a member of there.",
+    a: "TikTok, Instagram, Telegram, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads — including Stories, and, if you sign in with your own Telegram account, the channels and chats you're already a member of there.",
   },
   {
     q: "Can I download just the audio (MP3)?",

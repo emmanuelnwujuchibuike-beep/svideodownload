@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
  */
 
 /** Recognisable, well-spread brands — the product's flagship sources. */
-const RING: PlatformId[] = ["tiktok", "instagram", "youtube", "snapchat", "facebook", "twitter"];
+const RING: PlatformId[] = ["tiktok", "instagram", "linkedin", "snapchat", "facebook", "twitter"];
 
 /** Even placement around the circle, top-first. Radius is a % of the box. */
 function ringPosition(index: number, count: number): { left: string; top: string } {

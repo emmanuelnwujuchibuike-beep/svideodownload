@@ -128,9 +128,20 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
   },
 };
 
-/** Ordered list for UI rendering (flagship first, generic excluded). */
+/**
+ * Ordered list for UI rendering (flagship first, generic excluded).
+ *
+ * `youtube` is excluded here too (2026-08-25) — not from `PLATFORMS` itself,
+ * so `detectPlatform` below still recognizes a pasted youtube.com/youtu.be
+ * link and the generic downloader keeps working for it. This list is what
+ * every LANDING/marketing surface renders from (platform-showcase,
+ * supported-platforms, etc.), and AdSense rejected the site as "low value
+ * content" twice with the owner's read being a YouTube-branded downloader
+ * specifically triggers it — so YouTube is a supported-but-unpromoted
+ * platform now, the same way `generic` always has been.
+ */
 export const SHOWCASE_PLATFORMS: Platform[] = Object.values(PLATFORMS).filter(
-  (p) => p.id !== "generic",
+  (p) => p.id !== "generic" && p.id !== "youtube",
 );
 
 function normalizeHost(host: string): string {

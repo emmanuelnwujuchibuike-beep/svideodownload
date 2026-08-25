@@ -19,13 +19,13 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "Blog — Video Downloading Guides & Tips",
   description:
-    "Guides on downloading videos from TikTok, Instagram, YouTube and more — safely, in HD, on any device.",
+    "Guides on downloading videos from TikTok, Instagram, LinkedIn and more — safely, in HD, on any device.",
   alternates: { canonical: "/blog" },
   openGraph: {
     type: "website",
     title: "FrenzSave Blog — Downloading Guides",
     description:
-      "How-to guides for downloading videos from TikTok, Instagram, YouTube and more.",
+      "How-to guides for downloading videos from TikTok, Instagram, LinkedIn and more.",
   },
 };
 

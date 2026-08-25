@@ -57,7 +57,10 @@ export const SUPPORTED_PLATFORMS: PlatformId[] = [
   "instagram",
   "facebook",
   "pinterest",
-  "youtube",
+  // youtube swapped for linkedin 2026-08-25 — AdSense "low value content"
+  // rejection, twice; the owner's read is a YouTube-branded downloader is
+  // the trigger. See config/seoPages.ts's removal note for the full picture.
+  "linkedin",
   "telegram",
 ];
 

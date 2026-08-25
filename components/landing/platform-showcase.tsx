@@ -14,7 +14,6 @@ import type { PlatformId } from "@/types";
  */
 const LABEL_OVERRIDES: Partial<Record<PlatformId, string>> = {
   twitter: "X (Twitter)",
-  youtube: "YouTube Shorts",
 };
 
 export function PlatformShowcase() {

@@ -29,8 +29,16 @@ import type { PlatformId } from "@/types";
  * It is the yt-dlp catch-all for every site with no dedicated extractor, not a
  * platform anybody recognises. "Other sites: partly working" would be true of
  * the internet on any given day and tells a visitor nothing.
+ *
+ * ── `youtube` is excluded too (2026-08-25) ──────────────────────────────────
+ * Same reasoning as `SHOWCASE_PLATFORMS` in lib/platforms.ts: YouTube is
+ * unpromoted across every marketing/landing surface after two AdSense
+ * "low value content" rejections, so a status badge for it has nothing left
+ * to badge — its logo doesn't appear anywhere this editor's own status dot
+ * would be read next to. Detection/download still works for a pasted
+ * youtube.com link either way; this panel only controls the visible badge.
  */
-const EDITABLE = (Object.keys(PLATFORMS) as PlatformId[]).filter((id) => id !== "generic");
+const EDITABLE = (Object.keys(PLATFORMS) as PlatformId[]).filter((id) => id !== "generic" && id !== "youtube");
 
 const OPTIONS: PlatformStatus[] = ["operational", "partial", "down"];
 

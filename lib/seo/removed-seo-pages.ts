@@ -63,6 +63,28 @@ const CLUSTERS: { stem: string; primary: string; had: readonly (typeof MERGED_MO
   { stem: "telegram", primary: "telegram-video-downloader", had: MERGED_MODIFIER_SLUGS },
 ];
 
-export const REMOVED_SEO_PAGES: RemovedSeoPage[] = CLUSTERS.flatMap(({ stem, primary, had }) =>
-  had.map((modifierSlug) => ({ from: `${stem}-${modifierSlug}`, to: primary })),
-);
+/**
+ * Round 2 (2026-08-25): the entire `youtube` CLUSTER was removed from
+ * config/seoPages.ts — not just its merged modifiers like round 1 above, all
+ * five of its pages. AdSense rejected the site as "low value content" twice;
+ * the owner's read is that a YouTube-branded downloader specifically is the
+ * trigger (YouTube's own ToS/AdSense's own policy are unusually strict about
+ * third-party YouTube downloaders), so every youtube-* page redirects to
+ * LinkedIn's — the platform the owner is promoting in its place. These don't
+ * fit the CLUSTERS/MERGED_MODIFIER_SLUGS shape above (that models six
+ * specific merged modifiers a cluster KEPT other pages for; this is a whole
+ * cluster gone), so they're listed directly instead of forcing the generator
+ * to express a different kind of removal.
+ */
+const YOUTUBE_CLUSTER_REMOVED: RemovedSeoPage[] = [
+  "youtube-shorts-downloader",
+  "youtube-video-downloader",
+  "youtube-to-mp3-converter",
+  "youtube-thumbnail-downloader",
+  "youtube-1080p-downloader",
+].map((from) => ({ from, to: "linkedin-video-downloader" }));
+
+export const REMOVED_SEO_PAGES: RemovedSeoPage[] = [
+  ...CLUSTERS.flatMap(({ stem, primary, had }) => had.map((modifierSlug) => ({ from: `${stem}-${modifierSlug}`, to: primary }))),
+  ...YOUTUBE_CLUSTER_REMOVED,
+];

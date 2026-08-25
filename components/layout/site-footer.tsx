@@ -1,4 +1,4 @@
-import { Facebook, Instagram, Send, Youtube } from "lucide-react";
+import { Facebook, Instagram, Send } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -19,7 +19,6 @@ import { SecretAdminGesture } from "@/features/account/secret-admin";
 const SOCIALS: { label: string; href: string; icon: typeof Facebook }[] = [
   { label: "Facebook", href: "", icon: Facebook },
   { label: "Instagram", href: "", icon: Instagram },
-  { label: "YouTube", href: "", icon: Youtube },
 ].filter((s) => s.href.length > 0);
 
 /**

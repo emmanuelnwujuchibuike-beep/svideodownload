@@ -33,7 +33,7 @@ export function DownloadDisclaimer({
   const COPY = (
     <>
       Frenzsave is an independent service and is not affiliated with, endorsed by, or
-      sponsored by TikTok, Instagram, YouTube, Snapchat, Facebook, X, or Google. All
+      sponsored by TikTok, Instagram, LinkedIn, Snapchat, Facebook, or X. All
       trademarks and logos are the property of their respective owners.
     </>
   );

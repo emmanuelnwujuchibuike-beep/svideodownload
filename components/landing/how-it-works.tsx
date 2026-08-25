@@ -23,7 +23,7 @@ const NOTES = [
 ];
 
 const GRID_PLATFORMS: PlatformId[] = [
-  "tiktok", "instagram", "facebook", "twitter", "youtube", "telegram", "pinterest",
+  "tiktok", "instagram", "facebook", "twitter", "telegram", "pinterest",
   "snapchat", "reddit", "vimeo", "threads", "linkedin",
 ];
 

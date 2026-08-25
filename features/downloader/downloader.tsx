@@ -78,7 +78,7 @@ const PLACEHOLDER_PLATFORMS = [
   "Instagram",
   "X (Twitter)",
   "Snapchat",
-  "YouTube",
+  "LinkedIn",
   "Facebook",
   "Pinterest",
 ];

@@ -46,7 +46,7 @@ export const BLOG_POSTS: BlogPost[] = [
       {
         heading: "Why download without a watermark?",
         paragraphs: [
-          "A watermark-free copy looks professional and is far more useful. Creators repurpose clips across Instagram Reels, YouTube Shorts and X without a competing username stamped on top. Editors get a clean canvas. And anyone archiving favourite videos keeps the original framing intact.",
+          "A watermark-free copy looks professional and is far more useful. Creators repurpose clips across Instagram Reels, LinkedIn and X without a competing username stamped on top. Editors get a clean canvas. And anyone archiving favourite videos keeps the original framing intact.",
           "Screen recording can't match this — it lowers quality, captures your notifications, and still includes the watermark. Downloading the real source file keeps full resolution and audio.",
         ],
       },
@@ -142,37 +142,37 @@ export const BLOG_POSTS: BlogPost[] = [
     ],
   },
   {
-    slug: "how-to-download-youtube-shorts",
-    title: "How to Download YouTube Shorts (HD & MP3) in 2026",
+    slug: "how-to-download-linkedin-videos",
+    title: "How to Download LinkedIn Videos (HD & MP3) in 2026",
     description:
-      "Save YouTube Shorts as HD MP4 or convert them to MP3 — free, on iPhone, Android and PC, with no app to install.",
-    date: "2026-06-16",
+      "Save public LinkedIn video posts as HD MP4 or convert them to MP3 — free, on iPhone, Android and PC, with no app to install.",
+    date: "2026-08-25",
     readingMinutes: 4,
-    toolSlug: "youtube-shorts-downloader",
+    toolSlug: "linkedin-video-downloader",
     body: [
       {
         paragraphs: [
-          "YouTube Shorts are quick to watch but there's no built-in download button. Whether you want to watch offline, save your own Short, or grab the audio, here's the simplest way to download YouTube Shorts in 2026.",
+          "LinkedIn doesn't give you a native way to save a video post — no download button, no share-to-file option. Whether it's a talk, a demo or a case study you want to reference offline, here's the simplest way to download a LinkedIn video in 2026.",
         ],
       },
       {
-        heading: "Download a Short in 3 steps",
+        heading: "Download a LinkedIn video in 3 steps",
         bullets: [
-          "Open the Short and tap Share → Copy link.",
-          "Paste it into our YouTube Shorts downloader.",
+          "Open the post and copy its link (the ••• menu → Copy link to post).",
+          "Paste it into our LinkedIn video downloader.",
           "Choose HD video or MP3 audio — the file saves to your device.",
         ],
       },
       {
         heading: "Video or MP3?",
         paragraphs: [
-          "Pick MP4 video to keep the full clip, or MP3 if you only want the sound — handy for music, voiceovers or sound effects. You can choose the resolution up to the highest the Short was uploaded in.",
+          "Pick MP4 video to keep the full clip for reference or reposting, or MP3 if you only need the audio — handy for a talk or panel you'd rather listen back to. You get the original quality, no re-encoding.",
         ],
       },
       {
         heading: "Does it work on iPhone?",
         paragraphs: [
-          "Yes. It runs in Safari or Chrome with no app, and the file saves to Files or Photos. The same link works on Android and desktop too.",
+          "Yes. It runs in Safari or Chrome with no app, and the file saves to Files or Photos. The same link works on Android and desktop too — and no LinkedIn login is required for public posts.",
         ],
       },
     ],

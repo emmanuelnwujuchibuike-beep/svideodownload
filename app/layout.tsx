@@ -95,7 +95,7 @@ export const metadata: Metadata = {
     "no watermark",
     "video downloader",
     "instagram downloader",
-    "youtube downloader",
+    "linkedin downloader",
     "mp4 download",
     "mp3 download",
   ],
@@ -287,7 +287,7 @@ const webApplicationLd = {
   operatingSystem: "Web",
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   description:
-    "Watermark-free video downloader for TikTok, Instagram, YouTube and more.",
+    "Watermark-free video downloader for TikTok, Instagram, LinkedIn and more.",
 };
 
 export default function RootLayout({

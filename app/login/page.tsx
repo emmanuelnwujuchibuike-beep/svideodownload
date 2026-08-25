@@ -100,7 +100,7 @@ export default async function LoginPage({
           */}
           <p className="mt-5 text-pretty text-center text-[10px] leading-[1.5] text-muted-foreground/60">
             Frenzsave is an independent service and is not affiliated with, endorsed by, or
-            sponsored by TikTok, Instagram, YouTube, Snapchat, Facebook, X, or Google. All
+            sponsored by TikTok, Instagram, LinkedIn, Snapchat, Facebook, or X. All
             trademarks and logos are the property of their respective owners.
           </p>
         </div>

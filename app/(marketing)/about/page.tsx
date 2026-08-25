@@ -14,7 +14,7 @@ export const dynamic = "force-static";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "FrenzSave is a fast, private, watermark-free downloader for TikTok, Instagram, YouTube, X, Facebook and more.",
+    "FrenzSave is a fast, private, watermark-free downloader for TikTok, Instagram, LinkedIn, X, Facebook and more.",
   alternates: { canonical: "/about" },
 };
 
@@ -49,9 +49,9 @@ export default function AboutPage() {
 
       <h2>Built for every platform</h2>
       <p>
-        From TikTok, Instagram, and YouTube to X, Facebook, Pinterest, Vimeo,
-        Reddit, LinkedIn and Threads — FrenzSave supports the platforms you
-        actually use, with audio extraction and quality selection built in.
+        From TikTok and Instagram to X, Facebook, Pinterest, Vimeo, Reddit,
+        LinkedIn and Threads — FrenzSave supports the platforms you actually
+        use, with audio extraction and quality selection built in.
       </p>
 
       <h2>What&apos;s next</h2>

@@ -423,96 +423,20 @@ export const CLUSTERS: SeoCluster[] = [
       },
     ],
   },
-  {
-    id: "youtube",
-    platformId: "youtube",
-    brand: "YouTube",
-    thing: "videos",
-    stem: "youtube",
-    intros: [
-      "Save YouTube videos and Shorts in HD, or convert them to MP3 — no app, no sign-in.",
-      "Paste a YouTube link, pick a quality up to 4K, and download in seconds.",
-      "The easy way to keep YouTube content offline, on any device.",
-    ],
-    facts: [
-      "Choose exactly the resolution you want, from compact mobile sizes up to Full HD and 4K where the source provides it — great for watching offline or repurposing clips.",
-      "Audio-only is one tap away: convert any video or Short to a clean MP3 for music, podcasts or voiceovers.",
-      "It runs in any browser on iPhone, Android, Windows, Mac and Linux, with fast server-side processing even for high-resolution videos.",
-    ],
-    baseBenefits: [
-      { title: "Up to 4K", text: "Pick any quality the source offers, from 360p to HD and 4K." },
-      { title: "MP3 conversion", text: "Turn any video or Short into a clean MP3 in one tap." },
-      { title: "No sign-in", text: "Download public videos without a Google account." },
-    ],
-    baseFaqs: [
-      { q: "Is the YouTube downloader free?", a: "Yes — completely free with no limits or account." },
-      { q: "What quality can I download?", a: "Up to the highest the source offers, including HD and 4K. You choose the resolution first." },
-      { q: "Does it work on iPhone and Android?", a: "Yes — directly in your mobile browser, no app required." },
-      { q: "Do I need to install software?", a: "No. Everything happens online in your browser." },
-      { q: "Is it safe?", a: "Yes — no logins, no stored files and encrypted downloads." },
-    ],
-    modifiers: [
-      {
-        slug: "shorts-downloader",
-        title: "YouTube Shorts Downloader (HD MP4 / MP3)",
-        keyword: "YouTube Shorts downloader",
-        thing: "Shorts",
-        h1: "YouTube Shorts Downloader — HD MP4 & MP3",
-        tagline: "Download YouTube Shorts in HD — free and instant.",
-        angle:
-          "Our YouTube Shorts downloader saves Shorts as HD MP4 files or converts them to MP3 audio. Paste the Short's URL, pick a quality, and download — no app and no sign-in. It's perfect for saving short-form clips to watch offline or repurpose.",
-        benefit: { title: "Shorts & long-form", text: "Works for both YouTube Shorts and standard videos." },
-        faqs: [{ q: "Can I convert YouTube Shorts to MP3?", a: "Yes — choose the Audio (MP3) option to save just the sound." }],
-        secondary: ["download youtube shorts", "shorts to mp4", "youtube shorts saver"],
-      },
-      {
-        slug: "video-downloader",
-        title: "YouTube Video Downloader (HD)",
-        keyword: "YouTube video downloader",
-        tagline: "Download YouTube videos in HD or 4K — free.",
-        angle:
-          "Save full-length YouTube videos as HD MP4 files in the resolution you choose, up to 4K. Whether it's a tutorial to watch offline or your own upload to archive, you get a clean file with no sign-in and nothing to install.",
-        benefit: { title: "Any resolution", text: "From 360p to 4K — you pick before downloading." },
-        faqs: [{ q: "Can I download full YouTube videos?", a: "Yes — paste the video link and choose a quality up to 4K where available." }],
-        secondary: ["download youtube video", "youtube to mp4", "save youtube video"],
-      },
-      {
-        slug: "to-mp3-converter",
-        title: "YouTube to MP3 Converter (320kbps)",
-        keyword: "YouTube to MP3",
-        thing: "audio",
-        tagline: "Convert YouTube videos and Shorts to MP3 — free.",
-        angle:
-          "Turn any YouTube video or Short into a clean MP3 with our converter. It's ideal for music, podcasts, lectures or voiceovers you want offline. Paste the link, choose audio, and the MP3 downloads in seconds — no app, no account.",
-        benefit: { title: "High-quality audio", text: "Extracts a clean MP3 at the best available bitrate." },
-        faqs: [{ q: "How do I convert YouTube to MP3?", a: "Paste the video link and choose the Audio (MP3) option to download the audio." }],
-        secondary: ["youtube mp3 converter", "youtube music download", "yt to mp3"],
-      },
-      {
-        slug: "thumbnail-downloader",
-        title: "YouTube Thumbnail Downloader (HD)",
-        keyword: "YouTube thumbnail downloader",
-        thing: "thumbnails",
-        tagline: "Download any YouTube video's thumbnail in full HD.",
-        angle:
-          "Grab the full-resolution thumbnail image from any YouTube video or Short. It's useful for research, references or designing your own thumbnails. Paste the video link and save the HD cover image — free and instant.",
-        benefit: { title: "Full-HD cover", text: "Saves the highest-resolution thumbnail available." },
-        faqs: [{ q: "How do I download a YouTube thumbnail?", a: "Paste the video link and the HD thumbnail image is available to save." }],
-        secondary: ["youtube thumbnail grabber", "download youtube cover image", "yt thumbnail hd"],
-      },
-      {
-        slug: "1080p-downloader",
-        title: "YouTube 1080p Downloader (Full HD)",
-        keyword: "YouTube 1080p downloader",
-        tagline: "Download YouTube videos in Full HD 1080p.",
-        angle:
-          "Want crisp Full HD? This downloader saves YouTube videos and Shorts in 1080p where the source allows, giving you a sharp, high-quality file without re-encoding. Choose 1080p from the quality list and download straight to your device.",
-        benefit: { title: "True 1080p", text: "Saves Full HD where the original supports it." },
-        faqs: [{ q: "Can I download YouTube in 1080p?", a: "Yes — pick the 1080p option in the quality list when the source offers it." }],
-        secondary: ["youtube full hd download", "download youtube 1080p", "youtube hd video download"],
-      },
-    ],
-  },
+  /*
+    🔴 YOUTUBE CLUSTER REMOVED HERE 2026-08-25 (AdSense "Low value content"
+    rejection — the owner's read, after two rejections, is that a
+    YouTube-branded downloader specifically is the trigger: YouTube's own
+    ToS and AdSense policy are markedly stricter about third-party YouTube
+    download tools than about the other platforms this app supports. All 5
+    pages (shorts/video/mp3/thumbnail/1080p downloader) are gone; each
+    301-redirects to linkedin-video-downloader (next.config.ts /
+    lib/seo/removed-seo-pages.ts), the platform promoted in its place across
+    landing/marketing surfaces. The backend is untouched — detectPlatform()
+    in lib/platforms.ts still recognizes youtube.com URLs pasted into the
+    generic downloader, so nothing that already works breaks; this is a
+    marketing-surface decision, not a feature removal.
+  */
   {
     id: "twitter",
     platformId: "twitter",
@@ -1007,7 +931,7 @@ const GENERIC_BY_CLUSTER: Record<string, SeoModifier[]> = {
   // Drop generics that would overlap a cluster's own specific intent.
   tiktok: without("mp3-downloader", "hd-downloader"), // has sound + 4k pages
   instagram: without("mp3-downloader"), // has audio page
-  youtube: without("mp3-downloader", "hd-downloader"), // has to-mp3, 1080p pages
+  // youtube entry removed 2026-08-25 alongside the whole cluster above.
   twitter: GENERIC,
   facebook: GENERIC,
   pinterest: GENERIC,

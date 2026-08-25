@@ -71,27 +71,31 @@ function buildFormats(html: string): MediaFormat[] {
     }
   }
 
-  // No video → offer the pin's image so image pins are still downloadable.
-  if (formats.length === 0) {
-    const img =
-      metaContent(html, "og:image") ||
-      firstMatch(html, /"orig":\{"url":"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/);
-    if (img && img.startsWith("http")) {
-      formats.push({
-        formatId: "pin-img",
-        kind: "image",
-        label: "Photo",
-        ext: /\.png/i.test(img) ? "png" : /\.webp/i.test(img) ? "webp" : "jpg",
-        resolution: null,
-        fps: null,
-        filesize: null,
-        tbr: null,
-        vcodec: null,
-        acodec: null,
-        directUrl: unescapeJsonUrl(img),
-        httpHeaders: headers,
-      });
-    }
+  /*
+    The pin's own image — always offered when found, not just when there's no
+    video (owner, 2026-08-25: "pinterest... video to image"). A video pin's
+    cover IS the pin's own artwork, not an auto-picked preview frame, so
+    "just give me the image" is a real, separate choice from "give me the
+    video" here — unlike most platforms, where a thumbnail is throwaway.
+  */
+  const img =
+    metaContent(html, "og:image") ||
+    firstMatch(html, /"orig":\{"url":"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/);
+  if (img && img.startsWith("http")) {
+    formats.push({
+      formatId: "pin-img",
+      kind: "image",
+      label: "Photo",
+      ext: /\.png/i.test(img) ? "png" : /\.webp/i.test(img) ? "webp" : "jpg",
+      resolution: null,
+      fps: null,
+      filesize: null,
+      tbr: null,
+      vcodec: null,
+      acodec: null,
+      directUrl: unescapeJsonUrl(img),
+      httpHeaders: headers,
+    });
   }
 
   return formats.sort(

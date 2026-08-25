@@ -509,6 +509,40 @@ function pickDimensions(info: RawInfo): { width: number | null; height: number |
   return best ? { width: best.width, height: best.height } : { width: null, height: null };
 }
 
+const PINTEREST_IMAGE_HEADERS = { "User-Agent": "Mozilla/5.0", Referer: "https://www.pinterest.com/" };
+
+/**
+ * Pinterest video pins ALSO offer their cover image as its own downloadable
+ * format, not just as a no-video fallback (owner, 2026-08-25: "pinterest...
+ * video to image").
+ *
+ * Scoped to Pinterest specifically rather than added for every platform:
+ * Pinterest's thumbnail IS the pin's own original artwork (often the whole
+ * point of the pin), unlike a TikTok/Instagram video's thumbnail, which is
+ * just an auto-picked preview frame nobody would want as a separate download.
+ * yt-dlp already resolves Pinterest's `thumbnail` to the `/originals/` (full
+ * resolution) CDN URL — see the direct-URL fast path via `directUrl`, no
+ * yt-dlp re-invocation needed to fetch it.
+ */
+function pinterestImageFormat(info: RawInfo, platformId: string): MediaFormat | null {
+  if (platformId !== "pinterest" || !info.thumbnail) return null;
+  const ext = /\.png(?:$|\?)/i.test(info.thumbnail) ? "png" : /\.webp(?:$|\?)/i.test(info.thumbnail) ? "webp" : "jpg";
+  return {
+    formatId: "pin-image",
+    kind: "image",
+    label: "Photo",
+    ext,
+    resolution: null,
+    fps: null,
+    filesize: null,
+    tbr: null,
+    vcodec: null,
+    acodec: null,
+    directUrl: info.thumbnail,
+    httpHeaders: PINTEREST_IMAGE_HEADERS,
+  };
+}
+
 function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
   const platform = detectPlatform(sourceUrl);
   const entries = info._type === "playlist" ? info.entries : undefined;
@@ -516,6 +550,9 @@ function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
   // Playlists (Instagram Story trays) are several distinct slides, each
   // potentially its own shape — no single width/height represents them all.
   const dims = isPlaylist ? { width: null, height: null } : pickDimensions(info);
+  const formats = isPlaylist ? mapPlaylistFormats(entries!) : mapFormats(info);
+  const imageFormat = isPlaylist ? null : pinterestImageFormat(info, platform.id);
+  if (imageFormat) formats.push(imageFormat);
   return {
     id: info.id || crypto.randomUUID(),
     platform: platform.id,
@@ -532,7 +569,7 @@ function mapInfo(info: RawInfo, sourceUrl: string): VideoMetadata {
     viewCount: info.view_count ?? null,
     likeCount: info.like_count ?? null,
     webpageUrl: info.webpage_url || sourceUrl,
-    formats: isPlaylist ? mapPlaylistFormats(entries!) : mapFormats(info),
+    formats,
     extractor: "ytdlp",
     width: dims.width,
     height: dims.height,

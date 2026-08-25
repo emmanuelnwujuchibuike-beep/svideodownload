@@ -100,10 +100,14 @@ export function DownloadsPage({
   ctaWallpaperUrl = null,
   /** Platform health for the supported-platforms strip inside DownloadBox. */
   platformStatus,
+  /** Admin visibility switch for the Multi-Link batch downloader — same
+   *  server-resolved-prop reason as the two above. */
+  multiLinkEnabled = true,
 }: {
   wallpapers: Wallpaper[];
   ctaWallpaperUrl?: string | null;
   platformStatus?: PlatformStatusMap;
+  multiLinkEnabled?: boolean;
 }) {
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
@@ -165,7 +169,7 @@ export function DownloadsPage({
         section) — quick actions, the usage dashboard, the downloading list,
         history panel, wallpaper gallery and trust strip stay here.
       */}
-      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
+      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} multiLinkEnabled={multiLinkEnabled} />
 
       <DownloadQuickActions />
 

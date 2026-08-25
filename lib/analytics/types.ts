@@ -71,6 +71,35 @@ export type AnalyticsEventType =
   | "download_preview_authorized"
   | "download_preview_opened"
   | "download_preview_limit_reached"
+  /**
+   * Multi-Link Batch Downloader funnel (spec §35).
+   *
+   * The CLIENT half — every step a person takes inside the panel, which the
+   * server never sees: opening it, adding and removing sources, fetching one,
+   * ticking a post, retrying a failure, tapping the upgrade CTA. The three
+   * moments the SERVER decides (authorized / refused / started) are separate
+   * events in `lib/platform/events-registry.ts`, emitted where the decision is
+   * actually made rather than where the client claims it happened — same split
+   * as the reward-session events above.
+   *
+   * The reward ad itself is NOT re-tracked here: a multi-link batch runs
+   * through the same `BatchAdGate` → `useRewardSession` path as a single-link
+   * one, so it already emits the `download_batch_reward_*` events above. A
+   * parallel set would double-count the same ads.
+   */
+  | "multilink_opened"
+  | "multilink_source_added"
+  | "multilink_source_removed"
+  | "multilink_source_fetched"
+  | "multilink_source_fetch_failed"
+  | "multilink_posts_discovered"
+  | "multilink_post_selected"
+  | "multilink_download_clicked"
+  | "multilink_batch_completed"
+  | "multilink_retry_used"
+  | "multilink_zip_downloaded"
+  | "multilink_limit_reached"
+  | "multilink_upgrade_clicked"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

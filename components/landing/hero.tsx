@@ -1,4 +1,5 @@
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
+import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
@@ -47,12 +48,15 @@ export async function Hero() {
     the tile falls back to the admin's own static pick, exactly like before
     this existed.
   */
-  const [landing, platformStatus, recentWallpaperUrls] = await Promise.all([
+  const [landing, platformStatus, recentWallpaperUrls, multiLink] = await Promise.all([
     getLandingSettings(),
     getPlatformStatus(),
     listWallpapers(null, 10)
       .then((ws) => ws.map((w) => w.url).filter(Boolean))
       .catch(() => [] as string[]),
+    // Joins the existing parallel fetch rather than adding a serial await —
+    // it is a cached settings read, so it adds no measurable time to the hero.
+    getMultiLinkSettings(),
   ]);
 
   return (
@@ -62,6 +66,7 @@ export async function Hero() {
         ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
         rotateUrls={recentWallpaperUrls}
         showDisclaimer
+        multiLinkEnabled={multiLink.enabled}
       />
     </section>
   );

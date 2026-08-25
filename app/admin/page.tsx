@@ -140,6 +140,7 @@ import { AffiliateManager } from "@/features/admin/affiliate-manager";
 import { AnalyticsPanel } from "@/features/admin/analytics-panel";
 import { BroadcastComposer } from "@/features/admin/broadcast-composer";
 import { LimitsEditor } from "@/features/admin/limits-editor";
+import { MultiLinkEditor } from "@/features/admin/multi-link-editor";
 import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
@@ -173,6 +174,7 @@ import { getPricing } from "@/lib/monetization/pricing";
 import { getPromoSettings } from "@/lib/monetization/promo";
 import { PromoEditor } from "@/features/admin/promo-editor";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
 import { listAffiliates } from "@/lib/monetization/tools";
 import {
   fetchMonetizationAnalytics,
@@ -225,7 +227,7 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit] =
+  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit, multiLink] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
@@ -245,6 +247,10 @@ export default async function AdminPage() {
       // New vs. returning, one series — capped at 30 days, see the doc comment
       // on getVisitorSplitSeries for why this can't share the 90-day window.
       getVisitorSplitSeries(30).catch(() => null),
+      // Multi-Link batch downloader policy (source ceilings, daily batches,
+      // reward requirement) — a plan-limit sibling, so it sits in the same
+      // Pricing & limits panel as LimitsEditor rather than a panel of its own.
+      getMultiLinkSettings(),
     ]);
 
   return (
@@ -360,6 +366,7 @@ export default async function AdminPage() {
                 },
               }}
             />
+            <MultiLinkEditor settings={multiLink} />
             <PromoEditor initial={promo} />
           </AdminPanel>
 

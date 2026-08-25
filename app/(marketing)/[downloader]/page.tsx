@@ -19,6 +19,7 @@ import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
+import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
 import { categoryHubMetadata, CategoryHubView } from "@/features/social/category-hub-view";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
@@ -104,6 +105,12 @@ export default async function DownloaderPage({
   }
   const page = getSeoPage(downloader);
   if (!page) notFound();
+
+  // Admin visibility for the Multi-Link batch downloader. A settings read on a
+  // force-static page is fine here: it is cached in-process (so the ~148 pages
+  // share one query at build) and ISR regenerates within the root layout's
+  // 60s revalidate, exactly like getPlatformStatus on the landing hero.
+  const multiLink = await getMultiLinkSettings();
 
   const Icon = BRAND_ICONS[page.platformId];
   /*
@@ -270,7 +277,7 @@ export default async function DownloaderPage({
                     someone who searched for a YouTube downloader. Passing the
                     platform pins it to the one the page is actually about.
                   */}
-                  <Downloader platformId={page.platformId} />
+                  <Downloader platformId={page.platformId} multiLinkEnabled={multiLink.enabled} />
                 </div>
 
                 <p className={`mt-5 text-sm ${onDark ? "text-white/75" : "text-black/70"}`}>

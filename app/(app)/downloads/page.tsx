@@ -6,6 +6,7 @@ import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
+import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
@@ -87,7 +88,7 @@ async function DownloadsData() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/downloads");
 
-  const [profile, wallpapers, landing, platformStatus] = await Promise.all([
+  const [profile, wallpapers, landing, platformStatus, multiLink] = await Promise.all([
     getHomeProfile(user.id),
     listWallpapers(user.id),
     // The admin-uploaded tile background (admin → Landing page). Resolved HERE
@@ -96,6 +97,8 @@ async function DownloadsData() {
     // Same reason: the supported-platforms strip lives inside a client
     // component, so its status has to arrive as a prop from this boundary.
     getPlatformStatus(),
+    // Same reason again: the batch downloader's admin visibility switch.
+    getMultiLinkSettings(),
   ]);
   if (!profile?.handle) redirect("/welcome");
 
@@ -113,6 +116,7 @@ async function DownloadsData() {
       wallpapers={wallpapers}
       ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
       platformStatus={platformStatus}
+      multiLinkEnabled={multiLink.enabled}
     />
   );
 }

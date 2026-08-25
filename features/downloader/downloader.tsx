@@ -16,6 +16,7 @@ import { type FormEvent, useEffect, useRef, useState, useSyncExternalStore } fro
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
+import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
 import {
   getServerSnapshot as getServerDownloads,
   getSnapshot as getDownloads,
@@ -89,6 +90,7 @@ export function Downloader({
   hideDisclaimer,
   resultOnly,
   heroHandlesFetching,
+  multiLinkEnabled = true,
 }: {
   initialUrl?: string;
   platformId?: PlatformId;
@@ -114,6 +116,9 @@ export function Downloader({
    * it would have drawn is the CTA itself, sitting a few rows above.
    */
   resultOnly?: boolean;
+  /** Admin "Feature visibility" for the Multi-Link batch downloader (§34).
+   *  Server-resolved and threaded, same as `platformStatus` elsewhere. */
+  multiLinkEnabled?: boolean;
 } = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -430,6 +435,16 @@ export function Downloader({
           </p>
         ) : null}
       </form>
+      )}
+
+      {/*
+        §1 — the batch entry point, directly under the paste box. Suppressed
+        for `resultOnly`, which renders the RESULT half only: its input lives
+        somewhere else entirely (the landing hero's CTA), so a batch panel
+        opening under a bare result card would have no field it belongs to.
+      */}
+      {resultOnly ? null : (
+        <MultiLinkButton enabled={multiLinkEnabled} surface="card" className="mt-3 flex justify-center" />
       )}
 
       {/*

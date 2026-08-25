@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { SupportedPlatforms } from "@/components/landing/supported-platforms";
+import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
 import type { PlatformStatusMap } from "@/lib/platform-status";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -85,7 +86,17 @@ export function DownloadBox({
    * cost the download page its whole interactive paste flow.
    */
   platformStatus,
-}: { surface?: "hero" | "card"; platformStatus?: PlatformStatusMap } = {}) {
+  /** Admin "Feature visibility" switch for the batch downloader (§34).
+   *  Resolved on the server page and threaded down, for the same reason
+   *  `platformStatus` is: this component is `"use client"` and cannot read
+   *  the settings store itself. Defaults ON so a caller that doesn't know
+   *  behaves exactly as the feature's own default does. */
+  multiLinkEnabled = true,
+}: {
+  surface?: "hero" | "card";
+  platformStatus?: PlatformStatusMap;
+  multiLinkEnabled?: boolean;
+} = {}) {
   const onCard = surface === "card";
   const [url, setUrl] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -299,6 +310,14 @@ export function DownloadBox({
           </button>
         </div>
       </form>
+
+      {/*
+        §1 — the secondary control, directly below the primary paste box, and
+        expanding INLINE rather than navigating anywhere. The single-link flow
+        above it is untouched (§46): this adds a capability beside it, it does
+        not wrap or replace it.
+      */}
+      <MultiLinkButton enabled={multiLinkEnabled} surface={surface} className="mt-2.5" />
 
       {validationError || error ? (
         <p role="alert" className={cn("mt-2 text-sm font-medium", onCard ? "text-rose-500" : "text-rose-300")}>{validationError ?? error}</p>

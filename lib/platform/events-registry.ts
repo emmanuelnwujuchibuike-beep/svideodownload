@@ -59,6 +59,22 @@ export const EVENTS = [
   */
   { id: "reward_started", label: "Reward ad started", description: "A visitor opened a rewarded ad to unlock a download.", domain: "monetization", metadata: ["rewardType", "items"] },
   { id: "reward_granted", label: "Reward ad completed", description: "A rewarded ad was verified and the download authorized.", domain: "monetization", metadata: ["rewardType", "items"] },
+  /*
+    Multi-Link batch lifecycle, emitted SERVER-side from
+    app/api/downloads/batch/* — the three moments where the server itself made
+    a decision, which is the only part of the flow worth auditing.
+
+    `batch_refused` is the one that earns its place: it is the only record of a
+    limit actually biting (daily allowance spent, source ceiling exceeded,
+    feature switched off), carrying WHICH limit in `reason`. Without it the
+    admin can see batches that ran and has no way to tell a quiet feature from
+    one that is refusing everybody. The client-side funnel (panel opened,
+    source added, post selected…) stays in the client analytics types, where
+    the rest of the UI funnel already lives.
+  */
+  { id: "batch_authorized", label: "Batch authorized", description: "A multi-link batch passed the server-side plan and quota check.", domain: "download", metadata: ["sources", "items", "plan"] },
+  { id: "batch_refused", label: "Batch refused", description: "A multi-link batch was refused by a server-side limit.", domain: "download", metadata: ["reason", "sources", "items"] },
+  { id: "batch_started", label: "Batch started", description: "A multi-link batch spent its allowance and began downloading.", domain: "download", metadata: ["batchId", "allowed"] },
   { id: "subscribe", label: "Subscribe", description: "A paid subscription started.", domain: "monetization", metadata: ["plan"] },
   { id: "subscribe_cancel", label: "Subscription cancelled", description: "A paid subscription ended.", domain: "monetization", metadata: ["plan"] },
   { id: "api_call", label: "API call", description: "A developer-API request was served.", domain: "api" },

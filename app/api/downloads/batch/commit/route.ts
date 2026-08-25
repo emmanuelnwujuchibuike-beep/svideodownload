@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { trackEvent } from "@/lib/analytics/events";
+import { resolveBatchIdentity, withBatchIdentity } from "@/lib/downloads/batch-identity";
 import { commitBatch } from "@/lib/downloads/multi-link";
 import { clientId, rewardCompleteLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -9,7 +10,11 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ batchId: z.string().uuid() });
+const schema = z.object({
+  batchId: z.string().uuid(),
+  /* localStorage mirror of the browser id — see lib/downloads/batch-identity.ts. */
+  anonId: z.string().uuid().optional(),
+});
 
 /**
  * §16 step 10 — spend exactly one batch allowance, at the moment the downloads
@@ -64,12 +69,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await commitBatch({ userId, ip, batchId: parsed.data.batchId });
+    const identity = resolveBatchIdentity({ request, userId, clientAnonId: parsed.data.anonId });
+    const result = await commitBatch({
+      userId,
+      ip: identity.ip,
+      anonId: identity.anonId,
+      batchId: parsed.data.batchId,
+    });
     trackEvent("batch_started", {
       userId,
       metadata: { batchId: parsed.data.batchId, allowed: result.allowed },
     });
-    return NextResponse.json(result);
+    return withBatchIdentity(NextResponse.json({ ...result, anonId: identity.mirrorId }), identity);
   } catch {
     // Fail OPEN, like every other counter here: a broken quota store must never
     // be what stops a download that was already paid for with an ad.

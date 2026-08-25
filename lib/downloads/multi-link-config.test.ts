@@ -107,12 +107,37 @@ describe("the backend is the final authority (§18, §19, §36)", () => {
   });
 
   it("reads the allowance without spending it, and spends it exactly once", () => {
-    // peek at authorize time (§16 step 4), consume at commit time (step 10),
-    // with the batch id as the receipt so a replay charges nothing.
-    expect(policy).toMatch(/const used = dailyLimit === null \? 0 : await peekDaily/);
-    expect(policy).toMatch(/const receipt = `batchsess:\$\{input\.batchId\}`/);
-    expect(policy).toMatch(/consumeDaily\(key, limit, receipt\)/);
-    expect(policy).toMatch(/alreadyCounted\(receipt\)/);
+    // Read at authorize time (§16 step 4), write at commit time (step 10).
+    expect(policy).toMatch(/const used = dailyLimit === null \? 0 : await batchesUsedToday/);
+    // Exactly-once is the UNIQUE constraint on batch_id, not application logic.
+    expect(policy).toMatch(/onConflict: "batch_id", ignoreDuplicates: true/);
+  });
+
+  it("🔴 counts in Postgres, never through the fail-open Redis counter", () => {
+    /*
+      The bug this replaced (owner: "the daily limit in the multi link doesnt
+      work, it just shows a constant you have 2 remaining"): `consumeDaily`
+      returns `{ allowed: true, used: 0 }` when Upstash is unconfigured, and
+      `UPSTASH_REDIS_REST_URL`/`_TOKEN` are present but EMPTY — so the counter
+      never counted and the panel faithfully printed a number that never moved.
+
+      Fail-open is correct for a DOWNLOAD and wrong for an allowance shown back
+      to the visitor. This assertion is what stops the convenient helper being
+      reached for again.
+    */
+    /* Comments stripped: the module explains WHAT it replaced and why, and a
+       bare `not.toMatch` finds `consumeDaily` in that explanation. Third time
+       this trap has bitten in this file — the assertions are about code. */
+    const code = policy.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/consumeDaily|peekDaily|alreadyCounted/);
+    expect(code).toMatch(/from\("batch_sessions"\)/);
+  });
+
+  it("counts anonymous visitors per BROWSER, not per IP", () => {
+    // A carrier NATs thousands onto one address; an IP-keyed allowance makes
+    // strangers spend each other's. The ip hash is recorded, never counted.
+    expect(policy).toMatch(/q\.eq\("anon_id", anonId!\)/);
+    expect(policy).toMatch(/Recorded for a future abuse control, never the counting key/);
   });
 
   it("never charges Pro or Business a batch allowance", () => {
@@ -305,6 +330,10 @@ describe("the intro's description is hidden until asked for", () => {
     doesnt occupy space".
   */
   const intro = read("features/downloader/multi-link/multi-link-intro.tsx");
+  /* Comments stripped — the file DOCUMENTS the class it moved away from, and a
+     bare `not.toMatch` would fail on the very explanation of why it is gone.
+     Same reason as the button block above. */
+  const introCode = intro.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
   it("starts hidden", () => {
     expect(intro).toMatch(/const \[showDetail, setShowDetail\] = useState\(false\)/);
@@ -318,6 +347,24 @@ describe("the intro's description is hidden until asked for", () => {
     expect(intro).toMatch(/\{showDetail \? "Hide" : "Learn more"\}/);
   });
 
+  it("🔴 never centres with a transform while an animation owns transform", () => {
+    /*
+      Owner reported the popup hanging off the right edge of the screen.
+
+      Cause: `left-1/2 -translate-x-1/2` and `animate-fade-up` both write the
+      SAME `transform` property, and the animation wins for as long as it is
+      applied — its keyframes end at `translateY(0)`, silently discarding the
+      `translateX(-50%)`. The card was therefore positioned with its LEFT edge
+      at the midpoint and ran off from there.
+
+      Centre through the LAYOUT (`inset-x-0 mx-auto`) so the two never touch
+      the same property. This assertion is what stops the transform version
+      coming back the next time someone reaches for the familiar idiom.
+    */
+    expect(introCode).toMatch(/inset-x-0 top-full z-20 mx-auto/);
+    expect(introCode).not.toMatch(/-translate-x-1\/2/);
+  });
+
   it("floats above the layout so it occupies no space", () => {
     /*
       The requirement is literally "so it doesnt occupy space". A block that
@@ -325,7 +372,7 @@ describe("the intro's description is hidden until asked for", () => {
       box down — a layout shift on the page whose CLS was measured at 0.684
       once already.
     */
-    expect(intro).toMatch(/absolute left-1\/2 top-full/);
+    expect(introCode).toMatch(/absolute inset-x-0 top-full/);
   });
 
   it("keeps the heading and the chips, which were explicitly kept", () => {

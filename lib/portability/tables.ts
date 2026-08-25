@@ -73,6 +73,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   gateway_config: "Payment gateway configuration. Operational, not personal.",
   notification_broadcasts: "Announcements sent to everyone. Not about you.",
   product_waitlist: "Interest in unreleased products; exported with your profile instead.",
+  batch_sessions: "One row per Multi-Link batch you ran today, used only to count your daily allowance. It holds no links, no files and nothing about what you downloaded — the downloads themselves are exported through your download history.",
   reward_sessions: "Short-lived reward-download authorizations. They expire in minutes and mean nothing once redeemed; the download itself is exported through your download history.",
 
   /*

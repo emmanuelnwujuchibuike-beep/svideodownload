@@ -129,8 +129,26 @@ export function MultiLinkIntro({
               if (hideTimer.current) clearTimeout(hideTimer.current);
             }}
             onMouseLeave={() => setShowDetail(false)}
+            /*
+              🔴 CENTRED WITHOUT A TRANSFORM (owner, 2026-08-25, with a
+              screenshot: "when i click on learn more, it opens the mockup in
+              an unprofessional position" — the card was hanging off the right
+              edge of the screen).
+
+              The first version used `left-1/2 -translate-x-1/2`. Both that
+              class AND `animate-fade-up`'s keyframes write the SAME
+              `transform` property, and an animation wins over a class for the
+              whole time it is applied — the keyframes end at
+              `transform: translateY(0)`, which silently discarded the
+              `translateX(-50%)`. So the card was positioned with its LEFT edge
+              at the horizontal midpoint and ran off-screen from there.
+
+              `inset-x-0 mx-auto` centres through the LAYOUT instead, leaving
+              `transform` entirely to the animation. The two can no longer
+              fight because they no longer touch the same property.
+            */
             className={cn(
-              "animate-fade-up absolute left-1/2 top-full z-20 mt-2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border p-3 text-left text-sm leading-relaxed shadow-luxury",
+              "animate-fade-up absolute inset-x-0 top-full z-20 mx-auto mt-2 w-full max-w-[26rem] rounded-2xl border p-3 text-left text-sm leading-relaxed shadow-luxury",
               onHero
                 ? "border-white/15 bg-[#0b1020]/95 text-white/85 backdrop-blur"
                 : "border-border bg-card text-muted-foreground",

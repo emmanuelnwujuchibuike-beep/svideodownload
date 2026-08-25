@@ -21,6 +21,43 @@ import { DEFAULT_MULTI_LINK, MAX_BATCH_ITEMS, type BatchPolicy } from "@/lib/dow
  * shape someone sees for the few hundred milliseconds before the truth lands,
  * and "gains a slot" is a far better surprise than "loses the work you did".
  */
+/**
+ * The localStorage mirror of the server-minted browser id (owner, 2026-08-25:
+ * "browser id and local storage so it doesnt glitch on anonymous users").
+ *
+ * The httpOnly cookie is the authoritative identity and is invisible to this
+ * code — so the SERVER echoes the id back and this keeps a copy. When the
+ * cookie is missing (ITP capping a non-Secure cookie, a PWA relaunching with a
+ * cold cookie jar, a privacy extension), the mirror is sent back and the server
+ * restores both the identity and the cookie. Without it the visitor would look
+ * brand new and their remaining count would visibly jump back to full.
+ *
+ * Display/recovery only — never read as truth. The server decides.
+ */
+const ANON_MIRROR_KEY = "frenz.batch.aid";
+
+function readAnonMirror(): string | null {
+  try {
+    return localStorage.getItem(ANON_MIRROR_KEY);
+  } catch {
+    return null; // private mode, storage disabled — the cookie still works
+  }
+}
+
+function writeAnonMirror(id: string | null | undefined): void {
+  if (!id) return;
+  try {
+    localStorage.setItem(ANON_MIRROR_KEY, id);
+  } catch {
+    /* nothing to recover with, but nothing breaks either */
+  }
+}
+
+/** The mirror to send with a batch request body, when there is one. */
+export function batchAnonMirror(): string | undefined {
+  return readAnonMirror() ?? undefined;
+}
+
 export function useBatchPolicy(enabled: boolean) {
   const [policy, setPolicy] = useState<BatchPolicy | null>(null);
   const [ready, setReady] = useState(false);
@@ -30,9 +67,15 @@ export function useBatchPolicy(enabled: boolean) {
     if (inFlight.current) return;
     inFlight.current = true;
     try {
-      const res = await fetch("/api/downloads/batch/policy", { cache: "no-store" });
+      const mirror = readAnonMirror();
+      const res = await fetch(
+        `/api/downloads/batch/policy${mirror ? `?a=${encodeURIComponent(mirror)}` : ""}`,
+        { cache: "no-store" },
+      );
       if (!res.ok) return;
-      setPolicy((await res.json()) as BatchPolicy);
+      const json = (await res.json()) as BatchPolicy & { anonId?: string | null };
+      writeAnonMirror(json.anonId);
+      setPolicy(json);
     } catch {
       /* keep the conservative default — the server decides at authorize time */
     } finally {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { trackEvent } from "@/lib/analytics/events";
+import { resolveBatchIdentity, withBatchIdentity } from "@/lib/downloads/batch-identity";
 import { authorizeBatch } from "@/lib/downloads/multi-link";
 import { clientId, rewardStartLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -27,6 +28,9 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   sources: z.array(sourceUrlSchema).min(1).max(64),
   itemCount: z.number().int().min(1).max(500),
+  /* The localStorage mirror of the browser id — used only when the request
+     carries no cookie. See lib/downloads/batch-identity.ts. */
+  anonId: z.string().uuid().optional(),
 });
 
 /**
@@ -88,9 +92,11 @@ export async function POST(request: Request) {
   const uniqueSources = new Set(parsed.data.sources.map((u) => u.trim()));
 
   try {
+    const identity = resolveBatchIdentity({ request, userId, clientAnonId: parsed.data.anonId });
     const result = await authorizeBatch({
       userId,
-      ip,
+      ip: identity.ip,
+      anonId: identity.anonId,
       sourceCount: uniqueSources.size,
       itemCount: parsed.data.itemCount,
     });
@@ -100,10 +106,10 @@ export async function POST(request: Request) {
         userId,
         metadata: { reason: result.reason, sources: uniqueSources.size, items: parsed.data.itemCount },
       });
-      return NextResponse.json(
-        { error: result.message, code: result.reason, policy: result.policy },
+      return withBatchIdentity(NextResponse.json(
+        { error: result.message, code: result.reason, policy: result.policy, anonId: identity.mirrorId },
         { status: result.reason === "DAILY_LIMIT_REACHED" ? 429 : 403 },
-      );
+      ), identity);
     }
 
     /*
@@ -120,11 +126,12 @@ export async function POST(request: Request) {
       metadata: { sources: uniqueSources.size, items: parsed.data.itemCount, plan: result.policy.plan },
     });
 
-    return NextResponse.json({
+    return withBatchIdentity(NextResponse.json({
       batchId,
       rewardRequired: result.policy.rewardRequired,
       policy: result.policy,
-    });
+      anonId: identity.mirrorId,
+    }), identity);
   } catch {
     return NextResponse.json({ error: "Couldn't authorize this batch.", code: "INTERNAL" }, { status: 500 });
   }

@@ -1,7 +1,8 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { getUserPlan } from "@/lib/monetization/plan";
-import { alreadyCounted, consumeDaily, peekDaily } from "@/lib/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
@@ -26,24 +27,21 @@ import {
  * would have rejected a free member's 4th.
  *
  * ── Why the allowance is spent in a SECOND call ───────────────────────────
- * `authorizeBatch` only READS the daily counter (`peekDaily` — reading an
- * allowance must never spend it), and `commitBatch` is what charges it. That
- * split is what makes spec §16 step 4 ("verify daily quota", before the ad) and
- * step 10 ("consume exactly one batch allowance", after it) both true without
- * charging a member who closed the ad and never downloaded anything.
+ * `authorizeBatch` only READS the allowance, and `commitBatch` is what charges
+ * it. That split is what makes spec §16 step 4 ("verify daily quota", before
+ * the ad) and step 10 ("consume exactly one batch allowance", after it) both
+ * true without charging a member who closed the ad and never downloaded.
  *
- * The refresh / multi-tab / replay hole §18 names is closed by `consumeDaily`
- * itself, not by the split: it is a single atomic Redis INCR keyed by UTC day,
- * shared across serverless instances, and the `receiptKey` is the batch id — so
- * a replayed commit for a batch already charged costs nothing, while two tabs
- * racing two DIFFERENT batches each get their own INCR and the second is
- * refused on the same counter.
+ * ── 🔴 The counter is POSTGRES, not the Redis daily helper ────────────────
+ * It used to be `consumeDaily`, which fails open when Upstash is unconfigured —
+ * and those env vars are present but EMPTY here, so it always did: the panel
+ * showed a constant "2 remaining" forever (owner, 2026-08-25). Fail-open is
+ * right for a DOWNLOAD and wrong for an allowance the UI prints back to the
+ * visitor. See `batchesUsedToday` and migration 0134.
  *
- * ── Fail-open, deliberately ───────────────────────────────────────────────
- * With no Upstash configured (local dev), `consumeDaily`/`peekDaily` allow
- * everything — the same philosophy as every other counter in `lib/rate-limit.ts`
- * and `lib/api/download-quota.ts`. A broken counter must never be the thing that
- * stops a download. Production configures Upstash for the cap to bite.
+ * The refresh / multi-tab / replay hole §18 names is closed by the UNIQUE
+ * constraint on `batch_sessions.batch_id` — a replayed commit conflicts and is
+ * ignored, enforced by the database rather than by application logic.
  */
 
 export * from "./multi-link-config";
@@ -81,11 +79,60 @@ export async function setMultiLinkSettings(s: MultiLinkSettings): Promise<void> 
   cache = null;
 }
 
-/** The daily-counter key for one identity. Signed-in follows the account across
- *  devices; signed-out falls back to IP, same identity model as every other
- *  guest allowance here (wallpapers, guest-like, reward sessions). */
-function dailyKey(userId: string | null, ip: string): string {
-  return `batchsess:${userId ? `u:${userId}` : `ip:${ip}`}`;
+/** Start of the current UTC day — the window the allowance resets on. */
+function startOfUtcDay(): string {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Batches this identity has committed today.
+ *
+ * 🔴 Reads Postgres, NOT the Redis daily counter (owner, 2026-08-25: "the
+ * daily limit in the multi link doesnt work, it just shows a constant you have
+ * 2 remaining").
+ *
+ * `consumeDaily` fails open when Upstash is unconfigured — returning
+ * `used: 0` — and `UPSTASH_REDIS_REST_URL`/`_TOKEN` are present but EMPTY, so
+ * it always did. That behaviour is correct for a download (a broken counter
+ * must never stop someone getting their file) and wrong for an allowance the
+ * UI shows back to the visitor, where it prints a number that never moves and
+ * quietly gives the feature away.
+ *
+ * The database is already a hard dependency of this feature — plan resolution,
+ * settings and reward sessions all need it, so there is no batch to authorize
+ * without it. Counting here cannot silently no-op.
+ */
+async function batchesUsedToday(userId: string | null, anonId: string | null): Promise<number> {
+  if (!hasSupabase) return 0;
+  if (!userId && !anonId) return 0;
+  try {
+    const db = createAdminClient();
+    const q = db
+      .from("batch_sessions")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", startOfUtcDay());
+    const { count } = await (userId
+      ? q.eq("user_id", userId)
+      : q.eq("anon_id", anonId!));
+    return count ?? 0;
+  } catch {
+    /*
+      A read failure reports ZERO used, i.e. full allowance.
+
+      Deliberate, and the one place the old fail-open instinct is still right:
+      refusing a batch because a COUNT query hiccuped would take a paid-for ad
+      and deliver nothing. The write below is what actually enforces the cap,
+      and it has the unique constraint behind it.
+    */
+    return 0;
+  }
+}
+
+/** sha256(ip) — never the raw address, same as reward_sessions. */
+function hashIdentityIp(ip: string): string {
+  return createHash("sha256").update(ip).digest("hex");
 }
 
 /**
@@ -95,13 +142,15 @@ function dailyKey(userId: string | null, ip: string): string {
 export async function getBatchPolicy(input: {
   userId: string | null;
   ip: string;
+  /** The browser identity for a signed-out visitor — see batch-identity.ts. */
+  anonId?: string | null;
 }): Promise<BatchPolicy> {
   const [settings, plan] = await Promise.all([
     getMultiLinkSettings(),
     getUserPlan(input.userId),
   ]);
   const dailyLimit = dailyBatchLimitFor(plan, settings);
-  const used = dailyLimit === null ? 0 : await peekDaily(dailyKey(input.userId, input.ip));
+  const used = dailyLimit === null ? 0 : await batchesUsedToday(input.userId, input.anonId ?? null);
 
   return {
     enabled: settings.enabled,
@@ -146,10 +195,11 @@ export interface BatchRefused {
 export async function authorizeBatch(input: {
   userId: string | null;
   ip: string;
+  anonId?: string | null;
   sourceCount: number;
   itemCount: number;
 }): Promise<BatchAuthorization | BatchRefused> {
-  const policy = await getBatchPolicy({ userId: input.userId, ip: input.ip });
+  const policy = await getBatchPolicy({ userId: input.userId, ip: input.ip, anonId: input.anonId });
 
   if (!policy.enabled) {
     return {
@@ -196,6 +246,7 @@ export async function authorizeBatch(input: {
 export async function commitBatch(input: {
   userId: string | null;
   ip: string;
+  anonId?: string | null;
   batchId: string;
 }): Promise<{ allowed: boolean; used: number; remaining: number | null }> {
   const [settings, plan] = await Promise.all([
@@ -204,17 +255,43 @@ export async function commitBatch(input: {
   ]);
   const limit = dailyBatchLimitFor(plan, settings);
   if (limit === null) return { allowed: true, used: 0, remaining: null };
+  if (!hasSupabase) return { allowed: true, used: 0, remaining: limit };
 
-  const key = dailyKey(input.userId, input.ip);
-  const receipt = `batchsess:${input.batchId}`;
+  const db = createAdminClient();
 
-  // Already charged — a refresh or a retry of THIS batch rides the receipt
-  // rather than paying twice (§18's "page refresh" / "repeated requests").
-  if (await alreadyCounted(receipt)) {
-    const used = await peekDaily(key);
-    return { allowed: true, used, remaining: Math.max(0, limit - used) };
+  /*
+    Idempotency is the UNIQUE constraint on `batch_id`, not application logic.
+
+    A replayed commit — refresh mid-batch, a retried request, a re-mounted
+    component — conflicts and is ignored, so the row count (and therefore the
+    allowance) is unchanged. `ignoreDuplicates` makes that a no-op rather than
+    an error, which is what lets this be called freely.
+  */
+  try {
+    await db
+      .from("batch_sessions")
+      .upsert(
+        {
+          batch_id: input.batchId,
+          user_id: input.userId,
+          anon_id: input.userId ? null : (input.anonId ?? null),
+          // Recorded for a future abuse control, never the counting key.
+          ip_hash: input.userId ? null : hashIdentityIp(input.ip),
+        },
+        { onConflict: "batch_id", ignoreDuplicates: true },
+      );
+  } catch {
+    // Recording failed — allow the batch (the ad was already watched) but do
+    // not pretend it was counted.
+    return { allowed: true, used: 0, remaining: limit };
   }
 
-  const r = await consumeDaily(key, limit, receipt);
-  return { allowed: r.allowed, used: r.used, remaining: Math.max(0, limit - r.used) };
+  const used = await batchesUsedToday(input.userId, input.anonId ?? null);
+  return {
+    // `used` INCLUDES the row just written, so the Nth batch of an N-limit day
+    // is still allowed and the (N+1)th is not.
+    allowed: used <= limit,
+    used,
+    remaining: Math.max(0, limit - used),
+  };
 }

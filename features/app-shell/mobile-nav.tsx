@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { Headset, History, LayoutGrid } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
@@ -25,7 +24,6 @@ import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { springs } from "@/lib/motion/springs";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
 
@@ -521,16 +519,41 @@ export function MobileNav({
  * spring-animated micro-lift + PressIcon's tap scale either way, so the
  * motion still feels alive even though there's no more halo.
  */
+/*
+  🔴 CSS, not framer-motion (owner, 2026-08-25: "remove navigation motion
+  bottlenecks … bottom navigation must feel instant and native").
+
+  This was a `motion.span` running a spring for a TWO-PIXEL lift. Measured
+  before the change: framer's core is 39.3 kB gzipped in one chunk, and this
+  component — mounted in `(app)/layout`, i.e. on the critical path of every
+  signed-in navigation — was one of only three things in the shell importing
+  it. A JS animation library evaluating a spring on every tab tap, for 2px, is
+  precisely the "simple effect" §3 says belongs in CSS.
+
+  A cubic-bezier over 2px is visually indistinguishable from a spring, and the
+  active state now updates in the same frame as the tap instead of after a JS
+  animation is scheduled.
+
+  `motion-reduce:transition-none` keeps the accessibility behaviour the framer
+  version had via `useReducedMotion` — the lift becomes instant rather than
+  animated, which is what the setting asks for.
+
+  NO `will-change` here, deliberately: §3 says not to add it without profiling
+  evidence, and this codebase already has a scar from it — a permanent
+  `will-change: transform` establishes a CONTAINING BLOCK for `position: fixed`
+  descendants, which is documented at length on the page-transition classes in
+  globals.css. A 2px transform does not need the hint.
+*/
 function NavLift({ active, children }: { active: boolean; children: ReactNode }) {
-  const reduceMotion = useReducedMotion();
   return (
-    <motion.span
-      className="relative flex h-9 w-9 items-center justify-center"
-      animate={reduceMotion ? undefined : { y: active ? -2 : 0 }}
-      transition={reduceMotion ? { duration: 0 } : springs.bounce}
+    <span
+      className={cn(
+        "relative flex h-9 w-9 items-center justify-center transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+        active ? "-translate-y-0.5" : "translate-y-0",
+      )}
     >
       {children}
-    </motion.span>
+    </span>
   );
 }
 

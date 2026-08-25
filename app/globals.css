@@ -716,12 +716,42 @@
      (0.32,0.72,0,1) spends its last third barely moving, which at 520ms is a
      third of a second of almost-nothing that reads exactly as lag.
   */
-  .page-transition-forward { animation: page-in-forward 300ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .page-transition-back    { animation: page-in-back 260ms cubic-bezier(0.22, 1, 0.36, 1); }
-  /* Reduced motion: a quick fade instead of any slide. */
+  /*
+     🔴 THE FULL-PAGE SLIDE IS GONE (owner, 2026-08-25: "remove navigation
+     motion bottlenecks & make navigation instant … returning to the Home page
+     feels noticeably faster and more effortless").
+
+     Profiled before changing anything, because the owner's own hypothesis was
+     that framer-motion caused it. It did not: this transition has been pure
+     CSS since 2026-08-24 and framer was never involved. What actually makes
+     Home feel different is that Home is on the `noSlideFor` list
+     (page-transition.tsx) — it is the ONE destination that does not slide. So
+     the honest reading of "make everything feel like Home" is: stop sliding.
+
+     What a slide costs that a fade does not: `translate3d(100%, 0, 0)` moves
+     the ENTIRE page across the viewport, so the compositor must promote and
+     repaint a full-viewport layer for the whole duration, every navigation. On
+     the low/mid-range Android this spec targets that is the single most
+     expensive per-navigation operation in the app — and the destination is not
+     legible until it lands, which is exactly the "waiting for the animation"
+     feeling §14 describes.
+
+     A 120ms opacity fade keeps the arrival from being an abrupt cut while
+     leaving the destination readable from the first frame. Opacity alone never
+     creates a containing block, so the whole family of `position: fixed`
+     bugs documented above cannot recur through it.
+
+     The keyframes for the slide are deliberately KEPT (page-in-forward /
+     page-in-back) rather than deleted: EdgeSwipeBack still moves this same
+     wrapper with the finger, and if the slide is ever wanted back it is a
+     one-line change here rather than a rebuild.
+  */
+  .page-transition-forward,
+  .page-transition-back { animation: page-in-fade 120ms linear; }
+  /* Reduced motion: no transition at all — the destination simply is there. */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-forward,
-    .page-transition-back { animation: page-in-fade var(--dur-fast) linear; background: none; }
+    .page-transition-back { animation: none; background: none; }
   }
 
   /* Full-screen chat thread slide-in (mobile only). A thread (/messages/[id]) is

@@ -41,7 +41,7 @@ import {
 } from "./state";
 import { useBatchDownloadWatcher } from "./use-batch-download";
 import { useBatchFetch } from "./use-batch-fetch";
-import { useBatchPolicy } from "./use-batch-policy";
+import { batchAnonMirror, useBatchPolicy } from "./use-batch-policy";
 
 /**
  * The Multi-Link Batch Downloader panel.
@@ -212,7 +212,7 @@ export function MultiLinkPanel({
           const res = await fetch("/api/downloads/batch/commit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ batchId }),
+            body: JSON.stringify({ batchId, anonId: batchAnonMirror() }),
           });
           if (res.ok) {
             const json = (await res.json()) as { allowed: boolean };
@@ -279,6 +279,8 @@ export function MultiLinkPanel({
         body: JSON.stringify({
           sources: filled.map((s) => s.url.trim()),
           itemCount: items.length,
+          // Recovers the browser identity when the cookie was dropped.
+          anonId: batchAnonMirror(),
         }),
       });
       const json = await res.json().catch(() => ({}));

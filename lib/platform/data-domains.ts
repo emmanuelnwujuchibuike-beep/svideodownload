@@ -207,6 +207,7 @@ export const DATA_DOMAINS: DataDomain[] = [
       "gateway_config",
       "gateway_impressions",
       "reward_sessions",
+      "batch_sessions",
     ],
     storage: ["relational"],
   },

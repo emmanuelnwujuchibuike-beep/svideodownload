@@ -57,8 +57,14 @@ const METADATA_TTL_SECONDS = Number(
  * waiting out a TTL and wondering why a deploy did nothing.
  *
  * v2 — 2026-08-09: TikTok format order + `filesize` semantics.
+ * v3 — 2026-08-25: Pinterest image-only results no longer mask a real video
+ * (PinterestImageOnlyError, pinterest.ts) — a URL that was cached as
+ * image-only under v2, BEFORE this fix existed, would otherwise keep
+ * serving that stale wrong answer for the rest of its 30-minute TTL
+ * regardless of the code fix — exactly the trap this constant exists to
+ * avoid (see the TikTok note above). Bumping retires every v2 snapshot.
  */
-const EXTRACTOR_SHAPE_VERSION = "v2";
+const EXTRACTOR_SHAPE_VERSION = "v3";
 
 function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;

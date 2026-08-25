@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 
 import type { AnalyticsEventType } from "@/lib/analytics/types";
-import type { RewardType } from "@/lib/monetization/reward-sessions";
+import type { RewardSurfaceTag, RewardType } from "@/lib/monetization/reward-sessions";
 import type { MediaKind } from "@/types";
 
 export interface RewardSessionItem {
@@ -93,10 +93,10 @@ const EVENTS: Record<RewardType, { started: AnalyticsEventType; granted: Analyti
  * url/formatId — the server ignores those in favor of what it stored).
  */
 export function useRewardSession() {
-  const start = useCallback(async (type: RewardType, items: RewardSessionItem[]) => {
-    track(EVENTS[type].started, { count: items.length });
+  const start = useCallback(async (type: RewardType, items: RewardSessionItem[], surface?: RewardSurfaceTag) => {
+    track(EVENTS[type].started, { count: items.length, surface });
     try {
-      return await postJson<StartResponse>("/api/rewards/download/start", { type, items });
+      return await postJson<StartResponse>("/api/rewards/download/start", { type, items, surface });
     } catch (e) {
       track(EVENTS[type].failed, { code: e instanceof RewardSessionClientError ? e.code : "INTERNAL" });
       throw e;

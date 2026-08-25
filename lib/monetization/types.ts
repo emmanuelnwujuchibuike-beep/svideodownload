@@ -46,7 +46,21 @@ export type AdZone =
     appearing inside a comment truncates the list early and silently drops
     every zone below it from the type/runtime agreement check.
   */
-  | "feed_inline";
+  | "feed_inline"
+  /*
+    Multi-Link batch downloader (2026-08-25).
+
+    `multilink_between_sources` sits between fetch cards and takes any format.
+    `multilink_fetch_gate` is the skippable vignette after a fetch action.
+
+    ⚠️ Same rule as the note above: no semicolon anywhere in a comment inside
+    this union, and no double-quoted lowercase word either — ad-slots.test.ts
+    recovers the member list by slicing at the first statement terminator and
+    then matching every quoted token, so either one silently corrupts the
+    type/runtime agreement check.
+  */
+  | "multilink_between_sources"
+  | "multilink_fetch_gate";
 
 export type DeviceType = "mobile" | "desktop";
 

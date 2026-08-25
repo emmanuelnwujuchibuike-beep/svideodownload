@@ -43,6 +43,18 @@ import { getMonetizationSettings, type MonetizationSettings } from "./settings";
 
 export type RewardType = "hd" | "batch" | "preview";
 
+/**
+ * WHICH surface opened this reward (owner, 2026-08-25: "how many reward ad from
+ * multi download").
+ *
+ * `RewardType` alone cannot answer that: the single-link batch gate and the
+ * multi-link gate both open type "batch" — deliberately, so the item cap, the
+ * daily limit and `redeemRewardItem` behave identically for both. Without this
+ * tag the admin sees one merged number and no way to tell which gate earned it.
+ * Optional so an older client that omits it still works.
+ */
+export type RewardSurfaceTag = "multilink_batch" | "batch_download" | "hd_download" | "video_preview";
+
 export interface RewardItemInput {
   url: string;
   formatId: string;
@@ -108,7 +120,7 @@ interface SessionRow {
   ip_hash: string | null;
   type: RewardType;
   status: "pending" | "granted" | "expired";
-  payload: { items: RewardItem[] };
+  payload: { items: RewardItem[]; surface?: RewardSurfaceTag };
   consumed_indexes: number[];
   expires_at: string;
 }
@@ -142,6 +154,9 @@ export async function startRewardSession(input: {
   items: RewardItemInput[];
   userId: string | null;
   ip: string;
+  /** Which gate opened this — see RewardSurfaceTag. Stored on the session so
+   *  the GRANT event can report it too, not just the start. */
+  surface?: RewardSurfaceTag;
 }): Promise<{ id: string; expiresAt: string }> {
   const settings = await getMonetizationSettings();
   if (!settings[FEATURE_FLAG[input.type]]) {
@@ -189,7 +204,7 @@ export async function startRewardSession(input: {
   const db = createAdminClient();
   const { data, error } = await db
     .from("reward_sessions")
-    .insert({ user_id: userId, ip_hash: ipHash, type: input.type, payload: { items } })
+    .insert({ user_id: userId, ip_hash: ipHash, type: input.type, payload: { items, surface: input.surface } })
     .select("id, expires_at")
     .single();
   if (error || !data) throw new RewardError("INVALID_REQUEST", "Couldn't start the reward session.");
@@ -203,7 +218,7 @@ export async function startRewardSession(input: {
   */
   trackEvent("reward_started", {
     userId,
-    metadata: { rewardType: input.type, items: items.length },
+    metadata: { rewardType: input.type, items: items.length, surface: input.surface ?? null },
   });
 
   return { id: data.id as string, expiresAt: data.expires_at as string };
@@ -264,7 +279,9 @@ export async function completeRewardSession(input: {
   */
   trackEvent("reward_granted", {
     userId: input.userId,
-    metadata: { rewardType: row.type, items: row.payload.items.length },
+    // Read back off the stored session, so the grant is attributed to the same
+    // surface that started it even though the client never re-sends it.
+    metadata: { rewardType: row.type, items: row.payload.items.length, surface: row.payload.surface ?? null },
   });
 
   return { items: row.payload.items };

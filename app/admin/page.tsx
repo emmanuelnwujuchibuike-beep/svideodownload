@@ -141,6 +141,7 @@ import { AnalyticsPanel } from "@/features/admin/analytics-panel";
 import { BroadcastComposer } from "@/features/admin/broadcast-composer";
 import { LimitsEditor } from "@/features/admin/limits-editor";
 import { MultiLinkEditor } from "@/features/admin/multi-link-editor";
+import { MultiLinkMonitor } from "@/features/admin/multi-link-monitor";
 import { RewardNetworkEditor } from "@/features/admin/reward-network-editor";
 import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
@@ -177,6 +178,7 @@ import { PromoEditor } from "@/features/admin/promo-editor";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
 import { getNetworkCapabilities, getRewardNetworks } from "@/lib/monetization/reward-networks-store";
+import { getMultiLinkStats } from "@/lib/monetization/multilink-stats";
 import { listAffiliates } from "@/lib/monetization/tools";
 import {
   fetchMonetizationAnalytics,
@@ -229,7 +231,7 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit, multiLink, rewardNetworks, networkCaps] =
+  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit, multiLink, rewardNetworks, networkCaps, multiLinkStats] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
@@ -257,6 +259,10 @@ export default async function AdminPage() {
       // fact the routing table cannot know (Offerium readiness).
       getRewardNetworks(),
       getNetworkCapabilities(),
+      // Multi-Link usage, refusals, ad impressions and reward funnel. Never
+      // throws — an unmigrated or unreachable table yields zeroes and the panel
+      // says "nothing recorded yet" rather than breaking the dashboard.
+      getMultiLinkStats(30),
     ]);
 
   return (
@@ -348,6 +354,8 @@ export default async function AdminPage() {
             {/* Which network pays for which reward moment. Sits in the ads
                 panel beside the network switches it routes between, not in
                 Pricing — it is an ad-delivery decision, not a plan limit. */}
+            {/* Usage + ad performance, above the routing that governs it. */}
+            <MultiLinkMonitor stats={multiLinkStats} />
             <RewardNetworkEditor
               settings={rewardNetworks}
               offeriumConfigured={networkCaps.offeriumConfigured}

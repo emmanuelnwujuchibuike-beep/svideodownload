@@ -104,6 +104,8 @@ export function RevenueCharts({
   const installs: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.installs }));
   const rewardsStarted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsStarted }));
   const rewardsGranted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsGranted }));
+  const multilinkBatches: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.multilinkBatches }));
+  const multilinkRefused: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.multilinkRefused }));
   /*
     🔴 A NULL DAY IS DROPPED, NOT PLOTTED AS ZERO (owner, 2026-08-23:
     "returning visitors in admin is glitching, showing 0"). An unmeasured day
@@ -122,6 +124,8 @@ export function RevenueCharts({
   const totalImpr = impressions.reduce((n, p) => n + p.value, 0);
   const totalClicks = clicks.reduce((n, p) => n + p.value, 0);
   const totalDownloads = downloads.reduce((n, p) => n + p.value, 0);
+  const totalMultilinkBatches = multilinkBatches.reduce((n, p) => n + p.value, 0);
+  const totalMultilinkRefused = multilinkRefused.reduce((n, p) => n + p.value, 0);
   const totalNewVisitors = newVisitors.reduce((n, p) => n + p.value, 0);
   const totalReturningVisitors = returningVisitors.reduce((n, p) => n + p.value, 0);
   const ctr = totalImpr > 0 ? (totalClicks / totalImpr) * 100 : null;
@@ -492,6 +496,34 @@ export function RevenueCharts({
               : `${totalRewardsGranted.toLocaleString()} verified · ${rewardCompletion}% completion`
           }
           points={rewardsGranted}
+          slot={1}
+        />
+
+        {/*
+          Multi-Link batches (owner, 2026-08-25: "also a chart in revenue").
+
+          Two lines for the same reason as the pair above: a success-only
+          series makes a limit that is turning people away look like an
+          absence of demand. `batch_started` is charted rather than
+          `batch_authorized` because authorization happens BEFORE the ad and
+          before the allowance is spent, so it would count batches nobody
+          completed — this is "batches that actually ran", which is what
+          corresponds to the impressions and downloads charted elsewhere.
+        */}
+        <AdminAreaChart
+          title="Multi-Link batches"
+          subtitle={`${totalMultilinkBatches.toLocaleString()} ran in the last ${range} days`}
+          points={multilinkBatches}
+          slot={2}
+        />
+        <AdminAreaChart
+          title="Multi-Link refused"
+          subtitle={
+            totalMultilinkRefused === 0
+              ? `None refused in the last ${range} days`
+              : `${totalMultilinkRefused.toLocaleString()} hit a limit — unmet intent, and the upgrade case`
+          }
+          points={multilinkRefused}
           slot={1}
         />
 

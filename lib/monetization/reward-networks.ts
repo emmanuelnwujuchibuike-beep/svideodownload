@@ -26,6 +26,7 @@
 /** Every moment in the product where an ad can gate an action. */
 export type RewardSurface =
   | "multilink_batch"
+  | "multilink_fetch"
   | "batch_download"
   | "batch_complete"
   | "hd_download"
@@ -77,6 +78,20 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     description: "Before a multi-source batch starts downloading.",
     supports: BATCH_NETWORKS,
     fallback: "interstitial",
+  },
+  {
+    id: "multilink_fetch",
+    label: "Multi-Link — after fetching sources",
+    description: "The skippable vignette once a fetch finishes and the results appear.",
+    /*
+      Interstitial or nothing. The visitor has already GOT their results by the
+      time this runs — it is an interruption placed after a completed action,
+      not a gate in front of a locked one, so there is nothing a rewarded
+      format could unlock. Same reasoning as the other post-event rows below.
+    */
+    supports: ["interstitial", "none"],
+    fallback: "interstitial",
+    note: "Fires once per fetch action, however many sources it covered — never one ad per source.",
   },
   {
     id: "batch_download",
@@ -227,6 +242,7 @@ export const DEFAULT_REWARD_NETWORKS: RewardNetworkMap = {
   // Defaults reproduce EXACTLY what each surface did before this table existed,
   // so an unconfigured site behaves identically to how it did yesterday.
   multilink_batch: { network: "interstitial", gptAdUnitPath: "" },
+  multilink_fetch: { network: "interstitial", gptAdUnitPath: "" },
   batch_download: { network: "interstitial", gptAdUnitPath: "" },
   batch_complete: { network: "interstitial", gptAdUnitPath: "" },
   // NOT gpt_rewarded: the real GPT flow is paused on these two surfaces until a

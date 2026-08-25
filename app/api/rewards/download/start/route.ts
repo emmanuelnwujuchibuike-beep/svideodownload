@@ -24,6 +24,10 @@ const itemSchema = z.object({
 const schema = z.object({
   type: z.enum(["hd", "batch", "preview"]),
   items: z.array(itemSchema).min(1).max(50),
+  /* Which gate opened this. Reporting only — it can never widen what the
+     reward grants, since redemption still returns exactly the stored items.
+     Optional so a cached older client keeps working. */
+  surface: z.enum(["multilink_batch", "batch_download", "hd_download", "video_preview"]).optional(),
 });
 
 function fail(code: ApiError["code"], error: string, status: number) {
@@ -71,6 +75,7 @@ export async function POST(request: Request) {
       items: parsed.data.items,
       userId,
       ip: clientIp,
+      surface: parsed.data.surface,
     });
     return NextResponse.json({ rewardSessionId: session.id, expiresAt: session.expiresAt });
   } catch (e) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, Layers } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,33 @@ export function MultiLinkIntro({
 }) {
   const onHero = surface === "hero";
 
+  /*
+    🔴 THE DESCRIPTION IS HIDDEN BY DEFAULT (owner, 2026-08-25: "hide the
+    multilink gray description, the H1 and the same platform, mixed platform
+    and batch download text is enough, the gray description occupied a lot of
+    space in hero section … show like a display mock when a learn more button
+    near the H1 is clicked, and a hide button should show when it display and
+    it should auto hide after 3secs, so it doesnt occupy space").
+
+    ── Why it is an OVERLAY, not a collapsing block ────────────────────────
+    "so it doesnt occupy space" is the requirement, and a block that expands
+    in place occupies space by definition — it would also push the paste box
+    and the whole hero down the moment it opened, which is a layout shift on
+    the page whose CLS was measured at 0.684 once already. So it floats above
+    the layout (`absolute`) and the section reserves nothing for it. Opening
+    and closing move no other pixel.
+  */
+  const [showDetail, setShowDetail] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showDetail) return;
+    hideTimer.current = setTimeout(() => setShowDetail(false), 3000);
+    return () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    };
+  }, [showDetail]);
+
   return (
     <section
       aria-labelledby="multi-link-heading"
@@ -57,27 +85,63 @@ export function MultiLinkIntro({
         above it is already a bounded column — matching it keeps the section
         visually balanced around the tool rather than spanning past it.
       */}
-      <div className="mx-auto max-w-xl text-center">
-        <h3
-          id="multi-link-heading"
-          className={cn(
-            // Prominent, not oversized (§3) — a step below the page's own H1.
-            "text-balance text-lg font-extrabold tracking-tight sm:text-xl",
-          )}
-        >
-          Download multiple links, all in one place.
-        </h3>
-        <p
-          className={cn(
-            "mt-1.5 text-pretty text-sm leading-relaxed",
-            onHero ? "text-white/75" : "text-muted-foreground",
-          )}
-        >
-          Add links from the same platform or mix different supported platforms into one batch.
-          Fetch, choose what you want, and download everything together.
-        </p>
+      <div className="relative mx-auto max-w-xl text-center">
+        <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
+          <h3
+            id="multi-link-heading"
+            className={cn(
+              // Prominent, not oversized — a step below the page's own H1.
+              "text-balance text-lg font-extrabold tracking-tight sm:text-xl",
+            )}
+          >
+            Download multiple links, all in one place.
+          </h3>
 
-        {/* Capability chips (§4) — subtle, thin, monochrome. Wrap on mobile. */}
+          {/* Beside the heading, as asked. Doubles as the Hide control while
+              the detail is up, so no second button appears and disappears. */}
+          <button
+            type="button"
+            onClick={() => setShowDetail((v) => !v)}
+            aria-expanded={showDetail}
+            aria-controls="multi-link-detail"
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              onHero ? "text-white/80 hover:text-white" : "text-primary",
+            )}
+          >
+            {showDetail ? "Hide" : "Learn more"}
+          </button>
+        </div>
+
+        {/*
+          The detail card. `absolute` so it never displaces the paste box below
+          it — the whole point of hiding it was the space it took in the hero.
+          `aria-live` because it appears and self-dismisses without focus
+          moving, which a screen reader would otherwise never learn about.
+        */}
+        {showDetail ? (
+          <div
+            id="multi-link-detail"
+            role="status"
+            aria-live="polite"
+            onMouseEnter={() => {
+              // Reading it shouldn't be a race against the timer.
+              if (hideTimer.current) clearTimeout(hideTimer.current);
+            }}
+            onMouseLeave={() => setShowDetail(false)}
+            className={cn(
+              "animate-fade-up absolute left-1/2 top-full z-20 mt-2 w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border p-3 text-left text-sm leading-relaxed shadow-luxury",
+              onHero
+                ? "border-white/15 bg-[#0b1020]/95 text-white/85 backdrop-blur"
+                : "border-border bg-card text-muted-foreground",
+            )}
+          >
+            Add links from the same platform or mix different supported platforms into one batch.
+            Fetch, choose what you want, and download everything together.
+          </div>
+        ) : null}
+
+        {/* Capability chips — subtle, thin, monochrome. Wrap on mobile. */}
         <ul className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
           {["Same platform", "Mixed platforms", "Batch download"].map((chip) => (
             <li

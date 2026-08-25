@@ -88,6 +88,25 @@ export interface DayPoint {
    * figure worth acting on. See the note in lib/platform/events-registry.ts.
    */
   rewardsGranted: number;
+  /**
+   * Multi-Link batches that actually STARTED downloading (owner, 2026-08-25:
+   * "and also a chart in revenue").
+   *
+   * `batch_started` rather than `batch_authorized`: authorization happens
+   * before the ad and before the allowance is spent, so charting it would
+   * count batches nobody completed. This line is "batches that ran", which is
+   * the one that corresponds to ad impressions and downloads.
+   */
+  multilinkBatches: number;
+  /**
+   * Batches a server-side limit REFUSED.
+   *
+   * Charted beside the line above for the same reason `rewardsStarted` is
+   * charted beside `rewardsGranted`: a success-only series makes a limit that
+   * is turning people away look like an absence of demand. The gap is the
+   * number worth acting on — it is unmet intent, and it is the upgrade case.
+   */
+  multilinkRefused: number;
 }
 
 export interface RevenueSeries {
@@ -122,7 +141,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
-    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0, installs: 0, rewardsStarted: 0, rewardsGranted: 0 });
+    grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0, installs: 0, rewardsStarted: 0, rewardsGranted: 0, multilinkBatches: 0, multilinkRefused: 0 });
   }
 
   const empty: RevenueSeries = { days: [...grid.values()], capped: false, rangeDays: days };
@@ -202,13 +221,16 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
         ROW_CAP,
       );
 
-    const [impr, clicks, dl, inst, rewardStart, rewardGrant] = await Promise.all([
+    const [impr, clicks, dl, inst, rewardStart, rewardGrant, batchRun, batchRefused] = await Promise.all([
       pull("ad_impressions"),
       pull("ad_clicks"),
       pullDownloads(),
       pullInstalls(),
       pullEvent("reward_started"),
       pullEvent("reward_granted"),
+      // Multi-Link, through the same helper — they differ only by `type`.
+      pullEvent("batch_started"),
+      pullEvent("batch_refused"),
     ]);
 
     for (const r of impr.rows) {
@@ -235,10 +257,26 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       const cell = grid.get(r.created_at.slice(0, 10));
       if (cell) cell.rewardsGranted += 1;
     }
+    for (const r of batchRun.rows) {
+      const cell = grid.get(r.created_at.slice(0, 10));
+      if (cell) cell.multilinkBatches += 1;
+    }
+    for (const r of batchRefused.rows) {
+      const cell = grid.get(r.created_at.slice(0, 10));
+      if (cell) cell.multilinkRefused += 1;
+    }
 
     return {
       days: [...grid.values()],
-      capped: impr.capped || clicks.capped || dl.capped || inst.capped || rewardStart.capped || rewardGrant.capped,
+      capped:
+        impr.capped ||
+        clicks.capped ||
+        dl.capped ||
+        inst.capped ||
+        rewardStart.capped ||
+        rewardGrant.capped ||
+        batchRun.capped ||
+        batchRefused.capped,
       rangeDays: days,
     };
   } catch {

@@ -106,6 +106,10 @@ export function BatchAdGate({
     once and memoised process-wide, and this reads the same object.
   */
   const { network, gptAdUnitPath } = useRewardNetwork(surface);
+  /* Reporting tag carried onto the reward session, so the admin can tell a
+     multi-link reward from a single-link one — both open type "batch" on
+     purpose, so the type alone cannot answer it. */
+  const surfaceTag = surface === "multilink_batch" ? "multilink_batch" : "batch_download";
   const { network: completeNetwork } = useRewardNetwork("batch_complete");
 
   const [phase, setPhase] = useState<"idle" | "gate" | "complete">("idle");
@@ -141,14 +145,14 @@ export function BatchAdGate({
     setPhase("idle");
     dismissToast(PREP_TOAST_ID);
     try {
-      const session = await (startPromiseRef.current ?? start("batch", [...batch]));
+      const session = await (startPromiseRef.current ?? start("batch", [...batch], surfaceTag));
       const result = await complete("batch", session.rewardSessionId);
       onProceed({ rewardSessionId: session.rewardSessionId, items: result.items });
     } catch (e) {
       console.warn("[batch-ad-gate] reward confirmation failed after a completed ad, proceeding anyway:", e);
       onProceed(null);
     }
-  }, [batch, start, complete, onProceed]);
+  }, [batch, start, complete, onProceed, surfaceTag]);
 
   /*
     ── The GPT path ────────────────────────────────────────────────────────
@@ -173,7 +177,7 @@ export function BatchAdGate({
     },
     [onProceed],
   );
-  const gptFlow = useRewardFlow("BATCH_UNLOCK", onGptGranted, gptAdUnitPath);
+  const gptFlow = useRewardFlow("BATCH_UNLOCK", onGptGranted, gptAdUnitPath, surfaceTag);
   const usingGpt = useRef(false);
   /*
     `gptFlow.open` is NOT reference-stable — it closes over the GPT hook's own
@@ -233,13 +237,13 @@ export function BatchAdGate({
       return;
     }
 
-    startPromiseRef.current = start("batch", [...batch]);
+    startPromiseRef.current = start("batch", [...batch], surfaceTag);
     setHasAd(null);
     setRemaining(Math.max(0, batchGateSeconds));
     setPhase("gate");
     // Immediate feedback the instant the tap registers.
     toast("Preparing your download…", "loading", { id: PREP_TOAST_ID });
-  }, [batch, showAds, enabled, batchGateSeconds, bypass, start, network]);
+  }, [batch, showAds, enabled, batchGateSeconds, bypass, start, network, surfaceTag]);
 
   /*
     Ceiling for a slot that never answers at all (`hasAd` stuck at `null`).

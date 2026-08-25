@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { RewardType } from "@/lib/monetization/reward-sessions";
+import type { RewardSurfaceTag, RewardType } from "@/lib/monetization/reward-sessions";
 
 import { useGptRewardedAd } from "./use-gpt-rewarded-ad";
 import { RewardSessionClientError, useRewardSession, type RewardSessionItem } from "./use-reward-session";
@@ -30,6 +30,9 @@ const CONTEXT_META: Record<
   RewardFlowContext,
   {
     type: RewardType;
+    /** Reporting tag for the reward session — overridable, because
+     *  BATCH_UNLOCK is opened by BOTH the single-link and multi-link gates. */
+    surface: RewardSurfaceTag;
     title: string;
     body: string;
     primaryLabel: string;
@@ -39,6 +42,7 @@ const CONTEXT_META: Record<
 > = {
   DOWNLOAD_UNLOCK: {
     type: "hd",
+    surface: "hd_download",
     title: "Unlock your download",
     body: "Watch a short sponsored experience to unlock this download for free.",
     primaryLabel: "Watch & Download",
@@ -47,6 +51,7 @@ const CONTEXT_META: Record<
   },
   VIDEO_PREVIEW: {
     type: "preview",
+    surface: "video_preview",
     title: "Preview this video",
     body: "Watch a short sponsored experience to unlock the video preview.",
     primaryLabel: "Watch & Preview",
@@ -65,6 +70,7 @@ const CONTEXT_META: Record<
   */
   BATCH_UNLOCK: {
     type: "batch",
+    surface: "batch_download",
     title: "Unlock your batch download",
     body: "Watch a short sponsored experience to download everything you selected.",
     primaryLabel: "Watch & Download",
@@ -114,6 +120,9 @@ export function useRewardFlow(
    * the HD gate earned the money — one shared unit reports them as one number.
    */
   adUnitPath?: string,
+  /** Overrides the context default — BATCH_UNLOCK is opened by two different
+   *  gates and the admin needs to tell their revenue apart. */
+  surfaceTag?: RewardSurfaceTag,
 ) {
   const meta = CONTEXT_META[context];
   const { start, complete } = useRewardSession();
@@ -148,7 +157,7 @@ export function useRewardFlow(
     setErrorText(null);
     setPhase("requesting");
     grantedHandledRef.current = false;
-    const promise = start(meta.type, itemsRef.current);
+    const promise = start(meta.type, itemsRef.current, surfaceTag ?? meta.surface);
     startPromiseRef.current = promise;
     promise.catch((e) => {
       if (startPromiseRef.current !== promise) return; // superseded by a newer attempt
@@ -157,7 +166,7 @@ export function useRewardFlow(
       setPhase("unavailable");
     });
     gpt.request(adUnitPath?.trim() || DEFAULT_AD_UNIT_PATH);
-  }, [start, meta.type, gpt, adUnitPath]);
+  }, [start, meta.type, meta.surface, surfaceTag, gpt, adUnitPath]);
 
   // GPT slot ready → show it immediately. Consent was already collected at
   // the prompt step; this is not a second opt-in, just the earliest moment

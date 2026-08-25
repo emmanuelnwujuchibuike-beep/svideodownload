@@ -40,6 +40,9 @@ export const AD_ZONES = [
   // In-feed native slot — one after every N posts (2026-08-24). Appended last
   // so existing rows keep their position in the admin list.
   "feed_inline",
+  // Multi-Link batch downloader (2026-08-25). Appended last, same reason.
+  "multilink_between_sources",
+  "multilink_fetch_gate",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -313,6 +316,32 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     // 🔴 Never prefetched. Prefetching is precisely what the slot's own
     // IntersectionObserver exists to avoid — it would pull every upcoming ad
     // in the feed up front and undo the whole lazy-loading design.
+    prefetch: false,
+  },
+  multilink_between_sources: {
+    label: "Multi-Link — between source cards",
+    description:
+      "An in-page unit between each fetch card in the batch downloader. Takes any format — banner, native, AdSense unit or video. Only ever appears BETWEEN two source cards, never after the last one, so it can't sit at the bottom of the panel as filler.",
+    // Part of the panel's rhythm, like the under-download unit — not an
+    // interruption the visitor should be dismissing one at a time.
+    persistent: true,
+    supportsSkip: false,
+    /*
+      🔴 Not prefetched. The whole panel is behind a lazy gate that most
+      visitors never open (see multi-link-button.tsx) — warming this zone on
+      page load would spend a round trip on every cold landing visit for a
+      placement that usually never renders.
+    */
+    prefetch: false,
+  },
+  multilink_fetch_gate: {
+    label: "Multi-Link — after fetching sources",
+    description:
+      "A full-screen skippable vignette shown once when a fetch finishes and the results appear. One per fetch action, however many sources it covered — never one ad per source.",
+    persistent: false,
+    // The visitor waits through it, so `skippable` / `skip_after_seconds` on
+    // the ad row are meaningful here.
+    supportsSkip: true,
     prefetch: false,
   },
   exit_intent_popup: {

@@ -12,9 +12,12 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
+import { AdSurface } from "@/features/monetization/ad-surface";
+
+import { FetchAdGate } from "./fetch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import type { RewardSessionItem } from "@/features/monetization/use-reward-session";
 import { track } from "@/lib/analytics/client";
@@ -25,6 +28,7 @@ import { SourceCard } from "./source-card";
 import {
   batchProgress,
   batchReducer,
+  countFetchedSources,
   countItems,
   countSelected,
   filledSources,
@@ -442,8 +446,29 @@ export function MultiLinkPanel({
       {/* ── Sources ────────────────────────────────────────────────────── */}
       <ul className="mt-3 space-y-2.5">
         {sources.map((source, i) => (
+          <Fragment key={source.id}>
+          {/*
+            An ad BETWEEN cards, never after the last one (owner, 2026-08-25).
+
+            The `i > 0` placement is the same rule the feed's slot inserter
+            proved out: a unit after the final item is not "between" anything —
+            it sits at the bottom of the panel as filler, directly above the
+            Download button, which is the one place an ad must never be. It
+            takes any format the zone is seeded with (banner, native, AdSense
+            unit or video) because `AdSlot` renders whatever the row declares,
+            and `AdSurface` renders NOTHING at all while the zone is empty, so
+            an unconfigured site sees the panel exactly as it was.
+          */}
+          {i > 0 ? (
+            <li>
+              <AdSurface
+                zone="multilink_between_sources"
+                maxWidth="max-w-none"
+                className="my-0"
+              />
+            </li>
+          ) : null}
           <SourceCard
-            key={source.id}
             source={source}
             index={i}
             /* §9 — focus the first field on open, but only where a keyboard
@@ -467,6 +492,7 @@ export function MultiLinkPanel({
             onDownloadSource={() => void authorizeAndStart(source.items.filter((i2) => i2.selected))}
             onRetrySource={() => retryFailed(source.id)}
           />
+          </Fragment>
         ))}
       </ul>
 
@@ -575,25 +601,54 @@ export function MultiLinkPanel({
             </div>
           ) : null}
 
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          {/* Stacked at every width now — the primary action owns its own full
+              row on desktop too, instead of sharing one with ZIP. */}
+          <div className="mt-3 flex flex-col gap-2">
             <button
               type="button"
               onClick={() => void authorizeAndStart(selectedItems(state))}
               disabled={!canDownload || outOfBatches}
-              className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 text-sm font-bold text-white shadow-lg transition hover:opacity-95 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-45 disabled:active:scale-100"
+              /*
+                🔴 REBUILT (owner, 2026-08-25: "the download button in multi
+                link is too thin and looks like a glitch and is
+                unprofessional").
+
+                Three things were wrong and all three were the same mistake —
+                it was sized like a secondary control while being the panel's
+                primary action:
+
+                 • h-12 / text-sm against the h-14 / text-base the paste box's
+                   own Download button uses. Next to a full-width card of
+                   source rows a 48px bar reads as an accident, not a CTA.
+                 • `flex-1` beside the ZIP button split the row, so the primary
+                   action rendered at roughly half width — which is exactly
+                   what "too thin" describes. It is full width now and ZIP
+                   moved BELOW it, where a secondary action belongs.
+                 • `disabled:opacity-45` on a saturated gradient produces a
+                   washed, half-rendered slab that genuinely looks broken. The
+                   disabled state is now a flat neutral surface — plainly off,
+                   rather than a damaged version of on.
+              */
+              className={cn(
+                "inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-6 text-base font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                !canDownload || outOfBatches
+                  ? "cursor-not-allowed bg-secondary text-muted-foreground"
+                  : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-lg shadow-violet-600/25 hover:opacity-95 active:scale-[0.99]",
+              )}
             >
               {state.phase === "authorizing" || state.phase === "awaiting-reward" ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Preparing…
+                  <Loader2 className="h-5 w-5 animate-spin" /> Preparing…
                 </>
               ) : running ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Downloading{" "}
+                  <Loader2 className="h-5 w-5 animate-spin" /> Downloading{" "}
                   {Math.min(progress.done + 1, progress.total)} of {progress.total}
                 </>
               ) : (
                 <>
-                  <Download className="h-4 w-4" /> Download selected · {selectedCount}
+                  <Download className="h-5 w-5" /> Download selected
+                  {selectedCount > 0 ? ` · ${selectedCount}` : ""}
                 </>
               )}
             </button>
@@ -603,7 +658,9 @@ export function MultiLinkPanel({
                 type="button"
                 onClick={() => void downloadZip()}
                 disabled={zipping}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50"
+                /* Secondary, and now genuinely secondary: full width under the
+                   primary rather than competing with it for the same row. */
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card px-5 text-sm font-semibold text-foreground transition hover:bg-secondary active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:opacity-50"
               >
                 {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileArchive className="h-4 w-4" />}
                 {zipping ? "Zipping…" : "Download as ZIP"}
@@ -633,6 +690,13 @@ export function MultiLinkPanel({
         control stays hidden until the countdown reaches zero, so a resolved
         gate only ever means the ad ran in full.
       */}
+      {/*
+        The post-fetch vignette. Fires once per fetch ACTION on the falling
+        edge of `busyFetching` — see the note in the component for why that is
+        not once per source.
+      */}
+      <FetchAdGate busy={busyFetching} readyCount={countFetchedSources(state)} />
+
       <BatchAdGate
         /*
           Its OWN reward surface, so an admin can route the multi-link gate to

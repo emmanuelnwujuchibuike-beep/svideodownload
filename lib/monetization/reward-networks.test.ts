@@ -56,7 +56,7 @@ describe("post-event moments never offer a rewarded format", () => {
     run AFTER the thing already happened, so there is no "that" — offering GPT
     or an offerwall would be a control that cannot do what its label says.
   */
-  it.each(["batch_complete", "wallpaper", "history_video"] as const)("%s", (id) => {
+  it.each(["batch_complete", "multilink_fetch", "wallpaper", "history_video"] as const)("%s", (id) => {
     const def = REWARD_SURFACES.find((s) => s.id === id)!;
     expect(def.supports).not.toContain("gpt_rewarded");
     expect(def.supports).not.toContain("offerium");
@@ -187,6 +187,12 @@ describe("each surface is wired at a real call site", () => {
     expect(preview).toMatch(/useRewardNetwork\("hd_download"\)/);
     expect(preview).toMatch(/hdNetwork\.network === "gpt_rewarded"/);
     expect(preview).toMatch(/hdNetwork\.network === "none"/);
+  });
+
+  it("multilink_fetch — the post-fetch vignette honours it", () => {
+    const fetchGate = read("features/downloader/multi-link/fetch-ad-gate.tsx");
+    expect(fetchGate).toMatch(/useRewardNetwork\("multilink_fetch"\)/);
+    expect(fetchGate).toMatch(/network === "none"/);
   });
 
   it("wallpaper and history_video — honoured at their triggers", () => {

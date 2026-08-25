@@ -280,3 +280,108 @@ the SAME `"batch"` reward-session type, so nothing server-side changes), and
 declining that ad now reports a **cancellation** rather than falling open —
 backing out of a rewarded ad must not hand over the download, and it costs no
 allowance because `/commit` is never reached.
+
+---
+
+## Round 3 (2026-08-25) — ad placements, monitoring, and two UI corrections
+
+### Two new ad zones
+
+| Zone | Where | Formats | Skippable |
+| --- | --- | --- | --- |
+| `multilink_between_sources` | Between each fetch card | any (banner, native, AdSense unit, video) | no — it's furniture |
+| `multilink_fetch_gate` | Full-screen vignette after a fetch | any | **yes** |
+
+The inline slot renders **between** cards only (`i > 0`), never after the last
+one — a unit after the final card is not "between" anything, it's filler
+directly above the Download button, which is the one place an ad must never
+be. It uses `AdSurface`, so an unseeded zone renders *nothing*: an
+unconfigured site sees the panel exactly as before.
+
+Neither zone is prefetched. The whole panel is behind a lazy gate most visitors
+never open, so warming them would spend a round trip on every cold landing visit
+for a placement that usually never renders.
+
+### The fetch vignette fires once per fetch ACTION
+
+Triggered on the falling edge of "anything is fetching" — so "Fetch all" across
+three sources produces **one** ad, and a single card's Fetch produces one.
+Firing per source would mean three full-screen interruptions from a single tap:
+miserable, and exactly the ad density that gets a site refused (this project
+already carries three AdSense rejections). It also shows nothing when a fetch
+produced no results — an ad on top of an error is the worst moment for one — and
+every dead end (no creative, slot never answers, premium viewer) closes itself,
+because the posts are already on screen underneath.
+
+Routable like every other moment via `multilink_fetch` in the reward-network
+table (interstitial or none — it runs after the results arrive, so there's
+nothing a rewarded format could unlock).
+
+### The Download button
+
+Owner: *"too thin and looks like a glitch and is unprofessional."* Three
+problems, one root cause — it was sized like a secondary control while being the
+panel's primary action:
+
+- `h-12`/`text-sm` against the `h-14`/`text-base` the paste box's own Download
+  button uses.
+- `flex-1` **beside** the ZIP button, so the primary action rendered at roughly
+  half width. That is what "too thin" was describing. It is full width now, and
+  ZIP moved below it where a secondary action belongs.
+- `disabled:opacity-45` over a saturated gradient renders as a washed,
+  half-drawn slab — the "glitch". The disabled state is now a flat neutral
+  surface: plainly off, rather than a damaged version of on.
+
+### The intro description is hidden by default
+
+Owner: *"the gray description occupied a lot of space in hero section."* The
+heading and the three chips stay; the description moved behind a **Learn more**
+control beside the heading, which becomes **Hide** while open and auto-dismisses
+after 3 seconds.
+
+It is an **overlay** (`absolute`), not a collapsing block — "so it doesnt occupy
+space" is the requirement, and a block that expands in place occupies space by
+definition and would push the paste box down, a layout shift on the page whose
+CLS was measured at 0.684 once already. Hovering it pauses the timer so reading
+it isn't a race.
+
+### Admin monitoring
+
+**Live activity** now shows `batch_authorized`, `batch_started` and
+`batch_refused` with the user attached — answering "which user used multi
+links" — each with a detail line (`3 sources · 16 items · free`, or *which*
+limit bit on a refusal). All three, because a feed showing only successes makes
+a limit that is turning people away look like an absence of demand.
+
+**Revenue** gained two charted series: Multi-Link batches (from `batch_started`,
+not `batch_authorized` — authorization happens before the ad and before the
+allowance is spent, so it would count batches nobody completed) and Multi-Link
+refused.
+
+**Multi-Link activity panel** (Admin → Ads & networks): batches run, authorized,
+refused, distinct members; free-allowance usage today (used up vs. still have
+some left); ad impressions split by the two zones; the reward funnel with
+completion rate; refusals broken down by which limit bit; and average sources
+and items per batch.
+
+To make "how many reward ads from multi-download" answerable at all, reward
+sessions now carry a **surface tag**. Both batch gates open reward type
+`"batch"` deliberately — identical server behaviour — so the type alone merges
+them. The tag is stored on the session, so the *grant* event is attributed to
+the same surface that started it even though the client never re-sends it. It is
+reporting only, and can never widen what a reward grants.
+
+**One attribution limit, stated in the panel rather than hidden:** the
+free-allowance breakdown covers **signed-in members only**. The allowance is
+keyed per identity, and a signed-out visitor's identity is their IP hash, which
+is deliberately never written to the events table. Their batches are counted in
+the totals and reported separately as `anonymousBatches` rather than folded in
+and silently overstating the user count.
+
+### Verified
+
+`tsc` + `next build` + ESLint clean; full suite **2325/2325**. Landing 267.0 kB
+gz against its 275 kB ceiling, panel still absent from every entry manifest.
+Live: both new zones serve `200`, the routing table exposes `multilink_fetch`,
+and the landing's HTML contains the heading and chips but **zero** occurrences
+of the description.

@@ -24,6 +24,16 @@ export const NOTABLE = new Set([
   // actually complete?" rather than just "a reward existed".
   "reward_started",
   "reward_granted",
+  /*
+    Multi-Link batch lifecycle (owner, 2026-08-25: "see in live activity which
+    user used multi links"). All three, because the feed has to answer both
+    halves of the question — a batch that RAN and a batch that was REFUSED are
+    equally worth seeing, and a feed showing only successes makes a limit that
+    is biting look like quiet demand.
+  */
+  "batch_authorized",
+  "batch_started",
+  "batch_refused",
   "subscribe",
   "subscribe_cancel",
   "api_key_created",
@@ -61,6 +71,24 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
       const parts = [type, count !== null ? `${count} item${count === 1 ? "" : "s"}` : null].filter(Boolean);
       return parts.length > 0 ? parts.join(" · ") : null;
     }
+    case "batch_authorized": {
+      // "3 sources · 16 items · free" — the shape of the batch, which is what
+      // an operator is scanning the feed for.
+      const sources = typeof m.sources === "number" ? m.sources : null;
+      const items = typeof m.items === "number" ? m.items : null;
+      const parts = [
+        sources !== null ? `${sources} source${sources === 1 ? "" : "s"}` : null,
+        items !== null ? `${items} item${items === 1 ? "" : "s"}` : null,
+        m.plan ? String(m.plan) : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(" · ") : null;
+    }
+    case "batch_refused":
+      // WHICH limit bit. Without it the feed says a batch failed and leaves the
+      // operator to guess between a spent allowance and a source ceiling.
+      return m.reason ? String(m.reason).toLowerCase().replace(/_/g, " ") : null;
+    case "batch_started":
+      return m.allowed === false ? "allowance already spent" : "downloading";
     case "upgrade_prompt_view":
       return m.kind ? String(m.kind) : null;
     default:

@@ -18,8 +18,7 @@ export const maxDuration = 120;
  * ── Why it is bounded, and what happens when it hits the bound ─────────────
  * This is the only job in the product that touches every member, so it is the
  * one most able to turn into an unbounded bill. It processes members in pages
- * with a hard ceiling, and it snapshots ACTIVE members first (most recently
- * updated). If the ceiling is reached the rest simply wait for tomorrow — a
+ * with a hard ceiling, newest members first. If the ceiling is reached the rest simply wait for tomorrow — a
  * missing day in someone's chart is a far better failure than a cron that runs
  * for an hour.
  *
@@ -45,15 +44,39 @@ export async function GET(request: Request) {
   const capturedOn = new Date().toISOString().slice(0, 10);
   let written = 0;
   let scanned = 0;
+  let failure: string | null = null;
 
   try {
     for (let from = 0; from < MAX_MEMBERS; from += PAGE) {
+      /*
+        🔴 `created_at`, NOT `updated_at` — THE COLUMN DOES NOT EXIST.
+
+        This ordered by `profiles.updated_at`, which Postgres rejects with
+        42703 ("column profiles.updated_at does not exist"; only `created_at`
+        is there — `last_seen_at` and `last_active_at` are absent too). The
+        `if (error) break` below then turned that into `scanned: 0` and a
+        cheerful `ok:true`, every night, on one of only TWO Vercel cron slots.
+        Combined with migration 0110 never having applied, this job had never
+        written a single row — and Growth Insights, which exists to read them,
+        had nothing to draw.
+
+        The ordering intent was "most recently active first", so the bounded
+        run favours people who are around. No column expresses that, so newest
+        members first is the honest approximation rather than a second wrong
+        guess; the ceiling is 5,000 and there are ~51 profiles, so which end it
+        starts from is currently academic anyway.
+      */
       const { data, error } = await db
         .from("profiles")
         .select("id, followers_count, following_count")
-        .order("updated_at", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false, nullsFirst: false })
         .range(from, from + PAGE - 1);
-      if (error) break;
+      // 🔴 REPORT IT. `break` alone made a query error indistinguishable from
+      // "no members" — which is exactly how a broken column hid for weeks.
+      if (error) {
+        failure = error.message;
+        break;
+      }
 
       const rows = (data ?? []) as { id: string; followers_count: number | null; following_count: number | null }[];
       if (rows.length === 0) break;
@@ -101,7 +124,12 @@ export async function GET(request: Request) {
       const { error: writeError } = await db
         .from("profile_snapshots")
         .upsert(snapshots, { onConflict: "user_id,captured_on" });
-      if (writeError) break;
+      if (writeError) {
+        // Same rule as the read above: an upsert that failed must not read as
+        // a successful run that simply found nothing to write.
+        failure = writeError.message;
+        break;
+      }
       written += snapshots.length;
 
       if (rows.length < PAGE) break;
@@ -111,5 +139,7 @@ export async function GET(request: Request) {
     // a gap far better than the job failing loudly and being disabled.
   }
 
-  return NextResponse.json({ ok: true, capturedOn, scanned, written });
+  // `ok` reflects what actually happened. A query error used to render as a
+  // successful run with zero rows, which is how this stayed broken.
+  return NextResponse.json({ ok: !failure, capturedOn, scanned, written, ...(failure ? { error: failure } : {}) });
 }

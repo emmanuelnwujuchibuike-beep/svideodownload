@@ -8,7 +8,7 @@ import { getWatchCount, isPlayerOpen, onVideoWatched } from "@/features/download
 import { upgradeCta, upgradeHeadline } from "@/lib/monetization/upgrade-cta";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
-import { useInterstitialConfig } from "./use-interstitial-skip";
+import { useInterstitialConfig, useRewardNetwork } from "./use-interstitial-skip";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -74,6 +74,10 @@ export function DownloadInterstitial({
   const { showAds, ready } = useShowAds();
   const { plan } = useEntitlements();
   const { skipSeconds, historyVideo: historyVideoOn } = useInterstitialConfig();
+  /* Per-feature routing (owner, 2026-08-25). This trigger fires on a clip
+     ENDING, so it gates nothing and offers only interstitial/none — "none"
+     silences it without touching the other moments. */
+  const { network: historyNetwork } = useRewardNetwork("history_video");
   const [open, setOpen] = useState(false);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   const [remaining, setRemaining] = useState(0);
@@ -156,11 +160,12 @@ export function DownloadInterstitial({
   // can never interrupt a clip mid-watch: the ad lands as the 2nd video
   // finishes, which is exactly the moment the owner asked for.
   useEffect(() => {
-    if (!ready || !watchAllowed || !historyVideoOn || !triggers.includes("watch")) return;
+    if (!ready || !watchAllowed || !historyVideoOn || historyNetwork === "none") return;
+    if (!triggers.includes("watch")) return;
     return onVideoWatched(() => {
       if (getWatchCount() % WATCH_EVERY === 0) show();
     });
-  }, [ready, watchAllowed, historyVideoOn, triggers, show]);
+  }, [ready, watchAllowed, historyVideoOn, historyNetwork, triggers, show]);
 
   const shown = open && hasAd === true;
   // The admin-set skip delay: while it counts down the ad can't be dismissed;

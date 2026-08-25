@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  getNetworkCapabilities,
+  getRewardNetworks,
+} from "@/lib/monetization/reward-networks-store";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -26,9 +30,26 @@ function clampSeconds(raw: unknown, fallback: number, max: number): number {
 }
 
 export async function GET() {
-  const settings = await getMonetizationSettings();
+  const [settings, rewardNetworks, capabilities] = await Promise.all([
+    getMonetizationSettings(),
+    getRewardNetworks(),
+    getNetworkCapabilities(),
+  ]);
   return NextResponse.json(
     {
+      /*
+        Which network pays for which reward moment (owner, 2026-08-25), plus the
+        one runtime fact the client cannot work out for itself.
+
+        Public and non-user-specific, exactly like the skip delay beside it:
+        knowing that the multi-link gate runs a GPT slot is not a secret — the
+        GPT script is visible in the page anyway. Offerium's readiness arrives
+        as a plain BOOLEAN and never its credentials; `offeriumConfigured`
+        checks two server-only env secrets, and this endpoint is the seam
+        precisely so the client never needs them.
+      */
+      rewardNetworks,
+      offeriumConfigured: capabilities.offeriumConfigured,
       interstitialSkipSeconds: normalizeSkipSeconds(settings.interstitialSkipSeconds),
       // The per-moment switches (wallpaper downloads, history video watches).
       // Public and non-user-specific, like the skip delay — the client needs

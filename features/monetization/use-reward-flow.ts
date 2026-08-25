@@ -12,7 +12,7 @@ import { RewardSessionClientError, useRewardSession, type RewardSessionItem } fr
  * download, and previewing an already-downloaded video. Deliberately never
  * chained — see `use-reward-flow.ts`'s own doc below for why.
  */
-export type RewardFlowContext = "DOWNLOAD_UNLOCK" | "VIDEO_PREVIEW";
+export type RewardFlowContext = "DOWNLOAD_UNLOCK" | "VIDEO_PREVIEW" | "BATCH_UNLOCK";
 
 /**
  * Defaults to Google's own public TEST rewarded ad unit — real Google-served
@@ -53,6 +53,24 @@ const CONTEXT_META: Record<
     secondaryLabel: "Cancel",
     declinedMessage: "The preview wasn't unlocked because the ad wasn't completed.",
   },
+  /*
+    Added 2026-08-25 so a batch gate can run the real GPT rewarded flow when an
+    admin routes it there (lib/monetization/reward-networks.ts), instead of the
+    zone-based interstitial.
+
+    It reuses `type: "batch"` — the SAME reward-session type the interstitial
+    path already opens — so the server side is entirely unchanged: same
+    `MAX_ITEMS.batch` cap, same daily limit field, same `redeemRewardItem`
+    substitution at download time. Only the thing the visitor watches differs.
+  */
+  BATCH_UNLOCK: {
+    type: "batch",
+    title: "Unlock your batch download",
+    body: "Watch a short sponsored experience to download everything you selected.",
+    primaryLabel: "Watch & Download",
+    secondaryLabel: "Not now",
+    declinedMessage: "The batch wasn't unlocked because the ad wasn't completed.",
+  },
 };
 
 type Phase = "closed" | "prompt" | "requesting" | "unavailable" | "declined" | "completing" | "failed";
@@ -87,6 +105,15 @@ export interface RewardConsentSheetProps {
 export function useRewardFlow(
   context: RewardFlowContext,
   onGranted: (items: RewardSessionItem[], rewardSessionId: string) => void,
+  /**
+   * Per-surface GPT ad unit (`/networkCode/adUnitName`), from the admin's
+   * reward-network table. Empty/omitted keeps the global default.
+   *
+   * Per surface rather than one path for the whole site because that is the
+   * only way a Google Ad Manager report can say whether the multi-link gate or
+   * the HD gate earned the money — one shared unit reports them as one number.
+   */
+  adUnitPath?: string,
 ) {
   const meta = CONTEXT_META[context];
   const { start, complete } = useRewardSession();
@@ -129,8 +156,8 @@ export function useRewardFlow(
       setErrorText(e instanceof RewardSessionClientError ? e.message : "Reward unavailable. Please try again in a moment.");
       setPhase("unavailable");
     });
-    gpt.request(DEFAULT_AD_UNIT_PATH);
-  }, [start, meta.type, gpt]);
+    gpt.request(adUnitPath?.trim() || DEFAULT_AD_UNIT_PATH);
+  }, [start, meta.type, gpt, adUnitPath]);
 
   // GPT slot ready → show it immediately. Consent was already collected at
   // the prompt step; this is not a second opt-in, just the earliest moment

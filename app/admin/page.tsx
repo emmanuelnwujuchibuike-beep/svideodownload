@@ -141,6 +141,7 @@ import { AnalyticsPanel } from "@/features/admin/analytics-panel";
 import { BroadcastComposer } from "@/features/admin/broadcast-composer";
 import { LimitsEditor } from "@/features/admin/limits-editor";
 import { MultiLinkEditor } from "@/features/admin/multi-link-editor";
+import { RewardNetworkEditor } from "@/features/admin/reward-network-editor";
 import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
@@ -175,6 +176,7 @@ import { getPromoSettings } from "@/lib/monetization/promo";
 import { PromoEditor } from "@/features/admin/promo-editor";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
 import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
+import { getNetworkCapabilities, getRewardNetworks } from "@/lib/monetization/reward-networks-store";
 import { listAffiliates } from "@/lib/monetization/tools";
 import {
   fetchMonetizationAnalytics,
@@ -227,7 +229,7 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit, multiLink] =
+  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit, multiLink, rewardNetworks, networkCaps] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
@@ -251,6 +253,10 @@ export default async function AdminPage() {
       // reward requirement) — a plan-limit sibling, so it sits in the same
       // Pricing & limits panel as LimitsEditor rather than a panel of its own.
       getMultiLinkSettings(),
+      // Which ad network pays for which reward moment, plus the one runtime
+      // fact the routing table cannot know (Offerium readiness).
+      getRewardNetworks(),
+      getNetworkCapabilities(),
     ]);
 
   return (
@@ -339,6 +345,13 @@ export default async function AdminPage() {
 
           <AdminPanel id="ads">
             <MonetizationSettings settings={monetization} />
+            {/* Which network pays for which reward moment. Sits in the ads
+                panel beside the network switches it routes between, not in
+                Pricing — it is an ad-delivery decision, not a plan limit. */}
+            <RewardNetworkEditor
+              settings={rewardNetworks}
+              offeriumConfigured={networkCaps.offeriumConfigured}
+            />
             <AdManager ads={adRecords} />
           </AdminPanel>
 

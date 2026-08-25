@@ -1,5 +1,5 @@
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
-import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
+import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
@@ -66,7 +66,7 @@ export async function Hero() {
         ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
         rotateUrls={recentWallpaperUrls}
         showDisclaimer
-        multiLinkEnabled={multiLink.enabled}
+        multiLink={publicMultiLinkConfig(multiLink)}
       />
     </section>
   );

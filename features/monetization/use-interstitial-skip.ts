@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+import {
+  DEFAULT_REWARD_NETWORKS,
+  mergeRewardNetworks,
+  resolveRewardNetwork,
+  type RewardNetworkMap,
+  type RewardSurface,
+} from "@/lib/monetization/reward-networks";
+
 /**
  * The public interstitial config: the admin-set skip delay plus the per-moment
  * switches (wallpaper downloads, history video watches).
@@ -36,6 +44,12 @@ export interface InterstitialConfig {
    *  lib/monetization/reward-sessions.ts. Both default ON. */
   rewardDownloadHdEnabled: boolean;
   rewardDownloadBatchEnabled: boolean;
+  /** Which ad network pays for which reward moment (owner, 2026-08-25).
+   *  See lib/monetization/reward-networks.ts. */
+  rewardNetworks: RewardNetworkMap;
+  /** Whether Offerium has BOTH its public config and its server secrets. The
+   *  client is told the answer, never the credentials. */
+  offeriumConfigured: boolean;
 }
 
 const DEFAULTS: InterstitialConfig = {
@@ -55,6 +69,10 @@ const DEFAULTS: InterstitialConfig = {
   rewardImageAudioSkipAfterSeconds: 5,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,
+  // Defaults reproduce exactly what each surface did before the routing table
+  // existed, so a failed config fetch changes no behaviour.
+  rewardNetworks: DEFAULT_REWARD_NETWORKS,
+  offeriumConfigured: false,
 };
 
 let cached: InterstitialConfig | null = null;
@@ -102,6 +120,8 @@ export function useInterstitialConfig(): InterstitialConfig {
             typeof d?.rewardDownloadBatchEnabled === "boolean"
               ? d.rewardDownloadBatchEnabled
               : DEFAULTS.rewardDownloadBatchEnabled,
+          rewardNetworks: mergeRewardNetworks(d?.rewardNetworks),
+          offeriumConfigured: d?.offeriumConfigured === true,
         };
       })
       .catch(() => {
@@ -126,4 +146,26 @@ export function useInterstitialConfig(): InterstitialConfig {
 /** Just the skip delay — the shape the download interstitial already uses. */
 export function useInterstitialSkipSeconds(): number {
   return useInterstitialConfig().skipSeconds;
+}
+
+/**
+ * The effective network for one reward moment, plus its GPT ad unit.
+ *
+ * Every gate asks THIS rather than reading `rewardNetworks` directly, so the
+ * fallback rules (an unsupported choice, an unconfigured or unbuilt network)
+ * live in one place — `resolveRewardNetwork` — instead of being re-derived,
+ * and differently, at each call site.
+ *
+ * Costs no extra request: `useInterstitialConfig` is already fetched once and
+ * memoised process-wide, and every gate on the page shares it.
+ */
+export function useRewardNetwork(surface: RewardSurface) {
+  const config = useInterstitialConfig();
+  const resolved = resolveRewardNetwork(surface, config.rewardNetworks, {
+    offeriumConfigured: config.offeriumConfigured,
+  });
+  return {
+    ...resolved,
+    gptAdUnitPath: (config.rewardNetworks?.[surface]?.gptAdUnitPath ?? "").trim(),
+  };
 }

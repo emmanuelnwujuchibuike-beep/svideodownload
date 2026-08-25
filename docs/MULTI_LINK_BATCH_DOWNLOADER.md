@@ -212,3 +212,71 @@ have real Upstash values for the cap to apply** — the same requirement
   (§12's "Retry Source" / "Retry Failed"). A third control on every failed tile
   would crowd a 2-4 column grid on mobile for a case the source-level control
   already covers.
+
+---
+
+## Round 2 (2026-08-25) — premium intro section + per-feature ad network
+
+### The explanatory section above the control
+
+`multi-link-intro.tsx` — heading, description, capability chips, and the
+collapsed card, all above the Multi-Link placeholder. The point of the copy is
+the one thing "＋ Multiple Links" cannot say on its own: that the links may come
+from **different** platforms. Someone with a TikTok and an Instagram link in
+their clipboard has no reason to guess that.
+
+It names **no platforms**. `SupportedPlatforms` already renders the real set from
+the registry; a second hand-written list here would be exactly the drift this
+codebase keeps having to remove, and would start overpromising the moment a
+platform is added or (as with YouTube) removed.
+
+- Collapsed card: the whole surface is the button, with a chevron that rotates
+  on `transform` only.
+- Free sees *"Add up to 3 sources"*, Pro *"Add up to 6 sources · PRO"* — the same
+  sentence shape, so the free tier is never framed as a restriction.
+- The daily allowance is a separate line, never folded into the description: two
+  different numbers in one paragraph read as one confusing rule.
+
+### Where each number comes from, and why
+
+| Value | Source | Cost |
+| --- | --- | --- |
+| Source limit (admin-configurable) | server-threaded prop (`publicMultiLinkConfig`) | free |
+| Which plan the visitor is on | `useEntitlements` — already fetched by the download box | free |
+| Daily allowance (per-identity) | `/api/downloads/batch/policy` | **not fetched until the panel opens** |
+
+The allowance genuinely cannot come from a prop or a memoised hook, and a
+per-visitor, uncacheable round trip on every cold landing visit is what the
+1.6-second budget refuses. Once the panel has been opened, the policy is lifted
+back up to the button and the collapsed card shows it from then on.
+
+### Autofocus is desktop-only
+
+§9 asks to focus the first input on open. On a phone that raises the keyboard
+over the panel the visitor just opened, so it is gated on
+`matchMedia("(hover: hover) and (pointer: fine)")` — pointer type, not width,
+because that is what actually decides whether a soft keyboard appears.
+
+### Weight after this round
+
+| Route | Before | After | Ceiling |
+| --- | --- | --- | --- |
+| `/` (landing) | 265.6 kB | **266.6 kB** | 275 kB |
+| `/[downloader]` | 263.0 kB | **263.9 kB** | 275 kB |
+| `/downloads` | 248.9 kB | **252.1 kB** | 300 kB |
+
++1.0 kB on the landing for the whole intro section — text, two icons, a border.
+The panel is still absent from all three manifests (verified by chunk content,
+since hashed filenames hide it), and `"Batch Download"` still appears nowhere in
+the landing's server-rendered HTML.
+
+### The batch gate is now routable
+
+The multi-link gate declares `surface="multilink_batch"`, so an admin can point
+it at a different network from the single-link batch — see
+`docs/REWARD_AD_NETWORK_ROUTING.md`. When routed to Google's rewarded slot the
+gate runs the existing verified GPT flow (a new `BATCH_UNLOCK` context reusing
+the SAME `"batch"` reward-session type, so nothing server-side changes), and
+declining that ad now reports a **cancellation** rather than falling open —
+backing out of a rewarded ad must not hand over the download, and it costs no
+allowance because `/commit` is never reached.

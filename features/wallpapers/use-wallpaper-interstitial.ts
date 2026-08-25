@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
+import { useInterstitialConfig, useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
 
 /**
  * The wallpaper download interstitial trigger (owner, 2026-08-04): a skippable
@@ -33,6 +33,15 @@ export function useWallpaperInterstitial(): {
   close: () => void;
 } {
   const { wallpaper: enabled } = useInterstitialConfig();
+  /*
+    The admin's per-feature routing (owner, 2026-08-25). This surface only
+    offers "interstitial" or "none" — it fires after the download has already
+    saved, so there is nothing a rewarded format could unlock; see the note on
+    it in lib/monetization/reward-networks.ts. "none" is still a real and
+    useful choice: it silences wallpaper ads without touching the other
+    moments, which the single global switch above cannot do.
+  */
+  const { network } = useRewardNetwork("wallpaper");
   const [adOpen, setAdOpen] = useState(false);
   const downloads = useRef(0);
 
@@ -42,9 +51,9 @@ export function useWallpaperInterstitial(): {
     // so turning it off takes effect on the next download rather than needing a
     // reload. The count still runs either way, so enabling it mid-session
     // doesn't fire an ad for downloads that happened while it was off.
-    if (!enabled) return;
+    if (!enabled || network === "none") return;
     if (downloads.current % EVERY === 0) setAdOpen(true);
-  }, [enabled]);
+  }, [enabled, network]);
 
   const close = useCallback(() => setAdOpen(false), []);
 

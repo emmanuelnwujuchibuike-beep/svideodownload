@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FullscreenInterstitial } from "@/features/monetization/fullscreen-interstitial";
-import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
+import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
+import { useInterstitialConfig, useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
+import { useRewardFlow } from "@/features/monetization/use-reward-flow";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { useRewardSession, type RewardSessionItem } from "@/features/monetization/use-reward-session";
 import { dismissToast, toast } from "@/features/ui/toast";
+import type { RewardSurface } from "@/lib/monetization/reward-networks";
 
 /** Fixed id so opening a new gate can never stack a second "Preparing…" toast
  *  on top of one already showing, and so it can be found and dismissed from
@@ -67,15 +70,43 @@ export function BatchAdGate({
   /** Set once a batch has finished, to run the short closing ad. */
   showComplete,
   onCompleteClosed,
+  /**
+   * Which reward moment this gate IS (owner, 2026-08-25) — the admin routes
+   * each one to its own network in `lib/monetization/reward-networks.ts`.
+   *
+   * Defaults to the single-link batch so the existing call site
+   * (`preview-card.tsx`) keeps its exact behaviour without being touched.
+   */
+  surface = "batch_download",
+  /**
+   * The visitor backed out of a rewarded ad without earning it.
+   *
+   * Only reachable on the GPT path: the interstitial cannot be dismissed until
+   * its countdown finishes, so it always resolves one way or the other. A
+   * rewarded ad CAN be declined, and the caller has to be told — otherwise the
+   * batch sits in "awaiting reward" forever. Never called with an
+   * authorization: declining earns nothing.
+   */
+  onCancelled,
 }: {
   batch: readonly RewardSessionItem[] | null;
   onProceed: (auth: BatchAuthorization | null) => void;
   showComplete: boolean;
   onCompleteClosed: () => void;
+  surface?: RewardSurface;
+  onCancelled?: () => void;
 }) {
   const { showAds } = useShowAds();
   const { batchDownload: enabled, batchGateSeconds, batchCompleteSeconds } = useInterstitialConfig();
   const { start, complete } = useRewardSession();
+  /*
+    The admin's choice for THIS surface, already resolved through the fallback
+    rules (unsupported pick, unconfigured or unbuilt network) — see
+    `resolveRewardNetwork`. Costs no request: `useInterstitialConfig` is fetched
+    once and memoised process-wide, and this reads the same object.
+  */
+  const { network, gptAdUnitPath } = useRewardNetwork(surface);
+  const { network: completeNetwork } = useRewardNetwork("batch_complete");
 
   const [phase, setPhase] = useState<"idle" | "gate" | "complete">("idle");
   const [remaining, setRemaining] = useState(0);
@@ -119,10 +150,65 @@ export function BatchAdGate({
     }
   }, [batch, start, complete, onProceed]);
 
+  /*
+    ── The GPT path ────────────────────────────────────────────────────────
+    `useRewardFlow` already owns the whole verified Google rewarded flow:
+    consent sheet → server reward session → real `rewardedSlotGranted` →
+    server-side completion. It opens the SAME `"batch"` reward-session type the
+    interstitial path opens, so everything server-side — the item cap, the
+    daily limit, `redeemRewardItem`'s substitution at download time — is
+    identical. Only what the visitor watches differs.
+
+    Declared unconditionally (hooks cannot be conditional) but completely inert
+    until `open()` is called, which only happens on the branch below.
+  */
+  const gptGranted = useRef(false);
+  const onGptGranted = useCallback(
+    (items: RewardSessionItem[], rewardSessionId: string) => {
+      if (proceeded.current) return;
+      proceeded.current = true;
+      gptGranted.current = true;
+      dismissToast(PREP_TOAST_ID);
+      onProceed({ rewardSessionId, items });
+    },
+    [onProceed],
+  );
+  const gptFlow = useRewardFlow("BATCH_UNLOCK", onGptGranted, gptAdUnitPath);
+  const usingGpt = useRef(false);
+  /*
+    `gptFlow.open` is NOT reference-stable — it closes over the GPT hook's own
+    object, which changes on every render. Putting it in the gate effect's
+    dependency array would re-run that effect constantly and re-open the gate
+    on every render; leaving it out while calling it directly would capture a
+    stale one. A ref refreshed each render is neither: the effect keeps keying
+    only on the batch reference (see the long note on the `batch` prop, which
+    is the whole reason that reference exists) and still calls today's function.
+  */
+  const gptOpenRef = useRef(gptFlow.open);
+  gptOpenRef.current = gptFlow.open;
+
+  /*
+    Declining a rewarded ad earns nothing — so this reports a CANCELLATION, it
+    never falls open. That is the one place this gate deliberately differs from
+    the interstitial's fail-open rule: "no inventory" is not the visitor's
+    problem to solve, but "I chose not to watch it" is an answer, and honouring
+    it as a free download would make the reward meaningless.
+  */
+  useEffect(() => {
+    if (!usingGpt.current || gptFlow.sheetProps.open || proceeded.current) return;
+    if (gptGranted.current) return;
+    usingGpt.current = false;
+    proceeded.current = true;
+    dismissToast(PREP_TOAST_ID);
+    onCancelled?.();
+  }, [gptFlow.sheetProps.open, onCancelled]);
+
   // ── Open the gate ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!batch) return;
     proceeded.current = false;
+    gptGranted.current = false;
+    usingGpt.current = false;
 
     // Premium members, or the feature switched off: straight through, no
     // reward session at all.
@@ -130,13 +216,30 @@ export function BatchAdGate({
       bypass();
       return;
     }
+
+    // The admin routed this surface away from an ad entirely.
+    if (network === "none") {
+      bypass();
+      return;
+    }
+
+    // …or to Google's rewarded slot. `useRewardFlow` starts its own reward
+    // session at the moment the visitor taps "Watch & Download", so this path
+    // deliberately does NOT pre-open one here — two sessions for one batch
+    // would bill the daily reward limit twice.
+    if (network === "gpt_rewarded") {
+      usingGpt.current = true;
+      gptOpenRef.current([...batch]);
+      return;
+    }
+
     startPromiseRef.current = start("batch", [...batch]);
     setHasAd(null);
     setRemaining(Math.max(0, batchGateSeconds));
     setPhase("gate");
     // Immediate feedback the instant the tap registers.
     toast("Preparing your download…", "loading", { id: PREP_TOAST_ID });
-  }, [batch, showAds, enabled, batchGateSeconds, bypass, start]);
+  }, [batch, showAds, enabled, batchGateSeconds, bypass, start, network]);
 
   /*
     Ceiling for a slot that never answers at all (`hasAd` stuck at `null`).
@@ -156,14 +259,16 @@ export function BatchAdGate({
   // ── The closing ad ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!showComplete) return;
-    if (!showAds || !enabled) {
+    // Premium, the feature off, or the admin routed the closing moment to "No
+    // ad" — it is purely cosmetic and has nothing to unlock, so it just closes.
+    if (!showAds || !enabled || completeNetwork === "none") {
       onCompleteClosed();
       return;
     }
     setHasAd(null);
     setRemaining(Math.max(0, batchCompleteSeconds));
     setPhase("complete");
-  }, [showComplete, showAds, enabled, batchCompleteSeconds, onCompleteClosed]);
+  }, [showComplete, showAds, enabled, completeNetwork, batchCompleteSeconds, onCompleteClosed]);
 
   // ── Countdown ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -199,7 +304,14 @@ export function BatchAdGate({
     }
   }, [phase, grant, onCompleteClosed]);
 
-  if (phase === "idle") return null;
+  /*
+    On the GPT path the interstitial never leaves `idle` — the consent sheet
+    IS the gate's UI, and `useRewardFlow` hides it the instant Google's own ad
+    goes on screen (nothing Frenzsave-owned may sit over it). The sheet renders
+    nothing of its own while closed, so this is also the correct return for a
+    gate that simply is not open.
+  */
+  if (phase === "idle") return <RewardConsentSheet {...gptFlow.sheetProps} />;
 
   const isGate = phase === "gate";
   return (

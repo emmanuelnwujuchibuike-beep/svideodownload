@@ -30,7 +30,7 @@ import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { useRewardFlow } from "@/features/monetization/use-reward-flow";
 import type { RewardSessionItem } from "@/features/monetization/use-reward-session";
 import { rewardAdsFor, type RewardAd } from "@/lib/monetization/reward-policy";
-import { useInterstitialConfig } from "@/features/monetization/use-interstitial-skip";
+import { useInterstitialConfig, useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
@@ -457,7 +457,24 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     },
     [onDownload],
   );
-  const downloadUnlock = useRewardFlow("DOWNLOAD_UNLOCK", onDownloadUnlockGranted);
+  /*
+    ── The pause above is now an ADMIN SWITCH, not a hard-coded state
+       (owner, 2026-08-25: "I want to be able to decide in admin dashboard
+       which reward ad network for a particular feature") ──────────────────
+
+    `hd_download` defaults to `rewarded_video` — exactly the behaviour the note
+    above describes and the only one that works without a Google Ad Manager
+    account. But the moment a real ad unit exists, an admin selects "Google
+    rewarded ad (GPT)" for this surface and the dormant flow below goes live,
+    with no deploy. That is precisely the "one-line swap back" the note
+    anticipated, turned into configuration.
+  */
+  const hdNetwork = useRewardNetwork("hd_download");
+  const downloadUnlock = useRewardFlow(
+    "DOWNLOAD_UNLOCK",
+    onDownloadUnlockGranted,
+    hdNetwork.gptAdUnitPath,
+  );
   const startDownload = (formatId: string, kind: MediaKind) => {
     const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
     const ads = rewardAdsFor({
@@ -468,6 +485,17 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       tierConfig,
     });
     if (ads.length > 0) {
+      // Routed away from an ad entirely by the admin.
+      if (hdNetwork.network === "none") {
+        onDownload(formatId, kind);
+        return;
+      }
+      if (hdNetwork.network === "gpt_rewarded") {
+        downloadUnlock.open([
+          { url: metadata.sourceUrl, formatId, kind, title: metadata.title },
+        ]);
+        return;
+      }
       setQueue(ads);
       setTotalAds(ads.length);
       setGate({ formatId, kind });

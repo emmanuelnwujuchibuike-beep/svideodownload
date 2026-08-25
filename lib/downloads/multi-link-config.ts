@@ -90,6 +90,33 @@ export function dailyBatchLimitFor(
   return plan === "free" ? settings.freeDailyBatches : null;
 }
 
+/**
+ * The slice of the admin settings a PAGE can safely hand to the collapsed
+ * Multi-Link card.
+ *
+ * Threaded as a prop from the server page rather than fetched, because the
+ * intro copy ("Add up to 3 sources") is rendered on every cold landing visit
+ * and a request for one line of text is exactly the cost the 1.6-second budget
+ * exists to refuse. Nothing here is per-identity, so it stays compatible with
+ * the marketing routes being statically generated.
+ */
+export interface MultiLinkPublicConfig {
+  enabled: boolean;
+  freeSourceLimit: number;
+  proSourceLimit: number;
+}
+
+export function publicMultiLinkConfig(s: MultiLinkSettings): MultiLinkPublicConfig {
+  return {
+    enabled: s.enabled,
+    freeSourceLimit: s.freeSourceLimit,
+    proSourceLimit: s.proSourceLimit,
+  };
+}
+
+export const DEFAULT_MULTI_LINK_PUBLIC: MultiLinkPublicConfig =
+  publicMultiLinkConfig(DEFAULT_MULTI_LINK);
+
 /** The shape `/api/downloads/batch/policy` answers with. */
 export interface BatchPolicy {
   enabled: boolean;

@@ -83,10 +83,18 @@ describe("no ad is requested before explicit consent (§7)", () => {
 
 describe("no automatic ad chaining (§16)", () => {
   it("DOWNLOAD_UNLOCK and VIDEO_PREVIEW are opened from different files, never from each other's grant handler", () => {
-    expect(previewCard).toMatch(/useRewardFlow\("DOWNLOAD_UNLOCK"/);
-    expect(previewCard).not.toMatch(/useRewardFlow\("VIDEO_PREVIEW"/);
-    expect(floatingProgress).toMatch(/useRewardFlow\("VIDEO_PREVIEW"/);
-    expect(floatingProgress).not.toMatch(/useRewardFlow\("DOWNLOAD_UNLOCK"/);
+    /*
+      `\s*` after the paren: the call became multi-line in 2026-08-25 when it
+      gained the per-surface GPT ad unit argument (the admin reward-network
+      routing table). The property under test is WHICH context each file opens,
+      not how the call is wrapped — a formatter must not be able to fail this,
+      and tightening it back to one line would only invite the next reformat to
+      break it again.
+    */
+    expect(previewCard).toMatch(/useRewardFlow\(\s*"DOWNLOAD_UNLOCK"/);
+    expect(previewCard).not.toMatch(/useRewardFlow\(\s*"VIDEO_PREVIEW"/);
+    expect(floatingProgress).toMatch(/useRewardFlow\(\s*"VIDEO_PREVIEW"/);
+    expect(floatingProgress).not.toMatch(/useRewardFlow\(\s*"DOWNLOAD_UNLOCK"/);
   });
 
   it("the download-unlock grant handler never opens the preview flow, and vice versa", () => {

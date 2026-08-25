@@ -8,6 +8,7 @@ import { useAppMode } from "@/features/app-shell/use-app-mode";
 import type { PlatformStatusMap } from "@/lib/platform-status";
 
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
+import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import { DownloadQuickActions, DownloadTrustStrip } from "@/features/downloads/downloads-sections";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
@@ -102,12 +103,12 @@ export function DownloadsPage({
   platformStatus,
   /** Admin visibility switch for the Multi-Link batch downloader — same
    *  server-resolved-prop reason as the two above. */
-  multiLinkEnabled = true,
+  multiLink,
 }: {
   wallpapers: Wallpaper[];
   ctaWallpaperUrl?: string | null;
   platformStatus?: PlatformStatusMap;
-  multiLinkEnabled?: boolean;
+  multiLink?: MultiLinkPublicConfig;
 }) {
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
@@ -169,7 +170,7 @@ export function DownloadsPage({
         section) — quick actions, the usage dashboard, the downloading list,
         history panel, wallpaper gallery and trust strip stay here.
       */}
-      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} multiLinkEnabled={multiLinkEnabled} />
+      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} multiLink={multiLink} />
 
       <DownloadQuickActions />
 

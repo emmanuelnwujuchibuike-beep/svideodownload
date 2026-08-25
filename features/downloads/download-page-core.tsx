@@ -6,6 +6,7 @@ import Link from "next/link";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { DownloadBox } from "@/features/downloads/download-box";
+import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import {
   CloudStorageCard,
   DownloadsHero,
@@ -71,13 +72,13 @@ export function DownloadPageCore({
   /** Admin "Feature visibility" for the Multi-Link batch downloader — read on
    *  the server page (this file and `DownloadBox` are both client components)
    *  and passed straight through, exactly like `platformStatus`. */
-  multiLinkEnabled = true,
+  multiLink,
 }: {
   platformStatus?: PlatformStatusMap;
   ctaWallpaperUrl?: string | null;
   rotateUrls?: string[];
   showDisclaimer?: boolean;
-  multiLinkEnabled?: boolean;
+  multiLink?: MultiLinkPublicConfig;
 }) {
   const { items } = useHistory();
 
@@ -95,7 +96,7 @@ export function DownloadPageCore({
 
       <section id="download" className="mt-5 scroll-mt-20">
         <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">
-          <DownloadBox surface="card" platformStatus={platformStatus} multiLinkEnabled={multiLinkEnabled} />
+          <DownloadBox surface="card" platformStatus={platformStatus} multiLink={multiLink} />
         </div>
       </section>
 

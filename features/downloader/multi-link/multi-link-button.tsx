@@ -1,27 +1,45 @@
 "use client";
 
-import { Layers } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
-import { cn } from "@/lib/utils";
+import { useEntitlements } from "@/features/auth/use-entitlements";
+import {
+  DEFAULT_MULTI_LINK_PUBLIC,
+  type BatchPolicy,
+  type MultiLinkPublicConfig,
+} from "@/lib/downloads/multi-link-config";
+
+import { MultiLinkIntro } from "./multi-link-intro";
 
 /**
- * The "＋ Multiple Links" control — the ONLY part of the Multi-Link feature
- * that any first paint pays for.
+ * The Multi-Link entry point — the intro copy, the collapsed card, and the
+ * lazy mount of everything behind it.
  *
- * ── The two-part split is the performance requirement (§26, §48) ──────────
+ * ── The two-part split is the performance requirement (§13) ───────────────
  * `dynamic(ssr:false)` alone does NOT keep a chunk out of a route's build
  * manifest — if the JSX is reached on the first render pass, the chunk is
  * listed and preloaded regardless. So the panel is BOTH dynamically imported
  * AND behind `open`, which starts false: the landing page's manifest never
- * lists it, and the module (with `BatchAdGate`, the reward-session hooks, the
- * ZIP writer and the source-card grid behind it) is fetched on the tap that
- * opens it, not before. That gate is load-bearing — the same lesson the
- * `chromeReady` flags in `downloader.tsx` encode. Keep it.
+ * lists it, and the module (with `BatchAdGate`, the reward hooks, the ZIP
+ * writer and the source-card grid behind it) is fetched on the tap that opens
+ * it. That gate is load-bearing — keep it.
  *
- * Everything shipped on first load is this file: a button, one icon, and a
- * boolean.
+ * What DOES ship on first load is this file plus `multi-link-intro.tsx`: text,
+ * two icons, a border, and a boolean. No fetch, no animation library.
+ *
+ * ── Why the plan comes from two different places ──────────────────────────
+ * The SOURCE LIMIT is admin-configurable and not per-visitor, so it arrives as
+ * a server-threaded prop — accurate, and free. WHICH plan the visitor is on
+ * comes from `useEntitlements`, which the download box on this page has
+ * already fetched and memoised process-wide, so it costs nothing either.
+ *
+ * The DAILY ALLOWANCE is genuinely per-identity and cannot come from either;
+ * it needs `/api/downloads/batch/policy`. That request is deliberately not
+ * made until the panel opens — a per-visitor, uncacheable round trip on every
+ * cold landing visit is exactly what the 1.6-second budget refuses. Once the
+ * panel has opened, the answer is lifted back up here and the collapsed card
+ * shows it from then on.
  */
 const MultiLinkPanel = dynamic(
   () => import("./multi-link-panel").then((m) => m.MultiLinkPanel),
@@ -29,59 +47,43 @@ const MultiLinkPanel = dynamic(
 );
 
 export function MultiLinkButton({
-  /** Off = the admin switched the feature off; render nothing at all rather
-   *  than a control that opens a panel which immediately refuses (§34's
-   *  "Feature visibility"). Threaded from the server page that knows. */
-  enabled = true,
-  /** Matches `DownloadBox`'s own palette prop: "card" is the light download
-   *  card, "hero" the white-on-gradient treatment. */
+  /** Admin settings, resolved on the server page. */
+  config = DEFAULT_MULTI_LINK_PUBLIC,
+  /** Matches `DownloadBox`'s own palette prop. */
   surface = "card",
   className,
 }: {
-  enabled?: boolean;
+  config?: MultiLinkPublicConfig;
   surface?: "hero" | "card";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  if (!enabled) return null;
+  /** Lifted out of the panel so the collapsed card can show the allowance
+   *  after the first open, without ever fetching to draw the closed state. */
+  const [policy, setPolicy] = useState<BatchPolicy | null>(null);
+  const { plan, ready } = useEntitlements();
+
+  if (!config.enabled) return null;
+
+  // Optimistic-free until entitlements resolve: drawing six slots for a free
+  // member and then refusing the batch after they filled them is a far worse
+  // surprise than a limit that goes UP a moment after load.
+  const isPro = ready && plan !== "free";
+  const sourceLimit = policy?.sourceLimit ?? (isPro ? config.proSourceLimit : config.freeSourceLimit);
 
   return (
     <div className={className}>
-      {/*
-        A real toggle carrying `aria-expanded`/`aria-controls`, not a button
-        that vanishes once the panel opens. A control that disappears leaves a
-        keyboard user's focus on nothing, and a screen reader with no way to
-        learn the panel it just opened is still there (§25).
-      */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-controls="multi-link-panel"
-        className={cn(
-            /*
-              Secondary by design (§40: "noticeable but secondary"). The single
-              paste field and its Download button stay the primary action —
-              this sits under them as a quieter, bordered pill rather than a
-              second filled CTA competing with the first.
-            */
-          "inline-flex h-10 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          surface === "hero"
-            ? "border-white/25 bg-white/10 text-white hover:bg-white/20"
-            : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-secondary/60",
-          open && "border-primary/50 bg-secondary/60",
-        )}
-      >
-        <Layers aria-hidden className="h-4 w-4" />
-        {open ? "Hide multiple links" : (
-          <>
-            <span aria-hidden>＋</span> Multiple Links
-          </>
-        )}
-      </button>
+      <MultiLinkIntro
+        open={open}
+        onToggle={() => setOpen((v) => !v)}
+        sourceLimit={sourceLimit}
+        isPro={isPro}
+        remainingToday={policy?.remaining ?? null}
+        surface={surface}
+      />
 
       <div id="multi-link-panel">
-        {open ? <MultiLinkPanel onClose={() => setOpen(false)} /> : null}
+        {open ? <MultiLinkPanel onClose={() => setOpen(false)} onPolicy={setPolicy} /> : null}
       </div>
     </div>
   );

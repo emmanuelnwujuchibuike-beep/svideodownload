@@ -19,7 +19,7 @@ import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
 import { RelatedLinks } from "@/components/seo/related-links";
 import { Downloader } from "@/features/downloader/downloader";
-import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
+import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { categoryHubMetadata, CategoryHubView } from "@/features/social/category-hub-view";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
@@ -277,7 +277,7 @@ export default async function DownloaderPage({
                     someone who searched for a YouTube downloader. Passing the
                     platform pins it to the one the page is actually about.
                   */}
-                  <Downloader platformId={page.platformId} multiLinkEnabled={multiLink.enabled} />
+                  <Downloader platformId={page.platformId} multiLink={publicMultiLinkConfig(multiLink)} />
                 </div>
 
                 <p className={`mt-5 text-sm ${onDark ? "text-white/75" : "text-black/70"}`}>

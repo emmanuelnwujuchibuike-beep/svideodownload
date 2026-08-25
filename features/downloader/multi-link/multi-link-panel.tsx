@@ -58,9 +58,21 @@ import { useBatchPolicy } from "./use-batch-policy";
  *   → commit (server: spend exactly one allowance, idempotent per batchId)
  *   → enqueue into the existing download manager
  */
-export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
+export function MultiLinkPanel({
+  onClose,
+  /** Hands the resolved policy back up so the COLLAPSED card can show the
+   *  daily allowance without ever fetching to draw a closed panel. */
+  onPolicy,
+}: {
+  onClose: () => void;
+  onPolicy?: (policy: BatchPolicy) => void;
+}) {
   const [state, dispatch] = useReducer(batchReducer, initialBatchState);
-  const { policy, refresh, spendLocally } = useBatchPolicy(true);
+  const { policy, ready: policyReady, refresh, spendLocally } = useBatchPolicy(true);
+
+  useEffect(() => {
+    if (policyReady) onPolicy?.(policy);
+  }, [policyReady, policy, onPolicy]);
   const [error, setError] = useState<string | null>(null);
   const [upsell, setUpsell] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -323,6 +335,21 @@ export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
     [state.batchId, runBatch],
   );
 
+  /**
+   * The visitor declined the rewarded ad (GPT path only — an interstitial
+   * cannot be dismissed early).
+   *
+   * Back to `editing` with everything still selected, so a second attempt is
+   * one tap away. The allowance is untouched: `/commit` only runs from
+   * `runBatch`, which a declined gate never reaches, so backing out of an ad
+   * costs nothing.
+   */
+  const onGateCancelled = useCallback(() => {
+    setPendingReward(null);
+    pendingItems.current = [];
+    dispatch({ type: "setPhase", phase: "editing" });
+  }, []);
+
   const retryFailed = (sourceId?: string) => {
     track("multilink_retry_used", { scope: sourceId ? "source" : "all" });
     /*
@@ -390,14 +417,14 @@ export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
       aria-label="Batch download"
       className="animate-fade-up mt-3 rounded-2xl border border-border bg-card/60 p-3 shadow-soft ring-1 ring-inset ring-border/40 sm:p-4"
     >
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* ── Header (§6) ────────────────────────────────────────────────── */}
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-base font-extrabold text-foreground">
             <Layers aria-hidden className="h-4 w-4 text-primary" /> Batch Download
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Add up to {policy.sourceLimit} sources and choose exactly what you want to download.
+            Add your sources below, then fetch and choose exactly what you want.
           </p>
         </div>
         <button
@@ -419,6 +446,15 @@ export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
             key={source.id}
             source={source}
             index={i}
+            /* §9 — focus the first field on open, but only where a keyboard
+               doesn't cover the panel that just opened. `matchMedia` rather
+               than a width check so it tracks the pointer type, which is what
+               actually decides whether a soft keyboard appears. */
+            autoFocus={
+              i === 0 &&
+              typeof window !== "undefined" &&
+              window.matchMedia?.("(hover: hover) and (pointer: fine)").matches
+            }
             disabled={running || state.phase === "authorizing" || state.phase === "awaiting-reward"}
             onChangeUrl={(url) => changeUrl(source.id, url)}
             onRemove={() => removeSource(source.id)}
@@ -442,7 +478,7 @@ export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
           disabled={running}
           className="inline-flex h-11 items-center gap-1.5 rounded-xl border border-dashed border-border px-4 text-sm font-semibold text-foreground transition hover:border-primary/50 hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40"
         >
-          <Plus className="h-4 w-4" /> Add source
+          <Plus className="h-4 w-4" /> Add another link
         </button>
         {filled.length > 1 ? (
           <button
@@ -463,7 +499,8 @@ export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
           reaches the ceiling. Subtle, never a blocking interruption. */}
       {upsell && policy.plan === "free" ? (
         <div className="animate-fade-up mt-3 rounded-xl bg-gradient-to-r from-blue-600/10 to-violet-600/10 p-3 ring-1 ring-inset ring-violet-500/20">
-          <p className="text-sm font-bold text-foreground">Need more sources?</p>
+          {/* §12 — a nudge at the ceiling, never an error and never a blocker. */}
+          <p className="text-sm font-bold text-foreground">Need more links?</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{policy.upsellMessage}</p>
           <Link
             href="/pricing"
@@ -597,8 +634,15 @@ export function MultiLinkPanel({ onClose }: { onClose: () => void }) {
         gate only ever means the ad ran in full.
       */}
       <BatchAdGate
+        /*
+          Its OWN reward surface, so an admin can route the multi-link gate to
+          a different network from the single-link one — the whole point of
+          lib/monetization/reward-networks.ts.
+        */
+        surface="multilink_batch"
         batch={pendingReward}
         onProceed={onGateResolved}
+        onCancelled={onGateCancelled}
         showComplete={completeAd}
         onCompleteClosed={() => setCompleteAd(false)}
       />

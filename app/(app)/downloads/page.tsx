@@ -6,7 +6,7 @@ import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
-import { getMultiLinkSettings } from "@/lib/downloads/multi-link";
+import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
@@ -116,7 +116,7 @@ async function DownloadsData() {
       wallpapers={wallpapers}
       ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
       platformStatus={platformStatus}
-      multiLinkEnabled={multiLink.enabled}
+      multiLink={publicMultiLinkConfig(multiLink)}
     />
   );
 }

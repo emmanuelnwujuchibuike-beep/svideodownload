@@ -17,6 +17,7 @@ import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { RecommendedToolsClient } from "@/components/monetization/recommended-tools-client";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
+import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import {
   getServerSnapshot as getServerDownloads,
   getSnapshot as getDownloads,
@@ -90,7 +91,7 @@ export function Downloader({
   hideDisclaimer,
   resultOnly,
   heroHandlesFetching,
-  multiLinkEnabled = true,
+  multiLink,
 }: {
   initialUrl?: string;
   platformId?: PlatformId;
@@ -118,7 +119,7 @@ export function Downloader({
   resultOnly?: boolean;
   /** Admin "Feature visibility" for the Multi-Link batch downloader (§34).
    *  Server-resolved and threaded, same as `platformStatus` elsewhere. */
-  multiLinkEnabled?: boolean;
+  multiLink?: MultiLinkPublicConfig;
 } = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -444,7 +445,7 @@ export function Downloader({
         opening under a bare result card would have no field it belongs to.
       */}
       {resultOnly ? null : (
-        <MultiLinkButton enabled={multiLinkEnabled} surface="card" className="mt-3 flex justify-center" />
+        <MultiLinkButton config={multiLink} surface="card" />
       )}
 
       {/*

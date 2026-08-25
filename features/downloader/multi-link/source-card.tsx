@@ -44,6 +44,16 @@ export const SourceCard = memo(function SourceCard({
   source,
   index,
   disabled,
+  /**
+   * §9 — "automatically focus the first input where appropriate".
+   *
+   * "Where appropriate" is doing real work: on a PHONE, focusing an input
+   * raises the keyboard, which would cover the panel the visitor just opened
+   * before they have seen it. So this is the desktop-only case, and the caller
+   * decides — `autoFocus` is passed only for the first card, and only above
+   * the coarse-pointer breakpoint.
+   */
+  autoFocus,
   onChangeUrl,
   onRemove,
   onFetch,
@@ -54,6 +64,7 @@ export const SourceCard = memo(function SourceCard({
 }: {
   source: BatchSource;
   index: number;
+  autoFocus?: boolean;
   /** True while a batch is running — the source list is frozen so the queue
    *  can't be edited out from under itself. */
   disabled: boolean;
@@ -172,6 +183,8 @@ export const SourceCard = memo(function SourceCard({
             </label>
             <input
               id={inputId}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- desktop-only, first card only; see the prop doc.
+              autoFocus={autoFocus}
               type="url"
               inputMode="url"
               autoComplete="off"

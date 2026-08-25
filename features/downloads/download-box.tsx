@@ -6,6 +6,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { SupportedPlatforms } from "@/components/landing/supported-platforms";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
+import { DEFAULT_MULTI_LINK_PUBLIC, type MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import type { PlatformStatusMap } from "@/lib/platform-status";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -91,11 +92,11 @@ export function DownloadBox({
    *  `platformStatus` is: this component is `"use client"` and cannot read
    *  the settings store itself. Defaults ON so a caller that doesn't know
    *  behaves exactly as the feature's own default does. */
-  multiLinkEnabled = true,
+  multiLink = DEFAULT_MULTI_LINK_PUBLIC,
 }: {
   surface?: "hero" | "card";
   platformStatus?: PlatformStatusMap;
-  multiLinkEnabled?: boolean;
+  multiLink?: MultiLinkPublicConfig;
 } = {}) {
   const onCard = surface === "card";
   const [url, setUrl] = useState("");
@@ -317,7 +318,7 @@ export function DownloadBox({
         above it is untouched (§46): this adds a capability beside it, it does
         not wrap or replace it.
       */}
-      <MultiLinkButton enabled={multiLinkEnabled} surface={surface} className="mt-2.5" />
+      <MultiLinkButton config={multiLink} surface={surface} />
 
       {validationError || error ? (
         <p role="alert" className={cn("mt-2 text-sm font-medium", onCard ? "text-rose-500" : "text-rose-300")}>{validationError ?? error}</p>

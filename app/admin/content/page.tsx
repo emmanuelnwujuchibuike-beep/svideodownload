@@ -7,7 +7,7 @@ import { auditGenomes, getProfiles } from "@/lib/content/genome/queries";
 import { auditGraph, graphStats } from "@/lib/content/graph/traverse";
 import { detectDrift } from "@/lib/content/sync/detect";
 import { buildReport } from "@/lib/content/sync/impact";
-import { takeSnapshot } from "@/lib/content/sync/snapshot";
+import { isSnapshotBlind, takeSnapshot } from "@/lib/content/sync/snapshot";
 import { isAdmin } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -58,7 +58,22 @@ export default async function ContentOpsPage() {
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (!isAdmin(profile?.role, user.email)) redirect("/");
 
-  const report = buildReport(detectDrift(takeSnapshot(process.cwd())));
+  /*
+    🔴 A SNAPSHOT THAT READ NOTHING MUST NOT BE REPORTED AS DRIFT.
+
+    Every route detector is written `!exists(route)`, so a snapshot with zero
+    routes makes every module on the site look like a dead 404. That is what
+    production showed: 23 "factual-break" findings and "Publish blocked — the
+    site currently states something untrue", because on Vercel the source `app/`
+    directory was not in the serverless bundle and the scan came back empty.
+    next.config.ts now traces the files this needs; `blind` is the guard that
+    keeps a future tracing change from resurrecting 23 confident wrong claims.
+  */
+  const snapshot = takeSnapshot(process.cwd());
+  const blind = isSnapshotBlind(snapshot);
+  // `buildReport([])` rather than a hand-rolled empty object, so this stays a
+  // real SyncReport and cannot drift from that shape.
+  const report = buildReport(blind ? [] : detectDrift(snapshot));
   const genomeIssues = auditGenomes();
   const graphIssues = auditGraph();
   const stats = graphStats();
@@ -70,7 +85,7 @@ export default async function ContentOpsPage() {
   return (
     <>
       <SiteHeader />
-      <main className="container max-w-5xl py-10">
+      <main className="container max-w-5xl px-4 pb-20 pt-32 sm:px-6 sm:pt-40">
         <h1 className="text-2xl font-bold tracking-[-0.02em]">Content operations</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Drift between the product and what the site says about it.
@@ -82,7 +97,15 @@ export default async function ContentOpsPage() {
             <ShieldCheck className="h-4 w-4" /> Sync review queue
           </h2>
 
-          {report.blocked ? (
+          {blind ? (
+            <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+              <span className="font-semibold">Drift analysis unavailable here.</span> This check compares the content
+              registry against the repository on disk, and no routes were readable from this deployment — so it can
+              report nothing rather than report everything as broken. Run{" "}
+              <code className="font-mono text-xs">npx vitest run lib/content/sync</code> locally for an authoritative
+              result; it asserts the same detectors against the real tree.
+            </p>
+          ) : report.blocked ? (
             <p className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-semibold text-rose-600 dark:text-rose-300">
               Publish blocked — the site currently states something untrue.
             </p>
@@ -98,7 +121,7 @@ export default async function ContentOpsPage() {
 
           {report.findings.length === 0 ? (
             <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No drift detected.
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> {blind ? "Nothing to report — the repository could not be read." : "No drift detected."}
             </p>
           ) : (
             <ul className="mt-4 space-y-3">

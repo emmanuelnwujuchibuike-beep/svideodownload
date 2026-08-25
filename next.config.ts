@@ -1,3 +1,4 @@
+import { scanMigrations, scanRoutes } from "./lib/content/sync/scan";
 import type { NextConfig } from "next";
 
 import { REMOVED_SEO_PAGES } from "./lib/seo/removed-seo-pages";
@@ -144,7 +145,6 @@ export function buildCsp(mode: "enforce" | "report"): string {
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  env: { NEXT_PUBLIC_APP_BUILD: appBuild },
   /*
     A self-contained server bundle for the Docker runtime image (the download
     WORKER — see Dockerfile + fly.toml, which copy `.next/standalone`).
@@ -166,6 +166,34 @@ const nextConfig: NextConfig = {
   // downloads. It uses native optional deps + dynamic requires that webpack can't
   // bundle, so keep it external — required from node_modules at runtime instead.
   serverExternalPackages: ["telegram"],
+  /*
+    🔴 /admin/content READ THE REPO AT REQUEST TIME, AND ON VERCEL IT COULDN'T.
+
+    The Sync Engine detects drift by comparing the content registry against the
+    real app: it walks `app/` for route files and lists `supabase/migrations`.
+    Locally that is the source tree and everything resolves. In a Vercel
+    serverless bundle only TRACED files exist, source `app/` is not among them,
+    every readdirSync threw, and the snapshot came back empty — so detectors
+    written `!exists(route)` answered "missing" for every module on the site.
+    The page reported 23 "factual-break" findings and "Publish blocked — the
+    site currently states something untrue", which was the only untrue thing on
+    screen. The genuine answer, asserted in lib/content/sync/sync.test.ts
+    against the real tree, is zero factual-breaks.
+
+    Fixed by taking the inventory HERE, at build time, where the source tree
+    always exists — rather than hoping it survives into the runtime bundle.
+    `outputFileTracingIncludes` was tried first and traced nothing; a config
+    that silently stops matching would put the 23 phantoms straight back.
+
+    Only names are inlined (~7 kB of strings, server-side only), never file
+    contents. `scanRoutes`/`scanMigrations` are imported from the module that
+    owns them so this cannot drift from what the detectors expect.
+  */
+  env: {
+    NEXT_PUBLIC_APP_BUILD: appBuild,
+    FRENZ_REPO_ROUTES: JSON.stringify(scanRoutes(process.cwd())),
+    FRENZ_REPO_MIGRATIONS: JSON.stringify(scanMigrations(process.cwd())),
+  },
   // Keep barrel-heavy libraries from pulling their entire surface into a route
   // bundle: importing one icon should ship one icon. Central to the platform's
   // "more modules must not bloat existing routes" guarantee (docs/ARCHITECTURE.md).

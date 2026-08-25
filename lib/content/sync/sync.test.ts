@@ -13,7 +13,7 @@ import {
   type RepoSnapshot,
 } from "./detect";
 import { buildReport, formatReport, impactOf } from "./impact";
-import { scanRoutes, takeSnapshot } from "./snapshot";
+import { isSnapshotBlind, scanRoutes, takeSnapshot } from "./snapshot";
 import { capabilityId, productId } from "@/lib/content/graph/build";
 
 /**
@@ -244,5 +244,70 @@ describe("Sync Engine — against the real repository", () => {
     const findings = detectDrift(snapshot);
     const breaks = findings.filter((f) => f.severity === "factual-break");
     expect(breaks, formatReport(buildReport(breaks))).toHaveLength(0);
+  });
+});
+
+/*
+  ── The 23 phantom "factual-break" findings (owner, 2026-08-24) ────────────
+  Production's /admin/content showed "Publish blocked — the site currently
+  states something untrue" over 23 factual-breaks, each claiming a real route
+  (/admin, /home, /downloads …) did not exist.
+
+  Every one was false. The page calls `takeSnapshot(process.cwd())`, which
+  walks the SOURCE tree at request time. In a Vercel serverless bundle only
+  traced files exist, `app/` is not among them, readdirSync threw, the catch
+  returned [], and `!exists(route)` then answered "missing" for every module on
+  the site.
+
+  These run against the REAL repository, so they assert the thing that actually
+  matters: from a place where the repo IS readable, there is no drift at all.
+*/
+describe("the real repository — no phantom drift", () => {
+  const real = takeSnapshot(process.cwd());
+
+  it("can see the app's routes at all", () => {
+    expect(isSnapshotBlind(real), "snapshot is blind even locally").toBe(false);
+    expect(real.routes.length).toBeGreaterThan(50);
+  });
+
+  it("finds the exact routes production claimed were 404s", () => {
+    // Each of these lives under a route GROUP, which contributes no URL
+    // segment — the scanner's handling of that is what these pin.
+    for (const route of ["/admin", "/home", "/downloads"]) {
+      expect(real.routes, `${route} reported missing`).toContain(route);
+    }
+  });
+
+  it("🔴 reports ZERO factual-breaks — the 23 were phantoms", () => {
+    /*
+      The real answer, from a readable repo: three dead basePaths, all of them
+      unbuilt products (/studio, /cloud, /smart) that contribute no nav links.
+      `detectDeadBasePaths` grades those "stale", not "factual-break" — which
+      is exactly the "3 stale" chip beside the 23 in the screenshot. So the
+      stale count was right all along and every factual-break was invented by
+      the empty snapshot.
+    */
+    const dead = detectDeadBasePaths(real);
+    const breaks = dead.filter((f) => f.severity === "factual-break").map((f) => f.summary);
+    expect(breaks, `phantom findings: ${breaks.join(" | ")}`).toEqual([]);
+
+    // The genuinely-unbuilt three. Listed rather than counted, so building one
+    // fails here and prompts removing it from this list.
+    expect(dead.map((f) => f.nodeId).sort()).toEqual([
+      "product:cloud",
+      "product:smart",
+      "product:studio",
+    ]);
+  });
+
+  it("does not block publishing", () => {
+    // The banner said "Publish blocked — the site currently states something
+    // untrue". Nothing here is untrue.
+    expect(blocksPublish(detectDrift(real))).toBe(false);
+  });
+
+  it("treats an unreadable repository as blind, never as total drift", () => {
+    // The guard that stops this returning as 23 confident wrong statements.
+    expect(isSnapshotBlind({ ...real, routes: [] })).toBe(true);
   });
 });

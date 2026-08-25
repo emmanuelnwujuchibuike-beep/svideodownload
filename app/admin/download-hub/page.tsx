@@ -140,7 +140,10 @@ export default async function DownloadHubOpsPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border border-border/60 p-5">
+          {/* min-w-0 on both cards: a grid item defaults to min-width:auto, so
+              without it any wide child (a long platform name, a long title)
+              stretches the column instead of being contained by it. */}
+          <div className="min-w-0 rounded-2xl border border-border/60 p-5">
             <h2 className="font-semibold">Downloads by platform</h2>
             {stats && stats.platforms.length > 0 ? (
               <div className="mt-4 space-y-3">
@@ -168,7 +171,7 @@ export default async function DownloadHubOpsPage() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-border/60 p-5">
+          <div className="min-w-0 rounded-2xl border border-border/60 p-5">
             <h2 className="font-semibold">By media type</h2>
             <div className="mt-4 space-y-3">
               <KindRow icon={Video} label="Video" value={kinds.video} />
@@ -229,10 +232,12 @@ export default async function DownloadHubOpsPage() {
               {plannedDemand.map(({ action, waitlist }) => (
                 <li
                   key={action.id}
-                  className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-4 py-3"
                 >
-                  <span className="text-sm font-medium">{action.label}</span>
-                  <span className="text-sm tabular-nums text-muted-foreground">{waitlist}</span>
+                  {/* min-w-0 + truncate, so a long action label shortens rather
+                      than widening the row past the viewport. */}
+                  <span className="min-w-0 truncate text-sm font-medium">{action.label}</span>
+                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{waitlist}</span>
                 </li>
               ))}
             </ul>
@@ -289,7 +294,17 @@ export default async function DownloadHubOpsPage() {
               return (
                 <li
                   key={lesson.slug}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-border/60 px-4 py-3"
+                  /*
+                    🔴 THE ROW THAT MADE THE WHOLE PAGE SCROLL SIDEWAYS.
+                    "surfaced by the Gateway" sat in a `shrink-0` span beside a
+                    title on one line. On a phone the two cannot both fit, and
+                    because the label refused to shrink the row grew wider than
+                    the viewport — which makes the ENTIRE page horizontally
+                    scrollable, so every card above it renders wider than the
+                    screen and looks cut off. One row, all the symptoms.
+                    It stacks below the title until there is room beside it.
+                  */
+                  className="flex flex-col gap-1.5 rounded-xl border border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium">{lesson.title}</span>
@@ -297,7 +312,7 @@ export default async function DownloadHubOpsPage() {
                       {lesson.topic} · {lesson.minutes} min
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground sm:shrink-0">
                     {orphaned ? (
                       <span className="inline-flex items-center gap-1">
                         <Ban className="h-3.5 w-3.5" /> not linked to an action

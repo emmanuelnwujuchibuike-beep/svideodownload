@@ -39,6 +39,7 @@ import type { MediaKind, PlatformId } from "@/types";
 
 import type { DownloadOptions } from "./preview-card";
 import { useDownloader } from "./use-downloader";
+import { useScrollToResult } from "./use-result-scroll";
 
 // Result card (+ its framer-motion dependency) only ever appears after a
 // visitor submits a link — code-split it out of the landing page's initial
@@ -269,16 +270,17 @@ export function Downloader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // On phones, bring the result card into view once a fetch resolves.
-  useEffect(() => {
-    if (metadata && typeof window !== "undefined" && window.innerWidth < 768) {
-      const t = setTimeout(
-        () => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-        90,
-      );
-      return () => clearTimeout(t);
-    }
-  }, [metadata]);
+  /*
+    Bring the result card into view once a fetch resolves.
+
+    Was a phone-only (`innerWidth < 768`) copy of this effect. It is now the
+    shared hook, for two reasons: the width gate predates the blocks that now
+    sit between the field and the result (Install banner, ＋Multiple Links,
+    platform strip), which push it off-screen on a desktop too; and the OTHER
+    paste box — `features/downloads/download-box.tsx`, the one on the landing —
+    never had this at all, which is the surface the owner reported.
+  */
+  useScrollToResult(previewRef, metadata?.id);
 
   /*
     Rotate the placeholder platform every couple of seconds — but ONLY where the
@@ -432,7 +434,7 @@ export function Downloader({
         */}
         {detected?.id === "telegram" ? (
           <p className="px-4 pb-2 text-xs text-amber-600 dark:text-amber-400">
-            Telegram downloads can take up to a minute to prepare — that's normal.
+            Telegram downloads can take up to a minute to prepare — that&apos;s normal.
           </p>
         ) : null}
       </form>

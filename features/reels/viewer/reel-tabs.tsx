@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-import { glass, layer, reelMotion } from "./design";
+import { GLYPH_SHADOW, layer, reelMotion } from "./design";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -121,15 +121,30 @@ export function ReelTabs({
         "fixed left-1/2 top-[max(0.75rem,var(--frenz-safe-top))] flex max-w-[min(92vw,26rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-full px-1.5 py-1",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         /*
-          Glass, where the old bar was bare text on video.
+          🔴 NO GLASS PANEL BEHIND THIS ROW (owner, 2026-08-25: "i want the glass
+          background of the reels top nav to be removed, the black glass
+          background").
 
-          Bare white text over a video is legible on some frames and invisible on
-          others — the same failure the whole design language exists to remove,
-          and the tab bar is the one control that is ALWAYS on screen, so it hit
-          it most often. `secondary` rather than `primary`: this is read, not
-          aimed at, and the heavier blur would read as a modal over the video.
+          It used to carry `glass.secondary` — a `bg-black/25` tint plus a blur —
+          added because bare white text over video is legible on some frames and
+          invisible on others. That argument was right about the RISK and wrong
+          about the remedy: a dark slab pinned across the top of every reel is
+          the one piece of chrome that is always on screen, so it is also the one
+          that most persistently contradicts "the video is the hero".
+
+          The contrast floor is still guaranteed, by the two mechanisms that
+          already existed and cost no extra surface:
+           • the deck's ADAPTIVE top scrim (`scrimForLuminance`, reel-viewer)
+             sits under this row and darkens with the actual frame luminance —
+             it does more than a fixed tint ever did, and it fades with the rest
+             of the chrome instead of persisting;
+           • `GLYPH_SHADOW` on each label (below), the same treatment every other
+             glyph that legitimately sits directly on video already uses.
+
+          So the blur is gone, not the legibility. Do not reintroduce a tint here
+          without removing one of those two — two floors stacked is what made
+          this read as a slab in the first place.
         */
-        glass.secondary,
         layer.topNav,
         className,
       )}
@@ -151,7 +166,11 @@ export function ReelTabs({
             <span
               className={cn(
                 "relative z-[1] whitespace-nowrap text-[13px] font-semibold transition-colors",
-                on ? "text-white" : "text-white/60 hover:text-white/85",
+                // Sits directly on video now that the panel is gone — same
+                // shadow as every other on-video glyph, so an inactive label
+                // never dissolves into a bright frame.
+                GLYPH_SHADOW,
+                on ? "text-white" : "text-white/70 hover:text-white/90",
               )}
             >
               {t.label}
@@ -185,12 +204,16 @@ export function ReelTabs({
 
       {feedHref ? (
         <>
-          {tabs.length >= 2 ? <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-white/20" /> : null}
+          {/* white/35, not white/20: with no panel under it a hairline at 20%
+              is invisible on a light frame, and this divider is the only thing
+              telling the eye that Feed is not a sixth reel tab. */}
+          {tabs.length >= 2 ? <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-white/35" /> : null}
           <Link
             href={feedHref}
             className={cn(
-              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-[13px] font-semibold text-white/60 outline-none transition hover:text-white/85 active:scale-95",
+              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-[13px] font-semibold text-white/70 outline-none transition hover:text-white/90 active:scale-95",
               "focus-visible:ring-2 focus-visible:ring-white/80",
+              GLYPH_SHADOW,
             )}
           >
             <LayoutGrid className="h-3.5 w-3.5" aria-hidden />

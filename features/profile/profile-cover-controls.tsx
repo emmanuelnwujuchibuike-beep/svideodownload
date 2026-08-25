@@ -8,6 +8,7 @@ import { useState } from "react";
 import type { MenuUser } from "./profile-menu-panel";
 
 import { Portal } from "@/components/ui/portal";
+import { useBodyScrollLocked } from "@/lib/dom/use-body-scroll-locked";
 
 // Was a plain static import — ~32kB of profile-menu UI, its full nav icon
 // set, and (transitively, via the Language row) the entire ~50-locale
@@ -38,6 +39,31 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
 
+  /*
+    🔴 THESE BUTTONS MUST LEAVE WHEN SOMETHING OPENS OVER THE PROFILE
+    (owner, 2026-08-25, with a screenshot: "the profile nav also show when i
+    click on a reels or feed post in profile, covering the reels buttons").
+
+    Tapping a post in the grid does NOT navigate — `ReelViewer`/`ImageViewer`
+    mount in place (features/social/profile-media-grid.tsx), so this page stays
+    mounted underneath. These controls are `fixed`, portalled to <body>, and
+    `z-[70]`; the viewer's own top chrome is `z-[60]` inside a `z-[85]` root.
+    Portalled to the same parent, the two are siblings, so "Edit Cover" landed
+    squarely on top of the viewer's For You / Following tabs.
+
+    Raising the viewer or lowering these would only move the collision to the
+    next overlay. The real statement is "page-owned chrome yields while an
+    overlay covers the page", which is what the body-scroll-lock convention
+    already means everywhere else in this app (lib/dom/scroll-lock.ts, and
+    edge-swipe-back.tsx already decides on it). So it covers the image viewer,
+    the post viewer and any future one for free — not just reels.
+
+    The BUTTONS unmount; the component does not return early. The menu sheet
+    below is our own child, and an early return would unmount it mid-open — the
+    sheet would close itself the instant it locked the body.
+  */
+  const covered = useBodyScrollLocked();
+
   return (
     <>
       {/*
@@ -63,6 +89,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
         on a cover photo of any brightness, so it reads correctly over page
         content too once they are no longer over the artwork.
       */}
+      {covered ? null : (
       <Portal>
       <div
         className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex items-start justify-between px-3 lg:hidden"
@@ -98,6 +125,7 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
         </div>
       </div>
       </Portal>
+      )}
 
       {ready ? <ProfileMenuBottomSheet open={open} user={user} onClose={() => setOpen(false)} /> : null}
     </>

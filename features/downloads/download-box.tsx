@@ -12,6 +12,7 @@ import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useGatewayMemory } from "@/features/download-hub/use-gateway-memory";
 import { useDownloader } from "@/features/downloader/use-downloader";
+import { useScrollToResult } from "@/features/downloader/use-result-scroll";
 import { onDownloadCompleted, startDownload } from "@/features/downloads/manager";
 import { useHistory } from "@/features/history/use-history";
 import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
@@ -129,6 +130,17 @@ export function DownloadBox({
   useEffect(() => onDownloadCompleted(() => setCompleteAdOpen(true)), []);
 
   const isBusy = status === "fetching";
+
+  /*
+    A resolved fetch now TAKES the user to the result card (owner, 2026-08-25).
+    The card sits below the Install banner, the ＋Multiple Links block and the
+    supported-platforms strip, so without this the fetch completes off-screen
+    and reads as nothing having happened. Shared hook, not a local effect —
+    `features/downloader/downloader.tsx` is the other paste box and runs the
+    same behaviour from the same place.
+  */
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  useScrollToResult(resultRef, metadata?.id);
 
   const startFetch = () => {
     const parsed = sourceUrlSchema.safeParse(url);
@@ -389,7 +401,9 @@ export function DownloadBox({
       ) : null}
 
       {metadata ? (
-        <div className="text-foreground">
+        /* `scroll-mt-24` clears the sticky app bar — without it `block: "start"`
+           parks the top of the result underneath it. */
+        <div ref={resultRef} className="scroll-mt-24 text-foreground">
           {/* The download-result ad, above the result — same placement as the
               landing flow. Renders nothing until the zone is filled. */}
           <FetchedAd key={`ad-${metadata.id}`} />

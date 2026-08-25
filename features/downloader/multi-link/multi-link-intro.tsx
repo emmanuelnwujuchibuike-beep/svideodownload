@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, HelpCircle, Layers, Link2, Package, Shuffle } from "lucide-react";
+import { ChevronDown, HelpCircle, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -9,9 +9,12 @@ import { cn } from "@/lib/utils";
  * The Multi-Link block above the batch panel, rebuilt to the owner's reference
  * screenshot (`public/downloadandlanding arrangement.jpg`, 2026-08-25).
  *
- * Structure, top to bottom: heading with a "?" beside it, three capability
- * chips with icons, then the tappable "＋ Multiple Links" row carrying an
- * "Up to N" pill — all inside ONE card, matching the reference.
+ * Structure, top to bottom: heading with a "?" beside it, then the tappable
+ * "＋ Multiple Links" row carrying an "Up to N" pill — both inside ONE card.
+ *
+ * The reference also had a row of three capability chips between the two.
+ * Removed on the owner's instruction (2026-08-25) — see the note where they
+ * used to render. What is left is the heading, the "?", and the control.
  *
  * ── Where the description went ────────────────────────────────────────────
  * It is not rendered at rest at all. Owner: "hide the multilink gray
@@ -29,12 +32,6 @@ import { cn } from "@/lib/utils";
  * also removes the last reason the COLLAPSED card would need per-visitor data,
  * so nothing here waits on a request — see multi-link-button.tsx.
  */
-
-const CHIPS = [
-  { label: "Same platform", icon: Link2 },
-  { label: "Mixed platforms", icon: Shuffle },
-  { label: "Batch download", icon: Package },
-] as const;
 
 export function MultiLinkIntro({
   open,
@@ -74,8 +71,13 @@ export function MultiLinkIntro({
     >
       {/* ── Heading + the "?" ──────────────────────────────────────────── */}
       <div className="relative flex items-start gap-2">
+        {/* "…, all in one place." dropped (owner, 2026-08-25). The heading
+            itself STAYS: the "?" is anchored beside it by the owner's own
+            earlier instruction ("you just put a question mark at the top of the
+            multi link H1 text"), so removing the H1 outright would orphan the
+            one affordance that holds the description. */}
         <h3 id="multi-link-heading" className="text-balance text-base font-extrabold tracking-tight sm:text-lg">
-          Download multiple links, all in one place.
+          Download multiple links
         </h3>
 
         <button
@@ -128,23 +130,16 @@ export function MultiLinkIntro({
         ) : null}
       </div>
 
-      {/* ── Capability chips, with icons per the reference ─────────────── */}
-      <ul className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {CHIPS.map(({ label, icon: Icon }) => (
-          <li
-            key={label}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:text-xs",
-              onHero
-                ? "border-white/20 bg-white/[0.07] text-white/85"
-                : "border-border/70 bg-background text-muted-foreground",
-            )}
-          >
-            <Icon aria-hidden className="h-3.5 w-3.5 text-primary" />
-            {label}
-          </li>
-        ))}
-      </ul>
+      {/*
+        ── The capability chips are GONE (owner, 2026-08-25, with a screenshot
+           of the row: "remove this section from the multi link card") ────────
+
+        They were "Same platform · Mixed platforms · Batch download", from the
+        reference. Every one of them restated a sentence that is already behind
+        the "?" above — so at rest they cost three rows of the hero and taught
+        nothing the control below does not already say ("Add up to N links at
+        once"). Nothing else read `CHIPS`; the icons went with it.
+      */}
 
       {/* ── The control. The whole row is the button (§5 of the earlier
              brief) — on a phone that is the difference between a control you

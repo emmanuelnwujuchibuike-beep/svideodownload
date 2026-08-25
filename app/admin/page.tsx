@@ -151,11 +151,13 @@ import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
 import { UserModeration } from "@/features/admin/user-moderation";
 import { AppealsQueue } from "@/features/admin/appeals-queue";
+import { MomentumEditor } from "@/features/admin/momentum-editor";
 import { PushDeliveryMonitor } from "@/features/admin/push-delivery-monitor";
 import { TrendingEditor } from "@/features/admin/trending-editor";
 import { listPendingAppeals } from "@/lib/social/appeals";
 import { listBroadcasts } from "@/lib/social/broadcasts";
 import { getTrendingSettings } from "@/lib/social/feed";
+import { getMomentumSettings } from "@/lib/social/momentum";
 import { fetchMessagingStats } from "@/lib/social/messaging-stats";
 import { listReportedTargets } from "@/lib/social/moderation";
 import { listVerificationQueue, verificationCounts } from "@/lib/social/verification";
@@ -680,13 +682,15 @@ async function VerificationSection() {
 }
 
 async function ContentSection() {
-  const [trendingSettings, broadcasts] = await Promise.all([
+  const [trendingSettings, momentumSettings, broadcasts] = await Promise.all([
     getTrendingSettings(),
+    getMomentumSettings(),
     listBroadcasts(),
   ]);
   return (
     <>
       <TrendingEditor settings={trendingSettings} />
+      <MomentumEditor settings={momentumSettings} />
       <BroadcastComposer initialBroadcasts={broadcasts} />
     </>
   );

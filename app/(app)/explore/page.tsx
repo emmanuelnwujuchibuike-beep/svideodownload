@@ -4,9 +4,11 @@ import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
 import { LoadingStripe } from "@/features/ui/page-loader";
+import { CollectionsRail } from "@/features/explore/collections-rail";
 import { ExploreBrowser } from "@/features/explore/explore-browser";
 import { OrbitRail } from "@/features/explore/orbit-rail";
 import { isCategory, type Category } from "@/lib/social/categories";
+import { getVideoCollections } from "@/lib/social/discovery-collections";
 import { getFeed, type FeedSort } from "@/lib/social/feed";
 import { getOrbitFeed } from "@/lib/social/orbits";
 import { createClient } from "@/lib/supabase/server";
@@ -72,12 +74,17 @@ async function ExploreData({
     /* anon */
   }
 
-  const [posts, orbitResult] = await Promise.all([
+  const [posts, orbitResult, collections] = await Promise.all([
     getFeed({ sort, category, viewerId }),
     // Discovery Orbit™ (Feature 15 Part 8) — "Creators" as the seeded default:
     // works signed-out (unlike Friends) and always has content (unlike a
     // category orbit on a quiet day).
     getOrbitFeed("creator", viewerId, 12),
+    // Video Collections (Feature 15 Part 8) — only rendered on the default
+    // (no sort/category param) view, same reasoning as the orbit rail: a
+    // filtered view of Explore is the visitor's OWN choice and shouldn't be
+    // pushed back down the page by curated rails they didn't ask for.
+    !sortParam && !category ? getVideoCollections(viewerId) : Promise.resolve([]),
   ]);
 
   return (
@@ -107,6 +114,8 @@ async function ExploreData({
         </header>
 
         <OrbitRail initialOrbit="creator" initialResult={orbitResult} />
+
+        <CollectionsRail collections={collections} />
 
         {/* Instant client-side tabs/chips — switching never reloads the page */}
         <ExploreBrowser initialPosts={posts} initialSort={sort} initialCategory={category} />

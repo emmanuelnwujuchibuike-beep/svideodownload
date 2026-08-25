@@ -7,7 +7,13 @@ export interface ChatMessage {
   content: string;
 }
 
-export function useAssistant() {
+/**
+ * `context` (Feature 15 Part 8) — optional real grounding data for a scoped
+ * assistant surface, e.g. the Smart Discovery Assistant. Sent with every
+ * message in the conversation, not just the first, so a follow-up question
+ * later in the thread still has it.
+ */
+export function useAssistant(context?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +32,7 @@ export function useAssistant() {
         const res = await fetch("/api/assistant", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: next.slice(-12) }),
+          body: JSON.stringify({ messages: next.slice(-12), context }),
         });
         const json = await res.json();
         if (!res.ok) {
@@ -40,7 +46,7 @@ export function useAssistant() {
         setPending(false);
       }
     },
-    [messages, pending],
+    [messages, pending, context],
   );
 
   const reset = useCallback(() => {

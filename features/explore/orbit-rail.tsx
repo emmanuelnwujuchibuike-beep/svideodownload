@@ -103,7 +103,9 @@ export function OrbitRail({ initialOrbit, initialResult }: { initialOrbit: Orbit
   );
 }
 
-function OrbitCardTile({ card }: { card: OrbitCard }) {
+/** Exported for reuse by `collections-rail.tsx` — same tile, same rules
+ *  (square avatar for a creator card, poster-ratio tile for everything else). */
+export function OrbitCardTile({ card }: { card: OrbitCard }) {
   const isPerson = card.kind === "creator";
   return (
     <Link

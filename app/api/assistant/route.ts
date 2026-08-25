@@ -18,6 +18,16 @@ const messageSchema = z.object({
 const bodySchema = z.object({
   // Keep the last few turns only — caps cost and latency.
   messages: z.array(messageSchema).min(1).max(12),
+  /**
+   * Optional grounding data for a scoped assistant surface (Feature 15 Part
+   * 8's Smart Discovery Assistant is the first caller) — e.g. the viewer's
+   * real top interests, a few real new-creator handles, real trending
+   * topics. Appended to the system prompt as clearly-labeled DATA, never as
+   * instructions, so the model can reference it in an answer without ever
+   * inventing a stat, creator or trend that isn't in this string. Capped
+   * short — this is a few real facts, not a second knowledge base.
+   */
+  context: z.string().max(2000).optional(),
 });
 
 export async function POST(request: Request) {
@@ -49,6 +59,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid message." }, { status: 400 });
   }
 
+  const system = parsed.data.context
+    ? `${ASSISTANT_SYSTEM_PROMPT}\n\n# Live data for this reply — real, current facts about THIS viewer\nUse ONLY the facts below when answering something personal (their interests, recommendations, what's trending for them). Never invent a creator, topic, sound or count beyond what's listed here — if something isn't in this list, say you don't have that data rather than guessing.\n${parsed.data.context}`
+    : ASSISTANT_SYSTEM_PROMPT;
+
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -60,7 +74,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 700,
-        system: ASSISTANT_SYSTEM_PROMPT,
+        system,
         messages: parsed.data.messages,
       }),
       signal: AbortSignal.timeout(30_000),

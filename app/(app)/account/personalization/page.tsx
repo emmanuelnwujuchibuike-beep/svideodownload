@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { DiscoveryAssistant } from "@/features/account/discovery-assistant";
 import { DiscoveryControls } from "@/features/account/discovery-controls";
 import { SettingsPage } from "@/features/account/settings-page";
+import { buildDiscoveryContext } from "@/lib/social/discovery-assistant-context";
 import { getFrenzDna } from "@/lib/social/frenz-dna";
 import { getHomePreferences } from "@/lib/social/home-preferences";
 import { createClient } from "@/lib/supabase/server";
@@ -24,7 +26,11 @@ export default async function PersonalizationPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/account/personalization");
 
-  const [preferences, interests] = await Promise.all([getHomePreferences(user.id), getFrenzDna(user.id)]);
+  const [preferences, interests, assistantContext] = await Promise.all([
+    getHomePreferences(user.id),
+    getFrenzDna(user.id),
+    buildDiscoveryContext(user.id),
+  ]);
 
   return (
     <SettingsPage
@@ -32,7 +38,10 @@ export default async function PersonalizationPage() {
       description="What Frenz shows you, why, and how much control you have over it."
       bare
     >
-      <DiscoveryControls preferences={preferences} interests={interests} />
+      <div className="space-y-5">
+        <DiscoveryAssistant context={assistantContext} />
+        <DiscoveryControls preferences={preferences} interests={interests} />
+      </div>
     </SettingsPage>
   );
 }

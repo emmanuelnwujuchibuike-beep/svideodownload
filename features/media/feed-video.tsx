@@ -9,7 +9,7 @@ import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
-import { claimPlayback, isSuspended, recentlyScrolled, recordView, releasePlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, isSuspended, recentlyScrolled, recordView, recordWatch, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
 
 // A tap only counts if the pointer barely moved AND the page isn't mid-scroll.
@@ -244,6 +244,9 @@ export function FeedVideo({
       // Unmount mid-play (tab pane swap) → remember the position so the same
       // post resumes seamlessly when its card mounts again.
       savePlaybackPosition(postId, v.currentTime, v.duration);
+      if (postId && Number.isFinite(v.duration) && v.duration > 0) {
+        recordWatch(postId, v.currentTime * 1000, v.duration * 1000, "feed");
+      }
       releasePlayback(v);
     };
   }, [iframeMode, playIfReady, postId]);
@@ -586,7 +589,12 @@ export function FeedVideo({
         onPause={() => {
           setPaused(true);
           const v = video.current;
-          if (v) savePlaybackPosition(postId, v.currentTime, v.duration);
+          if (v) {
+            savePlaybackPosition(postId, v.currentTime, v.duration);
+            if (postId && Number.isFinite(v.duration) && v.duration > 0) {
+              recordWatch(postId, v.currentTime * 1000, v.duration * 1000, "feed");
+            }
+          }
         }}
         onPlay={() => {
           setPaused(false);

@@ -1,71 +1,61 @@
 "use client";
 
-import { ChevronDown, Layers } from "lucide-react";
+import { ChevronDown, HelpCircle, Layers, Link2, Package, Shuffle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
 /**
- * The explanatory section above the Multi-Link control (owner, 2026-08-25).
+ * The Multi-Link block above the batch panel, rebuilt to the owner's reference
+ * screenshot (`public/downloadandlanding arrangement.jpg`, 2026-08-25).
  *
- * ── Why the copy is worth its own component ───────────────────────────────
- * "＋ Multiple Links" alone does not say the one thing that makes the feature
- * worth opening: that the links can come from DIFFERENT platforms. Someone
- * with a TikTok and an Instagram link in their clipboard has no reason to
- * guess that, so the capability has to be stated before the control, not
- * discovered after it.
+ * Structure, top to bottom: heading with a "?" beside it, three capability
+ * chips with icons, then the tappable "＋ Multiple Links" row carrying an
+ * "Up to N" pill — all inside ONE card, matching the reference.
  *
- * ── What this deliberately does not do ────────────────────────────────────
- * It names no platforms. The supported set is already rendered — and kept
- * honest — by `SupportedPlatforms`, which reads the real registry; a second
- * hand-written list here would be the exact drift that keeps having to be
- * removed from this codebase, and would start overpromising the moment a
- * platform is added or (as with YouTube) removed.
+ * ── Where the description went ────────────────────────────────────────────
+ * It is not rendered at rest at all. Owner: "hide the multilink gray
+ * description … it occupied a lot of space in hero section", then "no need for
+ * the learn me there, you just put a question mark at the top of the multi
+ * link H1 text". So the explanation lives behind the "?" and floats ABOVE the
+ * layout when opened — the requirement was literally "so it doesnt occupy
+ * space", and a block that expands in place occupies space by definition and
+ * would push the paste box down, which is a layout shift on the page whose CLS
+ * was once measured at 0.684.
  *
- * ── Weight ────────────────────────────────────────────────────────────────
- * Text, two icons and a border. No images, no animation library, no data
- * fetch. The plan comes from the caller, which already knows it — asking the
- * server here would put a request on every cold landing visit for a line of
- * copy.
+ * ── Where the daily allowance went ────────────────────────────────────────
+ * Into the opened panel (`PlanStrip`, multi-link-panel.tsx). Owner: "put the
+ * batch remaining to show after the plus multi link button is clicked". That
+ * also removes the last reason the COLLAPSED card would need per-visitor data,
+ * so nothing here waits on a request — see multi-link-button.tsx.
  */
+
+const CHIPS = [
+  { label: "Same platform", icon: Link2 },
+  { label: "Mixed platforms", icon: Shuffle },
+  { label: "Batch download", icon: Package },
+] as const;
+
 export function MultiLinkIntro({
   open,
   onToggle,
   sourceLimit,
   isPro,
-  /** Free only: today's remaining allowance, shown separately so the
-   *  description isn't crowded with two different numbers. */
-  remainingToday,
   surface = "card",
 }: {
   open: boolean;
   onToggle: () => void;
   sourceLimit: number;
   isPro: boolean;
-  remainingToday?: number | null;
   surface?: "hero" | "card";
 }) {
   const onHero = surface === "hero";
 
-  /*
-    🔴 THE DESCRIPTION IS HIDDEN BY DEFAULT (owner, 2026-08-25: "hide the
-    multilink gray description, the H1 and the same platform, mixed platform
-    and batch download text is enough, the gray description occupied a lot of
-    space in hero section … show like a display mock when a learn more button
-    near the H1 is clicked, and a hide button should show when it display and
-    it should auto hide after 3secs, so it doesnt occupy space").
-
-    ── Why it is an OVERLAY, not a collapsing block ────────────────────────
-    "so it doesnt occupy space" is the requirement, and a block that expands
-    in place occupies space by definition — it would also push the paste box
-    and the whole hero down the moment it opened, which is a layout shift on
-    the page whose CLS was measured at 0.684 once already. So it floats above
-    the layout (`absolute`) and the section reserves nothing for it. Opening
-    and closing move no other pixel.
-  */
   const [showDetail, setShowDetail] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Auto-dismiss after 3s (owner). Hovering pauses it — reading the sentence
+  // should not be a race against a timer.
   useEffect(() => {
     if (!showDetail) return;
     hideTimer.current = setTimeout(() => setShowDetail(false), 3000);
@@ -77,47 +67,44 @@ export function MultiLinkIntro({
   return (
     <section
       aria-labelledby="multi-link-heading"
-      className={cn("mt-5", onHero ? "text-white" : "text-foreground")}
+      className={cn(
+        "mt-3 rounded-2xl border p-3 sm:p-4",
+        onHero ? "border-white/15 bg-white/[0.06] text-white" : "border-border bg-card text-foreground",
+      )}
     >
-      {/*
-        Constrained width, centred (§3, §11). Prose that runs the full width of
-        a desktop viewport is measurably harder to read, and the download card
-        above it is already a bounded column — matching it keeps the section
-        visually balanced around the tool rather than spanning past it.
-      */}
-      <div className="relative mx-auto max-w-xl text-center">
-        <div className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
-          <h3
-            id="multi-link-heading"
-            className={cn(
-              // Prominent, not oversized — a step below the page's own H1.
-              "text-balance text-lg font-extrabold tracking-tight sm:text-xl",
-            )}
-          >
-            Download multiple links, all in one place.
-          </h3>
+      {/* ── Heading + the "?" ──────────────────────────────────────────── */}
+      <div className="relative flex items-start gap-2">
+        <h3 id="multi-link-heading" className="text-balance text-base font-extrabold tracking-tight sm:text-lg">
+          Download multiple links, all in one place.
+        </h3>
 
-          {/* Beside the heading, as asked. Doubles as the Hide control while
-              the detail is up, so no second button appears and disappears. */}
-          <button
-            type="button"
-            onClick={() => setShowDetail((v) => !v)}
-            aria-expanded={showDetail}
-            aria-controls="multi-link-detail"
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold underline-offset-2 transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              onHero ? "text-white/80 hover:text-white" : "text-primary",
-            )}
-          >
-            {showDetail ? "Hide" : "Learn more"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowDetail((v) => !v)}
+          aria-expanded={showDetail}
+          aria-controls="multi-link-detail"
+          aria-label={showDetail ? "Hide what batch download does" : "What does this do?"}
+          className={cn(
+            "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            showDetail
+              ? "bg-primary text-primary-foreground"
+              : onHero
+                ? "text-white/60 hover:bg-white/10 hover:text-white"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+          )}
+        >
+          <HelpCircle aria-hidden className="h-4 w-4" />
+        </button>
 
         {/*
-          The detail card. `absolute` so it never displaces the paste box below
-          it — the whole point of hiding it was the space it took in the hero.
-          `aria-live` because it appears and self-dismisses without focus
-          moving, which a screen reader would otherwise never learn about.
+          🔴 Centred through the LAYOUT (`inset-x-0 mx-auto`), never with
+          `-translate-x-1/2` (owner, with a screenshot: "it opens the mockup in
+          an unprofessional position" — it was hanging off the right edge).
+          That class and `animate-fade-up` both write `transform`, and the
+          animation wins: its keyframes end at `translateY(0)`, silently
+          discarding the horizontal centring, so the card was positioned with
+          its LEFT edge at the midpoint. Layout centring cannot collide with an
+          animation because the two no longer touch the same property.
         */}
         {showDetail ? (
           <div
@@ -125,30 +112,11 @@ export function MultiLinkIntro({
             role="status"
             aria-live="polite"
             onMouseEnter={() => {
-              // Reading it shouldn't be a race against the timer.
               if (hideTimer.current) clearTimeout(hideTimer.current);
             }}
             onMouseLeave={() => setShowDetail(false)}
-            /*
-              🔴 CENTRED WITHOUT A TRANSFORM (owner, 2026-08-25, with a
-              screenshot: "when i click on learn more, it opens the mockup in
-              an unprofessional position" — the card was hanging off the right
-              edge of the screen).
-
-              The first version used `left-1/2 -translate-x-1/2`. Both that
-              class AND `animate-fade-up`'s keyframes write the SAME
-              `transform` property, and an animation wins over a class for the
-              whole time it is applied — the keyframes end at
-              `transform: translateY(0)`, which silently discarded the
-              `translateX(-50%)`. So the card was positioned with its LEFT edge
-              at the horizontal midpoint and ran off-screen from there.
-
-              `inset-x-0 mx-auto` centres through the LAYOUT instead, leaving
-              `transform` entirely to the animation. The two can no longer
-              fight because they no longer touch the same property.
-            */
             className={cn(
-              "animate-fade-up absolute inset-x-0 top-full z-20 mx-auto mt-2 w-full max-w-[26rem] rounded-2xl border p-3 text-left text-sm leading-relaxed shadow-luxury",
+              "animate-fade-up absolute inset-x-0 top-full z-20 mx-auto mt-2 w-full rounded-xl border p-3 text-left text-sm leading-relaxed shadow-luxury",
               onHero
                 ? "border-white/15 bg-[#0b1020]/95 text-white/85 backdrop-blur"
                 : "border-border bg-card text-muted-foreground",
@@ -158,118 +126,83 @@ export function MultiLinkIntro({
             Fetch, choose what you want, and download everything together.
           </div>
         ) : null}
-
-        {/* Capability chips — subtle, thin, monochrome. Wrap on mobile. */}
-        <ul className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
-          {["Same platform", "Mixed platforms", "Batch download"].map((chip) => (
-            <li
-              key={chip}
-              className={cn(
-                "rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                onHero
-                  ? "border-white/20 bg-white/[0.07] text-white/85"
-                  : "border-border/70 bg-secondary/40 text-muted-foreground",
-              )}
-            >
-              {chip}
-            </li>
-          ))}
-        </ul>
       </div>
 
-      {/*
-        The collapsed card IS the button (§5) — the whole surface is tappable,
-        not just the words. On a phone that is the difference between a control
-        you can hit and one you aim at.
-      */}
-      <div className="mx-auto mt-3.5 max-w-xl">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls="multi-link-panel"
+      {/* ── Capability chips, with icons per the reference ─────────────── */}
+      <ul className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {CHIPS.map(({ label, icon: Icon }) => (
+          <li
+            key={label}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:text-xs",
+              onHero
+                ? "border-white/20 bg-white/[0.07] text-white/85"
+                : "border-border/70 bg-background text-muted-foreground",
+            )}
+          >
+            <Icon aria-hidden className="h-3.5 w-3.5 text-primary" />
+            {label}
+          </li>
+        ))}
+      </ul>
+
+      {/* ── The control. The whole row is the button (§5 of the earlier
+             brief) — on a phone that is the difference between a control you
+             can hit and one you aim at. ─────────────────────────────────── */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls="multi-link-panel"
+        className={cn(
+          "mt-2.5 flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          onHero
+            ? "border-white/20 bg-white/[0.07] hover:bg-white/[0.12]"
+            : "border-border bg-background hover:border-primary/40 hover:bg-secondary/40",
+          open && (onHero ? "border-white/35 bg-white/[0.12]" : "border-primary/50 bg-secondary/40"),
+        )}
+      >
+        <span
           className={cn(
-            "group flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-            onHero
-              ? "border-white/20 bg-white/[0.07] hover:bg-white/[0.12]"
-              : "border-border bg-card shadow-soft hover:border-primary/40 hover:bg-secondary/40",
-            open && (onHero ? "border-white/35 bg-white/[0.12]" : "border-primary/50 bg-secondary/40"),
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+            onHero ? "bg-white/10 text-white" : "bg-secondary text-foreground",
           )}
         >
-          <span
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-              onHero ? "bg-white/10 text-white" : "bg-secondary text-foreground",
-            )}
-          >
-            <Layers aria-hidden className="h-4 w-4" />
+          <Layers aria-hidden className="h-4 w-4" />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold">
+            <span aria-hidden>＋</span> Multiple Links
           </span>
-
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-bold">
-              <span aria-hidden>＋</span> Multiple Links
-            </span>
-            <span
-              className={cn(
-                "mt-0.5 block text-xs",
-                onHero ? "text-white/70" : "text-muted-foreground",
-              )}
-            >
-              {/*
-                §12 — Free is told what it HAS, never what it lacks. "Add up to
-                3 sources" and "Add up to 6 sources · PRO" are the same
-                sentence shape; nothing here frames the free tier as a
-                restriction.
-              */}
-              Add up to {sourceLimit} sources
-              {isPro ? " · PRO" : ""}
-            </span>
+          <span className={cn("mt-0.5 block text-xs", onHero ? "text-white/70" : "text-muted-foreground")}>
+            Add up to {sourceLimit} links at once
           </span>
+        </span>
 
-          {/* §9 — the chevron rotates. `transform` only, so it is composited. */}
-          <ChevronDown
-            aria-hidden
-            className={cn(
-              "h-4 w-4 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
-              onHero ? "text-white/70" : "text-muted-foreground",
-              open && "rotate-180",
-            )}
-          />
-        </button>
+        {/* The "Up to N" pill from the reference. Carries the Pro tier when
+            that is what the visitor has, so the same element answers "how many
+            can I add" for both plans instead of two different affordances. */}
+        <span
+          className={cn(
+            "shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold",
+            onHero ? "bg-white/15 text-white" : "bg-primary/10 text-primary",
+          )}
+        >
+          Up to {sourceLimit}
+          {isPro ? " · PRO" : ""}
+        </span>
 
-        {/*
-          The daily allowance, kept OUT of the description above (§2) — two
-          different numbers in one paragraph ("up to 3 links", "2 downloads
-          left") read as one confusing rule rather than two clear ones.
-        */}
-        {!isPro && typeof remainingToday === "number" ? (
-          <p
-            className={cn(
-              "mt-1.5 px-1 text-center text-[11px]",
-              onHero ? "text-white/65" : "text-muted-foreground",
-            )}
-          >
-            {remainingToday > 0 ? (
-              <>
-                <span className="font-semibold">{remainingToday}</span> batch{" "}
-                {remainingToday === 1 ? "download" : "downloads"} remaining today
-              </>
-            ) : (
-              "Daily batch limit reached"
-            )}
-          </p>
-        ) : null}
-        {isPro ? (
-          <p
-            className={cn(
-              "mt-1.5 px-1 text-center text-[11px]",
-              onHero ? "text-white/65" : "text-muted-foreground",
-            )}
-          >
-            Unlimited batches with Pro
-          </p>
-        ) : null}
-      </div>
+        {/* Rotates on `transform` only, so it is composited. */}
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "h-4 w-4 shrink-0 transition-transform duration-200 motion-reduce:transition-none",
+            onHero ? "text-white/70" : "text-muted-foreground",
+            open && "rotate-180",
+          )}
+        />
+      </button>
     </section>
   );
 }

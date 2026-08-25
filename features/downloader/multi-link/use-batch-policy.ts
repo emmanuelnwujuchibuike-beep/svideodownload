@@ -102,15 +102,27 @@ export function useBatchPolicy(enabled: boolean) {
     upsellMessage: DEFAULT_MULTI_LINK.upsellMessage,
   };
 
-  /** Reflect a just-spent batch immediately, so the "N remaining today"
-   *  indicator is right without waiting on a refetch. */
-  const spendLocally = useCallback(() => {
-    setPolicy((p) =>
-      p && p.remaining !== null
-        ? { ...p, used: p.used + 1, remaining: Math.max(0, p.remaining - 1) }
-        : p,
-    );
+  /**
+   * Adopt the counts the COMMIT response already returned.
+   *
+   * 🔴 Replaces an optimistic decrement followed by a `refresh()` (owner,
+   * 2026-08-25: "it showed 1 and then change back to 2"). That pattern has a
+   * race built into it: the local guess paints 1, then a second round trip
+   * re-reads the allowance and whatever it says wins — so any disagreement
+   * shows up as the number visibly flipping back in front of the visitor,
+   * which is worse than never having moved.
+   *
+   * `/commit` already counts and returns `used`/`remaining` from the same
+   * query `/policy` would run. Using them is exactly one source of truth, one
+   * network call, and nothing to race.
+   */
+  const applyCommit = useCallback((counts: { used?: number; remaining?: number | null }) => {
+    setPolicy((p) => {
+      if (!p) return p;
+      if (typeof counts.used !== "number") return p;
+      return { ...p, used: counts.used, remaining: counts.remaining ?? null };
+    });
   }, []);
 
-  return { policy: effective, ready, refresh, spendLocally };
+  return { policy: effective, ready, refresh, applyCommit };
 }

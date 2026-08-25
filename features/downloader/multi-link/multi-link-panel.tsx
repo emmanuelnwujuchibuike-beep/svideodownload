@@ -72,7 +72,7 @@ export function MultiLinkPanel({
   onPolicy?: (policy: BatchPolicy) => void;
 }) {
   const [state, dispatch] = useReducer(batchReducer, initialBatchState);
-  const { policy, ready: policyReady, refresh, spendLocally } = useBatchPolicy(true);
+  const { policy, ready: policyReady, refresh, applyCommit } = useBatchPolicy(true);
 
   useEffect(() => {
     if (policyReady) onPolicy?.(policy);
@@ -215,15 +215,25 @@ export function MultiLinkPanel({
             body: JSON.stringify({ batchId, anonId: batchAnonMirror() }),
           });
           if (res.ok) {
-            const json = (await res.json()) as { allowed: boolean };
+            const json = (await res.json()) as {
+              allowed: boolean;
+              used?: number;
+              remaining?: number | null;
+            };
             // A refusal here does NOT stop the files — the ad was already
             // watched. See the note on the commit route.
             if (!json.allowed) track("multilink_limit_reached", { kind: "daily" });
+            /*
+              Adopt the counts the server just computed, rather than guessing
+              locally and re-reading a moment later. That older pattern is what
+              produced "it showed 1 and then change back to 2" — see
+              `applyCommit`.
+            */
+            applyCommit(json);
           }
         } catch {
           /* fail open — a broken counter must never eat a paid-for batch */
         }
-        spendLocally();
 
         // Remember the authorization and each item's index within it, so a
         // retry can redeem the SAME session at the SAME index.
@@ -258,9 +268,8 @@ export function MultiLinkPanel({
         });
         dispatch({ type: "itemQueued", itemId: item.id, taskId });
       });
-      if (!isRetry) void refresh();
     },
-    [state.sources, spendLocally, refresh],
+    [state.sources, applyCommit],
   );
 
   /** Step 4: ask the server whether this batch may run at all. */

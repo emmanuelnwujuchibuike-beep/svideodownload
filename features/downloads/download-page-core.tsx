@@ -87,16 +87,22 @@ export function DownloadPageCore({
       <DownloadsHero />
 
       {/*
-        Install — the primary placement (owner, 2026-08-23), directly under the
-        hero copy and above the paste box, matching the reference. Renders in
-        the first paint and removes itself via CSS once installed, so it never
-        shifts the headline above it. See `InstallHeroBanner`.
+        🔴 Install moved BELOW the paste box (owner, 2026-08-25, with a
+        reference screenshot): the download field is what the page exists for,
+        so it now comes first and the install prompt sits under it, above the
+        Multi-Link block. It is passed into DownloadBox's `afterForm` slot so
+        the three land in the reference's order inside one card. The banner
+        itself is unchanged — it still renders in the first paint and removes
+        itself via CSS once installed, so it never shifts the headline.
       */}
-      <InstallHeroBanner />
-
       <section id="download" className="mt-5 scroll-mt-20">
         <div className="rounded-[1.5rem] bg-white p-4 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-[#0b1020] dark:ring-white/10 sm:p-5">
-          <DownloadBox surface="card" platformStatus={platformStatus} multiLink={multiLink} />
+          <DownloadBox
+            surface="card"
+            platformStatus={platformStatus}
+            multiLink={multiLink}
+            afterForm={<InstallHeroBanner />}
+          />
         </div>
       </section>
 

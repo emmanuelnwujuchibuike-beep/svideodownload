@@ -34,12 +34,14 @@ import { MultiLinkIntro } from "./multi-link-intro";
  * comes from `useEntitlements`, which the download box on this page has
  * already fetched and memoised process-wide, so it costs nothing either.
  *
- * The DAILY ALLOWANCE is genuinely per-identity and cannot come from either;
- * it needs `/api/downloads/batch/policy`. That request is deliberately not
- * made until the panel opens — a per-visitor, uncacheable round trip on every
- * cold landing visit is exactly what the 1.6-second budget refuses. Once the
- * panel has opened, the answer is lifted back up here and the collapsed card
- * shows it from then on.
+ * The DAILY ALLOWANCE is not drawn here at all any more (owner, 2026-08-25:
+ * "put the batch remaining to show after the plus multi link button is
+ * clicked") — it lives in the opened panel. That is also the last thing the
+ * COLLAPSED card needed per-visitor data for, so nothing on a cold landing
+ * visit now waits on `/api/downloads/batch/policy`, which is a per-visitor,
+ * uncacheable round trip the 1.6-second budget refuses. The policy is still
+ * lifted up here once the panel opens, because the source LIMIT can differ
+ * from the optimistic guess below.
  */
 const MultiLinkPanel = dynamic(
   () => import("./multi-link-panel").then((m) => m.MultiLinkPanel),
@@ -78,7 +80,6 @@ export function MultiLinkButton({
         onToggle={() => setOpen((v) => !v)}
         sourceLimit={sourceLimit}
         isPro={isPro}
-        remainingToday={policy?.remaining ?? null}
         surface={surface}
       />
 

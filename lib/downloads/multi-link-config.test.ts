@@ -343,8 +343,32 @@ describe("the intro's description is hidden until asked for", () => {
     expect(intro).toMatch(/setTimeout\(\(\) => setShowDetail\(false\), 3000\)/);
   });
 
-  it("the same control reads Learn more, then Hide", () => {
-    expect(intro).toMatch(/\{showDetail \? "Hide" : "Learn more"\}/);
+  it("is opened by a ? beside the heading, not a Learn more link", () => {
+    // Owner: "no need for the learn me there, you just put a question mark at
+    // the top of the multi link H1 text".
+    expect(introCode).toMatch(/<HelpCircle/);
+    expect(introCode).not.toMatch(/Learn more/);
+  });
+
+  it("does NOT draw the daily allowance in the collapsed card", () => {
+    // Owner: "put the batch remaining to show after the plus multi link button
+    // is clicked" — it lives in the opened panel now.
+    expect(introCode).not.toMatch(/remaining today/i);
+    expect(read("features/downloader/multi-link/multi-link-button.tsx")).not.toMatch(
+      /remainingToday/,
+    );
+  });
+
+  it("carries the Up to N pill and the icon chips from the reference", () => {
+    expect(introCode).toMatch(/Up to \{sourceLimit\}/);
+    for (const icon of ["Link2", "Shuffle", "Package"]) {
+      expect(introCode).toContain(icon);
+    }
+  });
+
+  it("puts the paste box ABOVE the install prompt, per the reference", () => {
+    const core = read("features/downloads/download-page-core.tsx");
+    expect(core).toMatch(/afterForm=\{<InstallHeroBanner \/>\}/);
   });
 
   it("🔴 never centres with a transform while an animation owns transform", () => {
@@ -376,8 +400,10 @@ describe("the intro's description is hidden until asked for", () => {
   });
 
   it("keeps the heading and the chips, which were explicitly kept", () => {
-    expect(intro).toMatch(/Download multiple links, all in one place\./);
-    expect(intro).toMatch(/"Same platform", "Mixed platforms", "Batch download"/);
+    expect(introCode).toMatch(/Download multiple links, all in one place\./);
+    for (const chip of ["Same platform", "Mixed platforms", "Batch download"]) {
+      expect(introCode).toContain(chip);
+    }
   });
 
   it("the timer doesn't run out while it is being read", () => {

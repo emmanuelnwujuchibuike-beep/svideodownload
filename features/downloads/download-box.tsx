@@ -2,7 +2,7 @@
 
 import { ClipboardPaste, Loader2, Search, X } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { SupportedPlatforms } from "@/components/landing/supported-platforms";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
@@ -93,10 +93,13 @@ export function DownloadBox({
    *  the settings store itself. Defaults ON so a caller that doesn't know
    *  behaves exactly as the feature's own default does. */
   multiLink = DEFAULT_MULTI_LINK_PUBLIC,
+  /** Rendered between the paste box and the Multi-Link block — see below. */
+  afterForm,
 }: {
   surface?: "hero" | "card";
   platformStatus?: PlatformStatusMap;
   multiLink?: MultiLinkPublicConfig;
+  afterForm?: ReactNode;
 } = {}) {
   const onCard = surface === "card";
   const [url, setUrl] = useState("");
@@ -313,10 +316,22 @@ export function DownloadBox({
       </form>
 
       {/*
-        §1 — the secondary control, directly below the primary paste box, and
-        expanding INLINE rather than navigating anywhere. The single-link flow
-        above it is untouched (§46): this adds a capability beside it, it does
-        not wrap or replace it.
+        Whatever the page wants between the paste box and the Multi-Link block.
+
+        `/downloads` and the landing pass the Install banner here (owner's
+        reference screenshot, 2026-08-25: paste box first, Install under it,
+        Multi-Link under that). A slot rather than importing the banner
+        directly, because this component also renders on surfaces that have no
+        install prompt at all, and the ORDER is the thing the reference
+        specifies — not a new dependency for this file.
+      */}
+      {afterForm}
+
+      {/*
+        The secondary control, directly below the primary paste box, expanding
+        INLINE rather than navigating anywhere. The single-link flow above it is
+        untouched: this adds a capability beside it, it does not wrap or replace
+        it.
       */}
       <MultiLinkButton config={multiLink} surface={surface} />
 

@@ -108,7 +108,7 @@ export async function PostPageView({
     const ipHash = createHash("sha256")
       .update((((await headers()).get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
       .digest("hex");
-    void recordPostView(post.id, me, ipHash);
+    void recordPostView(post.id, me, ipHash, "post_page");
   }
 
   const [plan, related, reactions, comments, gate, poll, albumMedia] = await Promise.all([

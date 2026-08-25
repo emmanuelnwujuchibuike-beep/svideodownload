@@ -7,6 +7,7 @@ import {
   Briefcase,
   ChevronRight,
   Code2,
+  Compass,
   Crown,
   Download,
   Ghost,
@@ -209,6 +210,13 @@ export default async function AccountPage() {
         { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your saved library", tint: "blue" },
         { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked", tint: "violet" },
         { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
+        {
+          href: "/account/personalization",
+          Icon: Compass,
+          title: "Discovery & personalization",
+          sub: "Your Frenz DNA, topics & feed controls",
+          tint: "cyan",
+        },
       ],
     },
     {

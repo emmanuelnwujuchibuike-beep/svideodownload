@@ -60,6 +60,9 @@ export const DATA_DOMAINS: DataDomain[] = [
       "poll_options",
       "poll_votes",
       "post_views",
+      // Watch-depth signal (Feature 15 Part 8, migration 0133) — how much of
+      // a post was actually watched, not just that it was viewed.
+      "post_watch_events",
       "post_guest_likes",
       "comment_reactions",
       // Creator-muted commenters (Feature 15 Part 5 tranche 4, migration
@@ -89,6 +92,9 @@ export const DATA_DOMAINS: DataDomain[] = [
       "stories",
       "user_stickers",
       "user_home_preferences",
+      // FrenzDNA™ — per-category interest weights, self-owned (Feature 15
+      // Part 8, migration 0133).
+      "user_interest_profile",
       "user_presence_status",
       "user_restrictions",
     ],

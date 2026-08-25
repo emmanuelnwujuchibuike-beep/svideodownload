@@ -81,6 +81,7 @@ export const NOT_EXPORTED: Record<string, string> = {
     people's actions to you in a form they never agreed to.
   */
   post_views: "Who viewed your posts. Exporting it would identify other people's browsing.",
+  post_watch_events: "Who watched your posts and for how long. Same reasoning as post_views — exporting it would identify other people's watch behavior; the aggregate (completion_rate) is already exported through posts.",
   sound_plays: "Who played your sounds. Same reasoning as post_views — the total is already exported through sounds.plays_count.",
   post_guest_likes: "Anonymous likes on your posts. There is no identity to return.",
   profile_view_stats: "Aggregate view counts, not a list of viewers.",
@@ -228,6 +229,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   security_audit_log: "user_id",
   milestone_log: "user_id",
   user_home_preferences: "user_id",
+  // FrenzDNA™ — the viewer's own derived interest weights (Feature 15 Part 8).
+  user_interest_profile: "user_id",
   user_presence_status: "user_id",
   user_stickers: "user_id",
 };

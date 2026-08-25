@@ -144,6 +144,34 @@ export function recordView(postId: string): void {
 }
 
 /**
+ * Reports watch depth (Feature 15 Part 8) — how much of a post was actually
+ * watched, not just that it was seen. Called at natural pause points (onPause,
+ * unmount) alongside `savePlaybackPosition`, which already has the exact
+ * `currentTime`/`duration` this needs. NOT deduped like `recordView` above —
+ * a rewatch to completion is a genuinely stronger signal than a first partial
+ * watch — but throttled per-post so a flurry of pause/resume taps doesn't
+ * spam the endpoint: only reported once progress has advanced meaningfully
+ * (2s) since the last report for that post this session.
+ */
+const lastWatchReportMs = new Map<string, number>();
+export function recordWatch(postId: string | undefined, watchMs: number, durationMs: number, source?: string): void {
+  if (!postId || !Number.isFinite(watchMs) || watchMs <= 0) return;
+  const last = lastWatchReportMs.get(postId) ?? -Infinity;
+  if (watchMs - last < 2000) return;
+  lastWatchReportMs.set(postId, watchMs);
+  try {
+    fetch("/api/watch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({ postId, watchMs: Math.round(watchMs), durationMs: Math.round(durationMs || 0), source }),
+    }).catch(() => {});
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
  * Dev-only safety net (never runs in production): periodically scans every
  * `<video>` in the document and, if more than one is genuinely playing at
  * once, pauses every one except whichever the coordinator currently considers

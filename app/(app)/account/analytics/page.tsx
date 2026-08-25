@@ -1,4 +1,4 @@
-import { BarChart3, Bookmark, Download, Eye, Gem, Heart, MessageCircle, Route, Share2, Users } from "lucide-react";
+import { BarChart3, Bookmark, Compass, Download, Eye, Gem, Heart, MessageCircle, Route, Share2, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -19,6 +19,22 @@ const SHARE_KIND_LABEL: Record<ShareKind, string> = {
   email: "Email",
   sms: "Text message",
   qr: "QR code",
+};
+
+/** Known post_watch_events.source values → readable labels. An unknown/new
+ *  source string still renders (falls back to itself), so this never hides
+ *  a real source, just leaves it unprettified until added here. */
+const SOURCE_LABEL: Record<string, string> = {
+  for_you: "For You",
+  following: "Following",
+  recent: "Recent",
+  trending: "Trending",
+  reels: "Reels",
+  post_page: "Post page",
+  search: "Search",
+  profile: "Profile",
+  collection: "Collection",
+  untagged: "Other",
 };
 
 export const dynamic = "force-dynamic";
@@ -175,6 +191,46 @@ async function Analytics({ userId }: { userId: string }) {
           ))}
         </ul>
       </section>
+
+      {/* Discovery Analytics (Feature 15 Part 8) — where reach actually came
+          from and how deeply it was watched. Only renders sections with real
+          data: an empty post_watch_events table (pre-migration, or simply no
+          watches recorded yet) means no fabricated Traffic Sources/Retention
+          rather than a chart full of zeros. */}
+      {a.discovery.trafficSources.length > 0 || a.discovery.topicReach.length > 0 ? (
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-card">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+            <Compass className="h-4 w-4 text-blue-500" /> Discovery
+          </h2>
+          <div className="mb-4 grid grid-cols-2 gap-3 text-center sm:grid-cols-3">
+            <Mini label="Retention" value={a.discovery.retention > 0 ? `${a.discovery.retention}%` : "—"} accent />
+            <Mini label="New followers 7d" value={formatCompactNumber(a.discovery.newFollowers7d)} />
+            <Mini label="Topics reached" value={String(a.discovery.topicReach.length)} />
+          </div>
+          {a.discovery.trafficSources.length > 0 ? (
+            <div className="space-y-2">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground">Traffic sources</p>
+              {a.discovery.trafficSources.slice(0, 6).map((s) => (
+                <div key={s.source} className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-muted-foreground">{SOURCE_LABEL[s.source] ?? s.source}</span>
+                  <span className="font-semibold">{formatCompactNumber(s.count)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {a.discovery.topicReach.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground">Topic reach</p>
+              {a.discovery.topicReach.slice(0, 6).map((t) => (
+                <div key={t.category} className="flex items-center justify-between text-xs">
+                  <span className="font-medium capitalize text-muted-foreground">{t.category}</span>
+                  <span className="font-semibold">{formatCompactNumber(t.views)} views</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Share Journey™ — a real funnel (sent → opened), not a propagation
           tree (see lib/social/share/insights.ts's own header on why). */}

@@ -5,8 +5,10 @@ import { Suspense } from "react";
 import { AppContent } from "@/features/app-shell/app-content";
 import { LoadingStripe } from "@/features/ui/page-loader";
 import { ExploreBrowser } from "@/features/explore/explore-browser";
+import { OrbitRail } from "@/features/explore/orbit-rail";
 import { isCategory, type Category } from "@/lib/social/categories";
 import { getFeed, type FeedSort } from "@/lib/social/feed";
+import { getOrbitFeed } from "@/lib/social/orbits";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -70,7 +72,13 @@ async function ExploreData({
     /* anon */
   }
 
-  const posts = await getFeed({ sort, category, viewerId });
+  const [posts, orbitResult] = await Promise.all([
+    getFeed({ sort, category, viewerId }),
+    // Discovery Orbit™ (Feature 15 Part 8) — "Creators" as the seeded default:
+    // works signed-out (unlike Friends) and always has content (unlike a
+    // category orbit on a quiet day).
+    getOrbitFeed("creator", viewerId, 12),
+  ]);
 
   return (
     <AppContent>
@@ -97,6 +105,8 @@ async function ExploreData({
             Trending &amp; fresh downloads from the community.
           </p>
         </header>
+
+        <OrbitRail initialOrbit="creator" initialResult={orbitResult} />
 
         {/* Instant client-side tabs/chips — switching never reloads the page */}
         <ExploreBrowser initialPosts={posts} initialSort={sort} initialCategory={category} />

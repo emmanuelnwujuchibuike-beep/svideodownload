@@ -67,6 +67,8 @@ export interface FeedItem {
   savesCount: number;
   downloadsCount: number;
   createdAt: string;
+  /** Momentum Engine™ (Feature 15 Part 8) — 0 pre-migration/pre-recompute. */
+  momentumScore?: number;
   publisher: FeedPublisher;
   viewerLiked: boolean;
   viewerSaved: boolean;
@@ -190,10 +192,26 @@ export interface Row {
   comments_count: number;
   downloads_count: number;
   created_at: string;
+  is_nsfw?: boolean;
+  /** Feature 15 Part 8 — absent pre-migration 0133 (see `hasMomentumColumn`). */
+  momentum_score?: number;
 }
 
 const SELECT =
-  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at";
+  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at, is_nsfw";
+
+// `posts.momentum_score` arrives with migration 0133 — same straddle pattern
+// as `hasFormatColumn` above, so the whole feed doesn't 500 on an
+// unmigrated instance (this exact failure class — a query erroring on a
+// missing column and the outer try/catch swallowing it into an empty page —
+// is documented in the project's own migration-gotcha notes).
+let momentumColumnKnown: boolean | null = null;
+async function hasMomentumColumn(db: ReturnType<typeof createAdminClient>): Promise<boolean> {
+  if (momentumColumnKnown !== null) return momentumColumnKnown;
+  const { error } = await db.from("posts").select("momentum_score").limit(1);
+  momentumColumnKnown = !error;
+  return momentumColumnKnown;
+}
 
 export type HomeFeedSort = "for_you" | "following" | "recent" | "trending";
 
@@ -253,6 +271,12 @@ export function rankForYou(
       row.likes_count + row.comments_count * 2 + row.shares_count * 3 + row.saves_count * 2 + row.downloads_count * 2;
     const freshness = 40 / (1 + ageHours / 30);
     const interest = row.category && boosted.has(row.category as Category) ? 60 : 0;
+    // Momentum Engine™ (Feature 15 Part 8) — a modest bonus, not a new tier.
+    // `momentum_score` already favors young + rising posts on its own scale
+    // (see recompute_momentum_scores); this is deliberately small relative to
+    // `quality`/`relationship` so a rising post gets a nudge toward the top of
+    // its day-bucket rather than overriding the ranking model wholesale.
+    const momentum = (row.momentum_score ?? 0) * 6;
     const createdMs = new Date(row.created_at).getTime();
     const isBrandNew = now - createdMs < NEW_POST_WINDOW_MS;
     // 🔴 DAY BUCKET (owner, 2026-08-17: "feed post should be ranked by date
@@ -266,7 +290,7 @@ export function rankForYou(
     // the 30-minute "brand new" pin below — that pin only ever protected the
     // newest few posts, not "today" as a whole.
     const dayBucket = Math.floor(ageHours / 24);
-    const base = relationship + quality + freshness + interest;
+    const base = relationship + quality + freshness + interest + momentum;
     // Per-refresh reshuffle (owner: "every refresh should reshuffle the feed
     // post arrangement like tiktok"). MULTIPLICATIVE, not additive: it varies a
     // post's score by ±SHUFFLE_SPREAD/2 of its OWN value, so posts of similar
@@ -714,9 +738,10 @@ async function loadHomeFeed(
     */
     const fixedWindow = sort === "for_you" || seed !== undefined;
     const want = fixedWindow ? RANKED_WINDOW : (offset + limit) * 3 + limit;
+    const hasMomentum = await hasMomentumColumn(db);
     let q = db
       .from("posts")
-      .select(SELECT)
+      .select(hasMomentum ? `${SELECT}, momentum_score` : SELECT)
       .eq("status", "published")
       .eq("visibility", "public")
       .limit(Math.min(want, 400));
@@ -744,21 +769,42 @@ async function loadHomeFeed(
       : q.order("created_at", { ascending: false });
 
     const { data } = await q;
-    let rows = (data as Row[]) ?? [];
+    // The select string is dynamic (`hasMomentum ? ... : ...`), so Supabase's
+    // generated-type query builder can't resolve it to a literal column list
+    // at compile time — hence the `unknown` hop, same as every other cast in
+    // this file that reads from a possibly-unmigrated column.
+    let rows = (data as unknown as Row[]) ?? [];
     if (rows.length === 0) return emptyFeedPage();
-    // Personalization (Feature 17 Part 13) only ever applies to "for_you" —
-    // same rule as rankForYou itself: "following"/"recent"/"trending" stay a
-    // plain, literal view. A muted category is excluded outright (mirrors
-    // muted_creators' absolute semantics), THEN the remaining rows are ranked
-    // with the viewer's boost/relationship preferences.
+
+    // Discovery Controls — Sensitive Content (Feature 15 Part 8). Off by
+    // default on EVERY sort, not just "for_you": this is a safety filter, not
+    // a ranking personalization, so it applies the same way `blocked`/
+    // `suspended` already do below — an anon viewer (no prefs row) always
+    // gets the safe default.
+    const prefsForViewer = viewerId ? await getHomePreferences(viewerId) : null;
+    if (!prefsForViewer?.sensitiveContent) {
+      rows = rows.filter((r) => !r.is_nsfw);
+    }
+
+    // Personalization (Feature 17 Part 13, extended Part 8) only ever applies
+    // to "for_you" — same rule as rankForYou itself: "following"/"recent"/
+    // "trending" stay a plain, literal view. A muted category is excluded
+    // outright (mirrors muted_creators' absolute semantics), THEN the
+    // remaining rows are ranked with the viewer's boost/relationship
+    // preferences — UNLESS personalization is explicitly paused, in which
+    // case "for_you" degrades to the same literal recency order "recent" uses.
     let prefs: HomePreferences | null = null;
     if (sort === "for_you") {
-      prefs = viewerId ? await getHomePreferences(viewerId) : null;
-      if (prefs && prefs.mutedCategories.length > 0) {
-        const muted = new Set(prefs.mutedCategories);
-        rows = rows.filter((r) => !r.category || !muted.has(r.category as Category));
+      prefs = prefsForViewer;
+      if (prefs?.personalizationPaused) {
+        // Paused: no mute filter, no ranking — exactly "recent"'s behavior.
+      } else {
+        if (prefs && prefs.mutedCategories.length > 0) {
+          const muted = new Set(prefs.mutedCategories);
+          rows = rows.filter((r) => !r.category || !muted.has(r.category as Category));
+        }
+        rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined, seed);
       }
-      rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined, seed);
     } else if (seed) {
       /*
         A seeded sort that is not "for_you" — today that is only the reels
@@ -877,6 +923,7 @@ async function loadHomeFeed(
         savesCount: r.saves_count,
         downloadsCount: r.downloads_count,
         createdAt: r.created_at,
+        momentumScore: r.momentum_score ?? 0,
         publisher: {
           id: r.publisher_id,
           handle: prof.handle as string,

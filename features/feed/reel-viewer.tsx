@@ -127,7 +127,7 @@ const RepostersSheet = dynamic(() => import("@/features/social/reposters-sheet")
 import { useLongPress } from "@/lib/hooks/use-long-press";
 import { PostPollInline } from "@/features/social/post-poll-inline";
 import { RepostBurst } from "@/features/social/repost-burst";
-import { claimPlayback, recordView, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
+import { claimPlayback, recordView, recordWatch, releasePlayback, suspendPlayback } from "@/lib/media/video-coordinator";
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
@@ -2023,7 +2023,17 @@ function ReelCard({
               }}
               onPause={() => {
                 const v = video.current;
-                if (v) savePlaybackPosition(playbackKey, v.currentTime, v.duration);
+                if (v) {
+                  savePlaybackPosition(playbackKey, v.currentTime, v.duration);
+                  // Watch-depth signal (Feature 15 Part 8) — feeds momentum_score
+                  // and completion_rate (migration 0133) and FrenzDNA's interest
+                  // weights. Reels is a `loop`ing player, so a pause is the
+                  // natural checkpoint (same moment savePlaybackPosition already
+                  // uses), not onTimeUpdate, which would spam an event every frame.
+                  if (Number.isFinite(v.duration) && v.duration > 0) {
+                    recordWatch(item.id, v.currentTime * 1000, v.duration * 1000, "reels");
+                  }
+                }
                 /*
                   Pausing leaves Full screen. Someone who hid the overlay to
                   watch and then paused is asking to look at something — the

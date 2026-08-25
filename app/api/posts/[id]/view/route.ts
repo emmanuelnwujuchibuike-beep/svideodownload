@@ -37,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const ipHash = createHash("sha256")
     .update(((request.headers.get("x-forwarded-for") ?? "").split(",")[0] || "anon").trim())
     .digest("hex");
-  void recordPostView(id, viewerId, ipHash);
+  void recordPostView(id, viewerId, ipHash, "feed");
 
   return NextResponse.json({ ok: true });
 }

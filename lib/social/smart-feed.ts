@@ -14,7 +14,7 @@ import type { FeedItem } from "./home-feed";
 
 /* ── Smart Explanation ─────────────────────────────────────────────────────── */
 
-export type SmartReasonTone = "follow" | "fresh" | "hot" | "interest" | "download";
+export type SmartReasonTone = "follow" | "fresh" | "hot" | "interest" | "download" | "momentum";
 
 export interface SmartReason {
   tone: SmartReasonTone;
@@ -33,10 +33,23 @@ function engagementScore(i: FeedItem): number {
  * chosen so the explanation feels earned, not generic: a real relationship
  * (follow) beats momentum (hot/download) beats freshness beats topic.
  */
+/**
+ * Momentum Engine™ (Feature 15 Part 8) threshold for surfacing "Gaining
+ * momentum" as the explanation. Deliberately checked BEFORE the `hot` tier —
+ * `hot` requires an absolute engagement score of 80+, which a genuinely
+ * rising but still-small creator's post may never reach even while its
+ * momentum (engagement relative to its own short age, plus real watch
+ * completion) is high. Tunable, same as the other thresholds in this file.
+ */
+const MOMENTUM_REASON_THRESHOLD = 15;
+
 export function feedReason(item: FeedItem): SmartReason | null {
   const ageH = (Date.now() - new Date(item.createdAt).getTime()) / HOUR;
   if (item.isFollowing) return { tone: "follow", label: "From someone you follow" };
   if (item.downloadsCount >= 25) return { tone: "download", label: "Trending download" };
+  if ((item.momentumScore ?? 0) >= MOMENTUM_REASON_THRESHOLD && ageH < 72) {
+    return { tone: "momentum", label: "Gaining momentum" };
+  }
   if (engagementScore(item) >= 80 && ageH < 48) return { tone: "hot", label: "Popular right now" };
   if (ageH < 3) return { tone: "fresh", label: "Fresh now" };
   if (item.category) return { tone: "interest", label: `Popular in ${item.category}` };

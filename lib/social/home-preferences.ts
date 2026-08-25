@@ -36,6 +36,23 @@ export interface HomePreferences {
   preferFriends: boolean;
   fewerReposts: boolean;
   quietMode: boolean;
+  /**
+   * Discovery Controls (Feature 15 Part 8) — "Pause personalization". When
+   * true, "for_you" skips `rankForYou` and the muted-category filter entirely
+   * and falls back to the same plain reverse-chronological order "recent"
+   * uses — a real, literal pause, not a softened version of ranking.
+   */
+  personalizationPaused: boolean;
+  /** Opt-in: include `is_nsfw` posts in ranked/discovery surfaces. Off by
+   *  default — the safe default, not a personalization preference to earn. */
+  sensitiveContent: boolean;
+  /**
+   * Content-language preference. Stored and surfaced in Discovery Controls;
+   * NOT yet enforced as a feed filter — posts carry no language tag today
+   * (see docs/FEATURE_15_PART_8_DISCOVERY.md), so this is honest groundwork
+   * for that filter rather than a working one.
+   */
+  preferredLanguages: string[];
 }
 
 export const DEFAULT_HOME_PREFERENCES: HomePreferences = {
@@ -46,6 +63,9 @@ export const DEFAULT_HOME_PREFERENCES: HomePreferences = {
   preferFriends: false,
   fewerReposts: false,
   quietMode: false,
+  personalizationPaused: false,
+  sensitiveContent: false,
+  preferredLanguages: [],
 };
 
 /** A saved order might predate a newly-added module key, have been
@@ -82,6 +102,9 @@ export interface HomePreferencesRow {
   prefer_friends: boolean | null;
   fewer_reposts: boolean | null;
   quiet_mode: boolean | null;
+  personalization_paused?: boolean | null;
+  sensitive_content?: boolean | null;
+  preferred_languages?: string[] | null;
 }
 
 /** Pure row→camelCase mapper — shared by the server-side reader below and
@@ -97,6 +120,9 @@ export function fromHomePreferencesRow(row: HomePreferencesRow | null): HomePref
     preferFriends: !!row.prefer_friends,
     fewerReposts: !!row.fewer_reposts,
     quietMode: !!row.quiet_mode,
+    personalizationPaused: !!row.personalization_paused,
+    sensitiveContent: !!row.sensitive_content,
+    preferredLanguages: row.preferred_languages ?? [],
   };
 }
 

@@ -25,6 +25,10 @@ const schema = z.object({
   preferFriends: z.boolean().optional(),
   fewerReposts: z.boolean().optional(),
   quietMode: z.boolean().optional(),
+  // Discovery Controls (Feature 15 Part 8).
+  personalizationPaused: z.boolean().optional(),
+  sensitiveContent: z.boolean().optional(),
+  preferredLanguages: z.array(z.string().min(2).max(10)).max(10).optional(),
   // Surgical add/remove against whatever's ALREADY saved (see below) — for
   // the inline Home-page switches (Continue Watching / Friend Activity),
   // which only ever know about their own one module and must never clobber
@@ -115,6 +119,9 @@ export async function PATCH(request: Request) {
         prefer_friends: merged.preferFriends,
         fewer_reposts: merged.fewerReposts,
         quiet_mode: merged.quietMode,
+        personalization_paused: merged.personalizationPaused,
+        sensitive_content: merged.sensitiveContent,
+        preferred_languages: merged.preferredLanguages,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },

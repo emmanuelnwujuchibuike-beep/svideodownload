@@ -91,6 +91,7 @@ const REASON_DOT: Record<SmartReasonTone, string> = {
   hot: "bg-rose-500",
   download: "bg-teal-500",
   interest: "bg-violet-500",
+  momentum: "bg-amber-500",
 };
 
 function timeAgo(iso: string): string {

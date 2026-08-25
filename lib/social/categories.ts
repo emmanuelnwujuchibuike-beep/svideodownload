@@ -12,6 +12,7 @@ export const CATEGORIES = [
   "tech",
   "travel",
   "animals",
+  "business",
   "other",
 ] as const;
 

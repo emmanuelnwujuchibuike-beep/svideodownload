@@ -797,11 +797,14 @@ export async function relatedPosts(post: PublicPost, limit = 6): Promise<PostCar
   }
 }
 
-/** Records a deduped view (per viewer|ip per day). Fire-and-forget friendly. */
+/** Records a deduped view (per viewer|ip per day). Fire-and-forget friendly.
+ *  `source` (Feature 15 Part 8) tags which surface drove the view — feeds
+ *  Discovery Analytics' Traffic Sources; optional, defaults to untagged. */
 export async function recordPostView(
   postId: string,
   viewerId: string | null,
   ipHash: string,
+  source?: string,
 ): Promise<void> {
   if (!hasSupabase) return;
   try {
@@ -811,6 +814,7 @@ export async function recordPostView(
       post_id: postId,
       viewer_id: viewerId,
       ip_hash: viewerId ? "" : ipHash,
+      source: source ?? null,
     });
   } catch {
     /* duplicate view or transient error — ignore */

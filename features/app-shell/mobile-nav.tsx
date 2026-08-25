@@ -81,7 +81,12 @@ import { cn } from "@/lib/utils";
   a class every other selector in this file depends on.
 */
 const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_4px_10px_rgba(79,70,229,0.7))]";
-const GLYPH_INACTIVE = "text-muted-foreground [filter:drop-shadow(0_3px_5px_rgba(2,6,23,0.3))]";
+// Black drop-shadow removed (owner, 2026-08-25) — the color base
+// (`text-muted-foreground`) is untouched on purpose: the immersive Reels
+// variant re-tints every inactive glyph white via a selector keyed on that
+// literal class name (`[&_.text-muted-foreground]:!text-white/75`, ~line
+// 213) — dropping the class itself would silently un-white the Reels nav.
+const GLYPH_INACTIVE = "text-muted-foreground";
 
 /**
  * Warms the reels viewer's chunk ahead of the actual tap (owner, 2026-08-16:

@@ -10,7 +10,7 @@ import type { VideoMetadata } from "@/types";
 
 import { apifyEnabled, apifyExtract, isApifyPlatform } from "./apify-instagram";
 import { facebookExtractor } from "./facebook";
-import { pinterestExtractor } from "./pinterest";
+import { PinterestImageOnlyError, pinterestExtractor } from "./pinterest";
 import { withQualityLadder } from "./quality-ladder";
 import { snapchatExtractor } from "./snapchat";
 import { telegramExtractor } from "./telegram";
@@ -64,15 +64,28 @@ function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;
 }
 
-/** Runs the custom-first, yt-dlp-fallback extraction chain (no caching). */
+/**
+ * Runs the custom-first, yt-dlp-fallback extraction chain (no caching).
+ *
+ * `imageOnlyFallback` (Pinterest, see PinterestImageOnlyError) is a real
+ * result the custom extractor found, but NOT a video — it's held back
+ * rather than returned immediately, so yt-dlp still gets a real chance to
+ * find the actual video first. It's only used if yt-dlp comes up empty too,
+ * which is when it's genuinely the best available answer instead of a
+ * mask over a video the fast path just failed to see.
+ */
 async function runChain(url: string): Promise<VideoMetadata> {
   const platform = detectPlatform(url);
+  let imageOnlyFallback: VideoMetadata | null = null;
   for (const extractor of CUSTOM_EXTRACTORS) {
     if (!extractor.canHandle(url, platform.id)) continue;
     try {
       const meta = await extractor.extract(url);
       if (meta.formats.length > 0) return meta;
     } catch (err) {
+      if (err instanceof PinterestImageOnlyError) {
+        imageOnlyFallback = err.imageOnlyMeta;
+      }
       const via = isProxyForced() ? " (via proxy)" : "";
       console.warn(
         `[extractor:${extractor.name}]${via} falling back:`,
@@ -80,7 +93,12 @@ async function runChain(url: string): Promise<VideoMetadata> {
       );
     }
   }
-  return ytdlpExtract(url);
+  try {
+    return await ytdlpExtract(url);
+  } catch (err) {
+    if (imageOnlyFallback) return imageOnlyFallback;
+    throw err;
+  }
 }
 
 /**

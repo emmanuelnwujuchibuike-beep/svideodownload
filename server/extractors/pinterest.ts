@@ -6,6 +6,27 @@ import { DESKTOP_UA, firstMatch, metaContent, unescapeJsonUrl } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
 /**
+ * Thrown when the regex-based scrape found the pin's IMAGE but no video.
+ *
+ * 🔴 THE BUG THIS FIXES (owner, 2026-08-25: "the pinterest link still fetch
+ * as image, jpg"): Pinterest now serves a client-rendered shell to a plain
+ * fetch — `og:video`/`video_list` are gone from the raw HTML for most pins,
+ * but `og:image` often still IS present. Before this, `extract()` treated
+ * "found an image" as a successful extraction (`formats.length > 0`), so
+ * `runChain` (server/extractors/index.ts) returned it immediately and NEVER
+ * tried yt-dlp — which, tested directly against a real pin.it link, DOES
+ * still find the actual video. An image-only result was silently masking a
+ * real video that was one fallback step away. Carries the image-only
+ * metadata so it isn't wasted — `runChain` uses it ONLY if yt-dlp also
+ * fails to find a video, never as a substitute for trying.
+ */
+export class PinterestImageOnlyError extends ExtractionError {
+  constructor(public readonly imageOnlyMeta: VideoMetadata) {
+    super("Pinterest: found only the pin's image, no video — trying yt-dlp before falling back to it");
+  }
+}
+
+/**
  * Pinterest custom extractor (video pins).
  *
  * Video pins expose direct MP4 URLs in the page's `video_list` JSON
@@ -128,10 +149,10 @@ export const pinterestExtractor: Extractor = {
 
     const formats = buildFormats(html);
     if (formats.length === 0) {
-      throw new ExtractionError("No Pinterest video found");
+      throw new ExtractionError("No Pinterest video or image found");
     }
 
-    return {
+    const meta: VideoMetadata = {
       id: firstMatch(url, /\/pin\/(\d+)/) || crypto.randomUUID(),
       platform: platform.id,
       platformName: platform.name,
@@ -148,5 +169,16 @@ export const pinterestExtractor: Extractor = {
       formats,
       extractor: "pinterest",
     };
+
+    // No video found — this might be a genuine image-only pin, or it might
+    // be the regex simply failing to find a video Pinterest DID serve (the
+    // documented current state). Either way, don't hand back "just the
+    // image" as if it were the full answer — let the caller try yt-dlp
+    // first, which reliably still finds Pinterest video when it exists.
+    if (!formats.some((f) => f.kind === "video")) {
+      throw new PinterestImageOnlyError(meta);
+    }
+
+    return meta;
   },
 };

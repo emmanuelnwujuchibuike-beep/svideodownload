@@ -352,6 +352,7 @@ export function HistoryPanel({
         platform: item.platform,
         platformName: item.platformName,
         qualityLabel: item.qualityLabel,
+        directUrl: item.directUrl ?? undefined,
       });
     }
     setSelected(new Set());

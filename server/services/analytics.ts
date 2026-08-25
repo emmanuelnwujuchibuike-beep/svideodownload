@@ -1,3 +1,4 @@
+import { getDownloadAlerts } from "@/lib/analytics/download-alert-settings";
 import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
 import { emit } from "@/lib/platform/event-bus";
 import { detectPlatform } from "@/lib/platforms";
@@ -15,8 +16,9 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Email the admin every N downloads (configurable). Default: every 100.
-const MILESTONE_EVERY = Math.max(1, Number(process.env.ALERT_DOWNLOAD_EVERY) || 100);
+// The milestone interval and its on/off switch now live in `settings`, tunable
+// from the dashboard without a redeploy — see lib/analytics/download-alert-settings.ts.
+// `ALERT_DOWNLOAD_EVERY` remains the default when nothing has been saved.
 
 export function recordDownloadEvent(
   url: string,
@@ -51,6 +53,11 @@ export function recordDownloadEvent(
 async function checkDownloadMilestone(
   supabase: ReturnType<typeof createAdminClient>,
 ): Promise<void> {
+  // Read the switch BEFORE counting: when the alert is off there is no reason
+  // to spend an exact count on the download path at all.
+  const { every, enabled } = await getDownloadAlerts();
+  if (!enabled) return;
+
   const { count } = await supabase
     .from("downloads")
     .select("*", { count: "exact", head: true });
@@ -58,8 +65,8 @@ async function checkDownloadMilestone(
 
   // Highest milestone reached so far — robust even if concurrent inserts skip
   // the exact multiple. Dedupe by milestone value means one email per milestone.
-  const milestone = Math.floor(count / MILESTONE_EVERY) * MILESTONE_EVERY;
-  if (milestone < MILESTONE_EVERY) return;
+  const milestone = Math.floor(count / every) * every;
+  if (milestone < every) return;
 
   await sendAdminAlertOnce(
     `downloads-${milestone}`,
@@ -72,7 +79,7 @@ async function checkDownloadMilestone(
         { label: "Total downloads", value: count.toLocaleString() },
         { label: "Milestone", value: milestone.toLocaleString() },
       ],
-      footnote: `You'll get the next nudge at ${(milestone + MILESTONE_EVERY).toLocaleString()} downloads.`,
+      footnote: `You'll get the next nudge at ${(milestone + every).toLocaleString()} downloads.`,
     }),
   );
 }

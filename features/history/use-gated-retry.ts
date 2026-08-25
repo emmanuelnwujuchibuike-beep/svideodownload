@@ -69,6 +69,9 @@ export function useGatedRetry(): {
       platformName: record.platformName,
       qualityLabel: record.qualityLabel,
       durationSeconds: record.durationSeconds ?? null,
+      // Preserved so a wallpaper (relative /api/wallpaper URL) retries against
+      // the same target instead of being rejected by /api/download.
+      directUrl: record.directUrl ?? undefined,
     });
   }, []);
 

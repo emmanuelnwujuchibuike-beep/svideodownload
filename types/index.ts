@@ -221,6 +221,23 @@ export interface DownloadRecord {
   /** Why it failed, when the manager captured a reason. Never shown for a
    *  completed record. */
   failureReason?: string | null;
+  /**
+   * Fetch THIS url on a retry, instead of the /api/download pipeline — set
+   * whenever the original download used one.
+   *
+   * 🔴 WITHOUT IT, RETRYING A WALLPAPER ALWAYS FAILS (owner, 2026-08-24, from
+   * an admin alert reading "generic · image · That doesn't look like a valid
+   * URL"). A wallpaper's `url` is the RELATIVE `/api/wallpaper?id=…`: a
+   * perfectly good fetch target, and not something the download pipeline can
+   * accept, because `new URL()` throws on a relative path and `sourceUrlSchema`
+   * rejects it. Retry dropped `directUrl`, so that relative path went to a
+   * pipeline that was never meant to see it — and which would have run yt-dlp
+   * on a wallpaper even if the URL had validated.
+   *
+   * Optional: records written before this field existed have none, and for
+   * those `url` was always the correct target anyway.
+   */
+  directUrl?: string | null;
   createdAt: number;
   favorite: boolean;
 }

@@ -511,6 +511,7 @@ function GalleryTile({
       platformName: item.platformName,
       qualityLabel: item.qualityLabel,
       durationSeconds: item.durationSeconds ?? null,
+      directUrl: item.directUrl ?? undefined,
     });
 
   // Close on any outside tap. A menu pinned to a tile in a scrolling grid that
@@ -813,6 +814,7 @@ function ListRow({ item, onOpen, onToggleFavorite, onRemove, onPublishSound, onR
       platform: item.platform,
       platformName: item.platformName,
       qualityLabel: item.qualityLabel,
+      directUrl: item.directUrl ?? undefined,
     });
     setTimeout(() => setRedownloading(false), 1200);
   };

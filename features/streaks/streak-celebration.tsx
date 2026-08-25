@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Portal } from "@/components/ui/portal";
+import { playSound } from "@/lib/notifications/sound-fx";
 import { StreakFlame } from "@/features/streaks/streak-flame";
 import { markStreakCelebrated } from "@/features/streaks/use-streak";
 
@@ -40,6 +41,13 @@ export function StreakCelebration({ streak, onDone }: { streak: number; onDone: 
     if (!marked.current) {
       marked.current = true;
       void markStreakCelebrated();
+      /*
+        Fires once a day, with the celebration. `playSound` already honours the
+        member's master sound switch and stays silent when the AudioContext was
+        never unlocked by a gesture — so this can never be the thing that makes
+        a phone blurt in a quiet room, and needs no switch of its own.
+      */
+      playSound("streak");
     }
     const hide = setTimeout(() => setLeaving(true), VISIBLE_MS);
     const done = setTimeout(onDone, VISIBLE_MS + 260);
@@ -69,21 +77,38 @@ export function StreakCelebration({ streak, onDone }: { streak: number; onDone: 
             blur — the two effects that cook a low-end phone. */}
         <span
           aria-hidden
-          className="streak-celebration-flare pointer-events-none absolute h-[min(70vw,320px)] w-[min(70vw,320px)] rounded-full bg-[radial-gradient(circle,rgba(251,146,60,0.42),transparent_68%)]"
+          className="streak-celebration-flare pointer-events-none absolute h-[min(78vw,360px)] w-[min(78vw,360px)] rounded-full bg-[radial-gradient(circle,rgba(251,146,60,0.45),transparent_68%)]"
         />
 
+        {/* Two expanding rings. Pure transform + opacity, so they run on the
+            compositor and cost nothing to animate — the "luxury" here is
+            timing and restraint, not more effects. */}
+        <span aria-hidden className="streak-celebration-ring pointer-events-none absolute h-40 w-40 rounded-full border border-amber-400/45" />
+        <span aria-hidden className="streak-celebration-ring streak-celebration-ring-2 pointer-events-none absolute h-40 w-40 rounded-full border border-orange-500/30" />
+
         <span className="streak-celebration-mark relative">
-          <StreakFlame className="h-24 w-24 drop-shadow-[0_10px_30px_rgba(249,115,22,0.45)]" gradient />
+          <StreakFlame className="h-[6.5rem] w-[6.5rem] drop-shadow-[0_14px_38px_rgba(249,115,22,0.5)]" gradient />
         </span>
 
-        <p className="streak-celebration-count relative mt-3 text-[clamp(1.9rem,10vw,3rem)] font-extrabold tracking-[-0.03em]">
-          <span className="bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 bg-clip-text text-transparent">
-            {streak} DAY STREAK!
+        {/*
+          🔴 THE NUMBER IS THE MESSAGE (owner, 2026-08-24: "make the text more
+          visible and less, not long words or sentence").
+
+          It was "{n} DAY STREAK!" over "{n} consecutive days on Frenzsave" —
+          the same fact told twice, the second time as a sentence nobody reads
+          in the 2.6s this is on screen. Now the count carries it: one huge
+          numeral, one two-word label. Bigger type, far less of it.
+        */}
+        <p className="streak-celebration-count relative mt-1 text-[clamp(4.5rem,26vw,8rem)] font-black leading-[0.9] tracking-[-0.055em]">
+          <span className="streak-celebration-shine bg-gradient-to-r from-amber-300 via-orange-500 to-rose-500 bg-clip-text text-transparent">
+            {streak}
           </span>
         </p>
 
-        <p className="streak-celebration-sub relative mt-1.5 text-[14px] font-medium text-muted-foreground">
-          {streak} consecutive days on Frenzsave
+        <p className="streak-celebration-sub relative mt-2 text-[13px] font-bold uppercase tracking-[0.42em] text-amber-500/90 dark:text-amber-400/90">
+          {/* "DAY" / "DAYS" — a "1 DAYS STREAK" on someone's first day is the
+              kind of small wrongness that undercuts the whole moment. */}
+          Day{streak === 1 ? "" : "s"} streak
         </p>
       </div>
     </Portal>

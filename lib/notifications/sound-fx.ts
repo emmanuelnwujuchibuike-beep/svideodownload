@@ -18,7 +18,7 @@ import { getCachedSoundPrefs } from "@/lib/social/notification-sound-prefs-clien
  * either iOS or Android.
  */
 
-type SoundType = "message" | "mention" | "reaction" | "typing" | "tap" | "wow";
+type SoundType = "message" | "mention" | "reaction" | "typing" | "tap" | "wow" | "streak";
 
 let ctx: AudioContext | null = null;
 function getContext(): AudioContext | null {
@@ -82,6 +82,28 @@ const TONES: Record<SoundType, Note[]> = {
   wow: [
     { freq: 880, at: 0, duration: 0.07, gain: 0.1 },
     { freq: 1320, at: 0.05, duration: 0.12, gain: 0.12 },
+  ],
+  /*
+    The once-a-day streak celebration (owner, 2026-08-24: "make the streak
+    animation style and text more luxurious with sound").
+
+
+    A rising major triad resolving an octave up — C6·E6·G6·C7 — then a soft
+    high shimmer. Every other tone here is one or two blips because they fire
+    constantly; this one fires ONCE PER DAY, so it can afford to be a phrase
+    rather than a beep, and a resolved octave is what reads as "achievement"
+    instead of "notification". Gains taper across the run so it arrives warm
+    and settles, rather than ending on the loudest note.
+
+    Still synthesised, not an audio file: an asset would be a network fetch on
+    a celebration that must appear instantly, and this is ~400ms of oscillator.
+  */
+  streak: [
+    { freq: 1046.5, at: 0, duration: 0.13, gain: 0.11 },
+    { freq: 1318.5, at: 0.085, duration: 0.13, gain: 0.115 },
+    { freq: 1568.0, at: 0.17, duration: 0.15, gain: 0.12 },
+    { freq: 2093.0, at: 0.26, duration: 0.26, gain: 0.1 },
+    { freq: 2637.0, at: 0.33, duration: 0.3, gain: 0.045 },
   ],
 };
 

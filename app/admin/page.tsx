@@ -38,6 +38,7 @@ import { getFlags } from "@/lib/platform/flags";
 import { getFlagOverrides } from "@/lib/platform/flags-store";
 import { getExperiments } from "@/lib/platform/experiments";
 import { getExperimentOverrides, getExperimentStats } from "@/lib/platform/experiments-store";
+import { DownloadAlertControls } from "@/features/admin/download-alert-settings";
 import { StreakMonitor } from "@/features/admin/streak-monitor";
 import { getStreakMetrics } from "@/lib/streaks/admin";
 import { PlatformCatalog } from "@/features/admin/platform-catalog";
@@ -375,6 +376,10 @@ export default async function AdminPage() {
             <Suspense fallback={<PanelSkeleton />}>
               <ActivitySection />
             </Suspense>
+            {/* The milestone-email threshold sits with download activity, which
+                is what it counts. It loads its own state, so it needs no
+                Suspense boundary and cannot delay the feed above it. */}
+            <DownloadAlertControls />
           </AdminPanel>
 
           <AdminPanel id="subscribers">

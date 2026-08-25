@@ -1,4 +1,7 @@
-import { Bell, Flame, RotateCcw, Trophy, UserRound, Users } from "lucide-react";
+"use client";
+
+import { Bell, Flame, RefreshCw, RotateCcw, Trophy, UserRound, Users } from "lucide-react";
+import { useCallback, useState } from "react";
 
 import type { StreakAdminMetrics } from "@/lib/streaks/admin";
 import { cn, formatCompactNumber } from "@/lib/utils";
@@ -16,15 +19,64 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * before; where a figure IS an approximation — the at-risk count, which is
  * measured in UTC rather than per-person — it says so on screen.
  */
-export function StreakMonitor({ metrics }: { metrics: StreakAdminMetrics }) {
+export function StreakMonitor({ metrics: initial }: { metrics: StreakAdminMetrics }) {
+  /*
+    Refreshed IN PLACE from /api/admin/streaks rather than with
+    `router.refresh()`. These numbers move minute to minute — a streak is
+    claimed the moment someone opens the app — and the alternative re-runs
+    every other panel on this page (subscribers, moderation, trending, the
+    activity feed) to update four counters. The endpoint already exists and is
+    already admin-guarded.
+  */
+  const [metrics, setMetrics] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [at, setAt] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch("/api/admin/streaks", { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      setMetrics((await res.json()) as StreakAdminMetrics);
+      setAt(new Date().toLocaleTimeString());
+    } catch {
+      // Say so. A refresh button that silently leaves stale numbers on screen
+      // is worse than no button — the reader believes they are current.
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   const retention2 = pct(metrics.streaks2Plus, metrics.activeStreaks);
   const retention7 = pct(metrics.streaks7Plus, metrics.activeStreaks);
 
   return (
     <section className="mt-6 overflow-hidden rounded-3xl border border-border/70 bg-card p-6 shadow-card">
-      <h2 className="mb-5 flex items-center gap-2 font-semibold">
-        <Flame className="h-5 w-5 text-orange-500" /> Streaks
-      </h2>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 font-semibold">
+          <Flame className="h-5 w-5 text-orange-500" /> Streaks
+        </h2>
+        <div className="flex items-center gap-2">
+          {failed ? (
+            <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400">Couldn&apos;t refresh</span>
+          ) : at ? (
+            <span className="text-[11px] text-muted-foreground tabular-nums">Updated {at}</span>
+          ) : null}
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={busy}
+            aria-label="Refresh streak metrics"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-secondary/40 px-3 py-1.5 text-xs font-semibold transition hover:bg-secondary disabled:opacity-60"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", busy && "motion-safe:animate-spin")} />
+            {busy ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Mini icon={Flame} label="Active streaks" value={formatCompactNumber(metrics.activeStreaks)} />

@@ -379,6 +379,29 @@ function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title" | 
 }
 
 /**
+ * Where this task's bytes actually come from.
+ *
+ * 🔴 A RELATIVE `url` IS ALREADY THE TARGET, NEVER PIPELINE INPUT.
+ * Wallpapers download from `/api/wallpaper?id=…`, a same-origin path. Handing
+ * that to /api/download is wrong twice over: `new URL()` throws on a relative
+ * path so `sourceUrlSchema` rejects it outright ("That doesn't look like a
+ * valid URL" — the admin alert the owner saw, 2026-08-24), and even if it
+ * validated, the pipeline would try to run yt-dlp on our own image endpoint.
+ *
+ * `directUrl` covers this for anything downloaded from now on. This check is
+ * for the records that already exist: history is the visitor's own
+ * localStorage, so every wallpaper saved before `directUrl` was persisted has
+ * none, and every retry of one would fail forever without a backstop that
+ * needs no stored field.
+ */
+function fetchTarget(t: DownloadTask): string {
+  if (t.directUrl) return t.directUrl;
+  // Same-origin path (starts with a single slash, not the "//host" form).
+  if (/^\/(?!\/)/.test(t.url)) return t.url;
+  return buildUrl(t);
+}
+
+/**
  * The blob's MIME type is what iOS's share sheet keys "Save Video"/"Save
  * Image" off — a missing or generic type turns the download into a nameless
  * "file" with no save option. When the source doesn't declare a real type,
@@ -466,7 +489,7 @@ async function run(id: string) {
   const endCriticalActivity = beginCriticalActivity();
 
   try {
-    const res = await fetch(task.directUrl ?? buildUrl(task), { signal: controller.signal });
+    const res = await fetch(fetchTarget(task), { signal: controller.signal });
     if (!res.ok || !res.body) throw new Error(await failureMessage(res));
 
     const total = Number(res.headers.get("content-length")) || 0;
@@ -542,6 +565,7 @@ async function run(id: string) {
       qualityLabel: task.qualityLabel,
       size: received, // exact downloaded bytes
       durationSeconds: task.durationSeconds ?? null,
+      directUrl: task.directUrl ?? null,
     });
     if (!ios) toast("Download complete — saved to your device & library", "success");
   } catch (err) {
@@ -598,6 +622,7 @@ async function run(id: string) {
       qualityLabel: task.qualityLabel,
       status: "failed",
       failureReason: reason,
+      directUrl: task.directUrl ?? null,
     });
 
     /*
@@ -845,6 +870,7 @@ export function cancelDownload(id: string) {
       qualityLabel: task.qualityLabel,
       status: "cancelled",
       failureReason: null,
+      directUrl: task.directUrl ?? null,
     });
   }
   controllers.get(id)?.abort();

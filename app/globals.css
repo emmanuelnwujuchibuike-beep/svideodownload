@@ -2169,8 +2169,35 @@ body:has(.frenz-canvas-page) {
 .streak-celebration-scrim { animation: frenz-streak-fade 220ms var(--ease-out) both; }
 .streak-celebration-flare { animation: frenz-streak-flare 900ms var(--ease-out) both; }
 .streak-celebration-mark  { animation: frenz-streak-in 520ms var(--ease-spring) 80ms both; }
-.streak-celebration-count { animation: frenz-streak-in 520ms var(--ease-spring) 180ms both; }
-.streak-celebration-sub   { animation: frenz-streak-in 420ms var(--ease-out) 300ms both; }
+.streak-celebration-count { animation: frenz-streak-in 560ms var(--ease-spring) 170ms both; }
+.streak-celebration-sub   { animation: frenz-streak-in 420ms var(--ease-out) 330ms both; }
+
+/*
+  ── The "luxurious" pass (owner, 2026-08-24) ───────────────────────────────
+  Two expanding rings and one gold sweep across the numeral. Both are pure
+  `transform` / `opacity` / `background-position`, so they stay on the
+  compositor — no animated blur, no box-shadow animation, no particle system,
+  which are the three things that turn a celebration into a stutter on a
+  low-end Android. The premium feel comes from the STAGGER (flame, then count,
+  then rings, then label) rather than from more effects running at once.
+*/
+@keyframes frenz-streak-ring {
+  from { transform: scale(0.55); opacity: 0.85; }
+  to   { transform: scale(2.15); opacity: 0; }
+}
+.streak-celebration-ring   { animation: frenz-streak-ring 1150ms var(--ease-out) 160ms both; }
+.streak-celebration-ring-2 { animation-delay: 420ms; animation-duration: 1350ms; }
+
+/* The sweep needs a background wider than the text to travel across, and the
+   text is already `bg-clip-text`, so this only moves the gradient's position. */
+@keyframes frenz-streak-shine {
+  from { background-position: 0% 50%; }
+  to   { background-position: 220% 50%; }
+}
+.streak-celebration-shine {
+  background-size: 220% 100%;
+  animation: frenz-streak-shine 1500ms var(--ease-out) 380ms both;
+}
 
 /*
   🔴 Honour the OS setting (§22). Reduced motion removes the MOVEMENT and keeps
@@ -2188,6 +2215,16 @@ body:has(.frenz-canvas-page) {
   .streak-celebration-count,
   .streak-celebration-sub {
     animation: frenz-streak-fade 200ms linear both;
+  }
+  /* The rings are decoration with no text of their own, so reduced motion
+     removes them outright rather than fading them in and leaving two static
+     circles floating behind the number. The shine simply stops travelling. */
+  .streak-celebration-ring {
+    display: none;
+  }
+  .streak-celebration-shine {
+    animation: none;
+    background-size: 100% 100%;
   }
 }
 

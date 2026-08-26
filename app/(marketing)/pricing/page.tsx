@@ -1,4 +1,4 @@
-import { Check, Code2, Crown, Sparkles, Zap } from "lucide-react";
+import { Check, Crown, Gem, Minus, Sparkles, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -37,6 +37,38 @@ interface Tier {
   prestige?: boolean;
 }
 
+/**
+ * Feature copy — audited against the code, not carried forward from the last
+ * pass (owner, 2026-08-26: "read all the pro and business features currently
+ * and update the price plan features in pricing page").
+ *
+ * Every line below has a real mechanism behind it. Notably absent from the
+ * previous version, verified as NOT gated by plan anywhere in the codebase:
+ *
+ *   - "4K & highest-quality downloads" as Pro-exclusive — quality itself is
+ *     never plan-gated (server/extractors + the download service serve the
+ *     same formats to everyone). What Pro actually removes is the reward ad
+ *     Free watches in front of a top-tier or 100MB+ file
+ *     (lib/monetization/reward-policy.ts) — that's the line below instead.
+ *   - "Faster, priority downloads" — no download-speed or queue-priority
+ *     differentiation exists anywhere in the pipeline.
+ *   - "Priority support" (Business) — no priority flag/queue found in the
+ *     support inbox or its admin surface.
+ *   - "100% ad-free" as identical for Pro and Business — Pro still sees the
+ *     download-history watch interstitial every 2nd video
+ *     (features/monetization/download-interstitial.tsx: "Business never sees
+ *     an interstitial... Pro sees only the watch trigger"). Only Business is
+ *     unconditionally ad-free.
+ *
+ * Added, because it's real and wasn't listed: Creator analytics is an actual
+ * Business-only gate (app/(app)/account/analytics/page.tsx: `plan !==
+ * "business"` locks the whole page). Multi-Link batch numbers (3/2/ad vs.
+ * 6/unlimited/no-ad) come straight from lib/downloads/multi-link-config.ts.
+ * API request ceilings (50/500/50,000) come from
+ * lib/monetization/plan.ts — access itself is universal (`/account/developer`
+ * has no plan gate); only the daily ceiling differs, so this is billed as a
+ * higher limit, never as "exclusive access."
+ */
 function buildTiers(pricing: {
   pro: { name: string; price: string; period: string };
   business: { name: string; price: string; period: string };
@@ -50,10 +82,11 @@ function buildTiers(pricing: {
       icon: Sparkles,
       features: [
         "Downloads from every supported platform",
-        "HD video, MP3 audio & photos",
-        "No watermark",
+        "HD video, MP3 audio & photos — no watermark",
+        "Batch downloads — up to 3 links, 2 a day, with a short ad",
+        "150 downloads/day",
         "5 GB private cloud storage",
-        "Up to 30 downloads/day",
+        "API access — 50 requests a day",
         "Supported by ads",
       ],
       cta: "Get started free",
@@ -68,13 +101,11 @@ function buildTiers(pricing: {
       icon: Crown,
       features: [
         "Everything in Free",
-        "100% ad-free experience",
+        "No ads on downloads — skip the ad on large or top-quality files",
+        "Batch downloads — up to 6 links, unlimited per day, no ad",
+        "1,000 downloads/day",
         "50 GB private cloud storage",
-        "4K & highest-quality downloads",
-        "Faster, priority downloads",
-        "Batch downloads",
-        "Watch & re-download on any device",
-        "Up to 1,000 downloads/day",
+        "API access — 500 requests a day",
       ],
       cta: `Upgrade to ${pricing.pro.name}`,
       href: "/login?next=/pricing",
@@ -85,15 +116,16 @@ function buildTiers(pricing: {
       name: pricing.business.name,
       price: pricing.business.price,
       period: pricing.business.period,
-      tagline: "For developers & power users.",
-      icon: Code2,
+      tagline: "For creators & power users who want everything.",
+      icon: Gem,
       features: [
         "Everything in Pro",
-        "Unlimited private cloud storage",
-        "Full REST API access",
+        // @sourced download-interstitial.tsx: `watchAllowed = plan !== "business"` — Business is the only plan gated on nothing, so 100% is literal, not rounded.
+        "100% ad-free — every surface, including your download history",
+        "Creator analytics — per-post views, engagement & audience growth",
         "10,000 downloads/day",
-        "Higher rate limits",
-        "Priority support",
+        "Unlimited private cloud storage",
+        "API access — 50,000 requests a day, the highest limit",
       ],
       cta: `Get ${pricing.business.name}`,
       href: "/login?next=/pricing",
@@ -102,13 +134,92 @@ function buildTiers(pricing: {
   ];
 }
 
+/** The same facts as `buildTiers`, shaped for the comparison table instead of
+ *  a bullet list — one grounded set of numbers, two presentations. */
+type CompareValue = string | boolean;
+interface CompareRow {
+  label: string;
+  free: CompareValue;
+  pro: CompareValue;
+  business: CompareValue;
+}
+
+function buildCompareRows(pricing: {
+  pro: { price: string; period: string };
+  business: { price: string; period: string };
+}): CompareRow[] {
+  return [
+    {
+      label: "Price",
+      free: "$0",
+      pro: `${pricing.pro.price}${pricing.pro.period}`,
+      business: `${pricing.business.price}${pricing.business.period}`,
+    },
+    {
+      label: "Downloads per day",
+      free: "150",
+      pro: "1,000",
+      business: "10,000",
+    },
+    {
+      label: "Private cloud storage",
+      free: "5 GB",
+      pro: "50 GB",
+      business: "Unlimited",
+    },
+    { label: "Batch links per download", free: "3", pro: "6", business: "6" },
+    {
+      label: "Batch downloads per day",
+      free: "2",
+      pro: "Unlimited",
+      business: "Unlimited",
+    },
+    {
+      label: "Ad before large/top-quality downloads",
+      free: true,
+      pro: false,
+      business: false,
+    },
+    {
+      label: "Ads anywhere in the app",
+      free: true,
+      pro: true,
+      business: false,
+    },
+    {
+      label: "API requests per day",
+      free: "50",
+      pro: "500",
+      business: "50,000",
+    },
+    { label: "Creator analytics", free: false, pro: false, business: true },
+  ];
+}
+
+function CompareCell({ value }: { value: CompareValue }) {
+  if (typeof value === "boolean") {
+    return value ? (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Check className="h-3.5 w-3.5" />
+      </span>
+    ) : (
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-secondary text-muted-foreground/50">
+        <Minus className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  return <span className="font-semibold tabular-nums">{value}</span>;
+}
+
 export default async function PricingPage() {
-  const TIERS = buildTiers(await getPricing());
+  const pricing = await getPricing();
+  const TIERS = buildTiers(pricing);
+  const COMPARE = buildCompareRows(pricing);
+
   return (
     <>
       <SiteHeader />
       <main className="relative overflow-hidden pb-28 pt-[calc(var(--frenz-safe-top)+8rem)] sm:pt-[calc(var(--frenz-safe-top)+10rem)]">
-
         <div className="container max-w-5xl">
           <header className="mx-auto mb-14 max-w-2xl text-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-secondary/60 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -258,9 +369,91 @@ export default async function PricingPage() {
             ))}
           </div>
 
+          {/*
+            Full comparison table — the same grounded numbers as the cards
+            above, in a scannable side-by-side. Added because the card copy
+            got MORE specific this pass (exact daily/API/batch ceilings per
+            plan), and specific numbers are easier to compare in a grid than
+            to re-read across three lists. `overflow-x-auto` on its own
+            wrapper: a 4-column table must never widen the page itself.
+          */}
+          <section className="mt-16">
+            <h2 className="mb-5 text-center text-xl font-bold tracking-tight sm:text-2xl">
+              Compare every plan
+            </h2>
+            {/*
+              A 560px table on a ~375px phone MUST scroll — but scrolling
+              off a hard-edged card reads as "this is cut off," not "swipe for
+              more" (caught on a mobile screenshot: the Pro/Business columns
+              simply vanished past the card's own border with no cue). The
+              fade is the cue, `sm:hidden` because desktop already shows the
+              whole table with room to spare. `pointer-events-none` so it
+              never blocks the actual horizontal scroll it's hinting at.
+            */}
+            <div className="relative">
+              <div className="overflow-x-auto rounded-3xl border border-border/80 bg-card shadow-card">
+                <table className="w-full min-w-[560px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60">
+                      <th
+                        scope="col"
+                        className="p-4 text-left font-semibold text-muted-foreground"
+                      >
+                        &nbsp;
+                      </th>
+                      <th scope="col" className="p-4 text-center font-bold">
+                        Free
+                      </th>
+                      <th
+                        scope="col"
+                        className="p-4 text-center font-bold text-amber-600 dark:text-amber-400"
+                      >
+                        {pricing.pro.name}
+                      </th>
+                      <th
+                        scope="col"
+                        className="p-4 text-center font-bold text-amber-600 dark:text-amber-400"
+                      >
+                        {pricing.business.name}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {COMPARE.map((row, i) => (
+                      <tr
+                        key={row.label}
+                        className={cn(i > 0 && "border-t border-border/40")}
+                      >
+                        <th
+                          scope="row"
+                          className="p-4 text-left font-medium text-muted-foreground"
+                        >
+                          {row.label}
+                        </th>
+                        <td className="p-4 text-center">
+                          <CompareCell value={row.free} />
+                        </td>
+                        <td className="bg-amber-500/[0.04] p-4 text-center">
+                          <CompareCell value={row.pro} />
+                        </td>
+                        <td className="bg-amber-500/[0.07] p-4 text-center">
+                          <CompareCell value={row.business} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <span
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-3xl bg-gradient-to-l from-card to-transparent sm:hidden"
+              />
+            </div>
+          </section>
+
           <p className="mx-auto mt-12 max-w-xl text-center text-xs text-muted-foreground/70">
-            Prices in USD. Taxes may apply. Subscriptions renew automatically and can
-            be canceled any time from your account.
+            Prices in USD. Taxes may apply. Subscriptions renew automatically
+            and can be canceled any time from your account.
           </p>
         </div>
       </main>

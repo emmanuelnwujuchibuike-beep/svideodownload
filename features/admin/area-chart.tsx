@@ -4,6 +4,7 @@ import { Maximize2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { axisLabelIndices, axisScale } from "@/lib/monetization/revenue-aggregate";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -61,35 +62,62 @@ interface Pad {
   l: number;
 }
 
-function useChartGeometry(points: AreaPoint[], width: number, height: number, pad: Pad) {
+function useChartGeometry(
+  points: AreaPoint[],
+  width: number,
+  height: number,
+  pad: Pad,
+  /** The same window, one period earlier — drawn as the comparison line. */
+  compare?: AreaPoint[],
+) {
   return useMemo(() => {
-    const vals = points.map((p) => p.value);
     /*
-      The axis starts at ZERO and the top is a rounded step above the peak.
+      🔴 THE Y SCALE IS SHARED WITH THE COMPARISON SERIES.
 
-      An area chart whose baseline is not zero exaggerates every change — the
-      filled region stops being proportional to the value, which is the one thing
-      an area is for. The rounded ceiling stops the peak touching the frame,
-      which reads as clipped data.
+      Scaling the two lines independently is the single most misleading thing
+      this chart could do: a previous period drawn to its own ceiling would sit
+      at the same height as the current one no matter how different the numbers
+      are, and the entire point of the overlay is to show that difference. One
+      `axisScale` call over BOTH sets of values.
+
+      `axisScale` (lib/monetization/revenue-aggregate.ts) replaces the
+      hand-rolled ceiling that used to live here — it is the tested version of
+      the same idea (zero baseline, clean 1/2/5 step above the peak), and it
+      returns real ticks instead of assuming three.
     */
-    const peak = Math.max(1, ...vals);
-    const mag = Math.pow(10, Math.floor(Math.log10(peak)));
-    const top = Math.ceil(peak / (mag / 2)) * (mag / 2);
+    const all = [...points.map((p) => p.value), ...(compare ?? []).map((p) => p.value)];
+    const { top, ticks } = axisScale(all);
+
     const iw = width - pad.l - pad.r;
     const ih = height - pad.t - pad.b;
     const stepX = points.length > 1 ? iw / (points.length - 1) : 0;
     const xs = points.map((_, i) => pad.l + i * stepX);
-    const ys = points.map((p) => pad.t + ih - (p.value / top) * ih);
+    const yFor = (v: number) => pad.t + ih - (v / top) * ih;
+    const ys = points.map((p) => yFor(p.value));
     const line = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i]!.toFixed(1)}`).join(" ");
+
+    /*
+      The comparison path is indexed against the CURRENT series' x positions, so
+      bucket 3 of last period sits directly under bucket 3 of this one. That
+      vertical alignment is what makes "this Tuesday vs last Tuesday" readable
+      at a glance, and it is why both series must have the same length.
+    */
+    const cmpYs = (compare ?? []).slice(0, points.length).map((p) => yFor(p.value));
+    const cmpPath = cmpYs.length > 1
+      ? cmpYs.map((y, i) => `${i === 0 ? "M" : "L"}${xs[i]!.toFixed(1)},${y.toFixed(1)}`).join(" ")
+      : "";
+
     return {
       path: line,
       area: `${line} L${xs[xs.length - 1]!.toFixed(1)},${(pad.t + ih).toFixed(1)} L${xs[0]!.toFixed(1)},${(pad.t + ih).toFixed(1)} Z`,
       max: top,
-      ticks: [0, top / 2, top],
+      ticks,
       xs,
       ys,
+      cmpPath,
+      cmpYs,
     };
-  }, [points, width, height, pad.t, pad.r, pad.b, pad.l]);
+  }, [points, compare, width, height, pad.t, pad.r, pad.b, pad.l]);
 }
 
 /** The SVG body alone — reused at card size and at expanded-modal size. */
@@ -100,6 +128,8 @@ function ChartSvg({
   width,
   height,
   labelPx = 10,
+  compare,
+  compareLabel,
 }: {
   title: string;
   points: AreaPoint[];
@@ -107,13 +137,34 @@ function ChartSvg({
   width: number;
   height: number;
   labelPx?: number;
+  compare?: AreaPoint[];
+  compareLabel?: string;
 }) {
   const uid = useId().replace(/:/g, "");
   const [hover, setHover] = useState<number | null>(null);
   const PAD: Pad = { t: 12, r: 12, b: 22, l: labelPx > 10 ? 56 : 44 };
-  const { path, area, max, ticks, xs, ys } = useChartGeometry(points, width, height, PAD);
+  const { path, area, max, ticks, xs, ys, cmpPath, cmpYs } = useChartGeometry(
+    points,
+    width,
+    height,
+    PAD,
+    compare,
+  );
   const active = hover === null ? null : points[hover];
+  const activeCmp = hover === null ? null : compare?.[hover];
   const latest = points[points.length - 1]?.value ?? 0;
+
+  /*
+    Which x positions get a printed label (§5). Search Console prints as many
+    dates as fit and leaves the rest to the tooltip — every point is still
+    hoverable, only the LABEL is thinned. This replaces "first and last only",
+    which told you the range and nothing about where in it you were looking.
+
+    The divisor is the practical width of one date label at this font size;
+    fewer labels on the small card, more in the expanded modal, derived rather
+    than hardcoded per call site.
+  */
+  const labelled = axisLabelIndices(points.length, Math.max(2, Math.floor((width - PAD.l - PAD.r) / (labelPx * 6))));
 
   return (
     <div className="relative">
@@ -171,6 +222,30 @@ function ChartSvg({
         })}
 
         <path d={area} fill={`url(#g${uid})`} />
+
+        {/*
+          ── THE PREVIOUS PERIOD (Search Console's comparison line) ───────────
+          Drawn BEFORE the current series so the current one is never obscured
+          by it, and with NO fill: two filled areas overlapping produce a third
+          colour that means nothing, and the reader cannot tell which region
+          belongs to which period.
+
+          Dashed and muted, because it is reference rather than data. The whole
+          job of this line is to let the eye answer "is today's shape above or
+          below where we were" without reading a single number.
+        */}
+        {cmpPath ? (
+          <path
+            d={cmpPath}
+            fill="none"
+            className="stroke-muted-foreground/45"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        ) : null}
+
         {/* 2px line, per the mark spec — thin enough to read as data, thick
             enough to survive a retina downscale. */}
         <path d={path} fill="none" className="viz-line" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
@@ -187,20 +262,47 @@ function ChartSvg({
               className="stroke-foreground/25"
               strokeWidth={1}
             />
+            {/* The comparison marker is hollow, so the two can never be
+                confused when they sit close together. */}
+            {cmpYs[hover] !== undefined ? (
+              <circle
+                cx={xs[hover]}
+                cy={cmpYs[hover]}
+                r={3.5}
+                fill="none"
+                className="stroke-muted-foreground/70"
+                strokeWidth={2}
+              />
+            ) : null}
             {/* The 2px surface ring is what keeps the marker readable where it
                 overlaps the line and the fill. */}
             <circle cx={xs[hover]} cy={ys[hover]} r={5} className="viz-dot" strokeWidth={2} />
           </g>
         ) : null}
 
-        {/* First and last x labels only. A tick per day is unreadable at this
-            width and adds nothing — the tooltip carries the exact date. */}
-        <text x={PAD.l} y={height - 6} className="fill-muted-foreground" style={{ fontSize: labelPx }}>
-          {points[0]?.label}
-        </text>
-        <text x={width - PAD.r} y={height - 6} textAnchor="end" className="fill-muted-foreground" style={{ fontSize: labelPx }}>
-          {points[points.length - 1]?.label}
-        </text>
+        {/*
+          Thinned date labels, not just the two ends. `axisLabelIndices` pins
+          the first and last (an axis whose ends are unlabelled does not say
+          what range you are looking at) and spreads the rest evenly.
+
+          `textAnchor` shifts at the ends so neither label overhangs the
+          drawing area — a middle label is centred on its point, but the first
+          and last would hang off the left and right edges.
+        */}
+        {points.map((p, i) =>
+          labelled.has(i) ? (
+            <text
+              key={p.label + i}
+              x={xs[i]}
+              y={height - 6}
+              textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
+              className="fill-muted-foreground"
+              style={{ fontSize: labelPx }}
+            >
+              {p.label}
+            </text>
+          ) : null,
+        )}
       </svg>
 
       {active ? (
@@ -214,17 +316,67 @@ function ChartSvg({
              here rather than written out. */
           className="pointer-events-none absolute left-1/2 top-1 -translate-x-1/2 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs shadow-lg"
         >
-          <span className="font-semibold tabular-nums">{format(active.value)}</span>
-          <span className="ml-1.5 text-muted-foreground">{active.label}</span>
+          <div>
+            <span className="font-semibold tabular-nums">{format(active.value)}</span>
+            <span className="ml-1.5 text-muted-foreground">{active.label}</span>
+          </div>
+          {/*
+            The comparison row, and the DELTA — this is what turns a static
+            readout into "how has it changed" (owner, 2026-08-25). Without it
+            the overlay could be seen but not quantified, which is exactly the
+            complaint about a chart that "doesnt show how it has changed
+            compared to yesterday".
+          */}
+          {activeCmp ? (
+            <div className="mt-0.5 flex items-center gap-1.5 border-t border-border/60 pt-0.5 text-[11px]">
+              <span className="text-muted-foreground tabular-nums">{format(activeCmp.value)}</span>
+              <span className="text-muted-foreground/70">{compareLabel ?? "prev"}</span>
+              <DeltaText from={activeCmp.value} to={active.value} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-function TrendChip({ points }: { points: AreaPoint[] }) {
-  const latest = points[points.length - 1]?.value ?? 0;
-  const first = points[0]?.value ?? 0;
+/**
+ * A signed percentage change, or nothing.
+ *
+ * 🔴 Silent when the baseline is 0. A change from zero is not "+100%", it is
+ * undefined — and printing any number there is the fabricated-statistic trap
+ * this dashboard has a standing rule against. The absolute values are both on
+ * screen beside it, so the reader loses nothing.
+ */
+function DeltaText({ from, to }: { from: number; to: number }) {
+  if (from <= 0) return null;
+  const pct = Math.round(((to - from) / from) * 100);
+  if (pct === 0) return <span className="text-muted-foreground">±0%</span>;
+  const up = pct > 0;
+  return (
+    <span className={cn("font-semibold tabular-nums", up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+      {up ? "▲" : "▼"} {Math.abs(pct)}%
+    </span>
+  );
+}
+
+function TrendChip({ points, compare }: { points: AreaPoint[]; compare?: AreaPoint[] }) {
+  /*
+    🔴 WHEN THERE IS A COMPARISON PERIOD, THE CHIP MEASURES AGAINST IT.
+
+    Without one it can only compare the last bucket to the FIRST bucket of the
+    same window — which answers "is today bigger than 30 days ago", a single-day
+    comparison that swings wildly on noise and is not what anyone means by "the
+    trend".
+
+    With a comparison period it becomes the number Search Console actually puts
+    at the top: this period's TOTAL against the previous period's total. Totals,
+    not endpoints, because one quiet Sunday at the edge of a window should not
+    be able to invert the headline figure for a whole month.
+  */
+  const sum = (a: AreaPoint[]) => a.reduce((n, p) => n + p.value, 0);
+  const latest = compare ? sum(points) : (points[points.length - 1]?.value ?? 0);
+  const first = compare ? sum(compare) : (points[0]?.value ?? 0);
   /*
     The trend, and it is stated only when it MEANS something. A percentage change
     from a zero baseline is infinite, and one from a tiny baseline is noise
@@ -280,6 +432,8 @@ function ExpandedChart({
   slot,
   format,
   onClose,
+  compare,
+  compareLabel,
 }: {
   title: string;
   subtitle?: string;
@@ -287,6 +441,11 @@ function ExpandedChart({
   slot: 1 | 2 | 3 | 4;
   format: (n: number) => string;
   onClose: () => void;
+  /* The expanded view is the SAME geometry at a bigger size — so it takes the
+     comparison series too. A modal that quietly dropped the overlay would make
+     "expand to look closer" the one place you cannot see the trend. */
+  compare?: AreaPoint[];
+  compareLabel?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -335,11 +494,11 @@ function ExpandedChart({
             <span className="text-2xl font-bold tabular-nums tracking-tight">
               {format(points[points.length - 1]?.value ?? 0)}
             </span>
-            <TrendChip points={points} />
+            <TrendChip points={points} compare={compare} />
           </div>
         </div>
 
-        <ChartSvg title={title} points={points} format={format} width={960} height={420} labelPx={12} />
+        <ChartSvg title={title} points={points} format={format} width={960} height={420} labelPx={12} compare={compare} compareLabel={compareLabel} />
       </div>
     </div>,
     document.body,
@@ -354,6 +513,8 @@ export function AdminAreaChart({
   slot = 1,
   format = (n: number) => formatCompactNumber(n),
   className,
+  compare,
+  compareLabel = "prev. period",
 }: {
   title: string;
   subtitle?: string;
@@ -361,6 +522,17 @@ export function AdminAreaChart({
   slot?: 1 | 2 | 3 | 4;
   format?: (n: number) => string;
   className?: string;
+  /**
+   * The SAME window, one period earlier, already bucketed the same way — so
+   * index `i` in both arrays is the same position within its own period.
+   *
+   * Drawn as Search Console draws it: a dashed, muted line on the SHARED y
+   * scale, with no fill. Optional throughout — a panel with no prior data
+   * simply omits it and the chart is exactly what it was.
+   */
+  compare?: AreaPoint[];
+  /** What the comparison represents, for the tooltip ("prev. period"). */
+  compareLabel?: string;
 }) {
   const [showTable, setShowTable] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -396,7 +568,7 @@ export function AdminAreaChart({
           div (not nested inside it) so no interactive element ends up nested
           inside another. */}
       <div onClick={() => setExpanded(true)} className="cursor-zoom-in">
-        <ChartSvg title={title} points={points} format={format} width={760} height={190} />
+        <ChartSvg title={title} points={points} format={format} width={760} height={190} compare={compare} compareLabel={compareLabel} />
       </div>
 
       {/*
@@ -422,6 +594,8 @@ export function AdminAreaChart({
           slot={slot}
           format={format}
           onClose={() => setExpanded(false)}
+          compare={compare}
+          compareLabel={compareLabel}
         />
       ) : null}
     </figure>

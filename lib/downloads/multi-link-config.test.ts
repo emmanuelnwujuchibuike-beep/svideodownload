@@ -454,98 +454,68 @@ describe("the intro's description is hidden until asked for", () => {
       ("you just put a question mark at the top of the multi link H1 text"), so
       deleting the H1 would orphan the affordance holding the description.
     */
-    expect(introCode).toContain("Download multiple links");
+    /*
+      The three words are no longer one string: "multiple" is wrapped in its own
+      gradient span (hero-H1 style, see the test below), so the literal
+      "Download multiple links" does not appear in the source any more. Asserted
+      as the words in ORDER instead — which is the thing that actually matters
+      and survives the next styling change to any one of them.
+    */
+    expect(introCode).toMatch(/Download[\s\S]{0,600}?multiple[\s\S]{0,200}?links/);
     expect(introCode).not.toMatch(/all in one place/i);
   });
 
-  it("sets the heading in its OWN luxe face, not the wordmark's", () => {
+  it("sets the heading in the BRAND face, and adds no font of its own", () => {
     /*
-      Owner, 2026-08-25: "designed and decorated as a premium visible sentence,
-      with premium brand color splash like as the hero H1 … more premium with
-      premium stylish luxurious font", then explicitly: "dont use the frenzsave
-      brand font, use a more premium stylish font that havent been used before".
+      This setting went through two reversals, so the assertion records where it
+      landed rather than how it got there:
 
-      So `font-brand` (the Outfit wordmark face) is RULED OUT here by name — the
-      negative assertion is the point of this test, not an accident of it.
+        1. `font-brand` (Outfit, the wordmark face) — chosen to avoid a new
+           webfont on a page with a 1.6s LCP budget.
+        2. Owner: "dont use the frenzsave brand font, use a more premium stylish
+           font that havent been used before" → Playfair Display was added.
+        3. Owner: "is best to reuse the frenzsave brand font that is at the top
+           of the download page" → back to `font-brand`, and Playfair REMOVED.
+
+      The negative assertions are the valuable half. A third face left loaded
+      but unused would be pure weight on every route, and it is exactly the kind
+      of thing a revert leaves behind.
     */
-    expect(introCode).toMatch(/font-luxe/);
-    expect(introCode).not.toMatch(/font-brand/);
-  });
-
-  it("🔴 the luxe face is paid for like the wordmark: one weight, no preload", () => {
-    /*
-      A third webfont on a page held to a 1.6s LCP and a 275 kB ceiling is only
-      affordable on the terms the wordmark already proved:
-
-       • ONE weight — every extra weight is a separate file;
-       • `preload: false` — otherwise it joins the first wave and competes for
-         bandwidth with the LCP element on every route;
-       • `display: "swap"` — it must never block first paint.
-
-      Any one of these silently regressing turns a decorative heading into a
-      landing-page performance bug, which is exactly the class of thing this
-      project has shipped before.
-    */
+    expect(introCode).toMatch(/font-brand/);
     const layout = read("app/layout.tsx");
-    const luxe = layout.slice(layout.indexOf("const luxeDisplay"));
-    const decl = luxe.slice(0, luxe.indexOf("});") + 3);
-    expect(decl).toMatch(/Playfair_Display\(/);
-    expect(decl).toMatch(/weight: \["700"\]/);
-    expect(decl).toMatch(/style: \["italic"\]/);
-    expect(decl).toMatch(/preload: false/);
-    expect(decl).toMatch(/display: "swap"/);
-    expect(decl).toMatch(/variable: "--font-luxe"/);
-    // ONE cut. A second weight or the roman would double a face used by one
-    // heading — and see the italic assertion below for why the roman in
-    // particular must not creep back in unnoticed.
-    expect(decl).not.toMatch(/weight: \[[^\]]*,/);
-    // Wired onto <body>, or the variable resolves to nothing and the class is
-    // a silent no-op that falls back to Georgia everywhere.
-    expect(layout).toMatch(/\$\{luxeDisplay\.variable\}/);
+    expect(layout).not.toMatch(/Playfair/);
+    expect(layout).not.toMatch(/luxeDisplay|--font-luxe/);
+    expect(read("app/globals.css")).not.toMatch(/\.font-luxe/);
+    // Exactly two faces ship: the UI sans and the one display face.
+    expect(layout).toMatch(/import \{ Inter, Outfit \} from "next\/font\/google"/);
   });
 
-  it("🔴 .font-luxe carries the italic + weight, so it cannot be used upright", () => {
+  it("🔴 colours ONE word, hero-H1 style — not the whole line", () => {
     /*
-      Owner, 2026-08-25: "it should be a bold font with a stylish italic style."
+      Owner, 2026-08-25: "the multi link text shouldnt carry all colored, only
+      the middle text should be colored, just the Download. Discover. Explore
+      Hero H1 style."
 
-      Only the 700-ITALIC cut of Playfair is loaded. An element that renders
-      `.font-luxe` upright therefore matches NO `@font-face` and drops silently
-      to Georgia — it looks merely wrong, never broken, and nothing errors. So
-      the style and the weight live in the class itself rather than at the call
-      site, and this is what stops someone "tidying" them back into a utility
-      class on one usage and losing the face on the others.
-    */
-    const css = read("app/globals.css");
-    const rule = css.slice(css.indexOf(".font-luxe"));
-    const body = rule.slice(0, rule.indexOf("}"));
-    expect(body).toMatch(/font-style:\s*italic/);
-    expect(body).toMatch(/font-weight:\s*700/);
-  });
+      The hero gives the gradient to `Discover.` alone and sets the words either
+      side in ink. That works BECAUSE it is one word — a gradient across a whole
+      line has nothing to contrast against, so it stops reading as emphasis and
+      becomes merely a coloured heading, which is what the previous version did.
 
-  it("falls back to a SERIF while the luxe face swaps in", () => {
-    /*
-      `display: "swap"` means the first paint of this line is the fallback. If
-      that fallback were the UI sans, the swap would jump between two different
-      classes of letterform. Georgia is close enough that it reads as the line
-      settling, not reflowing.
+      So: the `<h3>` itself must carry an INK colour (not `text-transparent`),
+      and exactly one inner span carries the clip.
     */
-    const css = read("app/globals.css");
-    const rule = css.slice(css.indexOf(".font-luxe"));
-    expect(rule.slice(0, rule.indexOf("}"))).toMatch(/Georgia[\s\S]*serif/);
-  });
-
-  it("🔴 writes the four-stop splash literally — `via-` is only ONE stop", () => {
-    /*
-      Tailwind's `via-` emits a single custom property, so two `via-` classes
-      overwrite each other and quietly render a THREE-stop gradient. The richer
-      ramp is the whole point of "more premium than the hero", so it is written
-      as a literal `linear-gradient` where the fourth stop actually exists.
-    */
-    expect(introCode).toMatch(/bg-\[linear-gradient\(/);
-    expect(introCode).not.toMatch(/via-\w+-\d+\s+via-/);
-    // Light and dark ramps are declared separately — one set of stops cannot
-    // read rich on white AND on #0b1020.
-    expect(introCode).toMatch(/dark:bg-\[linear-gradient\(/);
+    expect(introCode).toMatch(/id="multi-link-heading"[\s\S]{0,400}?text-slate-900/);
+    // The heading element itself is not the clipped one any more.
+    expect(introCode).not.toMatch(/id="multi-link-heading"[\s\S]{0,300}?bg-clip-text/);
+    // Exactly one gradient span in the file, and it uses the hero's own stops
+    // rather than a second near-identical ramp.
+    expect(introCode.match(/bg-clip-text/g) ?? []).toHaveLength(1);
+    expect(introCode).toMatch(/from-blue-600 via-violet-600 to-fuchsia-600/);
+    expect(introCode).toMatch(/dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400/);
+    // Same stops as the hero H1 it is imitating — one source of truth by eye.
+    expect(read("features/downloads/downloads-sections.tsx")).toMatch(
+      /from-blue-600 via-violet-600 to-fuchsia-600/,
+    );
   });
 
   it("the timer doesn't run out while it is being read", () => {

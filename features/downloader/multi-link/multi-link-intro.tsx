@@ -77,46 +77,26 @@ export function MultiLinkIntro({
           premium brand color splash like as the hero H1 … but this should be
           more premium with premium stylish luxurious font."
 
-          Three things make it, and each one is chosen against a constraint:
+          ── 🔴 THIS SETTLED AFTER TWO REVERSALS. READ BEFORE CHANGING IT ─────
 
-          1. THE FACE — `font-luxe`, Playfair Display. A THIRD face, added for
-             this line (app/layout.tsx has the full note).
+          1. First pass reused `font-brand` (Outfit, the wordmark face) to avoid
+             a new webfont on a page with a 1.6s LCP budget.
+          2. Owner overruled that: "dont use the frenzsave brand font, use a more
+             premium stylish font that havent been used before" → a third face,
+             Playfair Display, bold italic.
+          3. Owner reversed again, and this is the current instruction: *"is best
+             to reuse the frenzsave brand font that is at the top of the download
+             page, and the multi link text shouldnt carry all colored, only the
+             middle text should be colored, just the Download. Discover. Explore
+             Hero H1 style."*
 
-             🔴 This overrules a first pass that reused the Outfit wordmark face
-             to avoid a new font file. Owner: "dont use the frenzsave brand
-             font, use a more premium stylish font that havent been used before
-             for the multi link H1 intro." That rules out both faces already
-             loaded, so a new one is the instruction, not a drift.
+          So it is `font-brand` — Outfit, the same face as the wordmark at the
+          top of this very page — and Playfair was removed from the project
+          entirely rather than left loaded for nothing.
 
-             The cost is real and is paid down the same way the wordmark's is —
-             one weight, `preload:false`, `display:swap` — so it never competes
-             with the LCP element and never blocks first paint. A high-contrast
-             SERIF is also the honest reading of "luxurious": that thick-to-thin
-             modulation is what the eye reads as luxury, and it is exactly what
-             Inter and Outfit, both sans, cannot do.
-
-          2. THE SPLASH — richer than the hero's, on purpose. The hero tints ONE
-             word out of three (`Discover.`) because the other two have to stay
-             quiet around it. Here the whole line is the subject, so the gradient
-             runs across all of it and travels further round the wheel
-             (blue → indigo → violet → fuchsia), which is what reads as "more
-             premium" rather than merely "same treatment, second time".
-             `text-transparent` + `bg-clip-text`, the same mechanism the hero and
-             `.text-gradient` use — no new idiom.
-
-          3. THE TYPE ITSELF — BOLD ITALIC (owner: "a bold font with a stylish
-             italic style"), a size bump, and NO negative tracking. All three
-             live in `.font-luxe` rather than here, because only the 700-italic
-             cut of Playfair is loaded and an element that renders it upright
-             matches no `@font-face` at all — it would fall back to Georgia
-             without erroring. High-contrast serifs are drawn to be set open;
-             the tightening that flatters a geometric wordmark closes these
-             counters and cheapens them. Luxury type is set OPEN, not squeezed.
-
-          🔴 The dark-mode stops are separate and lighter. A 600-weight gradient
-          that reads rich on white goes muddy on #0b1020 — the same reason the
-          hero declares its own `dark:` ramp instead of letting one set serve
-          both.
+          The two things that make it read as premium are now the SAME two the
+          hero H1 uses, not a bespoke treatment: the display face, and a gradient
+          on exactly one word. See the span below for why one word matters.
 
           The heading STAYS despite "…, all in one place." being cut: the "?" is
           anchored beside it by the owner's earlier instruction ("you just put a
@@ -126,27 +106,32 @@ export function MultiLinkIntro({
         <h3
           id="multi-link-heading"
           className={cn(
-            // `font-luxe` carries the face, the 700 weight AND the italic (see
-            // globals.css) — only that one cut is loaded, so none of the three
-            // is optional here.
-            "font-luxe text-balance bg-clip-text text-lg leading-snug text-transparent sm:text-xl",
-            /*
-              🔴 A literal `linear-gradient`, not `from-/via-/to-`. Tailwind's
-              `via-` is ONE stop — two `via-` classes emit the same custom
-              property and the later simply overwrites the earlier, so the
-              four-stop ramp described above is not expressible in that API. It
-              would have compiled, linted and silently rendered a three-stop
-              gradient. Written out, the extra stop actually exists.
-            */
-            onHero
-              ? "bg-[linear-gradient(100deg,#93c5fd_0%,#c4b5fd_45%,#f0abfc_100%)]"
-              : [
-                  "bg-[linear-gradient(100deg,#2563eb_0%,#4f46e5_28%,#7c3aed_58%,#c026d3_100%)]",
-                  "dark:bg-[linear-gradient(100deg,#60a5fa_0%,#818cf8_28%,#a78bfa_58%,#e879f9_100%)]",
-                ],
+            "font-brand text-balance text-lg font-bold leading-snug sm:text-xl",
+            onHero ? "text-white" : "text-slate-900 dark:text-white",
           )}
         >
-          Download multiple links
+          Download{" "}
+          {/*
+            🔴 ONLY THE MIDDLE WORD IS COLOURED — the hero H1's exact device
+            (owner, 2026-08-25: "the multi link text shouldnt carry all colored,
+            only the middle text should be colored, just the Download. Discover.
+            Explore Hero H1 style").
+
+            The hero sets "Download." and "Explore." in ink and gives the
+            gradient to "Discover." alone. That works BECAUSE it is one word:
+            a gradient across a whole line has nothing to contrast against, so
+            it stops reading as emphasis and starts reading as a coloured
+            heading — which is what the previous all-gradient version did.
+
+            Same stops as the hero (`from-blue-600 via-violet-600 to-fuchsia-600`
+            with its own dark ramp), NOT a bespoke set: two nearly-identical
+            gradients on one page is the kind of drift that makes a design
+            system stop being one.
+          */}
+          <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+            multiple
+          </span>{" "}
+          links
         </h3>
 
         <button

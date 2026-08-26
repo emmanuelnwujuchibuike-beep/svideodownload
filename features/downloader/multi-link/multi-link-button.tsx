@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import {
@@ -64,6 +64,56 @@ export function MultiLinkButton({
    *  after the first open, without ever fetching to draw the closed state. */
   const [policy, setPolicy] = useState<BatchPolicy | null>(null);
   const { plan, ready } = useEntitlements();
+
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     WARM THE PANEL CHUNK, WITHOUT PUTTING IT IN FIRST-LOAD JS
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-08-25: "multi link button should always prefetch immediately the
+    landing or download page opens, so it doesnt take a bit to open when
+    clicked."
+
+    🔴 THE `open=false` JSX GATE BELOW STAYS. It is not redundant with this, and
+    removing it would undo the thing that protects the landing budget:
+    `dynamic(ssr:false)` alone does NOT keep a chunk out of a route's build
+    manifest — if the JSX is REACHED during the render pass, Next lists and
+    preloads it as first-load JS. That is why the panel (with BatchAdGate, the
+    reward hooks, the ZIP writer and the source-card grid behind it) is both
+    dynamically imported AND gated.
+
+    A bare `import()` from an effect is a different mechanism entirely: it is
+    not part of any render pass, so the chunk stays out of the manifest and off
+    the first-load number, and it simply arrives in the background. By the time
+    a visitor reads the card and taps it, the module is already in memory and
+    the panel opens in the same frame.
+
+    ── Idle, not immediate ────────────────────────────────────────────────────
+    "Immediately" is taken as "without waiting for the tap", NOT "during
+    hydration". Firing this on mount would put a network request in direct
+    competition with the LCP element on the page whose budget is 1.6 seconds —
+    which would trade a fast panel for a slow landing, the wrong way round.
+    `requestIdleCallback` waits for the browser to be genuinely free; the
+    `timeout` guarantees it still happens on a page that never goes idle, and
+    the `setTimeout` branch covers Safari, which has no rIC.
+  */
+  useEffect(() => {
+    if (!config.enabled) return;
+    const warm = () => {
+      void import("./multi-link-panel");
+    };
+    type IdleWindow = Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const w = window as IdleWindow;
+    if (typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(warm, { timeout: 2500 });
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warm, 1500);
+    return () => window.clearTimeout(id);
+  }, [config.enabled]);
 
   if (!config.enabled) return null;
 

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Outfit, Playfair_Display } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ThemeCacheSync } from "@/components/theme-cache-sync";
@@ -73,62 +73,6 @@ const brandDisplay = Outfit({
   subsets: ["latin"],
   weight: ["700"],
   variable: "--font-brand",
-  display: "swap",
-  preload: false,
-});
-
-/**
- * The LUXE face — Playfair Display, for premium display lines that are neither
- * the wordmark nor body copy. Today: the Multi-Link intro heading.
- *
- * ── Why a third face at all ───────────────────────────────────────────────────
- * Owner, 2026-08-25: "dont use the frenzsave brand font, use a more premium
- * stylish font that havent been used before for the multi link H1 intro." The
- * first pass reused `--font-brand` (Outfit) precisely to avoid a new file; that
- * was overruled, and "hasn't been used before" rules out both faces already
- * here. So this is a deliberate, named third face rather than a drift.
- *
- * ── Why Playfair Display specifically ─────────────────────────────────────────
- * "Premium / stylish / luxurious" in type means a high-contrast display SERIF —
- * that thick-to-thin modulation is the thing the eye reads as luxury, and it is
- * exactly what both faces already here lack (Inter and Outfit are both sans).
- * Playfair carries that contrast while staying readable at ~20px on a phone,
- * which the more extreme fashion faces do not: Bodoni and Cormorant put their
- * hairlines below a pixel at this size and go patchy on a mid-range Android.
- *
- * ── Paid for the same way the wordmark is ────────────────────────────────────
- * One weight, and BOTH risky defaults off, because this renders on the landing
- * page — 1.6s LCP target, 275 kB ceiling:
- *
- *  • `display: "swap"` — the line paints in Inter and swaps when Playfair lands.
- *    It never blocks first paint.
- *  • `preload: false` — no competing with the LCP element for bandwidth in the
- *    first wave. It is a decorative heading below the fold of the paste box, not
- *    the thing anyone is waiting for.
- *
- * ── 🔴 BOLD ITALIC, AND ONLY BOLD ITALIC ────────────────────────────────────
- * Owner, 2026-08-25: "it should be a bold font with a stylish italic style."
- *
- * So this loads exactly ONE cut — Playfair Display **700 italic** — and no
- * roman at all. That is deliberate and it is also load-bearing:
- *
- *  • Every weight AND every style is a separate file. Shipping 600 roman
- *    alongside 700 italic would double the cost of a face used by one heading.
- *  • Because no roman cut is loaded, anything using `.font-luxe` MUST render
- *    italic or the browser finds no matching `@font-face` and silently falls
- *    back to Georgia. `.font-luxe` therefore sets `font-style: italic` itself
- *    (globals.css) rather than trusting each call site to remember — the class
- *    cannot be used wrongly.
- *
- * Italic is also the right call on the merits: a high-contrast display serif's
- * italic is its most distinctive cut, and it is where Playfair stops looking
- * like a book face and starts looking like a logotype.
- */
-const luxeDisplay = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["700"],
-  style: ["italic"],
-  variable: "--font-luxe",
   display: "swap",
   preload: false,
 });
@@ -446,7 +390,7 @@ export default function RootLayout({
         {/* GA4 / Google Ads / Tag Manager, from an admin-set ID. */}
         <GoogleTag />
       </head>
-      <body className={`${displaySans.variable} ${brandDisplay.variable} ${luxeDisplay.variable} font-sans`}>
+      <body className={`${displaySans.variable} ${brandDisplay.variable} font-sans`}>
         {/* Monetag (site-wide) — the owner's network alongside AdSense. The admin
             snippets are parsed server-side into safe tags, then injected on the
             client ONLY for visitors who should see ads, so Pro/Business stay

@@ -177,8 +177,36 @@ export function RevenueCharts({
     multilinkRefused,
     newVisitors,
     returningVisitors,
+    prev,
   } = useMemo(() => {
     const slice = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - range));
+
+    /*
+      ── THE PREVIOUS PERIOD (owner, 2026-08-25) ──────────────────────────────
+
+      "not just a static chart that doesnt move or show how it has changed
+      compare to yesterday … with the mobile google search console style."
+
+      Search Console's trend chart is not one line — it is this period against
+      the one before it, so every point answers "up or down from where we were"
+      rather than only "how much". That is the whole difference between a chart
+      you read and a chart you glance at.
+
+      The window immediately BEFORE the visible one, same length, taken from the
+      same gap-free daily grid: for a 30-day view, days -60..-31. It is grouped
+      through the SAME `aggregateRevenue` call, so bucket i of each array is the
+      same position within its own period and the two line up vertically.
+
+      🔴 Returns `undefined` when there is not a FULL prior window. A short
+      comparison would silently draw a period that covers fewer days than the
+      one it is being compared against — a line that sags for a reason that has
+      nothing to do with the business. Better no overlay than a misleading one.
+    */
+    const prevSlice = <T,>(arr: T[]): T[] | undefined => {
+      const end = Math.max(0, arr.length - range);
+      if (end < range) return undefined;
+      return arr.slice(end - range, end);
+    };
 
     /** Daily grid → the selected grouping → what AdminAreaChart draws. */
     const group = (days: DailyPoint[]): AreaPoint[] =>
@@ -186,6 +214,12 @@ export function RevenueCharts({
 
     const of = (pick: (d: RevenueSeries["days"][number]) => number): AreaPoint[] =>
       group(slice(series.days).map((d) => ({ date: d.date, value: pick(d) })));
+
+    /** The same measure over the preceding window, or nothing. */
+    const prevOf = (pick: (d: RevenueSeries["days"][number]) => number): AreaPoint[] | undefined => {
+      const days = prevSlice(series.days);
+      return days && group(days.map((d) => ({ date: d.date, value: pick(d) })));
+    };
 
     /*
       🔴 A NULL DAY IS DROPPED, NOT PLOTTED AS ZERO (owner, 2026-08-23:
@@ -220,6 +254,24 @@ export function RevenueCharts({
       multilinkRefused: of((d) => d.multilinkRefused),
       newVisitors: definedDays("newVisitors"),
       returningVisitors: definedDays("returningVisitors"),
+      /*
+        Comparison series for the measures that come off the daily grid. The
+        visitor charts are excluded on purpose: `visitors` and `visitorSplit`
+        are capped at 30 days by their own RPC, so there is rarely a full prior
+        window, and `definedDays` DROPS unmeasured days — which would make a
+        comparison line built from it cover a different number of days than the
+        line it sits under.
+      */
+      prev: {
+        impressions: prevOf((d) => d.impressions),
+        clicks: prevOf((d) => d.clicks),
+        downloads: prevOf((d) => d.downloads),
+        installs: prevOf((d) => d.installs),
+        rewardsStarted: prevOf((d) => d.rewardsStarted),
+        rewardsGranted: prevOf((d) => d.rewardsGranted),
+        multilinkBatches: prevOf((d) => d.multilinkBatches),
+        multilinkRefused: prevOf((d) => d.multilinkRefused),
+      },
     };
   }, [series.days, range, effectiveGrain, visitors, visitorSplit]);
 
@@ -482,12 +534,14 @@ export function RevenueCharts({
           title="Ad impressions"
           subtitle={`${totalImpr.toLocaleString()} in the last ${range} days`}
           points={impressions}
+          compare={prev.impressions}
           slot={1}
         />
         <AdminAreaChart
           title="Ad clicks"
           subtitle={ctr !== null ? `${totalClicks.toLocaleString()} clicks · ${ctr.toFixed(2)}% CTR` : undefined}
           points={clicks}
+          compare={prev.clicks}
           slot={2}
         />
         {/* The figures an ad panel is actually read for, under the charts they
@@ -586,6 +640,7 @@ export function RevenueCharts({
           title="Downloads"
           subtitle={`${totalDownloads.toLocaleString()} completed in the last ${range} days`}
           points={downloads}
+          compare={prev.downloads}
           slot={4}
           className="lg:col-span-2"
         />
@@ -606,6 +661,7 @@ export function RevenueCharts({
           title="App installs"
           subtitle={`${installsMonth.toLocaleString()} in the last 30 days · Android & desktop only`}
           points={installs}
+          compare={prev.installs}
           slot={3}
         />
 
@@ -665,6 +721,7 @@ export function RevenueCharts({
           title="Reward ads started"
           subtitle={`${totalRewardsStarted.toLocaleString()} opened in the last ${range} days`}
           points={rewardsStarted}
+          compare={prev.rewardsStarted}
           slot={2}
         />
         <AdminAreaChart
@@ -675,6 +732,7 @@ export function RevenueCharts({
               : `${totalRewardsGranted.toLocaleString()} verified · ${rewardCompletion}% completion`
           }
           points={rewardsGranted}
+          compare={prev.rewardsGranted}
           slot={1}
         />
 
@@ -693,6 +751,7 @@ export function RevenueCharts({
           title="Multi-Link batches"
           subtitle={`${totalMultilinkBatches.toLocaleString()} ran in the last ${range} days`}
           points={multilinkBatches}
+          compare={prev.multilinkBatches}
           slot={2}
         />
         <AdminAreaChart
@@ -703,6 +762,7 @@ export function RevenueCharts({
               : `${totalMultilinkRefused.toLocaleString()} hit a limit — unmet intent, and the upgrade case`
           }
           points={multilinkRefused}
+          compare={prev.multilinkRefused}
           slot={1}
         />
 

@@ -80,7 +80,26 @@ export function AdminSectionTabs({
       role="tablist"
       aria-label="Section"
       className={cn(
-        "sticky z-20 -mx-5 mb-4 flex gap-1 overflow-x-auto border-b border-border/60 bg-card/95 px-5 py-2 backdrop-blur sm:-mx-6 sm:px-6",
+        /*
+          🔴 THE ROW KEEPS ITS OWN INSET (owner, 2026-08-25, with a screenshot:
+          "this top nav in live activity and some other section touches the end
+          a lot, i want it to have atleast padding x of 2").
+
+          The bar is full-bleed by design — `-mx-5` cancels the card's padding so
+          the border-bottom reaches both edges rather than stopping short and
+          reading as a stray rule. But the BUTTONS were riding that same bleed
+          out to the very edge, so the first tab was flush against the screen on
+          a phone and looked clipped rather than scrollable.
+
+          `px-7` = the card's `px-5` that was cancelled, plus the `px-2` the
+          owner asked for (`sm:px-8` for the `sm:-mx-6` variant). The bleed and
+          the inset are therefore independent: the rule still spans the full
+          width, and the tabs sit 8px inside it at both ends. `scroll-px` makes
+          the same gap apply when a tab is scrolled to — without it
+          `scrollIntoView` parks the active tab flush against the edge again and
+          undoes the fix the moment anyone uses the row.
+        */
+        "sticky z-20 -mx-5 mb-4 flex gap-1 overflow-x-auto scroll-px-2 border-b border-border/60 bg-card/95 px-7 py-2 backdrop-blur sm:-mx-6 sm:px-8",
         // Hide the horizontal scrollbar on desktop — the row is short enough
         // that a visible bar reads as a defect rather than an affordance.
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",

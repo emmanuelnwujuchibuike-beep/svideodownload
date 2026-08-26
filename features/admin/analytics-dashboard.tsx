@@ -45,6 +45,49 @@ const RANGES: { key: Range; label: string }[] = [
   { key: "30d", label: "30 days" },
 ];
 
+/**
+ * The 24h / 7d / 30d selector.
+ *
+ * Exported and shared with `download-history-panel.tsx` rather than copied into
+ * it. The copy existed for about ten minutes and the route budget caught it —
+ * two identical selectors is both duplicated bytes on a page already at its
+ * ceiling AND two places for the ranges to drift apart, which would let two
+ * tabs of the same section disagree about what "7 days" means.
+ */
+export function RangeTabs({
+  range,
+  onChange,
+}: {
+  range: Range;
+  onChange: (r: Range) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Date range"
+      className="inline-flex rounded-xl bg-secondary/60 p-1 shadow-sm ring-1 ring-inset ring-border/40"
+    >
+      {RANGES.map((r) => (
+        <button
+          key={r.key}
+          type="button"
+          onClick={() => {
+            tap();
+            onChange(r.key);
+          }}
+          aria-pressed={range === r.key}
+          className={cn(
+            "rounded-lg px-3 py-1.5 text-sm font-semibold transition active:scale-[0.96]",
+            range === r.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function tap() {
   haptic("light");
   playSound("tap");
@@ -130,26 +173,12 @@ export function AnalyticsDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <ExportButton range={range} type="events" label="Events CSV" />
+          {/* The Downloads CSV also lives on the Download history tab, next to
+              the table it exports. Both are the same component and the same
+              URL — this one stays because the events export beside it is
+              scoped by the same range. */}
           <ExportButton range={range} type="downloads" label="Downloads CSV" />
-          <div className="inline-flex rounded-xl bg-secondary/60 p-1 shadow-sm ring-1 ring-inset ring-border/40">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => {
-                  tap();
-                  setRange(r.key);
-                }}
-                aria-pressed={range === r.key}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm font-semibold transition active:scale-[0.96]",
-                  range === r.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          <RangeTabs range={range} onChange={setRange} />
         </div>
       </div>
 
@@ -238,14 +267,19 @@ export function AnalyticsDashboard() {
       </div>
 
       {/*
-        Every user's downloads, successful and failed, with the source link
-        (owner, 2026-08-09). Placed under the aggregate numbers because it is
-        the drill-down FROM them: "success rate dipped" → "which ones failed?"
+        🔴 DOWNLOAD HISTORY HAS MOVED OUT (owner, 2026-08-25: "put download
+        history in it own section in traffic with a top nav, so i can easily
+        located download history in traffic section").
+
+        It lived here from 2026-08-09 as the drill-down FROM the aggregate
+        numbers above ("success rate dipped" → "which ones failed?"), which is
+        still a fair reading — but it meant the table was only reachable by
+        scrolling this entire live dashboard, and the owner could not find it.
+        It is now its own tab on the Traffic panel
+        (`features/admin/download-history-panel.tsx`), one tap from anywhere in
+        the section, with its own range control and the Downloads CSV export
+        that belongs to it.
       */}
-      <div>
-        <SectionLabel icon={FileDown}>Download history</SectionLabel>
-        <DownloadLogTable range={range} />
-      </div>
 
       {/* Every page — including the ones nobody visited */}
       <div>
@@ -662,7 +696,10 @@ function FeedCard({
 
 /* --------------------------------------------------------------- export */
 
-function ExportButton({ range, type, label }: { range: Range; type: "events" | "downloads"; label: string }) {
+/* Exported so `download-history-panel.tsx` can reuse it: the CSV export for the
+   download log moved to that tab along with the table it exports, and a second
+   copy of this button would be a second place to fix a broken export URL. */
+export function ExportButton({ range, type, label }: { range: Range; type: "events" | "downloads"; label: string }) {
   return (
     <a
       href={`/api/admin/analytics/export?range=${range}&type=${type}`}

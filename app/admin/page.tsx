@@ -148,6 +148,7 @@ import { MessagingMonitor } from "@/features/admin/messaging-monitor";
 import { MonetizationSettings } from "@/features/admin/monetization-settings";
 import { PlanManager } from "@/features/admin/plan-manager";
 import { AnalyticsDashboard } from "@/features/admin/analytics-dashboard";
+import { DownloadHistoryPanel } from "@/features/admin/download-history-panel";
 import { AnnouncementSettings } from "@/features/admin/announcement-settings";
 import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
@@ -692,6 +693,13 @@ export default async function AdminPage() {
                   id: "live",
                   label: "Live",
                   content: <AnalyticsDashboard />,
+                },
+                {
+                  /* Its own tab (owner, 2026-08-25) — it used to be buried
+                     partway down the live dashboard above. */
+                  id: "history",
+                  label: "Download history",
+                  content: <DownloadHistoryPanel />,
                 },
                 {
                   id: "sources",

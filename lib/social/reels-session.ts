@@ -151,7 +151,7 @@ export function suppressReel(id: string): void {
 /* ────────────────────────────────────────────────────────────────────────── */
 
 /**
- * Deterministic (seed, id) → [0,1). FNV-1a, byte for byte the same function
+ * Deterministic (seed, id) → [0,1). FNV-1a + fmix32, byte for byte the same function
  * `home-feed.ts` ranks with.
  *
  * Duplicated rather than imported ON PURPOSE: `home-feed.ts` is a server module
@@ -166,6 +166,27 @@ function seededUnit(seed: string, id: string): number {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
+  // 🔴 FINAL AVALANCHE (murmur3 fmix32) — NOT decoration, and NOT removable.
+  //
+  // Plain FNV-1a's last step is `h = imul(h ^ lastChar, 16777619)`, so the
+  // trailing bytes never diffuse into the high bits that `(h >>> 0) / 2**32`
+  // actually reads. Measured 2026-08-26: for ten ids sharing a prefix and
+  // differing only in the FINAL character, raw FNV-1a produced values spanning
+  // a band 0.04 wide (not ~1.0) and only 18 DISTINCT ORDERS across 200 seeds —
+  // the same arrangement over and over. With fmix32: 200/200 distinct orders,
+  // spread 0.86, deciles flat to within 0.15%.
+  //
+  // Live `posts.id` is `uuid_generate_v4()` (migration 0007), which varies
+  // across its whole length, so the feed shuffle was never dead in production.
+  // It is fixed anyway because the degenerate case is one id-scheme change
+  // away (uuidv7 shares a long prefix), because reels shuffles by this value
+  // ALONE, and because the test fixtures use ids like `q0`…`q9` — so the
+  // suite could not tell a working shuffle from a broken one.
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
 

@@ -349,7 +349,7 @@ export function SmartFeed({
      * the new-posts pill) — there the spinner is the acknowledgement that the
      * tap did something, and removing it would feel broken.
      */
-    async (s: HomeFeedSort, offset: number, replace: boolean, silent = false) => {
+    async (s: HomeFeedSort, offset: number, replace: boolean, silent = false, pinNew = false) => {
       const isActiveTab = () => s === sortRef.current;
       // Only the tab actually on screen shows loading UI — a background
       // prefetch of the other tab (below) must stay invisible.
@@ -373,7 +373,16 @@ export function SmartFeed({
               this array. If an ad ever counted here the cursor would run ahead
               of the dataset and the feed would silently skip real posts.
             */
-            query: { sort: s, offset, limit: PAGE, seed: seedRef.current },
+            /*
+              `pinNew` is sent ONLY by the new-posts pill (see `refreshTop`).
+              Since 2026-08-26 the server reshuffles the WHOLE catalogue by
+              default instead of pinning the newest post on every request — the
+              owner's "it shouldnt show a fixed new post". The pill is the one
+              action that names specific posts to the viewer, so it is the one
+              request that pins them; omitted everywhere else, including here on
+              pagination, where pinning would re-pin page 1's post onto page 2.
+            */
+            query: { sort: s, offset, limit: PAGE, seed: seedRef.current, ...(pinNew ? { pinNew: "1" } : {}) },
           },
         );
         // The server restates the cadence on every page, so it can change
@@ -549,7 +558,11 @@ export function SmartFeed({
     // under them would move the post they're looking at.
     seedRef.current = newFeedSeed();
     setFreshCount(0);
-    void fetchPage(sort, 0, true);
+    // `pinNew` — the pill just told the viewer "N new posts", so those posts
+    // must actually be at the top when it reloads. This is the ONLY caller that
+    // passes it; a plain entry or pull-to-refresh reshuffles across the whole
+    // catalogue instead of re-anchoring on the same newest post every time.
+    void fetchPage(sort, 0, true, false, true);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }, [fetchPage, sort]);
 

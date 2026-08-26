@@ -19,6 +19,7 @@ import { rankForYou, type Row } from "./home-feed";
 // asserting against a code path they never reach. A day old is unambiguously in
 // the ranked tier. The pinning behaviour has its own tests further down.
 const SHARED_CREATED_AT = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
 
 function makeRow(overrides: Partial<Row> = {}): Row {
   return {
@@ -59,13 +60,13 @@ describe("rankForYou", () => {
     expect(ranked[0]?.category).toBe("tech");
   });
 
-  it("preferFriends (120→220 relationship bonus) is large enough to flip a ranking the default bonus wouldn't", () => {
+  it("preferFriends (25→46 relationship bonus) is large enough to flip a ranking the default bonus wouldn't", () => {
     const friend = makeRow({ id: "friend-post", publisher_id: "friend", likes_count: 0 });
     const stranger = makeRow({ id: "stranger-post", publisher_id: "stranger", likes_count: 150 });
     const withoutPref = rankForYou([friend, stranger], new Set(["friend"]), { preferFriends: false, boostedCategories: [] });
     const withPref = rankForYou([friend, stranger], new Set(["friend"]), { preferFriends: true, boostedCategories: [] });
-    expect(withoutPref[0]?.publisher_id).toBe("stranger"); // 120 bonus loses to a 150-like gap
-    expect(withPref[0]?.publisher_id).toBe("friend"); // 220 bonus wins
+    expect(withoutPref[0]?.publisher_id).toBe("stranger"); // 25 bonus loses to a 150-like gap
+    expect(withPref[0]?.publisher_id).toBe("friend"); // 46 bonus wins
   });
 
   it("quality signals (comments/shares weighted above raw likes) affect ranking among strangers", () => {
@@ -134,134 +135,229 @@ describe("rankForYou — per-refresh shuffle", () => {
     expect(withoutSeed).toEqual(legacy);
   });
 
-  it("jitter can't invert a real quality gap — a strong post stays on top", () => {
-    // ±25% of each post's own score, so a 10x gap must survive any seed.
+  it("engagement is a strong BIAS, not a guarantee — a banger averages the top of the feed", () => {
+    /*
+      🔴 This replaced "a strong post stays on top, whatever the seed"
+      (2026-08-26). That assertion was true of the OLD scoring, where `quality`
+      was raw and unbounded, and it is exactly what had to go: if a 100x
+      engagement gap is unbridgeable then so is a 100x gap between an old viral
+      post and today's, and the feed can never reshuffle across ages.
+
+      What is asserted instead is the property that actually matters — a strong
+      post is favoured HEAVILY on average, but is not nailed to slot one.
+    */
     const rows = [...many(), makeRow({ id: "banger", likes_count: 5000 })];
-    for (const seed of ["s1", "s2", "s3", "s4", "s5", "s6"]) {
-      expect(rankForYou(rows, new Set(), undefined, seed)[0]?.id).toBe("banger");
-    }
+    const ranks = Array.from({ length: 60 }, (_, i) =>
+      rankForYou(rows, new Set(), undefined, `s${i}`).findIndex((r) => r.id === "banger"),
+    );
+    const mean = ranks.reduce((a, b) => a + b, 0) / ranks.length;
+    // Chance alone would average 20 of 41. Measured 2026-08-26: ~9.5.
+    expect(mean, "engagement stopped mattering — the feed became a lottery").toBeLessThan(15);
+    // ...and it genuinely does reach the top, often.
+    expect(ranks.filter((r) => r < 10).length / ranks.length).toBeGreaterThan(0.33);
+  });
+
+  /*
+    🔴 REGRESSION GUARD for the jitter hash itself (2026-08-26).
+
+    `seededUnit` was plain FNV-1a with no final avalanche, so ids sharing a
+    prefix and differing only in their LAST character hashed into a band ~0.04
+    wide — and to only 18 distinct orders across 200 seeds. Fixture ids look
+    exactly like that, which is why an earlier attempt at this change saw two
+    different seeds produce an identical order and mistook a hash defect for a
+    ranking bug. Production ids are `uuid_generate_v4()` so the live feed was
+    never affected, and that is precisely why only a test can catch a
+    regression here.
+  */
+  it("the jitter hash does not collapse for ids differing only in the last character", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => makeRow({ id: `q${i}`, created_at: daysAgo(i) }));
+    const orders = new Set(
+      Array.from({ length: 200 }, (_, i) =>
+        rankForYou(rows, new Set(), undefined, `seed-${i}`).map((r) => r.id).join(","),
+      ),
+    );
+    // Pre-fix this was 18. Anything near that means the avalanche is gone.
+    expect(orders.size, "the seeded jitter has collapsed into a handful of orders").toBeGreaterThan(100);
   });
 });
 
 /**
- * Brand-new posts pin to the top (owner: "new post should be at the top when
- * the new post button is clicked and when is refresh"). This is what makes the
- * realtime "N new posts" pill honest — it refreshes, and the thing it promised
- * is visibly at the top rather than wherever the ranker happened to put it.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE FEED RESHUFFLES ACROSS THE WHOLE CATALOGUE
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * It deliberately overrides BOTH scoring and the shuffle, but only inside a
- * 30-minute window; the two asks ("reshuffle every refresh" / "my new post is
- * on top") can't both hold for the same post, so they're separated by scope.
+ * Owner, 2026-08-26: "feed should show random videos from older to newer every
+ * time a user first enters the feed … it shouldnt show a fixed new post … after
+ * a refresh it should show a reshuffled post from oldest to new, from the first
+ * post to the new post every refresh and first entry".
+ *
+ * 🔴 THIS SUITE REPLACES TWO EARLIER ONES — "brand-new posts pin to the top"
+ * and "day bucket beats quality across days" — which pinned the OPPOSITE
+ * behaviour, from the owner's own earlier instructions. Both are described here
+ * so nobody restores them as a bug fix:
+ *
+ *   • a brand-new post hard-pinned above everything for 30 minutes, on EVERY
+ *     request;
+ *   • a post could never outrank one from a newer DAY, at any score.
+ *
+ * Together those put the same newest post at the top of every entry and
+ * confined the shuffle to within a single day — the "feed shows one post every
+ * time I enter" being reported. The pin survives ONLY as the opt-in `pinNew`
+ * flag, covered at the bottom of this file.
  */
-describe("rankForYou — brand-new posts pin to the top", () => {
-  const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+describe("rankForYou — reshuffles across the whole catalogue", () => {
+  it("🔴 does NOT always put the newest post first", () => {
+    // The core of the complaint. A fresh post is still favoured by `freshness`
+    // and `momentum`, but it is no longer GUARANTEED the top slot, so across a
+    // spread of seeds the leader genuinely varies.
+    const rows = [
+      makeRow({ id: "new", created_at: daysAgo(0) }),
+      makeRow({ id: "old-a", created_at: daysAgo(6), likes_count: 900 }),
+      makeRow({ id: "old-b", created_at: daysAgo(12), likes_count: 1200 }),
+    ];
+    const leaders = new Set(
+      Array.from({ length: 60 }, (_, i) => rankForYou(rows, new Set(), undefined, `s${i}`)[0]!.id),
+    );
+    expect(leaders.size, "the same post led every seed — the feed is fixed").toBeGreaterThan(1);
+  });
 
-  it("puts a just-posted item above a viral old one, whatever the seed", () => {
-    // The case a score-based freshness bonus loses: `quality` is unbounded, so
-    // a big enough old post outbids any fixed bonus. A hard tier cannot be outbid.
+  it("🔴 lets an OLDER post appear above a newer one", () => {
+    // The day-bucket tier made this impossible at any score. "From oldest to
+    // new" requires it to be possible.
+    const rows = [
+      makeRow({ id: "newer", created_at: daysAgo(1) }),
+      makeRow({ id: "older", created_at: daysAgo(9), likes_count: 5000 }),
+    ];
+    const sawOlderFirst = Array.from({ length: 60 }, (_, i) =>
+      rankForYou(rows, new Set(), undefined, `seed-${i}`),
+    ).some((r) => r[0]!.id === "older");
+    expect(sawOlderFirst, "an older post can never reach the top").toBe(true);
+  });
+
+  it("draws the top of the feed from the WHOLE age range, not just the newest days", () => {
+    /*
+      The property the owner is actually describing, measured rather than
+      asserted anecdotally: 20 posts spanning 20 days, with engagement
+      correlated to age the way a real catalogue's is.
+
+      A day-bucketed sort puts days 0-4 in the top five 100% of the time.
+      Measured after this change (2026-08-26): 36% / 31% / 19% / 14% across the
+      four five-day bands, mean top-five age 7.6 days of a 0-19 range.
+    */
+    const rows = Array.from({ length: 20 }, (_, i) =>
+      makeRow({ id: `d${i}`, created_at: daysAgo(i), likes_count: i * 40 }),
+    );
+    const topAges: number[] = [];
+    for (let n = 0; n < 60; n++) {
+      const order = rankForYou(rows, new Set(), undefined, `real${n}`).map((r) => Number(r.id.slice(1)));
+      topAges.push(...order.slice(0, 5));
+    }
+    const oldHalf = topAges.filter((a) => a >= 10).length / topAges.length;
+    expect(oldHalf, "the older half of the catalogue never reaches the top five").toBeGreaterThan(0.15);
+    const mean = topAges.reduce((a, b) => a + b, 0) / topAges.length;
+    expect(mean, "the top of the feed is still clustered on the newest days").toBeGreaterThan(4);
+    // ...but recency is still a real bias, not a coin flip (uniform would be 9.5).
+    expect(mean, "recency stopped mattering entirely").toBeLessThan(9.5);
+  });
+
+  it("still reshuffles between refreshes", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => makeRow({ id: `q${i}`, created_at: daysAgo(i) }));
+    const a = rankForYou(rows, new Set(), undefined, "seed-a").map((r) => r.id);
+    const b = rankForYou(rows, new Set(), undefined, "seed-b").map((r) => r.id);
+    expect(a).not.toEqual(b);
+  });
+
+  it("is DETERMINISTIC for one seed, so pages of the same refresh agree", () => {
+    // Page 2 must continue page 1's order rather than re-roll it — otherwise
+    // offset pagination duplicates some posts and drops others.
+    const rows = Array.from({ length: 8 }, (_, i) => makeRow({ id: `r${i}`, created_at: daysAgo(i) }));
+    const first = rankForYou(rows, new Set(), undefined, "same").map((r) => r.id);
+    const second = rankForYou(rows, new Set(), undefined, "same").map((r) => r.id);
+    expect(first).toEqual(second);
+  });
+
+  it("engagement still decides between posts of the SAME age", () => {
+    // Reshuffling must not become a lottery: with age held equal, quality wins.
+    const rows = [
+      makeRow({ id: "dead", created_at: daysAgo(3), likes_count: 0 }),
+      makeRow({ id: "viral", created_at: daysAgo(3), likes_count: 10_000 }),
+    ];
+    expect(rankForYou(rows, new Set()).map((r) => r.id)).toEqual(["viral", "dead"]);
+  });
+
+  it("keeps every post exactly once across the whole catalogue", () => {
+    const rows = Array.from({ length: 25 }, (_, i) => makeRow({ id: `k${i}`, created_at: daysAgo(i) }));
+    const ranked = rankForYou(rows, new Set(), undefined, "seed");
+    expect(ranked).toHaveLength(25);
+    expect(new Set(ranked.map((r) => r.id)).size).toBe(25);
+  });
+});
+
+/**
+ * The one surviving pin, and it is now OPT-IN (`pinNew`).
+ *
+ * Only the "N new posts" pill passes it, because that pill is the only place
+ * the viewer has been promised specific posts and would rightly call it broken
+ * not to see them. Entry, pull-to-refresh and pagination all reshuffle instead
+ * — which is what stops the feed looking frozen on every visit.
+ */
+describe("rankForYou — the new-post pin is opt-in", () => {
+  const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+  const withFresh = () => [
+    makeRow({ id: "fresh", created_at: minsAgo(2) }),
+    ...Array.from({ length: 30 }, (_, i) => makeRow({ id: `o${i}`, likes_count: 50 })),
+  ];
+
+  it("pinNew=true puts the just-posted item on top, whatever the seed", () => {
+    for (const seed of ["s1", "s2", "s3", "s4", "s5"]) {
+      expect(rankForYou(withFresh(), new Set(), undefined, seed, true)[0]?.id).toBe("fresh");
+    }
+  });
+
+  it("pinNew=true beats a viral old post that would otherwise outscore it", () => {
     const rows = [
       makeRow({ id: "viral-old", likes_count: 100_000, created_at: SHARED_CREATED_AT }),
       makeRow({ id: "just-posted", likes_count: 0, created_at: minsAgo(1) }),
     ];
-    for (const seed of ["s1", "s2", "s3", "s4", "s5"]) {
-      expect(rankForYou(rows, new Set(), undefined, seed)[0]?.id).toBe("just-posted");
+    for (const seed of ["s1", "s2", "s3"]) {
+      expect(rankForYou(rows, new Set(), undefined, seed, true)[0]?.id).toBe("just-posted");
     }
   });
 
-  it("orders several brand-new posts newest-first, not by score", () => {
+  it("orders several pinned posts newest-first, not by score", () => {
     const rows = [
       makeRow({ id: "new-oldest", likes_count: 900, created_at: minsAgo(20) }),
       makeRow({ id: "new-newest", likes_count: 0, created_at: minsAgo(1) }),
       makeRow({ id: "new-middle", likes_count: 400, created_at: minsAgo(10) }),
     ];
-    expect(rankForYou(rows, new Set(), undefined, "seed").map((r) => r.id)).toEqual([
+    expect(rankForYou(rows, new Set(), undefined, "seed", true).map((r) => r.id)).toEqual([
       "new-newest",
       "new-middle",
       "new-oldest",
     ]);
   });
 
-  it("does not PIN a post older than the 30-minute window — but same-day scoring still applies", () => {
-    const rows = [
-      makeRow({ id: "strong-recent", likes_count: 900, created_at: minsAgo(60) }),
-      makeRow({ id: "weak-stale", likes_count: 0, created_at: minsAgo(45) }),
-    ];
-    // Both outside the 30min pin AND in the same day bucket — normal scoring
-    // decides between them, same as before this file's 2026-08-17 revision.
-    expect(rankForYou(rows, new Set(), undefined)[0]?.id).toBe("strong-recent");
+  it("🔴 DEFAULTS OFF — a plain refresh does not re-pin the same new post", () => {
+    // The regression that produced "the feed shows one post every time I enter
+    // the feed". If this ever goes back to pinning by default, that returns.
+    const pinned = Array.from({ length: 40 }, (_, i) =>
+      rankForYou(withFresh(), new Set(), undefined, `s${i}`)[0]!.id,
+    ).filter((id) => id === "fresh").length;
+    expect(pinned, "an unpinned refresh still anchors on the newest post").toBeLessThan(20);
   });
 
-  it("still reshuffles the non-pinned tail while a new post holds the top", () => {
-    const rows = [
-      makeRow({ id: "fresh", created_at: minsAgo(2) }),
-      ...Array.from({ length: 30 }, (_, i) => makeRow({ id: `old${i}`, likes_count: 50, created_at: SHARED_CREATED_AT })),
-    ];
-    const a = rankForYou(rows, new Set(), undefined, "seed-a").map((r) => r.id);
-    const b = rankForYou(rows, new Set(), undefined, "seed-b").map((r) => r.id);
+  it("still reshuffles the tail while a pinned post holds the top", () => {
+    const rows = withFresh();
+    const a = rankForYou(rows, new Set(), undefined, "seed-a", true).map((r) => r.id);
+    const b = rankForYou(rows, new Set(), undefined, "seed-b", true).map((r) => r.id);
     expect(a[0]).toBe("fresh");
     expect(b[0]).toBe("fresh");
-    // ...but everything under it still re-orders between refreshes.
     expect(a.slice(1)).not.toEqual(b.slice(1));
   });
 
   it("keeps pagination consistent — pinning must not drop or duplicate", () => {
-    const rows = [
-      makeRow({ id: "fresh", created_at: minsAgo(3) }),
-      ...Array.from({ length: 20 }, (_, i) => makeRow({ id: `old${i}`, created_at: SHARED_CREATED_AT })),
-    ];
-    const ranked = rankForYou(rows, new Set(), undefined, "seed");
-    expect(ranked).toHaveLength(21);
-    expect(new Set(ranked.map((r) => r.id)).size).toBe(21);
-  });
-});
-
-/**
- * Day-bucket ranking (owner, 2026-08-17: "feed post should be ranked by date
- * first before most liked, so every refresh shows the newest post... shows
- * the newest on every cold entry"). Before this, only a JUST-posted item
- * (inside the 30-minute pin above) was guaranteed to beat an older one — past
- * that window, an unbounded `quality` score let a viral post from days ago
- * keep outranking a plain, ordinary post from earlier today. The day bucket
- * is a SECOND, wider tier between the 30-minute pin and normal scoring: a
- * post from an earlier day can never outrank one from a newer day, however
- * much more engagement it has; within the SAME day, scoring/shuffle still
- * decide the order exactly as before.
- */
-describe("rankForYou — day bucket beats quality across days", () => {
-  const daysAgo = (d: number) => new Date(Date.now() - d * 24 * 60 * 60 * 1000 - 60 * 60 * 1000).toISOString();
-
-  it("a plain post from today outranks a viral post from yesterday", () => {
-    const rows = [
-      makeRow({ id: "viral-yesterday", likes_count: 50_000, created_at: daysAgo(1) }),
-      makeRow({ id: "plain-today", likes_count: 0, created_at: daysAgo(0) }),
-    ];
-    expect(rankForYou(rows, new Set())[0]?.id).toBe("plain-today");
-  });
-
-  it("a viral post from LAST WEEK still never beats an ordinary post from today", () => {
-    const rows = [
-      makeRow({ id: "viral-last-week", likes_count: 1_000_000, created_at: daysAgo(7) }),
-      makeRow({ id: "plain-today", likes_count: 0, created_at: daysAgo(0) }),
-    ];
-    for (const seed of ["s1", "s2", "s3"]) {
-      expect(rankForYou(rows, new Set(), undefined, seed)[0]?.id).toBe("plain-today");
-    }
-  });
-
-  it("within the SAME day, quality still decides the order as before", () => {
-    const rows = [
-      makeRow({ id: "weak-today", likes_count: 0, created_at: daysAgo(0) }),
-      makeRow({ id: "strong-today", likes_count: 500, created_at: daysAgo(0) }),
-    ];
-    expect(rankForYou(rows, new Set())[0]?.id).toBe("strong-today");
-  });
-
-  it("orders three days correctly: today, then yesterday, then two days ago — regardless of likes", () => {
-    const rows = [
-      makeRow({ id: "two-days-ago", likes_count: 999_999, created_at: daysAgo(2) }),
-      makeRow({ id: "yesterday", likes_count: 500, created_at: daysAgo(1) }),
-      makeRow({ id: "today", likes_count: 0, created_at: daysAgo(0) }),
-    ];
-    expect(rankForYou(rows, new Set()).map((r) => r.id)).toEqual(["today", "yesterday", "two-days-ago"]);
+    const ranked = rankForYou(withFresh(), new Set(), undefined, "seed", true);
+    expect(ranked).toHaveLength(31);
+    expect(new Set(ranked.map((r) => r.id)).size).toBe(31);
   });
 });

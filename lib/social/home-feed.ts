@@ -260,93 +260,143 @@ export function rankForYou(
   followingIds: Set<string>,
   prefs?: Pick<HomePreferences, "preferFriends" | "boostedCategories">,
   seed?: string,
+  /**
+   * Pin posts from the last {@link NEW_POST_WINDOW_MS} to the top, newest
+   * first, bypassing both scoring and the shuffle.
+   *
+   * OFF by default, and that default is the 2026-08-26 change: this used to be
+   * unconditional, so every entry and every refresh re-pinned the same newest
+   * post and the feed read as frozen. It is now opted into by exactly one
+   * caller — the "N new posts" pill — because that is the only moment the
+   * viewer has been PROMISED specific posts and would rightly call it broken
+   * not to see them. Entry, pull-to-refresh and pagination all reshuffle.
+   */
+  pinNew = false,
 ): Row[] {
   const now = Date.now();
-  const relationshipBonus = prefs?.preferFriends ? 220 : 120;
+  /* Scaled to match the compressed quality/freshness below. At the old
+     120/220 — set when `quality` was raw and unbounded — a followed creator
+     would own the entire feed once quality became log-scaled. */
+  const relationshipBonus = prefs?.preferFriends ? 46 : 25;
   const boosted = new Set(prefs?.boostedCategories ?? []);
   const scored = rows.map((row, i) => {
     const ageHours = Math.max(0, (now - new Date(row.created_at).getTime()) / 3_600_000);
     const relationship = followingIds.has(row.publisher_id) ? relationshipBonus : 0;
-    const quality =
+    /*
+      🔴 BOTH INPUTS ARE COMPRESSED, AND THAT IS WHAT MAKES THE SHUFFLE REAL.
+
+      Dropping the day-bucket tier below was necessary but NOT sufficient — the
+      first attempt at this (reverted 2026-08-26) removed the tier and the feed
+      still came back newest-first, because the SCALES alone prevented any
+      cross-age mixing:
+
+        • `quality` was raw and unbounded. A post with 900 likes scored ~900
+          against a fresh post's ~40, so no jitter could ever reorder them.
+          `log1p` preserves the ordering — more engagement still ranks higher —
+          while collapsing the range: 900 likes becomes ~55, not 900.
+        • `freshness` decayed over ~30 hours, so yesterday's post scored half
+          of today's and the day before a third. Stretching the constant to 240
+          hours keeps recency a real bias — a new post still outscores a
+          ten-day-old one — but by a margin the jitter can actually cross.
+
+      Net: recency and engagement still decide the AVERAGE position, while the
+      per-refresh jitter genuinely reorders ACROSS days, which is what "random
+      videos from older to newer" requires.
+    */
+    const engagement =
       row.likes_count + row.comments_count * 2 + row.shares_count * 3 + row.saves_count * 2 + row.downloads_count * 2;
-    const freshness = 40 / (1 + ageHours / 30);
-    const interest = row.category && boosted.has(row.category as Category) ? 60 : 0;
+    const quality = Math.log1p(Math.max(0, engagement)) * 8;
+    const freshness = 80 / (1 + ageHours / 240);
+    const interest = row.category && boosted.has(row.category as Category) ? 14 : 0;
     // Momentum Engine™ (Feature 15 Part 8) — a modest bonus, not a new tier.
     // `momentum_score` already favors young + rising posts on its own scale
     // (see recompute_momentum_scores); this is deliberately small relative to
-    // `quality`/`relationship` so a rising post gets a nudge toward the top of
-    // its day-bucket rather than overriding the ranking model wholesale.
-    const momentum = (row.momentum_score ?? 0) * 6;
+    // `quality`/`relationship` so a rising post gets a nudge up the order
+    // rather than overriding the ranking model wholesale.
+    const momentum = (row.momentum_score ?? 0) * 1.5;
     const createdMs = new Date(row.created_at).getTime();
     const isBrandNew = now - createdMs < NEW_POST_WINDOW_MS;
-    // 🔴 DAY BUCKET (owner, 2026-08-17: "feed post should be ranked by date
-    // first before most liked, so every refresh shows the newest post...
-    // shows the newest on every cold entry"). 0 = posted within the last 24h,
-    // 1 = the 24h before that, etc. This becomes the PRIMARY sort key below —
-    // a post from an earlier bucket can never outrank one from a newer
-    // bucket, however much more engagement it has. `quality` is unbounded
-    // (likes + 2*comments + 3*shares + …), which is exactly how a viral post
-    // from days ago used to keep beating today's posts once it aged out of
-    // the 30-minute "brand new" pin below — that pin only ever protected the
-    // newest few posts, not "today" as a whole.
-    const dayBucket = Math.floor(ageHours / 24);
     const base = relationship + quality + freshness + interest + momentum;
     // Per-refresh reshuffle (owner: "every refresh should reshuffle the feed
     // post arrangement like tiktok"). MULTIPLICATIVE, not additive: it varies a
     // post's score by ±SHUFFLE_SPREAD/2 of its OWN value, so posts of similar
     // standing trade places on each refresh while a genuinely strong post never
     // gets buried and a weak one never rockets to the top — the feed feels
-    // alive without the ranking becoming a lottery. Still scoped to WITHIN a
-    // day bucket now, never across one.
+    // alive without the ranking becoming a lottery. Since 2026-08-26 this
+    // spans the WHOLE catalogue rather than being confined within one day.
     const score = seed ? base * (1 + (seededUnit(seed, row.id) - 0.5) * SHUFFLE_SPREAD) : base;
-    return { row, score, i, createdMs, isBrandNew, dayBucket };
+    return { row, score, i, createdMs, isBrandNew };
   });
   scored.sort((a, b) => {
-    // TIER 1 — a brand-new post is always above an older one, and is NOT
-    // jittered (owner: "new post should be at the top when the new post button
-    // is clicked and when is refresh").
-    //
-    // This deliberately overrides scoring AND the shuffle for the window,
-    // because the two asks genuinely conflict: "reshuffle every refresh" and
-    // "the post I just made is at the top" cannot both hold for the same post.
-    // Resolved by scope rather than by fighting over score — the newest posts
-    // pin, everything older reshuffles. That's also what makes the "N new
-    // posts" pill honest: it refreshes, and the thing it promised is visibly
-    // at the top instead of somewhere down the list where the ranker happened
-    // to put it.
-    if (a.isBrandNew !== b.isBrandNew) return a.isBrandNew ? -1 : 1;
-    // Among brand-new posts: strict recency, newest first. `a.i - b.i` is the
-    // tiebreak for identical timestamps (rows arrive newest-first), so equal
-    // ages keep their original order rather than shuffling arbitrarily.
-    if (a.isBrandNew) return b.createdMs - a.createdMs || a.i - b.i;
-    // TIER 2 — day bucket, ascending (today before yesterday before the day
-    // before that, …). This is the actual fix: no amount of `quality` lets a
-    // post cross a day boundary anymore.
-    if (a.dayBucket !== b.dayBucket) return a.dayBucket - b.dayBucket;
-    // TIER 3 — within the same day: jittered score, tiebreak on original
-    // (recency) order so equal scores never shuffle arbitrarily between
-    // otherwise-identical requests.
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       ONE TIER. THE SHUFFLE SPANS THE WHOLE CATALOGUE.
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-08-26: "feed should show random videos from older to newer
+      every time a user first enters the feed … it shouldnt show a fixed new
+      post … after a refresh it should show a reshuffled post from oldest to
+      new, from the first post to the new post every refresh and first entry".
+
+      🔴 THIS SUPERSEDES TWO EARLIER INSTRUCTIONS OF THE OWNER'S. Both are named
+      here so nobody "restores" them as bug fixes:
+
+        • 2026-08-17 — "ranked by date first before most liked … shows the
+          newest on every cold entry" → the DAY BUCKET tier, under which a post
+          from an earlier day could not outrank a newer one at ANY score.
+        • the unconditional 30-minute BRAND-NEW PIN — "new post should be at the
+          top when the new post button is clicked and when is refresh".
+
+      Together those produced exactly the behaviour later reported as the bug:
+      the same newest post at the top of every entry, with the shuffle able to
+      reorder only WITHIN a single day — invisible on this catalogue's volume.
+
+      What replaces them is a single jittered score over every candidate.
+      Recency is still an input (`freshness`, plus `momentum`, which favours
+      young rising posts), so a new post still TENDS to surface high — it is
+      simply no longer GUARANTEED the top slot, which is precisely what
+      "shouldn't show a fixed new post" asks for.
+    */
+    // The one surviving pin, and it is now opt-in: see `pinNew`. Only the
+    // "N new posts" pill sets it, because that pill makes a specific promise
+    // about specific posts. Nothing else does, so nothing else pins.
+    if (pinNew) {
+      if (a.isBrandNew !== b.isBrandNew) return a.isBrandNew ? -1 : 1;
+      // Among the pinned: strict recency, newest first. `a.i - b.i` is the
+      // tiebreak for identical timestamps (rows arrive newest-first).
+      if (a.isBrandNew) return b.createdMs - a.createdMs || a.i - b.i;
+    }
+    // Jittered score, tiebreak on original (recency) order so equal scores are
+    // stable across otherwise-identical requests rather than flapping.
     return b.score - a.score || a.i - b.i;
   });
   return scored.map((s) => s.row);
 }
 
 /**
- * How long a post counts as "brand new" and pins to the top of "for_you".
+ * How long a post counts as "brand new" for the OPT-IN pin (`pinNew`).
  *
- * 30 minutes is a deliberate compromise between the owner's two asks. Too long
- * and the top of the feed stops reshuffling (every recent post is pinned, so
- * the shuffle only ever reaches the tail); too short and a post you made ten
- * minutes ago has already sunk into the shuffle, which reads as "my post
- * vanished". At this platform's posting volume most refreshes have zero posts
- * in this window — so the common case is a full reshuffle, and pinning only
- * kicks in exactly when there IS something new to show.
+ * Until 2026-08-26 this window applied on every request, which is what made
+ * the feed look frozen: on this catalogue's posting volume the newest post is
+ * usually still inside it, so it re-pinned to the top of every entry and every
+ * refresh and the shuffle only ever reached the tail. The window itself was
+ * never the problem — applying it unconditionally was. It now scopes exactly
+ * one caller: the "N new posts" pill, where 30 minutes comfortably covers the
+ * gap between a post arriving over realtime and the viewer tapping the pill.
  */
 const NEW_POST_WINDOW_MS = 30 * 60 * 1000;
 
-/** ±25% of each post's own score. Enough to visibly re-order comparable posts
- *  every refresh; far too little to invert a real quality gap. */
-const SHUFFLE_SPREAD = 0.5;
+/**
+ * ±45% of each post's own score.
+ *
+ * Raised from 0.5 (±25%) on 2026-08-26 together with the log-compressed
+ * `quality` and the stretched `freshness`: those three numbers are ONE
+ * setting and tuning any of them alone re-breaks the feed. At ±45% over the
+ * compressed scale a ten-day-old post can genuinely reach the top on some
+ * refreshes — "from oldest to new" — while a post with real engagement still
+ * averages a far higher position than a dead one of the same age.
+ */
+const SHUFFLE_SPREAD = 0.9;
 
 /**
  * Deterministic (seed, id) → [0,1). FNV-1a; no dependency, no `Math.random`.
@@ -366,6 +416,27 @@ function seededUnit(seed: string, id: string): number {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
+  // 🔴 FINAL AVALANCHE (murmur3 fmix32) — NOT decoration, and NOT removable.
+  //
+  // Plain FNV-1a's last step is `h = imul(h ^ lastChar, 16777619)`, so the
+  // trailing bytes never diffuse into the high bits that `(h >>> 0) / 2**32`
+  // actually reads. Measured 2026-08-26: for ten ids sharing a prefix and
+  // differing only in the FINAL character, raw FNV-1a produced values spanning
+  // a band 0.04 wide (not ~1.0) and only 18 DISTINCT ORDERS across 200 seeds —
+  // the same arrangement over and over. With fmix32: 200/200 distinct orders,
+  // spread 0.86, deciles flat to within 0.15%.
+  //
+  // Live `posts.id` is `uuid_generate_v4()` (migration 0007), which varies
+  // across its whole length, so the feed shuffle was never dead in production.
+  // It is fixed anyway because the degenerate case is one id-scheme change
+  // away (uuidv7 shares a long prefix), because reels shuffles by this value
+  // ALONE, and because the test fixtures use ids like `q0`…`q9` — so the
+  // suite could not tell a working shuffle from a broken one.
+  h ^= h >>> 16;
+  h = Math.imul(h, 2246822507);
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909);
+  h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
 
@@ -627,6 +698,12 @@ export async function getHomeFeed(opts: {
    * to empty its own deck on a small catalogue.
    */
   excludeIds?: string[];
+  /**
+   * Pin posts from the last 30 minutes to the top (see `rankForYou`'s
+   * `pinNew`). Set by the "N new posts" pill ONLY — the one action that
+   * promises the viewer specific posts. Everything else reshuffles.
+   */
+  pinNew?: boolean;
 }): Promise<FeedPage> {
   const limit = opts.limit ?? 8;
   const offset = opts.offset ?? 0;
@@ -647,6 +724,8 @@ export async function getHomeFeed(opts: {
   */
   const reshuffles = sort === "for_you" || (sort === "following" && format === "reel");
   const seed = reshuffles ? opts.seed : undefined;
+  // Only "for_you" ranks, so only "for_you" can pin.
+  const pinNew = sort === "for_you" && opts.pinNew === true;
   const exclude = opts.excludeIds?.length ? [...new Set(opts.excludeIds)] : undefined;
   if (!hasSupabase) return emptyFeedPage();
   // Cached briefly per (viewer, sort, format, page) so SSR seeding + client
@@ -661,8 +740,10 @@ export async function getHomeFeed(opts: {
   // are already sorted before hashing so two requests differing only in the
   // order they listed the same ids still share one entry.
   const excludeKey = exclude ? fnv1a([...exclude].sort().join(",")) : "-";
-  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}:${excludeKey}`;
-  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed, exclude));
+  // `pinNew` joins the key for the same reason `seed` does — it changes the
+  // returned ORDER, so a pill refresh and a plain one must not share an entry.
+  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}:${excludeKey}${pinNew ? ":pin" : ""}`;
+  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed, exclude, pinNew));
 }
 
 /**
@@ -695,6 +776,7 @@ async function loadHomeFeed(
   format: ContentFormat,
   seed?: string,
   excludeIds?: string[],
+  pinNew = false,
 ): Promise<FeedPage> {
   try {
     const db = createAdminClient();
@@ -803,7 +885,7 @@ async function loadHomeFeed(
           const muted = new Set(prefs.mutedCategories);
           rows = rows.filter((r) => !r.category || !muted.has(r.category as Category));
         }
-        rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined, seed);
+        rows = rankForYou(rows, new Set(followingIds), prefs ?? undefined, seed, pinNew);
       }
     } else if (seed) {
       /*

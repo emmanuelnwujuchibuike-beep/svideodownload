@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const SORTS: HomeFeedSort[] = ["for_you", "following", "recent"];
 
-/** GET /api/home-feed?sort=&offset=&limit=&seed= — rich, paginated dashboard feed. */
+/** GET /api/home-feed?sort=&offset=&limit=&seed=&pinNew= — rich, paginated dashboard feed. */
 export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
   const sortParam = sp.get("sort") as HomeFeedSort | null;
@@ -21,6 +21,14 @@ export async function GET(request: Request) {
   // entries into that cache. Truncating can only cost a seed collision — two
   // refreshes sharing an order — never correctness.
   const seed = (sp.get("seed") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || undefined;
+  /*
+    Pin brand-new posts to the top for THIS request (see rankForYou's `pinNew`).
+    Sent only by the "N new posts" pill, which promises the viewer specific
+    posts; entry, pull-to-refresh and pagination all omit it and reshuffle.
+    Strictly opt-in — anything but "1" is off — so a malformed or absent value
+    can only ever produce the reshuffled default, never a frozen feed.
+  */
+  const pinNew = sp.get("pinNew") === "1";
 
   let viewerId: string | null = null;
   try {
@@ -33,7 +41,7 @@ export async function GET(request: Request) {
     /* anon */
   }
 
-  const page = await getHomeFeed({ viewerId, sort, offset, limit, seed });
+  const page = await getHomeFeed({ viewerId, sort, offset, limit, seed, pinNew });
   // Anon feeds are identical for everyone → let the CDN edge (incl. African PoPs)
   // serve them without a function hop; personalized feeds stay private to the browser.
   // `seed` is part of the URL, so it's already part of the edge cache key — two

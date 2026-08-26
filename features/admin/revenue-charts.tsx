@@ -260,17 +260,26 @@ export function RevenueCharts({
       nothing to do with the business. Better no overlay than a misleading one.
     */
     /*
-      🔴 NO COMPARISON OVERLAY ANY MORE, and that is the honest outcome of
-      dropping the range picker. The window is now the WHOLE fetched series, so
-      there is no earlier slice of it left to compare against — a "previous 90
-      days" would need 180 days on the server, which is not fetched.
+      ── THE COMPARISON IS BACK, FROM THE SERVER ──────────────────────────────
 
-      Search Console has the same shape: its comparison is a separate opt-in
-      ("Compare"), OFF in the reference screenshots, and its trend chart draws a
-      single line. Rather than invent a baseline, this returns nothing and the
-      chart draws one line, exactly like the reference.
+      It was removed when the range picker was dropped: the window became the
+      whole fetched series, so there was no earlier slice of it left to compare
+      against, and inventing a baseline out of the same 90 days would have drawn
+      a period against itself.
+
+      `getRevenueSeries` now fetches TWICE the window and returns the preceding
+      one as `previousDays` (2026-08-26). So the overlay is a real prior period
+      again rather than a slice of the current one.
+
+      🔴 Still returns `undefined` unless the baseline is a FULL window of the
+      same length. A short comparison silently draws a period covering fewer
+      days than the one it is measured against — a line that sags for a reason
+      that has nothing to do with the business. The server sends `[]` when its
+      scan was capped, and a young site simply has no data that far back; both
+      land here as "no overlay", which is the honest rendering.
     */
-    const prevSlice = <T,>(_arr: T[]): T[] | undefined => undefined;
+    const previous = series.previousDays ?? [];
+    const hasComparison = previous.length === series.days.length && previous.length > 0;
 
     /** Daily grid → the selected grouping → what AdminAreaChart draws. */
     const group = (days: DailyPoint[]): AreaPoint[] =>
@@ -287,8 +296,14 @@ export function RevenueCharts({
 
     /** The same measure over the preceding window, or nothing. */
     const prevOf = (pick: (d: RevenueSeries["days"][number]) => number): AreaPoint[] | undefined => {
-      const days = prevSlice(series.days);
-      return days && group(days.map((d) => ({ date: d.date, value: pick(d) })));
+      if (!hasComparison) return undefined;
+      /*
+        Grouped through the SAME `group` helper as the current period, so a
+        Weekly/Monthly view buckets both periods identically and point `i` of
+        the overlay is the same position within its own period as point `i` of
+        the line — which is what makes them line up vertically.
+      */
+      return group(previous.map((d) => ({ date: d.date, value: pick(d) })));
     };
 
     /*

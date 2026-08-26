@@ -113,6 +113,12 @@ export interface RevenueSeries {
   days: DayPoint[];
   /** True when either table hit ROW_CAP, so the UI can label the window partial. */
   capped: boolean;
+  /**
+   * The window immediately BEFORE `days`, same length — the comparison
+   * baseline the charts overlay. Empty when the scan was capped (see the note
+   * where it is built) or when there is no data that far back.
+   */
+  previousDays: DayPoint[];
   /** Whole days covered, inclusive. */
   rangeDays: number;
   /**
@@ -142,19 +148,35 @@ function isoDay(d: Date): string {
  */
 export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
   const days = Math.min(90, Math.max(7, Math.floor(rangeDays)));
+  /*
+    ── TWO WINDOWS ARE FETCHED, ONE IS RETURNED AS THE COMPARISON ────────────
+
+    Owner (08-26 open queue, item 2): the charts lost their period-comparison
+    overlay when the range picker was dropped, because the window became the
+    whole fetched series and there was no earlier slice left to compare against.
+    Restoring it needs the PRECEDING window on the server, so the grid spans
+    `days * 2` and is split at the end.
+
+    Affordable, measured rather than assumed (2026-08-26, live): over 180 days
+    ad_impressions holds 2 513 rows, ad_clicks 0, completed analytics_downloads
+    7 741 and events 3 749 — all far inside ROW_CAP, and `capped` covers the
+    day that stops being true.
+  */
+  const span = days * 2;
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
-  start.setUTCDate(start.getUTCDate() - (days - 1));
+  start.setUTCDate(start.getUTCDate() - (span - 1));
 
-  // The gap-free grid, built before any data arrives.
+  // The gap-free grid, built before any data arrives. Insertion order is
+  // oldest-first, which is what lets the split below be a plain slice.
   const grid = new Map<string, DayPoint>();
-  for (let i = 0; i < days; i++) {
+  for (let i = 0; i < span; i++) {
     const d = new Date(start);
     d.setUTCDate(start.getUTCDate() + i);
     grid.set(isoDay(d), { date: isoDay(d), impressions: 0, clicks: 0, downloads: 0, installs: 0, rewardsStarted: 0, rewardsGranted: 0, multilinkBatches: 0, multilinkRefused: 0 });
   }
 
-  const empty: RevenueSeries = { days: [...grid.values()], capped: false, rangeDays: days };
+  const empty: RevenueSeries = { days: [...grid.values()].slice(span - days), previousDays: [], capped: false, rangeDays: days };
   if (!hasSupabase) return empty;
 
   try {
@@ -166,7 +188,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
     // it. See lib/supabase/paginate.ts for how this was found.
     const pull = async (table: "ad_impressions" | "ad_clicks") =>
       paginatedSelect<{ created_at: string }>(
-        (from, to) => db.from(table).select("created_at").gte("created_at", since).order("created_at", { ascending: true }).range(from, to),
+        (from, to) => db.from(table).select("created_at").gte("created_at", since).order("created_at", { ascending: false }).range(from, to),
         ROW_CAP,
       );
 
@@ -192,7 +214,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
             .select("created_at")
             .eq("status", "completed")
             .gte("created_at", since)
-            .order("created_at", { ascending: true })
+            .order("created_at", { ascending: false })
             .range(from, to),
         ROW_CAP,
       );
@@ -213,7 +235,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
             .select("created_at")
             .eq("type", type)
             .gte("created_at", since)
-            .order("created_at", { ascending: true })
+            .order("created_at", { ascending: false })
             .range(from, to),
         ROW_CAP,
       );
@@ -226,7 +248,7 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
             .select("created_at")
             .eq("type", "pwa_installed")
             .gte("created_at", since)
-            .order("created_at", { ascending: true })
+            .order("created_at", { ascending: false })
             .range(from, to),
         ROW_CAP,
       );
@@ -276,9 +298,8 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       if (cell) cell.multilinkRefused += 1;
     }
 
-    return {
-      days: [...grid.values()],
-      capped:
+    const all = [...grid.values()];
+    const capped =
         impr.capped ||
         clicks.capped ||
         dl.capped ||
@@ -286,7 +307,19 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
         rewardStart.capped ||
         rewardGrant.capped ||
         batchRun.capped ||
-        batchRefused.capped,
+        batchRefused.capped;
+
+    return {
+      days: all.slice(span - days),
+      /*
+        🔴 NO COMPARISON WHEN THE SCAN WAS CAPPED. Paging is newest-first, so a
+        cap drops the OLDEST rows — which is precisely the previous window. A
+        comparison drawn from a partially-read baseline would show a line that
+        sags for a reason that has nothing to do with the business, which is
+        worse than drawing no baseline at all.
+      */
+      previousDays: capped ? [] : all.slice(0, span - days),
+      capped,
       rangeDays: days,
     };
   } catch {

@@ -3,6 +3,7 @@
 import { CheckCircle2, CreditCard, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,6 +23,8 @@ interface Loaded {
 }
 
 export function PaystackSettings() {
+  /* Payment keys are a SENSITIVE action - see lib/admin/reauth.ts. */
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [mode, setMode] = useState<"test" | "live">("test");
   const [secretKey, setSecretKey] = useState("");
@@ -55,7 +58,7 @@ export function PaystackSettings() {
       const body: Record<string, unknown> = { mode, publicKey, planPro, planBusiness };
       // Only send the secret when the admin typed a new one (blank = keep existing).
       if (secretKey.trim()) body.secretKey = secretKey.trim();
-      const res = await fetch("/api/admin/paystack", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const res = await sensitiveFetch("/api/admin/paystack", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json();
       if (res.ok) {
         setMsg({ ok: true, text: "Paystack saved." });
@@ -150,6 +153,7 @@ export function PaystackSettings() {
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save Paystack
         </button>
         {msg ? <span className={cn("text-sm font-medium", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</span> : null}
+        {reauthPrompt}
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
         Get these from your Paystack dashboard → Settings → API Keys &amp; Webhooks. Use the <b>test</b> keys while

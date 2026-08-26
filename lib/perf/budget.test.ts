@@ -88,8 +88,23 @@ function landingChunks(): string[] {
  *
  * /admin now measures ~343.2 kB, leaving ~800 bytes, so the next addition to
  * this page still has to justify itself here.
+ *
+ * ── 344 → 345 kB (2026-08-26, later the same day) ──────────────────────────
+ * 99 bytes, from wiring `useSensitiveAction()` into `stat-adjuster.tsx` and
+ * `paystack-settings.tsx`. Their routes already demanded a password
+ * re-entry, but the components could not raise the prompt — so the operator got
+ * "Confirm your password to continue." as plain red text with no field to type
+ * into. A protected endpoint whose UI cannot satisfy it is a dead button, so
+ * this is a defect fix rather than a feature.
+ *
+ * 🔴 THIS IS THE ADMIN ROUTE'S SECOND BUMP TODAY (341 → 344 → 345) AND THAT IS
+ * A SIGNAL, NOT A PATTERN TO CONTINUE. The page has absorbed section tabs, chart
+ * granularity, the comparison engine, the streak roster, download history and
+ * the re-auth flow in one session. The prompt itself is already code-split; the
+ * next addition should come with a splitting pass over the panel components
+ * rather than another kilobyte here. Recorded in the 08-26 handoff.
  */
-const GLOBAL_CEILING = 344 * 1024;
+const GLOBAL_CEILING = 345 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

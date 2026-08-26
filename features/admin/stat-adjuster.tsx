@@ -3,6 +3,7 @@
 import { Eye, Heart, Loader2, Search, Users } from "lucide-react";
 import { useState } from "react";
 
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +27,10 @@ export function StatAdjuster() {
 }
 
 function ProfileAdjuster() {
+  /* Stat overrides are a SENSITIVE action: the route answers REAUTH_REQUIRED
+     when the password re-entry is stale. Without this the operator saw the raw
+     error text and no way to act on it. */
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [handle, setHandle] = useState("");
   const [name, setName] = useState<string | null>(null);
   const [followers, setFollowers] = useState("");
@@ -60,7 +65,7 @@ function ProfileAdjuster() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/adjust-stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "profile", handle: handle.trim(), followers: Math.round(n) }) });
+      const res = await sensitiveFetch("/api/admin/adjust-stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "profile", handle: handle.trim(), followers: Math.round(n) }) });
       const d = await res.json();
       setMsg(res.ok ? { ok: true, text: "Followers updated." } : { ok: false, text: d.error ?? "Couldn't update." });
     } catch {
@@ -94,11 +99,17 @@ function ProfileAdjuster() {
         </div>
       ) : null}
       {msg ? <p className={cn("mt-2 text-sm font-medium", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</p> : null}
+      {/* Renders nothing until the server asks for a password. */}
+      {reauthPrompt}
     </section>
   );
 }
 
 function PostAdjuster() {
+  /* Stat overrides are a SENSITIVE action: the route answers REAUTH_REQUIRED
+     when the password re-entry is stale. Without this the operator saw the raw
+     error text and no way to act on it. */
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
   const [postId, setPostId] = useState("");
   const [title, setTitle] = useState<string | null>(null);
   const [likes, setLikes] = useState("");
@@ -133,7 +144,7 @@ function PostAdjuster() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/adjust-stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "post", postId: postId.trim(), likes: Math.max(0, Math.round(Number(likes) || 0)), views: Math.max(0, Math.round(Number(views) || 0)) }) });
+      const res = await sensitiveFetch("/api/admin/adjust-stats", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "post", postId: postId.trim(), likes: Math.max(0, Math.round(Number(likes) || 0)), views: Math.max(0, Math.round(Number(views) || 0)) }) });
       const d = await res.json();
       setMsg(res.ok ? { ok: true, text: "Post stats updated." } : { ok: false, text: d.error ?? "Couldn't update." });
     } catch {
@@ -174,6 +185,8 @@ function PostAdjuster() {
         </>
       ) : null}
       {msg ? <p className={cn("mt-2 text-sm font-medium", msg.ok ? "text-green-500" : "text-red-400")}>{msg.text}</p> : null}
+      {/* Renders nothing until the server asks for a password. */}
+      {reauthPrompt}
     </section>
   );
 }

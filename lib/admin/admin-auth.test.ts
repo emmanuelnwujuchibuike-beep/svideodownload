@@ -370,6 +370,62 @@ describe("no credential ever reaches browser storage", () => {
   });
 });
 
+describe("sensitive actions have a working PROMPT, not just a guarded route", () => {
+  /*
+    🔴 Owner, 2026-08-26, with a screenshot of the stat adjuster: "it show
+    confirm password to continue and i didnt see any password slot or anything".
+
+    The ROUTE was correctly protected — a direct API call was refused — but the
+    UI had no `useSensitiveAction()`, so the server's REAUTH_REQUIRED message
+    was printed as plain red text with no way to act on it. A protected endpoint
+    whose UI cannot satisfy it is a dead button, which is worse than either an
+    unprotected endpoint or an honest error.
+
+    This walks the ROUTES that demand re-auth and checks that every admin UI
+    posting to one can actually raise the prompt — so a fourth sensitive
+    endpoint added later cannot repeat it.
+  */
+  const sensitiveRoutes = walk(join(process.cwd(), "app/api/admin"))
+    .filter((f) => f.endsWith("route.ts"))
+    .filter((f) => /requireSensitiveAdmin/.test(readFileSync(f, "utf8")))
+    .map((f) => {
+      const m = f.replace(/\\/g, "/").match(/app\/api\/admin\/([^/]+)\//);
+      return m ? m[1]! : "";
+    })
+    .filter(Boolean);
+
+  it("finds the sensitive routes", () => {
+    expect(sensitiveRoutes.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("🔴 every UI posting to one can raise the password prompt", () => {
+    const broken: string[] = [];
+
+    for (const file of walk(join(process.cwd(), "features/admin")).filter((f) =>
+      f.endsWith(".tsx"),
+    )) {
+      const src = readFileSync(file, "utf8");
+
+      // Does this component POST to a route that demands re-authentication?
+      const posts = sensitiveRoutes.some((r) =>
+        new RegExp('fetch\\("/api/admin/' + r + '", \\{ method: "POST"').test(src),
+      );
+      if (!posts) continue;
+
+      const hasHook = /useSensitiveAction\(\)/.test(src);
+      const rendersPrompt = /\{reauthPrompt\}/.test(src);
+      // A bare `fetch` to one of these routes bypasses the handshake entirely.
+      const bypasses = sensitiveRoutes.some((r) =>
+        new RegExp('await fetch\\("/api/admin/' + r + '", \\{ method: "POST"').test(src),
+      );
+
+      if (!hasHook || !rendersPrompt || bypasses) broken.push(file.replace(process.cwd(), ""));
+    }
+
+    expect(broken, "posts to a re-auth-protected route but cannot prompt").toEqual([]);
+  });
+});
+
 /** Strip comments — these assertions are about CODE, and several of the
  *  negative ones would otherwise match the prose explaining what was removed.
  *  Same trap already recorded three times in multi-link-config.test.ts. */

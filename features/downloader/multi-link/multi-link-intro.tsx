@@ -104,11 +104,14 @@ export function MultiLinkIntro({
              `text-transparent` + `bg-clip-text`, the same mechanism the hero and
              `.text-gradient` use — no new idiom.
 
-          3. THE TYPE ITSELF — a size bump, and NO negative tracking (`.font-luxe`
-             sets `letter-spacing: 0`). High-contrast serifs are drawn to be set
-             open; the tightening that flatters a geometric wordmark closes
-             these counters and cheapens them. Luxury type is set OPEN, not
-             squeezed.
+          3. THE TYPE ITSELF — BOLD ITALIC (owner: "a bold font with a stylish
+             italic style"), a size bump, and NO negative tracking. All three
+             live in `.font-luxe` rather than here, because only the 700-italic
+             cut of Playfair is loaded and an element that renders it upright
+             matches no `@font-face` at all — it would fall back to Georgia
+             without erroring. High-contrast serifs are drawn to be set open;
+             the tightening that flatters a geometric wordmark closes these
+             counters and cheapens them. Luxury type is set OPEN, not squeezed.
 
           🔴 The dark-mode stops are separate and lighter. A 600-weight gradient
           that reads rich on white goes muddy on #0b1020 — the same reason the
@@ -123,7 +126,10 @@ export function MultiLinkIntro({
         <h3
           id="multi-link-heading"
           className={cn(
-            "font-luxe text-balance bg-clip-text text-lg font-semibold leading-snug text-transparent sm:text-xl",
+            // `font-luxe` carries the face, the 700 weight AND the italic (see
+            // globals.css) — only that one cut is loaded, so none of the three
+            // is optional here.
+            "font-luxe text-balance bg-clip-text text-lg leading-snug text-transparent sm:text-xl",
             /*
               🔴 A literal `linear-gradient`, not `from-/via-/to-`. Tailwind's
               `via-` is ONE stop — two `via-` classes emit the same custom
@@ -213,7 +219,21 @@ export function MultiLinkIntro({
         aria-expanded={open}
         aria-controls="multi-link-panel"
         className={cn(
-          "mt-2.5 flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          /*
+            🔴 SLIMMER (owner, 2026-08-25: "make the multi link cta more
+            slimmer when the intro font reduce space").
+
+            The italic heading gives back vertical space, and this row is where
+            it should go — the card was two tall blocks stacked, which is what
+            made it feel heavy in the hero. `py-2` + a 8×8 tile instead of
+            `py-2.5` + 9×9 takes ~10px off the row.
+
+            🔴 The tap target is NOT reduced below the 44px floor: 32px tile +
+            16px padding = 48px, and the whole row is the button (§5), so this
+            is still a full-width target. Slimming chrome must never become
+            slimming the thing a thumb has to hit.
+          */
+          "mt-2.5 flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
           onHero
             ? "border-white/20 bg-white/[0.07] hover:bg-white/[0.12]"
             : "border-border bg-background hover:border-primary/40 hover:bg-secondary/40",
@@ -222,11 +242,11 @@ export function MultiLinkIntro({
       >
         <span
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
             onHero ? "bg-white/10 text-white" : "bg-secondary text-foreground",
           )}
         >
-          <Layers aria-hidden className="h-4 w-4" />
+          <Layers aria-hidden className="h-[15px] w-[15px]" />
         </span>
 
         <span className="min-w-0 flex-1">

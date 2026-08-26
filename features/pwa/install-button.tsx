@@ -92,11 +92,24 @@ export function InstallButton({ className }: { className?: string }) {
  * takes its place. The header earns the room by giving up two things the owner
  * named — the "Frenz" wordmark text and the search trigger.
  *
- * ── The three parts, and nothing else ────────────────────────────────────────
- * Icon, label, button. The hero banner's second line ("Get the full Frenz
- * experience on your home screen") is deliberately dropped: a description in a
- * 64px-tall bar is what makes a header feel cramped, and it was the noise being
- * complained about.
+ * ── ONE BUTTON. THAT IS THE WHOLE CONTROL ────────────────────────────────────
+ * Owner, 2026-08-25: *"the install button dont have to have another icon like
+ * button, just the install button and an install text is okay, like an Install
+ * Frenz."*
+ *
+ * The first pass was three parts — a gradient icon tile, a separate "Install
+ * Frenz" label, then the button. The tile was the problem: a rounded gradient
+ * square the same height as the button beside it does not read as an icon, it
+ * reads as a SECOND button, so the header appeared to carry two calls to action
+ * that did the same thing.
+ *
+ * Now the label IS the button. Nothing is lost — "Install Frenz" says what the
+ * icon was gesturing at, in less horizontal space than the icon plus the label
+ * took, which is also why the bar stops feeling compressed.
+ *
+ * The hero banner's second line ("Get the full Frenz experience on your home
+ * screen") stays dropped for the same reason it was dropped before: a
+ * description in a 64px-tall bar is what makes a header feel cramped.
  *
  * ── 🔴 FIRST PAINT, HIDDEN BY CSS — NOT MOUNT-GATED ──────────────────────────
  * `InstallButton` above waits for mount before rendering, which is right for a
@@ -124,32 +137,17 @@ export function InstallHeaderCta({ className }: { className?: string }) {
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
         className={cn(
-          "hide-when-installed flex shrink-0 items-center gap-2.5 rounded-2xl px-1",
+          "hide-when-installed inline-flex h-10 shrink-0 items-center whitespace-nowrap rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition active:scale-[0.97]",
           className,
         )}
       >
-        {/* The ICON the owner asked for, on the brand gradient — the one piece
-            of colour in an otherwise quiet bar, so the eye lands on it. */}
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25">
-          <Download className="h-[18px] w-[18px]" aria-hidden />
-        </span>
-        {/* Hidden below `sm`, where the button alone has to carry it — a phone
-            header cannot hold a label AND a button AND the account cluster
-            without becoming the cramped bar this change exists to fix. */}
-        <span className="hidden whitespace-nowrap text-sm font-bold leading-none text-foreground sm:block">
-          Install Frenz
-        </span>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-haspopup="dialog"
-          className="inline-flex h-9 shrink-0 items-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition active:scale-[0.97]"
-        >
-          Install
-        </button>
-      </div>
+        Install Frenz
+      </button>
       {open ? <InstallModal onClose={() => setOpen(false)} /> : null}
     </>
   );

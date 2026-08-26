@@ -106,12 +106,28 @@ const brandDisplay = Outfit({
  *    first wave. It is a decorative heading below the fold of the paste box, not
  *    the thing anyone is waiting for.
  *
- * 🔴 Only `600`. Every extra weight is a separate file, and this face has
- * exactly one job.
+ * ── 🔴 BOLD ITALIC, AND ONLY BOLD ITALIC ────────────────────────────────────
+ * Owner, 2026-08-25: "it should be a bold font with a stylish italic style."
+ *
+ * So this loads exactly ONE cut — Playfair Display **700 italic** — and no
+ * roman at all. That is deliberate and it is also load-bearing:
+ *
+ *  • Every weight AND every style is a separate file. Shipping 600 roman
+ *    alongside 700 italic would double the cost of a face used by one heading.
+ *  • Because no roman cut is loaded, anything using `.font-luxe` MUST render
+ *    italic or the browser finds no matching `@font-face` and silently falls
+ *    back to Georgia. `.font-luxe` therefore sets `font-style: italic` itself
+ *    (globals.css) rather than trusting each call site to remember — the class
+ *    cannot be used wrongly.
+ *
+ * Italic is also the right call on the merits: a high-contrast display serif's
+ * italic is its most distinctive cut, and it is where Playfair stops looking
+ * like a book face and starts looking like a logotype.
  */
 const luxeDisplay = Playfair_Display({
   subsets: ["latin"],
-  weight: ["600"],
+  weight: ["700"],
+  style: ["italic"],
   variable: "--font-luxe",
   display: "swap",
   preload: false,

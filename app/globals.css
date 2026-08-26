@@ -236,9 +236,22 @@
   */
   .font-luxe {
     font-family: var(--font-luxe), Georgia, "Times New Roman", Times, serif;
+    /*
+      🔴 THE ITALIC LIVES HERE, NOT AT THE CALL SITE (owner, 2026-08-25: "a bold
+      font with a stylish italic style").
+
+      Only ONE cut of Playfair is loaded — 700 italic — so an element using this
+      class without `font-style: italic` matches no `@font-face` at all and
+      drops silently to Georgia. Putting the style in the class makes that
+      impossible rather than merely documented. Same reasoning for the weight:
+      there is no 400 cut to fall into.
+    */
+    font-style: italic;
+    font-weight: 700;
     /* High-contrast serifs are drawn to be set OPEN. The negative tracking that
        flatters the geometric wordmark closes these counters and cheapens them —
-       so this deliberately does NOT inherit `.font-brand`'s -0.02em. */
+       so this deliberately does NOT inherit `.font-brand`'s -0.02em. Italics
+       want the room even more than romans do. */
     letter-spacing: 0;
   }
 

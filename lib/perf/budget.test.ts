@@ -54,8 +54,33 @@ function landingChunks(): string[] {
  * so the ceiling moves the 187 bytes it needs rather than the fix getting
  * cut to fit. Bumped to 341 kB, not further: `/home` now measures ~340.18 kB,
  * so there is deliberately almost no slack left on this route either.
+ *
+ * ── 341 → 343 kB (2026-08-25) ──────────────────────────────────────────────
+ * `/admin/page` measured 350,539 bytes gzipped against a 349,184-byte ceiling
+ * — 1,355 bytes over, confirmed via `routeWeights()` directly rather than read
+ * off the rounded `formatKb` display, same as the 2026-08-17 bump above.
+ *
+ * The overage is three pieces of real, requested functionality landing on that
+ * one route in a single pass:
+ *  • `AdminSubsections` (features/admin/section-tabs.tsx), which puts a top nav
+ *    on six long panels — "arrange the ad placement and all sections … with a
+ *    top nav so i dont scroll down much";
+ *  • the Daily/Weekly/Monthly control in `revenue-charts.tsx` plus the
+ *    `aggregateRevenue` engine it drives — client-side re-bucketing is the
+ *    whole point (switching granularity must not refetch), so that code has to
+ *    be on the client;
+ *  • the signed-in streak roster table in `streak-monitor.tsx`.
+ *
+ * 🔴 IT IS THE ADMIN ROUTE, and only the admin route. `/admin` is one
+ * authenticated operator behind a redirect, explicitly outside the visitor
+ * budget (see the note in features/admin/admin-shell.tsx). No public route
+ * moved: `/` is 273 kB against its own 275 kB landing ceiling, unchanged.
+ *
+ * Bumped 2 kB rather than to a round number with room to spare — /admin now
+ * measures ~342.3 kB, leaving ~700 bytes, so the next addition to this page
+ * still has to justify itself here.
  */
-const GLOBAL_CEILING = 341 * 1024;
+const GLOBAL_CEILING = 343 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

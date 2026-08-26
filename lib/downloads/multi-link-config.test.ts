@@ -490,13 +490,36 @@ describe("the intro's description is hidden until asked for", () => {
     const luxe = layout.slice(layout.indexOf("const luxeDisplay"));
     const decl = luxe.slice(0, luxe.indexOf("});") + 3);
     expect(decl).toMatch(/Playfair_Display\(/);
-    expect(decl).toMatch(/weight: \["600"\]/);
+    expect(decl).toMatch(/weight: \["700"\]/);
+    expect(decl).toMatch(/style: \["italic"\]/);
     expect(decl).toMatch(/preload: false/);
     expect(decl).toMatch(/display: "swap"/);
     expect(decl).toMatch(/variable: "--font-luxe"/);
+    // ONE cut. A second weight or the roman would double a face used by one
+    // heading — and see the italic assertion below for why the roman in
+    // particular must not creep back in unnoticed.
+    expect(decl).not.toMatch(/weight: \[[^\]]*,/);
     // Wired onto <body>, or the variable resolves to nothing and the class is
     // a silent no-op that falls back to Georgia everywhere.
     expect(layout).toMatch(/\$\{luxeDisplay\.variable\}/);
+  });
+
+  it("🔴 .font-luxe carries the italic + weight, so it cannot be used upright", () => {
+    /*
+      Owner, 2026-08-25: "it should be a bold font with a stylish italic style."
+
+      Only the 700-ITALIC cut of Playfair is loaded. An element that renders
+      `.font-luxe` upright therefore matches NO `@font-face` and drops silently
+      to Georgia — it looks merely wrong, never broken, and nothing errors. So
+      the style and the weight live in the class itself rather than at the call
+      site, and this is what stops someone "tidying" them back into a utility
+      class on one usage and losing the face on the others.
+    */
+    const css = read("app/globals.css");
+    const rule = css.slice(css.indexOf(".font-luxe"));
+    const body = rule.slice(0, rule.indexOf("}"));
+    expect(body).toMatch(/font-style:\s*italic/);
+    expect(body).toMatch(/font-weight:\s*700/);
   });
 
   it("falls back to a SERIF while the luxe face swaps in", () => {

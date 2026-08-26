@@ -247,10 +247,14 @@ export default async function AdminPage() {
       getRevenueSeries(90),
       // Visitors come from the ANALYTICS summary, not the monetization one —
       // different object, and only this one carries a timeseries.
-      getAnalyticsSummary("30d").catch(() => null),
-      // New vs. returning, one series — capped at 30 days, see the doc comment
-      // on getVisitorSplitSeries for why this can't share the 90-day window.
-      getVisitorSplitSeries(30).catch(() => null),
+      // 90d, matching getRevenueSeries(90) above. These were 30 while the
+      // revenue series was 90, so the visitor charts genuinely plotted a
+      // different window from the download chart beside them (owner,
+      // 2026-08-26). Both are exact aggregates over the window — see the doc
+      // comment on getVisitorSplitSeries for why only the un-migrated FALLBACK
+      // path stays at 30.
+      getAnalyticsSummary("90d").catch(() => null),
+      getVisitorSplitSeries(90).catch(() => null),
       // Multi-Link batch downloader policy (source ceilings, daily batches,
       // reward requirement) — a plan-limit sibling, so it sits in the same
       // Pricing & limits panel as LimitsEditor rather than a panel of its own.

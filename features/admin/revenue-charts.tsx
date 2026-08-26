@@ -86,7 +86,8 @@ export function RevenueCharts({
   /** Daily visitors from the analytics RPC — real buckets, may be absent. */
   visitors?: { date: string; visitors: number }[];
   /**
-   * Daily new-vs-returning split — see getVisitorSplitSeries, capped at 30 days.
+   * Daily new-vs-returning split — see getVisitorSplitSeries. The exact path
+   * covers the full window; only the un-migrated fallback is capped at 30 days.
    * A null count means NOT MEASURED for that day (the un-migrated fallback
    * could not reach it), never zero — those points are dropped below.
    */
@@ -119,23 +120,21 @@ export function RevenueCharts({
   const windowDays = series.rangeDays || series.days.length;
 
   /*
-    🔴 THE VISITOR SERIES COVERS A SHORTER WINDOW, AND IT MUST SAY SO.
+    THE VISITOR SERIES NOW COVERS THE SAME WINDOW AS EVERYTHING ELSE.
 
-    Everything else on this dashboard comes off `getRevenueSeries(90)`. The
-    visitor charts do not: `getAnalyticsSummary` and `getVisitorSplitSeries` are
-    capped at 30 days by the analytics layer (`Range` has no "90d", and the
-    split query carries a 50,000-row cap). So a visitor chart genuinely holds
-    fewer days than the download chart beside it — which is the axis mismatch
-    the owner spotted.
+    It did not until 2026-08-26: the dashboard fetched `getRevenueSeries(90)`
+    beside `getAnalyticsSummary("30d")` and `getVisitorSplitSeries(30)`, so a
+    visitor chart genuinely held a third of the days of the download chart next
+    to it — the axis mismatch the owner spotted. Both visitor sources are now
+    asked for 90 days too (`Range` gained "90d"; the split's exact aggregate
+    path was already unbounded).
 
-    Labelling it with the global `windowDays` would have been worse than the
-    mismatch itself: the panel would have claimed "the last 90 days" over 30
-    days of data. Deriving it from the series actually plotted keeps the
-    sentence true whatever the analytics layer returns.
-
-    Making the windows genuinely EQUAL is a server change (a "90d" range plus a
-    higher row cap, with the truncation risk that implies) and is deliberately
-    not bundled into a chart fix.
+    This still derives the subtitle from the series ACTUALLY plotted rather than
+    from the global `windowDays`, and that is not leftover caution: the split's
+    FALLBACK path — used only when migration 0127 has not been applied — is
+    still limited to 30 days behind its row cap, and a young site simply has
+    fewer days of data than the window asked for. Claiming "the last 90 days"
+    over whatever came back would be a worse bug than the mismatch was.
   */
   const visitorDays = visitors?.length ?? windowDays;
   /*
@@ -607,8 +606,10 @@ export function RevenueCharts({
           to a single day's active visitors, so they belong at the same scale
           slot ties them visually to "Visitors" above, since they're its split,
           not a new measure (owner, 2026-08-16: "make a chart for returning
-          visitors and new visitors"). Capped at 30 days server-side — see
-          getVisitorSplitSeries — so this stays flat/empty past that window.
+          visitors and new visitors"). Covers the same 90-day window as the charts
+          above since 2026-08-26; only the un-migrated fallback path is still
+          limited to 30 days, and the days it cannot reach arrive as null
+          rather than zero, so they render as a gap.
         */}
         {newVisitors.length > 0 ? (
           <AdminAreaChart

@@ -41,7 +41,20 @@ function emptyPageStats(): PageStat[] {
  * dashboard. A MISSING RPC (the migration not yet applied) is reported rather
  * than silently zeroed: see `rpcHealth` on the summary.
  */
-export type Range = "24h" | "7d" | "30d";
+/**
+ * A dashboard window.
+ *
+ * "90d" added 2026-08-26 so the visitor charts can cover the same window the
+ * revenue/downloads charts already did — the owner's "visitors chart is
+ * different from download chart" was a genuine data mismatch, two charts side
+ * by side describing different lengths of time.
+ *
+ * ⚠️ Every helper that maps a Range to a number is an explicit lookup rather
+ * than a ternary chain ending in a default. They used to end `: 30`, which
+ * would have made a "90d" request silently return 30 days of data — the exact
+ * class of quiet wrongness this dashboard has been bitten by before.
+ */
+export type Range = "24h" | "7d" | "30d" | "90d";
 
 export interface Breakdown {
   key: string;
@@ -216,8 +229,10 @@ export interface AnalyticsSummary {
 const SAMPLE_CAP = 20_000;
 const DEFAULT_CPM_USD = 2.5;
 
+const RANGE_DAYS: Record<Range, number> = { "24h": 1, "7d": 7, "30d": 30, "90d": 90 };
+
 function rangeDays(range: Range): number {
-  return range === "24h" ? 1 : range === "7d" ? 7 : 30;
+  return RANGE_DAYS[range];
 }
 
 function sinceIso(range: Range): string {
@@ -234,7 +249,7 @@ function priorWindow(range: Range): { from: string; to: string } {
 /** Ordered, gap-free bucket keys from the start of the range to now. */
 function buildBuckets(range: Range): { granularity: "hour" | "day"; keys: string[]; step: number } {
   const granularity: "hour" | "day" = range === "24h" ? "hour" : "day";
-  const count = range === "24h" ? 24 : range === "7d" ? 7 : 30;
+  const count = range === "24h" ? 24 : rangeDays(range);
   const step = granularity === "hour" ? 3_600_000 : 86_400_000;
   const base = new Date();
   if (granularity === "hour") base.setMinutes(0, 0, 0);
@@ -846,7 +861,35 @@ export interface VisitorSplitSeries {
 }
 
 const VISITOR_SPLIT_ROW_CAP = 50_000;
-const VISITOR_SPLIT_MAX_DAYS = 30;
+
+/**
+ * How far back the split can go — and the two limits are NOT the same number.
+ *
+ * Owner, 2026-08-26: "visitors chart is different from download chart". It was
+ * a real data mismatch, not styling: `getRevenueSeries(90)` plots 90 days
+ * beside a visitors series capped at 30, so two charts sitting next to each
+ * other described different windows.
+ *
+ * 🔴 The 30 could not simply be raised, because the two code paths below have
+ * completely different failure modes:
+ *
+ *   • PRIMARY (`analytics_visitor_split_daily`, migration 0127) is ONE
+ *     Postgres GROUP BY over the window. No row cap, no truncation, and both
+ *     numbers come from the same scan. Measured live 2026-08-26: 90 days
+ *     returns in ~1.6 s. Widening it is free.
+ *
+ *   • FALLBACK (0127 not applied) pages `analytics_events` under
+ *     VISITOR_SPLIT_ROW_CAP and subtracts. Widening THAT is what
+ *     [[postgrest-1000-row-silent-truncation]] and
+ *     [[returning-visitors-truncation-bug]] are both about: more days behind a
+ *     fixed row cap means a smaller fraction of the window is covered, so the
+ *     scan's horizon eats further into the days people actually read. It stays
+ *     at 30, and days past its horizon are already reported as UNKNOWN rather
+ *     than as a confident zero.
+ */
+const VISITOR_SPLIT_MAX_DAYS = 90;
+/** The capped, subtracting path stays where it was — see above. */
+const VISITOR_SPLIT_FALLBACK_MAX_DAYS = 30;
 
 function isoDayUtc(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -918,8 +961,19 @@ export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeri
          UNKNOWN (null) rather than zero, so the chart shows a gap instead of a
          confident wrong number.
     */
+    /*
+      Past this point we are on the FALLBACK. It keeps the old 30-day reach: the
+      window may have been opened to 90 for the exact path above, but this one
+      pages under a row cap, and asking it for three times the days behind the
+      same cap would shrink the covered fraction of every day people read. Days
+      beyond it are emitted as unknown (null), which the chart already draws as
+      a gap rather than as zero.
+    */
+    const fallbackDays = Math.min(n, VISITOR_SPLIT_FALLBACK_MAX_DAYS);
+    const fallbackBoundaries = boundaries.slice(n - fallbackDays);
+
     const cumulativeNew = await Promise.all(
-      boundaries.map(async (d) => {
+      fallbackBoundaries.map(async (d) => {
         const { data, error } = await db.rpc("analytics_visitor_split", { p_since: d.toISOString() });
         if (error) return null;
         const row = (data ?? [])[0] as { new_visitors: number } | undefined;
@@ -933,7 +987,7 @@ export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeri
           .from("analytics_events")
           .select("visitor_id, received_at")
           .eq("is_bot", false)
-          .gte("received_at", boundaries[0]!.toISOString())
+          .gte("received_at", fallbackBoundaries[0]!.toISOString())
           .order("received_at", { ascending: false })
           .range(from, to),
       VISITOR_SPLIT_ROW_CAP,
@@ -959,15 +1013,24 @@ export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeri
     const out: VisitorSplitDay[] = [];
     for (let i = 0; i < n; i++) {
       const date = isoDayUtc(boundaries[i]!);
-      const hi = cumulativeNew[i];
-      const lo = cumulativeNew[i + 1];
+      // Days older than the fallback's reach were never measured — unknown,
+      // not zero. Same rule the scan horizon below already applies.
+      const f = i - (n - fallbackDays);
+      if (f < 0) {
+        out.push({ date, newVisitors: null, returningVisitors: null });
+        continue;
+      }
+      const hi = cumulativeNew[f];
+      const lo = cumulativeNew[f + 1];
       const newVisitors = hi == null || lo == null ? null : Math.max(0, hi - lo);
       const covered = !oldestScanned || date > oldestScanned;
       const active = activeByDay.get(date)?.size ?? 0;
       const returningVisitors = covered && newVisitors != null ? Math.max(0, active - newVisitors) : null;
       out.push({ date, newVisitors, returningVisitors });
     }
-    return { days: out, capped };
+    // A window wider than the fallback can measure is itself a form of capping —
+    // the chart's "partial data" note should appear for it too.
+    return { days: out, capped: capped || fallbackDays < n };
   } catch {
     return empty();
   }

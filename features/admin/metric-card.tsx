@@ -60,6 +60,7 @@ const PERIOD_LABEL: Record<string, string> = {
   "24h": "previous 24h",
   "7d": "previous 7 days",
   "30d": "previous 30 days",
+  "90d": "previous 90 days",
 };
 
 export function MetricCard({ spec, summary }: { spec: MetricSpec; summary: AnalyticsSummary }) {

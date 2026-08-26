@@ -39,7 +39,23 @@ import { MetricCard } from "./metric-card";
  * and error/security monitoring. Reads the Phase-1 event pipeline + the monetization
  * and security tables; empty until traffic flows.
  */
-const RANGES: { key: Range; label: string }[] = [
+/**
+ * The ranges this selector OFFERS — deliberately narrower than `Range`.
+ *
+ * `Range` gained "90d" on 2026-08-26 so the admin overview's server fetch can
+ * plot visitors over the same window as revenue. That is a server-side window,
+ * not a choice: this selector drives the traffic dashboard, the CSV export and
+ * the download log, and each of those reads `analytics_events` under a row
+ * cap. Offering 90 days there would widen the window behind a fixed cap, which
+ * is the truncation trap recorded in [[returning-visitors-truncation-bug]].
+ *
+ * Typing the tabs to what they actually render — rather than to all of `Range`
+ * — is what makes that a compile-time fact instead of a comment. It is also
+ * what caught `DownloadHistoryPanel`, whose own `Range` never had "90d".
+ */
+export type TabRange = "24h" | "7d" | "30d";
+
+const RANGES: { key: TabRange; label: string }[] = [
   { key: "24h", label: "24h" },
   { key: "7d", label: "7 days" },
   { key: "30d", label: "30 days" },
@@ -58,8 +74,8 @@ export function RangeTabs({
   range,
   onChange,
 }: {
-  range: Range;
-  onChange: (r: Range) => void;
+  range: TabRange;
+  onChange: (r: TabRange) => void;
 }) {
   return (
     <div
@@ -94,7 +110,9 @@ function tap() {
 }
 
 export function AnalyticsDashboard() {
-  const [range, setRange] = useState<Range>("24h");
+  // TabRange, not Range: this state feeds RangeTabs and the CSV export, and
+  // neither offers the server-only 90d window. See TabRange.
+  const [range, setRange] = useState<TabRange>("24h");
   const [data, setData] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState(false);
@@ -699,7 +717,7 @@ function FeedCard({
 /* Exported so `download-history-panel.tsx` can reuse it: the CSV export for the
    download log moved to that tab along with the table it exports, and a second
    copy of this button would be a second place to fix a broken export URL. */
-export function ExportButton({ range, type, label }: { range: Range; type: "events" | "downloads"; label: string }) {
+export function ExportButton({ range, type, label }: { range: TabRange; type: "events" | "downloads"; label: string }) {
   return (
     <a
       href={`/api/admin/analytics/export?range=${range}&type=${type}`}

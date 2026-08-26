@@ -117,6 +117,27 @@ export function RevenueCharts({
     three, so no option is ever disabled and the menu never shows a dead row.
   */
   const windowDays = series.rangeDays || series.days.length;
+
+  /*
+    🔴 THE VISITOR SERIES COVERS A SHORTER WINDOW, AND IT MUST SAY SO.
+
+    Everything else on this dashboard comes off `getRevenueSeries(90)`. The
+    visitor charts do not: `getAnalyticsSummary` and `getVisitorSplitSeries` are
+    capped at 30 days by the analytics layer (`Range` has no "90d", and the
+    split query carries a 50,000-row cap). So a visitor chart genuinely holds
+    fewer days than the download chart beside it — which is the axis mismatch
+    the owner spotted.
+
+    Labelling it with the global `windowDays` would have been worse than the
+    mismatch itself: the panel would have claimed "the last 90 days" over 30
+    days of data. Deriving it from the series actually plotted keeps the
+    sentence true whatever the analytics layer returns.
+
+    Making the windows genuinely EQUAL is a server change (a "90d" range plus a
+    higher row cap, with the truncation risk that implies) and is deliberately
+    not bundled into a chart fix.
+  */
+  const visitorDays = visitors?.length ?? windowDays;
   /*
     Which group of panels is on screen. "overview" first because it holds MRR —
     the one figure worth seeing without asking for it — and because a section
@@ -574,8 +595,9 @@ export function RevenueCharts({
         {visits.length > 0 ? (
           <AdminAreaChart
             title="Visitors"
-            subtitle={`${visits.reduce((n, p) => n + p.value, 0).toLocaleString()} in the last ${windowDays} days`}
+            subtitle={`${visits.reduce((n, p) => n + p.value, 0).toLocaleString()} in the last ${visitorDays} days`}
             points={visits}
+            {...grainProps}
             slot={3}
           />
         ) : null}
@@ -593,6 +615,7 @@ export function RevenueCharts({
             title="New visitors"
             subtitle={`${totalNewVisitors.toLocaleString()} first-time visitors, last ${newVisitors.length} days`}
             points={newVisitors}
+            {...grainProps}
             slot={3}
           />
         ) : null}
@@ -601,6 +624,7 @@ export function RevenueCharts({
             title="Returning visitors"
             subtitle={`${totalReturningVisitors.toLocaleString()} came back, last ${returningVisitors.length} days`}
             points={returningVisitors}
+            {...grainProps}
             slot={3}
           />
         ) : null}

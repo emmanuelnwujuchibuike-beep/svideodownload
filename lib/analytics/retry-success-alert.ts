@@ -83,6 +83,7 @@ export async function notifyAdminsOfRetrySuccess(d: RetrySuccessDetails): Promis
           // critical/high lanes the failure alerts use.
           "medium",
           "downloads",
+          { type: "download_complete" },
         ).catch(() => {}),
       ),
     );

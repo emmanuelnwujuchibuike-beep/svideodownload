@@ -90,6 +90,7 @@ export async function checkAndNotifyMissingDailyWallpaper(): Promise<{ notified:
           wallpaperReminderPush(),
           "high",
           "system",
+          { type: "system" },
         ).catch(() => {}),
       ),
     );

@@ -2,8 +2,10 @@ import { isOverPushFrequencyCap } from "@/lib/notifications/frequency-limit";
 import { computeShouldPush, getNotificationSettings } from "@/lib/social/notification-settings";
 import type { NotificationCategory } from "@/lib/social/notifications";
 import { getOwnPresenceStatus } from "@/lib/social/presence-status";
+import type { NotificationType } from "@/lib/platform/notifications-registry";
 import type { PushPayload } from "@/lib/push/web-push";
 import { sendPushToUser } from "@/lib/push/web-push";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Priority-tiered, presence-aware push delivery — the real, buildable slice
@@ -33,7 +35,78 @@ import { sendPushToUser } from "@/lib/push/web-push";
  */
 export type PushPriority = "critical" | "high" | "medium" | "low";
 
-export async function sendSmartPush(userId: string, payload: PushPayload, priority: PushPriority, category: NotificationCategory): Promise<void> {
+/**
+ * What to write into the Notification Center alongside the push.
+ *
+ * Owner, 2026-08-26: "make all users and admin push notification to be stored
+ * in notification page and show and unread mark when not read."
+ *
+ * 🔴 REQUIRED, deliberately. Before this, a push and its in-app record were two
+ * unrelated calls: `publishNotification` did both, and the eleven callers that
+ * reached for `sendSmartPush` directly — every admin alert among them — sent to
+ * the lock screen and left nothing behind. Nothing in the types said they had
+ * to. Making this a required argument means a new caller cannot quietly repeat
+ * that: it must either describe the row to write or say, in words, that it has
+ * already written one.
+ */
+export type NotificationRecord =
+  | {
+      type: NotificationType;
+      actorId?: string | null;
+      postId?: string | null;
+      conversationId?: string | null;
+    }
+  /** The caller already inserted the row itself (today: `publishNotification`). */
+  | "already-recorded";
+
+/**
+ * Write the in-app copy.
+ *
+ * 🔴 Runs BEFORE every suppression branch below, and that ordering is the
+ * feature. DND, quiet hours, the category toggles and the frequency cap all
+ * govern the LOCK SCREEN — the module docstring says so explicitly ("delivers
+ * in-app (Realtime + Notification Center) and does not reach the lock screen").
+ * Recording after them would mean the quieter someone asks the app to be, the
+ * less history they get, which is the opposite of what those settings mean.
+ *
+ * Best-effort: a failed insert must never cost the push, exactly as in
+ * `publishNotification`.
+ */
+async function recordInApp(userId: string, payload: PushPayload, record: NotificationRecord): Promise<void> {
+  if (record === "already-recorded") return;
+  try {
+    const db = createAdminClient();
+    await db
+      .from("notifications")
+      .insert({
+        user_id: userId,
+        actor_id: record.actorId ?? null,
+        type: record.type,
+        post_id: record.postId ?? null,
+        conversation_id: record.conversationId ?? null,
+        /*
+          The push's own text and destination, kept so the card can show what
+          was actually sent rather than a generic label off the type, and so the
+          tap lands on the exact page (see lib/notifications/destinations.ts).
+          `data` already carries this shape for admin_broadcast.
+        */
+        data: { title: payload.title, body: payload.body, url: payload.url ?? null },
+      })
+      .then(undefined, () => {});
+  } catch {
+    /* best-effort — never block the push */
+  }
+}
+
+export async function sendSmartPush(
+  userId: string,
+  payload: PushPayload,
+  priority: PushPriority,
+  category: NotificationCategory,
+  record: NotificationRecord,
+): Promise<void> {
+  await recordInApp(userId, payload, record);
+
   const settings = await getNotificationSettings(userId);
   // "Hide push preview" (Part 6 privacy toggle) — swap in the caller-supplied
   // generic body ("New message") instead of the real text, applied uniformly

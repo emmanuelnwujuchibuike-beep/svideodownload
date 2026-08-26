@@ -88,6 +88,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           },
           "medium",
           "social",
+          // 0042's `notify_on_message_reaction` trigger already wrote the row —
+          // see the comment above this block. Recording again here would show
+          // the same reaction twice in the Notification Center.
+          "already-recorded",
         );
       } catch {
         /* push is best-effort */

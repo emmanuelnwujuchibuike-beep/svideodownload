@@ -21,7 +21,22 @@ function actorSummary(g: NotificationGroup): string {
   return `${names[0]}, ${names[1]} and ${g.totalActors - 2} others`;
 }
 
-function hrefFor(g: NotificationGroup): string | null {
+/**
+ * 🔴 NEVER NULL (owner, 2026-08-26: "make all notification in notification page
+ * to open the page to the notification, and security too").
+ *
+ * This used to return null for anything that was not a conversation, a post, a
+ * friend request or a single-actor follow — and the card renders a plain
+ * `<div>` instead of a `<Link>` on null. So security alerts, payments,
+ * download outcomes, streaks and moderation decisions were not tappable at all.
+ *
+ * The specific cases below still come first, because they resolve to the exact
+ * post/profile/conversation involved and a stored url cannot know which actor a
+ * COLLAPSED group ended up with. Everything else falls through to
+ * `g.href`, which the server already resolved from the notification's own
+ * `data.url` or its type — see lib/notifications/destinations.ts.
+ */
+function hrefFor(g: NotificationGroup): string {
   if ((g.type === "message" || g.type === "message_reaction") && g.conversationId) return `/messages/${g.conversationId}`;
   if (g.postId) return `/p/${g.postId}`;
   if (g.type === "friend_request") return "/friends";
@@ -33,7 +48,7 @@ function hrefFor(g: NotificationGroup): string | null {
   ) {
     return `/u/${first.handle}`;
   }
-  return null;
+  return g.href;
 }
 
 function NotificationCardImpl({
@@ -153,6 +168,21 @@ function NotificationCardImpl({
             </p>
             {group.broadcast.body ? <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{group.broadcast.body}</p> : null}
           </>
+        ) : !actorLed && group.content ? (
+          /*
+            An actor-less notification that carries the push's own words —
+            every admin alert, security alert, support reply and digest since
+            2026-08-26. Showing `verbFor(type)` here instead would reduce
+            "Sign-in · Chris · Lagos · iPhone/Safari" to the bare label
+            "New sign-in", which is exactly the detail the owner wants to be
+            able to act on.
+          */
+          <>
+            <p className="truncate text-sm font-semibold leading-snug text-foreground">{group.content.title}</p>
+            {group.content.body ? (
+              <p className="mt-0.5 text-sm leading-snug text-muted-foreground">{group.content.body}</p>
+            ) : null}
+          </>
         ) : (
           <p className="text-sm leading-snug text-foreground">
             {actorLed ? <span className="font-semibold">{summary}</span> : null}{" "}
@@ -242,13 +272,14 @@ function NotificationCardImpl({
       {/* Unread left accent */}
       {!group.read ? <span className="absolute inset-y-3 left-0 w-1 rounded-full bg-gradient-to-b from-blue-500 to-violet-500" /> : null}
 
-      {href ? (
-        <Link href={href} onClick={() => !group.read && onMarkRead(group)} className="block">
-          {body}
-        </Link>
-      ) : (
-        <div>{body}</div>
-      )}
+      {/* Always a link now — `hrefFor` no longer returns null, so the
+          non-tappable `<div>` branch this used to fall into is gone. That
+          branch is also what silently swallowed the mark-as-read, since it
+          carried no onClick: an un-linkable notification could never be
+          marked read by opening it. */}
+      <Link href={href} onClick={() => !group.read && onMarkRead(group)} className="block">
+        {body}
+      </Link>
 
       {/* Quick actions (hover / focus) */}
       <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100">

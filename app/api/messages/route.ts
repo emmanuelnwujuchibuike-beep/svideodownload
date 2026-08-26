@@ -270,6 +270,8 @@ async function notifyMembers(
           },
           priority,
           "social",
+          // `lib/social/messages.ts` already inserted the message/mention rows.
+          "already-recorded",
         );
       }),
     );

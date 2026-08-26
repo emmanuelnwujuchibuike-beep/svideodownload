@@ -121,6 +121,9 @@ export async function notifyAdminsOfDownloadOutcome(d: DownloadOutcomeDetails): 
           },
           "high",
           "downloads",
+          // Stored so the operator finds it in the Notification Center too,
+          // not only on whichever device happened to be unlocked.
+          { type: "download_failed" },
         ).catch(() => {}),
       ),
     );

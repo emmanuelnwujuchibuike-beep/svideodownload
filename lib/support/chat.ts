@@ -323,6 +323,7 @@ async function notifyAdminsOfMessage(fromUserId: string, body: string): Promise<
         { title: `Support · ${name}`, body: preview, url: `${SITE_URL}/admin`, tag: "support" },
         "critical",
         "system",
+        { type: "system" },
       ).catch(() => {}),
     ),
   );
@@ -348,6 +349,7 @@ async function notifyMemberOfReply(memberId: string, body: string): Promise<void
     { title: "Support replied", body: preview, url: `${SITE_URL}/support`, tag: "support-reply" },
     "high",
     "system",
+    { type: "system" },
   ).catch(() => {});
 
   const { data: prof } = await db

@@ -62,6 +62,16 @@ export async function publishNotification(input: PublishNotificationInput): Prom
         type: input.type,
         post_id: input.postId ?? null,
         conversation_id: input.conversationId ?? null,
+        /*
+          The push's own text and destination, so the Notification Center card
+          shows what was actually sent and the tap lands on the exact page
+          rather than the type's generic default (owner, 2026-08-26). Same
+          shape `sendSmartPush` writes for callers that do not come through
+          here — see recordInApp there.
+        */
+        data: input.push
+          ? { title: input.push.title, body: input.push.body, url: input.push.url ?? null }
+          : null,
       })
       .then(undefined, () => {});
   } catch {
@@ -85,6 +95,8 @@ export async function publishNotification(input: PublishNotificationInput): Prom
       },
       priority,
       category,
+      // This function inserted the row itself, above.
+      "already-recorded",
     );
   }
 }

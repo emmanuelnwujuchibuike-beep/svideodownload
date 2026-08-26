@@ -44,6 +44,9 @@ export async function notifyAdminsOfSignIn(d: SignInDetails): Promise<void> {
           },
           "high",
           "system",
+          // A sign-in IS a security event, and typing it as one is what makes the
+          // stored copy open the security surface when tapped.
+          { type: "security_login" },
         ).catch(() => {}),
       ),
     );

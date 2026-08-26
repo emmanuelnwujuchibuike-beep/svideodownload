@@ -1,3 +1,4 @@
+import { hrefForNotification } from "@/lib/notifications/destinations";
 import { getNotificationSettings, mutedTypesFor } from "@/lib/social/notification-settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -51,6 +52,19 @@ export interface NotificationItem {
   conversationId: string | null;
   /** Present on admin_broadcast rows — the ad/announcement content + sponsored flag. */
   broadcast: NotificationBroadcast | null;
+  /**
+   * The push's own text, for notifications that have no ACTOR and would
+   * otherwise render only the type's generic label ("System", "Download
+   * failed"). Every push now stores what it actually said — see
+   * `recordInApp` in lib/notifications/smart-delivery.ts.
+   */
+  content: { title: string; body: string } | null;
+  /**
+   * Where tapping it goes. Resolved from the notification's own `data.url`
+   * when it has one, otherwise from its type — never null, so every card in
+   * the Notification Center is a link (owner, 2026-08-26).
+   */
+  href: string;
 }
 
 interface Row {
@@ -61,7 +75,7 @@ interface Row {
   conversation_id: string | null;
   read: boolean;
   created_at: string;
-  data?: { title?: string; body?: string; sponsored?: boolean } | null;
+  data?: { title?: string; body?: string; sponsored?: boolean; url?: string | null } | null;
 }
 
 // `notifications.data` arrives with migration 0094 — probe once per server
@@ -75,6 +89,19 @@ async function selectCols(db: ReturnType<typeof createAdminClient>): Promise<str
     dataColumnKnown = !error;
   }
   return dataColumnKnown ? `${cols}, data` : cols;
+}
+
+/**
+ * The stored push text, for non-broadcast rows.
+ *
+ * `admin_broadcast` keeps its own `broadcast` field — it renders differently
+ * (an "Ad"/"News" label) and has its own `sponsored` flag, so folding the two
+ * together would either lose that label or put it on every system notification.
+ */
+function contentOf(r: Row): { title: string; body: string } | null {
+  if (r.type === "admin_broadcast") return null;
+  if (!r.data?.title) return null;
+  return { title: r.data.title, body: r.data.body ?? "" };
 }
 
 function broadcastOf(r: Row): NotificationBroadcast | null {
@@ -126,6 +153,8 @@ async function enrichRows(db: ReturnType<typeof createAdminClient>, rows: Row[])
     postTitle: r.post_id ? titleById.get(r.post_id) ?? null : null,
     conversationId: r.conversation_id,
     broadcast: broadcastOf(r),
+    content: contentOf(r),
+    href: hrefForNotification(r.type, r.data?.url),
   }));
 }
 
@@ -190,6 +219,10 @@ export interface NotificationGroup {
   notificationIds: string[];
   /** Present on admin_broadcast groups — the ad/announcement content. */
   broadcast: NotificationBroadcast | null;
+  /** The stored push text, for actor-less notifications. See NotificationItem. */
+  content: { title: string; body: string } | null;
+  /** Where tapping the card goes — never null. See NotificationItem. */
+  href: string;
 }
 
 export interface GroupedNotificationsResult {
@@ -263,6 +296,10 @@ export async function listGroupedNotifications(userId: string, limit = 60): Prom
           conversationId: it.conversationId,
           notificationIds: [],
           broadcast: it.broadcast,
+          content: it.content,
+          // The group takes the NEWEST member's destination (rows arrive newest
+          // first), so a collapsed group opens the most recent thing in it.
+          href: it.href,
         };
         byKey.set(key, g);
         seenActors.set(key, new Set());

@@ -140,7 +140,10 @@ export async function prepareBroadcast(
 export async function fanOutBroadcastPush(targetIds: string[], push: PushPayload): Promise<void> {
   for (let i = 0; i < targetIds.length; i += CHUNK_SIZE) {
     const chunk = targetIds.slice(i, i + CHUNK_SIZE);
-    await Promise.all(chunk.map((userId) => sendSmartPush(userId, push, "high", "system")));
+    // `prepareBroadcast` already wrote an `admin_broadcast` row per recipient
+    // (with the ad/announcement content on `data`) — this fan-out is the push
+    // half only.
+    await Promise.all(chunk.map((userId) => sendSmartPush(userId, push, "high", "system", "already-recorded")));
   }
 }
 

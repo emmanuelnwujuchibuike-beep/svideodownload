@@ -1,3 +1,4 @@
+import { defaultHrefFor } from "@/lib/notifications/destinations";
 import {
   AtSign,
   Bell,
@@ -267,6 +268,8 @@ export function hrefFor(n: {
   actor: { handle: string } | null;
   postId: string | null;
   conversationId?: string | null;
+  /** Server-resolved destination — see lib/notifications/destinations.ts. */
+  href?: string;
 }): string {
   if (n.type === "friend_request") return "/friends";
   if ((n.type === "friend_accepted" || n.type === "friend_reminder" || n.type === "follow") && n.actor) {
@@ -275,7 +278,13 @@ export function hrefFor(n: {
   if ((n.type === "message" || n.type === "message_reaction" || n.type === "message_mention") && n.conversationId) return `/messages/${n.conversationId}`;
   if (n.type === "moderation_appeal_resolved") return "/account/appeals";
   if (n.postId) return `/p/${n.postId}`;
-  return "/notifications";
+  /*
+    Was a flat `return "/notifications"` — a link from the Notification Center
+    back to the Notification Center, i.e. a dead tap for every security alert,
+    payment, download outcome and system message. The resolved destination now
+    stands behind it (owner, 2026-08-26).
+  */
+  return n.href ?? defaultHrefFor(n.type);
 }
 
 /** Relative "2m", "3h", "5d" style timestamp. */

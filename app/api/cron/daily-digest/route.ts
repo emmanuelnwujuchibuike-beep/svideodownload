@@ -87,7 +87,7 @@ async function run(request: Request) {
         skipped++;
         continue;
       }
-      await sendSmartPush(userId, { title: "Good morning 👋", body, url: "/notifications", tag: "daily-digest" }, "low", "system");
+      await sendSmartPush(userId, { title: "Good morning 👋", body, url: "/notifications", tag: "daily-digest" }, "low", "system", { type: "system" });
       sent++;
     }
 

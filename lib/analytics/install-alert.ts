@@ -63,6 +63,9 @@ export async function notifyAdminsOfInstall(d: InstallAlertDetails): Promise<voi
           // out of the critical/high lanes reserved for failures and security.
           "medium",
           "downloads",
+          // Stored so the operator finds it in the Notification Center too, not
+          // only on whichever device happened to be unlocked.
+          { type: "system" },
         ).catch(() => {}),
       ),
     );

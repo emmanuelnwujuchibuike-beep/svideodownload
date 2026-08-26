@@ -1,13 +1,18 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { takeBackTarget } from "@/lib/dom/back-target";
 import { isBodyScrollLocked } from "@/lib/dom/scroll-lock";
 import { isStandalone } from "@/lib/pwa/platform";
 
-const EDGE_ZONE_PX = 24; // matches iOS's own narrow edge-gesture hit zone
+/**
+ * Exported so other horizontal-swipe gestures (e.g. reel-viewer's own For You
+ * / Following tab switch) can exclude this same strip and avoid interpreting
+ * the identical touch this component already claims for back-navigation.
+ */
+export const EDGE_ZONE_PX = 24; // matches iOS's own narrow edge-gesture hit zone
 /** Past this much horizontal travel, releasing completes the navigation. */
 const SWIPE_THRESHOLD_PX = 80;
 /** Below this, a mostly-vertical drag is a scroll and the page must not move. */
@@ -66,10 +71,39 @@ const CANCEL_MS = 190;
  */
 export function EdgeSwipeBack() {
   const router = useRouter();
+  const pathname = usePathname();
   const start = useRef<{ x: number; y: number } | null>(null);
   const el = useRef<HTMLElement | null>(null);
   /** null = undecided, true = horizontal (ours), false = vertical (theirs). */
   const horizontal = useRef<boolean | null>(null);
+  /**
+   * SINGLE-SHOT LOCK (owner, 2026-08-26: "full backswipe go two times back
+   * ... swiping fully on ios screen goes twice or three time back ... unless
+   * backswipe half screen and slightly thats when it goes back once and
+   * normal").
+   *
+   * A full, fast edge-to-edge swipe travels exactly the distance and speed
+   * that can make iOS's OWN edge-gesture recognizer -- the one this file's
+   * EDGE_ZONE_PX comment already notes iOS reserves near the screen edge --
+   * treat the touch as ambiguous, touchcancel it mid-drag, and redeliver a
+   * fresh touchstart/touchend cycle once it decides not to claim it. A short,
+   * unhurried "half screen" swipe never reaches whatever threshold makes iOS
+   * do that, which is exactly the reported correlation: distance and speed,
+   * not anything this code computes differently per gesture.
+   *
+   * finish()'s existing guard (checking start.current) only protects against
+   * RE-ENTRY of the same cycle -- it does nothing to stop a genuinely NEW
+   * touchstart that iOS redelivers while a previous commit is still
+   * resolving. This lock closes that gap directly: once a swipe COMMITS,
+   * every touch is ignored -- however many cycles iOS sends -- until the
+   * route actually changes (proof the first commit's navigation completed),
+   * or a generous safety-net timeout in case navigation didn't change the
+   * URL at all (e.g. router.back() with nowhere to go).
+   */
+  const committing = useRef(false);
+  useEffect(() => {
+    committing.current = false;
+  }, [pathname]);
 
   useEffect(() => {
     if (!isStandalone()) return;
@@ -90,6 +124,13 @@ export function EdgeSwipeBack() {
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      // A prior swipe already committed a navigation and hasn't resolved yet
+      // -- ignore every touch, including one iOS redelivers for the SAME
+      // physical gesture, so it can never schedule a second commit.
+      if (committing.current) {
+        start.current = null;
+        return;
+      }
       horizontal.current = null;
       if (isBodyScrollLocked()) {
         start.current = null;
@@ -152,6 +193,18 @@ export function EdgeSwipeBack() {
       const commit = dx > SWIPE_THRESHOLD_PX;
 
       if (commit) {
+        // Locked BEFORE the setTimeout below, not inside it -- the
+        // redelivered touch this guards against can arrive within
+        // milliseconds, well before COMPLETE_MS elapses.
+        committing.current = true;
+        // Safety net: if the route never actually changes (nothing to go
+        // back to, or takeBackTarget points at the current page), the
+        // pathname-driven unlock above never fires. 1500ms comfortably
+        // covers COMPLETE_MS (220) plus a full page-transition, so a
+        // genuinely new swipe on the same page is never locked out longer.
+        window.setTimeout(() => {
+          committing.current = false;
+        }, 1500);
         /*
           Carry the page the rest of the way out, THEN navigate. Navigating
           first would swap the content underneath a wrapper that is still

@@ -60,6 +60,7 @@ import { createPortal } from "react-dom";
    architecture and reusable components — putting a design system inside the
    consumer of that design system is how the next surface ends up with a
    copy of it. */
+import { EDGE_ZONE_PX } from "@/features/app-shell/edge-swipe-back";
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
@@ -736,6 +737,17 @@ function ReelCard({
   const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const axisLock = useRef<"h" | "v" | null>(null);
+  /**
+   * True when this gesture STARTED inside the same left-edge strip
+   * `EdgeSwipeBack` claims for its own back-navigation swipe (owner,
+   * 2026-08-26: reported as a "backswipe goes back twice" incident, and
+   * this was a real, independently found contributor on the Reels page — a
+   * rightward swipe starting at the very edge was interpreted by BOTH
+   * systems: EdgeSwipeBack as "go back", and this handler below as "switch
+   * For You/Following". Excluding the shared strip here means only one
+   * gesture ever claims a touch that starts there.
+   */
+  const startedInEdgeZone = useRef(false);
   // Live album-slide drag (owner spec: "as smooth as a top platform" — a real,
   // finger-tracked slide, not a wait-for-release flip). `dragX` drives the
   // current slide's transform directly; framer-motion updates it imperatively
@@ -1505,6 +1517,7 @@ function ReelCard({
   //  • horizontal swipe (page variant only) → switch For You/Following instantly.
   const onPointerDown = (e: React.PointerEvent) => {
     startPt.current = { x: e.clientX, y: e.clientY };
+    startedInEdgeZone.current = e.clientX <= EDGE_ZONE_PX;
     moved.current = false;
     axisLock.current = null;
     if (!native) return;
@@ -1595,8 +1608,9 @@ function ReelCard({
     if (moved.current) {
       // A decisive horizontal drag on a NON-album reel (album drags are fully
       // handled live above): switches For You/Following (page variant; no-op
-      // in the modal).
-      if (axisLock.current === "h" && startX !== undefined) {
+      // in the modal). Excludes the left-edge strip EdgeSwipeBack claims for
+      // its own back-navigation swipe — see `startedInEdgeZone`.
+      if (axisLock.current === "h" && startX !== undefined && !startedInEdgeZone.current) {
         const dx = e.clientX - startX;
         if (Math.abs(dx) > 64) onSwipeTab?.(dx < 0 ? "left" : "right");
       }

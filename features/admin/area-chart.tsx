@@ -448,60 +448,104 @@ function GranularityMenu({
   );
 }
 
-function TrendChip({ points, compare }: { points: AreaPoint[]; compare?: AreaPoint[] }) {
-  /*
-    🔴 WHEN THERE IS A COMPARISON PERIOD, THE CHIP MEASURES AGAINST IT.
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE CHANGE FIGURE — LAST COMPLETE PERIOD vs THE ONE BEFORE IT
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-08-26: "i no longer see a percentage drops or increase in all the
+ * charts, put a legit, accurate percentage and not fake percentage."
+ *
+ * Both halves of that are fair, and they came from two different mistakes of
+ * mine. This is the third version, so the reasoning is written down properly.
+ *
+ * ── v1 was FAKE: last bucket vs FIRST bucket ──────────────────────────────
+ * With no comparison series the chip compared the newest bucket against the
+ * oldest one in the window. The oldest bucket is routinely a near-empty partial
+ * day, so 3 visitors against 428 produced a true, useless "▲ 14167%".
+ *
+ * ── v2 was SILENT: I raised a minimum baseline ────────────────────────────
+ * That suppressed the absurd numbers by suppressing almost every number. It
+ * treated the symptom — the comparison itself was still the wrong one.
+ *
+ * ── v3, this one: compare two ADJACENT, COMPLETE periods ──────────────────
+ * The granularity control already says what a "period" is, so the honest change
+ * figure is the obvious one: yesterday against the day before, last week
+ * against the week before, last month against the month before.
+ *
+ * 🔴 THE TRAILING BUCKET IS EXCLUDED, and this is the part that makes it
+ * accurate rather than merely defensible. The final bucket is always the period
+ * IN PROGRESS — today, this week, this month. Measuring a part-finished day
+ * against a finished one manufactures a drop every single morning, which is
+ * exactly the "fake percentage" being complained about, just with a smaller
+ * number. So the comparison runs over the last two COMPLETE buckets and the
+ * in-progress one is left out of it.
+ *
+ * Consequences, stated rather than hidden:
+ *  • it needs three buckets (two complete plus the running one), so a very
+ *    short series shows no chip — correct, there is no trend in two points;
+ *  • the chip therefore describes the last CLOSED period, not this instant.
+ *    `title` says so on hover, because a number whose meaning is guessed at is
+ *    the same problem in a new outfit.
+ *
+ * A zero baseline still prints nothing: a change from nothing is undefined, not
+ * "+100%", and this dashboard has a standing rule against numbers it cannot
+ * stand behind. There is deliberately NO minimum-size threshold beyond that —
+ * v2 proved that silencing real movement is its own kind of dishonesty, and the
+ * absolute values sit right beside the chip for scale.
+ */
+/** "daily" -> "day". What one bucket represents, for the chip tooltip. */
+function periodNoun(g?: string): string {
+  return g === "weekly" ? "week" : g === "monthly" ? "month" : "day";
+}
 
-    Without one it can only compare the last bucket to the FIRST bucket of the
-    same window — which answers "is today bigger than 30 days ago", a single-day
-    comparison that swings wildly on noise and is not what anyone means by "the
-    trend".
-
-    With a comparison period it becomes the number Search Console actually puts
-    at the top: this period's TOTAL against the previous period's total. Totals,
-    not endpoints, because one quiet Sunday at the edge of a window should not
-    be able to invert the headline figure for a whole month.
-  */
+function TrendChip({
+  points,
+  compare,
+  periodNoun = "period",
+}: {
+  points: AreaPoint[];
+  compare?: AreaPoint[];
+  /** "day" | "week" | "month" — what one bucket represents, for the tooltip. */
+  periodNoun?: string;
+}) {
   const sum = (a: AreaPoint[]) => a.reduce((n, p) => n + p.value, 0);
-  const latest = compare ? sum(points) : (points[points.length - 1]?.value ?? 0);
-  const first = compare ? sum(compare) : (points[0]?.value ?? 0);
 
-  /*
-    ═══════════════════════════════════════════════════════════════════════════
-     🔴 A PERCENTAGE IS ONLY PRINTED WHEN IT MEANS SOMETHING
-    ═══════════════════════════════════════════════════════════════════════════
+  let latest: number;
+  let baseline: number;
+  let explain: string;
 
-    Owner, 2026-08-26, with a screenshot showing "▲ 14167%" and "▲ 9667%":
-    "hard to get clear accurate."
+  if (compare && compare.length > 0) {
+    /*
+      A real comparison series was supplied (the previous window, drawn as the
+      dashed overlay). Then the headline figure is this period's TOTAL against
+      that period's total — totals, not endpoints, so one quiet Sunday at the
+      edge cannot invert the number for a whole month.
+    */
+    latest = sum(points);
+    baseline = sum(compare);
+    explain = "vs the previous period";
+  } else {
+    // Two adjacent COMPLETE buckets; the in-progress one is dropped.
+    if (points.length < 3) return null;
+    latest = points[points.length - 2]!.value;
+    baseline = points[points.length - 3]!.value;
+    explain = `last complete ${periodNoun} vs the ${periodNoun} before`;
+  }
 
-    Those numbers were arithmetically correct and completely useless. With no
-    comparison period this chip falls back to LAST bucket vs FIRST bucket, and
-    the first bucket of a window is routinely a near-empty partial day — 3
-    visitors against 428 is a true "+14,167%" and tells the reader nothing
-    except that the first day was quiet.
+  if (baseline <= 0) return null;
 
-    Two guards, and the second is the one that was missing:
-
-     • a zero baseline gives no chip (a change from nothing is undefined);
-     • a baseline BELOW `MIN_BASELINE` gives no chip either, because a
-       percentage off a handful of events is noise wearing a signal's clothes.
-
-    The absolute value is always on screen next to this, so suppressing the
-    percentage costs the reader nothing and stops the panel making a claim it
-    cannot support. Same rule the reward-completion figure already follows.
-  */
-  const MIN_BASELINE = 10;
-  const trend = first >= MIN_BASELINE ? ((latest - first) / first) * 100 : null;
-  if (trend === null) return null;
+  const trend = ((latest - baseline) / baseline) * 100;
   const trendUp = trend >= 0;
   return (
     <span
       className={cn(
-        "rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums",
+        "cursor-help rounded-full px-1.5 py-0.5 text-[11px] font-bold tabular-nums",
         trendUp
           ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400"
           : "bg-rose-500/12 text-rose-600 dark:text-rose-400",
       )}
+      title={explain}
     >
       {trendUp ? "▲" : "▼"} {Math.abs(trend).toFixed(trend > -10 && trend < 10 ? 1 : 0)}%
     </span>
@@ -543,6 +587,7 @@ function ExpandedChart({
   onClose,
   compare,
   compareLabel,
+  granularity,
 }: {
   title: string;
   subtitle?: string;
@@ -555,6 +600,8 @@ function ExpandedChart({
      "expand to look closer" the one place you cannot see the trend. */
   compare?: AreaPoint[];
   compareLabel?: string;
+  /** Only for the trend chip's tooltip wording — the modal has no picker. */
+  granularity?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -603,7 +650,7 @@ function ExpandedChart({
             <span className="text-2xl font-bold tabular-nums tracking-tight">
               {format(points[points.length - 1]?.value ?? 0)}
             </span>
-            <TrendChip points={points} compare={compare} />
+            <TrendChip points={points} compare={compare} periodNoun={periodNoun(granularity)} />
           </div>
         </div>
 
@@ -673,7 +720,7 @@ export function AdminAreaChart({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold tabular-nums tracking-tight">{format(points[points.length - 1]?.value ?? 0)}</span>
-          <TrendChip points={points} compare={compare} />
+          <TrendChip points={points} compare={compare} periodNoun={periodNoun(granularity)} />
           {/*
             ── SEARCH CONSOLE PUTS THE GRANULARITY IN THE CHART CARD ──────────
 
@@ -744,6 +791,7 @@ export function AdminAreaChart({
           onClose={() => setExpanded(false)}
           compare={compare}
           compareLabel={compareLabel}
+          granularity={granularity}
         />
       ) : null}
     </figure>

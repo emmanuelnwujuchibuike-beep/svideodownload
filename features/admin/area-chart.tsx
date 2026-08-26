@@ -1,6 +1,6 @@
 "use client";
 
-import { Maximize2, X } from "lucide-react";
+import { ChevronDown, Maximize2, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -404,6 +404,50 @@ function DeltaText({ from, to }: { from: number; to: number }) {
   );
 }
 
+/**
+ * Search Console's granularity control: a tinted pill with a chevron, sitting
+ * in the chart card's top-right.
+ *
+ * A native `<select>` under the styling, deliberately. It is one option wide at
+ * rest (the reference's whole point — a segmented row has to show every option
+ * always, which is what put a permanently greyed-out "Monthly" on screen), it
+ * opens the platform picker on a phone, and it brings focus handling,
+ * type-ahead and Escape without a line of menu code.
+ */
+function GranularityMenu({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { id: string; label: string; disabled?: boolean }[];
+  onChange: (id: string) => void;
+}) {
+  if (options.length < 2) return null;
+  return (
+    <span className="relative inline-flex items-center">
+      <select
+        aria-label="Group data by"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        // `pr-6` leaves room for the chevron; `appearance-none` removes the
+        // platform arrow so there is exactly one.
+        className="appearance-none rounded-full bg-primary/10 py-1 pl-2.5 pr-6 text-[11px] font-bold text-primary outline-none transition hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        {options.map((o) => (
+          <option key={o.id} value={o.id} disabled={o.disabled}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        aria-hidden
+        className="pointer-events-none absolute right-1.5 h-3 w-3 text-primary"
+      />
+    </span>
+  );
+}
+
 function TrendChip({ points, compare }: { points: AreaPoint[]; compare?: AreaPoint[] }) {
   /*
     🔴 WHEN THERE IS A COMPARISON PERIOD, THE CHIP MEASURES AGAINST IT.
@@ -559,6 +603,9 @@ export function AdminAreaChart({
   className,
   compare,
   compareLabel = "prev. period",
+  granularity,
+  granularityOptions,
+  onGranularityChange,
 }: {
   title: string;
   subtitle?: string;
@@ -577,6 +624,16 @@ export function AdminAreaChart({
   compare?: AreaPoint[];
   /** What the comparison represents, for the tooltip ("prev. period"). */
   compareLabel?: string;
+  /**
+   * Search Console's in-card granularity dropdown ("Daily ⌄").
+   *
+   * Optional and inert unless BOTH the value and the handler are passed — the
+   * ten other charts on this dashboard have no grouping of their own and must
+   * not sprout a control that does nothing.
+   */
+  granularity?: string;
+  granularityOptions?: { id: string; label: string; disabled?: boolean }[];
+  onGranularityChange?: (id: string) => void;
 }) {
   const [showTable, setShowTable] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -595,7 +652,33 @@ export function AdminAreaChart({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-lg font-bold tabular-nums tracking-tight">{format(points[points.length - 1]?.value ?? 0)}</span>
-          <TrendChip points={points} />
+          <TrendChip points={points} compare={compare} />
+          {/*
+            ── SEARCH CONSOLE PUTS THE GRANULARITY IN THE CHART CARD ──────────
+
+            Owner, 2026-08-26, with a screenshot: "there are two period interval
+            button and the chart is still not like the google chart".
+
+            Right, and it was a LAYOUT mistake rather than a styling one. The
+            toolbar carried `7d / 30d / 90d` and `Daily ⌄` side by side, which
+            reads as two competing interval pickers because that is exactly what
+            it looks like. Search Console never puts them together: the date
+            RANGE sits at the top of the page, and the granularity dropdown sits
+            inside the chart card, next to the data it regroups.
+
+            Separating them in space is what removes the duplication — the same
+            thing the reference does.
+
+            Rendered only when the parent passes a handler, so the charts that
+            have no granularity of their own are untouched.
+          */}
+          {granularity && onGranularityChange ? (
+            <GranularityMenu
+              value={granularity}
+              options={granularityOptions ?? []}
+              onChange={onGranularityChange}
+            />
+          ) : null}
           <button
             type="button"
             onClick={() => setExpanded(true)}

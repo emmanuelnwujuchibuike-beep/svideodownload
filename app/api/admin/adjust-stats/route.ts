@@ -58,7 +58,6 @@ export async function POST(request: Request) {
   */
   const gate = await requireSensitiveAdmin();
   if (!gate.ok) return gate.response;
-  const admin = gate.user;
   const body = await request.json().catch(() => null);
   const db = createAdminClient();
 

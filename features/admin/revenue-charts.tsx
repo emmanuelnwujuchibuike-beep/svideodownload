@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, Info, RefreshCw } from "lucide-react";
+import { AlertTriangle, Info, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
@@ -126,6 +126,30 @@ export function RevenueCharts({
     rewritten to "daily" behind the operator's back.
   */
   const effectiveGrain: Granularity = grainTooShort(grain, range) ? "daily" : grain;
+
+  /*
+    The in-card granularity dropdown, spread onto every chart that comes off the
+    daily grid (owner, 2026-08-26: "there are two period interval button").
+
+    One shared piece of state behind however many dropdowns are on screen, so
+    changing it on any chart regroups all of them — they are panels of ONE
+    dataset and letting two disagree about the grouping is the same class of
+    error as letting them disagree about the date range.
+
+    Search Console shows one because it has one chart; this dashboard shows the
+    control where the reference shows it, on each card, and keeps the behaviour
+    global.
+  */
+  const grainProps = {
+    granularity: effectiveGrain,
+    granularityOptions: GRAINS.map((g) => ({
+      id: g.id,
+      label: g.label,
+      // Greyed INSIDE the opened menu rather than as a dead button on the page.
+      disabled: grainTooShort(g.id, range),
+    })),
+    onGranularityChange: (id: string) => setGrain(id as Granularity),
+  };
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -382,67 +406,6 @@ export function RevenueCharts({
             ))}
           </div>
 
-          {/*
-            Grouping, beside the range and styled identically — the two read as
-            one filter row because they are one question ("what window, grouped
-            how"), and every panel below answers it the same way.
-
-            🔴 Weekly/monthly are DISABLED when the window cannot express them.
-            Seven days is one week and a fraction, and "monthly" over 7 days is a
-            single bar — a control that produces a meaningless chart is worse
-            than one that is visibly unavailable, and `title` says why rather
-            than leaving a dead button to guess at.
-          */}
-          {/*
-            ── SEARCH CONSOLE'S DROPDOWN, not a segmented row ────────────────
-
-            Owner, 2026-08-25, with side-by-side screenshots: "use exactly the
-            measurement, button style, design and calculation from the image".
-
-            Search Console puts ONE tinted pill with a chevron here — "Weekly ⌄"
-            — and the two designs are not interchangeable at this width. A
-            three-button segmented row has to render every option all the time,
-            which is what pushed "Monthly" onto the screen permanently greyed
-            out (visible in the owner's screenshot) — a control that is mostly
-            unavailable, taking permanent space to say so.
-
-            A `<select>` under a styled pill: it is one option wide at rest,
-            it opens the platform's own picker (correct on a phone, which is
-            where the reference was captured), and it is keyboard- and
-            screen-reader-native without a line of menu code.
-
-            🔴 A REAL `<select>`, not a div with a listbox role. The native
-            control brings focus management, type-ahead, Escape, and the iOS
-            wheel for free; every hand-rolled dropdown in this codebase would
-            have to re-earn those.
-          */}
-          <div className="relative inline-flex items-center">
-            <select
-              aria-label="Group data by"
-              value={effectiveGrain}
-              onChange={(e) => setGrain(e.target.value as Granularity)}
-              className="appearance-none rounded-full bg-primary/10 py-1.5 pl-3.5 pr-8 text-xs font-semibold text-primary outline-none transition hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {GRAINS.map((g) => (
-                <option
-                  key={g.id}
-                  value={g.id}
-                  /*
-                    Still disabled where the window cannot express the grouping
-                    — but now it is one row inside an opened menu rather than a
-                    permanently greyed button on the page.
-                  */
-                  disabled={grainTooShort(g.id, range)}
-                >
-                  {g.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              aria-hidden
-              className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-primary"
-            />
-          </div>
         </div>
       </div>
 
@@ -565,6 +528,7 @@ export function RevenueCharts({
           subtitle={`${totalImpr.toLocaleString()} in the last ${range} days`}
           points={impressions}
           compare={prev.impressions}
+          {...grainProps}
           slot={1}
         />
         <AdminAreaChart
@@ -572,6 +536,7 @@ export function RevenueCharts({
           subtitle={ctr !== null ? `${totalClicks.toLocaleString()} clicks · ${ctr.toFixed(2)}% CTR` : undefined}
           points={clicks}
           compare={prev.clicks}
+          {...grainProps}
           slot={2}
         />
         {/* The figures an ad panel is actually read for, under the charts they
@@ -671,6 +636,7 @@ export function RevenueCharts({
           subtitle={`${totalDownloads.toLocaleString()} completed in the last ${range} days`}
           points={downloads}
           compare={prev.downloads}
+          {...grainProps}
           slot={4}
           className="lg:col-span-2"
         />
@@ -692,6 +658,7 @@ export function RevenueCharts({
           subtitle={`${installsMonth.toLocaleString()} in the last 30 days · Android & desktop only`}
           points={installs}
           compare={prev.installs}
+          {...grainProps}
           slot={3}
         />
 
@@ -752,6 +719,7 @@ export function RevenueCharts({
           subtitle={`${totalRewardsStarted.toLocaleString()} opened in the last ${range} days`}
           points={rewardsStarted}
           compare={prev.rewardsStarted}
+          {...grainProps}
           slot={2}
         />
         <AdminAreaChart
@@ -763,6 +731,7 @@ export function RevenueCharts({
           }
           points={rewardsGranted}
           compare={prev.rewardsGranted}
+          {...grainProps}
           slot={1}
         />
 
@@ -782,6 +751,7 @@ export function RevenueCharts({
           subtitle={`${totalMultilinkBatches.toLocaleString()} ran in the last ${range} days`}
           points={multilinkBatches}
           compare={prev.multilinkBatches}
+          {...grainProps}
           slot={2}
         />
         <AdminAreaChart
@@ -793,6 +763,7 @@ export function RevenueCharts({
           }
           points={multilinkRefused}
           compare={prev.multilinkRefused}
+          {...grainProps}
           slot={1}
         />
 

@@ -49,7 +49,6 @@ export async function POST(request: Request) {
   */
   const gate = await requireSensitiveAdmin();
   if (!gate.ok) return gate.response;
-  const admin = gate.user;
   let body: unknown;
   try {
     body = await request.json();

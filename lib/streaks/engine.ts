@@ -252,6 +252,23 @@ export async function recordActivity(
     if (needsApply) {
       const outcome = applyActivity(record, today);
       if (outcome.kind !== "already-today") {
+        /*
+          🔴 RECORD THE LOSS BEFORE OVERWRITING IT (migration 0135).
+
+          `outcome.record` has already replaced `currentStreak` with 1, so the
+          length of the run that just broke exists only in `record` — the value
+          on THIS line — and nowhere else once we reassign below. That is why
+          this sits here rather than after the update: one line later the number
+          is gone, which is precisely why "how many days lost" was unanswerable
+          before this ledger existed.
+
+          `kind === "reset"` is the engine's own word for "a run ended". Guarded
+          on a real previous run (> 0) so a brand-new record's first day is not
+          logged as having lost a zero-day streak.
+        */
+        if (outcome.kind === "reset" && record.currentStreak > 0) {
+          void logStreakEvent(db, row.id, "lost", record.currentStreak, today);
+        }
         record = outcome.record;
         await db
           .from("streaks")
@@ -299,6 +316,31 @@ export async function markCelebrated(identity: StreakIdentity, now: Date = new D
   }
 }
 
+/**
+ * Append to the loss/restore ledger (`public.streak_events`, migration 0135).
+ *
+ * 🔴 FIRE-AND-FORGET, AND DELIBERATELY SO. This is observability for the admin
+ * dashboard; the streak itself is already correct without it. §24's rule is that
+ * the streak must never break the page, so a failed ledger insert costs a row in
+ * an admin chart and nothing a member can see. Every caller uses `void` for that
+ * reason — awaiting it would put an analytics write on the critical path of the
+ * request that credits someone's day.
+ */
+function logStreakEvent(
+  db: ReturnType<typeof createAdminClient>,
+  streakId: string,
+  kind: "lost" | "restored",
+  days: number,
+  occurredOn: string,
+): PromiseLike<unknown> {
+  // PostgREST's builder is a thenable, not a real Promise — `.then(…)` on it
+  // returns `PromiseLike`, which is all a `void`-ed call needs.
+  return db
+    .from("streak_events")
+    .insert({ streak_id: streakId, kind, days, occurred_on: occurredOn })
+    .then(undefined, () => undefined);
+}
+
 /** Restore an interrupted streak. Returns the new state, or null if not allowed. */
 export async function restoreStreak(identity: StreakIdentity, now: Date = new Date()): Promise<StreakState | null> {
   if (!hasSupabase) return null;
@@ -322,6 +364,19 @@ export async function restoreStreak(identity: StreakIdentity, now: Date = new Da
       // restore finds the deadline already cleared and changes nothing.
       .eq("restore_deadline", row.restore_deadline ?? "");
     if (error) return null;
+
+    /*
+      Logged only AFTER the conditional update succeeded (migration 0135). The
+      `.eq("restore_deadline", …)` guard is what makes a restore happen exactly
+      once under concurrency — logging before it would write a second 'restored'
+      row for the request that lost that race and never actually restored
+      anything, inflating the very number the owner asked for.
+
+      `restored.currentStreak` is the run that came back, which is the honest
+      answer to "how many days restored" — not `restores_used`, which only ever
+      counted HOW MANY TIMES someone restored.
+    */
+    void logStreakEvent(db, row.id, "restored", restored.currentStreak, today);
 
     // The restored run counts today as active, so the calendar agrees with it.
     await db

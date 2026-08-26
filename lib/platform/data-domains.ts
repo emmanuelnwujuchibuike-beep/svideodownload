@@ -331,8 +331,8 @@ export const DATA_DOMAINS: DataDomain[] = [
     name: "Streaks",
     owner: "lib/streaks",
     description:
-      "Daily-activity streaks for BOTH accounts and anonymous browser identities. `streaks` holds one row per identity (exactly one of user_id/anon_id, enforced by a CHECK); `streak_daily_activity` is the per-day ledger whose composite primary key is what makes crediting idempotent across tabs and devices.",
-    tables: ["streaks", "streak_daily_activity"],
+      "Daily-activity streaks for BOTH accounts and anonymous browser identities. `streaks` holds one row per identity (exactly one of user_id/anon_id, enforced by a CHECK); `streak_daily_activity` is the per-day ledger whose composite primary key is what makes crediting idempotent across tabs and devices; `streak_events` records runs ENDING and being restored, because `streaks` overwrites `current_streak` on a break and the length of the run that just ended exists nowhere else.",
+    tables: ["streaks", "streak_daily_activity", "streak_events"],
     storage: ["relational"],
   },
   {

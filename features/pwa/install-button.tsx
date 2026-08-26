@@ -76,6 +76,86 @@ export function InstallButton({ className }: { className?: string }) {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE HEADER INSTALL GROUP — the landing's primary placement (2026-08-25)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner: *"i think the install CTA in the landing hero is causing visual noise
+ * … remove the frenz [text] from the top header landing page, and the search
+ * icon button so there will be space for the install section and button but in
+ * a premium and professional way, no description, just Install Frenz and the
+ * install button and ICON in the top header, it should [not] look too
+ * compressed, there should still be space."*
+ *
+ * So the call to action MOVES rather than being duplicated: the hero banner is
+ * gone from the landing (`DownloadPageCore installBanner={false}`) and this
+ * takes its place. The header earns the room by giving up two things the owner
+ * named — the "Frenz" wordmark text and the search trigger.
+ *
+ * ── The three parts, and nothing else ────────────────────────────────────────
+ * Icon, label, button. The hero banner's second line ("Get the full Frenz
+ * experience on your home screen") is deliberately dropped: a description in a
+ * 64px-tall bar is what makes a header feel cramped, and it was the noise being
+ * complained about.
+ *
+ * ── 🔴 FIRST PAINT, HIDDEN BY CSS — NOT MOUNT-GATED ──────────────────────────
+ * `InstallButton` above waits for mount before rendering, which is right for a
+ * standalone pill in a fixed-size slot. It is WRONG here: this group is wide,
+ * and appearing after hydration would reflow the whole header row on the one
+ * page carrying a CLS budget — precisely the regression the hero banner was
+ * built to avoid.
+ *
+ * So it renders in the server HTML and the installed case is removed by CSS
+ * (`.hide-when-installed`, a `display-mode: standalone` media query in
+ * globals.css). Same fail-closed trick as `InstallHeroBanner` and
+ * `public/launch.html`: a visitor who already installed sees it vanish before
+ * first paint, with no JavaScript involved and no shift either way.
+ *
+ * ── Spacing is the "premium" instruction, literally ──────────────────────────
+ * `gap-2.5` inside the group and `pl-1 pr-1` around it, rather than packing the
+ * three parts flush. "There should still be space" is a spacing brief, and the
+ * cheapest way to make a control look expensive is to give it room.
+ */
+export function InstallHeaderCta({ className }: { className?: string }) {
+  const state = useSyncExternalStore(subscribeInstall, getInstallState, getServerInstallState);
+  const [open, setOpen] = useState(false);
+
+  if (state.installed) return null;
+
+  return (
+    <>
+      <div
+        className={cn(
+          "hide-when-installed flex shrink-0 items-center gap-2.5 rounded-2xl px-1",
+          className,
+        )}
+      >
+        {/* The ICON the owner asked for, on the brand gradient — the one piece
+            of colour in an otherwise quiet bar, so the eye lands on it. */}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25">
+          <Download className="h-[18px] w-[18px]" aria-hidden />
+        </span>
+        {/* Hidden below `sm`, where the button alone has to carry it — a phone
+            header cannot hold a label AND a button AND the account cluster
+            without becoming the cramped bar this change exists to fix. */}
+        <span className="hidden whitespace-nowrap text-sm font-bold leading-none text-foreground sm:block">
+          Install Frenz
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          className="inline-flex h-9 shrink-0 items-center rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-4 text-sm font-bold text-white shadow-md shadow-violet-500/25 transition active:scale-[0.97]"
+        >
+          Install
+        </button>
+      </div>
+      {open ? <InstallModal onClose={() => setOpen(false)} /> : null}
+    </>
+  );
+}
+
+/**
  * The hero banner — the primary, unmissable placement (owner, 2026-08-23:
  * "professionally organised to be well visible at the top of the hero, just
  * below the top header").

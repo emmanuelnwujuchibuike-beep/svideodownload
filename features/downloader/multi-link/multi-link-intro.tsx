@@ -71,12 +71,75 @@ export function MultiLinkIntro({
     >
       {/* ── Heading + the "?" ──────────────────────────────────────────── */}
       <div className="relative flex items-start gap-2">
-        {/* "…, all in one place." dropped (owner, 2026-08-25). The heading
-            itself STAYS: the "?" is anchored beside it by the owner's own
-            earlier instruction ("you just put a question mark at the top of the
-            multi link H1 text"), so removing the H1 outright would orphan the
-            one affordance that holds the description. */}
-        <h3 id="multi-link-heading" className="text-balance text-base font-extrabold tracking-tight sm:text-lg">
+        {/*
+          ── THE PREMIUM LINE (owner, 2026-08-25) ────────────────────────────
+          "should be designed and decorated as a premium visible sentence, with
+          premium brand color splash like as the hero H1 … but this should be
+          more premium with premium stylish luxurious font."
+
+          Three things make it, and each one is chosen against a constraint:
+
+          1. THE FACE — `font-luxe`, Playfair Display. A THIRD face, added for
+             this line (app/layout.tsx has the full note).
+
+             🔴 This overrules a first pass that reused the Outfit wordmark face
+             to avoid a new font file. Owner: "dont use the frenzsave brand
+             font, use a more premium stylish font that havent been used before
+             for the multi link H1 intro." That rules out both faces already
+             loaded, so a new one is the instruction, not a drift.
+
+             The cost is real and is paid down the same way the wordmark's is —
+             one weight, `preload:false`, `display:swap` — so it never competes
+             with the LCP element and never blocks first paint. A high-contrast
+             SERIF is also the honest reading of "luxurious": that thick-to-thin
+             modulation is what the eye reads as luxury, and it is exactly what
+             Inter and Outfit, both sans, cannot do.
+
+          2. THE SPLASH — richer than the hero's, on purpose. The hero tints ONE
+             word out of three (`Discover.`) because the other two have to stay
+             quiet around it. Here the whole line is the subject, so the gradient
+             runs across all of it and travels further round the wheel
+             (blue → indigo → violet → fuchsia), which is what reads as "more
+             premium" rather than merely "same treatment, second time".
+             `text-transparent` + `bg-clip-text`, the same mechanism the hero and
+             `.text-gradient` use — no new idiom.
+
+          3. THE TYPE ITSELF — a size bump, and NO negative tracking (`.font-luxe`
+             sets `letter-spacing: 0`). High-contrast serifs are drawn to be set
+             open; the tightening that flatters a geometric wordmark closes
+             these counters and cheapens them. Luxury type is set OPEN, not
+             squeezed.
+
+          🔴 The dark-mode stops are separate and lighter. A 600-weight gradient
+          that reads rich on white goes muddy on #0b1020 — the same reason the
+          hero declares its own `dark:` ramp instead of letting one set serve
+          both.
+
+          The heading STAYS despite "…, all in one place." being cut: the "?" is
+          anchored beside it by the owner's earlier instruction ("you just put a
+          question mark at the top of the multi link H1 text"), so removing the
+          H1 outright would orphan the affordance that holds the description.
+        */}
+        <h3
+          id="multi-link-heading"
+          className={cn(
+            "font-luxe text-balance bg-clip-text text-lg font-semibold leading-snug text-transparent sm:text-xl",
+            /*
+              🔴 A literal `linear-gradient`, not `from-/via-/to-`. Tailwind's
+              `via-` is ONE stop — two `via-` classes emit the same custom
+              property and the later simply overwrites the earlier, so the
+              four-stop ramp described above is not expressible in that API. It
+              would have compiled, linted and silently rendered a three-stop
+              gradient. Written out, the extra stop actually exists.
+            */
+            onHero
+              ? "bg-[linear-gradient(100deg,#93c5fd_0%,#c4b5fd_45%,#f0abfc_100%)]"
+              : [
+                  "bg-[linear-gradient(100deg,#2563eb_0%,#4f46e5_28%,#7c3aed_58%,#c026d3_100%)]",
+                  "dark:bg-[linear-gradient(100deg,#60a5fa_0%,#818cf8_28%,#a78bfa_58%,#e879f9_100%)]",
+                ],
+          )}
+        >
           Download multiple links
         </h3>
 

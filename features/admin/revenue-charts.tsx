@@ -2,12 +2,35 @@
 
 import { AlertTriangle, Info, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { AdminAreaChart, type AreaPoint } from "@/features/admin/area-chart";
 import { AdminSectionTabs, AdminTabPanel, type AdminTab } from "@/features/admin/section-tabs";
+import {
+  aggregateRevenue,
+  type DailyPoint,
+  type Granularity,
+} from "@/lib/monetization/revenue-aggregate";
 import type { RevenueSeries } from "@/lib/monetization/revenue-series";
 import { cn } from "@/lib/utils";
+
+/** The grouping control's options, in the order they escalate. */
+const GRAINS: { id: Granularity; label: string }[] = [
+  { id: "daily", label: "Daily" },
+  { id: "weekly", label: "Weekly" },
+  { id: "monthly", label: "Monthly" },
+];
+
+/**
+ * Is this grouping meaningless over this window?
+ *
+ * Seven days is one week and a fraction; a "monthly" chart of 7 days is a single
+ * bar. 14 and 60 are the points at which each grouping has at least two real
+ * buckets to compare, which is the minimum for a trend to exist at all.
+ */
+function grainTooShort(grain: Granularity, range: number): boolean {
+  return (grain === "weekly" && range < 14) || (grain === "monthly" && range < 60);
+}
 
 /**
  * The sticky sub-nav's buttons (owner, 2026-08-23: "the top nav should have
@@ -86,40 +109,119 @@ export function RevenueCharts({
     that opens on a filtered view should open on its least surprising one.
   */
   const [tab, setTab] = useState<string>("overview");
+  /*
+    How the daily grid is grouped. Purely a VIEW concern — it never reaches the
+    server, because every bucket is derivable from the daily grid already in
+    memory. Defaults to daily: it is the raw measurement, and a dashboard should
+    open on what was actually counted rather than on a rollup of it.
+  */
+  const [grain, setGrain] = useState<Granularity>("daily");
+  /*
+    🔴 The grouping is CLAMPED to the window, not just disabled in the UI.
+    Picking Monthly over 90 days and then narrowing to 7 would otherwise leave
+    `grain` on a value whose own button is now disabled — the charts stuck
+    showing one meaningless bucket with the control that caused it greyed out.
+    Deriving the effective value means the selection is always renderable, and
+    it springs back when the window widens again instead of being silently
+    rewritten to "daily" behind the operator's back.
+  */
+  const effectiveGrain: Granularity = grainTooShort(grain, range) ? "daily" : grain;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // The filter narrows an already-fetched window rather than refetching: at 90
-  // days this is 90 numbers, and a round-trip to slice an array is latency for
-  // nothing.
-  const slice = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - range));
-
-  const fmtDay = (iso: string) =>
-    new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-
-  const impressions: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.impressions }));
-  const clicks: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.clicks }));
-  const visits: AreaPoint[] = slice(visitors ?? []).map((d) => ({ label: fmtDay(d.date), value: d.visitors }));
-  const downloads: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.downloads }));
-  const installs: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.installs }));
-  const rewardsStarted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsStarted }));
-  const rewardsGranted: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.rewardsGranted }));
-  const multilinkBatches: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.multilinkBatches }));
-  const multilinkRefused: AreaPoint[] = slice(series.days).map((d) => ({ label: fmtDay(d.date), value: d.multilinkRefused }));
   /*
-    🔴 A NULL DAY IS DROPPED, NOT PLOTTED AS ZERO (owner, 2026-08-23:
-    "returning visitors in admin is glitching, showing 0"). An unmeasured day
-    charted at zero is indistinguishable from a real day with no returning
-    visitors, and it also drags the total down — which is how a day whose true
-    figure was 52 came to read as 0. Dropping it leaves a visible gap, which is
-    the honest rendering of "we could not measure this".
+    ═══════════════════════════════════════════════════════════════════════════
+     DAILY / WEEKLY / MONTHLY — RE-BUCKETED HERE, NEVER REFETCHED
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Every panel below is built inside ONE `useMemo` keyed on the inputs that can
+    actually change the drawing: the source grid, the window, and the
+    granularity. Two consequences, and both are requirements rather than
+    niceties:
+
+     • SWITCHING GRANULARITY IS NOT A FETCH. `lib/monetization/revenue-series.ts`
+       already returns a gap-free daily grid with explicit zeros — every weekly
+       and monthly bucket is derivable from it. Going back to the server to draw
+       the same numbers grouped differently would put a spinner in front of a
+       pure function.
+     • RE-RENDERS THAT CHANGE NOTHING COST NOTHING. Without the memo, eleven
+       series would be re-derived on every unrelated state change in this
+       component — the open/closed state of a chart's data table, the refresh
+       transition — for identical output.
+
+    `aggregateRevenue` is the tested engine (27 cases: Monday weeks, weeks
+    spanning months AND years, leap days, partial leading weeks, zero days). It
+    conserves totals, so the figures beside each title are the same number
+    whichever grouping is on screen — a total that moved when you regrouped it
+    would mean one of the two was wrong.
+
+    🔴 KNOWN AND DELIBERATE: weeks and months are grouped in the VIEWER'S local
+    calendar (owner asked for "my local time zone"), but the DAY totals they are
+    built from are still bucketed by UTC day on the server (`revenue-series.ts`
+    uses `isoDay`/`setUTCHours`). So a day's activity either side of local
+    midnight can land in the neighbouring bucket. Fixing it properly needs the
+    server to know the viewer's zone — a timezone cookie read by the admin page
+    — and is NOT done here. It is recorded rather than papered over because the
+    error is at most one day at a boundary, and pretending otherwise is how a
+    dashboard stops being trustworthy.
   */
-  const definedDays = <K extends "newVisitors" | "returningVisitors">(key: K): AreaPoint[] =>
-    slice(visitorSplit ?? [])
-      .filter((d): d is (typeof d) & Record<K, number> => d[key] != null)
-      .map((d) => ({ label: fmtDay(d.date), value: d[key] }));
-  const newVisitors: AreaPoint[] = definedDays("newVisitors");
-  const returningVisitors: AreaPoint[] = definedDays("returningVisitors");
+  const {
+    impressions,
+    clicks,
+    visits,
+    downloads,
+    installs,
+    rewardsStarted,
+    rewardsGranted,
+    multilinkBatches,
+    multilinkRefused,
+    newVisitors,
+    returningVisitors,
+  } = useMemo(() => {
+    const slice = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - range));
+
+    /** Daily grid → the selected grouping → what AdminAreaChart draws. */
+    const group = (days: DailyPoint[]): AreaPoint[] =>
+      aggregateRevenue(days, effectiveGrain).map((b) => ({ label: b.label, value: b.value }));
+
+    const of = (pick: (d: RevenueSeries["days"][number]) => number): AreaPoint[] =>
+      group(slice(series.days).map((d) => ({ date: d.date, value: pick(d) })));
+
+    /*
+      🔴 A NULL DAY IS DROPPED, NOT PLOTTED AS ZERO (owner, 2026-08-23:
+      "returning visitors in admin is glitching, showing 0"). An unmeasured day
+      charted at zero is indistinguishable from a real day with no returning
+      visitors, and it also drags the total down — which is how a day whose true
+      figure was 52 came to read as 0. Dropping it leaves a visible gap, which
+      is the honest rendering of "we could not measure this".
+
+      🔴 The drop happens BEFORE aggregation, on purpose. Feeding a null through
+      as 0 and then summing a week would bury the gap inside a bucket, where it
+      is no longer visible as missing at all — the weekly figure would simply be
+      quietly too low, which is strictly worse than the bug this rule was
+      written for.
+    */
+    const definedDays = <K extends "newVisitors" | "returningVisitors">(key: K): AreaPoint[] =>
+      group(
+        slice(visitorSplit ?? [])
+          .filter((d): d is (typeof d) & Record<K, number> => d[key] != null)
+          .map((d) => ({ date: d.date, value: d[key] })),
+      );
+
+    return {
+      impressions: of((d) => d.impressions),
+      clicks: of((d) => d.clicks),
+      visits: group(slice(visitors ?? []).map((d) => ({ date: d.date, value: d.visitors }))),
+      downloads: of((d) => d.downloads),
+      installs: of((d) => d.installs),
+      rewardsStarted: of((d) => d.rewardsStarted),
+      rewardsGranted: of((d) => d.rewardsGranted),
+      multilinkBatches: of((d) => d.multilinkBatches),
+      multilinkRefused: of((d) => d.multilinkRefused),
+      newVisitors: definedDays("newVisitors"),
+      returningVisitors: definedDays("returningVisitors"),
+    };
+  }, [series.days, range, effectiveGrain, visitors, visitorSplit]);
 
   const totalImpr = impressions.reduce((n, p) => n + p.value, 0);
   const totalClicks = clicks.reduce((n, p) => n + p.value, 0);
@@ -221,6 +323,44 @@ export function RevenueCharts({
               </button>
             ))}
           </div>
+
+          {/*
+            Grouping, beside the range and styled identically — the two read as
+            one filter row because they are one question ("what window, grouped
+            how"), and every panel below answers it the same way.
+
+            🔴 Weekly/monthly are DISABLED when the window cannot express them.
+            Seven days is one week and a fraction, and "monthly" over 7 days is a
+            single bar — a control that produces a meaningless chart is worse
+            than one that is visibly unavailable, and `title` says why rather
+            than leaving a dead button to guess at.
+          */}
+          <div role="group" aria-label="Group by" className="flex items-center gap-1 rounded-xl bg-secondary/50 p-1">
+            {GRAINS.map((g) => {
+              const tooShort = grainTooShort(g.id, range);
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setGrain(g.id)}
+                  disabled={tooShort}
+                  aria-pressed={effectiveGrain === g.id}
+                  title={
+                    tooShort
+                      ? `Needs a longer window than ${range} days to be meaningful`
+                      : undefined
+                  }
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                    grain === g.id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                    tooShort && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
+                  )}
+                >
+                  {g.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -229,6 +369,45 @@ export function RevenueCharts({
           <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           This window hit the read limit, so the earliest days are partial. The shape of the recent
           days is accurate; the totals are a floor, not the whole count.
+        </p>
+      ) : null}
+
+      {/*
+        ── THE THREE STATES A SERIES CAN BE IN, AND ONLY ONE IS "DRAW IT" ─────
+
+        ERROR is announced, not swallowed. `revenue-series.ts` degrades to an
+        empty grid when its read fails, which is the right thing for the page —
+        but it makes a failure indistinguishable from a genuinely quiet week.
+        `series.failed` says which, so nobody reads an outage as a collapse in
+        traffic and goes looking for a cause that does not exist.
+
+        EMPTY is stated once, here, rather than as eleven "no data" panels. A
+        grid of empty charts is a wall of noise that takes longer to interpret
+        than one sentence.
+
+        There is deliberately NO loading state. This component is server-rendered
+        with its data already in hand — it never mounts without a series — and
+        the only refresh path is `router.refresh()`, which keeps the current
+        numbers on screen and swaps them when the new ones land. A spinner would
+        mean blanking real data to display nothing, which is strictly worse than
+        showing slightly-stale figures with the Refresh button spinning (it
+        already does).
+      */}
+      {series.failed ? (
+        <p
+          role="alert"
+          className="mb-3 flex items-start gap-2 rounded-xl bg-rose-500/10 p-2.5 text-xs text-rose-700 dark:text-rose-400"
+        >
+          <AlertTriangle aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          These figures could not be read just now, so the charts below are empty — this is a
+          failure to MEASURE, not a drop to zero. Try Refresh; if it persists, check the analytics
+          tables.
+        </p>
+      ) : series.days.length === 0 ? (
+        <p className="mb-3 flex items-start gap-2 rounded-xl bg-secondary/50 p-2.5 text-xs text-muted-foreground">
+          <Info aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Nothing recorded in this window yet. The charts below are empty because there is nothing
+          to draw, not because anything is broken.
         </p>
       ) : null}
 

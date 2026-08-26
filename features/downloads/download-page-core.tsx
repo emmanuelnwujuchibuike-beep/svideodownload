@@ -73,12 +73,23 @@ export function DownloadPageCore({
    *  the server page (this file and `DownloadBox` are both client components)
    *  and passed straight through, exactly like `platformStatus`. */
   multiLink,
+  installBanner = true,
 }: {
   platformStatus?: PlatformStatusMap;
   ctaWallpaperUrl?: string | null;
   rotateUrls?: string[];
   showDisclaimer?: boolean;
   multiLink?: MultiLinkPublicConfig;
+  /**
+   * Whether to render the Install banner under the paste box.
+   *
+   * Off on the LANDING (owner, 2026-08-25: the hero's install CTA "is causing
+   * visual noise") — that page carries `InstallHeaderCta` in its top bar
+   * instead, having given up its wordmark text and search trigger to fit it.
+   * On by default so `/downloads`, whose header has no room for the group,
+   * keeps the banner it has always had.
+   */
+  installBanner?: boolean;
 }) {
   const { items } = useHistory();
 
@@ -101,7 +112,7 @@ export function DownloadPageCore({
             surface="card"
             platformStatus={platformStatus}
             multiLink={multiLink}
-            afterForm={<InstallHeroBanner />}
+            afterForm={installBanner ? <InstallHeroBanner /> : null}
           />
         </div>
       </section>

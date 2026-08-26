@@ -67,6 +67,19 @@ export async function Hero() {
         rotateUrls={recentWallpaperUrls}
         showDisclaimer
         multiLink={publicMultiLinkConfig(multiLink)}
+        /*
+          🔴 NO INSTALL BANNER IN THE LANDING HERO (owner, 2026-08-25: "i think
+          the install CTA in the landing hero is causing visual noise").
+
+          It has MOVED, not gone: `SiteHeader landing` now renders
+          `InstallHeaderCta` in the top bar, which is why that header gives up
+          its wordmark text and its search trigger. Two install calls to action
+          on one screen was the noise.
+
+          /downloads keeps the banner — its header is the ordinary one, with a
+          wordmark and a search field and no room for the group.
+        */
+        installBanner={false}
       />
     </section>
   );

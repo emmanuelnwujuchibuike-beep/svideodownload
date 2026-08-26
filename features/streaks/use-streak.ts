@@ -115,6 +115,39 @@ export async function recordStreakActivity(): Promise<StreakState | null> {
   }
 }
 
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   ONE SOUND PER STREAK VALUE, WHOEVER GETS THERE FIRST
+  ═══════════════════════════════════════════════════════════════════════════
+
+  Owner, 2026-08-25: "the streak animation doesnt animate when it increase, it
+  should bounce and move and feel alive like celebration, with sound."
+
+  Two surfaces can now legitimately want to make a noise for the SAME increment:
+  the hero chip (every increase, wherever the visitor happens to be) and the
+  once-a-day full-screen `StreakCelebration`. On the day both fire they fire
+  within a few hundred ms of each other, and two overlapping copies of the same
+  cue does not read as twice as celebratory — it reads as a bug.
+
+  Gating the chip on `shouldCelebrate` would be the obvious fix and is racy:
+  `markStreakCelebrated()` republishes the state with that flag already flipped,
+  so which surface sees `true` depends on request timing.
+
+  A claim is not racy. Whoever asks first for a given streak value gets the
+  sound; everyone else that day is silently refused. Module-level, because both
+  callers live in the same document and neither owns the other.
+
+  🔴 Keyed by the VALUE, not a boolean: tomorrow's increment is a different
+  number and must be able to claim its own sound.
+*/
+let soundedFor: number | null = null;
+
+export function claimStreakSound(streak: number): boolean {
+  if (soundedFor === streak) return false;
+  soundedFor = streak;
+  return true;
+}
+
 export async function markStreakCelebrated(): Promise<void> {
   try {
     const res = await fetch("/api/streak/celebrated", { method: "POST", credentials: "same-origin" });

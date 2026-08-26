@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Portal } from "@/components/ui/portal";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { StreakFlame } from "@/features/streaks/streak-flame";
-import { markStreakCelebrated } from "@/features/streaks/use-streak";
+import { claimStreakSound, markStreakCelebrated } from "@/features/streaks/use-streak";
 
 /**
  * The once-a-day streak celebration.
@@ -46,8 +46,15 @@ export function StreakCelebration({ streak, onDone }: { streak: number; onDone: 
         member's master sound switch and stays silent when the AudioContext was
         never unlocked by a gesture — so this can never be the thing that makes
         a phone blurt in a quiet room, and needs no switch of its own.
+
+        Claimed rather than played outright: the hero chip now celebrates every
+        increase too, and on the day both fire they land within a few hundred ms
+        of each other. See `claimStreakSound`. This overlay asks FIRST in
+        practice (it mounts off the same response), and if it ever loses the
+        race the chip has already made the noise — either way the moment gets
+        exactly one cue.
       */
-      playSound("streak");
+      if (claimStreakSound(streak)) playSound("streak");
     }
     const hide = setTimeout(() => setLeaving(true), VISIBLE_MS);
     const done = setTimeout(onDone, VISIBLE_MS + 260);
@@ -55,7 +62,10 @@ export function StreakCelebration({ streak, onDone }: { streak: number; onDone: 
       clearTimeout(hide);
       clearTimeout(done);
     };
-  }, [onDone]);
+    // `streak` is fixed for this overlay's whole life (StreakTracker sets it
+    // once and unmounts us on done), so listing it satisfies the linter without
+    // making the timers restartable in practice.
+  }, [onDone, streak]);
 
   return (
     <Portal>

@@ -69,6 +69,13 @@ export const NOT_EXPORTED: Record<string, string> = {
      composite primary key is what stops a day being credited twice. */
   streak_daily_activity:
     "Per-day credit ledger belonging to a streak; the streak itself is exported, including the totals these rows produce.",
+  /* Same shape and same reasoning as the ledger above: keyed by `streak_id`,
+     not by a person, and every fact in it is about a streak that is itself
+     exported. It exists so the admin dashboard can answer "how many days were
+     lost and restored" — `streaks` overwrites `current_streak` on a break, so
+     the length of the ended run survives nowhere else. */
+  streak_events:
+    "Record of your streaks ending and being restored, belonging to a streak; the streak itself is exported, including its current and longest run.",
   collection_items: "Membership rows for a collection; the collection is exported.",
   gateway_config: "Payment gateway configuration. Operational, not personal.",
   notification_broadcasts: "Announcements sent to everyone. Not about you.",

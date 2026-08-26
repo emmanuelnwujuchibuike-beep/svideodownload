@@ -549,7 +549,28 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       initial={{ opacity: 0, y: 24, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="group/card relative mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[2rem] border border-border/60 bg-card shadow-luxury"
+      /*
+        🔴 A RING, NOT A BORDER (owner, 2026-08-25, with a screenshot of this
+        card: "the fetch card has an unprofessional gray boder that doesnt have
+        a border radius").
+
+        It carried `border border-border/60` — a full-strength grey hairline. On
+        the near-white surface this card sits on, that reads as a BOX drawn
+        around the result rather than as the result's own edge, and it is the
+        only card in this flow still drawn that way: the section card that
+        contains it, the landing tiles and the ad surface all use the house
+        treatment below.
+
+        `ring-1 ring-inset` also cannot produce the square edge that was
+        reported. An inset ring is painted inside the element's border-box and
+        follows `border-radius` exactly, whereas a `border` sits in the layout
+        box — so where a radius is fighting a clip or a transformed ancestor
+        (this is a `motion.div`; framer leaves an inline transform on it even at
+        rest), the border is the thing that can end up looking squared off while
+        the content inside it stays correctly rounded. Swapping to a ring
+        removes both the greyness and that whole failure mode.
+      */
+      className="group/card relative mx-auto mt-10 w-full max-w-2xl overflow-hidden rounded-[2rem] bg-card shadow-luxury ring-1 ring-inset ring-slate-900/[0.06] dark:ring-white/10"
     >
       {/* subtle gradient sheen on top edge */}
       <div

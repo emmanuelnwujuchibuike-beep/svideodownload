@@ -1,9 +1,9 @@
 "use client";
 
-import { Bell, Flame, RefreshCw, RotateCcw, Trophy, UserRound, Users } from "lucide-react";
+import { Bell, Flame, RefreshCw, RotateCcw, TrendingDown, Trophy, UserRound, Users } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import type { StreakAdminMetrics } from "@/lib/streaks/admin";
+import type { StreakAdminMetrics, StreakMember } from "@/lib/streaks/admin";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -19,7 +19,14 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * before; where a figure IS an approximation — the at-risk count, which is
  * measured in UTC rather than per-person — it says so on screen.
  */
-export function StreakMonitor({ metrics: initial }: { metrics: StreakAdminMetrics }) {
+export function StreakMonitor({
+  metrics: initial,
+  members = [],
+}: {
+  metrics: StreakAdminMetrics;
+  /** Signed-in members currently on a streak, longest first. */
+  members?: StreakMember[];
+}) {
   /*
     Refreshed IN PLACE from /api/admin/streaks rather than with
     `router.refresh()`. These numbers move minute to minute — a streak is
@@ -128,6 +135,50 @@ export function StreakMonitor({ metrics: initial }: { metrics: StreakAdminMetric
         />
       </div>
 
+      {/*
+        ── Days lost / restored (owner, 2026-08-25) ─────────────────────────
+        "how many days lost and restored".
+
+        🔴 THESE ARE NOT BACKFILLABLE AND THE PANEL SAYS SO. Before migration
+        0135 a broken run left no trace anywhere — `applyActivity` overwrote
+        `current_streak` with 1 and the length of the run that just ended
+        ceased to exist. So the ledger starts on the day it shipped and accrues
+        forward. Showing "0 days lost" with no such note would read as "nobody
+        has ever lost a streak", which is a fabricated statistic rather than a
+        measured one.
+      */}
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Panel
+          icon={TrendingDown}
+          label="Days lost"
+          value={formatCompactNumber(metrics.daysLost)}
+          tone={metrics.daysLost > 0 ? "warn" : "neutral"}
+          note={
+            metrics.ledgerSince
+              ? `Total length of every streak that has broken since ${metrics.ledgerSince}, across ${formatCompactNumber(metrics.lossEvents)} broken run${metrics.lossEvents === 1 ? "" : "s"}.`
+              : "Total length of every streak that breaks from here on. Nothing recorded yet — losses were not written down before this ledger existed, so there is no history to backfill."
+          }
+        />
+        <Panel
+          icon={RotateCcw}
+          label="Days restored"
+          value={formatCompactNumber(metrics.daysRestored)}
+          note={
+            metrics.ledgerSince
+              ? `Days brought back by ${formatCompactNumber(metrics.restoreEvents)} restore${metrics.restoreEvents === 1 ? "" : "s"}. Counts DAYS, unlike "Streaks restored" above, which counts people.`
+              : 'Days brought back by restores from here on. Counts DAYS, unlike "Streaks restored" above, which counts people.'
+          }
+        />
+      </div>
+
+      {/*
+        The list the owner asked for by name: "signed in users who are on streak
+        and how many days streak". Signed-in only — an anonymous identity has no
+        name to show, and "Anonymous share" above is where their reach is
+        reported instead.
+      */}
+      <StreakMemberTable members={members} />
+
       <p className="mt-4 border-t border-border/60 pt-3 text-xs text-muted-foreground">
         Streaks can be switched off without losing data: the{" "}
         <span className="font-medium text-foreground">streak-system</span> and{" "}
@@ -136,6 +187,82 @@ export function StreakMonitor({ metrics: initial }: { metrics: StreakAdminMetric
         reminding immediately and leaves every stored streak intact.
       </p>
     </section>
+  );
+}
+
+/**
+ * The signed-in streak roster.
+ *
+ * 🔴 A real `<table>`, not a grid of divs. This is tabular data with a header
+ * row, and a screen reader reading "Ada 14 3 0" out of a stack of divs conveys
+ * nothing — the column association is the information.
+ *
+ * Scrolls inside its OWN container (`overflow-x-auto`), so a long handle can
+ * never make the admin page itself scroll sideways.
+ */
+function StreakMemberTable({ members }: { members: StreakMember[] }) {
+  if (members.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-dashed border-border/70 bg-secondary/20 p-5 text-center text-xs text-muted-foreground">
+        No signed-in member is on a streak right now. Anonymous visitors keep their own streaks —
+        see <span className="font-medium text-foreground">Anonymous share</span> above.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-2xl border border-border/60">
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-secondary/30 px-4 py-3">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <UserRound className="h-4 w-4 text-muted-foreground" /> Members on a streak
+        </span>
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          Top {members.length} by current streak
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] text-sm">
+          <thead>
+            <tr className="border-b border-border/60 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+              <th scope="col" className="px-4 py-2 font-semibold">Member</th>
+              <th scope="col" className="px-3 py-2 text-right font-semibold">Streak</th>
+              <th scope="col" className="px-3 py-2 text-right font-semibold">Best</th>
+              <th scope="col" className="px-3 py-2 text-right font-semibold">Lost</th>
+              <th scope="col" className="px-3 py-2 text-right font-semibold">Restored</th>
+              <th scope="col" className="px-4 py-2 text-right font-semibold">Last active</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m) => (
+              <tr key={m.userId} className="border-b border-border/40 last:border-0">
+                <th scope="row" className="max-w-[14rem] truncate px-4 py-2.5 text-left font-medium">
+                  {m.displayName || (m.handle ? `@${m.handle}` : "Member")}
+                  {m.handle && m.displayName ? (
+                    <span className="ml-1.5 text-xs font-normal text-muted-foreground">@{m.handle}</span>
+                  ) : null}
+                </th>
+                <td className="px-3 py-2.5 text-right font-bold tabular-nums text-orange-600 dark:text-orange-400">
+                  {m.currentStreak}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{m.longestStreak}</td>
+                {/* An em dash, not a 0: before the ledger existed there is no
+                    difference between "lost nothing" and "not recorded", and
+                    printing 0 would assert the first. */}
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                  {m.daysLost > 0 ? m.daysLost : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">
+                  {m.daysRestored > 0 ? m.daysRestored : "—"}
+                </td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                  {m.lastActivityDate ?? "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

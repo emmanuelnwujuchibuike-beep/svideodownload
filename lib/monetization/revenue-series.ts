@@ -115,6 +115,16 @@ export interface RevenueSeries {
   capped: boolean;
   /** Whole days covered, inclusive. */
   rangeDays: number;
+  /**
+   * True when the read FAILED and this grid is zeros standing in for unknown
+   * numbers — as opposed to a real window in which nothing happened.
+   *
+   * 🔴 The distinction is the whole point. Both render as a flat line at zero,
+   * but one means "fix the database" and the other means "traffic was quiet".
+   * Optional so every existing construction site stays valid and simply reads
+   * as not-failed, which is what they all are.
+   */
+  failed?: boolean;
 }
 
 function isoDay(d: Date): string {
@@ -280,9 +290,16 @@ export async function getRevenueSeries(rangeDays = 30): Promise<RevenueSeries> {
       rangeDays: days,
     };
   } catch {
-    // An unmigrated or unreachable table yields the ZERO grid, not an error
-    // state: the dashboard still renders, and a flat zero line is honest about
-    // what we can see.
-    return empty;
+    /*
+      An unmigrated or unreachable table yields the ZERO grid rather than
+      throwing: the dashboard still renders.
+
+      🔴 But it renders FLAGGED. Returning a silent zero grid made a failed read
+      pixel-identical to a genuinely quiet week, and those two call for opposite
+      responses — one is an outage to fix, the other is a business fact. The
+      panel reads `failed` and says which it is looking at, so nobody goes
+      hunting for the cause of a traffic collapse that never happened.
+    */
+    return { ...empty, failed: true };
   }
 }

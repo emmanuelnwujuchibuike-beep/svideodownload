@@ -107,7 +107,7 @@ export default function HomePage() {
         about the gray ground, and the owner was explicit it's /downloads-only.
       */}
       <div className="bg-background text-foreground">
-        <SiteHeader />
+        <SiteHeader landing />
         <main>
         <Hero />
         {/*

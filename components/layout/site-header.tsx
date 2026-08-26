@@ -4,14 +4,14 @@ import { ArrowRight, Crown, LayoutGrid, LogOut, UserCircle, X } from "lucide-rea
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { FrenzWordmark } from "@/components/brand/frenz-logo";
+import { FrenzLogo, FrenzWordmark } from "@/components/brand/frenz-logo";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
-import { InstallButton, InstallCta } from "@/features/pwa/install-button";
+import { InstallButton, InstallCta, InstallHeaderCta } from "@/features/pwa/install-button";
 import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { SearchTrigger, SearchTriggerIcon } from "@/features/navigation/search-trigger";
@@ -157,9 +157,29 @@ export function SiteHeader({
   desktopHidden = false,
   canvas = false,
   topGradient = false,
+  landing = false,
 }: {
   social?: boolean;
   desktopHidden?: boolean;
+  /**
+   * The landing page's header arrangement (owner, 2026-08-25).
+   *
+   * Three linked changes, and they only make sense together — which is why one
+   * flag drives all three rather than three independent props:
+   *
+   *  • the brand becomes the MARK ALONE, no "Frenz" wordmark text;
+   *  • the search trigger is removed (desktop field and mobile icon both);
+   *  • the room those free up goes to `InstallHeaderCta`.
+   *
+   * A prop rather than `usePathname()`: the landing is the only surface that
+   * wants this, the page already knows it is the landing, and deriving chrome
+   * from the URL inside a component rendered on every marketing route is how a
+   * header starts quietly disagreeing with the page it sits on.
+   *
+   * 🔴 Everywhere else keeps the wordmark and search unchanged. This is not a
+   * global redesign of the header.
+   */
+  landing?: boolean;
   /**
    * 🔴 Wear the landing's native canvas instead of `bg-background`, and drop the
    * hairline (owner, 2026-08-11 — `public/newnativeapplandingpage.jpg`).
@@ -334,8 +354,19 @@ export function SiteHeader({
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
         <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
           {/* The mark sits on a white plate per public/newnativeapplandingpage.jpg —
-              a CSS plate, not a third artwork, so the header costs no new bytes. */}
-          <FrenzWordmark size={28} priority plate />
+              a CSS plate, not a third artwork, so the header costs no new bytes.
+
+              🔴 On the landing it is the MARK ALONE (owner, 2026-08-25: "remove
+              the frenz [text] from the top header landing page"). The logo still
+              carries `alt="Frenz"` by default, so the brand is still announced
+              to a screen reader and the name is not actually lost — it stops
+              taking horizontal space, which is the whole point: that space
+              becomes the install group on the right. */}
+          {landing ? (
+            <FrenzLogo size={28} priority />
+          ) : (
+            <FrenzWordmark size={28} priority plate />
+          )}
         </Link>
 
         {/* Desktop nav — only at lg+; iPad-portrait (md) uses the roomy drawer so
@@ -375,7 +406,11 @@ export function SiteHeader({
               <Crown className="h-4 w-4" /> Go Pro
             </Link>
           )}
-          <SearchTrigger className="w-48" />
+          {/* Search is REMOVED on the landing (owner, 2026-08-25) so the install
+              group has room. It stays on every other marketing route, and on
+              the landing it is still reachable from the menu drawer below —
+              which already carries it for exactly this reason. */}
+          {landing ? null : <SearchTrigger className="w-48" />}
           {/* Language selector for the top ~50 languages (owner — replaced the
               downloads/history icon). History lives in the bottom nav now. */}
           <LanguageSelector />
@@ -386,8 +421,15 @@ export function SiteHeader({
             cluster so it reads as a site-level action rather than an account
             one. Renders null when the app is already installed or running
             standalone, so it never becomes a dead control.
+
+            🔴 On the LANDING it is the fuller `InstallHeaderCta` (icon + "Install
+            Frenz" + button) instead of the bare pill — that page gave up its
+            wordmark and its search field to make room for exactly this, and it
+            no longer carries the hero banner. Every other route keeps the
+            compact pill, where the header still has a wordmark and a search
+            field to fit around.
           */}
-          <InstallButton />
+          {landing ? <InstallHeaderCta /> : <InstallButton />}
           <ThemeToggle />
           <UserMenu />
           {/*
@@ -418,8 +460,15 @@ export function SiteHeader({
         {/* Mobile right — search then menu, hidden on social surfaces (the bottom
             nav owns navigation there). */}
         {social ? null : (
-          <div className="flex items-center gap-1 lg:hidden">
-            <SearchTriggerIcon />
+          <div className={cn("flex items-center lg:hidden", landing ? "gap-2" : "gap-1")}>
+            {/*
+              The install group leads the mobile cluster on the landing, in the
+              space the search icon used to occupy. `gap-2` rather than `gap-1`
+              for this row: the owner's instruction was explicitly that it must
+              not look compressed, and on a phone this row is where that is won
+              or lost.
+            */}
+            {landing ? <InstallHeaderCta /> : <SearchTriggerIcon />}
             {/* Language selector — the top ~50 languages (owner, replaced the
                 downloads/history icon; History is in the bottom nav). */}
             <LanguageSelector />

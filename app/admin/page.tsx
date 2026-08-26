@@ -28,6 +28,7 @@ import { Suspense } from "react";
 
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
+import { AdminSubsections } from "@/features/admin/section-tabs";
 import { SupportInbox } from "@/features/admin/support-inbox";
 import { RatingsSection } from "@/features/admin/ratings-section";
 import { VerificationQueue } from "@/features/admin/verification-queue";
@@ -40,7 +41,7 @@ import { getExperiments } from "@/lib/platform/experiments";
 import { getExperimentOverrides, getExperimentStats } from "@/lib/platform/experiments-store";
 import { DownloadAlertControls } from "@/features/admin/download-alert-settings";
 import { StreakMonitor } from "@/features/admin/streak-monitor";
-import { getStreakMetrics } from "@/lib/streaks/admin";
+import { getStreakMembers, getStreakMetrics } from "@/lib/streaks/admin";
 import { PlatformCatalog } from "@/features/admin/platform-catalog";
 import { getRegistries } from "@/lib/platform/registries";
 import { getServices } from "@/lib/platform/services";
@@ -330,11 +331,15 @@ export default async function AdminPage() {
           trade is right on an operator page and wrong on a public one.
         */}
         <AdminShell>
+          {/*
+            Revenue is deliberately NOT re-tabbed — it is the panel the owner
+            held up as the model. The tiles answer "where are we now", the
+            charts answer "how did we get here", and that is the order somebody
+            reads them in, so the two stay stacked and `RevenueCharts` keeps its
+            own internal tab bar over the six chart groups.
+          */}
           <AdminPanel id="monetization">
             <RevenueOverview revenue={revenue} analytics={analytics} />
-            {/* The trend view sits UNDER the tiles: the tiles answer "where are
-                we now", the charts answer "how did we get here", and that is the
-                order somebody reads them in. */}
             <RevenueCharts
               series={revenueSeries}
               mrr={revenue?.mrr ?? 0}
@@ -349,18 +354,36 @@ export default async function AdminPage() {
             <DigestPanel />
           </AdminPanel>
 
+          {/*
+            🔴 The panel the owner named ("arrange the ad placement … with a top
+            nav so i dont scroll down much"). Ad Placements used to be the LAST
+            of four stacked blocks, so editing a zone meant scrolling past the
+            whole monetization form, the multi-link monitor and the reward
+            routing every time. Each is now one tab.
+          */}
           <AdminPanel id="ads">
-            <MonetizationSettings settings={monetization} />
-            {/* Which network pays for which reward moment. Sits in the ads
-                panel beside the network switches it routes between, not in
-                Pricing — it is an ad-delivery decision, not a plan limit. */}
-            {/* Usage + ad performance, above the routing that governs it. */}
-            <MultiLinkMonitor stats={multiLinkStats} />
-            <RewardNetworkEditor
-              settings={rewardNetworks}
-              offeriumConfigured={networkCaps.offeriumConfigured}
+            <AdminSubsections
+              groups={[
+                { id: "placements", label: "Ad placements", content: <AdManager ads={adRecords} /> },
+                { id: "settings", label: "Ad settings", content: <MonetizationSettings settings={monetization} /> },
+                {
+                  /* Which network pays for which reward moment. Stays in the
+                     ads panel beside the network switches it routes between,
+                     not in Pricing — it is an ad-delivery decision, not a plan
+                     limit. */
+                  id: "networks",
+                  label: "Reward networks",
+                  content: (
+                    <RewardNetworkEditor
+                      settings={rewardNetworks}
+                      offeriumConfigured={networkCaps.offeriumConfigured}
+                    />
+                  ),
+                },
+                /* Usage + ad performance for the batch downloader. */
+                { id: "multi-link", label: "Multi-Link", content: <MultiLinkMonitor stats={multiLinkStats} /> },
+              ]}
             />
-            <AdManager ads={adRecords} />
           </AdminPanel>
 
           <AdminPanel id="affiliates">
@@ -368,27 +391,39 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="pricing">
-            {/* Payment provider setup — your Paystack test/live keys, set here. */}
-            <PaystackSettings />
-            <PricingEditor pricing={pricing} />
-            <LimitsEditor
-              limits={{
-                free: {
-                  dailyDownloads: planLimits.free.dailyDownloads,
-                  apiDailyLimit: planLimits.free.apiDailyLimit,
+            <AdminSubsections
+              groups={[
+                { id: "plans", label: "Plans & pricing", content: <PricingEditor pricing={pricing} /> },
+                {
+                  id: "limits",
+                  label: "Limits",
+                  content: (
+                    <LimitsEditor
+                      limits={{
+                        free: {
+                          dailyDownloads: planLimits.free.dailyDownloads,
+                          apiDailyLimit: planLimits.free.apiDailyLimit,
+                        },
+                        pro: {
+                          dailyDownloads: planLimits.pro.dailyDownloads,
+                          apiDailyLimit: planLimits.pro.apiDailyLimit,
+                        },
+                        business: {
+                          dailyDownloads: planLimits.business.dailyDownloads,
+                          apiDailyLimit: planLimits.business.apiDailyLimit,
+                        },
+                      }}
+                    />
+                  ),
                 },
-                pro: {
-                  dailyDownloads: planLimits.pro.dailyDownloads,
-                  apiDailyLimit: planLimits.pro.apiDailyLimit,
-                },
-                business: {
-                  dailyDownloads: planLimits.business.dailyDownloads,
-                  apiDailyLimit: planLimits.business.apiDailyLimit,
-                },
-              }}
+                { id: "multi-link", label: "Multi-Link", content: <MultiLinkEditor settings={multiLink} /> },
+                { id: "promos", label: "Promo codes", content: <PromoEditor initial={promo} /> },
+                /* Payment provider setup — the Paystack test/live keys. Last
+                   because it is set once and then never touched, unlike the
+                   four above it. */
+                { id: "paystack", label: "Paystack", content: <PaystackSettings /> },
+              ]}
             />
-            <MultiLinkEditor settings={multiLink} />
-            <PromoEditor initial={promo} />
           </AdminPanel>
 
           <AdminPanel id="commerce">
@@ -403,13 +438,27 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="activity">
-            <Suspense fallback={<PanelSkeleton />}>
-              <ActivitySection />
-            </Suspense>
-            {/* The milestone-email threshold sits with download activity, which
-                is what it counts. It loads its own state, so it needs no
-                Suspense boundary and cannot delay the feed above it. */}
-            <DownloadAlertControls />
+            <AdminSubsections
+              groups={[
+                {
+                  id: "feed",
+                  label: "Activity",
+                  content: (
+                    <Suspense fallback={<PanelSkeleton />}>
+                      <ActivitySection />
+                    </Suspense>
+                  ),
+                },
+                {
+                  /* The milestone-email threshold sits with download activity,
+                     which is what it counts. It loads its own state, so it
+                     needs no Suspense boundary of its own. */
+                  id: "alerts",
+                  label: "Download alerts",
+                  content: <DownloadAlertControls />,
+                },
+              ]}
+            />
           </AdminPanel>
 
           <AdminPanel id="subscribers">
@@ -430,12 +479,29 @@ export default async function AdminPage() {
             operator opened the page for.
           */}
           <AdminPanel id="moderation">
-            {/* Admin stat overrides — adjust a user's followers or a post's
-                likes/views (owner). A deliberate manual control. */}
-            <StatAdjuster />
-            <Suspense fallback={<PanelSkeleton />}>
-              <ModerationSection />
-            </Suspense>
+            <AdminSubsections
+              groups={[
+                {
+                  id: "queues",
+                  label: "Queues",
+                  /* The Suspense boundary stays INSIDE the group, so the queue
+                     still streams independently of the panel around it. */
+                  content: (
+                    <Suspense fallback={<PanelSkeleton />}>
+                      <ModerationSection />
+                    </Suspense>
+                  ),
+                },
+                {
+                  /* Admin stat overrides — adjust a user's followers or a
+                     post's likes/views (owner). A deliberate manual control,
+                     and one nobody wants to scroll past to reach the queue. */
+                  id: "stat-overrides",
+                  label: "Stat overrides",
+                  content: <StatAdjuster />,
+                },
+              ]}
+            />
           </AdminPanel>
 
           {/* Support inbox — a client island that loads its own data through
@@ -561,9 +627,19 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="communication">
-            <AnnouncementSettings />
-            <div className="my-6 border-t border-border/60" />
-            <CommunicationCatalog events={getDomainEvents()} integrations={getIntegrations()} />
+            {/* The hand-rolled `border-t` divider goes with the stack: the tab
+                bar is now what separates the two, and a rule under a tab panel
+                would read as the end of the page. */}
+            <AdminSubsections
+              groups={[
+                { id: "announcements", label: "Announcements", content: <AnnouncementSettings /> },
+                {
+                  id: "catalog",
+                  label: "Events & integrations",
+                  content: <CommunicationCatalog events={getDomainEvents()} integrations={getIntegrations()} />,
+                },
+              ]}
+            />
           </AdminPanel>
 
           <AdminPanel id="data">
@@ -608,8 +684,19 @@ export default async function AdminPage() {
           </AdminPanel>
 
           <AdminPanel id="traffic">
-            {/* Live analytics dashboard (Phase 2/3) — reads the event pipeline. */}
-            <AnalyticsDashboard />
+            <AdminSubsections
+              groups={[
+                {
+                  /* Live analytics dashboard (Phase 2/3) — reads the event
+                     pipeline. */
+                  id: "live",
+                  label: "Live",
+                  content: <AnalyticsDashboard />,
+                },
+                {
+                  id: "sources",
+                  label: "Sources & placements",
+                  content: (
             <Suspense fallback={<PanelSkeleton />}>
               {/*
                 `analytics` is the SAME object Revenue's placement table reads
@@ -626,6 +713,10 @@ export default async function AdminPage() {
               */}
               <TrafficSection analytics={analytics} />
             </Suspense>
+                  ),
+                },
+              ]}
+            />
           </AdminPanel>
 
           <AdminPanel id="health">
@@ -640,7 +731,10 @@ export default async function AdminPage() {
 }
 
 async function StreakMonitorLoader() {
-  return <StreakMonitor metrics={await getStreakMetrics()} />;
+  // Both reads in one round trip — the roster is a separate query from the
+  // counters and there is no reason for the panel to wait on them in sequence.
+  const [metrics, members] = await Promise.all([getStreakMetrics(), getStreakMembers()]);
+  return <StreakMonitor metrics={metrics} members={members} />;
 }
 
 /** Matches StreakMonitor's real height, so the panel does not jump when it streams in. */

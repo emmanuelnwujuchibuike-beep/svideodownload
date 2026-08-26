@@ -221,6 +221,27 @@
     letter-spacing: -0.02em;
   }
 
+  /*
+    The LUXE face — Playfair Display, wired by next/font in the root layout.
+    For premium display lines that are neither the wordmark nor body copy
+    (owner, 2026-08-25: "a more premium stylish font that havent been used
+    before"). See the note on `luxeDisplay` in app/layout.tsx for why a serif,
+    and why only one weight ships.
+
+    🔴 The fallback stack is SERIF, not `--font-sans`. `font-display: swap`
+    means the first paint of any line using this IS the fallback, and falling
+    back to Inter would swap between two different classes of letterform —
+    visibly reflowing the line. Georgia is metrically close enough that the swap
+    reads as a refinement rather than a jump.
+  */
+  .font-luxe {
+    font-family: var(--font-luxe), Georgia, "Times New Roman", Times, serif;
+    /* High-contrast serifs are drawn to be set OPEN. The negative tracking that
+       flatters the geometric wordmark closes these counters and cheapens them —
+       so this deliberately does NOT inherit `.font-brand`'s -0.02em. */
+    letter-spacing: 0;
+  }
+
   /* Blue→purple gradient text — hero headings, brand moments */
   .text-gradient {
     @apply bg-gradient-to-r from-blue-500 via-violet-500 to-purple-500 bg-clip-text text-transparent;
@@ -2229,6 +2250,75 @@ body:has(.frenz-canvas-page) {
   animation: frenz-streak-shine 1500ms var(--ease-out) 380ms both;
 }
 
+/* ── The chip's own celebration, on every increment (owner, 2026-08-25) ──────
+   "the streak animation doesnt animate when it increase, it should bounce and
+   move and feel alive like celebration, with sound."
+
+   This is the SMALL sibling of the full-screen moment above: the number used to
+   swap silently, which is the one thing a returning visitor came back for. It
+   fires wherever the chip is, on every rise — not once a day.
+
+   Same three rules as the big one, for the same reason: `transform`/`opacity`
+   only (compositor, no layout, no paint), a stagger rather than more effects
+   at once, and nothing that outlasts the moment (~1.1s total, matching the JS
+   timer that removes these classes).
+
+   🔴 The chip lives in the hero of a page with a 1.6s LCP target and a measured
+   CLS history. Every one of these animates the element IN PLACE — no width,
+   no margin, no layout property — so a bouncing chip cannot shift the pill row
+   it sits in or the H1 above it. */
+@keyframes frenz-streak-chip-pop {
+  0%   { transform: scale(1); }
+  22%  { transform: scale(1.28) rotate(-3deg); }
+  44%  { transform: scale(0.94) rotate(2deg); }
+  64%  { transform: scale(1.12) rotate(-1deg); }
+  82%  { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+/* The numeral gets its own, slightly later and taller bounce, so the eye reads
+   "the NUMBER changed" rather than "a chip wobbled". */
+@keyframes frenz-streak-chip-count {
+  0%   { transform: translateY(0) scale(1); }
+  30%  { transform: translateY(-4px) scale(1.45); }
+  55%  { transform: translateY(1px) scale(0.9); }
+  78%  { transform: translateY(0) scale(1.12); }
+  100% { transform: translateY(0) scale(1); }
+}
+/* One ring, expanding out of the chip and gone. The full-screen moment gets
+   two; a chip that threw two rings would be the tail wagging the dog. */
+@keyframes frenz-streak-chip-ring {
+  from { transform: scale(1); opacity: 0.9; }
+  to   { transform: scale(1.9); opacity: 0; }
+}
+/* The flame breaks out of its slow idle loop and flares once, then the infinite
+   `.streak-flame` breathing resumes when the class is removed. */
+@keyframes frenz-streak-chip-flame {
+  0%   { transform: scale(1) rotate(0deg); }
+  25%  { transform: scale(1.35) rotate(-8deg); }
+  50%  { transform: scale(1.1) rotate(6deg); }
+  75%  { transform: scale(1.22) rotate(-3deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.streak-chip-pop {
+  animation: frenz-streak-chip-pop 760ms var(--ease-spring) both;
+  /* The bounce scales the chip about its own centre; the default 50% 50% is
+     already right, but stating it stops a future `transform-origin` on the
+     hero row from being inherited into a lopsided pop. */
+  transform-origin: 50% 50%;
+}
+.streak-chip-count {
+  animation: frenz-streak-chip-count 700ms var(--ease-spring) 90ms both;
+}
+.streak-chip-ring {
+  animation: frenz-streak-chip-ring 900ms var(--ease-out) both;
+}
+.streak-chip-flame {
+  /* Overrides `.streak-flame`'s infinite idle for the length of the flare —
+     later in the cascade AND more specific by class count, so no `!important`. */
+  animation: frenz-streak-chip-flame 820ms var(--ease-spring) 60ms both;
+}
+
 /*
   🔴 Honour the OS setting (§22). Reduced motion removes the MOVEMENT and keeps
   the MEANING: the flame, the number and the words all still render, they simply
@@ -2255,6 +2345,22 @@ body:has(.frenz-canvas-page) {
   .streak-celebration-shine {
     animation: none;
     background-size: 100% 100%;
+  }
+
+  /*
+    The chip's increment celebration: the MOVEMENT goes, the MEANING stays. The
+    new number is already rendered as text and the sound still plays, so the
+    increment is still announced — it simply does not bounce. The ring is pure
+    decoration with no text of its own, so it is removed outright rather than
+    left as a static circle stuck around the chip.
+  */
+  .streak-chip-pop,
+  .streak-chip-count,
+  .streak-chip-flame {
+    animation: none;
+  }
+  .streak-chip-ring {
+    display: none;
   }
 }
 

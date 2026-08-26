@@ -359,16 +359,64 @@ describe("the intro's description is hidden until asked for", () => {
     );
   });
 
-  it("carries the Up to N pill and the icon chips from the reference", () => {
+  it("carries the Up to N pill from the reference", () => {
     expect(introCode).toMatch(/Up to \{sourceLimit\}/);
+  });
+
+  it("🔴 no longer renders the three capability chips", () => {
+    /*
+      Owner, 2026-08-25, with a screenshot of the row: "remove this section from
+      the multi link card". They came from the reference and were kept for a
+      day; every one of them restated the sentence that is already behind the
+      "?", so at rest they cost three rows of the hero and taught nothing the
+      control below does not already say.
+
+      Asserted on the LABELS and on the icon imports both: dropping the markup
+      but leaving `Link2`/`Shuffle`/`Package` imported is the shape a partial
+      revert takes.
+    */
+    for (const chip of ["Same platform", "Mixed platforms", "Batch download"]) {
+      expect(introCode).not.toContain(chip);
+    }
     for (const icon of ["Link2", "Shuffle", "Package"]) {
-      expect(introCode).toContain(icon);
+      expect(introCode).not.toContain(icon);
     }
   });
 
-  it("puts the paste box ABOVE the install prompt, per the reference", () => {
+  it("puts the paste box ABOVE the install prompt, where the prompt is shown", () => {
+    /*
+      The reference's order (paste box → Install → Multi-Link) is unchanged and
+      still asserted — but the banner is now OPTIONAL.
+
+      Owner, 2026-08-25: "i think the install CTA in the landing hero is causing
+      visual noise". It moved into the top bar (`SiteHeader landing` renders
+      `InstallHeaderCta`, which is what the wordmark text and the search trigger
+      were removed to make room for), so the landing passes
+      `installBanner={false}` and /downloads — whose header has no such room —
+      keeps it.
+
+      Asserted as a CONDITIONAL rather than deleted: the slot and its order are
+      still the thing that must not regress, and a test that simply stopped
+      looking would not notice the banner reappearing on both surfaces at once.
+    */
     const core = read("features/downloads/download-page-core.tsx");
-    expect(core).toMatch(/afterForm=\{<InstallHeroBanner \/>\}/);
+    expect(core).toMatch(/afterForm=\{installBanner \? <InstallHeroBanner \/> : null\}/);
+    expect(core).toMatch(/installBanner = true/);
+    // The landing is the surface that opts out; /downloads must not.
+    expect(read("components/landing/hero.tsx")).toMatch(/installBanner=\{false\}/);
+  });
+
+  it("🔴 never shows TWO install calls to action on the landing at once", () => {
+    /*
+      The header group and the hero banner are mutually exclusive BY
+      CONSTRUCTION, not by breakpoint arithmetic: the landing turns the banner
+      off in the same file that turns the header arrangement on. Two gradient
+      "Install" CTAs on one screen was the reported noise, and it is the kind of
+      thing that comes back when one of the two halves is edited alone.
+    */
+    const page = read("app/(marketing)/page.tsx");
+    expect(page).toMatch(/<SiteHeader landing \/>/);
+    expect(read("components/landing/hero.tsx")).toMatch(/installBanner=\{false\}/);
   });
 
   it("🔴 never centres with a transform while an animation owns transform", () => {
@@ -399,11 +447,82 @@ describe("the intro's description is hidden until asked for", () => {
     expect(introCode).toMatch(/absolute inset-x-0 top-full/);
   });
 
-  it("keeps the heading and the chips, which were explicitly kept", () => {
-    expect(introCode).toMatch(/Download multiple links, all in one place\./);
-    for (const chip of ["Same platform", "Mixed platforms", "Batch download"]) {
-      expect(introCode).toContain(chip);
-    }
+  it("keeps the heading, without the trailing clause", () => {
+    /*
+      Owner, 2026-08-25: remove "the all in once place text". The heading ITSELF
+      stays — the "?" is anchored beside it by the owner's earlier instruction
+      ("you just put a question mark at the top of the multi link H1 text"), so
+      deleting the H1 would orphan the affordance holding the description.
+    */
+    expect(introCode).toContain("Download multiple links");
+    expect(introCode).not.toMatch(/all in one place/i);
+  });
+
+  it("sets the heading in its OWN luxe face, not the wordmark's", () => {
+    /*
+      Owner, 2026-08-25: "designed and decorated as a premium visible sentence,
+      with premium brand color splash like as the hero H1 … more premium with
+      premium stylish luxurious font", then explicitly: "dont use the frenzsave
+      brand font, use a more premium stylish font that havent been used before".
+
+      So `font-brand` (the Outfit wordmark face) is RULED OUT here by name — the
+      negative assertion is the point of this test, not an accident of it.
+    */
+    expect(introCode).toMatch(/font-luxe/);
+    expect(introCode).not.toMatch(/font-brand/);
+  });
+
+  it("🔴 the luxe face is paid for like the wordmark: one weight, no preload", () => {
+    /*
+      A third webfont on a page held to a 1.6s LCP and a 275 kB ceiling is only
+      affordable on the terms the wordmark already proved:
+
+       • ONE weight — every extra weight is a separate file;
+       • `preload: false` — otherwise it joins the first wave and competes for
+         bandwidth with the LCP element on every route;
+       • `display: "swap"` — it must never block first paint.
+
+      Any one of these silently regressing turns a decorative heading into a
+      landing-page performance bug, which is exactly the class of thing this
+      project has shipped before.
+    */
+    const layout = read("app/layout.tsx");
+    const luxe = layout.slice(layout.indexOf("const luxeDisplay"));
+    const decl = luxe.slice(0, luxe.indexOf("});") + 3);
+    expect(decl).toMatch(/Playfair_Display\(/);
+    expect(decl).toMatch(/weight: \["600"\]/);
+    expect(decl).toMatch(/preload: false/);
+    expect(decl).toMatch(/display: "swap"/);
+    expect(decl).toMatch(/variable: "--font-luxe"/);
+    // Wired onto <body>, or the variable resolves to nothing and the class is
+    // a silent no-op that falls back to Georgia everywhere.
+    expect(layout).toMatch(/\$\{luxeDisplay\.variable\}/);
+  });
+
+  it("falls back to a SERIF while the luxe face swaps in", () => {
+    /*
+      `display: "swap"` means the first paint of this line is the fallback. If
+      that fallback were the UI sans, the swap would jump between two different
+      classes of letterform. Georgia is close enough that it reads as the line
+      settling, not reflowing.
+    */
+    const css = read("app/globals.css");
+    const rule = css.slice(css.indexOf(".font-luxe"));
+    expect(rule.slice(0, rule.indexOf("}"))).toMatch(/Georgia[\s\S]*serif/);
+  });
+
+  it("🔴 writes the four-stop splash literally — `via-` is only ONE stop", () => {
+    /*
+      Tailwind's `via-` emits a single custom property, so two `via-` classes
+      overwrite each other and quietly render a THREE-stop gradient. The richer
+      ramp is the whole point of "more premium than the hero", so it is written
+      as a literal `linear-gradient` where the fourth stop actually exists.
+    */
+    expect(introCode).toMatch(/bg-\[linear-gradient\(/);
+    expect(introCode).not.toMatch(/via-\w+-\d+\s+via-/);
+    // Light and dark ramps are declared separately — one set of stops cannot
+    // read rich on white AND on #0b1020.
+    expect(introCode).toMatch(/dark:bg-\[linear-gradient\(/);
   });
 
   it("the timer doesn't run out while it is being read", () => {

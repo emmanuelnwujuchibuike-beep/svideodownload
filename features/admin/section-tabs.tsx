@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -113,6 +113,87 @@ export function AdminSectionTabs({
               </span>
             ) : null}
           </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE SAME TOP NAV, APPLIED TO A WHOLE ADMIN PANEL
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-08-25: *"arrange the ad placement and all sections in the admin
+ * dashboard to be arranged like the revenue and engagement section with a top
+ * nav so i dont scroll down much"*.
+ *
+ * Revenue got this treatment by hand inside `revenue-charts.tsx`. Every other
+ * long panel stacks its blocks vertically, so reaching the ad placements meant
+ * scrolling past the whole monetization form, the multi-link monitor and the
+ * reward-network routing first.
+ *
+ * `app/admin/page.tsx` is a SERVER component, so it cannot hold the selected
+ * tab itself. Each group's content is passed in as an already-rendered node
+ * and this client component only decides which one is visible — no data moves
+ * to the client that was not already going there.
+ *
+ * ── 🔴 These HIDE, they do not unmount (unlike `AdminTabPanel`) ────────────
+ *
+ * `AdminTabPanel` unmounts, and for Revenue that is right: its groups are
+ * charts, and keeping six sets of SVGs in the DOM is the cost the tabs exist
+ * to avoid.
+ *
+ * The panels here are mostly FORMS — ad placements, pricing, limits, promo
+ * codes. Unmounting one would discard a half-typed edit the moment an operator
+ * glanced at another group, which is precisely the reason `AdminShell` gives
+ * for hiding its own panels rather than unmounting them. `hidden` takes the
+ * content out of the layout, which is the entire ask ("i dont scroll down
+ * much"), while leaving the form state and any open editor intact.
+ *
+ * Pass `unmountInactive` for a group set that is genuinely chart-shaped and
+ * has no state worth keeping.
+ */
+export function AdminSubsections({
+  groups,
+  className,
+  topClassName,
+  unmountInactive = false,
+}: {
+  groups: { id: string; label: string; badge?: string; content: React.ReactNode }[];
+  className?: string;
+  topClassName?: string;
+  unmountInactive?: boolean;
+}) {
+  const [active, setActive] = useState(groups[0]?.id ?? "");
+
+  // One group is not a choice — render it plainly rather than growing a tab bar
+  // that can only ever select what is already showing. Same rule the reels tab
+  // bar follows.
+  if (groups.length < 2) return <>{groups[0]?.content ?? null}</>;
+
+  return (
+    <div className={className}>
+      <AdminSectionTabs
+        tabs={groups.map(({ id, label, badge }) => ({ id, label, badge }))}
+        active={active}
+        onChange={setActive}
+        topClassName={topClassName}
+      />
+      {groups.map((group) => {
+        const selected = group.id === active;
+        if (unmountInactive && !selected) return null;
+        return (
+          <div
+            key={group.id}
+            role="tabpanel"
+            id={`admin-panel-${group.id}`}
+            aria-labelledby={`admin-tab-${group.id}`}
+            hidden={!selected}
+            className={cn(!selected && "hidden")}
+          >
+            {group.content}
+          </div>
         );
       })}
     </div>

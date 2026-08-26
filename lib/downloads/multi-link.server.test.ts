@@ -41,6 +41,14 @@ interface Row {
   created_at: string;
 }
 let rows: Row[] = [];
+/**
+ * Makes the next writes fail the way PostgREST actually fails: a RESOLVED
+ * promise carrying `{ error }`, not a throw. That distinction is the whole
+ * reason the 2026-08-26 outage was invisible — see the describe at the bottom.
+ */
+let writeError: { message: string } | null = null;
+/** Makes the next writes THROW instead — the other half of the same story. */
+let writeThrows = false;
 
 /**
  * Mirrors the PostgREST chain the code actually calls.
@@ -68,6 +76,8 @@ function makeQuery(table: string) {
     maybeSingle: async () => ({ data: null }),
     upsert: async (row: Partial<Row>, opts?: { ignoreDuplicates?: boolean }) => {
       if (table !== "batch_sessions") return {};
+      if (writeThrows) throw new Error("connection reset");
+      if (writeError) return { error: writeError };
       // THE UNIQUE CONSTRAINT — a replayed batch id is a no-op, not a second row.
       if (rows.some((r) => r.batch_id === row.batch_id)) {
         return opts?.ignoreDuplicates ? {} : { error: { message: "duplicate key" } };
@@ -105,6 +115,8 @@ const guest = { userId: null, ip: "203.0.113.7", anonId: BROWSER };
 
 beforeEach(() => {
   rows = [];
+  writeError = null;
+  writeThrows = false;
   plan.mockResolvedValue("free");
 });
 
@@ -169,6 +181,82 @@ describe("commit spends exactly one, and the count actually MOVES", () => {
     await commitBatch({ ...guest, batchId: "b2" });
     const r = await authorizeBatch({ ...guest, sourceCount: 1, itemCount: 1 });
     expect(r.ok === false && r.reason).toBe("DAILY_LIMIT_REACHED");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  A REJECTED WRITE MUST NEVER LOOK LIKE A FULL ALLOWANCE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-08-26: "multi links still show 2 remaining to anonymous and
+ * signed in free users even after using 2."
+ *
+ * Probed live: the deployed `batch_sessions` had no `anon_id` column (0134
+ * declared it, but its `create table if not exists` found a table already
+ * there and left it alone — fixed by 0138), and the table held ZERO rows. Every
+ * upsert named a column that does not exist, so every commit was rejected —
+ * for signed-in callers too, since the column is named either way.
+ *
+ * 🔴 And it was invisible because a PostgREST rejection is NOT a throw. It is a
+ * resolved promise carrying `{ error }`. The old code wrapped a bare `await`
+ * in a try/catch, so the catch never ran, and the success path returned a clean
+ * "0 used, 2 remaining" every single time. The daily cap was not just displayed
+ * wrong — it was never enforced at all.
+ *
+ * These cases pin BOTH failure shapes, because only one of them was ever
+ * handled.
+ */
+describe("a write that FAILS is never reported as an untouched allowance", () => {
+  /*
+    🔴 The behaviour that actually changed on 2026-08-26 is the THROWN path.
+
+    It used to return a hardcoded `{ used: 0, remaining: limit }` — a clean,
+    full allowance — so a transient write failure silently handed the visitor
+    their whole daily quota back. It now reports whatever the table can still be
+    read for, so a broken write shows up as a counter that STOPS MOVING rather
+    than one that resets to full.
+  */
+  it("🔴 a THROWN write no longer reports a full, untouched allowance", async () => {
+    await commitBatch({ ...guest, batchId: "b1" });
+    writeThrows = true;
+    const r = await commitBatch({ ...guest, batchId: "b2" });
+    // Pre-fix this was { used: 0, remaining: 2 } — the visitor's counter reset
+    // to full on every failed commit.
+    expect(r.used, "a failed write handed back the whole daily allowance").toBe(1);
+    expect(r.remaining).toBe(1);
+  });
+
+  it("still ALLOWS the batch — the ad was already watched", async () => {
+    writeThrows = true;
+    expect((await commitBatch({ ...guest, batchId: "b1" })).allowed).toBe(true);
+  });
+
+  /*
+    The other failure shape, and the one that caused the outage: PostgREST
+    rejects with a RESOLVED promise carrying `{ error }`, never a throw. The old
+    try/catch therefore never fired on it at all — it fell through to the count
+    and read a table that, because `anon_id` did not exist (0134's `create
+    table if not exists` found a table already there; fixed by 0138), had never
+    received a single row. So the count was honestly zero and the cap was never
+    once enforced.
+
+    No unit test can catch a column missing from the deployed schema — 0138 is
+    that fix. What is pinned here is that the rejection is now READ rather than
+    ignored, so the same shape can never again be mistaken for a success.
+  */
+  it("reads a rejected { error } rather than treating it as a successful write", async () => {
+    await commitBatch({ ...guest, batchId: "b1" });
+    await commitBatch({ ...guest, batchId: "b2" });
+    writeError = { message: `column "anon_id" does not exist` };
+    const r = await commitBatch({ ...guest, batchId: "b3" });
+    // The third batch was NOT recorded, so the day stays at two spent —
+    // never "0 used, 2 remaining".
+    expect(r).toMatchObject({ used: 2, remaining: 0 });
+  });
+
+  it("a successful write is unaffected", async () => {
+    expect(await commitBatch({ ...guest, batchId: "b1" })).toMatchObject({ allowed: true, used: 1, remaining: 1 });
   });
 });
 

@@ -267,8 +267,22 @@ export async function commitBatch(input: {
     allowance) is unchanged. `ignoreDuplicates` makes that a no-op rather than
     an error, which is what lets this be called freely.
   */
+  /*
+    🔴 THE ERROR IS READ, NOT JUST THE THROW (2026-08-26).
+
+    This used to be a bare `await` in a try/catch, and a PostgREST rejection is
+    not a throw — it is a resolved promise carrying `{ error }`. So when
+    `anon_id` turned out not to exist on the deployed table (0138), every
+    single upsert was rejected, the catch never ran, and the code below happily
+    counted a table that had never received a row. Result: "0 used, 2 remaining"
+    forever, and a daily cap that was never once enforced.
+
+    Both failure shapes now land in the same place, and neither is allowed to
+    report a clean full allowance.
+  */
+  let recorded = true;
   try {
-    await db
+    const { error } = await db
       .from("batch_sessions")
       .upsert(
         {
@@ -280,10 +294,21 @@ export async function commitBatch(input: {
         },
         { onConflict: "batch_id", ignoreDuplicates: true },
       );
+    if (error) recorded = false;
   } catch {
-    // Recording failed — allow the batch (the ad was already watched) but do
-    // not pretend it was counted.
-    return { allowed: true, used: 0, remaining: limit };
+    recorded = false;
+  }
+
+  if (!recorded) {
+    /*
+      Allow the batch — the ad was already watched, and taking someone's
+      payment and delivering nothing is the worse failure. But do NOT hand back
+      a full allowance as though the write had succeeded: report whatever the
+      table can still be read for, so a broken write shows up as a counter that
+      stops moving rather than one that silently resets to full every time.
+    */
+    const known = await batchesUsedToday(input.userId, input.anonId ?? null);
+    return { allowed: true, used: known, remaining: Math.max(0, limit - known) };
   }
 
   const used = await batchesUsedToday(input.userId, input.anonId ?? null);

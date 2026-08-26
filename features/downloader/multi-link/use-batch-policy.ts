@@ -60,6 +60,18 @@ export function batchAnonMirror(): string | undefined {
 
 export function useBatchPolicy(enabled: boolean) {
   const [policy, setPolicy] = useState<BatchPolicy | null>(null);
+  /**
+   * Counts from the most recent `/commit`, held SEPARATELY from `policy`.
+   *
+   * 🔴 They used to be merged straight into `policy`, behind an `if (!p)
+   * return p` — so whenever `/policy` had not landed yet, or had failed (the
+   * fetch below returns early on `!res.ok` and leaves `policy` null), applying
+   * a commit was a silent no-op and the panel kept drawing the optimistic
+   * default of a full allowance no matter how many batches had been spent.
+   * Keeping them apart means a spent batch is always reflected, even when the
+   * only thing we know about this visitor is what `/commit` just told us.
+   */
+  const [counts, setCounts] = useState<{ used: number; remaining: number | null } | null>(null);
   const [ready, setReady] = useState(false);
   const inFlight = useRef(false);
 
@@ -76,6 +88,9 @@ export function useBatchPolicy(enabled: boolean) {
       const json = (await res.json()) as BatchPolicy & { anonId?: string | null };
       writeAnonMirror(json.anonId);
       setPolicy(json);
+      // `/policy` is a fresh server count, so it supersedes any commit we were
+      // holding — otherwise a stale local number would outlive the truth.
+      setCounts(null);
     } catch {
       /* keep the conservative default — the server decides at authorize time */
     } finally {
@@ -89,7 +104,7 @@ export function useBatchPolicy(enabled: boolean) {
     void refresh();
   }, [enabled, refresh]);
 
-  const effective: BatchPolicy = policy ?? {
+  const base: BatchPolicy = policy ?? {
     enabled: true,
     plan: "free",
     sourceLimit: DEFAULT_MULTI_LINK.freeSourceLimit,
@@ -101,6 +116,9 @@ export function useBatchPolicy(enabled: boolean) {
     fetchConcurrency: DEFAULT_MULTI_LINK.fetchConcurrency,
     upsellMessage: DEFAULT_MULTI_LINK.upsellMessage,
   };
+  // A commit we have seen always wins over the shape's default counts — the
+  // server just told us what it recorded, and that is the newest fact we have.
+  const effective: BatchPolicy = counts ? { ...base, used: counts.used, remaining: counts.remaining } : base;
 
   /**
    * Adopt the counts the COMMIT response already returned.
@@ -116,12 +134,9 @@ export function useBatchPolicy(enabled: boolean) {
    * query `/policy` would run. Using them is exactly one source of truth, one
    * network call, and nothing to race.
    */
-  const applyCommit = useCallback((counts: { used?: number; remaining?: number | null }) => {
-    setPolicy((p) => {
-      if (!p) return p;
-      if (typeof counts.used !== "number") return p;
-      return { ...p, used: counts.used, remaining: counts.remaining ?? null };
-    });
+  const applyCommit = useCallback((next: { used?: number; remaining?: number | null }) => {
+    if (typeof next.used !== "number") return;
+    setCounts({ used: next.used, remaining: next.remaining ?? null });
   }, []);
 
   return { policy: effective, ready, refresh, applyCommit };

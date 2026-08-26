@@ -94,6 +94,23 @@ import type { QualityPreference } from "@/lib/media/engine/governor";
 const QUALITY_PREF_KEY = "frenz:video-quality-pref";
 const QUALITY_LEVELS: readonly QualityPreference[] = ["auto", "data-saver", "balanced", "high"];
 
+/**
+ * Shared display text for {@link QualityPreference}, so the Reels in-player
+ * cycle control and the Account Settings selector (features/account/
+ * video-quality-setting.tsx) can never drift apart on what a level is called.
+ * Previously declared twice — once locally in reel-viewer.tsx — before the
+ * settings control needed the same labels (2026-08-26).
+ *
+ * Labelled by what they DO, not by a resolution: a rung number means nothing
+ * without knowing the ladder, and the ceiling moves with the network anyway.
+ */
+export const QUALITY_LABELS: Record<QualityPreference, string> = {
+  auto: "Auto (recommended)",
+  "data-saver": "Data saver",
+  balanced: "Balanced · HD",
+  high: "Highest quality",
+};
+
 export function getQualityPreference(): QualityPreference {
   try {
     const v = typeof localStorage !== "undefined" ? localStorage.getItem(QUALITY_PREF_KEY) : null;

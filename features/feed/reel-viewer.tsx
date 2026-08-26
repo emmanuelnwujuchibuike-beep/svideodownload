@@ -132,7 +132,7 @@ import { claimPlayback, recordView, recordWatch, releasePlayback, suspendPlaybac
 import { toast } from "@/features/ui/toast";
 import { FrenzsaveError } from "@/lib/sdk";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
-import { getQualityPreference, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
+import { getQualityPreference, QUALITY_LABELS, setQualityPreference, type QualityPreference } from "@/lib/media/network-conditions";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
 import { suppressReel } from "@/lib/social/reels-session";
 import { streamHlsUrl, streamThumbnailUrl } from "@/lib/media/stream";
@@ -277,17 +277,11 @@ const SocialPulse = dynamic(
   Best Quality". Balanced is the one that was missing — a 720p ceiling for
   someone who wants HD without a 4K decode and a 4K data bill on a phone.
 
-  Labelled by what they DO, not by a resolution: a rung number is only
-  meaningful if you know the ladder, and the ceiling moves with the network
-  anyway. The cycle order walks from cheapest to most expensive so repeated taps
-  read as one axis rather than a shuffle.
+  QUALITY_LABELS now lives in network-conditions.ts, shared with the Account
+  Settings selector (2026-08-26) — see that module for why. The cycle order
+  walks from cheapest to most expensive so repeated taps read as one axis
+  rather than a shuffle.
 */
-const QUALITY_LABELS: Record<QualityPreference, string> = {
-  auto: "Auto (recommended)",
-  "data-saver": "Data saver",
-  balanced: "Balanced · HD",
-  high: "Highest quality",
-};
 const QUALITY_CYCLE: QualityPreference[] = ["auto", "data-saver", "balanced", "high"];
 
 /*

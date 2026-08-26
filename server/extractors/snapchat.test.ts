@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { distinctVideos, snapFormat, stripSnapWatermark } from "./snapchat";
+import {
+  distinctVideos,
+  preferCleanSnapMedia,
+  snapFormat,
+  stripSnapWatermark,
+} from "./snapchat";
 
 /**
  * Snapchat Spotlight watermark removal.
@@ -32,24 +37,37 @@ describe("stripSnapWatermark", () => {
   });
 
   /*
-    🔴 Regression guard for "Spotlight now downloads with watermark"
-    (owner, 2026-08-24). Measured against the live clip snapchat.com/t/zWJDbGIN:
+    🔴 THIS TEST WAS INVERTED ON 2026-08-26, AND THE REASON MATTERS.
 
-      bolt-gcdn.sc-cdn.net/y/<id>.27.<tok>   → 206 video/mp4  (the real file)
-      the same path rewritten to .1034.       → 404
-      …and .1023/.256/.128/.64/…/.0.          → 404, all of them
+    The August version asserted the OPPOSITE — that bolt-gcdn is never
+    rewritten — after probing the live clip snapchat.com/t/zWJDbGIN, where
+    `.1034.` and every other rendition 404'd. That reasoning was sound for that
+    clip and the conclusion drawn from it ("bolt-gcdn has no clean rendition")
+    was too broad.
 
-    Rewriting on that host therefore handed the pipeline a URL that does not
-    exist; the download failed and fell back to yt-dlp, whose Spotlight
-    extractor returns a WATERMARKED render. The watermark came from the
-    fallback, triggered by our own 404.
+    It used to assert that bolt-gcdn is NEVER rewritten, from an August probe of
+    one clip where `.1034.` 404'd. Re-probed against the owner's example
+    (snapchat.com/t/OafU7rPV → bolt-gcdn/u/jRlgbOdOZ34pwjJoKVhTL.27.IRZXSOY):
+
+      .27.   → 206 video/mp4 540×960  — Snapchat ghost + @handle burned in
+      .1034. → 206 video/mp4 480×852  — same clip, overlay GONE
+
+    Both frames were extracted and looked at. `.1034.` exists on bolt-gcdn for
+    this clip and not for the other, so availability is PER-CLIP and a host
+    allowlist cannot express it — which is exactly why some Spotlight downloads
+    came out clean and others watermarked.
+
+    The rewrite is therefore host-agnostic again, and the "does it exist?"
+    question moved to `preferCleanSnapMedia`, which asks the CDN instead of
+    guessing.
   */
-  it("does NOT rewrite on a host that has no .1034. rendition (bolt-gcdn)", () => {
+  it("computes the clean candidate on ANY host, bolt-gcdn included", () => {
     const live =
       "https://bolt-gcdn.sc-cdn.net/y/ozcsuISdRBcfOKb3N9CKU.27.IRZXSOY?mo=U3BvdGxpZ2h0U2hhcmluZw&uc=46";
-    // Returned untouched: a working watermarked file beats a dead URL that
-    // silently downgrades the whole download to yt-dlp.
-    expect(stripSnapWatermark(live)).toBe(live);
+    const out = stripSnapWatermark(live);
+    expect(out).toContain(".1034.");
+    expect(out).not.toContain("mo=");
+    expect(out).not.toContain("uc=");
   });
 
   it("detects the watermark from the SpotlightSharing media-option alone", () => {
@@ -73,6 +91,84 @@ describe("stripSnapWatermark", () => {
 
   it("returns the input unchanged when it is not a URL", () => {
     expect(stripSnapWatermark("not a url")).toBe("not a url");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  preferCleanSnapMedia — the part that decides what is actually downloaded
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `stripSnapWatermark` only says what the clean URL WOULD be. This asks the CDN
+ * whether it is really there, because availability turned out to be per-clip.
+ *
+ * 🔴 Every failure path must return the ORIGINAL url. The August regression was
+ * caused by handing the pipeline a `.1034.` that did not exist: the download
+ * failed, the pipeline fell back to yt-dlp, and yt-dlp's Spotlight extractor
+ * returns a watermarked render. A dead "clean" URL is strictly worse than a
+ * live watermarked one, which is what these cases pin.
+ */
+describe("preferCleanSnapMedia", () => {
+  const WATERMARKED =
+    "https://bolt-gcdn.sc-cdn.net/u/abc123.27.TOK?mo=U3BvdGxpZ2h0U2hhcmluZw&uc=8";
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const stubFetch = (impl: (url: string) => Partial<Response> | Promise<Partial<Response>>) => {
+    const spy = vi.fn(async (input: RequestInfo, _init?: RequestInit) => {
+      const out = await impl(String(input));
+      return {
+        ok: out.ok ?? true,
+        headers: out.headers ?? new Headers({ "content-type": "video/mp4" }),
+        ...out,
+      } as Response;
+    });
+    vi.stubGlobal("fetch", spy);
+    return spy;
+  };
+
+  it("uses the clean rendition when the CDN serves it as video", async () => {
+    stubFetch(() => ({ ok: true, headers: new Headers({ "content-type": "video/mp4" }) }));
+    const out = await preferCleanSnapMedia(WATERMARKED);
+    expect(out).toContain(".1034.");
+  });
+
+  it("🔴 keeps the ORIGINAL when the clean rendition 404s", async () => {
+    // The August regression, pinned: this is the clip where .1034. is absent.
+    stubFetch(() => ({ ok: false, headers: new Headers() }));
+    expect(await preferCleanSnapMedia(WATERMARKED)).toBe(WATERMARKED);
+  });
+
+  it("🔴 keeps the ORIGINAL when the rendition answers with an IMAGE", async () => {
+    // `.256.` is a JPEG thumbnail that also returns 206 — accepting any 2xx
+    // would silently swap the video for a still.
+    stubFetch(() => ({ ok: true, headers: new Headers({ "content-type": "image/jpeg" }) }));
+    expect(await preferCleanSnapMedia(WATERMARKED)).toBe(WATERMARKED);
+  });
+
+  it("keeps the ORIGINAL when the probe throws or times out", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("aborted");
+    }));
+    expect(await preferCleanSnapMedia(WATERMARKED)).toBe(WATERMARKED);
+  });
+
+  it("makes NO request for an already-clean story URL", async () => {
+    const spy = stubFetch(() => ({ ok: true }));
+    const clean = "https://cf-st.sc-cdn.net/d/ABC123def.mp4";
+    expect(await preferCleanSnapMedia(clean)).toBe(clean);
+    // The cost argument for multi-snap stories depends on this: a story of ten
+    // clean snaps must not fire ten probes.
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("asks for ONE BYTE, not the file", async () => {
+    const spy = stubFetch(() => ({ ok: true }));
+    await preferCleanSnapMedia(WATERMARKED);
+    const init = spy.mock.calls[0]![1] as RequestInit;
+    expect((init.headers as Record<string, string>).Range).toBe("bytes=0-0");
   });
 });
 

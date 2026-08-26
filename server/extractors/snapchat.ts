@@ -149,19 +149,47 @@ function cleanUrl(u: string): string {
  * download fails and the pipeline falls back to yt-dlp — never a broken file.
  */
 /**
- * CDN hosts on which the clean `.1034.` rendition is known to be served.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE HOST ALLOWLIST WAS THE BUG (re-derived live, 2026-08-26)
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * Verified live 2026-08-24: `bolt-gcdn.sc-cdn.net` — where Snapchat now hosts
- * Spotlight — 404s on `.1034.` and on every other rendition number, so
- * rewriting there hands the pipeline a dead URL. `cf-st.sc-cdn.net` is the host
- * the rewrite was originally derived against and still works.
+ * This function used to refuse to rewrite anything that was not on
+ * `cf-st.sc-cdn.net`, because a 2026-08-24 probe of ONE bolt-gcdn clip found
+ * `.1034.` (and every other rendition) 404ing there. The conclusion drawn was
+ * "bolt-gcdn has no clean rendition". That generalised from a single clip, and
+ * it is wrong.
  *
- * An allowlist rather than a denylist on purpose: a NEW unknown host should
- * keep the URL that Snapchat actually served (a working, if watermarked,
- * download) rather than gamble on a rendition that may not exist and fail.
+ * Measured against the owner's example (snapchat.com/t/OafU7rPV →
+ * bolt-gcdn.sc-cdn.net/u/jRlgbOdOZ34pwjJoKVhTL.27.IRZXSOY):
+ *
+ *   .27.    → 206 video/mp4  1,996,976 B  540×960  ← WATERMARKED (verified by
+ *                                                    extracting a frame: the
+ *                                                    Snapchat ghost + @handle
+ *                                                    are burned in)
+ *   .1034.  → 206 video/mp4  1,285,711 B  480×852  ← CLEAN (same frame, no
+ *                                                    ghost, no @handle; the
+ *                                                    creator's own caption
+ *                                                    correctly remains)
+ *   .256.   → 206 image/jpeg                        ← thumbnail
+ *   others  → 404
+ *
+ * So `.1034.` DOES exist on bolt-gcdn — for this clip. On the clip probed in
+ * August it did not. Availability is therefore PER-CLIP, not per-host, which is
+ * exactly why the owner sees some Spotlight downloads clean and others
+ * watermarked: whether we happened to be on the allowlisted host decided it.
+ *
+ * Also confirmed here: stripping `mo`/`uc` from the `.27.` URL returns a
+ * BYTE-IDENTICAL file (same sha256). The overlay is baked into the stored
+ * object, not applied by the CDN from the query string — so there is nothing to
+ * negotiate on `.27.` itself. The only clean copy is a different rendition.
+ *
+ * ── What replaces the allowlist ───────────────────────────────────────────
+ *
+ * A guess about hosts cannot answer a per-clip question, so this function no
+ * longer tries: it computes the CANDIDATE clean URL for any host, and
+ * `preferCleanSnapMedia()` below spends one 1-byte range request to find out
+ * whether that candidate actually exists before anything is downloaded.
  */
-const REWRITABLE_HOSTS = ["cf-st.sc-cdn.net"];
-
 export function stripSnapWatermark(u: string): string {
   try {
     const url = new URL(u);
@@ -218,16 +246,83 @@ export function stripSnapWatermark(u: string): string {
       without one for these clips — that is a change on their side, not
       something this function can rewrite around.
     */
-    if (!REWRITABLE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`))) {
-      return u;
-    }
-
     url.pathname = url.pathname.replace(/(\/[a-z]\/[^./]+)\.\d+\./i, "$1.1034.");
     url.searchParams.delete("mo");
     url.searchParams.delete("uc");
-    return url.toString();
+    const candidate = url.toString();
+    // A path with no `.<rendition>.` segment produces no change — say so
+    // clearly rather than handing back a string that only looks rewritten.
+    return candidate === u ? u : candidate;
   } catch {
     return u;
+  }
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  PICK THE CLEAN RENDITION — BUT ONLY IF IT EXISTS
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `stripSnapWatermark` says what the clean URL WOULD be. This says whether it
+ * is really there, and is the only thing allowed to decide what gets
+ * downloaded.
+ *
+ * ── Cost, because this is a production path ───────────────────────────────
+ *
+ *  • ONE request, `Range: bytes=0-0` — a single byte, not a file. No transcode,
+ *    no temp file, no ffmpeg, no second download to compare against.
+ *  • Only for URLs that are actually watermarked. A Story URL is already clean,
+ *    `stripSnapWatermark` returns it unchanged, and this returns immediately
+ *    without touching the network. Multi-snap stories therefore cost nothing.
+ *  • Bounded by its own short timeout, so a slow CDN delays the metadata
+ *    response by at most `PROBE_TIMEOUT_MS` and then proceeds with the URL
+ *    Snapchat actually served.
+ *
+ * ── 🔴 FAILS TO THE WORKING FILE, ALWAYS ──────────────────────────────────
+ *
+ * Every abnormal path — 404, timeout, DNS failure, an unexpected content-type —
+ * returns the ORIGINAL url. That is the lesson from the August regression: the
+ * previous version rewrote to a `.1034.` that did not exist, the download
+ * failed, and the pipeline fell back to yt-dlp, whose Spotlight extractor
+ * returns a watermarked render. A dead "clean" URL produces a WORSE result than
+ * an honest watermarked one, so this never hands out a URL it has not seen
+ * answer.
+ *
+ * The content-type check matters: `.256.` is a JPEG thumbnail at a rendition
+ * number that also answers 206. Accepting any 2xx would swap a video for a
+ * still image.
+ */
+const PROBE_TIMEOUT_MS = 4000;
+
+export async function preferCleanSnapMedia(mediaUrl: string): Promise<string> {
+  const candidate = stripSnapWatermark(mediaUrl);
+  // Not watermarked, or nothing to rewrite — no request, no cost.
+  if (candidate === mediaUrl) return mediaUrl;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const res = await fetch(candidate, {
+      method: "GET",
+      headers: {
+        "User-Agent": MOBILE_UA,
+        Referer: "https://www.snapchat.com/",
+        Range: "bytes=0-0",
+      },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+    if (!res.ok) return mediaUrl;
+    const type = res.headers.get("content-type") ?? "";
+    if (!/^video\//i.test(type)) return mediaUrl;
+    return candidate;
+  } catch {
+    return mediaUrl;
+  } finally {
+    clearTimeout(timer);
+    // The 1-byte body is tiny, but leaving it undrained keeps a socket open on
+    // some runtimes. Cheaper to release it explicitly than to rely on GC.
+    controller.abort();
   }
 }
 
@@ -484,10 +579,38 @@ export const snapchatExtractor: Extractor = {
       );
     }
 
-    const finalFormats =
+    const builtFormats =
       formats && formats.length
         ? formats
         : [videoFormat(stripSnapWatermark(cleanUrl(mediaUrl!)))];
+
+    /*
+      ── VERIFY THE CLEAN RENDITION BEFORE COMMITTING TO IT ─────────────────
+
+      Everything above chose URLs by string rewriting alone. `preferCleanSnapMedia`
+      is what turns that guess into a fact: for each WATERMARKED video it spends
+      one 1-byte range request to confirm the `.1034.` original really exists,
+      and keeps Snapchat's own URL when it does not.
+
+      🔴 Only watermarked VIDEO formats reach the network. Images and already-
+      clean story media short-circuit inside the helper, so the common case — a
+      multi-snap story — still costs zero requests. A Spotlight post costs
+      exactly one.
+
+      Run in PARALLEL: a story that somehow contained several watermarked snaps
+      would otherwise add its probes to the metadata latency in series. Bounded
+      by the helper's own 4s timeout, so the worst case is one timeout, not N.
+
+      `Promise.all` is safe here precisely because the helper cannot reject — it
+      returns the original URL on every failure path.
+    */
+    const finalFormats = await Promise.all(
+      builtFormats.map(async (f) =>
+        f.kind === "video" && f.directUrl
+          ? { ...f, directUrl: await preferCleanSnapMedia(f.directUrl) }
+          : f,
+      ),
+    );
 
     return {
       id: crypto.randomUUID(),

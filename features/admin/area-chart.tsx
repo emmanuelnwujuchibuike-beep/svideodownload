@@ -465,12 +465,33 @@ function TrendChip({ points, compare }: { points: AreaPoint[]; compare?: AreaPoi
   const sum = (a: AreaPoint[]) => a.reduce((n, p) => n + p.value, 0);
   const latest = compare ? sum(points) : (points[points.length - 1]?.value ?? 0);
   const first = compare ? sum(compare) : (points[0]?.value ?? 0);
+
   /*
-    The trend, and it is stated only when it MEANS something. A percentage change
-    from a zero baseline is infinite, and one from a tiny baseline is noise
-    dressed as a signal — both get no chip rather than a dramatic number.
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 A PERCENTAGE IS ONLY PRINTED WHEN IT MEANS SOMETHING
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-08-26, with a screenshot showing "▲ 14167%" and "▲ 9667%":
+    "hard to get clear accurate."
+
+    Those numbers were arithmetically correct and completely useless. With no
+    comparison period this chip falls back to LAST bucket vs FIRST bucket, and
+    the first bucket of a window is routinely a near-empty partial day — 3
+    visitors against 428 is a true "+14,167%" and tells the reader nothing
+    except that the first day was quiet.
+
+    Two guards, and the second is the one that was missing:
+
+     • a zero baseline gives no chip (a change from nothing is undefined);
+     • a baseline BELOW `MIN_BASELINE` gives no chip either, because a
+       percentage off a handful of events is noise wearing a signal's clothes.
+
+    The absolute value is always on screen next to this, so suppressing the
+    percentage costs the reader nothing and stops the panel making a claim it
+    cannot support. Same rule the reward-completion figure already follows.
   */
-  const trend = first > 0 ? ((latest - first) / first) * 100 : null;
+  const MIN_BASELINE = 10;
+  const trend = first >= MIN_BASELINE ? ((latest - first) / first) * 100 : null;
   if (trend === null) return null;
   const trendUp = trend >= 0;
   return (

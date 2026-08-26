@@ -21,16 +21,6 @@ const GRAINS: { id: Granularity; label: string }[] = [
   { id: "monthly", label: "Monthly" },
 ];
 
-/**
- * Is this grouping meaningless over this window?
- *
- * Seven days is one week and a fraction; a "monthly" chart of 7 days is a single
- * bar. 14 and 60 are the points at which each grouping has at least two real
- * buckets to compare, which is the minimum for a trend to exist at all.
- */
-function grainTooShort(grain: Granularity, range: number): boolean {
-  return (grain === "weekly" && range < 14) || (grain === "monthly" && range < 60);
-}
 
 /**
  * The sticky sub-nav's buttons (owner, 2026-08-23: "the top nav should have
@@ -102,7 +92,31 @@ export function RevenueCharts({
    */
   visitorSplit?: { date: string; newVisitors: number | null; returningVisitors: number | null }[];
 }) {
-  const [range, setRange] = useState<7 | 30 | 90>(30);
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 THERE IS NO DATE-RANGE PICKER. DAILY / WEEKLY / MONTHLY IS THE CONTROL.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-08-26: "you were supposed to remove the 7 days, 30 days and 90
+    days period interval, and leave the daily, weekly and monthly … to see daily
+    trend, weekly trend and monthly trends."
+
+    The `7d / 30d / 90d` selector is gone. The window is now simply everything
+    the server fetched — `getRevenueSeries(90)` — and the grouping does the rest,
+    which is what makes the three views mean what their names say:
+
+      Daily   → ~90 points, one per day     (the jagged day-to-day trend)
+      Weekly  → ~13 points, one per week    (the smooth weekly trend)
+      Monthly → 3 points, one per month     (the monthly trend)
+
+    That is Search Console's own arrangement: a fixed reporting window with a
+    grouping dropdown over it, not two interval pickers side by side.
+
+    A consequence worth stating: `grainTooShort` is gone with it. It existed only
+    because a 7-day window could not express a month. Ninety days expresses all
+    three, so no option is ever disabled and the menu never shows a dead row.
+  */
+  const windowDays = series.rangeDays || series.days.length;
   /*
     Which group of panels is on screen. "overview" first because it holds MRR —
     the one figure worth seeing without asking for it — and because a section
@@ -125,7 +139,7 @@ export function RevenueCharts({
     it springs back when the window widens again instead of being silently
     rewritten to "daily" behind the operator's back.
   */
-  const effectiveGrain: Granularity = grainTooShort(grain, range) ? "daily" : grain;
+  const effectiveGrain: Granularity = grain;
 
   /*
     The in-card granularity dropdown, spread onto every chart that comes off the
@@ -146,7 +160,6 @@ export function RevenueCharts({
       id: g.id,
       label: g.label,
       // Greyed INSIDE the opened menu rather than as a dead button on the page.
-      disabled: grainTooShort(g.id, range),
     })),
     onGranularityChange: (id: string) => setGrain(id as Granularity),
   };
@@ -203,7 +216,7 @@ export function RevenueCharts({
     returningVisitors,
     prev,
   } = useMemo(() => {
-    const slice = <T,>(arr: T[]) => arr.slice(Math.max(0, arr.length - range));
+    const slice = <T,>(arr: T[]) => arr;
 
     /*
       ── THE PREVIOUS PERIOD (owner, 2026-08-25) ──────────────────────────────
@@ -226,11 +239,18 @@ export function RevenueCharts({
       one it is being compared against — a line that sags for a reason that has
       nothing to do with the business. Better no overlay than a misleading one.
     */
-    const prevSlice = <T,>(arr: T[]): T[] | undefined => {
-      const end = Math.max(0, arr.length - range);
-      if (end < range) return undefined;
-      return arr.slice(end - range, end);
-    };
+    /*
+      🔴 NO COMPARISON OVERLAY ANY MORE, and that is the honest outcome of
+      dropping the range picker. The window is now the WHOLE fetched series, so
+      there is no earlier slice of it left to compare against — a "previous 90
+      days" would need 180 days on the server, which is not fetched.
+
+      Search Console has the same shape: its comparison is a separate opt-in
+      ("Compare"), OFF in the reference screenshots, and its trend chart draws a
+      single line. Rather than invent a baseline, this returns nothing and the
+      chart draws one line, exactly like the reference.
+    */
+    const prevSlice = <T,>(_arr: T[]): T[] | undefined => undefined;
 
     /** Daily grid → the selected grouping → what AdminAreaChart draws. */
     const group = (days: DailyPoint[]): AreaPoint[] =>
@@ -303,7 +323,7 @@ export function RevenueCharts({
         multilinkRefused: prevOf((d) => d.multilinkRefused),
       },
     };
-  }, [series.days, range, effectiveGrain, visitors, visitorSplit]);
+  }, [series.days, effectiveGrain, visitors, visitorSplit]);
 
   const totalImpr = impressions.reduce((n, p) => n + p.value, 0);
   const totalClicks = clicks.reduce((n, p) => n + p.value, 0);
@@ -368,7 +388,7 @@ export function RevenueCharts({
 
             `router.refresh()` re-runs the server components that fetched this
             data and swaps in the result — it does NOT remount the page or reset
-            client state, so the selected date range survives and the admin stays
+            client state, so the selected date windowDays survives and the admin stays
             exactly where they were scrolled. A full reload would lose both, and
             re-fetching only this panel would let it disagree with the revenue
             tiles above it, which read from the same server pass.
@@ -386,25 +406,6 @@ export function RevenueCharts({
             <RefreshCw aria-hidden className={cn("h-3.5 w-3.5", isPending && "animate-spin")} />
             {isPending ? "Refreshing…" : "Refresh"}
           </button>
-
-          {/* Filters in ONE row above the charts, and they drive every panel — a
-              per-panel range would let two charts disagree about the window. */}
-          <div role="group" aria-label="Date range" className="flex items-center gap-1 rounded-xl bg-secondary/50 p-1">
-            {([7, 30, 90] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRange(r)}
-                aria-pressed={range === r}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                  range === r ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {r}d
-              </button>
-            ))}
-          </div>
 
         </div>
       </div>
@@ -470,9 +471,9 @@ export function RevenueCharts({
         rest, so the section is only as tall as what was asked for. See
         section-tabs.tsx for why these filter rather than scroll to anchors.
 
-        The date range and Refresh stay ABOVE the bar, outside the tabs,
+        The date windowDays and Refresh stay ABOVE the bar, outside the tabs,
         because they apply to every panel — moving them inside would imply they
-        were per-tab, and a range that silently differed between tabs is
+        were per-tab, and a windowDays that silently differed between tabs is
         exactly the disagreement the single filter row was added to prevent.
       */}
       <AdminSectionTabs tabs={TABS} active={tab} onChange={setTab} />
@@ -525,7 +526,7 @@ export function RevenueCharts({
       <AdminTabPanel id="ads" active={tab} className="grid gap-4 lg:grid-cols-2">
         <AdminAreaChart
           title="Ad impressions"
-          subtitle={`${totalImpr.toLocaleString()} in the last ${range} days`}
+          subtitle={`${totalImpr.toLocaleString()} in the last ${windowDays} days`}
           points={impressions}
           compare={prev.impressions}
           {...grainProps}
@@ -545,7 +546,7 @@ export function RevenueCharts({
         <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 lg:col-span-2">
           <div className="mb-3 flex items-baseline justify-between gap-3">
             <p className="text-sm font-bold">Ad performance</p>
-            <p className="text-xs text-muted-foreground">Last {range} days</p>
+            <p className="text-xs text-muted-foreground">Last {windowDays} days</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             {[
@@ -573,7 +574,7 @@ export function RevenueCharts({
         {visits.length > 0 ? (
           <AdminAreaChart
             title="Visitors"
-            subtitle={`${visits.reduce((n, p) => n + p.value, 0).toLocaleString()} in the last ${range} days`}
+            subtitle={`${visits.reduce((n, p) => n + p.value, 0).toLocaleString()} in the last ${windowDays} days`}
             points={visits}
             slot={3}
           />
@@ -633,7 +634,7 @@ export function RevenueCharts({
         */}
         <AdminAreaChart
           title="Downloads"
-          subtitle={`${totalDownloads.toLocaleString()} completed in the last ${range} days`}
+          subtitle={`${totalDownloads.toLocaleString()} completed in the last ${windowDays} days`}
           points={downloads}
           compare={prev.downloads}
           {...grainProps}
@@ -716,7 +717,7 @@ export function RevenueCharts({
         */}
         <AdminAreaChart
           title="Reward ads started"
-          subtitle={`${totalRewardsStarted.toLocaleString()} opened in the last ${range} days`}
+          subtitle={`${totalRewardsStarted.toLocaleString()} opened in the last ${windowDays} days`}
           points={rewardsStarted}
           compare={prev.rewardsStarted}
           {...grainProps}
@@ -726,7 +727,7 @@ export function RevenueCharts({
           title="Reward ads completed"
           subtitle={
             rewardCompletion === null
-              ? `${totalRewardsGranted.toLocaleString()} verified in the last ${range} days`
+              ? `${totalRewardsGranted.toLocaleString()} verified in the last ${windowDays} days`
               : `${totalRewardsGranted.toLocaleString()} verified · ${rewardCompletion}% completion`
           }
           points={rewardsGranted}
@@ -748,7 +749,7 @@ export function RevenueCharts({
         */}
         <AdminAreaChart
           title="Multi-Link batches"
-          subtitle={`${totalMultilinkBatches.toLocaleString()} ran in the last ${range} days`}
+          subtitle={`${totalMultilinkBatches.toLocaleString()} ran in the last ${windowDays} days`}
           points={multilinkBatches}
           compare={prev.multilinkBatches}
           {...grainProps}
@@ -758,7 +759,7 @@ export function RevenueCharts({
           title="Multi-Link refused"
           subtitle={
             totalMultilinkRefused === 0
-              ? `None refused in the last ${range} days`
+              ? `None refused in the last ${windowDays} days`
               : `${totalMultilinkRefused.toLocaleString()} hit a limit — unmet intent, and the upgrade case`
           }
           points={multilinkRefused}
@@ -774,7 +775,7 @@ export function RevenueCharts({
       <div className="rounded-2xl border border-border/70 bg-secondary/25 p-4 lg:col-span-2">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <p className="text-sm font-bold">Reward ads</p>
-          <p className="text-xs text-muted-foreground">Last {range} days</p>
+          <p className="text-xs text-muted-foreground">Last {windowDays} days</p>
         </div>
         <div className="grid grid-cols-3 gap-3">
           {[

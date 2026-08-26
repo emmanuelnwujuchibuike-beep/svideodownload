@@ -203,6 +203,11 @@ export async function POST(request: Request) {
       file_size: num(p.fileSize),
       duration_ms: num(p.durationMs),
       retry_of: typeof p.retryOf === "string" ? p.retryOf : null,
+      // Grouping keys for the admin outcome alert (migration 0137). Persisted
+      // as well as read inline, because the ABANDONED sweep never sees an
+      // event — it reads this table directly and has to group there too.
+      batch_id: str(p.batchId),
+      link_key: str(p.linkKey),
       country: geo.country,
       device: ua.device,
       is_bot: isBot,
@@ -288,6 +293,8 @@ export async function POST(request: Request) {
         visitorId: e.visitorId,
         device: ua.device,
         country: geo.country,
+        batchId: str(p.batchId),
+        linkKey: str(p.linkKey),
       }),
     );
   }

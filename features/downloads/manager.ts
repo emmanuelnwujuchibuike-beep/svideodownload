@@ -56,6 +56,16 @@ export interface DownloadTask {
    * which is charged on its own id.
    */
   batchId?: string;
+  /**
+   * Which SOURCE LINK inside the batch this task came from.
+   *
+   * The admin outcome alert groups on it so one broken link sends ONE email and
+   * ONE push instead of one per media item (owner, 2026-08-26). A multi-link
+   * batch passes the per-source id, so ten links still report ten times; a
+   * single link that expanded into several media leaves it unset and falls back
+   * to `batchId`, which already means "this one link".
+   */
+  linkKey?: string;
   /** Clip length in seconds when the extractor reported one — shown in history. */
   durationSeconds?: number | null;
 }
@@ -594,7 +604,17 @@ async function run(id: string) {
     }
 
     patch(id, { status: "failed", error: reason });
-    trackDownload("failed", { downloadId: task.id, platform: task.platform, mediaKind: task.kind, quality: task.qualityLabel, errorReason: reason });
+    trackDownload("failed", {
+      downloadId: task.id,
+      platform: task.platform,
+      mediaKind: task.kind,
+      quality: task.qualityLabel,
+      errorReason: reason,
+      // Grouping keys ride the TERMINAL event, which is the one the admin
+      // alert fires from — see migration 0137.
+      batchId: task.batchId,
+      linkKey: task.linkKey ?? task.batchId,
+    });
 
     /*
       Keep the FAILED attempt in history so it can be retried later (owner,
@@ -764,6 +784,8 @@ export function startDownload(input: {
   durationSeconds?: number | null;
   /** Shared across one batch so the daily cap is charged once. See DownloadTask. */
   batchId?: string;
+  /** Which source link inside the batch — groups admin alerts. See DownloadTask. */
+  linkKey?: string;
 }): string {
   /*
     A double tap is ONE download (owner audit, 2026-08-09).
@@ -815,6 +837,8 @@ export function startDownload(input: {
     quality: input.qualityLabel,
     sourceUrl: input.url,
     title: input.title,
+    batchId: input.batchId,
+    linkKey: input.linkKey ?? input.batchId,
   });
   // No "started" toast — the floating progress card IS the notification.
   enqueueRun(id);
@@ -854,6 +878,8 @@ export function cancelDownload(id: string) {
       platform: task.platform,
       mediaKind: task.kind,
       quality: task.qualityLabel,
+      batchId: task.batchId,
+      linkKey: task.linkKey ?? task.batchId,
     });
 
     /* Cancelled attempts are kept in history too, for the same reason failures

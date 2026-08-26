@@ -259,6 +259,10 @@ export function MultiLinkPanel({
           platformName: source?.platformName ?? "Link",
           qualityLabel: item.label,
           batchId,
+          // Every media item of ONE pasted link shares its source id, so a link
+          // that failed sends one admin alert rather than one per item — while
+          // ten links in the batch still report ten times (owner, 2026-08-26).
+          linkKey: item.sourceId,
           // A reward-authorized redemption: the server substitutes what IT
           // stored for this index, never what the client re-sends.
           directUrl:

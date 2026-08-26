@@ -271,6 +271,21 @@ export function trackDownload(
      * exists to report (see lib/analytics/retry-success-alert.ts).
      */
     attempts?: number | null;
+    /**
+     * Which BATCH and which SOURCE LINK this download belongs to.
+     *
+     * Sent on every stage, not just `requested` like `sourceUrl`, because the
+     * admin outcome alert groups by them and it fires from the terminal event
+     * (`failed`/`cancelled`) — an identifier that only rode the first event
+     * would not be there when it is needed. They are short opaque ids, not the
+     * URL, so repeating them costs nothing like storing the link four times.
+     *
+     * `linkKey` equals `batchId` when a single link expanded into several
+     * media, and the per-source id inside a multi-link batch. Both absent for a
+     * plain single download. See migration 0137.
+     */
+    batchId?: string | null;
+    linkKey?: string | null;
   },
 ): void {
   const type: AnalyticsEventType =

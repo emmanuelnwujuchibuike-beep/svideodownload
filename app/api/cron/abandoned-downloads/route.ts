@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { cronAuthorized } from "@/lib/cron/auth";
-import { notifyAdminsOfDownloadOutcome } from "@/lib/analytics/download-failure-alert";
+import { notifyAdminsOfDownloadOutcome, outcomeDedupeKey } from "@/lib/analytics/download-failure-alert";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -54,6 +54,8 @@ interface StuckRow {
   media_kind: string | null;
   device: string | null;
   country: string | null;
+  batch_id: string | null;
+  link_key: string | null;
 }
 
 async function run(request: Request) {
@@ -66,7 +68,7 @@ async function run(request: Request) {
 
   const { data, error } = await db
     .from("analytics_downloads")
-    .select("download_id, visitor_id, user_id, platform, media_kind, device, country")
+    .select("download_id, visitor_id, user_id, platform, media_kind, device, country, batch_id, link_key")
     .in("status", ["requested", "started", "preparing"])
     .lt("updated_at", cutoff)
     .order("updated_at", { ascending: true })
@@ -90,8 +92,36 @@ async function run(request: Request) {
   const { error: updateError } = await db.from("analytics_downloads").update({ status: "timed_out" }).in("download_id", ids);
   if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
 
+  /*
+    🔴 COLLAPSE TO ONE ROW PER LINK BEFORE ALERTING (owner, 2026-08-26: "should
+    send one per link, not each media in a batch download, causing email and
+    push notification spamming").
+
+    `notifyAdminsOfDownloadOutcome` dedupes on the same key, so the extra rows
+    would be suppressed there anyway — but only after this route had already
+    fanned out a push to every admin and an email attempt PER ROW. A slideshow
+    of forty abandoned photos would open forty of those before the dedupe threw
+    thirty-nine away. Collapsing here means the work is never started.
+
+    Rows with no batch (a plain single download, and every row written before
+    migration 0137) key on their own download id, so they each still alert
+    exactly as before.
+  */
+  const perLink = new Map<string, StuckRow>();
+  for (const r of rows) {
+    const key = outcomeDedupeKey({
+      status: "timed_out",
+      downloadId: r.download_id,
+      batchId: r.batch_id,
+      linkKey: r.link_key,
+    });
+    // First row of a link wins — they are ordered oldest-first, so the alert
+    // describes the item that actually stalled first.
+    if (!perLink.has(key)) perLink.set(key, r);
+  }
+
   await Promise.all(
-    rows.map((r) =>
+    [...perLink.values()].map((r) =>
       notifyAdminsOfDownloadOutcome({
         downloadId: r.download_id,
         status: "timed_out",
@@ -102,11 +132,13 @@ async function run(request: Request) {
         visitorId: r.visitor_id,
         device: r.device,
         country: r.country,
+        batchId: r.batch_id,
+        linkKey: r.link_key,
       }).catch(() => {}),
     ),
   );
 
-  return NextResponse.json({ ok: true, swept: rows.length });
+  return NextResponse.json({ ok: true, swept: rows.length, alerted: perLink.size });
 }
 
 export const GET = run;

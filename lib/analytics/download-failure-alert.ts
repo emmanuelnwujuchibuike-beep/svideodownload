@@ -36,6 +36,41 @@ export interface DownloadOutcomeDetails {
   visitorId: string;
   device: string | null;
   country: string | null;
+  /**
+   * Which batch and which SOURCE LINK this download came from (migration 0137).
+   * Both absent for a plain single download, which keeps deduping on its own id.
+   */
+  batchId?: string | null;
+  linkKey?: string | null;
+}
+
+/**
+ * ONE ALERT PER LINK, not per media item.
+ *
+ * Owner, 2026-08-26: "the failed, cancelled and abandoned email and push
+ * notification sent to the admin should send one per link, not each media in a
+ * batch download, causing email and push notification spamming i dont want."
+ *
+ * One pasted link can expand into many downloads — a story's snaps, a
+ * slideshow's photos. Each is its own row with its own `downloadId`, and this
+ * alert deduped on exactly that, so one broken slideshow sent an email and a
+ * push PER PHOTO.
+ *
+ * 🔴 The grouping is per (batch, LINK) and deliberately not per batch. A
+ * multi-link batch of ten links shares one `batchId`; collapsing on that alone
+ * would report a single failure when ten links broke — under-reporting, which
+ * is the opposite failure and no better than the spam. `linkKey` is what
+ * distinguishes them: the source id inside a multi-link batch, and the batch id
+ * itself when a single link expanded into several media.
+ *
+ * A download with no batch at all falls back to `downloadId`, which is exactly
+ * the behaviour before this change — so single downloads are untouched, and so
+ * are all the rows written before 0137, which have no batch recorded.
+ */
+export function outcomeDedupeKey(d: Pick<DownloadOutcomeDetails, "status" | "downloadId" | "batchId" | "linkKey">): string {
+  const link = d.linkKey ?? d.batchId;
+  if (d.batchId && link) return `download:${d.status}:${d.batchId}:${link}`;
+  return `download:${d.status}:${d.downloadId}`;
 }
 
 const OUTCOME_LABEL: Record<DownloadOutcomeDetails["status"], string> = {
@@ -53,9 +88,10 @@ function esc(s: string): string {
 }
 
 export async function notifyAdminsOfDownloadOutcome(d: DownloadOutcomeDetails): Promise<void> {
-  // One alert per (download, outcome) — see the module docstring for why a
-  // duplicate delivery is a real, not hypothetical, case here.
-  const dedupeKey = `download:${d.status}:${d.downloadId}`;
+  // One alert per (LINK, outcome) — see `outcomeDedupeKey`. The insert below
+  // is the lock itself, so whichever media item of a link arrives first wins it
+  // and its siblings silently no-op.
+  const dedupeKey = outcomeDedupeKey(d);
   try {
     const admin = createAdminClient();
     const { error } = await admin.from("admin_alerts").insert({ key: dedupeKey, kind: "download_outcome", subject: OUTCOME_LABEL[d.status] });

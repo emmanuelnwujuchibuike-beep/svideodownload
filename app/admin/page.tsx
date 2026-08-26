@@ -453,6 +453,23 @@ export default async function AdminPage() {
                   ),
                 },
                 {
+                  /*
+                    Owner, 2026-08-26: "give top downloader its own section and
+                    a top nav in live activity for quick access." It used to sit
+                    stacked above the activity feed inside "Activity" — reaching
+                    it meant landing on the feed tab first. Its own tab is the
+                    "quick access" ask: one tap from the Live activity top nav,
+                    same mechanism every other section on this page already uses.
+                  */
+                  id: "top-downloaders",
+                  label: "Top downloaders",
+                  content: (
+                    <Suspense fallback={<PanelSkeleton />}>
+                      <TopDownloadersSection />
+                    </Suspense>
+                  ),
+                },
+                {
                   /* The milestone-email threshold sits with download activity,
                      which is what it counts. It loads its own state, so it
                      needs no Suspense boundary of its own. */
@@ -829,17 +846,15 @@ async function ContentSection() {
 }
 
 async function ActivitySection() {
-  const [initial, totals, topDownloaders] = await Promise.all([
-    fetchRecentActivity(40),
-    fetchActivityTotals(),
-    fetchTopDownloaders(),
-  ]);
-  return (
-    <div className="space-y-6">
-      <TopDownloaders data={topDownloaders} />
-      <ActivityFeed initial={initial} totals={totals} />
-    </div>
-  );
+  const [initial, totals] = await Promise.all([fetchRecentActivity(40), fetchActivityTotals()]);
+  return <ActivityFeed initial={initial} totals={totals} />;
+}
+
+/** Split out of ActivitySection so it streams on its own tab — see the
+ *  "top-downloaders" group above. */
+async function TopDownloadersSection() {
+  const topDownloaders = await fetchTopDownloaders();
+  return <TopDownloaders data={topDownloaders} />;
 }
 
 async function ConfigSection() {

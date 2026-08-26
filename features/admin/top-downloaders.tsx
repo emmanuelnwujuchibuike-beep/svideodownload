@@ -1,27 +1,39 @@
+"use client";
+
 import { Crown, Download, Medal, Trophy, UserRound } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useState } from "react";
 
 import type { TopDownloadersResult } from "@/lib/admin/top-downloaders";
 import { cn, formatCompactNumber } from "@/lib/utils";
+
+/*
+  🔴 CODE-SPLIT, same reasoning as ReauthPrompt (see use-sensitive-action.tsx).
+  Every operator who opens Live activity sees the leaderboard; almost none
+  open a row's detail in a given visit. /admin is already at its weight
+  ceiling (see revenue-chart-search-console-2026-08-25), so the sheet — its
+  fetch, its frequency bars, its own icon set — loads only on the first tap.
+*/
+const DownloaderDetailSheet = dynamic(() =>
+  import("@/features/admin/downloader-detail-sheet").then((m) => m.DownloaderDetailSheet),
+);
 
 /**
  * Top downloaders — signed-in members ranked 1..10 by recent download volume, with
  * what they download most, shown as a chart + number + words (owner). Anonymous
  * downloads are never ranked; their volume is a footnote for context.
  *
- * Server component — the data is fetched server-side (lib/admin/top-downloaders.ts)
- * and this only renders it. Responsive: the bar chart and the labels reflow on
- * narrow widths.
+ * ── Client, and why ─────────────────────────────────────────────────────────
+ * Was a server component; the data still arrives server-fetched as a prop
+ * (lib/admin/top-downloaders.ts) — this file only renders it. It became
+ * client-side ONLY to own which row's detail sheet is open (owner, 2026-08-26:
+ * "should be clickable to see full details of that users download, streaks
+ * ... and all information about that user").
  */
-
-const RANK_STYLE: Record<number, { ring: string; badge: string; icon: typeof Trophy | null }> = {
-  1: { ring: "ring-amber-400/60", badge: "bg-gradient-to-br from-amber-400 to-yellow-500 text-black", icon: Crown },
-  2: { ring: "ring-slate-300/60", badge: "bg-gradient-to-br from-slate-300 to-slate-400 text-black", icon: Trophy },
-  3: { ring: "ring-orange-400/60", badge: "bg-gradient-to-br from-orange-400 to-amber-600 text-black", icon: Medal },
-};
-
 export function TopDownloaders({ data }: { data: TopDownloadersResult }) {
   const { ranked, anonymousCount, sampled } = data;
   const max = ranked[0]?.count ?? 1;
+  const [openUserId, setOpenUserId] = useState<string | null>(null);
 
   return (
     <section className="rounded-3xl border border-border bg-card p-5 shadow-card">
@@ -48,52 +60,55 @@ export function TopDownloaders({ data }: { data: TopDownloadersResult }) {
             const pct = Math.max(6, Math.round((d.count / max) * 100));
             const Icon = style?.icon;
             return (
-              <li
-                key={d.rank}
-                className="flex items-center gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-2.5 sm:gap-4 sm:p-3"
-              >
-                {/* Rank badge (number + medal for the top 3) */}
-                <span
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-extrabold tabular-nums ring-1",
-                    style ? cn(style.badge, style.ring) : "bg-secondary text-muted-foreground ring-border",
-                  )}
+              <li key={d.rank}>
+                <button
+                  type="button"
+                  onClick={() => setOpenUserId(d.userId)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-2.5 text-left sm:gap-4 sm:p-3"
                 >
-                  {Icon ? <Icon className="h-4 w-4" /> : d.rank}
-                </span>
+                  {/* Rank badge (number + medal for the top 3) */}
+                  <span
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-extrabold tabular-nums ring-1",
+                      style ? cn(style.badge, style.ring) : "bg-secondary text-muted-foreground ring-border",
+                    )}
+                  >
+                    {Icon ? <Icon className="h-4 w-4" /> : d.rank}
+                  </span>
 
-                {/* Name + words + chart */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate text-sm font-semibold">{d.displayName}</span>
-                      {d.handle ? <span className="hidden truncate text-xs text-muted-foreground sm:inline">@{d.handle}</span> : null}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums">
-                      <Download className="h-3.5 w-3.5 text-blue-500" />
-                      {formatCompactNumber(d.count)}
-                    </span>
-                  </div>
-
-                  {/* The bar (chart) */}
-                  <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-secondary">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-
-                  {/* Words — what they download most */}
-                  {d.topPlatform || d.topFormat ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      Mostly{" "}
-                      <span className="font-medium text-foreground">
-                        {[d.topPlatform, d.topFormat].filter(Boolean).join(" · ")}
+                  {/* Name + words + chart */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <UserRound className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate text-sm font-semibold">{d.displayName}</span>
+                        {d.handle ? <span className="hidden truncate text-xs text-muted-foreground sm:inline">@{d.handle}</span> : null}
                       </span>
-                    </p>
-                  ) : null}
-                </div>
+                      <span className="flex shrink-0 items-center gap-1 text-sm font-bold tabular-nums">
+                        <Download className="h-3.5 w-3.5 text-blue-500" />
+                        {formatCompactNumber(d.count)}
+                      </span>
+                    </div>
+
+                    {/* The bar (chart) */}
+                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-secondary">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {/* Words — what they download most */}
+                    {d.topPlatform || d.topFormat ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Mostly{" "}
+                        <span className="font-medium text-foreground">
+                          {[d.topPlatform, d.topFormat].filter(Boolean).join(" · ")}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
+                </button>
               </li>
             );
           })}
@@ -108,6 +123,14 @@ export function TopDownloaders({ data }: { data: TopDownloadersResult }) {
           downloads in this window (not ranked).
         </p>
       ) : null}
+
+      {openUserId ? <DownloaderDetailSheet userId={openUserId} onClose={() => setOpenUserId(null)} /> : null}
     </section>
   );
 }
+
+const RANK_STYLE: Record<number, { ring: string; badge: string; icon: typeof Trophy | null }> = {
+  1: { ring: "ring-amber-400/60", badge: "bg-gradient-to-br from-amber-400 to-yellow-500 text-black", icon: Crown },
+  2: { ring: "ring-slate-300/60", badge: "bg-gradient-to-br from-slate-300 to-slate-400 text-black", icon: Trophy },
+  3: { ring: "ring-orange-400/60", badge: "bg-gradient-to-br from-orange-400 to-amber-600 text-black", icon: Medal },
+};

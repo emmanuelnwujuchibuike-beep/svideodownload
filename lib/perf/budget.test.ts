@@ -97,14 +97,24 @@ function landingChunks(): string[] {
  * into. A protected endpoint whose UI cannot satisfy it is a dead button, so
  * this is a defect fix rather than a feature.
  *
- * 🔴 THIS IS THE ADMIN ROUTE'S SECOND BUMP TODAY (341 → 344 → 345) AND THAT IS
- * A SIGNAL, NOT A PATTERN TO CONTINUE. The page has absorbed section tabs, chart
- * granularity, the comparison engine, the streak roster, download history and
- * the re-auth flow in one session. The prompt itself is already code-split; the
- * next addition should come with a splitting pass over the panel components
- * rather than another kilobyte here. Recorded in the 08-26 handoff.
+ * 🔴 A THIRD BUMP (341 → 344 → 345 → 346), and this one DID the splitting pass
+ * the previous note asked for, rather than skip it.
+ *
+ * Owner, 2026-08-26: Top downloaders rows must open a detail sheet — profile,
+ * streak, exact lifetime count, day/week frequency, platform/format breakdown,
+ * recent downloads. That is real weight (icons, a fetch, a small bar chart),
+ * and none of it is in this budget: `DownloaderDetailSheet` is `next/dynamic`,
+ * same pattern as the re-auth prompt above, so it loads only on the first tap
+ * and never touches the route's first load.
+ *
+ * What is left, and could not be split out, is `TopDownloaders` itself
+ * becoming a client component so its rows can be clickable at all — it was a
+ * server component shipping zero client JS before. Measured after the split:
+ * 353,468 bytes, 188 over the previous 345 KiB ceiling. That is the
+ * irreducible cost of "a row is now a button with an onClick", not a panel
+ * that skipped splitting.
  */
-const GLOBAL_CEILING = 345 * 1024;
+const GLOBAL_CEILING = 346 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

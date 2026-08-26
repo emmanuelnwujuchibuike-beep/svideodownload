@@ -29,6 +29,10 @@ const RECENT_WINDOW = 5000;
 
 export interface TopDownloader {
   rank: number;
+  /** Owner, 2026-08-26: a row must be clickable through to that member's full
+   *  detail (downloads, streak, frequency) — that lookup is by id, not handle,
+   *  since a handle can be null. */
+  userId: string;
   handle: string | null;
   displayName: string;
   count: number;
@@ -125,6 +129,7 @@ export async function fetchTopDownloaders(): Promise<TopDownloadersResult> {
       const fmt = mode(u.formats);
       return {
         rank: i + 1,
+        userId: id,
         handle: actor?.handle ?? null,
         displayName: actor?.displayName ?? "Member",
         count: u.count,

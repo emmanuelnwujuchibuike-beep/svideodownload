@@ -8,6 +8,7 @@ import { fireWowFeedback, WowBurst } from "@/features/ui/wow-burst";
 import { clampFeedRatio } from "@/lib/media/aspect";
 import { muteInstant, unmuteWithFade } from "@/lib/media/audio-playback";
 import { getPlaybackPosition, savePlaybackPosition } from "@/lib/media/resume-positions";
+import { cancelVideoPrefetch, prefetchVideo } from "@/lib/media/prefetch-video";
 import { streamHlsUrl, streamIframeUrl } from "@/lib/media/stream";
 import { claimPlayback, isSuspended, recentlyScrolled, recordView, recordWatch, releasePlayback } from "@/lib/media/video-coordinator";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ export function FeedVideo({
   height,
   children,
   priority = false,
+  nextSrc,
 }: {
   /**
    * The clip's natural pixel size, when the server knows it (`posts.media_width`
@@ -104,6 +106,19 @@ export function FeedVideo({
    * moment the HTML parses, independent of hydration or scroll position.
    */
   priority?: boolean;
+  /**
+   * The clip AFTER this one in the reel deck, warmed into the HTTP cache once
+   * this one starts playing (owner: "every video watching on feed should
+   * automatically download and clear the path for reels so when is clicked it
+   * doesnt load a bit").
+   *
+   * Deliberately the NEXT clip and not this one: this one is already streaming
+   * its own bytes, and a parallel fetch of a URL a media element is mid-stream
+   * on can pull the same range twice. What is genuinely cold is the clip the
+   * first swipe in Reels lands on — below the fold here, so on
+   * `preload="metadata"`, which fetches headers and no content at all.
+   */
+  nextSrc?: string | null;
 }) {
   const wrap = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
@@ -183,6 +198,18 @@ export function FeedVideo({
     const v = video.current;
     if (v && inViewRef.current && readyRef.current && !userPaused.current && !isSuspended()) v.play().catch(() => {});
   }, []);
+  /*
+    `nextSrc` through a ref, NOT through the autoplay observer's dependency
+    array. That effect's cleanup calls `savePlaybackPosition` /
+    `recordWatch` / `releasePlayback`, so re-running it mid-play would
+    checkpoint and release a clip that never actually stopped — a re-render
+    that only changed which URL to warm would register as a playback event.
+    The ref keeps the observer's identity tied to the things that genuinely
+    change its behaviour.
+  */
+  const nextSrcRef = useRef(nextSrc);
+  nextSrcRef.current = nextSrc;
+
   const onSrcReady = useCallback(() => {
     readyRef.current = true;
     playIfReady();
@@ -228,6 +255,14 @@ export function FeedVideo({
         if (entry.isIntersecting && entry.intersectionRatio >= 0.4) {
           inViewRef.current = true;
           playIfReady();
+          /*
+            "Clear the path for reels" — this clip is now playing, so it is the
+            one a tap opens, and it is streaming its own bytes already. The clip
+            the first SWIPE lands on is the cold one, so warm its opening
+            megabytes here. Bounded, deduped and gated on Data Saver / slow
+            radios inside `prefetchVideo`.
+          */
+          prefetchVideo(nextSrcRef.current);
         } else {
           // Leaving view resets a manual pause so it resumes fresh on return.
           inViewRef.current = false;
@@ -241,6 +276,10 @@ export function FeedVideo({
     obs.observe(el);
     return () => {
       obs.disconnect();
+      // Scrolled away (or unmounted) before the warm finished — drop it rather
+      // than let a fast scroll leave a trail of fetches racing the clip the
+      // viewer actually stopped on.
+      cancelVideoPrefetch(nextSrcRef.current);
       // Unmount mid-play (tab pane swap) → remember the position so the same
       // post resumes seamlessly when its card mounts again.
       savePlaybackPosition(postId, v.currentTime, v.duration);

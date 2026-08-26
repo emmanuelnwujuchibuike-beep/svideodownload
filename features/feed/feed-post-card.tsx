@@ -121,12 +121,16 @@ function FeedPostCardImpl({
    * immediately instead of waiting on its own IntersectionObserver).
    */
   priority = false,
+  nextVideoSrc,
 }: {
   item: FeedItem;
   reason?: SmartReason | null;
   onRemove: (id: string) => void;
   onOpen: (item: FeedItem, startComments?: boolean, startIndex?: number) => void;
   priority?: boolean;
+  /** The next VIDEO in the reel deck, warmed once this card starts playing —
+   *  see `FeedVideo`'s `nextSrc`. */
+  nextVideoSrc?: string | null;
 }) {
   const [liked, setLiked] = useState(item.viewerLiked);
   const [saved, setSaved] = useState(item.viewerSaved);
@@ -870,6 +874,7 @@ function FeedPostCardImpl({
                 width={item.mediaWidth ?? undefined}
                 height={item.mediaHeight ?? undefined}
                 priority={priority}
+                nextSrc={nextVideoSrc}
               >
                 {/*
                   🔴 DURATION STAYS ON THE VIDEO; VIEWS MOVED OUT (owner,
@@ -1125,7 +1130,13 @@ export const FeedPostCard = memo(
     a.onRemove === b.onRemove &&
     a.onOpen === b.onOpen &&
     a.reason?.label === b.reason?.label &&
-    a.reason?.tone === b.reason?.tone,
+    a.reason?.tone === b.reason?.tone &&
+    // 🔴 Must be compared, or the prefetch silently stops at the page boundary:
+    // the card that was LAST when its page loaded has no next clip yet, and
+    // when the following page arrives its `nextVideoSrc` goes undefined → URL.
+    // Omitted from this list, that update never reaches the card, so the one
+    // clip most likely to be watched next is the one that never gets warmed.
+    a.nextVideoSrc === b.nextVideoSrc,
 );
 
 /**

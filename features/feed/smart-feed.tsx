@@ -270,6 +270,28 @@ export function SmartFeed({
   // Every loaded video, in feed order — the reel playlist. Kept live so the open
   // deck keeps growing as the feed loads more (infinite, TikTok-style).
   const videos = useMemo(() => items.filter((i) => i.mediaKind === "video"), [items]);
+  /*
+    id → the NEXT video's URL in reel order, so a card that starts playing can
+    warm the clip the first swipe in Reels will land on (owner: "every video
+    watching on feed should automatically download and clear the path for reels
+    so when is clicked it doesnt load a bit").
+
+    Built from `videos`, which IS the reel playlist — the deck `openViewer`
+    seeds is this same array, so "next in the feed" and "next in Reels" are the
+    same clip by construction rather than by coincidence.
+
+    Values are plain strings, so a card's prop is referentially stable as the
+    feed grows: appending a page only changes the entry for what used to be the
+    LAST video (undefined → a URL), leaving every other memoized card untouched.
+  */
+  const nextVideoSrcById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (let i = 0; i < videos.length - 1; i++) {
+      const next = videos[i + 1]?.mediaUrl;
+      if (next) m.set(videos[i]!.id, next);
+    }
+    return m;
+  }, [videos]);
   // Latest videos via a ref so openViewer stays a STABLE callback — memoized feed
   // cards then never re-render just because the list grew.
   const videosRef = useRef(videos);
@@ -925,7 +947,15 @@ export function SmartFeed({
                 <AnimatePresence initial={false}>
                   {stream.map((slot, index) =>
                     slot.type === "post" ? (
-                      <FeedPostCard key={slot.item.id} item={slot.item} reason={slot.reason} onRemove={remove} onOpen={openViewer} priority={index < 2} />
+                      <FeedPostCard
+                        key={slot.item.id}
+                        item={slot.item}
+                        reason={slot.reason}
+                        onRemove={remove}
+                        onOpen={openViewer}
+                        priority={index < 2}
+                        nextVideoSrc={nextVideoSrcById.get(slot.item.id)}
+                      />
                     ) : slot.type === "ad" ? (
                       /*
                         🔴 KEYED ON `anchorId`, NEVER ON THE INDEX OR THE

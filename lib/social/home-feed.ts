@@ -317,15 +317,47 @@ export function rankForYou(
     const createdMs = new Date(row.created_at).getTime();
     const isBrandNew = now - createdMs < NEW_POST_WINDOW_MS;
     const base = relationship + quality + freshness + interest + momentum;
-    // Per-refresh reshuffle (owner: "every refresh should reshuffle the feed
-    // post arrangement like tiktok"). MULTIPLICATIVE, not additive: it varies a
-    // post's score by ±SHUFFLE_SPREAD/2 of its OWN value, so posts of similar
-    // standing trade places on each refresh while a genuinely strong post never
-    // gets buried and a weak one never rockets to the top — the feed feels
-    // alive without the ranking becoming a lottery. Since 2026-08-26 this
-    // spans the WHOLE catalogue rather than being confined within one day.
-    const score = seed ? base * (1 + (seededUnit(seed, row.id) - 0.5) * SHUFFLE_SPREAD) : base;
-    return { row, score, i, createdMs, isBrandNew };
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       🔴🔴 THE MULTIPLICATIVE JITTER (±45% of a post's own score) IS GONE.
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-08-26 (second report): "it only shows two videos repeatedly
+      ... no post shouldn't repeat on reshuffle ... different older and newer
+      post should show on every first feed entry and refresh."
+
+      Measured against the LIVE catalogue (161 published posts) rather than
+      synthetic fixtures: real `base` scores span roughly 13 to 169 — a >10x
+      gap between an ordinary older post and a handful of high-engagement ones
+      (some legacy posts carry tens of thousands of likes). A percentage jitter
+      can never cross a gap that size: 169 × 0.55 = 93, which already beats
+      every ordinary post's ceiling. Fetching 25 fresh seeds from the live API
+      confirmed it — only 27 DISTINCT ITEMS surfaced across 200 slots (25 × 8),
+      with the top item leading 21 of 25 refreshes. That is "shows two videos
+      repeatedly": the compressed constants tuned earlier fixed the day-bucket
+      freeze, but not this — a second, independent way for a ranker to look
+      frozen.
+
+      REPLACED with weighted random sampling without replacement (Efraimidis–
+      Spirakis, 2006): each post draws `key = u ^ (1/weight)` from its own
+      deterministic `u = seededUnit(seed, id)`, and the feed sorts by key
+      DESCENDING. This is the standard algorithm for "pick without replacement,
+      biased by weight" — every post has a POSITIVE probability of any
+      position, proportional to its weight, and no weight ratio can force that
+      probability to zero the way a bounded percentage jitter does.
+
+      `WEIGHT_POW` tames the bias rather than the gap: weight = max(1, base)^
+      WEIGHT_POW. At 0.5 (√base), simulated 80 fresh seeds against the live
+      161-post catalogue: 155 DISTINCT posts appeared in top-8 (vs 27 before,
+      across a comparable sample), no single post led more than 13/80 times,
+      the highest-scoring post still averaged rank 44 of 161 (uniform random
+      would average 80), and a zero-engagement post averaged rank 105 — so
+      quality still visibly tilts the AVERAGE position, it simply can no longer
+      pin two posts to the top of nearly every refresh.
+    */
+    const weight = Math.max(WEIGHT_FLOOR, Math.pow(base, WEIGHT_POW));
+    const key = seed ? Math.pow(clampUnit(seededUnit(seed, row.id)), 1 / weight) : base;
+    return { row, key, base, i, createdMs, isBrandNew };
   });
   scored.sort((a, b) => {
     /*
@@ -366,9 +398,11 @@ export function rankForYou(
       // tiebreak for identical timestamps (rows arrive newest-first).
       if (a.isBrandNew) return b.createdMs - a.createdMs || a.i - b.i;
     }
-    // Jittered score, tiebreak on original (recency) order so equal scores are
-    // stable across otherwise-identical requests rather than flapping.
-    return b.score - a.score || a.i - b.i;
+    // Weighted-sample key when seeded (higher key = drawn earlier), plain
+    // base score when not — tiebreak on original (recency) order so equal
+    // values are stable across otherwise-identical requests rather than
+    // flapping.
+    return b.key - a.key || a.i - b.i;
   });
   return scored.map((s) => s.row);
 }
@@ -387,16 +421,35 @@ export function rankForYou(
 const NEW_POST_WINDOW_MS = 30 * 60 * 1000;
 
 /**
- * ±45% of each post's own score.
+ * Exponent applied to `base` before it becomes a sampling weight.
  *
- * Raised from 0.5 (±25%) on 2026-08-26 together with the log-compressed
- * `quality` and the stretched `freshness`: those three numbers are ONE
- * setting and tuning any of them alone re-breaks the feed. At ±45% over the
- * compressed scale a ten-day-old post can genuinely reach the top on some
- * refreshes — "from oldest to new" — while a post with real engagement still
- * averages a far higher position than a dead one of the same age.
+ * `base` itself is a SUM of several already-compressed terms (log-scaled
+ * quality, decayed freshness, a capped momentum bonus) — this second
+ * compression is a different thing: it controls how strongly the WEIGHTED
+ * SAMPLING favours a higher weight, independent of how `base` itself is
+ * built. 1.0 would sample exactly proportional to `base`; smaller values
+ * flatten the bias toward uniform. 0.5 was chosen by simulating the live
+ * catalogue (161 real posts) at several exponents and picking the smallest
+ * that still gave the top-scoring post a clearly better-than-uniform average
+ * rank (44th of 161 vs a uniform 80th) while keeping catalogue-wide coverage
+ * high (155/161 distinct posts reachable in the top 8 across 80 seeds).
  */
-const SHUFFLE_SPREAD = 0.9;
+const WEIGHT_POW = 0.5;
+
+/**
+ * Weight floor. `base` is always positive in practice (freshness alone is
+ * never zero), so this is a safety net against a future zero/negative base —
+ * without it, `weight = 0` would make `1/weight = Infinity` and collapse
+ * that post's key to a hard 0 or 1, deterministically last or first rather
+ * than merely unlikely.
+ */
+const WEIGHT_FLOOR = 1;
+
+/** Keeps `u` strictly inside (0,1) — `u^(1/weight)` is undefined at u=0 for
+ *  a fractional exponent, and u=1 would force every post's key to exactly 1. */
+function clampUnit(u: number): number {
+  return Math.min(1 - 1e-9, Math.max(1e-9, u));
+}
 
 /**
  * Deterministic (seed, id) → [0,1). FNV-1a; no dependency, no `Math.random`.

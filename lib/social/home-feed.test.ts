@@ -135,26 +135,73 @@ describe("rankForYou — per-refresh shuffle", () => {
     expect(withoutSeed).toEqual(legacy);
   });
 
-  it("engagement is a strong BIAS, not a guarantee — a banger averages the top of the feed", () => {
-    /*
-      🔴 This replaced "a strong post stays on top, whatever the seed"
-      (2026-08-26). That assertion was true of the OLD scoring, where `quality`
-      was raw and unbounded, and it is exactly what had to go: if a 100x
-      engagement gap is unbridgeable then so is a 100x gap between an old viral
-      post and today's, and the feed can never reshuffle across ages.
-
-      What is asserted instead is the property that actually matters — a strong
-      post is favoured HEAVILY on average, but is not nailed to slot one.
-    */
+  /**
+   * 🔴🔴 REPLACED THE MULTIPLICATIVE-JITTER MODEL ENTIRELY (2026-08-26, second
+   * report). Owner: "it only shows two videos repeatedly ... no post shouldn't
+   * repeat on reshuffle ... different older and newer post should show on
+   * every first feed entry and refresh."
+   *
+   * The FIRST 2026-08-26 fix (log-compressed quality + a ±45% multiplicative
+   * jitter) genuinely fixed the day-bucket freeze, but not this: fetched 25
+   * fresh seeds from the LIVE feed API against the real 161-post catalogue and
+   * found only 27 DISTINCT posts across 200 slots, with the single top post
+   * leading 21 of 25 refreshes. Real `base` scores span roughly 13 to 169 — a
+   * gap no bounded percentage jitter can cross (169 × 0.55 = 93, already above
+   * every ordinary post's ceiling).
+   *
+   * `rankForYou`'s seeded path is now weighted random sampling WITHOUT
+   * replacement (Efraimidis–Spirakis): key = u^(1/weight), sorted descending.
+   * Every post has a POSITIVE probability of any position — no weight ratio
+   * can zero it out — while a higher weight still shifts the probability mass
+   * toward the top. The two properties below are what that buys, and they
+   * trade off against each other by construction: a model that guaranteed a
+   * bigger edge for the strongest post would necessarily starve more of the
+   * rest, which is the exact bug being fixed.
+   */
+  it("engagement is a real bias, not a guarantee — a banger outperforms uniform chance", () => {
     const rows = [...many(), makeRow({ id: "banger", likes_count: 5000 })];
-    const ranks = Array.from({ length: 60 }, (_, i) =>
+    const N = 300;
+    const ranks = Array.from({ length: N }, (_, i) =>
       rankForYou(rows, new Set(), undefined, `s${i}`).findIndex((r) => r.id === "banger"),
     );
-    const mean = ranks.reduce((a, b) => a + b, 0) / ranks.length;
-    // Chance alone would average 20 of 41. Measured 2026-08-26: ~9.5.
-    expect(mean, "engagement stopped mattering — the feed became a lottery").toBeLessThan(15);
-    // ...and it genuinely does reach the top, often.
-    expect(ranks.filter((r) => r < 10).length / ranks.length).toBeGreaterThan(0.33);
+    const mean = ranks.reduce((a, b) => a + b, 0) / N;
+    // Uniform chance among 41 slots averages 20. Measured 2026-08-26: ~18.4.
+    expect(mean, "engagement stopped mattering — no better than uniform chance").toBeLessThan(19.5);
+    // ...and it reaches the top far more than its 1-in-41 uniform share.
+    const frac10 = ranks.filter((r) => r < 10).length / N;
+    expect(frac10, "the banger almost never reaches the top 10").toBeGreaterThan(0.15);
+  });
+
+  /**
+   * 🔴 THE ACTUAL REGRESSION GUARD for the reported bug: a SMALL number of
+   * high-weight posts among a much larger low-weight pool must not dominate
+   * every refresh. This is the shape of the real catalogue (a handful of
+   * legacy/viral posts, many ordinary ones) that the old multiplicative model
+   * failed on. Measured against this exact fixture, 2026-08-26: 40/40 distinct
+   * posts reached the top 8 across 80 seeds, and the single most-favoured post
+   * led only 25 of 80 (31%) — nowhere near the old model's 21-of-25 (84%).
+   */
+  it("🔴 a handful of high-engagement posts do NOT crowd out the rest of the catalogue", () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+    const rows = Array.from({ length: 40 }, (_, i) =>
+      makeRow({
+        id: `d${i}`,
+        created_at: daysAgo(i % 20),
+        // Every 20th post is a big outlier (5000 likes); the rest are ordinary.
+        likes_count: i % 20 === 0 ? 5000 : (i * 7) % 30,
+      }),
+    );
+    const N = 80;
+    const tally = new Map<string, number>();
+    for (let s = 0; s < N; s++) {
+      for (const r of rankForYou(rows, new Set(), undefined, `cov${s}`).slice(0, 8)) {
+        tally.set(r.id, (tally.get(r.id) ?? 0) + 1);
+      }
+    }
+    const distinct = tally.size;
+    const maxFreq = Math.max(...tally.values());
+    expect(distinct, "too few distinct posts ever reach the top 8 — the feed looks frozen").toBeGreaterThan(25);
+    expect(maxFreq / N, "one post is crowding out the rest of the catalogue").toBeLessThan(0.5);
   });
 
   /*

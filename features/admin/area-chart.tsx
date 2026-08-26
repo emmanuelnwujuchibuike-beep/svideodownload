@@ -51,8 +51,20 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  */
 
 export interface AreaPoint {
+  /** The terse x-axis tick — "8/3". Search Console's format. */
   label: string;
   value: number;
+  /**
+   * The unambiguous form for the TOOLTIP — "Aug 3–9, 2026".
+   *
+   * The axis and the tooltip want different things and it took the owner's
+   * side-by-side comparison against Search Console to make that obvious: "8/3"
+   * on the axis is what lets a dozen dates sit on one line, but "8/3" alone in
+   * a tooltip does not say whether you are looking at one day or the seven that
+   * start on it. Optional — a caller with nothing richer to say falls back to
+   * `label` and nothing changes.
+   */
+  fullLabel?: string;
 }
 
 interface Pad {
@@ -221,6 +233,34 @@ function ChartSvg({
           );
         })}
 
+        {/*
+          ── VERTICAL DOTTED GRIDLINES (owner, 2026-08-25, from the Search
+             Console screenshots) ────────────────────────────────────────────
+
+          One per LABELLED tick, not one per data point: a dotted line behind
+          every day of a 90-day series is a grey wash, and Search Console draws
+          them only where a date is printed. They are what visually ties a point
+          on the curve to the date under it, which is the job the axis was
+          failing at when every label but the first and last was missing.
+
+          Drawn BEFORE the area and the line so the data always sits on top —
+          scaffolding that crosses in front of the curve reads as part of it.
+        */}
+        {points.map((p, i) =>
+          labelled.has(i) && xs[i] !== undefined ? (
+            <line
+              key={`vg${p.label}${i}`}
+              x1={xs[i]}
+              x2={xs[i]}
+              y1={PAD.t}
+              y2={height - PAD.b}
+              className="stroke-border/70"
+              strokeWidth={1}
+              strokeDasharray="2 4"
+            />
+          ) : null,
+        )}
+
         <path d={area} fill={`url(#g${uid})`} />
 
         {/*
@@ -318,7 +358,11 @@ function ChartSvg({
         >
           <div>
             <span className="font-semibold tabular-nums">{format(active.value)}</span>
-            <span className="ml-1.5 text-muted-foreground">{active.label}</span>
+            {/* The UNAMBIGUOUS label here — "Aug 3–9, 2026" — while the axis
+                behind it carries the terse "8/3". */}
+            <span className="ml-1.5 text-muted-foreground">
+              {active.fullLabel ?? active.label}
+            </span>
           </div>
           {/*
             The comparison row, and the DELTA — this is what turns a static

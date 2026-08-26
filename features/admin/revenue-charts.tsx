@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Info, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronDown, Info, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
@@ -210,7 +210,13 @@ export function RevenueCharts({
 
     /** Daily grid → the selected grouping → what AdminAreaChart draws. */
     const group = (days: DailyPoint[]): AreaPoint[] =>
-      aggregateRevenue(days, effectiveGrain).map((b) => ({ label: b.label, value: b.value }));
+      aggregateRevenue(days, effectiveGrain).map((b) => ({
+        /* Terse on the axis ("8/3"), unambiguous in the tooltip
+           ("Aug 3-9, 2026") - Search Console does exactly this. */
+        label: b.axisLabel,
+        fullLabel: b.fullLabel,
+        value: b.value,
+      }));
 
     const of = (pick: (d: RevenueSeries["days"][number]) => number): AreaPoint[] =>
       group(slice(series.days).map((d) => ({ date: d.date, value: pick(d) })));
@@ -387,31 +393,55 @@ export function RevenueCharts({
             than one that is visibly unavailable, and `title` says why rather
             than leaving a dead button to guess at.
           */}
-          <div role="group" aria-label="Group by" className="flex items-center gap-1 rounded-xl bg-secondary/50 p-1">
-            {GRAINS.map((g) => {
-              const tooShort = grainTooShort(g.id, range);
-              return (
-                <button
+          {/*
+            ── SEARCH CONSOLE'S DROPDOWN, not a segmented row ────────────────
+
+            Owner, 2026-08-25, with side-by-side screenshots: "use exactly the
+            measurement, button style, design and calculation from the image".
+
+            Search Console puts ONE tinted pill with a chevron here — "Weekly ⌄"
+            — and the two designs are not interchangeable at this width. A
+            three-button segmented row has to render every option all the time,
+            which is what pushed "Monthly" onto the screen permanently greyed
+            out (visible in the owner's screenshot) — a control that is mostly
+            unavailable, taking permanent space to say so.
+
+            A `<select>` under a styled pill: it is one option wide at rest,
+            it opens the platform's own picker (correct on a phone, which is
+            where the reference was captured), and it is keyboard- and
+            screen-reader-native without a line of menu code.
+
+            🔴 A REAL `<select>`, not a div with a listbox role. The native
+            control brings focus management, type-ahead, Escape, and the iOS
+            wheel for free; every hand-rolled dropdown in this codebase would
+            have to re-earn those.
+          */}
+          <div className="relative inline-flex items-center">
+            <select
+              aria-label="Group data by"
+              value={effectiveGrain}
+              onChange={(e) => setGrain(e.target.value as Granularity)}
+              className="appearance-none rounded-full bg-primary/10 py-1.5 pl-3.5 pr-8 text-xs font-semibold text-primary outline-none transition hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {GRAINS.map((g) => (
+                <option
                   key={g.id}
-                  type="button"
-                  onClick={() => setGrain(g.id)}
-                  disabled={tooShort}
-                  aria-pressed={effectiveGrain === g.id}
-                  title={
-                    tooShort
-                      ? `Needs a longer window than ${range} days to be meaningful`
-                      : undefined
-                  }
-                  className={cn(
-                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                    grain === g.id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-                    tooShort && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
-                  )}
+                  value={g.id}
+                  /*
+                    Still disabled where the window cannot express the grouping
+                    — but now it is one row inside an opened menu rather than a
+                    permanently greyed button on the page.
+                  */
+                  disabled={grainTooShort(g.id, range)}
                 >
                   {g.label}
-                </button>
-              );
-            })}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              aria-hidden
+              className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-primary"
+            />
           </div>
         </div>
       </div>

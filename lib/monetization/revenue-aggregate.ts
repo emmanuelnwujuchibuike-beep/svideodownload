@@ -38,8 +38,26 @@ export interface DailyPoint {
 export interface AggregatedPoint {
   /** Stable key for React and for tooltip lookup. */
   key: string;
-  /** Short axis label — "Aug 3", "Aug 3–9", "Aug". */
+  /** Short label — "Aug 3", "Aug 3–9", "Aug". Used by the tooltip and table. */
   label: string;
+  /**
+   * The COMPACT x-axis label, in Search Console's own format.
+   *
+   * Owner, 2026-08-25, comparing our chart against two Search Console
+   * screenshots: "use exactly the measurement, button style, design and
+   * calculation from the image … days should show on one line".
+   *
+   * Search Console prints `M/D` — "8/3" — and for a WEEK it prints the week's
+   * START date, not the range. That is why its axis fits a dozen dates on one
+   * line where ours fits four: "Aug 3–9" is nine characters against three.
+   *
+   * 🔴 A SEPARATE FIELD, not a reformatted `label`. The tooltip and the table
+   * still want the unambiguous form — "8/3" alone does not say whether you are
+   * looking at one day or the seven that start on it, and that distinction is
+   * the whole point of the granularity control. So the axis gets the terse
+   * version and the tooltip keeps the explicit one.
+   */
+  axisLabel: string;
   /** Full tooltip label — "Aug 3, 2026", "Aug 3–9, 2026", "August 2026". */
   fullLabel: string;
   value: number;
@@ -94,6 +112,19 @@ function shortDay(d: Date): string {
 }
 
 /**
+ * `M/D` — Search Console's axis format.
+ *
+ * Unpadded on purpose: "8/3", not "08/03". Search Console prints it unpadded,
+ * and the padding is two wasted characters on the one axis that is short of
+ * room. Month FIRST, matching the reference; this is an axis tick rather than
+ * prose, so it is not run through the locale formatter — a locale that flipped
+ * it to D/M would silently disagree with the screenshots this was built to.
+ */
+function numericDay(d: Date): string {
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+/**
  * Aggregate a gap-free daily grid.
  *
  * The input is assumed complete (every day present, zeros included) — that is
@@ -109,6 +140,7 @@ export function aggregateRevenue(days: DailyPoint[], granularity: Granularity): 
       return {
         key: d.date,
         label: shortDay(date),
+        axisLabel: numericDay(date),
         fullLabel: `${shortDay(date)}, ${date.getFullYear()}`,
         value: d.value,
         start: d.date,
@@ -150,6 +182,9 @@ export function aggregateRevenue(days: DailyPoint[], granularity: Granularity): 
       return {
         key,
         label: MONTHS_SHORT[b.start.getMonth()]!,
+        // A month is already short enough to print whole — Search Console does
+        // the same. Only days and weeks need the numeric form.
+        axisLabel: MONTHS_SHORT[b.start.getMonth()]!,
         fullLabel: `${MONTHS_LONG[b.start.getMonth()]} ${b.start.getFullYear()}`,
         value: b.value,
         start: localDayKey(b.start),
@@ -182,6 +217,12 @@ export function aggregateRevenue(days: DailyPoint[], granularity: Granularity): 
     return {
       key,
       label,
+      /*
+        The week's START, numerically — "8/3" for the week of Aug 3–9. Exactly
+        what Search Console prints, and the reason its weekly axis reads as a
+        clean run of dates seven days apart instead of a row of ranges.
+      */
+      axisLabel: numericDay(first),
       fullLabel,
       value: b.value,
       start: localDayKey(first),

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { getAdminUser } from "@/lib/admin/require-admin";
+import { requireSensitiveAdmin } from "@/lib/admin/reauth";
 import { getPaystackConfig, setPaystackConfig } from "@/lib/paystack/config";
 
 export const runtime = "nodejs";
@@ -41,8 +42,14 @@ const schema = z.object({
 
 /** POST — save the config (admin only). */
 export async function POST(request: Request) {
-  const admin = await getAdminUser();
-  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  /*
+    SENSITIVE (requirement 10) — payment-provider settings. Whoever controls the
+    Paystack keys controls where money goes, so this needs a fresh password on
+    top of the session. See lib/admin/reauth.ts.
+  */
+  const gate = await requireSensitiveAdmin();
+  if (!gate.ok) return gate.response;
+  const admin = gate.user;
   let body: unknown;
   try {
     body = await request.json();

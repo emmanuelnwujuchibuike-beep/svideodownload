@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { getAdminUser } from "@/lib/admin/require-admin";
+import { requireSensitiveAdmin } from "@/lib/admin/reauth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -45,8 +46,19 @@ const postSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const admin = await getAdminUser();
-  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  /*
+    SENSITIVE (requirement 10) — this route rewrites other people's follower
+    counts and post metrics, which is exactly the "changing balances" case.
+
+    Admin AND a password re-entry within the last ten minutes. The session alone
+    is deliberately not enough: it stays valid for weeks by design, so the only
+    control that covers an unlocked laptop is a fresh proof at the moment of the
+    dangerous action. Answers `code: "REAUTH_REQUIRED"` so the dashboard can
+    prompt rather than show a dead button.
+  */
+  const gate = await requireSensitiveAdmin();
+  if (!gate.ok) return gate.response;
+  const admin = gate.user;
   const body = await request.json().catch(() => null);
   const db = createAdminClient();
 

@@ -230,3 +230,77 @@ describe("Y-axis scale (§6)", () => {
     expect(axisScale([9_400_000]).top).toBeGreaterThanOrEqual(9_400_000);
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE SEARCH CONSOLE AXIS FORMAT (owner, 2026-08-25)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The owner compared our chart against two Google Search Console screenshots
+ * and asked for "exactly the measurement, button style, design and calculation
+ * from the image … days should show on one line, with week showing weekly not
+ * daily".
+ *
+ * The BUCKETING already matched (Monday weeks, calendar months). What did not
+ * was the axis: ours printed "Aug 3–9", which is three times the width of
+ * Search Console's "8/3" and is why only the first and last tick ever fitted.
+ */
+describe("Search Console axis labels (§5)", () => {
+  it("prints a DAY as M/D, unpadded", () => {
+    const out = aggregateRevenue([{ date: "2026-08-03", value: 1 }], "daily");
+    expect(out[0]!.axisLabel).toBe("8/3");
+    // The verbose form survives for the tooltip — "8/3" alone cannot say
+    // whether it means one day or the seven starting on it.
+    expect(out[0]!.label).toBe("Aug 3");
+    expect(out[0]!.fullLabel).toBe("Aug 3, 2026");
+  });
+
+  it("prints a WEEK as its START date, not a range", () => {
+    // Mon 3 Aug 2026 → Sun 9 Aug.
+    const days = Array.from({ length: 7 }, (_, i) => ({
+      date: `2026-08-0${3 + i}`,
+      value: 1,
+    }));
+    const out = aggregateRevenue(days, "weekly");
+    expect(out).toHaveLength(1);
+    expect(out[0]!.axisLabel).toBe("8/3");
+    expect(out[0]!.label).toBe("Aug 3–9");
+  });
+
+  it("🔴 a WEEKLY chart emits one point per WEEK, never one per day", () => {
+    /*
+      The owner's actual complaint — "with week showing weekly not daily".
+      28 days must become 4 points with labels 7 days apart, which is what makes
+      the weekly line read as the smooth curve in the reference rather than the
+      jagged daily one.
+    */
+    const days = Array.from({ length: 28 }, (_, i) => ({
+      date: `2026-08-${String(3 + i).padStart(2, "0")}`,
+      value: 1,
+    }));
+    const weekly = aggregateRevenue(days, "weekly");
+    expect(weekly).toHaveLength(4);
+    expect(weekly.map((p) => p.axisLabel)).toEqual(["8/3", "8/10", "8/17", "8/24"]);
+    // Every bucket is a FULL week, and the total is conserved.
+    expect(weekly.every((p) => p.days === 7)).toBe(true);
+    expect(weekly.reduce((n, p) => n + p.value, 0)).toBe(28);
+  });
+
+  it("a MONTHLY chart emits one point per month", () => {
+    const days = [
+      ...Array.from({ length: 31 }, (_, i) => ({ date: `2026-07-${String(i + 1).padStart(2, "0")}`, value: 1 })),
+      ...Array.from({ length: 31 }, (_, i) => ({ date: `2026-08-${String(i + 1).padStart(2, "0")}`, value: 2 })),
+    ];
+    const monthly = aggregateRevenue(days, "monthly");
+    expect(monthly).toHaveLength(2);
+    expect(monthly.map((p) => p.axisLabel)).toEqual(["Jul", "Aug"]);
+    expect(monthly.map((p) => p.value)).toEqual([31, 62]);
+  });
+
+  it("keeps the axis label SHORTER than the verbose one for days and weeks", () => {
+    // The whole reason the separate field exists: axis width.
+    const days = Array.from({ length: 7 }, (_, i) => ({ date: `2026-08-0${3 + i}`, value: 1 }));
+    const weekly = aggregateRevenue(days, "weekly")[0]!;
+    expect(weekly.axisLabel.length).toBeLessThan(weekly.label.length);
+  });
+});

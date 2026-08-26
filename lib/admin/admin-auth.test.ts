@@ -105,7 +105,9 @@ describe("server-side authorization is the boundary, not the middleware", () => 
       const rel = f.replace(process.cwd(), "").replace(/\\/g, "/");
       if (rel.includes("/api/admin/auth/")) return false;
       const src = strip(readFileSync(f, "utf8"));
-      return !/getAdminUser|requireAdminApi|requireAdminAction/.test(src);
+      // `requireSensitiveAdmin` is the STRICTER gate (admin + recent password),
+      // so a route using it is guarded by more than this test demands.
+      return !/getAdminUser|requireAdminApi|requireAdminAction|requireSensitiveAdmin/.test(src);
     });
 
     expect(
@@ -266,9 +268,21 @@ describe("re-authentication for sensitive actions", () => {
   const reauth = read("lib/admin/reauth.ts");
 
   it("stores no credential — only a signed id and expiry", () => {
+    /*
+      The assertion is about what goes INTO the marker, not whether the file
+      says the word "password" — it now carries a user-facing "Confirm your
+      password to continue." string, which is correct and must not fail this.
+
+      So: the signed payload is exactly `<userId>.<expiry>`, and the module
+      neither accepts nor writes a password anywhere.
+    */
     const code = strip(reauth);
     expect(code).toMatch(/createHmac/);
-    expect(code).not.toMatch(/password/i);
+    expect(code).toMatch(/const payload = `\$\{userId\}\.\$\{expiry\}`/);
+    // `markReauthenticated` takes ONE argument, and it is the user id.
+    expect(code).toMatch(/markReauthenticated\(userId: string\)/);
+    // No password is ever read from a parameter, a cookie or an env var here.
+    expect(code).not.toMatch(/password[A-Za-z]*\s*[:=]/i);
   });
 
   it("uses a constant-time comparison", () => {

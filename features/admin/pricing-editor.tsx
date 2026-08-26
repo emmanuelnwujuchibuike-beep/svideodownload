@@ -4,6 +4,7 @@ import { Loader2, Tag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
+import { useSensitiveAction } from "@/features/admin/use-sensitive-action";
 import { cn } from "@/lib/utils";
 
 interface Tier {
@@ -22,13 +23,20 @@ export function PricingEditor({ pricing }: { pricing: Pricing }) {
   const [business, setBusiness] = useState<Tier>(pricing.business);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  /*
+    Pricing is a SENSITIVE action (requirement 10). The route answers
+    `REAUTH_REQUIRED` when the last password entry is stale; `sensitiveFetch`
+    raises the prompt, re-authenticates and replays the save, so this handler
+    never has to know the case exists.
+  */
+  const { sensitiveFetch, reauthPrompt } = useSensitiveAction();
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/admin/pricing", {
+      const res = await sensitiveFetch("/api/admin/pricing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pro, business }),
@@ -75,6 +83,8 @@ export function PricingEditor({ pricing }: { pricing: Pricing }) {
           ) : null}
         </div>
       </form>
+      {/* Renders nothing until the server asks for a password. */}
+      {reauthPrompt}
     </section>
   );
 }

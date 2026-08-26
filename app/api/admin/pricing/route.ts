@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getAdminUser } from "@/lib/admin/guard";
+import { requireSensitiveAdmin } from "@/lib/admin/reauth";
 import { setPricing } from "@/lib/monetization/pricing";
 
 export const runtime = "nodejs";
@@ -16,8 +16,13 @@ const schema = z.object({ pro: tier, business: tier });
 
 /** Admin-only: update the displayed pricing shown on /pricing. */
 export async function POST(request: Request) {
-  const admin = await getAdminUser();
-  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  /*
+    SENSITIVE (requirement 10) — what every plan costs. A silent edit here
+    changes what every subscriber is billed, so it needs a fresh password on top
+    of the session. See lib/admin/reauth.ts.
+  */
+  const gate = await requireSensitiveAdmin();
+  if (!gate.ok) return gate.response;
 
   let body: unknown;
   try {

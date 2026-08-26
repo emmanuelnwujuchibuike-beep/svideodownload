@@ -129,3 +129,49 @@ export async function requireRecentReauth(userId: string): Promise<void> {
     throw new Error("REAUTH_REQUIRED");
   }
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE GATE FOR DANGEROUS OPERATIONS
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Both conditions in one call: a verified administrator AND a recent password
+ * re-entry. Used by the routes that move money, change payment settings, or
+ * alter other people's data.
+ *
+ * ── 🔴 THIS ONE ANSWERS 403, NOT 404 ──────────────────────────────────────
+ *
+ * Everywhere else an unauthorized admin API answers 404, to avoid confirming
+ * the endpoint exists. Here the caller has ALREADY proved they are an
+ * administrator — they are simply stale — so there is nothing left to conceal
+ * and a 404 would be actively unhelpful: the dashboard could not tell "you may
+ * not do this" apart from "this endpoint moved", and the operator would see a
+ * broken button instead of a password prompt.
+ *
+ * The `code` is what the client keys on. A string rather than the status alone,
+ * because 403 is also what an ordinary authorization failure looks like and the
+ * two need different UI.
+ */
+export async function requireSensitiveAdmin(): Promise<
+  { ok: true; user: import("@supabase/supabase-js").User } | { ok: false; response: Response }
+> {
+  const { requireAdminApi } = await import("./require-admin");
+
+  const gate = await requireAdminApi();
+  if (!gate.ok) return { ok: false, response: gate.response };
+
+  if (!(await hasRecentReauth(gate.user.id))) {
+    return {
+      ok: false,
+      response: Response.json(
+        {
+          error: "Confirm your password to continue.",
+          code: "REAUTH_REQUIRED",
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return { ok: true, user: gate.user };
+}

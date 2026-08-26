@@ -17,7 +17,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/layout/site-header";
-import { isAdmin } from "@/lib/admin";
+import { requireAdminPage } from "@/lib/admin/require-admin";
 import {
   fetchDownloadStats,
   fetchProxyUsage,
@@ -190,7 +190,6 @@ import {
 } from "@/lib/monetization/stats";
 import { alertsEnabled } from "@/lib/notify";
 import { PLATFORMS } from "@/lib/platforms";
-import { createClient } from "@/lib/supabase/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
 import type { PlatformId } from "@/types";
 
@@ -208,20 +207,19 @@ const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export default async function AdminPage() {
-  if (!hasSupabase) redirect("/login");
+  if (!hasSupabase) redirect("/");
 
-  // Defense-in-depth (middleware already guards this).
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/admin");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (!isAdmin(profile?.role, user.email)) redirect("/");
+  /*
+    🔴 THE AUTHORIZATION DECISION FOR THIS PAGE. Not defence in depth — the
+    actual gate. `middleware.ts` also checks, but middleware is a convenience
+    that a matcher edit can silently remove, so this page decides for itself.
+
+    `requireAdminPage` verifies the session against the auth server (`getUser`,
+    never `getSession`) and re-reads the role from the DATABASE, so an
+    administrator demoted a moment ago loses access on this very request rather
+    than whenever their JWT happens to expire.
+  */
+  await requireAdminPage("/admin");
 
   /*
     Only the MONEY data is awaited before the first paint.

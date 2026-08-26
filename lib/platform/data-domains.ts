@@ -31,10 +31,12 @@ export const DATA_DOMAINS: DataDomain[] = [
   {
     id: "identity",
     name: "Identity",
-    owner: "lib/auth, lib/security",
-    description: "Accounts, profiles and every authentication/authorisation factor.",
+    owner: "lib/auth, lib/security, lib/admin",
+    description:
+      "Accounts, profiles and every authentication/authorisation factor. `admin_login_attempts` is the failed-sign-in ledger behind the admin login throttle — deliberately in Postgres rather than the Redis limiter, because that one fails open and a password form must not.",
     tables: [
       "profiles",
+      "admin_login_attempts",
       "account_security_settings",
       "security_pin",
       "mfa_recovery_codes",

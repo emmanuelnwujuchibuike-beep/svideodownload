@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
+import { AdminLogoutButton } from "@/features/admin/admin-logout-button";
 import {
   ADMIN_CATEGORIES,
   ADMIN_SECTIONS,
@@ -197,6 +198,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SectionContext.Provider value={active}>
+      {/*
+        🔴 LOG OUT IS ALWAYS VISIBLE, at the top of the shell, on every section.
+
+        It sits here rather than inside one panel or behind the account menu
+        because it must be reachable in one glance from wherever the operator
+        happens to be — a sign-out control that has to be hunted for is one that
+        does not get used on a shared or borrowed machine.
+
+        `justify-end` on its own row: it is deliberately NOT competing with the
+        section nav below it for attention, but it is never further than the top
+        of the page.
+      */}
+      <div className="mb-4 flex items-center justify-end px-3 sm:px-0">
+        <AdminLogoutButton />
+      </div>
       {/*
         Pinned shortcuts — up to 5, chosen via the pin toggle on each nav
         item below. Sits at the very top of the dashboard shell (above the

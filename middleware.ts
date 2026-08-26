@@ -35,7 +35,28 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  const needsGuard = path.startsWith("/account") || path.startsWith("/admin");
+  /*
+    🔴 THE ADMIN AUTH PAGES ARE PUBLIC, AND MUST BE.
+
+    `/admin/login`, `/admin/forgot-password` and `/admin/reset-password` are the
+    three pages an administrator reaches precisely BECAUSE they have no session.
+    Guarding them would redirect the login form to the login form — an infinite
+    bounce — and would make a password reset impossible for the one person who
+    needs it.
+
+    Matched as exact paths, not `startsWith`. A prefix test would also exempt
+    anything an attacker could append (`/admin/login/../secrets`), and Next's
+    normalisation is not something to lean on for an authorization decision.
+  */
+  const ADMIN_PUBLIC_PATHS = new Set([
+    "/admin/login",
+    "/admin/forgot-password",
+    "/admin/reset-password",
+  ]);
+  const isAdminPublic = ADMIN_PUBLIC_PATHS.has(path);
+
+  const needsGuard =
+    path.startsWith("/account") || (path.startsWith("/admin") && !isAdminPublic);
 
   // Signed-in visitors don't need the marketing page — they get the app.
   //
@@ -191,16 +212,24 @@ export async function middleware(request: NextRequest) {
     // Fail CLOSED for /admin (its pages re-check admin server-side too, but
     // the middleware gate shouldn't silently disappear on a slow network);
     // everything else passes through and self-guards.
-    if (path.startsWith("/admin")) return NextResponse.redirect(new URL("/", request.url));
+    if (path.startsWith("/admin") && !isAdminPublic) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
     return response;
   }
 
   const { pathname } = request.nextUrl;
-  const isProtected =
-    pathname.startsWith("/account") || pathname.startsWith("/admin");
+  const isProtectedAdmin = pathname.startsWith("/admin") && !isAdminPublic;
+  const isProtected = pathname.startsWith("/account") || isProtectedAdmin;
 
   if (!user && isProtected) {
-    const redirectUrl = new URL("/login", request.url);
+    /*
+      An unauthenticated visitor to /admin goes to the ADMIN login form, not the
+      member one. The member form has no idea what to do with `next=/admin` for
+      someone who turns out not to be an administrator, and it would sign them
+      into the app instead — leaving them looking at the feed wondering why.
+    */
+    const redirectUrl = new URL(isProtectedAdmin ? "/admin/login" : "/login", request.url);
     redirectUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(redirectUrl);
   }
@@ -210,8 +239,23 @@ export async function middleware(request: NextRequest) {
   // same as before this moved out of app/page.tsx.
   if (user && isLandingRedirect) return toHome();
 
-  // Admins only for /admin.
-  if (user && pathname.startsWith("/admin")) {
+  /*
+    Admins only for /admin.
+
+    🔴 THIS IS A CONVENIENCE, NOT THE SECURITY BOUNDARY. It turns a wrong URL
+    into a tidy redirect instead of a rendered error, and that is all it is
+    trusted to do. The real authorization is re-decided server-side on every
+    protected request by `lib/admin/require-admin.ts` — which every admin page,
+    every /api/admin route and every admin server action calls. Deleting this
+    block would open nothing; the matcher below not covering a future route
+    would open nothing either. Both of those WOULD be holes if this were the
+    only check, which is exactly why it is not.
+
+    A signed-in NON-admin goes to `/`, not to the admin login form: offering the
+    form implies signing in again might help, and it confirms /admin is a real
+    surface worth attacking.
+  */
+  if (user && isProtectedAdmin) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")

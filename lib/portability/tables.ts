@@ -74,6 +74,12 @@ export const NOT_EXPORTED: Record<string, string> = {
      exported. It exists so the admin dashboard can answer "how many days were
      lost and restored" — `streaks` overwrites `current_streak` on a break, so
      the length of the ended run survives nowhere else. */
+  /* Operational security telemetry about SIGN-IN ATTEMPTS, keyed by email or IP
+     rather than by an account — a row exists for addresses that never had one.
+     Exporting it would hand anyone who asks a list of which addresses have been
+     probed, which is exactly the information the table exists to act on. */
+  admin_login_attempts:
+    "Failed administrator sign-in attempts, used only to slow password guessing. Not personal data about a member and not tied to an account.",
   streak_events:
     "Record of your streaks ending and being restored, belonging to a streak; the streak itself is exported, including its current and longest run.",
   collection_items: "Membership rows for a collection; the collection is exported.",

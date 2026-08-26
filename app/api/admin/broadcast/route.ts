@@ -1,23 +1,27 @@
 import { after as runAfterResponse, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { isAdmin } from "@/lib/admin";
+import { getAdminUser } from "@/lib/admin/require-admin";
 import { assistantLimiter } from "@/lib/rate-limit";
 import { fanOutBroadcastPush, listBroadcasts, prepareBroadcast } from "@/lib/social/broadcasts";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/*
+  🔴 This file used to carry its OWN copy of the admin check — a private
+  `requireAdmin()` that re-implemented the session read and the role lookup.
+  It was correct, but a second implementation of an authorization rule is a
+  second place for it to drift, and it is invisible to any audit that greps for
+  the shared helper (the route-coverage test in lib/admin/admin-auth.test.ts
+  flagged this file as unguarded for exactly that reason).
+
+  It now uses the single authority. Same behaviour, one less copy — and this
+  route reaches every user on the platform, so it is the last one that should
+  have a bespoke gate.
+*/
 async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (!isAdmin(profile?.role as string | null, user.email)) return null;
-  return user;
+  return getAdminUser();
 }
 
 /** GET /api/admin/broadcast — recent broadcast history. */

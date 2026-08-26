@@ -93,10 +93,30 @@ export async function syncPaystackEvent(
 
   await supabase.from("subscriptions").upsert(patch, { onConflict: "user_id" });
 
+  /*
+    🔴 BILLING MUST NEVER DEMOTE AN ADMINISTRATOR.
+
+    `profiles.role` is doing two jobs in this schema — plan tier ('user'/'pro')
+    AND privilege ('admin') — so this line, which is only trying to record a
+    subscription outcome, used to overwrite an administrator's grant with 'user'
+    the moment any webhook fired for their own account. That is why zero rows in
+    production currently hold `role = 'admin'` and why ADMIN_EMAILS became the
+    de-facto grant path: the role kept being wiped by billing.
+
+    `.neq("role", "admin")` scopes the write so an admin row is left alone. The
+    subscription itself is still recorded in `subscriptions` above — which is
+    where entitlements are actually read from — so an administrator with a paid
+    plan keeps both facts, just not conflated in one column.
+
+    Migration 0136 enforces the same rule with a trigger, so a future writer
+    that forgets this clause still cannot demote an admin. Both, deliberately:
+    this makes the intent obvious at the call site, the trigger makes it true.
+  */
   await supabase
     .from("profiles")
     .update({ role: status !== "canceled" && effectivePlan !== "free" ? "pro" : "user" })
-    .eq("id", userId);
+    .eq("id", userId)
+    .neq("role", "admin");
 
   trackEvent(status === "canceled" ? "subscribe_cancel" : "subscribe", {
     userId,

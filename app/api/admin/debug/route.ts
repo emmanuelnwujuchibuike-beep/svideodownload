@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 
 import { NextResponse } from "next/server";
 
+import { requireAdminApi } from "@/lib/admin/require-admin";
 import { diagnoseEmail } from "@/lib/notify";
 import { apifyThreadsDiag } from "@/server/extractors/apify-instagram";
 import { cookieHeaderFor } from "@/server/extractors/cookies";
@@ -22,10 +23,39 @@ const IG_APP_UA =
  * gated by WORKER_SECRET. Returns redacted summaries (no tokens/media URLs).
  */
 export async function GET(request: Request) {
-  const secret = process.env.WORKER_SECRET;
-  if (secret && request.headers.get("x-worker-secret") !== secret) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  /*
+    🔴🔴 THIS WAS THE WORST OF THE THREE. It used to be:
+
+        if (secret && request.headers.get("x-worker-secret") !== secret) → 403
+
+    With `WORKER_SECRET` unset or an empty string, the `&&` short-circuits and
+    the guard disappears entirely — and this is not a read-only stats endpoint.
+    Unauthenticated, it would:
+
+      • `?fetch=` — issue arbitrary HTTP requests through the RESIDENTIAL PROXY
+        while attaching this app's saved Instagram/Facebook sign-in COOKIES.
+        That is a server-side request forgery with the app's own credentials
+        attached, billed to our proxy account.
+      • `?dl=` / `?url=` — run yt-dlp and ffmpeg on an attacker-supplied URL,
+        i.e. arbitrary outbound fetches and unbounded CPU on demand.
+      • `?apify=` — spend Apify credits.
+      • `?email=` — send mail through Resend.
+
+    "Present but empty" is a real state in this deployment's history
+    (`CRON_SECRET=""` broke every cron for weeks), and `&&` cannot tell it from
+    "not configured".
+
+    Now: fail CLOSED, and require a non-empty worker secret OR a signed-in
+    administrator. There is no configuration in which this endpoint is public.
+  */
+  const secret = process.env.WORKER_SECRET?.trim();
+  const fromWorker = !!secret && request.headers.get("x-worker-secret") === secret;
+
+  if (!fromWorker) {
+    const gate = await requireAdminApi();
+    if (!gate.ok) return gate.response;
   }
+
   const sp = new URL(request.url).searchParams;
 
   // Email diagnostic: live-send a test alert and return Resend's exact response.

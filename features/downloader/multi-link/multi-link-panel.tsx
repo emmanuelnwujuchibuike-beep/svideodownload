@@ -580,7 +580,7 @@ export function MultiLinkPanel({
           Gated on `total > 0` with the summary itself, so it appears only once
           a fetch has actually produced something to download.
         */}
-        <AdSurface zone="multilink_above_batch" maxWidth="max-w-none" className="mt-4" />
+        <AdSurface zone="multilink_above_batch" fullBleed className="mt-4" />
         <div className="mt-4 rounded-xl border border-border/70 bg-background/60 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p aria-live="polite" className="text-xs font-medium text-muted-foreground">

@@ -78,7 +78,7 @@ export const dynamic = "force-static";
 function SectionAd() {
   return (
     <div className="container max-w-5xl px-3 py-2">
-      <LazyAdSurface zone="landing_section_break" maxWidth="max-w-3xl" />
+      <LazyAdSurface zone="landing_section_break" fullBleed />
     </div>
   );
 }

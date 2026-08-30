@@ -200,7 +200,21 @@ export function ExoClickUnit({
     <div
       ref={host}
       className={cn(
-        "relative overflow-hidden bg-black",
+        "relative overflow-hidden",
+        /*
+          🔴 Black ONLY on the full-screen reels slide (owner, 2026-08-30: "and
+          a black background too").
+
+          In-page, the box is set to the creative's own aspect ratio, so
+          `object-contain` fills it edge to edge and any visible black is purely
+          the container showing through during the moment before metadata lands
+          — a dark slab flashing into a light page. Transparent there means the
+          page's own background carries it and nothing flashes.
+
+          The reels slide keeps it: that IS a full-screen black surface, and a
+          transparent one would show the previous reel behind the ad.
+        */
+        fill ? "bg-black" : "bg-transparent",
         /*
           🔴 FULL WIDTH, sized to the CREATIVE'S OWN ASPECT (owner, 2026-08-30:
           "i want it to be full width like a platform reels … so users can enjoy

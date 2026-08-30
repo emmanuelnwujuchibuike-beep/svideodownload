@@ -268,7 +268,23 @@ export function DownloadBox({
         a coloured panel where a white ad card has no ground to sit on, and the
         hero is the LCP element on the page with the 1.6s budget.
       */}
-      {onCard ? <AdSurface zone="downloader_above_fetch" maxWidth="max-w-2xl" className="mb-4" /> : null}
+      {/*
+        🔴 NOTHING HERE (owner, 2026-08-30: "the video ad slot shouldnt be in
+        the hero, the sections starts from below the cloud storage section").
+
+        An `AdSurface` for `downloader_above_fetch` was added here so the
+        landing's paste card would carry the above-the-fetch-box unit. Measured
+        live, that put a 348x619 video at y=277 — directly under the hero H1 and
+        above the paste box, inside the hero block that also holds the Cloud
+        storage card. The hero is the first thing a visitor sees and the LCP
+        element on the page with the 1.6s budget, and an ad is not what should
+        greet them.
+
+        The zone is NOT removed — `Downloader` still renders it on the ~148
+        generated downloader pages, where the paste box is the page's content
+        rather than its hero. On the landing, ad slots now begin below the hero,
+        at the section breaks.
+      */}
       <form onSubmit={onSubmit} className={cn("rounded-2xl p-1.5 ring-1 ring-inset", onCard ? "bg-secondary/40 ring-border/60" : "bg-white/10 ring-white/15 backdrop-blur")}>
         <div className="flex flex-col gap-2 sm:flex-row">
           {/*

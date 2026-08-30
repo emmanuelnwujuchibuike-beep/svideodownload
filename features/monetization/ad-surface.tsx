@@ -41,12 +41,32 @@ export function AdSurface({
   /** Constrains the card. Match it to the content column it sits under. */
   maxWidth = "max-w-2xl",
   label = "Sponsored",
+  /**
+   * Drop the card, the padding and the caption, and let the unit span its
+   * container.
+   *
+   * Owner, 2026-08-30: "the slot isnt full width, i still see some white
+   * background border round it."
+   *
+   * The card treatment is right for a fixed-size banner sitting in a column of
+   * text — it gives a 300x250 somewhere to live. It is wrong for a full-motion
+   * vertical video, where the border reads as a frame around an advert rather
+   * than something to watch, and where capping the width wastes the format.
+   *
+   * 🔴 Disclosure is NOT lost with the caption. `ExoClickUnit` — the format
+   * every full-bleed zone here serves — draws its own "Ad" badge and mute
+   * control ON the video, which is exactly how TikTok and Instagram mark a
+   * sponsored clip. Do not set this on a zone seeded with a bare display banner,
+   * which carries no label of its own.
+   */
+  fullBleed = false,
   onResolved,
 }: {
   zone: AdZone;
   className?: string;
   maxWidth?: string;
   label?: string | null;
+  fullBleed?: boolean;
   /**
    * Mirrors `AdSlot`'s own `onResolved` up to this surface's parent.
    *
@@ -66,6 +86,24 @@ export function AdSurface({
   // `ready` guards the premium check: rendering before the plan resolves would
   // flash an ad frame at a paying user.
   if (!ready || !showAds) return null;
+
+  // Full-bleed: no card, no padding, no caption, no width cap — the creative IS
+  // the presentation. Still collapses to nothing until the slot confirms an ad.
+  if (fullBleed) {
+    return (
+      <div className={cn("w-full", hasAd !== true && "hidden", className)} aria-hidden={hasAd !== true}>
+        <AdSlot
+          zone={zone}
+          dismissible={false}
+          fullBleed
+          onResolved={(has) => {
+            setHasAd(has);
+            onResolved?.(has);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     /*

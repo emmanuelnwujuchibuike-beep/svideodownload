@@ -39,6 +39,8 @@ export function LazyAdSurface({
   zone,
   className,
   maxWidth,
+  /** Passed straight through — see `AdSurface`. */
+  fullBleed,
   /**
    * How far ahead of the viewport to start loading.
    *
@@ -51,6 +53,7 @@ export function LazyAdSurface({
   zone: AdZone;
   className?: string;
   maxWidth?: string;
+  fullBleed?: boolean;
   rootMargin?: string;
 }) {
   const { showAds, ready } = useShowAds();
@@ -94,8 +97,37 @@ export function LazyAdSurface({
   if (!ready || !showAds) return null;
 
   return (
-    <div ref={host} className={cn("empty:hidden", className)}>
-      {eligible ? <AdSurface zone={zone} maxWidth={maxWidth} /> : null}
+    /*
+      🔴 NO `empty:hidden` ON THE OBSERVED ELEMENT, and a placeholder child
+      while waiting (fixed 2026-08-30).
+
+      This was `className="empty:hidden"` with a `null` child until eligible —
+      which is a deadlock, and it silently disabled every section-break slot on
+      the landing page:
+
+        no child yet  ->  `:empty` matches  ->  display:none
+          ->  the element measures 0x0
+            ->  the IntersectionObserver never reports it visible
+              ->  `eligible` never flips
+                ->  it never gets a child
+
+      Verified live: the landing page filled 2 ad slots and none of them were
+      section breaks, on a 12,031px page that was scrolled end to end four
+      times. `FeedAdSlot` never had this bug because it always renders an inert
+      placeholder — the same reason it is done here now.
+
+      Collapsing when the zone turns out to be empty is `AdSurface`'s job, and it
+      already does it by rendering nothing at all, so nothing is lost.
+    */
+    <div ref={host} className={className}>
+      {eligible ? (
+        <AdSurface zone={zone} maxWidth={maxWidth} fullBleed={fullBleed} />
+      ) : (
+        // Inert and zero-height, but a real node — it exists so the box can be
+        // measured. No shimmer: an animated skeleton at every section break
+        // would run a compositor job for slots that may never fill.
+        <div aria-hidden className="h-px w-full" />
+      )}
     </div>
   );
 }

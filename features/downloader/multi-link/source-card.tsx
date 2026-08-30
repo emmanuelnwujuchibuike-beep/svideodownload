@@ -260,7 +260,7 @@ export const SourceCard = memo(function SourceCard({
       */}
       {hasResults ? (
         <div className="mt-3">
-          <AdSurface zone="multilink_card_inline" maxWidth="max-w-none" />
+          <AdSurface zone="multilink_card_inline" fullBleed />
         </div>
       ) : null}
 

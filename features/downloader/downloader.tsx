@@ -359,7 +359,7 @@ export function Downloader({
         so an unconfigured site has exactly the layout it had before.
       */}
       {resultOnly ? null : (
-        <AdSurface zone="downloader_above_fetch" maxWidth="max-w-2xl" className="mb-5" />
+        <AdSurface zone="downloader_above_fetch" fullBleed className="mb-5" />
       )}
       {resultOnly ? null : (
       <form

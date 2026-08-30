@@ -157,7 +157,21 @@ async function withSharedExoClick(
   zone: string,
   found: AdSlotData | null,
 ): Promise<AdSlotData | null> {
-  if (found) return found;
+  /*
+    🔴 An ExoClick row with NO zone id does not count as "found".
+
+    It is a row that cannot possibly serve — `AdSlot` requires `adSlotId` to
+    render the ExoClick branch — but as a truthy result it still WON the
+    precedence check and blocked the shared id from filling the placement. The
+    symptom is a zone that reports an ad and renders nothing, which is precisely
+    the silent class this file keeps having to defend against. Found live on
+    `landing_section_break`, where a half-configured row left the section-break
+    slots blank while every other placement filled.
+
+    Treating it as absent also matches `resolveExoClickZoneId`, which already
+    falls through to the shared id on a blank row id — the two now agree.
+  */
+  if (found && !(found.format === "exoclick" && !found.adSlotId)) return found;
   const settings = await getMonetizationSettings();
   if (!exoClickZoneEnabled(settings, zone)) return null;
   const zoneId = resolveExoClickZoneId(settings, zone, null);

@@ -81,14 +81,37 @@ export function ExoClickUnit({
   const [muted, setMuted] = useState(true);
   const video = useRef<HTMLVideoElement | null>(null);
   const host = useRef<HTMLDivElement | null>(null);
-  const answered = useRef(false);
+  /** The last answer given to `onFill`, so it is only re-sent on a real change. */
+  const answered = useRef<boolean | null>(null);
   const started = useRef(false);
   const fired = useRef<Set<string>>(new Set());
 
+  /**
+   * 🔴 Reports on the CREATIVE RESOLVING, never on playback starting.
+   *
+   * Firing this from `onPlaying` deadlocked every ExoClick placement, and it
+   * took a headless browser to see it — the MP4 reported `readyState: 4`
+   * (fully buffered) while sitting at `0x0`, `paused`, forever:
+   *
+   *   the parent card is `hidden` until `onFill(true)`
+   *     → a `display:none` element measures 0x0
+   *       → the IntersectionObserver never sees it as visible
+   *         → playback never starts
+   *           → `onFill` never fires
+   *
+   * `AdSurface` and `FetchedAd` both gate exactly that way, so this affected
+   * every slot, not just the one being tested. Fill means "a playable creative
+   * exists", which is knowable the moment the VAST resolves. Whether it was
+   * SEEN is a different question, answered separately by the impression pixel
+   * below, which still waits for real playback.
+   *
+   * Deliberately NOT latched against a later `false`: a creative that resolves
+   * and then fails to decode has to be able to take its card back down.
+   */
   const answer = useCallback(
     (filled: boolean) => {
-      if (answered.current) return;
-      answered.current = true;
+      if (answered.current === filled) return;
+      answered.current = filled;
       if (!filled) setDead(true);
       onFill?.(filled);
     },
@@ -110,6 +133,9 @@ export function ExoClickUnit({
           return;
         }
         setAd(d.ad);
+        // The card may now render, which is what gives the <video> a size, which
+        // is what lets it become visible and play. See the note on `answer`.
+        answer(true);
       })
       .catch(() => {
         if (alive) answer(false);
@@ -187,11 +213,15 @@ export function ExoClickUnit({
         onPlaying={() => {
           if (started.current) return;
           started.current = true;
-          // The impression belongs to the moment pixels actually moved, not to
-          // the moment the row was fetched.
+          /*
+            The impression belongs to the moment pixels actually moved on a
+            screen someone is looking at — NOT to the moment the creative
+            resolved. That distinction is the whole reason `onFill` and this are
+            separate: the card can appear as soon as there is something to show,
+            while the advertiser is only billed for a view that really happened.
+          */
           pixel(ad.impressions);
           pixel(ad.tracking.start);
-          answer(true);
         }}
         onTimeUpdate={(e) => {
           const el = e.currentTarget;

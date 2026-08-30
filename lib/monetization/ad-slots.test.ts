@@ -14,7 +14,12 @@ import {
   isPersistentZone,
   isServableFormat,
 } from "./ad-schema";
-import { DEFAULT_MONETIZATION, exoClickZoneEnabled, normalizeExoClickZones } from "./settings";
+import {
+  DEFAULT_MONETIZATION,
+  exoClickZoneEnabled,
+  normalizeExoClickZones,
+  resolveExoClickZoneId,
+} from "./settings";
 
 /**
  * Ad slots — the empty-box class of bug.
@@ -228,6 +233,44 @@ describe("Ad slots — formats", () => {
     // AdSense-safety split would have a hole exactly where the bug was.
     expect(exoClickZoneEnabled({ exoclick: true, exoclickZones: { result_top: false } }, "result_top")).toBe(false);
     expect(normalizeExoClickZones({ result_top: false })).toEqual({ result_top: false });
+  });
+
+  it("🔴 an explicit ad row always beats the shared Zone ID", () => {
+    /*
+     * Owner: "put a way i can select to use one ad zone id link for all ad slots
+     * or not."
+     *
+     * Precedence only goes one way, and that is the safety property: turning
+     * shared mode on must never silently repoint a placement someone
+     * deliberately configured with its own id.
+     */
+    const shared = { exoclickSharedZoneId: "111111" };
+    expect(resolveExoClickZoneId(shared, "reels_interstitial", "999999")).toBe("999999");
+    expect(resolveExoClickZoneId(shared, "reels_interstitial", null)).toBe("111111");
+    // Blank/whitespace on the row is not a configuration — fall through.
+    expect(resolveExoClickZoneId(shared, "reels_interstitial", "   ")).toBe("111111");
+  });
+
+  it("🔴 the shared ID reaches only the purpose-built 9:16 placements", () => {
+    /*
+     * "All ad slots" means all the ExoClick ones. Applying it to every zone in
+     * the registry would drop a vertical video into the bottom banner and the
+     * blog sidebar — placements shaped for a leaderboard.
+     */
+    const shared = { exoclickSharedZoneId: "111111" };
+    for (const zone of EXOCLICK_ZONES) {
+      expect(resolveExoClickZoneId(shared, zone, null), `${zone} should take the shared id`).toBe("111111");
+    }
+    for (const zone of ["bottom_banner", "sidebar", "top_banner", "feed_inline"]) {
+      expect(resolveExoClickZoneId(shared, zone, null), `${zone} must not`).toBeNull();
+    }
+    // …but an explicit row still works anywhere, which is how `result_top` runs.
+    expect(resolveExoClickZoneId(shared, "result_top", "6015286")).toBe("6015286");
+  });
+
+  it("shared mode is OFF by default", () => {
+    expect(DEFAULT_MONETIZATION.exoclickSharedZoneId).toBe("");
+    expect(resolveExoClickZoneId({ exoclickSharedZoneId: "" }, "reels_interstitial", null)).toBeNull();
   });
 
   it("🔴 classifies EVERY zone as marketing or app", () => {

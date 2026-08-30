@@ -256,6 +256,56 @@ export function MonetizationSettings({
       */}
       {state.exoclick ? (
         <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          {/*
+            One id for everything, or a row per placement.
+
+            Owner: "put a way i can select to use one ad zone id link for all ad
+            slots or not." Presented as the FIRST thing under the master switch
+            because it decides whether the Ad-placements tab is involved at all —
+            with a shared id set, there are no rows to create.
+          */}
+          <div className="mb-4 rounded-xl border border-border/70 bg-background/60 p-3">
+            <label className="mb-1 block text-sm font-semibold" htmlFor="exo-shared">
+              One Zone ID for all ExoClick slots
+            </label>
+            <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+              Paste one numeric Zone ID and every ExoClick placement below uses it — no ad rows to
+              create. Leave it <strong>empty</strong> to configure each placement separately in{" "}
+              <em>Ad placements</em> instead. A placement that has its own row always wins, so you
+              can still point one slot somewhere else.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="exo-shared"
+                inputMode="numeric"
+                value={state.exoclickSharedZoneId}
+                disabled={busy}
+                onChange={(e) =>
+                  setState((s) => ({ ...s, exoclickSharedZoneId: e.target.value.trim() }))
+                }
+                placeholder="6015286"
+                className="h-10 w-40 rounded-xl bg-background px-3 font-mono text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+              />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void persist(state)}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+              >
+                Save
+              </button>
+              {state.exoclickSharedZoneId ? (
+                <span className="text-[11px] font-medium text-green-600 dark:text-green-400">
+                  Shared mode on — all placements use this ID.
+                </span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">
+                  Off — using per-placement rows.
+                </span>
+              )}
+            </div>
+          </div>
+
           <p className="text-sm font-semibold">ExoClick — which pages</p>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
             Turn off the pages AdSense reviews and keep the rest earning. A zone that is off stays
@@ -622,10 +672,11 @@ export function MonetizationSettings({
         <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500\30 bg-amber-500\10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
           <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            <strong>ExoClick is serving on public pages while AdSense is enabled.</strong>{" "}
-            ExoClick&rsquo;s inventory skews adult, and AdSense judges the page its reviewer actually
-            lands on — so an ExoClick creative rendering beside an AdSense unit is a real risk to the
-            account. This site has already been refused three times for content quality.
+            <strong>ExoClick is serving on public pages while AdSense is enabled.</strong> Filtering
+            adult and sexy categories on the ExoClick zone removes the biggest part of this risk and
+            is worth doing — but it does not remove it entirely: category filters are applied by the
+            network, not guaranteed by Google, and AdSense judges the page its reviewer actually
+            lands on. This site has already been refused three times for content quality.
             <br />
             <strong className="mt-1 inline-block">
               You do not have to choose the whole network.

@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
-import { exoClickZoneEnabled, getMonetizationSettings } from "@/lib/monetization/settings";
+import {
+  exoClickZoneEnabled,
+  getMonetizationSettings,
+  resolveExoClickZoneId,
+} from "@/lib/monetization/settings";
 import type { AdSlotData } from "@/lib/monetization/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -108,6 +112,58 @@ const INTERSTITIAL_ZONES: ReadonlySet<string> = new Set([
   "exit_intent_popup",
 ]);
 
+/**
+ * The slot a SHARED ExoClick zone id produces for a placement with no ad row.
+ *
+ * Without this, shared mode would be inert: `AdSurface` and `AdSlot` render
+ * nothing when this endpoint answers `null`, so "one id for all slots" would
+ * still have required creating a row per slot — which is the work it exists to
+ * remove.
+ *
+ * The id is a stable synthetic string rather than a row uuid, because there is
+ * no row. Nothing dereferences it: `/api/track` stores it as an opaque label,
+ * and the real accounting is ExoClick's own VAST pixels.
+ */
+function sharedExoClickSlot(zone: string, zoneId: string): AdSlotData {
+  return {
+    id: `exoclick-shared-${zone}`,
+    zone,
+    network: "exoclick",
+    format: "exoclick",
+    scriptCode: null,
+    imageUrl: null,
+    targetUrl: null,
+    headline: null,
+    width: null,
+    height: null,
+    adClient: null,
+    // The zone id the client never sees — /api/ads/exoclick resolves it again
+    // server-side. Carried here only so the slot is well-formed.
+    adSlotId: zoneId,
+    adLayout: null,
+    skippable: true,
+    skipAfterSeconds: 5,
+  };
+}
+
+/**
+ * Apply shared ExoClick mode to a zone's answer.
+ *
+ * Only fills a GAP — an explicit row always wins, which `resolveExoClickZoneId`
+ * enforces — and only when the zone's own per-page switch is on, so the shared
+ * id cannot reach a page the operator cleared for an AdSense review.
+ */
+async function withSharedExoClick(
+  zone: string,
+  found: AdSlotData | null,
+): Promise<AdSlotData | null> {
+  if (found) return found;
+  const settings = await getMonetizationSettings();
+  if (!exoClickZoneEnabled(settings, zone)) return null;
+  const zoneId = resolveExoClickZoneId(settings, zone, null);
+  return zoneId ? sharedExoClickSlot(zone, zoneId) : null;
+}
+
 export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
   const zone = sp.get("zone") ?? "";
@@ -141,7 +197,13 @@ export async function GET(request: Request) {
 
     const allowed = await allowedFilter();
     const entries = await Promise.all(
-      zones.map(async (z) => [z, (await getAdsForZone(z)).filter((a) => allowed(a, z))[0] ?? null] as const),
+      zones.map(
+        async (z) =>
+          [
+            z,
+            await withSharedExoClick(z, (await getAdsForZone(z)).filter((a) => allowed(a, z))[0] ?? null),
+          ] as const,
+      ),
     );
     return NextResponse.json(
       { ads: Object.fromEntries(entries) },
@@ -159,5 +221,5 @@ export async function GET(request: Request) {
   const ads = (await getAdsForZone(zone)).filter((a) => allowed(a, zone));
   const headers = { "Cache-Control": "private, max-age=10" };
   if (all) return NextResponse.json({ ads }, { headers });
-  return NextResponse.json({ ad: ads[0] ?? null }, { headers });
+  return NextResponse.json({ ad: await withSharedExoClick(zone, ads[0] ?? null) }, { headers });
 }

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { AD_ZONES, type AdZoneId } from "./ad-schema";
+import { AD_ZONES, isExoClickZone, type AdZoneId } from "./ad-schema";
 import {
   isMonetagAdType,
   isMonetagPlacementId,
@@ -320,6 +320,21 @@ export interface MonetizationSettings {
    */
   exoclickZones: Partial<Record<AdZoneId, boolean>>;
   /**
+   * One ExoClick zone id used for EVERY ExoClick placement.
+   *
+   * Owner, 2026-08-30: "put a way i can select to use one ad zone id link for
+   * all ad slots or not."
+   *
+   * Empty means off, and off is the default — placements then come from ad rows
+   * as before, one row per zone. Set it and every built-in ExoClick placement
+   * serves this id with no rows to create at all, which is the difference
+   * between configuring five placements and configuring one.
+   *
+   * An explicit ad ROW always wins over this, so a single zone can still be
+   * pointed somewhere else without abandoning the shared default.
+   */
+  exoclickSharedZoneId: string;
+  /**
    * Whether HD/top-tier downloads require a server-verified reward session at
    * all. Off skips the reward-session flow entirely — `preview-card.tsx` falls
    * back to the plain (still ad-gated-by-tier-and-duration) download.
@@ -402,6 +417,8 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
     default is still "ExoClick renders nowhere".
   */
   exoclickZones: {},
+  // Empty = off. Per-zone ad rows are the default arrangement.
+  exoclickSharedZoneId: "",
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,
   rewardHdDailyLimit: 0,
@@ -472,6 +489,31 @@ export function exoClickZoneEnabled(
     switch for every zone that actually has an ExoClick row.
   */
   return settings.exoclickZones?.[zone as AdZoneId] !== false;
+}
+
+/**
+ * Which ExoClick zone id serves this placement, if any.
+ *
+ * Precedence, and it only goes one way: an explicit ad ROW always wins. The
+ * shared id is a DEFAULT for placements that have no row of their own, so
+ * turning it on cannot silently repoint a placement someone deliberately
+ * configured — and one zone can still be pointed elsewhere without giving up
+ * the shared default everywhere else.
+ *
+ * The shared id only applies to the placements built for a 9:16 video unit. A
+ * blanket "every zone" would drop a vertical video into the bottom banner and
+ * the blog sidebar, which is not what "all ad slots" means.
+ */
+export function resolveExoClickZoneId(
+  settings: Pick<MonetizationSettings, "exoclickSharedZoneId">,
+  zone: string,
+  rowZoneId: string | null | undefined,
+): string | null {
+  const explicit = (rowZoneId ?? "").trim();
+  if (explicit) return explicit;
+  const shared = (settings.exoclickSharedZoneId ?? "").trim();
+  if (shared && isExoClickZone(zone)) return shared;
+  return null;
 }
 
 /** Keep only well-formed Monetag units (known type + string snippet), capped. */

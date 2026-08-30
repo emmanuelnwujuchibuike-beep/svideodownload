@@ -90,6 +90,18 @@ const schema = z.object({
     the same filter again on the way back out.
   */
   exoclickZones: z.record(z.enum(AD_ZONES), z.boolean()).default({}),
+  /*
+    One zone id for every ExoClick placement. Empty clears it. Shape-checked
+    rather than merely trimmed: the whole snippet pasted in by mistake
+    (`https://s.magsrv.com/v1/vast.php?idzone=123`) would otherwise be written
+    into a VAST URL that 404s, and the symptom is silence.
+  */
+  exoclickSharedZoneId: z
+    .string()
+    .trim()
+    .regex(/^\d{4,20}$/, "Just the numeric Zone ID — not the whole vast.php link")
+    .or(z.literal(""))
+    .default(""),
   // Server-verified reward-session gate for HD/batch downloads (see
   // lib/monetization/reward-sessions.ts). Independent of the reward-AD tier/
   // duration settings above, which decide whether a request is gated at all.

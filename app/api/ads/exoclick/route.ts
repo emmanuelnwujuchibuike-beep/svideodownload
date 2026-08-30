@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
-import { exoClickZoneEnabled, getMonetizationSettings } from "@/lib/monetization/settings";
+import {
+  exoClickZoneEnabled,
+  getMonetizationSettings,
+  resolveExoClickZoneId,
+} from "@/lib/monetization/settings";
 import { exoClickVastUrl, parseVast, vastWrapperUrl } from "@/lib/monetization/vast";
 import { createClient } from "@/lib/supabase/server";
 
@@ -103,10 +107,16 @@ export async function GET(request: Request) {
   const settings = await getMonetizationSettings();
   if (!exoClickZoneEnabled(settings, zone)) return NextResponse.json({ ad: null });
 
+  /*
+    An explicit row first, then the shared zone id as a fallback — the same
+    precedence `resolveExoClickZoneId` applies everywhere, so a placement cannot
+    resolve to one id here and a different one in /api/ads.
+  */
   const row = (await getAdsForZone(zone)).find((a) => a.format === "exoclick" && a.adSlotId);
-  if (!row?.adSlotId) return NextResponse.json({ ad: null });
+  const zoneId = resolveExoClickZoneId(settings, zone, row?.adSlotId ?? null);
+  if (!zoneId) return NextResponse.json({ ad: null });
 
-  let url = exoClickVastUrl(row.adSlotId);
+  let url = exoClickVastUrl(zoneId);
   for (let depth = 0; depth <= MAX_WRAPPER_DEPTH; depth++) {
     const xml = await fetchVast(url, request);
     if (!xml) return NextResponse.json({ ad: null });
@@ -114,7 +124,7 @@ export async function GET(request: Request) {
     const creative = parseVast(xml);
     if (creative) {
       return NextResponse.json(
-        { ad: { ...creative, adId: row.id, zone } },
+        { ad: { ...creative, adId: row?.id ?? `exoclick-shared-${zone}`, zone } },
         // Never shared between visitors: the creative is targeted to this one,
         // and a cached VAST would also mean a reused impression pixel.
         { headers: { "Cache-Control": "private, no-store" } },

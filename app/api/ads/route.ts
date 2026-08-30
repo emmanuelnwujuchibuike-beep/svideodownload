@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { getUserPlan } from "@/lib/monetization/plan";
-import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { exoClickZoneEnabled, getMonetizationSettings } from "@/lib/monetization/settings";
 import type { AdSlotData } from "@/lib/monetization/types";
 import { createClient } from "@/lib/supabase/server";
 
@@ -86,6 +86,17 @@ async function allowedFilter(): Promise<(a: AdSlotData, zone: string) => boolean
     if (!settings.interstitial && a.format === "video") return false;
     // Off by default — a pop row serves nothing until deliberately enabled.
     if (!settings.popunder && a.format === "pop") return false;
+    /*
+      ExoClick: the master switch AND this zone's own switch, both of which must
+      be on. `exoClickZoneEnabled` owns that precedence so the two gates cannot
+      disagree — see lib/monetization/settings.ts.
+
+      Gated HERE, server-side, rather than in the component. A client-side check
+      would still ship the zone id to every visitor and would be one `if` away
+      from serving during an AdSense review, and the per-page split exists
+      precisely so an AdSense reviewer never meets an ExoClick creative.
+    */
+    if (a.format === "exoclick" && !exoClickZoneEnabled(settings, zone)) return false;
     return true;
   };
 }

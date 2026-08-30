@@ -566,6 +566,21 @@ export function MultiLinkPanel({
 
       {/* ── Batch summary + primary action (§7, §13, §44) ──────────────── */}
       {total > 0 ? (
+        <>
+        {/*
+          The above-the-Download-button placement (owner, 2026-08-30).
+
+          ABOVE the summary card, not inside it. The card carries the selected
+          count, the progress bar and the button, and those three read as one
+          statement — dropping an ad between the count and the button it refers
+          to would break the sentence, and putting one directly on top of a
+          primary action is the placement the batch work already refused once
+          (see the note on `multilink_between_sources` and its `i > 0` rule).
+
+          Gated on `total > 0` with the summary itself, so it appears only once
+          a fetch has actually produced something to download.
+        */}
+        <AdSurface zone="multilink_above_batch" maxWidth="max-w-none" className="mt-4" />
         <div className="mt-4 rounded-xl border border-border/70 bg-background/60 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p aria-live="polite" className="text-xs font-medium text-muted-foreground">
@@ -695,6 +710,7 @@ export function MultiLinkPanel({
             </button>
           ) : null}
         </div>
+        </>
       ) : null}
 
       {/*

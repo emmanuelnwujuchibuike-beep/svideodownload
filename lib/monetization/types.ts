@@ -60,7 +60,27 @@ export type AdZone =
     type/runtime agreement check.
   */
   | "multilink_between_sources"
-  | "multilink_fetch_gate";
+  | "multilink_fetch_gate"
+  /*
+    ExoClick vertical-video placements (2026-08-30).
+
+    Five surfaces the owner asked for by name — above the paste box, between
+    every landing section, above the batch Download button, inside each
+    Multi-Link source card, and one full-screen slide after every third reel.
+    All five are shaped for a 9:16 creative and all five serve NOTHING until
+    the ExoClick switch in monetization settings is turned on.
+
+    ⚠️ Same rule as the two notes above and it has bitten twice already: no
+    semicolon anywhere in a comment inside this union, and no double-quoted
+    lowercase word either — ad-slots.test.ts recovers the member list by
+    slicing at the first statement terminator and then matching every quoted
+    token, so either one silently corrupts the type/runtime agreement check.
+  */
+  | "downloader_above_fetch"
+  | "landing_section_break"
+  | "multilink_above_batch"
+  | "multilink_card_inline"
+  | "reels_interstitial";
 
 export type DeviceType = "mobile" | "desktop";
 
@@ -79,8 +99,11 @@ export interface AdSlotData {
   id: string;
   zone: string;
   network: string;
-  /** `pop` is gated by the `popunder` switch, which defaults off. */
-  format: "display" | "native" | "adsense" | "video" | "pop";
+  /**
+   * `pop` is gated by the `popunder` switch, which defaults off, and
+   * `exoclick` by the `exoclick` switch, which also defaults off.
+   */
+  format: "display" | "native" | "adsense" | "video" | "pop" | "exoclick";
   scriptCode: string | null;
   imageUrl: string | null;
   targetUrl: string | null;

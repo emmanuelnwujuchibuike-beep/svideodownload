@@ -114,7 +114,32 @@ function landingChunks(): string[] {
  * irreducible cost of "a row is now a button with an onClick", not a panel
  * that skipped splitting.
  */
-const GLOBAL_CEILING = 346 * 1024;
+/*
+ * 🔴 A FOURTH BUMP (346 → 347), and it is the smallest one this file has taken.
+ *
+ * Owner, 2026-08-30: ExoClick must be switchable PER PAGE — "so i can turn off
+ * landing page where adsense are, and leave for only reels page when adsense
+ * accepts." That is five sub-switches under the master network toggle in
+ * Monetization controls, grouped by whether an AdSense reviewer reaches the
+ * page, plus the handler that persists one.
+ *
+ * Measured at 355,668 bytes — 1,364 over the previous 346 KiB ceiling. There is
+ * nothing to split out of it: the switches ARE the panel, they live inside a
+ * component the admin route already loads (`MonetizationSettings`), and they
+ * render only when the master switch is on. `AD_ZONE_META` — the one
+ * heavyweight import — was already in this route's graph via `ad-manager.tsx`,
+ * so it costs nothing new here.
+ *
+ * Worth the byte: the alternative is an all-or-nothing network switch, which
+ * would mean ExoClick and AdSense could never occupy the site at the same time
+ * on different pages, on a project that has already been refused by AdSense
+ * three times.
+ *
+ * 🔴 The LANDING is unaffected and was checked, not assumed: all five ExoClick
+ * placements render through `AdSurface`/`LazyAdSurface`, which the landing
+ * already shipped, and `/` measured unchanged.
+ */
+const GLOBAL_CEILING = 348 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

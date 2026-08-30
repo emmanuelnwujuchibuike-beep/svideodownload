@@ -121,7 +121,16 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
       way) and leave a misleading value behind after a format change.
     */
     ad_client: form.format === "adsense" ? form.ad_client.trim() || null : null,
-    ad_slot_id: form.format === "adsense" ? form.ad_slot_id.trim() || null : null,
+    /*
+      Sent for AdSense AND ExoClick — the column holds "the network's numeric id
+      for this placement", which is an ad unit id for one and a Zone ID for the
+      other. Still cleared for every other format, so a format change cannot
+      leave a stale id behind that the next reader would misinterpret.
+    */
+    ad_slot_id:
+      form.format === "adsense" || form.format === "exoclick"
+        ? form.ad_slot_id.trim() || null
+        : null,
     ad_layout: form.format === "adsense" ? form.ad_layout.trim() || null : null,
     skippable: form.skippable,
     skip_after_seconds: form.skip_after_seconds,
@@ -288,6 +297,7 @@ function AdForm({
   const label = "mb-1 block text-xs font-medium text-muted-foreground";
   const needsScript = form.format === "display" || form.format === "video";
   const isAdSense = form.format === "adsense";
+  const isExoClick = form.format === "exoclick";
   const isNative = form.format === "native";
   const zoneMeta = AD_ZONE_META[form.zone];
 
@@ -365,6 +375,42 @@ function AdForm({
             <p className="sm:col-span-3 text-xs leading-relaxed text-muted-foreground">
               Both IDs come from the AdSense ad unit screen. Leave width and height blank for a
               responsive unit — set them only to pin an exact size.
+            </p>
+          </>
+        ) : null}
+
+        {isExoClick ? (
+          <>
+            <div className="sm:col-span-1">
+              <label className={label}>ExoClick Zone ID</label>
+              <input
+                className={input}
+                inputMode="numeric"
+                value={form.ad_slot_id}
+                onChange={(e) => set("ad_slot_id", e.target.value)}
+                placeholder="1234567"
+              />
+            </div>
+            {/*
+              The two things an operator gets wrong here, said before they do.
+
+              (1) Pasting the whole embed. ExoClick's dashboard shows a three-line
+              snippet and the natural move is to copy all of it — but the loader
+              and the push are already handled once for the whole page, so only
+              the number is wanted. (2) Seeding every zone and then reporting that
+              nothing shows, because the network switch is off by default and
+              deliberately so.
+            */}
+            <p className="sm:col-span-2 self-end text-xs leading-relaxed text-muted-foreground">
+              Just the <strong className="text-foreground">number</strong> from the Zone ID column in
+              your ExoClick dashboard — not the <code className="font-mono">&lt;ins&gt;</code> snippet.
+              Renders a 9:16 vertical unit.
+              <br />
+              <strong className="text-amber-600 dark:text-amber-400">
+                Nothing serves until you turn on ExoClick
+              </strong>{" "}
+              in Monetization controls, which is off by default so an AdSense review never meets an
+              ExoClick creative by accident.
             </p>
           </>
         ) : null}

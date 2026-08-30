@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import {
+  AD_ZONE_META,
+  EXOCLICK_ZONE_SURFACE,
+  EXOCLICK_ZONES,
+  type ExoClickZoneId,
+} from "@/lib/monetization/ad-schema";
+import {
   MONETAG_PLACEMENTS,
   MONETAG_SURFACE_GROUPS,
   MONETAG_SURFACES,
@@ -47,6 +53,11 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
     */
     label: "In-page scripts",
     hint: "Enables self-injecting scripts — Social Bar, Native, OnClick. It does NOT create a pop-under by itself; that depends on which network zone you paste. Off by default.",
+  },
+  {
+    key: "exoclick",
+    label: "ExoClick",
+    hint: "Master switch for the five vertical-video zones. Turn it on to reveal a per-page switch for each, so AdSense pages can stay clean while Reels keeps earning. Seed each zone's ID in Ad placements first. Off by default.",
   },
   {
     key: "interstitial",
@@ -149,6 +160,24 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
     if (!ok) setState((s) => ({ ...s, [key]: !s[key] })); // roll back on failure
   };
 
+  /**
+   * One ExoClick zone's own switch, layered under the master.
+   *
+   * Absence means ON (see `normalizeExoClickZones`), so the first tap has to
+   * write an explicit `false` rather than deleting a key — deleting it would
+   * read back as enabled and the switch would spring straight back.
+   */
+  const toggleExoClickZone = async (zone: ExoClickZoneId) => {
+    const currentlyOn = state.exoclickZones?.[zone] !== false;
+    const next: MonetizationSettings = {
+      ...state,
+      exoclickZones: { ...state.exoclickZones, [zone]: !currentlyOn },
+    };
+    setState(next);
+    const ok = await persist(next);
+    if (!ok) setState((s) => ({ ...s, exoclickZones: state.exoclickZones })); // roll back
+  };
+
   // The text fields (publisher id, ads.txt, verification tags) still save on a
   // button — persisting on every keystroke would be absurd.
   const saveText = () => persist(state);
@@ -180,6 +209,66 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           </button>
         ))}
       </div>
+
+      {/*
+        Per-page ExoClick switches (owner, 2026-08-30).
+
+        Shown only while the master switch is on — five sub-switches under a
+        network that is off would be five controls with no effect, which is the
+        dead-affordance pattern this admin keeps having to remove.
+
+        Grouped by whether a Google reviewer would see the page, because that is
+        the only question being answered here. The order matters: the AdSense
+        surfaces are listed first, since those are the ones being turned OFF.
+      */}
+      {state.exoclick ? (
+        <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+          <p className="text-sm font-semibold">ExoClick — which pages</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Turn off the pages AdSense reviews and keep the rest earning. A zone that is off stays
+            configured and serves nothing.
+          </p>
+
+          {(["marketing", "app"] as const).map((surface) => {
+            const zones = EXOCLICK_ZONES.filter((z) => EXOCLICK_ZONE_SURFACE[z] === surface);
+            return (
+              <div key={surface} className="mt-3">
+                <p
+                  className={cn(
+                    "mb-1.5 text-[11px] font-bold uppercase tracking-[0.08em]",
+                    surface === "marketing"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {surface === "marketing"
+                    ? "Public pages · AdSense reviews these"
+                    : "Signed-in app · no AdSense here"}
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {zones.map((zone) => (
+                    <button
+                      key={zone}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void toggleExoClickZone(zone)}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold">
+                          {AD_ZONE_META[zone].label}
+                        </span>
+                      </span>
+                      {/* Absent means on — the opt-out default. */}
+                      <Switch on={state.exoclickZones?.[zone] !== false} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* Interstitial skip delay — how long before a full-screen ad can be
           skipped. Only meaningful with full-screen units on; saves on change. */}
@@ -482,6 +571,39 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
         Shown only when both are on, and only then — a standing warning about a
         combination nobody has selected is noise that trains people to ignore it.
       */}
+      {/*
+        Same rule as the pop-under warning below: shown only for the combination
+        that is actually selected, never as standing noise.
+
+        This one is about INVENTORY rather than mechanism. ExoClick's demand
+        skews adult, and AdSense judges the page a reviewer lands on — so the
+        risk here is not that ExoClick does something prohibited, it is what
+        else ends up rendered beside an AdSense unit on the same page.
+      */}
+      {state.exoclick &&
+      state.adsense &&
+      EXOCLICK_ZONES.some(
+        (z) => EXOCLICK_ZONE_SURFACE[z] === "marketing" && state.exoclickZones?.[z] !== false,
+      ) ? (
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500\30 bg-amber-500\10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+          <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>ExoClick is serving on public pages while AdSense is enabled.</strong>{" "}
+            ExoClick&rsquo;s inventory skews adult, and AdSense judges the page its reviewer actually
+            lands on — so an ExoClick creative rendering beside an AdSense unit is a real risk to the
+            account. This site has already been refused three times for content quality.
+            <br />
+            <strong className="mt-1 inline-block">
+              You do not have to choose the whole network.
+            </strong>{" "}
+            Switch off the four <em>Public pages</em> zones above and leave{" "}
+            <em>{AD_ZONE_META.reels_interstitial.label}</em> on — Reels is behind sign-in, so no
+            AdSense reviewer reaches it, and the zones you turn off stay configured and serve
+            nothing.
+          </span>
+        </p>
+      ) : null}
+
       {state.popunder && state.adsense ? (
         <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
           <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />

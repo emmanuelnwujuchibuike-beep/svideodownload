@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import { isExoClickZone, type ExoClickZoneId } from "./ad-schema";
 import {
   isMonetagAdType,
   isMonetagPlacementId,
@@ -282,6 +283,43 @@ export interface MonetizationSettings {
    */
   popunder: boolean;
   /**
+   * Allow ExoClick units (the `exoclick` format) to serve.
+   *
+   * ── Defaults OFF, and that is the whole point of the switch ───────────────
+   *
+   * ExoClick's inventory skews adult, and this site has already been refused by
+   * AdSense three times (see the low-value-content and YouTube-removal notes).
+   * A reviewer who meets an ExoClick creative while the AdSense application is
+   * open is a plausible fourth refusal, so the ExoClick zones ship WIRED AND
+   * SEEDABLE but inert: an operator can paste every zone id in, look at the
+   * admin, and still be serving nothing until this is deliberately turned on.
+   *
+   * ⚠️ Turning this on and leaving AdSense enabled runs both networks on the
+   * same pages. That is a real risk to the AdSense account and it is the
+   * operator's call to make knowingly — which is what this switch is for.
+   */
+  exoclick: boolean;
+  /**
+   * Per-zone ExoClick enablement, on top of the master switch above.
+   *
+   * ── Why both, rather than only one of them ────────────────────────────────
+   *
+   * They answer different questions. The master switch is "is this site running
+   * ExoClick at all" — one place to stop the network dead without touching five
+   * toggles or unseeding five zone ids. These are "and on which pages", which is
+   * the question AdSense forces (owner, 2026-08-30: turn it off on the landing
+   * where AdSense lives, keep it on Reels).
+   *
+   * Both must be true for a zone to serve, so the master stays a real kill
+   * switch rather than a suggestion.
+   *
+   * Zones DEFAULT TO ON here, unlike the master. A missing key would otherwise
+   * mean flipping the master on did nothing at all, which reads as broken — so
+   * absence means enabled and these are an opt-OUT, while the master remains the
+   * deliberate opt-in. See `normalizeExoClickZones`.
+   */
+  exoclickZones: Partial<Record<ExoClickZoneId, boolean>>;
+  /**
    * Whether HD/top-tier downloads require a server-verified reward session at
    * all. Off skips the reward-session flow entirely — `preview-card.tsx` falls
    * back to the plain (still ad-gated-by-tier-and-duration) download.
@@ -356,6 +394,14 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   rewardImageAudioTopTierSeconds: 5,
   rewardImageAudioSkipAfterSeconds: 5,
   popunder: false,
+  // Off until deliberately enabled — see the field's note for why.
+  exoclick: false,
+  /*
+    Empty, which means every zone is ON — see `normalizeExoClickZones`. Nothing
+    serves regardless while the master switch above is false, so the effective
+    default is still "ExoClick renders nowhere".
+  */
+  exoclickZones: {},
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,
   rewardHdDailyLimit: 0,
@@ -363,6 +409,47 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   rewardDownloadPreviewEnabled: true,
   rewardPreviewDailyLimit: 0,
 };
+
+/**
+ * Keep only known ExoClick zone keys, with real booleans.
+ *
+ * A stored blob can carry a zone that has since been removed, or a value that is
+ * a string because some client posted `"false"` — which is truthy, and would
+ * silently turn a placement the operator switched OFF back on. Both are dropped
+ * rather than coerced.
+ *
+ * 🔴 Absence means ENABLED, which is the opposite of the usual fail-closed
+ * instinct and is deliberate. This map is an opt-OUT layered under a master
+ * switch that is itself opt-in: an unknown zone with the master ON should serve,
+ * because the operator turning the master on is the act of consent, and a new
+ * zone silently defaulting to off is the "I enabled it and nothing happened"
+ * failure this codebase keeps having to diagnose.
+ */
+export function normalizeExoClickZones(value: unknown): Partial<Record<ExoClickZoneId, boolean>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Partial<Record<ExoClickZoneId, boolean>> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!isExoClickZone(key)) continue;
+    if (typeof raw !== "boolean") continue;
+    out[key] = raw;
+  }
+  return out;
+}
+
+/**
+ * May this ExoClick zone serve? The single answer both gates in one place.
+ *
+ * Exported so the serving route and any future caller cannot disagree about
+ * precedence — the master switch wins, then the per-zone opt-out.
+ */
+export function exoClickZoneEnabled(
+  settings: Pick<MonetizationSettings, "exoclick" | "exoclickZones">,
+  zone: string,
+): boolean {
+  if (!settings.exoclick) return false;
+  if (!isExoClickZone(zone)) return false;
+  return settings.exoclickZones?.[zone] !== false;
+}
 
 /** Keep only well-formed Monetag units (known type + string snippet), capped. */
 export function normalizeMonetagUnits(value: unknown): MonetagUnit[] {
@@ -494,6 +581,10 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
       ? merged.monetagSurfaces.filter(isMonetagSurfaceId)
       : [];
     merged.monetagPlacements = normalizeMonetagPlacements(merged.monetagPlacements);
+    // Same reasoning as the three above: a stored blob can carry a removed zone
+    // or a non-boolean, and a truthy `"false"` would turn a switched-off
+    // placement back on.
+    merged.exoclickZones = normalizeExoClickZones(merged.exoclickZones);
     cache = { at: Date.now(), value: merged };
     if (merged.adsensePublisherId.trim()) lastKnownPublisherId = merged.adsensePublisherId.trim();
     return { settings: merged, degraded: false };

@@ -340,6 +340,26 @@ export function Downloader({
 
   return (
     <div className="w-full">
+      {/*
+        The ABOVE-the-paste-box placement (owner, 2026-08-30).
+
+        Deliberately a different zone from `under_download`, which sits BELOW the
+        Download button — the two are independent placements and an operator
+        filling one must not silently fill the other.
+
+        Inside this component for the same reason the under-download unit is:
+        `Downloader` is what the home page and all ~148 generated downloader
+        pages render, so one edit covers every one of them and a new SEO page
+        inherits it. Suppressed for `resultOnly`, which renders the RESULT half
+        only — there is no paste box there to be above.
+
+        `AdSurface` renders nothing at all until the zone is filled, and the
+        ExoClick format behind it serves nothing until the ExoClick switch is on,
+        so an unconfigured site has exactly the layout it had before.
+      */}
+      {resultOnly ? null : (
+        <AdSurface zone="downloader_above_fetch" maxWidth="max-w-2xl" className="mb-5" />
+      )}
       {resultOnly ? null : (
       <form
         onSubmit={handleSubmit}

@@ -60,13 +60,23 @@ const baseFields = {
     .nullable()
     .optional()
     .or(emptyToNull),
-  /* Strips spaces and dashes: AdSense displays slot ids grouped, and pasting
-     the displayed form is the obvious thing to do. */
+  /*
+    The network's numeric slot/zone id. Shared by two formats on purpose:
+    AdSense calls it an ad unit id, ExoClick calls it a Zone ID, and both are
+    "the number identifying this placement inside the network account". A
+    separate column for the second one would mean a third tier in `loadZone`'s
+    42703 column-fallback ladder for no modelling gain.
+
+    Strips spaces and dashes: AdSense displays slot ids grouped, and pasting the
+    displayed form is the obvious thing to do. The lower bound is 4 rather than
+    6 because ExoClick issues shorter zone ids than AdSense issues unit ids —
+    per-format requirements are enforced in `checkCoherence` below.
+  */
   ad_slot_id: z
     .string()
     .trim()
     .transform((v) => v.replace(/[\s-]/g, ""))
-    .refine((v) => /^\d{6,20}$/.test(v), "The numeric ad unit id from AdSense")
+    .refine((v) => /^\d{4,20}$/.test(v), "The numeric ad unit id (AdSense) or Zone ID (ExoClick)")
     .nullable()
     .optional()
     .or(emptyToNull),
@@ -112,6 +122,19 @@ function checkCoherence(
         message: "AdSense placements need an ad unit id",
       });
     }
+  }
+  /*
+    An ExoClick row with no zone id renders an `<ins>` with nothing to fill it —
+    silent, and indistinguishable from "the network had no demand". The zone id
+    is the ONLY field this format needs, so there is no excuse for saving one
+    without it.
+  */
+  if (v.format === "exoclick" && !v.ad_slot_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["ad_slot_id"],
+      message: "ExoClick placements need the numeric Zone ID from your ExoClick dashboard",
+    });
   }
   if ((v.format === "display" || v.format === "video") && !v.script_code) {
     ctx.addIssue({

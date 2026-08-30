@@ -5,6 +5,7 @@ import {
   FEED_AD_INTERVAL,
   FEED_AD_MIN_INTERVAL,
   insertAdSlots,
+  REELS_AD_INTERVAL,
   type FeedEntry,
 } from "./ad-slots";
 
@@ -97,6 +98,61 @@ describe("insertAdSlots", () => {
 
   it("the default interval is the documented 4", () => {
     expect(FEED_AD_INTERVAL).toBe(4);
+  });
+});
+
+describe("Reels cadence", () => {
+  it("puts a slide after every 3 reels — the owner's stated cadence", () => {
+    // Owner, 2026-08-30: "it should show after 3 reels videos watched."
+    expect(
+      shape(insertAdSlots(posts(9), { idOf, interval: REELS_AD_INTERVAL, enabled: true })),
+    ).toEqual([
+      "p1", "p2", "p3", "AD:feed-ad-1",
+      "p4", "p5", "p6", "AD:feed-ad-2",
+      "p7", "p8", "p9",
+    ]);
+  });
+
+  it("🔴 sits exactly ON the density floor, never below it", () => {
+    /*
+     * 3 is `FEED_AD_MIN_INTERVAL`, which is a policy floor rather than a style
+     * choice — one ad per two items in an infinite deck is how a site gets
+     * flagged, and this project has already been refused three times. So the
+     * reels cadence is as dense as the deck is ever allowed to get, and a
+     * future edit that lowers it must fail here rather than ship.
+     */
+    expect(REELS_AD_INTERVAL).toBe(FEED_AD_MIN_INTERVAL);
+    expect(REELS_AD_INTERVAL).toBeGreaterThanOrEqual(FEED_AD_MIN_INTERVAL);
+  });
+
+  it("🔴 inserts NOTHING when the zone is unseeded", () => {
+    /*
+     * The reels slide is a whole SCREEN, not a card in a scroll. An unseeded
+     * zone must therefore produce no slide at all — a composed-but-empty one
+     * would be a black screen the viewer has to swipe past every fourth reel.
+     * The deck probes the zone before composing, and `enabled: false` is how
+     * that answer reaches this function.
+     */
+    const composed = insertAdSlots(posts(9), { idOf, interval: REELS_AD_INTERVAL, enabled: false });
+    expect(composed.every((e) => e.type === "post")).toBe(true);
+    expect(composed).toHaveLength(9);
+  });
+
+  it("🔴 never ends the deck on an ad slide", () => {
+    // The last thing before "load more" must be content. Exactly 3 and exactly
+    // 6 reels are the boundary cases where a trailing slot would appear.
+    for (const n of [3, 6, 9]) {
+      const composed = insertAdSlots(posts(n), { idOf, interval: REELS_AD_INTERVAL, enabled: true });
+      expect(composed.at(-1)?.type, `${n} reels ended on an ad`).toBe("post");
+    }
+  });
+
+  it("keeps the reel count recoverable from the composed deck", () => {
+    // The pagination guard, in reels terms: `onEndReached` is driven by how
+    // many REELS have been passed, never by how many slides.
+    const composed = insertAdSlots(posts(10), { idOf, interval: REELS_AD_INTERVAL, enabled: true });
+    expect(composed.length).toBeGreaterThan(10); // ads really were inserted
+    expect(countPosts(composed)).toBe(10);
   });
 });
 

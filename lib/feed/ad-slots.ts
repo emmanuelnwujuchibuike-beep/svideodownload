@@ -49,6 +49,21 @@ export const FEED_AD_ROOT_MARGIN = "600px 0px";
  */
 export const FEED_AD_MIN_INTERVAL = 3;
 
+/**
+ * Reels cadence — one full-screen ad slide after every N reels.
+ *
+ * Owner, 2026-08-30: "it should show after 3 reels videos watched." That lands
+ * exactly on `FEED_AD_MIN_INTERVAL`, which is the floor for a reason (see
+ * above), so this is as dense as the deck is ever allowed to get. Lowering it
+ * would be clamped by `insertAdSlots` rather than honoured — deliberately, since
+ * one ad per two reels in an infinite deck is how a site gets flagged.
+ *
+ * Separate from `FEED_AD_INTERVAL` because the surfaces are genuinely different:
+ * a scrolled feed post costs a glance, a reel costs a whole screen and several
+ * seconds, so the two cadences should be tunable independently.
+ */
+export const REELS_AD_INTERVAL = 3;
+
 /** A composed feed position: either a real post, or a slot for an ad. */
 export type FeedEntry<TPost> =
   | { type: "post"; data: TPost }
@@ -101,7 +116,26 @@ export function insertAdSlots<TPost>(
     enabled?: boolean;
   },
 ): FeedEntry<TPost>[] {
-  const { idOf, startIndex = 0 } = opts;
+  const { idOf, startIndex = 0, enabled = true } = opts;
+
+  /*
+    🔴 `enabled` was DOCUMENTED AND TYPED BUT NEVER READ (fixed 2026-08-30).
+
+    The option existed on the signature, with the comment "When false, returns
+    posts only. The premium/disabled path" — and the body destructured only
+    `idOf` and `startIndex`, so passing `enabled: false` inserted ad slots
+    exactly as if it had been true. Silent, because the only caller at the time
+    never passed it and expressed "no ads" through the interval instead, which
+    is why the existing test for the disabled path is named after that
+    workaround rather than after this flag.
+
+    It became load-bearing with the Reels deck: a reels ad slot is a whole
+    SCREEN, so composing one for an unseeded zone is not a stray empty div in a
+    scroll, it is a black slide the viewer has to swipe past every fourth reel.
+    Returning early is the whole fix.
+  */
+  if (!enabled) return posts.map((post) => ({ type: "post", data: post }));
+
   const interval = Math.max(FEED_AD_MIN_INTERVAL, Math.floor(opts.interval ?? FEED_AD_INTERVAL));
   const entries: FeedEntry<TPost>[] = [];
 

@@ -61,6 +61,10 @@ import { createPortal } from "react-dom";
    consumer of that design system is how the next surface ends up with a
    copy of it. */
 import { EDGE_ZONE_PX } from "@/features/app-shell/edge-swipe-back";
+import { loadZoneAd } from "@/features/monetization/ad-cache";
+import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
+import { useShowAds } from "@/features/monetization/use-show-ads";
+import { insertAdSlots, REELS_AD_INTERVAL } from "@/lib/feed/ad-slots";
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
@@ -385,8 +389,93 @@ export function ReelDeck({
   useLayoutEffect(() => suspendPlayback(), []);
   const scroller = useRef<HTMLDivElement | null>(null);
   const raf = useRef<number | null>(null);
-  const start = Math.min(Math.max(0, startIndex), items.length - 1);
+
+  /*
+    ── The ad slide, and the index model it forced ────────────────────────────
+    (owner, 2026-08-30: an ExoClick slide after every 3 reels, as its own card)
+
+    🔴 `active` is a SLIDE index from here on, not an item index. It always was
+    both — scrollTop/clientHeight gives the position of a `<section>`, and every
+    `<section>` was a reel — and inserting ad slides is exactly what separates
+    the two. Everything that needs an ITEM index now goes through
+    `itemIndexBySlide`, and everything the parent is told stays in ITEM terms so
+    `markReelWatched`, the resume snapshot and `startIndex` are all unchanged.
+
+    Getting this wrong has a known signature on this component: an `active` that
+    can point at something not rendered is what produced "the reels get stuck
+    after scrolling on 3 videos or 4" (see the clamp note in `onScroll`).
+  */
+  const { showAds, ready: adsReady } = useShowAds();
+  /**
+   * Whether the reels zone has a row at all. Null until answered.
+   *
+   * Probed ONCE at deck level rather than per slide, and composed against
+   * before any ad slide exists — because a slide is a whole screen the viewer
+   * must swipe past. An unseeded zone must therefore insert NO slide, not an
+   * empty one, which is the difference between a deck that is unchanged for an
+   * unconfigured site and one that shows a black screen every fourth reel.
+   */
+  const [adSeeded, setAdSeeded] = useState(false);
+  useEffect(() => {
+    if (!adsReady || !showAds) return;
+    let alive = true;
+    void loadZoneAd("reels_interstitial")
+      .then((ad) => {
+        if (alive) setAdSeeded(!!ad);
+      })
+      .catch(() => {
+        /* No ad is the safe direction — leave the deck as pure content. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [adsReady, showAds]);
+
+  /**
+   * The composed slide list, plus the two index maps that keep slide-space and
+   * item-space translatable in O(1).
+   *
+   * Built from the FULL item list rather than the buffer-gated slice, so the
+   * composition never changes under the viewer as the render window extends —
+   * `insertAdSlots` suppresses a trailing slot, and against a growing prefix
+   * that would mean the slide at a given index changing identity mid-scroll.
+   */
+  const { slides, itemIndexBySlide, slideIndexByItem } = useMemo(() => {
+    const composed = insertAdSlots(items, {
+      idOf: (item) => item.id,
+      interval: REELS_AD_INTERVAL,
+      enabled: adSeeded,
+    });
+    const bySlide: number[] = [];
+    const byItem: number[] = [];
+    let itemIndex = -1;
+    composed.forEach((entry, slideIndex) => {
+      if (entry.type === "post") {
+        itemIndex += 1;
+        byItem[itemIndex] = slideIndex;
+      }
+      // An ad slide reports the reel it follows: it is the last real content
+      // the viewer saw, so "where am I" stays truthful and re-marking that
+      // reel as watched is a no-op rather than a wrong answer.
+      bySlide[slideIndex] = Math.max(0, itemIndex);
+    });
+    return { slides: composed, itemIndexBySlide: bySlide, slideIndexByItem: byItem };
+  }, [items, adSeeded]);
+
+  const start = slideIndexByItem[Math.min(Math.max(0, startIndex), items.length - 1)] ?? 0;
   const [active, setActive] = useState(start);
+  /**
+   * Which REEL the viewer is on, tracked independently of the slide index.
+   *
+   * 🔴 This exists for the re-anchor below, and it must be written from
+   * `onScroll` rather than derived from `active` — at the moment the ad probe
+   * resolves, `active` is a slide index in the OLD composition while the maps
+   * have already been rebuilt for the new one, so deriving it on that render
+   * reads the wrong reel. `onScroll` always used the maps that were current
+   * when the viewer actually moved, so this is the one value that survives the
+   * transition intact.
+   */
+  const activeItemRef = useRef(Math.min(Math.max(0, startIndex), Math.max(0, items.length - 1)));
   // While a comments sheet is open the deck must NOT snap-scroll to the next
   // reel — the sheet stays put and the reel behind it is frozen.
   const [locked, setLocked] = useState(false);
@@ -420,9 +509,12 @@ export function ReelDeck({
   }, []);
   const budget = currentPolicySync(qualityPref);
 
+  // Reported in ITEM terms — the parent uses it for `markReelWatched`, the
+  // resume snapshot and `startIndex`, all of which index `items`.
+  const activeItemIndex = itemIndexBySlide[active] ?? 0;
   useEffect(() => {
-    onActiveIndexChange?.(active);
-  }, [active, onActiveIndexChange]);
+    onActiveIndexChange?.(activeItemIndex);
+  }, [activeItemIndex, onActiveIndexChange]);
 
   // Buffer-gated scrolling: reels are marked "ready" when their first frames are
   // buffered (or after a short fallback). We only render up to `ceiling` — the
@@ -441,9 +533,15 @@ export function ReelDeck({
   // Render (and pre-buffer) the next TWO clips at all times, extending to the
   // third once the next is ready — so scrolling forward always lands on a warm,
   // already-loaded video instead of a spinner.
-  const next1 = items[active + 1];
-  const ceiling = Math.min(items.length - 1, active + (next1 && readyIds.has(next1.id) ? 3 : 2));
-  const visible = items.slice(0, ceiling + 1);
+  //
+  // Now measured in SLIDES. An ad slide counts as one, which is correct: it is a
+  // full screen the viewer has to pass, so it consumes render window exactly
+  // like a reel. It needs no buffering of its own, so a next-slide that is an ad
+  // simply never extends the ceiling to three.
+  const next1 = slides[active + 1];
+  const next1Id = next1?.type === "post" ? next1.data.id : null;
+  const ceiling = Math.min(slides.length - 1, active + (next1Id && readyIds.has(next1Id) ? 3 : 2));
+  const visible = slides.slice(0, ceiling + 1);
   // Read by `onScroll` below, which can't put `ceiling` in its own deps
   // without being torn down/rebuilt on every index change — a ref lets the
   // stable callback always see the latest value instead.
@@ -451,6 +549,21 @@ export function ReelDeck({
   useEffect(() => {
     ceilingRef.current = ceiling;
   }, [ceiling]);
+  /*
+    The same stable-callback trick as `ceilingRef`, for the three other values
+    `onScroll` needs. Putting `slides` / `itemIndexBySlide` / `items.length` in
+    its dependency array would tear down and rebuild the scroll handler every
+    time a page of reels loads — on the one listener that runs on every frame of
+    every swipe.
+  */
+  const slidesRef = useRef(slides);
+  const itemIndexRef = useRef(itemIndexBySlide);
+  const itemCountRef = useRef(items.length);
+  useEffect(() => {
+    slidesRef.current = slides;
+    itemIndexRef.current = itemIndexBySlide;
+    itemCountRef.current = items.length;
+  }, [slides, itemIndexBySlide, items.length]);
 
   // Lock the page, jump to the opening reel, wire Escape. overflowY only — the
   // `overflow` shorthand also resets overflow-x, undoing the `overflow-x: clip`
@@ -470,6 +583,42 @@ export function ReelDeck({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+    🔴 RE-ANCHOR when the ad probe resolves, or the viewer silently jumps reels.
+
+    The deck mounts and sets `scrollTop = start * clientHeight` immediately, with
+    `adSeeded` still false — so at that instant one slide equals one reel. The
+    zone probe is a network round trip, so it lands a few hundred ms LATER, and
+    the moment it does, ad slides appear at positions 3, 7, 11… Every reel after
+    the first ad shifts down by one, while `scrollTop` and `active` still point
+    at the old arrangement.
+
+    Concretely: a feed tap deep-linking to reel 5 lands correctly, and then a
+    beat later the viewer is looking at reel 4 with no idea why. That is the
+    exact index-desync class that produced "the reels get stuck after scrolling
+    on 3 videos or 4" — the same failure wearing different clothes.
+
+    So on the one transition that reshuffles the composition, the scroller is
+    re-pointed at the SLIDE that now holds the reel the viewer was on. Keyed on
+    `adSeeded` alone, not on `slides`: pagination only ever APPENDS (a suppressed
+    trailing slot becoming a real one is still beyond the render window), so the
+    positions of everything already on screen are stable and re-anchoring on
+    every page load would be a scroll jump for no reason.
+  */
+  const anchoredFor = useRef(adSeeded);
+  useEffect(() => {
+    if (anchoredFor.current === adSeeded) return;
+    anchoredFor.current = adSeeded;
+    const el = scroller.current;
+    if (!el || !el.clientHeight) return;
+    const target = slideIndexByItem[activeItemRef.current] ?? 0;
+    // `scrollTop` is what the snap container actually reads, and setting it is
+    // what keeps the CSS snap position and `active` in agreement — updating
+    // state alone would leave the viewer scrolled to the wrong offset.
+    el.scrollTop = target * el.clientHeight;
+    setActive(target);
+  }, [adSeeded, slideIndexByItem]);
 
   const onScroll = useCallback(() => {
     if (raf.current) return;
@@ -500,12 +649,22 @@ export function ReelDeck({
         Clamping `i` to `ceilingRef.current` means `active` can never point
         past what is actually in the DOM, so this desync can't happen.
       */
-      const maxIndex = Math.min(items.length - 1, ceilingRef.current);
+      // Slide-space throughout: `ceilingRef` is a slide ceiling and `scrollTop`
+      // measures rendered `<section>`s, so both sides of this clamp agree.
+      const maxIndex = Math.min(slidesRef.current.length - 1, ceilingRef.current);
       const i = Math.min(Math.max(0, Math.round(el.scrollTop / el.clientHeight)), maxIndex);
       setActive((prev) => (i !== prev ? i : prev));
-      if (i >= items.length - 3) onEndReached?.();
+      /*
+        Pagination is counted in REELS, never in slides. Counting slides would
+        make every ad shown pull the "load more" trigger one position earlier
+        and, over a long session, fetch pages the viewer had not reached — the
+        same class of drift `countPosts` exists to prevent in the feed.
+      */
+      const reelsSoFar = itemIndexRef.current[i] ?? 0;
+      activeItemRef.current = reelsSoFar;
+      if (reelsSoFar >= itemCountRef.current - 3) onEndReached?.();
     });
-  }, [items.length, onEndReached]);
+  }, [onEndReached]);
 
   return (
     <motion.div
@@ -549,8 +708,30 @@ export function ReelDeck({
         // browser back/forward navigation).
         style={locked ? { touchAction: "none" } : { scrollSnapType: "y mandatory", touchAction: "pan-y", overscrollBehaviorX: "none" }}
       >
-        {visible.map((item, i) => (
-          <section key={item.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black lg:pr-[400px]">
+        {visible.map((entry, i) =>
+          entry.type === "ad" ? (
+            /*
+              An ad slide. Same box as a reel — full viewport height, same snap
+              behaviour — so the deck's scroll maths is unchanged and it is
+              swiped past exactly like a reel.
+
+              Keyed on `anchorId` (the id of the reel it follows), NOT on its
+              ordinal: hiding or muting a reel above would renumber every slot
+              below it, React would remount each one, and every ad on screen
+              would reload. See the note on `anchorId` in lib/feed/ad-slots.ts.
+
+              Deliberately NOT wrapped in the `lg:pr-[400px]` / 75vh column the
+              reels use — that column exists to leave room for the action rail,
+              and an ad has no rail.
+            */
+            <section
+              key={`ad-${entry.anchorId}`}
+              className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black"
+            >
+              <ReelsAdSlide variant={variant} />
+            </section>
+          ) : (
+          <section key={entry.data.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black lg:pr-[400px]">
             {/* On phones the reel fills the screen; on tablets/desktop it becomes a
                 centered column (black to the sides) capped at 75% of the viewport
                 height wide — true 9:16 clips are still bound by the full-height
@@ -561,7 +742,7 @@ export function ReelDeck({
                 right gutter (YouTube-Shorts-style). */}
             <div className="relative h-full w-full overflow-hidden bg-black lg:w-[min(100%,75vh)] lg:overflow-visible">
               <ReelCard
-                item={item}
+                item={entry.data}
                 /*
                   Feature 15: ONE rail layout for the whole deck.
 
@@ -584,7 +765,7 @@ export function ReelDeck({
                 preload={i >= active && i <= active + budget.fullyBufferAhead ? "auto" : "metadata"}
                 onClose={onClose}
                 onCommentsOpen={setLocked}
-                autoOpenComments={item.id === autoOpenCommentsId}
+                autoOpenComments={entry.data.id === autoOpenCommentsId}
                 variant={variant}
                 onSwipeTab={onSwipeTab}
                 onReady={markReady}
@@ -592,7 +773,8 @@ export function ReelDeck({
               />
             </div>
           </section>
-        ))}
+          ),
+        )}
       </div>
     </motion.div>
   );

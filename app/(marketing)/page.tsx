@@ -15,6 +15,7 @@ import { productJsonLd } from "@/lib/content/genome/queries";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL } from "@/lib/site";
 import { AdSurface } from "@/features/monetization/ad-surface";
+import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 
 /**
  * The marketing landing page — the first page a new visitor ever loads, and the
@@ -66,6 +67,21 @@ import { AdSurface } from "@/features/monetization/ad-surface";
  * silently ignored. Change it there, not here.
  */
 export const dynamic = "force-static";
+
+/**
+ * One section break's ad slot.
+ *
+ * A local alias rather than eight repetitions of the same three props — the
+ * container width and spacing are a property of this page's rhythm, so they
+ * belong in one place where changing them changes every break at once.
+ */
+function SectionAd() {
+  return (
+    <div className="container max-w-5xl px-3 py-2">
+      <LazyAdSurface zone="landing_section_break" maxWidth="max-w-3xl" />
+    </div>
+  );
+}
 
 export default function HomePage() {
   return (
@@ -202,11 +218,30 @@ export default function HomePage() {
           platform count is already stated honestly by PlatformShowcase below.
         */}
 
+        {/*
+          🔴 A section-break ad slot between EVERY section (owner, 2026-08-30).
+
+          `SectionAd` is the lazy wrapper — nothing is requested until the reader
+          is within about a screen of it, which is what makes eight placements
+          affordable on the page with the 1.6s budget. An unfilled zone collapses
+          to nothing, and the ExoClick format behind it serves nothing until the
+          ExoClick switch is on, so the default landing page is byte-for-byte the
+          one that was here before.
+
+          Deliberately BETWEEN sections and never inside one: each section owns
+          its own vertical rhythm and background treatment, and a unit dropped
+          inside would sit on a ground it was not designed for.
+        */}
+
         {/* Everything you need — the six-feature grid. */}
         <FeaturesGrid />
 
+        <SectionAd />
+
         {/* How it works — 3 simple steps. */}
         <HowItWorks />
+
+        <SectionAd />
 
         {/* Ecosystem grid (Product Genome). */}
         <ProductGrid />
@@ -221,6 +256,8 @@ export default function HomePage() {
 
         <PlatformShowcase />
 
+        <SectionAd />
+
         {/* Admin-managed recommended tools (renders nothing when empty) */}
         <Suspense fallback={null}>
           <RecommendedTools
@@ -230,10 +267,17 @@ export default function HomePage() {
           />
         </Suspense>
 
+        <SectionAd />
+
         <CtaBanner />
+
+        <SectionAd />
 
         {/* SEO link surface */}
         <DownloaderLinks heading="Popular video downloaders" />
+
+        <SectionAd />
+
           <Faq />
         </div>
         </main>

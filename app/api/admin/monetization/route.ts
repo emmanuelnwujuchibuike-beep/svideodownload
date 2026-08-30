@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { EXOCLICK_ZONES } from "@/lib/monetization/ad-schema";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
 import { setMonetizationSettings } from "@/lib/monetization/settings";
 
@@ -75,6 +76,22 @@ const schema = z.object({
   rewardImageAudioTopTierSeconds: z.number().int().min(0).max(30).default(5),
   rewardImageAudioSkipAfterSeconds: z.number().int().min(0).max(30).default(5),
   popunder: z.boolean().default(false),
+  /*
+    ExoClick serving. Defaults FALSE, and the default is load-bearing: a save
+    posted by an older cached client omits this key entirely, and defaulting it
+    to true would silently switch the network on across the whole site as a
+    side effect of an unrelated settings change.
+  */
+  exoclick: z.boolean().default(false),
+  /*
+    Per-zone opt-out, keyed by zone id. Unknown keys are stripped rather than
+    rejected so a save from a client that still knows about a removed zone is
+    not a 400 on an otherwise valid form, and `normalizeExoClickZones` applies
+    the same filter again on the way back out.
+  */
+  exoclickZones: z
+    .record(z.enum(EXOCLICK_ZONES), z.boolean())
+    .default({}),
   // Server-verified reward-session gate for HD/batch downloads (see
   // lib/monetization/reward-sessions.ts). Independent of the reward-AD tier/
   // duration settings above, which decide whether a request is gated at all.

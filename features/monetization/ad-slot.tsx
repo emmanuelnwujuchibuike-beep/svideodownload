@@ -9,6 +9,7 @@ import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
 import { loadZoneAd } from "./ad-cache";
 import { AdSenseUnit } from "./adsense-unit";
+import { ExoClickUnit } from "./exoclick-unit";
 import { injectAdMarkup } from "./inject";
 
 function beacon(kind: "impression" | "click", zone: string, adId: string) {
@@ -53,6 +54,14 @@ function rendersVisibly(ad: AdSlotData | null): boolean {
       return !!ad.scriptCode;
     case "adsense":
       return !!ad.adClient && !!ad.adSlotId;
+    /*
+      Excluded for the same reason as `adsense` directly above: a configured
+      ExoClick zone is not a filled one — the network returns nothing when it
+      has no demand for the visitor's geo/device and the `<ins>` stays empty.
+      Only the unit itself can answer, and it does, through `onFill` below.
+    */
+    case "exoclick":
+      return false;
     /*
       `pop` and `video` are REAL ads that paint no box of their own: a pop binds
       a handler for the next interaction (`display: contents`), and a video is
@@ -99,11 +108,21 @@ export function AdSlot({
   zone,
   className,
   dismissible = true,
+  fullBleed = false,
   onResolved,
 }: {
   zone: AdZone;
   className?: string;
   dismissible?: boolean;
+  /**
+   * The placement owns a full-bleed surface and the unit should use all of it.
+   *
+   * Set by the Reels slide, which is a whole 9:16 screen. Only the ExoClick
+   * branch honours it today — the other formats come at fixed creative sizes
+   * that stretching would only blur — so it is deliberately a hint rather than a
+   * contract, and defaults to the constrained in-page treatment.
+   */
+  fullBleed?: boolean;
   /**
    * Called once with whether this zone actually had an ad to show.
    *
@@ -141,8 +160,12 @@ export function AdSlot({
           no creative and the unit collapses to nothing, which would leave the
           parent's card and "Sponsored" label wrapped around empty space. For
           that format the answer comes from `data-ad-status` via `onFill` below.
+
+          ExoClick is the same shape and is excluded for the same reason — its
+          `<ins>` is filled asynchronously or not at all, so `ExoClickUnit`
+          watches the element and reports through the same `onFill` seam.
         */
-        if (!notified.current && found?.format !== "adsense") {
+        if (!notified.current && found?.format !== "adsense" && found?.format !== "exoclick") {
           notified.current = true;
           /*
             Whether it will PAINT, not whether a row was found — see
@@ -352,6 +375,37 @@ export function AdSlot({
           layout={ad.adLayout}
           width={ad.width}
           height={ad.height}
+          className="w-full"
+          /* The real answer for this format — see the fetch above. */
+          onFill={(filled) => {
+            if (notified.current) return;
+            notified.current = true;
+            onResolved?.(filled);
+          }}
+        />
+      </div>
+    );
+  }
+
+  /*
+    ExoClick — an `<ins>` placeholder plus a shared loader, in the top-level
+    document.
+
+    Like AdSense (and unlike `display`), it cannot go in the sandboxed frame:
+    the loader fills placeholders it finds in the document it runs in, so a
+    per-slot iframe would mean a duplicate copy of that loader for every unit on
+    the page. The zone id is the only field it needs — see `ExoClickUnit`.
+
+    Server-gated by the `exoclick` switch, which is off by default, so reaching
+    this branch at all means an operator deliberately enabled the network.
+  */
+  if (ad.format === "exoclick" && ad.adSlotId) {
+    return (
+      <div ref={hostRef} className={cn("relative flex justify-center", className)}>
+        {closeBtn}
+        <ExoClickUnit
+          zoneId={ad.adSlotId}
+          fill={fullBleed}
           className="w-full"
           /* The real answer for this format — see the fetch above. */
           onFill={(filled) => {

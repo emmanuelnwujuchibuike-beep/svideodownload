@@ -43,6 +43,12 @@ export const AD_ZONES = [
   // Multi-Link batch downloader (2026-08-25). Appended last, same reason.
   "multilink_between_sources",
   "multilink_fetch_gate",
+  // ExoClick vertical-video placements (2026-08-30). Appended last, same reason.
+  "downloader_above_fetch",
+  "landing_section_break",
+  "multilink_above_batch",
+  "multilink_card_inline",
+  "reels_interstitial",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -68,7 +74,7 @@ export type AdZoneId = (typeof AD_ZONES)[number];
  * exactly that. Both can be configured here; running them together is a real
  * risk to the AdSense account, and it is the operator's call.
  */
-export const AD_FORMATS = ["display", "native", "adsense", "video", "pop"] as const;
+export const AD_FORMATS = ["display", "native", "adsense", "video", "pop", "exoclick"] as const;
 
 export type AdFormatId = (typeof AD_FORMATS)[number];
 
@@ -129,7 +135,103 @@ export const AD_FORMAT_META: Record<AdFormatId, AdFormatMeta> = {
     description:
       "Runs in the page rather than a frame, which is what Social Bar and similar units need to attach themselves. Requires the in-page script switch to be on.",
   },
+  exoclick: {
+    label: "ExoClick zone (vertical video)",
+    description:
+      "Just the numeric Zone ID from your ExoClick dashboard — paste it into the slot/zone id field. Renders a 9:16 vertical unit. Requires the ExoClick switch in Ad settings to be on, which it is NOT by default.",
+  },
 };
+
+/* ------------------------------ ExoClick tag ------------------------------- */
+
+/**
+ * The class name on ExoClick's `<ins>` tag.
+ *
+ * ── Why this is a named constant and not inlined ──────────────────────────────
+ *
+ * ExoClick's serving script finds its placeholders by CLASS, so this one string
+ * is the difference between every ExoClick zone on the site rendering and none
+ * of them rendering — with no error anywhere, because an `<ins>` the script does
+ * not recognise is simply left alone. That is the single most likely thing to be
+ * wrong here, so it gets a name, a comment and one place to change it.
+ *
+ * The hex matches the site-verification meta tag ExoClick issued for this
+ * account (`6a97888e-site-verification`), which is what identifies the tag as
+ * ExoClick's rather than being per-publisher. If ExoClick's dashboard ever hands
+ * out an embed with a different class, change it HERE and every zone follows.
+ */
+export const EXOCLICK_INS_CLASS = "eas6a97888e";
+
+/** ExoClick's ad-provider loader. Serves every un-served `<ins>` on the page. */
+export const EXOCLICK_PROVIDER_SRC = "https://a.magsrv.com/ad-provider.js";
+
+/**
+ * The zones ExoClick was wired for, each independently switchable.
+ *
+ * ── Why per-zone and not one switch (owner, 2026-08-30) ───────────────────────
+ *
+ * "I can turn off landing page where adsense are, and leave for only reels page
+ * when adsense accepts."
+ *
+ * That is the whole shape of the problem. AdSense judges the PAGE its reviewer
+ * lands on, and the AdSense-facing pages (the landing, the downloader pages) are
+ * a different surface from the signed-in social product where Reels lives. A
+ * single network switch forces an all-or-nothing choice between running ExoClick
+ * everywhere and running it nowhere — so the two networks could never occupy the
+ * site at the same time, on different pages, which is exactly the arrangement
+ * that gets both paid.
+ *
+ * Listed here rather than derived by a name convention: which placements are
+ * ExoClick-shaped is a product decision, not something a prefix should imply.
+ * This file is the registry, so re-listing zone ids here is the ONE place that is
+ * not a second copy — see the guard in `ad-slots.test.ts`.
+ */
+export const EXOCLICK_ZONES = [
+  "downloader_above_fetch",
+  "landing_section_break",
+  "multilink_above_batch",
+  "multilink_card_inline",
+  "reels_interstitial",
+] as const;
+
+export type ExoClickZoneId = (typeof EXOCLICK_ZONES)[number];
+
+export function isExoClickZone(zone: string): zone is ExoClickZoneId {
+  return (EXOCLICK_ZONES as readonly string[]).includes(zone);
+}
+
+/**
+ * Which AdSense-facing surface each ExoClick zone renders on.
+ *
+ * The admin groups the switches by this, because "will a Google reviewer see
+ * it" is the only question that matters when deciding which ones to turn off,
+ * and it is not answerable from a zone id.
+ *
+ * 🔴 `downloader_above_fetch` is `marketing`, and that is not a typo: the
+ * landing page renders the shared `Downloader`, so that zone appears ON the
+ * landing page as well as on the ~148 generated downloader pages. Grouping it
+ * as anything else would let someone switch the landing "off" and still be
+ * serving ExoClick above the paste box on it.
+ */
+export const EXOCLICK_ZONE_SURFACE: Record<ExoClickZoneId, "marketing" | "app"> = {
+  downloader_above_fetch: "marketing",
+  landing_section_break: "marketing",
+  multilink_above_batch: "marketing",
+  multilink_card_inline: "marketing",
+  reels_interstitial: "app",
+};
+
+/**
+ * Is this a usable ExoClick zone id?
+ *
+ * Numeric only, and bounded. A zone id pasted with the surrounding embed code
+ * still attached — the obvious copy/paste mistake, since ExoClick's dashboard
+ * shows the full snippet — would otherwise be written into a `data-zoneid`
+ * attribute where it renders nothing and reports nothing.
+ */
+export function isExoClickZoneId(value: string | null | undefined): boolean {
+  return /^\d{4,20}$/.test((value ?? "").trim());
+}
 
 export interface AdZoneMeta {
   label: string;
@@ -342,6 +444,77 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     // The visitor waits through it, so `skippable` / `skip_after_seconds` on
     // the ad row are meaningful here.
     supportsSkip: true,
+    prefetch: false,
+  },
+  /*
+    The five ExoClick vertical-video placements (2026-08-30).
+
+    All five are `persistent` — none of them gets a dismiss X. Four are page
+    furniture in the SofaScore sense (they sit in the layout's own rhythm), and
+    the fifth is a full-screen reel slide whose dismissal is the swipe the
+    viewer was already going to make. Adding an X to that one would put a second
+    close control on a screen that already has the deck's own.
+
+    None of them `supportsSkip`: a skip control is for a placement the visitor is
+    WAITING through, and none of these block anything.
+  */
+  downloader_above_fetch: {
+    label: "Downloader — above the paste box",
+    description:
+      "A 9:16 vertical unit directly ABOVE the paste box and Download button, on the home page and every downloader page. Distinct from the under-download placement, which sits below the button. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+    // Above the fold on the site's highest-traffic pages, so the zone data is
+    // warmed with the rest of the page rather than starting a round trip when
+    // the component mounts. This warms the ZONE lookup only — the creative
+    // still loads lazily, from the unit itself.
+    prefetch: true,
+  },
+  landing_section_break: {
+    label: "Landing — between sections",
+    description:
+      "A 9:16 vertical unit in the gap between each landing-page section (features, how it works, ecosystem, platforms, tools, CTA, links, FAQ). Every one of them loads lazily, only as the reader scrolls near it, so an unscrolled page costs nothing.",
+    persistent: true,
+    supportsSkip: false,
+    /*
+      🔴 Never prefetched. This zone renders at up to eight positions on the
+      landing page, which is the one route in the project with a hard cold-entry
+      budget. Warming it would pull ad data for seven placements the visitor has
+      not scrolled to on every single cold visit.
+    */
+    prefetch: false,
+  },
+  multilink_above_batch: {
+    label: "Multi-Link — above the Download button",
+    description:
+      "A 9:16 vertical unit directly above the batch summary and its Download button, inside the Multi-Link panel. Sits above the summary card so it never separates the button from the count it refers to.",
+    persistent: true,
+    supportsSkip: false,
+    // Behind the same lazy gate as the rest of the panel — most visitors never
+    // open it, so warming this would spend a round trip on every cold visit.
+    prefetch: false,
+  },
+  multilink_card_inline: {
+    label: "Multi-Link — inside each source card",
+    description:
+      "A 9:16 vertical unit inside each Multi-Link source card, between the link row and the posts that link produced. Renders only once a card actually has results, so an empty card is never padded with an ad.",
+    persistent: true,
+    supportsSkip: false,
+    prefetch: false,
+  },
+  reels_interstitial: {
+    label: "Reels — full-screen slide after every 3 reels",
+    description:
+      "A full-screen 9:16 slide in the Reels swipe deck, inserted after every third reel and never as the last slide. It is its own card, so it is swiped past exactly like a reel and never covers one. Renders only if this zone is actually filled — an unseeded zone inserts no slide at all, rather than a blank black screen.",
+    // Swiping past IS the dismissal. A close X here would be a second close
+    // control on a screen that already carries the deck's own.
+    persistent: true,
+    supportsSkip: false,
+    /*
+      🔴 Never prefetched from the marketing shell — this is a social-surface
+      placement and the deck probes the zone itself before composing any slide.
+      See features/feed/reel-viewer.tsx.
+    */
     prefetch: false,
   },
   exit_intent_popup: {

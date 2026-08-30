@@ -7,11 +7,13 @@ import {
   AD_FORMATS,
   AD_ZONES,
   AD_ZONE_META,
+  EXOCLICK_ZONE_SURFACE,
+  EXOCLICK_ZONES,
   RETIRED_FORMATS,
   isPersistentZone,
   isServableFormat,
 } from "./ad-schema";
-import { DEFAULT_MONETIZATION } from "./settings";
+import { DEFAULT_MONETIZATION, exoClickZoneEnabled, normalizeExoClickZones } from "./settings";
 
 /**
  * Ad slots — the empty-box class of bug.
@@ -136,6 +138,97 @@ describe("Ad slots — formats", () => {
     expect(route, "the pop format is not gated server-side").toMatch(
       /!settings\.popunder && a\.format === "pop"/,
     );
+  });
+
+  it("keeps ExoClick gated behind a master switch that defaults OFF", () => {
+    /*
+     * ExoClick's inventory skews adult and this site has already been refused by
+     * AdSense three times. Wiring the zones must never be the same act as
+     * switching the network on — an operator has to seed the ids, look at the
+     * admin, and still be serving nothing until they deliberately opt in.
+     */
+    expect((AD_FORMATS as readonly string[]).includes("exoclick")).toBe(true);
+    expect(DEFAULT_MONETIZATION.exoclick, "exoclick must default to off").toBe(false);
+
+    const route = stripComments(readFileSync(path.join(ROOT, "app/api/ads/route.ts"), "utf8"));
+    expect(route, "the exoclick format is not gated server-side").toMatch(
+      /a\.format === "exoclick" && !exoClickZoneEnabled\(settings, zone\)/,
+    );
+  });
+
+  it("🔴 gates each ExoClick zone SEPARATELY, so AdSense pages can be cleared alone", () => {
+    /*
+     * Owner, 2026-08-30: "so i can turn off landing page where adsense are, and
+     * leave for only reels page when adsense accepts."
+     *
+     * A single network switch would force all-or-nothing and the two networks
+     * could never occupy the site at once on different pages. What is pinned
+     * here is the arrangement that request describes, end to end.
+     */
+    const on = { exoclick: true, exoclickZones: {} };
+    // Master on, nothing opted out — every zone serves.
+    for (const zone of EXOCLICK_ZONES) {
+      expect(exoClickZoneEnabled(on, zone), `${zone} should serve`).toBe(true);
+    }
+
+    // The owner's exact configuration: every AdSense-facing page off, Reels on.
+    const reelsOnly = {
+      exoclick: true,
+      exoclickZones: Object.fromEntries(
+        EXOCLICK_ZONES.filter((z) => EXOCLICK_ZONE_SURFACE[z] === "marketing").map((z) => [z, false]),
+      ),
+    };
+    expect(exoClickZoneEnabled(reelsOnly, "reels_interstitial")).toBe(true);
+    for (const zone of EXOCLICK_ZONES) {
+      if (EXOCLICK_ZONE_SURFACE[zone] === "marketing") {
+        expect(exoClickZoneEnabled(reelsOnly, zone), `${zone} must be off`).toBe(false);
+      }
+    }
+
+    // The master stays a real kill switch, not a suggestion: with it off, an
+    // explicitly-enabled zone still serves nothing.
+    expect(
+      exoClickZoneEnabled({ exoclick: false, exoclickZones: { reels_interstitial: true } }, "reels_interstitial"),
+    ).toBe(false);
+  });
+
+  it("🔴 groups the paste-box zone as a page AdSense reviews", () => {
+    /*
+     * The landing page renders the shared `Downloader`, so `downloader_above_fetch`
+     * appears ON the landing as well as on the generated downloader pages.
+     * Grouping it as app-side would let someone switch "the landing" off in the
+     * admin and still be serving ExoClick above the paste box on it — the exact
+     * false sense of safety this split exists to prevent.
+     */
+    expect(EXOCLICK_ZONE_SURFACE.downloader_above_fetch).toBe("marketing");
+    // Reels is the only surface behind sign-in, and therefore the only one no
+    // AdSense reviewer can reach.
+    const appZones = EXOCLICK_ZONES.filter((z) => EXOCLICK_ZONE_SURFACE[z] === "app");
+    expect(appZones).toEqual(["reels_interstitial"]);
+  });
+
+  it("🔴 a non-boolean stored value can never turn a disabled zone back on", () => {
+    // `"false"` is truthy. Coercing instead of dropping would silently re-enable
+    // a placement the operator switched off — on the one setting whose whole
+    // purpose is keeping a network away from an AdSense review.
+    const dirty = normalizeExoClickZones({
+      reels_interstitial: "false",
+      landing_section_break: false,
+      not_a_zone: true,
+    });
+    expect(dirty).toEqual({ landing_section_break: false });
+    expect(normalizeExoClickZones(null)).toEqual({});
+    expect(normalizeExoClickZones([1, 2])).toEqual({});
+  });
+
+  it("every ExoClick zone is a real zone with admin metadata", () => {
+    // The per-page switches render from this list and label themselves from
+    // AD_ZONE_META, so a drifted id would be an unlabelled switch that gates
+    // nothing.
+    for (const zone of EXOCLICK_ZONES) {
+      expect((AD_ZONES as readonly string[]).includes(zone), `${zone} is not a declared zone`).toBe(true);
+      expect(AD_ZONE_META[zone], `${zone} has no admin metadata`).toBeTruthy();
+    }
   });
 
   it("runs a pop script in the page, never inside the display iframe", () => {

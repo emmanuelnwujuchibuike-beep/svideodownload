@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { memo } from "react";
 
+import { AdSurface } from "@/features/monetization/ad-surface";
 import { cn, formatBytes } from "@/lib/utils";
 
 import { sourceProgress, type BatchItem, type BatchSource } from "./state";
@@ -244,6 +245,24 @@ export const SourceCard = memo(function SourceCard({
           </button>
         </div>
       )}
+
+      {/*
+        The in-card placement (owner, 2026-08-30: "in the middle of each link
+        card in multi link").
+
+        The middle of a source card is the seam between the link it was given
+        and the posts that link produced — so this sits after the URL row and
+        before the results grid, which is where the card visually divides.
+
+        Gated on `hasResults` on purpose: before a fetch the card is a single
+        input row, and an ad inside it would be taller than the card it is
+        "in the middle" of. It appears once there is a middle to be in.
+      */}
+      {hasResults ? (
+        <div className="mt-3">
+          <AdSurface zone="multilink_card_inline" maxWidth="max-w-none" />
+        </div>
+      ) : null}
 
       {/* ── Results, owned by THIS card ────────────────────────────────── */}
       {hasResults ? (

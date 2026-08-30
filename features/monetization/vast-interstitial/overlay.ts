@@ -2,7 +2,11 @@
 
 import { track } from "@/lib/analytics/client";
 import type { VastCreative } from "@/lib/monetization/vast";
-import type { VastInterstitialConfig } from "@/lib/monetization/vast-interstitial";
+import {
+  effectiveSkipSeconds,
+  skipRemainingSeconds,
+  type VastInterstitialConfig,
+} from "@/lib/monetization/vast-interstitial";
 
 /**
  * The full-screen VAST stage.
@@ -140,7 +144,19 @@ export function showInterstitial({
       happened.
     */
     const maySkip = config.skipEnabled;
-    let remaining = config.skipAfterSeconds;
+
+    /*
+      The admin number is a CEILING, capped by the ad's own length — see
+      `effectiveSkipSeconds`. Seeded from the VAST `<Duration>` so the very
+      first paint already shows the right number, then re-derived on
+      `loadedmetadata` once the real file's length is known.
+    */
+    let skipAt = effectiveSkipSeconds({
+      configuredSeconds: config.skipAfterSeconds,
+      vastDurationSeconds: creative.durationSeconds,
+    });
+    let startedAtMs = 0;
+    let remaining = skipAt;
 
     const paintSkip = () => {
       if (remaining > 0) {
@@ -209,16 +225,44 @@ export function showInterstitial({
       pixel(creative.tracking.start);
       track("vast_started", {});
       if (maySkip) {
+        startedAtMs = Date.now();
         paintSkip();
+        /*
+          Recomputed from playback position each tick rather than decremented.
+          A decrementing counter cannot react to what this timer now has to
+          react to: a `loadedmetadata` that shortens `skipAt`, and a stall that
+          should stop the countdown advancing. `skipRemainingSeconds` owns both
+          rules (and its wall-clock floor is what stops a dead stream trapping
+          the visitor behind a skip that never unlocks).
+        */
         countdownTimer = setInterval(() => {
-          remaining = Math.max(0, remaining - 1);
+          remaining = skipRemainingSeconds({
+            skipAtSeconds: skipAt,
+            playedSeconds: video.currentTime,
+            elapsedSeconds: (Date.now() - startedAtMs) / 1000,
+          });
           paintSkip();
           if (remaining === 0 && countdownTimer) {
             clearInterval(countdownTimer);
             countdownTimer = null;
           }
-        }, 1000);
+        }, 250);
       }
+    });
+
+    /*
+      The real file's length, which outranks the VAST's claim about it. An
+      ExoClick or Ad Manager response that declares 30s and delivers a 6s file
+      would otherwise hold the skip control 24 seconds past the end of the ad.
+    */
+    video.addEventListener("loadedmetadata", () => {
+      skipAt = effectiveSkipSeconds({
+        configuredSeconds: config.skipAfterSeconds,
+        vastDurationSeconds: creative.durationSeconds,
+        mediaDurationSeconds: video.duration,
+      });
+      if (!started) remaining = skipAt;
+      if (maySkip) paintSkip();
     });
 
     video.addEventListener("timeupdate", () => {

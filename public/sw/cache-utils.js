@@ -20,6 +20,39 @@ SWX.isCacheable = function isCacheable(response) {
   return !!response && (response.ok || response.type === "opaque");
 };
 
+/*
+  🔴 AN OPAQUE CACHED ENTRY CAN ONLY ANSWER A `no-cors` REQUEST (owner,
+  2026-08-30: "downloading post sometimes fail and show service worker is
+  opaque or load failed").
+
+  `isCacheable` above deliberately STORES opaque responses, which is right —
+  a cross-origin `<img>` is a `no-cors` request and its opaque response is a
+  perfectly good cache entry. The trap is on the way back OUT.
+
+  A Cache is keyed by URL (+ Vary) and NOTHING ELSE — request mode is not part
+  of the key. So the moment any code calls `fetch(someImageUrl)` for a URL the
+  page had already rendered in an `<img>`, `cache.match()` cheerfully returns
+  the stored OPAQUE response for a request whose mode is `cors`. The Handle
+  Fetch algorithm then rejects it outright:
+
+    "The FetchEvent for "…" resulted in a network error response: an "opaque"
+     response was used for a request whose type is not no-cors."
+
+  That is a NETWORK ERROR, not a bad response — the caller's `fetch()` REJECTS
+  (Chrome: "Failed to fetch"; Safari: "Load failed"), and the download it was
+  driving dies with it. It only happens once the same URL has been rendered as
+  an image AND is still inside IMAGE_CACHE's 80-entry cap, which is exactly why
+  it fails "sometimes".
+
+  So: never hand a stored response to a request the browser will refuse it for.
+  The caller falls through to the network instead, and the fresh (non-opaque)
+  response overwrites the opaque entry, so the cache heals itself.
+*/
+SWX.canServe = function canServe(response, request) {
+  if (!response) return false;
+  return response.type !== "opaque" || request.mode === "no-cors";
+};
+
 // Every cache write goes through this — never throws. A storage-quota
 // error, a third-party opaque response, or a mid-write cache-deletion race
 // (activate() cleaning up an old version) must never fail the network

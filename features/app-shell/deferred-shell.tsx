@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { MediaProtection } from "@/features/media/media-protection";
+import { VastDownloadCompleteTrigger } from "@/features/monetization/vast-interstitial/download-complete-trigger";
 import { StreakTracker } from "@/features/streaks/streak-tracker";
 
 /**
@@ -128,6 +129,18 @@ export function DeferredShell() {
         only fetched on the one day a year it plays.
       */}
       <StreakTracker />
+      {/*
+        The post-download skippable video ad, armed on EVERY page (owner,
+        2026-08-30: "landing pages and download, history and all pages").
+
+        Statically imported like MediaProtection above, and for the same reason
+        it is safe to be: it is one `addEventListener` and ONE STRING import —
+        deliberately not the download manager, which would drag analytics, the
+        history store and IndexedDB onto every page and through the landing
+        budget. The ad itself (config, VAST request, player) stays behind a
+        dynamic import that only runs once a download actually completes.
+      */}
+      <VastDownloadCompleteTrigger />
       <CommandCenterMount />
       <RegisterServiceWorker />
       <GlobalErrorCapture />

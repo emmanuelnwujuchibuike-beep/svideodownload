@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
+import { useAdGateCountdown } from "./use-ad-gate-countdown";
 
 /**
  * The reward gate shown when a wallpaper download is tapped.
@@ -47,14 +48,12 @@ export function WallpaperRewardGate({
     this is where that branch lands.
   */
   const { network } = useRewardNetwork("wallpaper");
-  const [remaining, setRemaining] = useState(seconds);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
 
   /*
-    Reset the COUNTDOWN per open, so a second download gets its own.
-
-    🔴 But NOT `hasAd` (owner, 2026-08-30: "wallpaper download button takes time
-    to fire, when i click on download, it takes time before it loads").
+    🔴 `hasAd` is deliberately NOT reset per open (owner, 2026-08-30: "wallpaper
+    download button takes time to fire, when i click on download, it takes time
+    before it loads").
 
     Resetting it to null threw away the answer the prefetch had already
     obtained, and `AdSlot` resolves once — it does not re-answer for a slot it
@@ -64,19 +63,31 @@ export function WallpaperRewardGate({
     requires `=== true`) never became true, so the ad it had just buffered never
     appeared either. The whole point of mounting this early is that the answer
     is already in hand by the time anyone taps.
-  */
-  useEffect(() => {
-    if (!open) return;
-    setRemaining(seconds);
-  }, [open, seconds]);
 
-  // The countdown only runs while a creative is actually on screen — counting
-  // down over a blank overlay would be charging the visitor for nothing.
-  useEffect(() => {
-    if (!open || hasAd !== true || remaining <= 0) return;
-    const id = setTimeout(() => setRemaining((n) => n - 1), 1000);
-    return () => clearTimeout(id);
-  }, [open, hasAd, remaining]);
+    The COUNTDOWN is still per-open — `useAdGateCountdown` resets itself
+    whenever `running` goes false.
+  */
+
+  /*
+    🔴 `seconds` is a FALLBACK, not the countdown (owner, 2026-08-30: "to be
+    skipable when the ad finishes in the ad network, admin timer set up should
+    only be a fallback").
+
+    This used to tick down from `seconds` with no idea what it was gating, so a
+    5-second setting over a 3-second ExoClick fill held the visitor two seconds
+    past the end of a frozen, finished video. The hook now closes the gate the
+    moment the creative ends, targets the creative's real length when it is
+    shorter than `seconds`, and only falls back to `seconds` for a creative with
+    no timeline at all.
+
+    `running` is `hasAd === true`: the countdown only runs while a creative is
+    genuinely on screen — counting down over a blank overlay would be charging
+    the visitor for nothing.
+  */
+  const { remaining, canSkip, onAdTiming } = useAdGateCountdown({
+    fallbackSeconds: seconds,
+    running: open && hasAd === true,
+  });
 
   /*
     FAIL OPEN. No creative, or a slot that never answers, releases the download
@@ -116,11 +127,12 @@ export function WallpaperRewardGate({
       /* `=== true`: three-state, and "not false" would flash the overlay
          before the slot has said anything. */
       shown={open && hasAd === true}
-      canSkip={remaining <= 0}
+      canSkip={canSkip}
       remaining={remaining}
       onResolved={setHasAd}
+      onAdTiming={onAdTiming}
       onClose={() => {
-        if (remaining <= 0) onDone();
+        if (canSkip) onDone();
       }}
       data-reward-network={network}
     />

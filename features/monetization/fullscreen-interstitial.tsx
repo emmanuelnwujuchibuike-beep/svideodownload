@@ -3,6 +3,7 @@
 import { Crown, X } from "lucide-react";
 import Link from "next/link";
 
+import type { AdTiming } from "@/lib/monetization/ad-timing";
 import type { AdZone } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ export function FullscreenInterstitial({
   shown,
   onClose,
   onResolved,
+  onAdTiming,
   canSkip = true,
   remaining = 0,
   upsell,
@@ -39,6 +41,12 @@ export function FullscreenInterstitial({
   shown: boolean;
   onClose: () => void;
   onResolved: (hasAd: boolean) => void;
+  /**
+   * The creative's real duration and end, so the caller's countdown can obey the
+   * network's timer instead of only an admin number — see
+   * `features/monetization/use-ad-gate-countdown.ts`.
+   */
+  onAdTiming?: (timing: AdTiming) => void;
   /** False while a skip countdown runs — hides the X and blocks backdrop dismiss. */
   canSkip?: boolean;
   remaining?: number;
@@ -157,6 +165,7 @@ export function FullscreenInterstitial({
           dismissible={false}
           fullBleed
           onResolved={onResolved}
+          onAdTiming={onAdTiming}
           className="pointer-events-auto flex h-full w-full items-center justify-center"
         />
       </div>

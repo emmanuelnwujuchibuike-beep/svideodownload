@@ -34,7 +34,9 @@ const IDLE_MS = 45_000;
 /** Fire the interstitial, loading it only at that moment. */
 function fire() {
   void import("./request")
-    .then((m) => m.requestVastInterstitial())
+    // "ambient" — gated by the master switch only, never by the download
+    // moment's switch. See `isEnabledFor` in request.ts.
+    .then((m) => m.requestVastInterstitial("ambient"))
     .catch(() => {
       /* An ad that cannot load its own module is not the visitor's problem. */
     });

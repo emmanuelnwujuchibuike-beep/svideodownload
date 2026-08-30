@@ -24,7 +24,9 @@ function looksLikeCaptivePortalResponse(response) {
 SWX.cacheFirst = async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(request);
-  if (hit) return hit;
+  // `canServe`, not a bare truthiness check — a cached OPAQUE entry handed to a
+  // non-`no-cors` request is a network error, not a cache hit (cache-utils.js).
+  if (SWX.canServe(hit, request)) return hit;
   const res = await fetch(request);
   if (SWX.isCacheable(res) && !looksLikeCaptivePortalResponse(res)) {
     await SWX.safePut(cacheName, request, res.clone());
@@ -41,13 +43,31 @@ SWX.cacheFirst = async function cacheFirst(request, cacheName) {
 // answers immediately.
 SWX.staleWhileRevalidate = async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
-  const hit = await cache.match(request);
+  // A stored entry the browser would REFUSE for this request is not a hit — see
+  // `canServe` in cache-utils.js for the opaque-response network error this
+  // closes. Falling through to the network also self-heals the cache, because
+  // the fresh response overwrites the unusable entry below.
+  const stored = await cache.match(request);
+  const hit = SWX.canServe(stored, request) ? stored : null;
   const network = fetch(request)
     .then(async (res) => {
       if (SWX.isCacheable(res)) await SWX.safePut(cacheName, request, res.clone());
       return res;
     })
-    .catch(() => hit);
+    /*
+      🔴 RE-THROW when there is nothing to fall back to. This used to be
+      `.catch(() => hit)`, so a failed fetch with no cached copy resolved the
+      whole strategy to `undefined` — and `respondWith(undefined)` is itself a
+      network error ("the promise was resolved with an object that is not a
+      Response"), reported to the caller as the same opaque-looking
+      "Failed to fetch" / "Load failed" as a real outage, with the SW's own
+      bug standing in for the network's. Throwing hands the request back with
+      its ACTUAL failure, exactly as if the worker were not installed.
+    */
+    .catch((err) => {
+      if (hit) return hit;
+      throw err;
+    });
   return hit || network;
 };
 

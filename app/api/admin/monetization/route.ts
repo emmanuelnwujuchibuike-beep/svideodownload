@@ -97,7 +97,11 @@ const schema = z.object({
   vastInterstitial: z
     .object({
       enabled: z.boolean().default(false),
-      enabledOnDownload: z.boolean().default(true),
+      /* Defaults mirror DEFAULT_VAST_INTERSTITIAL exactly — the start moment is
+         OFF and the completion moment is ON, because both firing for one
+         download means the cooldown silently eats the second one. */
+      enabledOnDownload: z.boolean().default(false),
+      enabledOnDownloadComplete: z.boolean().default(true),
       skipEnabled: z.boolean().default(true),
       skipAfterSeconds: z.number().int().min(0).max(30).default(5),
       timeoutMs: z.number().int().min(500).max(5000).default(3000),

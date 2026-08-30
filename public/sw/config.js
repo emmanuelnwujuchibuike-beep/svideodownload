@@ -6,6 +6,21 @@
  * activation. */
 var SWX = (self.SWX = self.SWX || {});
 
+// v18 (2026-08-30): the worker could FAIL a download it had no business
+// touching (owner: "downloading post sometimes fail and show service worker is
+// opaque or load failed"). routes.js matched the image strategy on URL
+// EXTENSION alone, so a programmatic `fetch()` for anything ending in .jpg/.png
+// was answered from IMAGE_CACHE — a cache that legitimately stores OPAQUE
+// entries from `<img>` renders of those same URLs. A Cache is keyed by URL and
+// not by request mode, so the download got the opaque copy, and an opaque
+// response cannot answer a `cors` request: the browser replaces it with a
+// network error and `fetch()` rejects ("Failed to fetch" / Safari's "Load
+// failed"). Fixed in three places (routing, `canServe`, and a
+// staleWhileRevalidate that resolved to `undefined` on a failed fetch).
+// The bump is load-bearing twice over: it ships the code to devices that
+// already have v17, and the new cache names ABANDON the v17 buckets holding
+// the opaque entries that trigger it.
+//
 // v17 (2026-08-24): push.js honours a `force` flag so the notification smoke
 // test (/api/cron/notification-test) displays even with the app open. Without
 // the bump, every already-installed device keeps the v16 push handler and the
@@ -40,7 +55,7 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v17";
+SWX.VERSION = "v18";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

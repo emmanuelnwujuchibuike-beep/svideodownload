@@ -20,8 +20,21 @@
 export interface VastInterstitialConfig {
   /** Master switch for the whole interstitial. Off means nothing is ever loaded. */
   enabled: boolean;
-  /** Show it when a download is started. The only trigger today. */
+  /** Show it when a download is STARTED. */
   enabledOnDownload: boolean;
+  /**
+   * Show it when a download COMPLETES — the landing, /download, /history and
+   * every other page that can finish a transfer (owner, 2026-08-30: "download
+   * completed in the landing pages and download, history and all pages should
+   * trigger a 5 to 15 sec skipable video ad").
+   *
+   * 🔴 THIS AND `enabledOnDownload` COMPETE FOR ONE COOLDOWN. A start ad at
+   * t=0 and a completion ad twenty seconds later are two interstitials inside
+   * the default 90s `cooldownMs`, so the second is suppressed. With both on the
+   * completion ad — the one actually asked for — is the one that never shows.
+   * That is why the START trigger now defaults OFF and this one defaults ON.
+   */
+  enabledOnDownloadComplete: boolean;
   /** Whether a skip/close control may appear at all. */
   skipEnabled: boolean;
   /** Seconds of playback before the skip control appears. */
@@ -41,7 +54,11 @@ export interface VastInterstitialConfig {
  */
 export const DEFAULT_VAST_INTERSTITIAL: VastInterstitialConfig = {
   enabled: false,
-  enabledOnDownload: true,
+  // OFF, and deliberately changed from the original default — see the cooldown
+  // note on `enabledOnDownloadComplete`. Still fully available in the admin for
+  // an operator who wants the ad up front instead.
+  enabledOnDownload: false,
+  enabledOnDownloadComplete: true,
   skipEnabled: true,
   skipAfterSeconds: 5,
   timeoutMs: 3000,
@@ -85,6 +102,10 @@ export function normalizeVastInterstitial(raw: unknown): VastInterstitialConfig 
   return {
     enabled: bool("enabled", DEFAULT_VAST_INTERSTITIAL.enabled),
     enabledOnDownload: bool("enabledOnDownload", DEFAULT_VAST_INTERSTITIAL.enabledOnDownload),
+    enabledOnDownloadComplete: bool(
+      "enabledOnDownloadComplete",
+      DEFAULT_VAST_INTERSTITIAL.enabledOnDownloadComplete,
+    ),
     skipEnabled: bool("skipEnabled", DEFAULT_VAST_INTERSTITIAL.skipEnabled),
     skipAfterSeconds: clampInt(
       v.skipAfterSeconds,
@@ -109,3 +130,18 @@ export function normalizeVastInterstitial(raw: unknown): VastInterstitialConfig 
 
 /** Options offered in the admin dropdown. */
 export const SKIP_SECOND_OPTIONS = [0, 3, 5, 10, 15, 20, 30] as const;
+
+/*
+  The skip-timing rule lives in `ad-timing.ts` — it is not specific to this
+  interstitial. Every gated ad in the product obeys it (owner: "make same rule
+  for the exoclick and others video ad in wallpaper download reward video or
+  anywhere"), so it has one home and this file re-exports it for the callers
+  that already import from here.
+*/
+export {
+  effectiveSkipSeconds,
+  skipRemainingSeconds,
+  SKIP_STALL_GRACE_SECONDS,
+  type AdTiming,
+} from "./ad-timing";
+

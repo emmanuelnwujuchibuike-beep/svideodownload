@@ -6,6 +6,7 @@ import { addDownload } from "@/features/history/store";
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
+import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
 
@@ -553,6 +554,21 @@ async function run(id: string) {
     completedCount += 1;
     const dailySingleCount = task.batchId ? null : bumpDailySingleCount();
     for (const l of completionListeners) l({ id, batchId: task.batchId, dailySingleCount });
+    /*
+      The same completion, broadcast for listeners that must NOT import this
+      module. The post-download video ad is armed in the root layout on every
+      page, and importing the manager there would put all of this on every
+      page's bundle — see lib/downloads/completion-event.ts.
+
+      Wrapped because a dispatch must never be able to fail a download that has
+      already succeeded: everything above this line is done, and the file is on
+      the device.
+    */
+    try {
+      window.dispatchEvent(new Event(DOWNLOAD_COMPLETED_EVENT));
+    } catch {
+      /* a listener that throws is not this download's problem */
+    }
     trackDownload("completed", {
       downloadId: task.id,
       platform: task.platform,

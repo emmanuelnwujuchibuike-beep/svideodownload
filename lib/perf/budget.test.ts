@@ -174,7 +174,30 @@ function landingChunks(): string[] {
  * reclaim a few hundred bytes on an internal admin route is not where the
  * attention belongs while ad revenue is still being wired up.
  */
-const GLOBAL_CEILING = 351 * 1024;
+/*
+ * 🔴 A SEVENTH BUMP (351 → 352), for the download-COMPLETE interstitial switch.
+ *
+ * Owner, 2026-08-30: the skippable video ad should fire when a download
+ * FINISHES, on every page. That splits the panel's single "Show on download"
+ * row into two — start and complete — because both moments now exist and an
+ * operator has to be able to pick, and it adds the conditional warning that
+ * turning BOTH on means the cooldown suppresses the completion ad (the one they
+ * asked for). Roughly 700 bytes gzipped.
+ *
+ * Nothing to split, same as the sixth bump: the controls ARE the panel, they
+ * live in a component `/admin` already loads, and they render only when the
+ * interstitial is on. The timing rule that came with this change deliberately
+ * landed in `lib/monetization/ad-timing.ts`, which is dependency-free and
+ * shared with the public gates, rather than being inlined per call site — so
+ * the admin route pays for it once and the public routes are unaffected.
+ *
+ * 🔴 STILL THE ADMIN ROUTE, AND ONLY THE ADMIN ROUTE. The public entry ceilings
+ * below (`ENTRY_CEILING` 275 KiB, `APP_ENTRY_CEILING` 300 KiB) are untouched and
+ * still pass — the post-download ad trigger added to the ROOT layout imports one
+ * string constant, not the download manager, precisely so that stays true. See
+ * lib/downloads/completion-event.ts.
+ */
+const GLOBAL_CEILING = 352 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

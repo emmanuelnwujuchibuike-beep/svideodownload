@@ -8,6 +8,7 @@ import { getWatchCount, isPlayerOpen, onVideoWatched } from "@/features/download
 import { upgradeCta, upgradeHeadline } from "@/lib/monetization/upgrade-cta";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
+import { useAdGateCountdown } from "./use-ad-gate-countdown";
 import { useInterstitialConfig, useRewardNetwork } from "./use-interstitial-skip";
 import { useShowAds } from "./use-show-ads";
 
@@ -80,7 +81,6 @@ export function DownloadInterstitial({
   const { network: historyNetwork } = useRewardNetwork("history_video");
   const [open, setOpen] = useState(false);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
-  const [remaining, setRemaining] = useState(0);
   const mountedAt = useRef(Date.now());
 
   // Business never sees an interstitial. Free/guest see all triggers; Pro sees
@@ -168,26 +168,22 @@ export function DownloadInterstitial({
   }, [ready, watchAllowed, historyVideoOn, historyNetwork, triggers, show]);
 
   const shown = open && hasAd === true;
-  // The admin-set skip delay: while it counts down the ad can't be dismissed;
-  // at 0 (immediately, if the admin chose 0) it becomes skippable.
-  const canSkip = remaining <= 0;
+  /*
+    🔴 `skipSeconds` is the FALLBACK, not the countdown (owner, 2026-08-30:
+    "skipable when the ad finishes in the ad network, admin timer set up should
+    only be a fallback").
 
-  // Start the skip countdown when the ad becomes visible.
-  useEffect(() => {
-    if (!shown) return;
-    setRemaining(skipSeconds);
-    if (skipSeconds <= 0) return;
-    const id = window.setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          window.clearInterval(id);
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [shown, skipSeconds]);
+    This used to run a fixed wall-clock interval from the admin number with no
+    knowledge of the creative it was gating, so a 10-second setting over a
+    4-second fill left six seconds of "Skip in 6…5…" on a video that had already
+    ended. The shared hook closes the gate on the creative's own `ended`, targets
+    its real duration when that is shorter, and only uses `skipSeconds` when the
+    creative has no timeline to report — a display ad.
+  */
+  const { remaining, canSkip, onAdTiming } = useAdGateCountdown({
+    fallbackSeconds: skipSeconds,
+    running: shown,
+  });
 
   useEffect(() => {
     if (!shown) return;
@@ -216,6 +212,7 @@ export function DownloadInterstitial({
       shown={shown}
       onClose={close}
       onResolved={setHasAd}
+      onAdTiming={onAdTiming}
       canSkip={canSkip}
       remaining={remaining}
       upsell={upsell}

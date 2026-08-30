@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { isPersistentZone, sizeFromScript } from "@/lib/monetization/ad-schema";
+import type { AdTiming } from "@/lib/monetization/ad-timing";
 import { cn } from "@/lib/utils";
 import type { AdSlotData, AdZone } from "@/lib/monetization/types";
 
@@ -110,6 +111,7 @@ export function AdSlot({
   dismissible = true,
   fullBleed = false,
   onResolved,
+  onAdTiming,
 }: {
   zone: AdZone;
   className?: string;
@@ -134,6 +136,15 @@ export function AdSlot({
    * only thing that knows, so it has to be the thing that says.
    */
   onResolved?: (hasAd: boolean) => void;
+  /**
+   * The creative's own duration and end, forwarded from the player.
+   *
+   * Only the ExoClick (video) branch can report it — the other formats have no
+   * timeline to report. A gate that receives nothing falls back to its admin
+   * number, which is exactly the intended behaviour for a display creative.
+   * See `lib/monetization/ad-timing.ts`.
+   */
+  onAdTiming?: (timing: AdTiming) => void;
 }) {
   const [ad, setAd] = useState<AdSlotData | null>(null);
   const [closed, setClosed] = useState(false);
@@ -423,6 +434,7 @@ export function AdSlot({
           zone={zone}
           fill={fullBleed}
           className="w-full"
+          onAdTiming={onAdTiming}
           /* The real answer for this format — see the fetch above. */
           onFill={(filled) => {
             if (notified.current) return;

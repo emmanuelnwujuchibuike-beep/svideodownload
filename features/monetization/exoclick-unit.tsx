@@ -4,6 +4,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AD_ZONE_META } from "@/lib/monetization/ad-schema";
+import type { AdTiming } from "@/lib/monetization/ad-timing";
 import type { VastCreative } from "@/lib/monetization/vast";
 import { cn } from "@/lib/utils";
 
@@ -89,11 +90,18 @@ export function ExoClickUnit({
   fill = false,
   className,
   onFill,
+  onAdTiming,
 }: {
   /** OUR zone name. The ExoClick zone id is resolved server-side. */
   zone: string;
   fill?: boolean;
   className?: string;
+  /**
+   * The creative's own length and end, for gates that must obey the network's
+   * timer rather than an admin number — see `lib/monetization/ad-timing.ts`.
+   * Fired on `loadedmetadata` (duration) and on `ended`.
+   */
+  onAdTiming?: (timing: AdTiming) => void;
   /**
    * Whether a creative actually arrived AND started playing.
    *
@@ -380,6 +388,20 @@ export function ExoClickUnit({
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           if (v.videoWidth > 0 && v.videoHeight > 0) setRatio(v.videoWidth / v.videoHeight);
+          /*
+            🔴 Report the ad's REAL length upward (owner, 2026-08-30: "skipable
+            when the ad finishes in the ad network, admin timer set up should
+            only be a fallback").
+
+            The gate above this has no access to the element, so without this it
+            can only count the admin number — which is how a 10-second wallpaper
+            gate ended up holding a visitor four seconds past the end of a
+            6-second fill. The VAST's declared duration is used when the file
+            itself has not got one.
+          */
+          const declared = ad.durationSeconds;
+          const real = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : declared;
+          onAdTiming?.({ durationSeconds: real ?? null, ended: false });
         }}
         onPlaying={() => {
           if (started.current) return;
@@ -433,6 +455,10 @@ export function ExoClickUnit({
           }
         }}
         onEnded={() => {
+          // The authoritative "the network's timer ran out" signal — reported
+          // even if the complete pixel has already fired, because the gate above
+          // needs it every time and pixel de-duplication is a separate concern.
+          onAdTiming?.({ durationSeconds: null, ended: true });
           if (fired.current.has("complete")) return;
           fired.current.add("complete");
           pixel(ad.tracking.complete);

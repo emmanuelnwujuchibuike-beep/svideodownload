@@ -247,7 +247,7 @@ export function Downloader({
       console error on a path the visitor is not even watching.
     */
     void import("@/features/monetization/vast-interstitial/request")
-      .then((m) => m.requestVastInterstitial())
+      .then((m) => m.requestVastInterstitial("download"))
       .catch(() => {
         /* An ad that cannot even load its own module is not the visitor's problem. */
       });

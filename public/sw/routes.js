@@ -98,7 +98,35 @@ self.addEventListener("fetch", (event) => {
     url.origin === self.location.origin &&
     (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/fonts/"));
   const isFont = /\.(woff2?|ttf|otf)$/i.test(url.pathname);
-  const isImage = req.destination === "image" || /\.(avif|webp|png|jpe?g|gif|svg|ico)$/i.test(url.pathname);
+  /*
+    🔴 THE EXTENSION IS A FALLBACK FOR SUB-RESOURCES, NEVER A NET FOR `fetch()`
+    (owner, 2026-08-30: "downloading post sometimes fail and show service worker
+    is opaque or load failed").
+
+    `req.destination === "image"` is the real test — it is what an `<img>`, a
+    CSS `background-image` and a `<link rel=preload as=image>` all report, and
+    the video/audio bail at the top of this router already trusts it. The bare
+    extension test used to run REGARDLESS of destination, so it also captured
+    every programmatic `fetch()` for a URL that merely ENDS in an image
+    extension — which is what a download is.
+
+    Two things then went wrong for a download routed into the image cache:
+
+      1. It was answered from a cache that may hold an OPAQUE entry stored by
+         the very same URL's `<img>` render, and an opaque response cannot
+         answer a `cors` request — the browser turns it into a network error
+         and the caller's `fetch()` rejects (cache-utils.js `canServe`).
+      2. Even on a clean hit it is WRONG: a download must transfer what the
+         origin has now, not a stale thumbnail-cache copy of it.
+
+    `destination` is empty for `fetch()`/XHR, so requiring `no-cors` on the
+    extension fallback keeps genuine destination-less image loads working while
+    leaving every download and API call to the untouched pass-through at the
+    bottom of this router.
+  */
+  const isImage =
+    req.destination === "image" ||
+    (req.destination === "" && req.mode === "no-cors" && /\.(avif|webp|png|jpe?g|gif|svg|ico)$/i.test(url.pathname));
 
   // Immutable, hashed assets — cache-first (they never change under the same URL).
   if (isStatic || isFont) {

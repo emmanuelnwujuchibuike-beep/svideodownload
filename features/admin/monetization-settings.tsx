@@ -497,8 +497,25 @@ export function MonetizationSettings({
         {vast.enabled ? (
           <div className="mt-3 space-y-2.5 border-t border-border/60 pt-3">
             <VastRow
-              label="Show on download"
-              hint="The only trigger today."
+              label="Show when a download COMPLETES"
+              hint="Landing, /download, /history — every page. The recommended moment: the visitor already has their file."
+              control={
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void setVast({ enabledOnDownloadComplete: !vast.enabledOnDownloadComplete })}
+                >
+                  <Switch on={vast.enabledOnDownloadComplete} />
+                </button>
+              }
+            />
+            <VastRow
+              label="Show when a download STARTS"
+              hint={
+                vast.enabledOnDownloadComplete && vast.cooldownMs > 0
+                  ? "⚠ With the completion ad also on, this one runs first and the cooldown below usually suppresses the completion ad."
+                  : "Plays while the file is still being prepared."
+              }
               control={
                 <button type="button" disabled={busy} onClick={() => void setVast({ enabledOnDownload: !vast.enabledOnDownload })}>
                   <Switch on={vast.enabledOnDownload} />
@@ -517,7 +534,7 @@ export function MonetizationSettings({
             {vast.skipEnabled ? (
               <VastRow
                 label="Skip after"
-                hint="How long the visitor WATCHES before the Skip control appears."
+                hint="A CEILING, not a fixed countdown — a shorter ad unlocks Skip when it ends. Set 10s and the network fills a 5s ad, Skip appears at 5s."
                 control={
                   <select
                     value={vast.skipAfterSeconds}

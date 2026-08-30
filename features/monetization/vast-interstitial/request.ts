@@ -53,8 +53,31 @@ async function loadConfig(): Promise<VastInterstitialConfig> {
   return configPromise;
 }
 
-/** The zone the interstitial serves from. Reuses the existing zone registry. */
-const ZONE = "download_preparing";
+/**
+ * Which moment is asking. Each has its own admin switch and its own ad zone, so
+ * an operator can run the completion ad without the start ad (the default) and
+ * price the two zones separately.
+ *
+ * `ambient` is idle + back-swipe (triggers.tsx). It is gated by the MASTER
+ * switch alone: it used to ride on `enabledOnDownload`, which was already a
+ * misnomer, and would now switch itself off with that field's new default —
+ * silently removing two placements nobody asked to remove.
+ */
+export type InterstitialTrigger = "download" | "download-complete" | "ambient";
+
+/** The zone each moment serves from. Reuses the existing zone registry. */
+const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
+  download: "download_preparing",
+  "download-complete": "download_complete",
+  ambient: "download_preparing",
+};
+
+function isEnabledFor(config: VastInterstitialConfig, trigger: InterstitialTrigger): boolean {
+  if (!config.enabled) return false;
+  if (trigger === "download") return config.enabledOnDownload;
+  if (trigger === "download-complete") return config.enabledOnDownloadComplete;
+  return true;
+}
 
 export interface InterstitialResult {
   shown: boolean;
@@ -65,9 +88,11 @@ export interface InterstitialResult {
  * Try to show a full-screen ad. Always resolves, never throws, never blocks
  * longer than the configured startup budget.
  */
-export async function requestVastInterstitial(): Promise<InterstitialResult> {
-  // Duplicate guard: two Download taps, or a double-fire, must not open two
-  // overlays or make two VAST requests.
+export async function requestVastInterstitial(
+  trigger: InterstitialTrigger = "download",
+): Promise<InterstitialResult> {
+  // Duplicate guard: two Download taps, a batch finishing eight files at once,
+  // or a double-fire must not open two overlays or make two VAST requests.
   if (phase !== "idle") return { shown: false, reason: "busy" };
 
   let config: VastInterstitialConfig;
@@ -77,10 +102,12 @@ export async function requestVastInterstitial(): Promise<InterstitialResult> {
     return { shown: false, reason: "error" };
   }
 
-  if (!config.enabled || !config.enabledOnDownload) return { shown: false, reason: "disabled" };
+  if (!isEnabledFor(config, trigger)) return { shown: false, reason: "disabled" };
   if (config.cooldownMs > 0 && Date.now() - lastShownAt < config.cooldownMs) {
     return { shown: false, reason: "cooldown" };
   }
+
+  const ZONE = ZONE_BY_TRIGGER[trigger];
 
   phase = "loading";
   const controller = new AbortController();

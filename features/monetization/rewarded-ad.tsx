@@ -140,8 +140,22 @@ export function RewardedAdGate({
     would let someone open the gate, pause, wait fifteen seconds and skip without
     the ad ever having played a frame.
   */
-  const canSkip = skipAfterSec !== null && watched >= skipAfterSec;
-  const skipIn = skipAfterSec === null ? 0 : Math.max(0, Math.ceil(skipAfterSec - watched));
+  /*
+    🔴 THE SKIP THRESHOLD IS CAPPED BY THE AD'S REAL LENGTH (owner, 2026-08-30:
+    "to be skipable when the ad finishes in the ad network, admin timer set up
+    should only be a fallback").
+
+    `required` was already capped this way by `onLoadedMeta`; `skipAfterSec` was
+    not, and that asymmetry was a dead control. `watched` can never exceed
+    `required`, so a 15-second skip threshold over a 12-second fill meant
+    `watched >= 15` was UNREACHABLE — the Skip button counted down to "1" and
+    stopped there forever, on a modal whose whole purpose is that skipping is
+    allowed. Capping it at `required` means the skip unlocks exactly when the
+    network's own ad has finished, which is the rule everywhere else now.
+  */
+  const skipAt = skipAfterSec === null ? null : Math.min(skipAfterSec, required);
+  const canSkip = skipAt !== null && watched >= skipAt - 0.4;
+  const skipIn = skipAt === null ? 0 : Math.max(0, Math.ceil(skipAt - watched));
 
   const onLoadedMeta = () => {
     const v = videoRef.current;

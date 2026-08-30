@@ -42,7 +42,21 @@ export function StoryAdSlide({
 }) {
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center bg-black"
+      /*
+        🔴 `fixed`, and ABOVE the player (owner, 2026-08-30: "the story player
+        is not showing").
+
+        It was `absolute inset-0 z-30`, which is wrong twice over. This renders
+        as a SIBLING of the player, not a child of it — so `absolute` resolved
+        against the document rather than the viewport, and z-30 put it BEHIND
+        `PlayerInner`, which is `fixed inset-0 z-[92]`. The ad was mounting and
+        firing correctly the whole time, underneath an opaque player.
+
+        `z-[95]` clears the player but stays under the sheet layer at z-[95]+
+        that the player's own menus use, so a menu opened before the ad still
+        wins rather than being trapped behind it.
+      */
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black"
       role="dialog"
       aria-modal="true"
       aria-label="Advertisement"

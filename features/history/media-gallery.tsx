@@ -365,7 +365,21 @@ export function MediaGallery({
       <div className="mb-4 w-full">
         <ExoClickSticky slot="history" />
       </div>
-      <AdSurface zone="history_above_grid" fullBleed className="mb-4" />
+      {/*
+        🔴 NO VAST SLOT HERE (owner, 2026-08-30: "the history above grid
+        showing in vertical instead of horizontal … i only said a horizontal
+        outstream video").
+
+        An `AdSurface` for `history_above_grid` was left rendering beside the
+        outstream tag above. That zone is shared-ID eligible, so it filled
+        with the 9:16 VERTICAL creative every other ExoClick zone serves —
+        which is the tall unit that appeared here. Two ad slots stacked, one
+        of them the wrong shape entirely.
+
+        The top of the history feed takes the horizontal outstream tag and
+        nothing else. The zone stays declared so it can be seeded
+        deliberately later, but it is no longer rendered here.
+      */}
 
       {sorted.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">{emptyText}</p>

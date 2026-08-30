@@ -78,14 +78,27 @@ export function WallpaperRewardGate({
     return () => clearTimeout(id);
   }, [open, hasAd, onDone]);
 
-  if (!open) return null;
+  /*
+    🔴 MOUNTED ALWAYS, REVEALED ON TAP (owner: "the download button should load
+    and prefetch the ad after the wallpaper have finished opening, so the ad
+    opens instantly").
 
+    Returning null until the gate opened meant the unit only began resolving its VAST and
+    pulling an MP4 at the moment of the tap — a round trip plus a video download
+    while someone waits for their wallpaper. Mounting it up front lets the
+    creative buffer in advance, so revealing it is instant.
+
+    Safe because the player no longer carries an autoplay attribute: playback
+    starts from the IntersectionObserver, which cannot fire while this is
+    hidden. That is what stopped the ad playing its AUDIO behind a hidden
+    overlay.
+  */
   return (
     <FullscreenInterstitial
       zone="wallpaper_reward"
       /* `=== true`: three-state, and "not false" would flash the overlay
          before the slot has said anything. */
-      shown={hasAd === true}
+      shown={open && hasAd === true}
       canSkip={remaining <= 0}
       remaining={remaining}
       onResolved={setHasAd}

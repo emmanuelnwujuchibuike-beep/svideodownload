@@ -263,7 +263,21 @@ export function ExoClickUnit({
         src={ad.mediaUrl}
         muted={muted}
         playsInline
-        autoPlay
+        /*
+          🔴 NO `autoPlay` ATTRIBUTE (owner, 2026-08-30: "when i click the
+          wallpaper download button it starts with the audio without showing
+          anything").
+
+          `autoPlay` starts playback as soon as the element can play —
+          including while it is inside a `display:none` wrapper, which is
+          exactly the state a gated interstitial is in before it reveals. iOS
+          happily plays the AUDIO of a hidden video, so the visitor heard an
+          ad they could not see.
+
+          Playback is started explicitly by the IntersectionObserver instead,
+          which by definition only fires once the element is really on
+          screen. Sound and picture then start together.
+        */
         /*
           🔴 Buffer AHEAD for zones declared `prefetch` (owner, 2026-08-30:
           "the ad video in above fetch card should prefetch and load before the

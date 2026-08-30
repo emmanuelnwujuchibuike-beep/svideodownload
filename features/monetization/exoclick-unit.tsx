@@ -265,6 +265,33 @@ export function ExoClickUnit({
         }}
         onTimeUpdate={(e) => {
           const el = e.currentTarget;
+
+          /*
+            🔴 THE VIEW BEACON (fixed 2026-08-30).
+
+            ExoClick reported ~100 impressions, 0 views, $0.00. Their VAST sends
+            NO `start` and NO quartile events — every tracker is
+            `event="progress"` with a time offset, and the URL behind it is
+            `vregister.php?a=vview`, which IS their view counter. Firing only the
+            named milestones meant `a=vimp` fired correctly on every play while
+            `a=vview` never fired once, so views stayed at zero and revenue
+            followed.
+
+            Driven by real `currentTime`, never a JS timer, so a paused, stalled
+            or backgrounded video cannot accrue a view it did not earn. Each
+            offset fires at most once per playback (`fired`), which also makes it
+            safe against React re-renders re-invoking this handler.
+          */
+          for (const p of ad.progress) {
+            const key = `progress@${p.offsetSeconds}`;
+            if (el.currentTime >= p.offsetSeconds && !fired.current.has(key)) {
+              fired.current.add(key);
+              pixel([p.url]);
+            }
+          }
+
+          // Named milestones, for networks that do send them. ExoClick does not,
+          // which is exactly why the progress trackers above had to be handled.
           const total = ad.durationSeconds || el.duration;
           if (!total || !Number.isFinite(total)) return;
           for (const [at, event] of QUARTILES) {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { exoClickVastUrl, parseVast, parseVastDuration, vastWrapperUrl } from "./vast";
+import {
+  exoClickVastUrl,
+  parseVast,
+  parseVastDuration,
+  parseVastOffset,
+  vastWrapperUrl,
+} from "./vast";
 
 /**
  * VAST reading — the pipeline the ExoClick work was missing.
@@ -129,6 +135,74 @@ describe("parseVast — media selection", () => {
     expect(ad.tracking.start).toEqual(["https://t/s"]);
     expect(ad.tracking.midpoint).toEqual(["https://t/m"]);
     expect(ad.tracking.complete).toEqual(["https://t/c"]);
+  });
+});
+
+describe("🔴 progress trackers — the view counter", () => {
+  /*
+   * THE ZERO-VIEWS BUG. ExoClick reported ~100 impressions, 0 views, $0.00.
+   *
+   * Their VAST sends NO `start` and NO quartile events. Every tracker is
+   * `event="progress"` with a time offset, and the URL behind it is
+   * `vregister.php?a=vview` — literally their view beacon. Keying trackers by
+   * event NAME alone put all five into an unused `progress` bucket, so `a=vimp`
+   * fired on every play and `a=vview` never fired once.
+   *
+   * Verbatim shape from the live zone (token elided).
+   */
+  const WITH_PROGRESS = `<VAST version="3.0"><Ad><InLine>
+    <Impression><![CDATA[https://s.magsrv.com/vregister.php?a=vimp&idzone=6015286]]></Impression>
+    <Creatives><Creative><Linear><Duration>00:00:20.736</Duration>
+      <TrackingEvents>
+        <Tracking id="prog_1" event="progress" offset="00:00:03.000"><![CDATA[https://s.magsrv.com/vregister.php?a=vview&progress=3]]></Tracking>
+        <Tracking id="prog_2" event="progress" offset="00:00:10.000"><![CDATA[https://s.magsrv.com/vregister.php?a=vview&progress=10]]></Tracking>
+        <Tracking event="progress" offset="50%"><![CDATA[https://s.magsrv.com/vregister.php?a=vview&progress=half]]></Tracking>
+      </TrackingEvents>
+      <MediaFiles><MediaFile delivery="progressive" type="video/mp4"><![CDATA[https://x/a.mp4]]></MediaFile></MediaFiles>
+    </Linear></Creative></Creatives>
+  </InLine></Ad></VAST>`;
+
+  it("extracts progress trackers WITH their offsets", () => {
+    const ad = parseVast(WITH_PROGRESS)!;
+    expect(ad.progress).toHaveLength(3);
+    expect(ad.progress[0]).toEqual({
+      offsetSeconds: 3,
+      url: "https://s.magsrv.com/vregister.php?a=vview&progress=3",
+    });
+  });
+
+  it("resolves a PERCENTAGE offset against the real duration", () => {
+    const ad = parseVast(WITH_PROGRESS)!;
+    // 50% of 20.736s. Sorted, so it lands between the 3s and 10s markers.
+    expect(ad.progress.map((p) => p.offsetSeconds)).toEqual([3, 10, 10.368]);
+  });
+
+  it("🔴 keeps the view beacon OUT of the named-event bucket", () => {
+    // The regression itself: while these lived under `tracking.progress`,
+    // nothing fired them, because the player only looks for start/quartiles.
+    const ad = parseVast(WITH_PROGRESS)!;
+    expect(ad.tracking.progress).toBeUndefined();
+    expect(ad.impressions).toHaveLength(1);
+  });
+
+  it("drops an unreadable offset rather than guessing at one", () => {
+    // A view beacon fired at the wrong moment is worse than one not fired —
+    // it is the number the advertiser is billed on.
+    const ad = parseVast(
+      WITH_PROGRESS.replace('offset="00:00:03.000"', 'offset="soon"'),
+    )!;
+    expect(ad.progress.map((p) => p.offsetSeconds)).toEqual([10, 10.368]);
+  });
+
+  it("a percentage offset needs a duration, and returns null without one", () => {
+    expect(parseVastOffset("50%", null)).toBeNull();
+    expect(parseVastOffset("50%", 20)).toBe(10);
+    expect(parseVastOffset("00:00:03.000", null)).toBe(3);
+    expect(parseVastOffset(null, 20)).toBeNull();
+  });
+
+  it("the live InLine fixture has no progress trackers and does not invent any", () => {
+    expect(parseVast(LIVE)!.progress).toEqual([]);
   });
 });
 

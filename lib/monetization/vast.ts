@@ -42,6 +42,21 @@ export interface VastCreative {
   impressions: string[];
   /** VAST `<Tracking event="…">` pixels, keyed by event name. */
   tracking: Record<string, string[]>;
+  /**
+   * 🔴 `<Tracking event="progress" offset="…">` — THE VIEW COUNTER.
+   *
+   * This is why ExoClick reported ~100 impressions, 0 views and $0.00. Their
+   * VAST carries no `start` or quartile events at all: every tracker is
+   * `event="progress"` with a time offset, and the URL behind it is
+   * `vregister.php?a=vview` — literally their view beacon. Keying trackers by
+   * event NAME alone collapsed all five into an unused `progress` bucket, so
+   * the impression pixel (`a=vimp`) fired correctly and the view pixel never
+   * fired once.
+   *
+   * Kept separate from `tracking` because these are the one event type whose
+   * firing time comes from the XML rather than from a fixed milestone.
+   */
+  progress: { offsetSeconds: number; url: string }[];
   /** Where a click on the ad goes. */
   clickThrough: string | null;
   /** Fired alongside a click. */
@@ -95,6 +110,28 @@ export function parseVastDuration(value: string | null): number | null {
   const total =
     Number(h) * 3600 + Number(min) * 60 + Number(s) + (frac ? Number(`0.${frac}`) : 0);
   return Number.isFinite(total) ? total : null;
+}
+
+/**
+ * A `progress` tracker's offset, in seconds.
+ *
+ * VAST 3.0 allows two forms and ExoClick uses the first: `"00:00:03.000"`, or a
+ * percentage of duration such as `"50%"`. The percentage form needs a known
+ * duration — without one it returns null rather than guessing, because these
+ * beacons are what the advertiser is billed on.
+ */
+export function parseVastOffset(
+  value: string | null,
+  durationSeconds: number | null,
+): number | null {
+  if (!value) return null;
+  const raw = value.trim();
+  const pct = raw.match(/^(\d{1,3})\s*%$/);
+  if (pct) {
+    if (!durationSeconds) return null;
+    return (Number(pct[1]) / 100) * durationSeconds;
+  }
+  return parseVastDuration(raw);
 }
 
 /**
@@ -162,24 +199,42 @@ export function parseVast(xml: string): VastCreative | null {
   const media = pickMedia(xml);
   if (!media) return null;
 
+  const durationSeconds = parseVastDuration(
+    xml.match(/<Duration\b[^>]*>([\s\S]*?)<\/Duration>/i)?.[1]?.trim() ?? null,
+  );
+
   const tracking: Record<string, string[]> = {};
+  const progress: { offsetSeconds: number; url: string }[] = [];
   for (const m of xml.matchAll(/<Tracking\b([^>]*)>([\s\S]*?)<\/Tracking>/gi)) {
-    const event = m[1]?.match(/event\s*=\s*"([^"]*)"/i)?.[1];
+    const attrs = m[1] ?? "";
+    const event = attrs.match(/event\s*=\s*"([^"]*)"/i)?.[1];
     const url = safeUrl(textOf(m[2]));
     if (!event || !url) continue;
+
+    if (event.toLowerCase() === "progress") {
+      const offsetSeconds = parseVastOffset(
+        attrs.match(/offset\s*=\s*"([^"]*)"/i)?.[1] ?? null,
+        durationSeconds,
+      );
+      // An offset we cannot read is dropped rather than guessed at: firing a
+      // view beacon at the wrong moment is worse than not firing it, because it
+      // is the number the advertiser is billed on.
+      if (offsetSeconds !== null) progress.push({ offsetSeconds, url });
+      continue;
+    }
     (tracking[event] ??= []).push(url);
   }
+  progress.sort((a, b) => a.offsetSeconds - b.offsetSeconds);
 
   return {
     mediaUrl: media.url,
     mediaType: media.type,
     width: media.w,
     height: media.h,
-    durationSeconds: parseVastDuration(
-      xml.match(/<Duration\b[^>]*>([\s\S]*?)<\/Duration>/i)?.[1]?.trim() ?? null,
-    ),
+    durationSeconds,
     impressions: safeUrls(allTags(xml, "Impression")),
     tracking,
+    progress,
     clickThrough: safeUrl(allTags(xml, "ClickThrough")[0] ?? null),
     clickTracking: safeUrls(allTags(xml, "ClickTracking")),
   };

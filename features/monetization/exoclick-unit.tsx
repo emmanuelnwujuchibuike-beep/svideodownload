@@ -33,6 +33,32 @@ import { cn } from "@/lib/utils";
  * ad that plays without reporting is an ad that earns nothing.
  */
 
+/**
+ * True once the document has finished loading — the gate every ad creative
+ * waits behind so none of them competes with the page's own first paint.
+ *
+ * The 4-second cap is a safety net, not a target: if `load` has not fired by
+ * then the page has something else wrong with it, and LCP has long since
+ * happened either way. Without the cap a single hanging subresource would mean
+ * no ad on the page ever resolves, which is a worse failure than a late one.
+ */
+function usePageSettled(): boolean {
+  const [settled, setSettled] = useState(
+    () => typeof document !== "undefined" && document.readyState === "complete",
+  );
+  useEffect(() => {
+    if (settled) return;
+    const done = () => setSettled(true);
+    window.addEventListener("load", done, { once: true });
+    const cap = setTimeout(done, 4000);
+    return () => {
+      window.removeEventListener("load", done);
+      clearTimeout(cap);
+    };
+  }, [settled]);
+  return settled;
+}
+
 /** VAST quartile events, as fractions of duration. */
 const QUARTILES: [number, string][] = [
   [0.25, "firstQuartile"],
@@ -132,7 +158,32 @@ export function ExoClickUnit({
   );
 
   // ── Resolve the creative ──────────────────────────────────────────────────
+  /*
+    🔴 NEVER BEFORE THE PAGE HAS LOADED (owner, 2026-08-30: "i think the lcp is
+    broken").
+
+    Three zones on the landing page are declared `prefetch` — the above-fetch
+    slot, the under-download slot and the preparing-download slot — and each one
+    resolved its VAST and then pulled a whole MP4 (`preload="auto"`) as soon as
+    it mounted, which is during hydration, which is while the browser is still
+    fetching the thing the LCP is waiting on. Measured on production against a
+    1.6Mbps link: LCP 3136ms with the ads live, 2796ms with them blocked. ~340ms
+    of the landing page's budget was ad creatives competing for bandwidth with
+    the hero.
+
+    Waiting for `load` costs the ads nothing that matters. "Prefetched" means
+    "ready before the visitor acts", and nobody has pasted a link, opened the
+    batch panel or tapped Download inside the first second of a cold visit. It
+    still buffers well ahead of the moment it is needed — it just stops doing it
+    in front of the page.
+
+    Units mounted after a client-side navigation (reels, the feed, the wallpaper
+    viewer) see `readyState === "complete"` immediately and are unaffected.
+  */
+  const settled = usePageSettled();
+
   useEffect(() => {
+    if (!settled) return;
     let alive = true;
     fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`)
       .then((r) => (r.ok ? r.json() : { ad: null }))
@@ -153,7 +204,7 @@ export function ExoClickUnit({
     return () => {
       alive = false;
     };
-  }, [zone, answer]);
+  }, [zone, answer, settled]);
 
   // ── Play only once it is actually on screen ───────────────────────────────
   /*

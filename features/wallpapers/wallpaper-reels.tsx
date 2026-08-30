@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
-import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { Bookmark, ChevronUp, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -158,6 +158,10 @@ export function WallpaperReels({
     wallpaper the visitor was already on.
   */
   const [adAt, setAdAt] = useState<number | null>(null);
+  /** Whether the ad overlay's zone actually produced a creative. Null = unknown. */
+  const [adFilled, setAdFilled] = useState<boolean | null>(null);
+  /** Y of the touch that may turn out to be a swipe past the ad. */
+  const adTouchFrom = useRef<number | null>(null);
   /*
     The wallpaper waiting on the reward gate.
 
@@ -258,6 +262,9 @@ export function WallpaperReels({
       if (e.key !== "Escape") return;
       if (comments) setComments(null);
       else if (upgradeOpen) setUpgradeOpen(false);
+      // The ad is a layer like any other: Escape leaves it before it leaves the
+      // viewer, so dismissing an ad never also costs the wallpaper behind it.
+      else if (adAt !== null) setAdAt(null);
       else onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -267,7 +274,30 @@ export function WallpaperReels({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflowY = prev;
     };
-  }, [onClose, comments, upgradeOpen]);
+  }, [onClose, comments, upgradeOpen, adAt]);
+
+  /*
+    🔴 FAIL OPEN (owner, 2026-08-30: "i cant scoll past an ad in wallpaper").
+
+    The overlay is only ever allowed to stay up while a real creative is on
+    screen. `false` — ExoClick had no demand for this geo/device — takes it away
+    at once. No answer at all within four seconds does the same, because a slot
+    that never replies is indistinguishable, from the visitor's side, from one
+    that filled with nothing.
+
+    Same shape as the wallpaper reward gate deliberately: every ad in this
+    feature releases the visitor when it cannot deliver, rather than holding
+    them in front of a blank.
+  */
+  useEffect(() => {
+    if (adAt === null) {
+      setAdFilled(null);
+      return;
+    }
+    if (adFilled === true) return;
+    const id = setTimeout(() => setAdAt(null), adFilled === false ? 0 : 4000);
+    return () => clearTimeout(id);
+  }, [adAt, adFilled]);
 
   const engage = useCallback(
     async (wallpaper: Wallpaper, action: "like" | "unlike" | "save" | "unsave") => {
@@ -412,14 +442,56 @@ export function WallpaperReels({
           }}
         />
         {adAt !== null ? (
-          <div className="fixed inset-0 z-[80]">
-            <ReelsAdSlide />
+          <div
+            /*
+              🔴 THIS OVERLAY MUST ALWAYS BE ESCAPABLE (owner, 2026-08-30: "i
+              cant scoll past an ad in wallpaper after 3 wallpaper").
+
+              In the reels deck the ad is a real SLIDE, so the swipe the viewer
+              was already making carries them past it. Here it is an overlay
+              over the scroller — deliberately, because splicing a slide into
+              `items` desyncs the IntersectionObserver's `data-i` — and an
+              overlay does not inherit that escape. It covered the scroller,
+              swallowed the touches that would have scrolled it, and offered
+              one way out: an INVISIBLE button in the bottom 96px. Nothing on
+              screen said it was there. If the zone did not fill it was worse
+              still — a black rectangle with no exit at all.
+
+              Three ways out now, and none of them require knowing a secret:
+              the swipe that already means "next", a control you can see, and
+              Escape. Plus the fail-open below, so an empty zone never gets to
+              draw this at all.
+            */
+            className="fixed inset-0 z-[80] bg-black"
+            onTouchStart={(e) => {
+              adTouchFrom.current = e.touches[0]?.clientY ?? null;
+            }}
+            onTouchEnd={(e) => {
+              const from = adTouchFrom.current;
+              adTouchFrom.current = null;
+              const to = e.changedTouches[0]?.clientY;
+              // Upward flick, same direction and roughly the same threshold as
+              // advancing a wallpaper. Not preventDefault'd, so the creative's
+              // own click-through still works on a plain tap.
+              if (from != null && to != null && from - to > 60) setAdAt(null);
+            }}
+          >
+            <ReelsAdSlide
+              /*
+                FAIL OPEN. No creative means no overlay — the visitor is
+                returned to the wallpaper they were on rather than being held
+                on black by a slot that had nothing to show.
+              */
+              onResolved={setAdFilled}
+            />
             <button
               type="button"
-              aria-label="Continue"
               onClick={() => setAdAt(null)}
-              className="absolute inset-x-0 bottom-0 z-10 h-24 w-full bg-transparent"
-            />
+              className="absolute inset-x-0 z-10 mx-auto flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/25"
+              style={{ bottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
+            >
+              <ChevronUp aria-hidden className="h-4 w-4" /> Continue
+            </button>
           </div>
         ) : null}
         {items.map((w, i) => (

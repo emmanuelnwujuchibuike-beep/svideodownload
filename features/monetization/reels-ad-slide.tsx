@@ -33,7 +33,17 @@ import { AdSlot } from "./ad-slot";
   only branch has been removed is a prop that will be wired to the wrong
   thing later.
 */
-export function ReelsAdSlide() {
+export function ReelsAdSlide({
+  /**
+   * Reports whether the zone produced a real creative.
+   *
+   * The reels deck does not need this — its ad is a genuine SLIDE, so an empty
+   * one is swiped past like any other. An OVERLAY host (the wallpaper viewer)
+   * does: an overlay that never fills is a black screen over a scroller the
+   * visitor can no longer reach, so it has to know to take itself away.
+   */
+  onResolved,
+}: { onResolved?: (filled: boolean) => void } = {}) {
   /**
    * Whether the zone actually produced a visible creative.
    *
@@ -94,7 +104,10 @@ export function ReelsAdSlide() {
           fullBleed
           dismissible={false}
           className="h-full w-full"
-          onResolved={setFilled}
+          onResolved={(f) => {
+            setFilled(f);
+            onResolved?.(f);
+          }}
         />
       </div>
 

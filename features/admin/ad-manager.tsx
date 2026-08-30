@@ -2,13 +2,15 @@
 
 import { AlertTriangle, Loader2, Megaphone, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   AD_FORMATS,
   AD_FORMAT_META,
   AD_ZONES,
   AD_ZONE_META,
+  EXOCLICK_ZONE_SURFACE,
+  isExoClickZone,
   looksLikeHijackScript,
 } from "@/lib/monetization/ad-schema";
 import type { AdRecord } from "@/lib/monetization/ads";
@@ -173,6 +175,46 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
     router.refresh();
   };
 
+  /*
+    🔴 The list is GROUPED BY NETWORK (owner, 2026-08-30: "the add placement
+    settings is confusing, i want the exoclick placement should be separated and
+    identified so i dont mistake it for adsterra slot").
+
+    Every row used to render identically — same layout, same badge colours — and
+    the only thing telling two networks apart was a free-text `network` field the
+    operator typed themselves. On a list of a dozen placements that is not a
+    distinction anyone can scan, and mixing up which row belongs to which network
+    is how the wrong unit gets switched off.
+
+    ExoClick is grouped on its FORMAT, not on that typed name: the format is
+    structural and cannot be misspelled, whereas `network` is whatever was typed
+    into the box. Everything else groups by the network name, lowercased so
+    "Adsterra" and "adsterra" are one group rather than two.
+  */
+  const groups = useMemo(() => {
+    const byKey = new Map<string, { label: string; exoclick: boolean; rows: AdRecord[] }>();
+    for (const r of ads) {
+      const exoclick = r.format === "exoclick";
+      const key = exoclick ? "\0exoclick" : (r.network || "—").trim().toLowerCase();
+      const existing = byKey.get(key);
+      if (existing) existing.rows.push(r);
+      else {
+        byKey.set(key, {
+          // The first row's own casing, so a group reads the way the operator
+          // typed it rather than force-lowercased back at them.
+          label: exoclick ? "ExoClick" : (r.network || "Unlabelled").trim(),
+          exoclick,
+          rows: [r],
+        });
+      }
+    }
+    // ExoClick first — it is the one being actively configured — then the rest
+    // alphabetically so the order is stable between renders and refreshes.
+    return [...byKey.entries()]
+      .sort(([a], [b]) => (a === "\0exoclick" ? -1 : b === "\0exoclick" ? 1 : a.localeCompare(b)))
+      .map(([key, g]) => ({ key, ...g }));
+  }, [ads]);
+
   const toggleActive = async (r: AdRecord) => {
     await fetch(`/api/admin/ads/${r.id}`, {
       method: "PATCH",
@@ -197,10 +239,16 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
         </button>
       </div>
       <p className="mb-4 text-sm text-muted-foreground">
-        One row per placement. Pick the format that matches the code your network gave you —
-        a <strong>banner</strong> and a <strong>Social Bar</strong> use the same host but need
-        different formats here. Network names containing &quot;adsense&quot;, &quot;adsterra&quot;
-        or &quot;propeller&quot; respect the global toggles above.
+        One row per placement, <strong>grouped by network</strong>. Pick the format that matches the
+        code your network gave you — a <strong>banner</strong> and a <strong>Social Bar</strong> use
+        the same host but need different formats here.
+        {/*
+          "the global toggles above" was written when this panel and the switches
+          were one scrolling column. They are separate TABS now, so "above" points
+          at nothing and the sentence reads as a missing control.
+        */}{" "}
+        Every network is additionally gated by its switch in the <em>Ad settings</em> tab — a row
+        marked <strong>Live</strong> here still serves nothing if its network is off there.
       </p>
 
       {editing ? (
@@ -220,55 +268,138 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
           No ad placements yet. Add one and seed your network embed code.
         </p>
       ) : (
-        <ul className="divide-y divide-border/60">
-          {ads.map((r) => (
-            <li key={r.id} className="flex items-center gap-3 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Human labels, matching the form. An operator scanning this
-                      list should not have to translate `result_top` or `pop`. */}
-                  <span className="text-sm font-semibold">
-                    {AD_ZONE_META[r.zone as keyof typeof AD_ZONE_META]?.label ?? r.zone}
-                  </span>
-                  <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
-                    {r.network}
-                  </span>
-                  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                    {AD_FORMAT_META[r.format as keyof typeof AD_FORMAT_META]?.label ?? r.format}
-                  </span>
-                </div>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  {r.headline || (r.script_code ? "script embed" : r.target_url || "—")}
-                </p>
-                {/* Flags EXISTING rows too, not just what is being typed — the
-                    ones already live are the ones showing blank right now. */}
-                {r.format === "display" && looksLikeHijackScript(r.script_code) ? (
-                  <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
-                    <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />
-                    In-page script in a Banner slot — renders blank. Change Format, or use a Banner/Video here.
-                  </p>
-                ) : null}
+        <div className="space-y-5">
+          {groups.map((g) => (
+            <div
+              key={g.key}
+              className={cn(
+                // ExoClick gets a real container — a rule and a heading are not
+                // enough to stop a mis-tap on a list that scrolls.
+                g.exoclick &&
+                  "rounded-2xl border border-violet-500/30 bg-violet-500/[0.04] p-3 sm:p-4",
+              )}
+            >
+              <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                <h3
+                  className={cn(
+                    "text-xs font-bold uppercase tracking-[0.08em]",
+                    g.exoclick ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground",
+                  )}
+                >
+                  {g.label}
+                </h3>
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {g.rows.length} {g.rows.length === 1 ? "placement" : "placements"}
+                </span>
               </div>
-              <button
-                type="button"
-                onClick={() => toggleActive(r)}
-                aria-pressed={r.active}
-                className={cn(
-                  "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
-                  r.active ? "bg-green-500/15 text-green-500" : "bg-secondary text-muted-foreground",
-                )}
-              >
-                {r.active ? "Live" : "Off"}
-              </button>
-              <button type="button" onClick={() => openEdit(r)} aria-label="Edit" className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
-                <Pencil className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => remove(r.id)} aria-label="Delete" className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-red-400">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </li>
+              {/*
+                Said on the GROUP, once, rather than on every row: a "Live" pill
+                on an ExoClick row means the ROW is enabled, which is not the
+                same as the network serving. Without this, five rows all reading
+                "Live" while nothing renders is completely unexplained.
+              */}
+              {g.exoclick ? (
+                <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Vertical 9:16 units. A row marked <strong>Live</strong> still serves nothing until{" "}
+                  <strong>ExoClick</strong> is switched on in <em>Ad settings</em> — and each page
+                  has its own switch there.
+                </p>
+              ) : null}
+
+              <ul className="divide-y divide-border/60">
+                {g.rows.map((r) => {
+                  const exo = r.format === "exoclick";
+                  const surface = isExoClickZone(r.zone) ? EXOCLICK_ZONE_SURFACE[r.zone] : null;
+                  return (
+                    <li key={r.id} className="flex items-center gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Human labels, matching the form. An operator scanning this
+                              list should not have to translate `result_top` or `pop`. */}
+                          <span className="text-sm font-semibold">
+                            {AD_ZONE_META[r.zone as keyof typeof AD_ZONE_META]?.label ?? r.zone}
+                          </span>
+                          {/* The network chip is redundant inside a group named
+                              after the network — dropped there, kept nowhere else
+                              so nothing is lost. */}
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                              exo
+                                ? "bg-violet-500/15 text-violet-600 dark:text-violet-400"
+                                : "bg-primary/10 text-primary",
+                            )}
+                          >
+                            {AD_FORMAT_META[r.format as keyof typeof AD_FORMAT_META]?.label ??
+                              r.format}
+                          </span>
+                          {/*
+                            Which per-page switch governs this row. The whole
+                            point of the split is "clear the pages AdSense
+                            reviews", so the row has to say which side it is on
+                            — otherwise that decision means opening two tabs and
+                            cross-referencing zone names.
+                          */}
+                          {surface ? (
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                                surface === "marketing"
+                                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                                  : "bg-secondary text-muted-foreground",
+                              )}
+                            >
+                              {surface === "marketing" ? "Public · AdSense sees this" : "Signed-in app"}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {/*
+                            An ExoClick row has no headline, no script and no
+                            target url, so the original fallback rendered a bare
+                            "—" — the least useful thing a row could say about
+                            itself. The zone id IS the configuration here, so it
+                            is what the row shows.
+                          */}
+                          {exo
+                            ? r.ad_slot_id
+                              ? `Zone ID ${r.ad_slot_id}`
+                              : "No Zone ID — this row cannot serve"
+                            : r.headline || (r.script_code ? "script embed" : r.target_url || "—")}
+                        </p>
+                        {/* Flags EXISTING rows too, not just what is being typed — the
+                            ones already live are the ones showing blank right now. */}
+                        {r.format === "display" && looksLikeHijackScript(r.script_code) ? (
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                            <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                            In-page script in a Banner slot — renders blank. Change Format, or use a Banner/Video here.
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleActive(r)}
+                        aria-pressed={r.active}
+                        className={cn(
+                          "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
+                          r.active ? "bg-green-500/15 text-green-500" : "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {r.active ? "Live" : "Off"}
+                      </button>
+                      <button type="button" onClick={() => openEdit(r)} aria-label="Edit" className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => remove(r.id)} aria-label="Delete" className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition hover:bg-secondary hover:text-red-400">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );

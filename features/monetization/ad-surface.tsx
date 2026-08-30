@@ -92,10 +92,19 @@ export function AdSurface({
   if (fullBleed) {
     return (
       <div className={cn("w-full", hasAd !== true && "hidden", className)} aria-hidden={hasAd !== true}>
+        {/*
+          NOTE: `fullBleed` is deliberately NOT forwarded to AdSlot.
+
+          Two different ideas got conflated and it showed: on this surface it
+          means DROP THE CARD, while AdSlot's `fullBleed` means FILL THE
+          PARENT'S HEIGHT — which only the full-screen reels slide wants.
+          Forwarding it made in-page units render `h-full` on a black ground,
+          measured live at 406x722 with a black backdrop. Left off, the unit
+          uses its natural width + creative aspect + transparent ground.
+        */}
         <AdSlot
           zone={zone}
           dismissible={false}
-          fullBleed
           onResolved={(has) => {
             setHasAd(has);
             onResolved?.(has);

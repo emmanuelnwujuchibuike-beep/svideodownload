@@ -50,7 +50,7 @@ export function PreparingAd({
         a close button on a thing that removes itself in a few seconds is a
         control with nothing to do.
       */}
-      <AdSlot zone="download_preparing" dismissible={false} fullBleed />
+      <AdSlot zone="download_preparing" dismissible={false} />
     </div>
   );
 }

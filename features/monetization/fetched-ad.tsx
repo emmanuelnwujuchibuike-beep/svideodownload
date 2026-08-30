@@ -105,7 +105,7 @@ export function FetchedAd() {
         Not dismissible, by explicit instruction: no X here, and `dismissible`
         stays false so `AdSlot` cannot draw one either.
       */}
-      <AdSlot zone="result_top" dismissible={false} fullBleed onResolved={setHasAd} />
+      <AdSlot zone="result_top" dismissible={false} onResolved={setHasAd} />
     </div>
   );
 }

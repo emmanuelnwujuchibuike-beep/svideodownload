@@ -145,11 +145,25 @@ export function DownloadPageCore({
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
 
-      <AdSurface zone="under_download" maxWidth="max-w-3xl" />
-
       <div className="mt-3">
         <CloudStorageCard items={items} />
       </div>
+
+      {/*
+        🔴 MOVED BELOW CLOUD STORAGE, and given room (owner, 2026-08-30: "the
+        sections starts from below the cloud storage section" … "give a small
+        padding space between the first slot and the hero section").
+
+        It used to sit between the Explore/Wallpaper cards and this card, which
+        measured live at y=823 — inside the hero block, wedged against the Cloud
+        storage card with no separation. `mt-6` is double the `mt-3` rhythm the
+        rest of this stack uses, so the first ad reads as the start of a new
+        band rather than another card in the hero.
+
+        `fullBleed` for the same reason every other video zone has it: the card
+        border was the white frame around the unit.
+      */}
+      <AdSurface zone="under_download" fullBleed className="mt-6" />
 
       <div className="mt-3">
         <DownloadStats items={items} />

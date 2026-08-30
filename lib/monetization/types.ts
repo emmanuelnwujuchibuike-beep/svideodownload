@@ -102,7 +102,16 @@ export type AdZone =
     ⚠️ Same rule as every note in this union: no semicolon and no
     double-quoted lowercase word inside a comment here.
   */
-  | "history_above_grid";
+  | "history_above_grid"
+  /*
+    A full-screen story ad between history media (2026-08-30) — vertical,
+    inside the safe area, side-tap to advance and centre-tap to open the
+    advertiser.
+
+    ⚠️ Same rule as every note in this union: no semicolon and no
+    double-quoted lowercase word inside a comment here.
+  */
+  | "history_story_ad";
 
 export type DeviceType = "mobile" | "desktop";
 

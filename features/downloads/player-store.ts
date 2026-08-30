@@ -61,6 +61,9 @@ export function openPlayerQueue(items: DownloadRecord[], startIndex = 0) {
 
 export function closePlayer() {
   current = null;
+  // Clearing this matters: a latched ad would otherwise re-appear over the
+  // next queue the visitor opens.
+  adPending = false;
   emit();
 }
 
@@ -68,6 +71,8 @@ export function closePlayer() {
  *  a tap never dismisses the player. Does NOT tick the clip-ended counter. */
 export function playerNext() {
   if (!current || current.index >= current.items.length - 1) return;
+  // A story ad may take this advance instead — see advanceWithAd.
+  if (advanceWithAd()) return;
   current = { ...current, index: current.index + 1 };
   emit();
 }
@@ -79,6 +84,9 @@ export function playerClipEnded() {
   if (!current) return;
   countClipEnded();
   if (current.index < current.items.length - 1) {
+    // Same ad gate as a manual tap, so the rhythm is "3 media then an ad"
+    // however the visitor got there.
+    if (advanceWithAd()) return;
     current = { ...current, index: current.index + 1 };
     emit();
   } else {
@@ -101,5 +109,99 @@ export function usePlayerQueue(): PlayerQueue | null {
     },
     () => current,
     () => null,
+  );
+}
+
+/* ─────────────────────── Story ads between queue items ─────────────────────
+   Owner, 2026-08-30: "after 3 media, the next should be a vertical full screen
+   video ad … can be next by left tap but center tap opens the ad link."
+
+   🔴 THE AD IS NOT A QUEUE ENTRY, and that is the whole design.
+
+   The obvious implementation — splice ad slides into `items` — is the one that
+   broke Reels three times: `index` then means a SLIDE position while every
+   caller still reads it as an ITEM position, and the two silently disagree.
+   This queue has four consumers (history, Continue Watching, the review player,
+   the floating card), so that bug would have four places to surface.
+
+   Instead `items` and `index` keep their exact current meaning and the ad is a
+   FLAG that gates the advance. Nothing that reads the queue today changes.
+
+   Scoped by `adEvery`, which only the history gallery sets — the other three
+   surfaces open queues with it undefined and never see an ad. */
+
+/** After how many items an ad shows. 0/undefined = never (the default). */
+let adEvery = 0;
+/** True while a story ad is on screen, holding the advance. */
+let adPending = false;
+/** Advances already paid for, so going back and forth cannot replay one. */
+const adShownAt = new Set<number>();
+
+/** Open a queue that shows a story ad after every `every` items. */
+export function openPlayerQueueWithAds(
+  items: DownloadRecord[],
+  startIndex: number,
+  every: number,
+) {
+  adEvery = Math.max(0, Math.floor(every));
+  adPending = false;
+  adShownAt.clear();
+  openPlayerQueue(items, startIndex);
+}
+
+/** Is a story ad currently on screen? */
+export function isPlayerAdPending(): boolean {
+  return adPending;
+}
+
+/**
+ * Should moving to `nextIndex` be interrupted by an ad?
+ *
+ * Counted on the DESTINATION so the rhythm is "3 media, then an ad", and
+ * latched per position so a visitor tapping back and forth over the same
+ * boundary is not shown the same ad repeatedly.
+ */
+function adDueAt(nextIndex: number): boolean {
+  if (adEvery <= 0 || adPending) return false;
+  if (nextIndex <= 0 || nextIndex >= (current?.items.length ?? 0)) return false;
+  if (adShownAt.has(nextIndex)) return false;
+  return nextIndex % adEvery === 0;
+}
+
+/** Dismiss the story ad and complete the advance it was holding. */
+export function playerAdDone() {
+  if (!adPending) return;
+  adPending = false;
+  if (current && current.index < current.items.length - 1) {
+    current = { ...current, index: current.index + 1 };
+  }
+  emit();
+}
+
+/**
+ * The advance used by BOTH a tap and a natural clip end, with the ad check.
+ *
+ * Returns true when an ad took over instead of advancing, so the caller knows
+ * the queue did not move.
+ */
+function advanceWithAd(): boolean {
+  if (!current) return false;
+  const next = current.index + 1;
+  if (!adDueAt(next)) return false;
+  adShownAt.add(next);
+  adPending = true;
+  emit();
+  return true;
+}
+
+/** Re-renders a component when a story ad opens or closes. */
+export function usePlayerAdPending(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => adPending,
+    () => false,
   );
 }

@@ -25,7 +25,7 @@ import { type ComponentType, type ReactNode, useEffect, useMemo, useRef, useStat
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
 import { startDownload } from "@/features/downloads/manager";
-import { openPlayerQueue } from "@/features/downloads/player-store";
+import { openPlayerQueue, openPlayerQueueWithAds } from "@/features/downloads/player-store";
 import { estimateBytes } from "@/features/history/usage";
 import { PublishSoundSheet } from "@/features/history/publish-sound-sheet";
 import { useGatedRetry } from "@/features/history/use-gated-retry";
@@ -36,6 +36,16 @@ import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn, formatBytes } from "@/lib/utils";
 import type { DownloadRecord, MediaKind } from "@/types";
+
+/**
+ * A story ad after every N media (owner: "after 3 media").
+ *
+ * Matches the reels cadence deliberately — the two are the same promise to the
+ * visitor, and a different number on each surface is a difference nobody asked
+ * for.
+ */
+const HISTORY_STORY_AD_EVERY = 3;
+
 
 /**
  * The iOS-Photos-style download gallery — a Grid ⇄ List toggle, a 2–5 column
@@ -247,7 +257,12 @@ export function MediaGallery({
   }, [groupByDay, sort, sorted]);
   const openAt = (idx: number) => {
     haptic("light");
-    openPlayerQueue(sorted, idx);
+    /*
+      History is the ONLY surface that opens the queue with story ads.
+      Continue Watching, the review player and the floating card all call
+      `openPlayerQueue` and never see one.
+    */
+    openPlayerQueueWithAds(sorted, idx, HISTORY_STORY_AD_EVERY);
   };
 
   /*

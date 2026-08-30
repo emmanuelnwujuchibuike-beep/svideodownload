@@ -53,6 +53,8 @@ export const AD_ZONES = [
   "download_preparing",
   // Above the history media grid (2026-08-30).
   "history_above_grid",
+  // Full-screen story ad between history media (2026-08-30).
+  "history_story_ad",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -215,6 +217,7 @@ export const EXOCLICK_ZONES = [
   "reels_interstitial",
   "download_preparing",
   "history_above_grid",
+  "history_story_ad",
 ] as const;
 
 export type ExoClickZoneId = (typeof EXOCLICK_ZONES)[number];
@@ -589,6 +592,20 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     supportsSkip: false,
     // Above the fold on a page people open deliberately, so the zone lookup
     // is warmed with the rest of the page rather than on mount.
+    prefetch: true,
+  },
+  history_story_ad: {
+    label: "History — story ad between media",
+    description:
+      "A full-screen vertical video between saved media on the History page, after every 3 items — the WhatsApp-status shape. Sits INSIDE the safe area rather than under the notch. Side tap advances to the next media, centre tap opens the advertiser. Shows nothing when unseeded, and the queue simply advances as it always did.",
+    // Swiping/tapping past IS the dismissal, exactly as in the reels deck.
+    persistent: true,
+    supportsSkip: false,
+    /*
+      🔴 Prefetched. It has to be ready the instant the third clip ends —
+      resolving it at that moment would mean a black screen for a round trip
+      in the middle of someone paging through their own downloads.
+    */
     prefetch: true,
   },
   exit_intent_popup: {

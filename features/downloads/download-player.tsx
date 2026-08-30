@@ -6,7 +6,16 @@ import { useRouter } from "next/navigation";
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
-import { closePlayer, playerClipEnded, playerNext, playerPrev, usePlayerQueue } from "@/features/downloads/player-store";
+import {
+  closePlayer,
+  playerAdDone,
+  playerClipEnded,
+  playerNext,
+  playerPrev,
+  usePlayerAdPending,
+  usePlayerQueue,
+} from "@/features/downloads/player-store";
+import { StoryAdSlide } from "@/features/monetization/story-ad-slide";
 import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
@@ -37,6 +46,25 @@ async function prefetchMedia(rec: DownloadRecord): Promise<void> {
 
 export function DownloadPlayer() {
   const queue = usePlayerQueue();
+  /*
+    A story ad is HOLDING the advance (history only — see openPlayerQueueWithAds).
+    Rendered as an overlay on top of the still-mounted player rather than as a
+    queue entry, so the queue index keeps meaning exactly what every consumer of
+    this store already assumes it means.
+  */
+  const adPending = usePlayerAdPending();
+  const [storyAdFilled, setStoryAdFilled] = useState<boolean | null>(null);
+  /*
+    An unseeded zone must not strand the visitor on a black screen between two
+    of their own downloads: the moment the slot reports no creative, the advance
+    it was holding is completed.
+  */
+  useEffect(() => {
+    if (adPending && storyAdFilled === false) playerAdDone();
+  }, [adPending, storyAdFilled]);
+  useEffect(() => {
+    if (!adPending) setStoryAdFilled(null);
+  }, [adPending]);
   const rec = queue?.items[queue.index];
 
   // Preload the neighbours (next first, then previous) a beat after the current
@@ -55,7 +83,21 @@ export function DownloadPlayer() {
   }, [queue]);
 
   if (!queue || !rec) return null;
-  return <PlayerInner key={rec.id} rec={rec} index={queue.index} total={queue.items.length} />;
+  return (
+    <>
+      <PlayerInner key={rec.id} rec={rec} index={queue.index} total={queue.items.length} />
+      {/*
+        The story ad sits OVER the player rather than replacing it, so the clip
+        underneath keeps its position and resumes exactly where it was. Rendered
+        here in the outer component because this is where the ad state lives —
+        PlayerInner is keyed per record and would remount the ad on every
+        advance.
+      */}
+      {adPending ? (
+        <StoryAdSlide zone="history_story_ad" onNext={playerAdDone} onResolved={setStoryAdFilled} />
+      ) : null}
+    </>
+  );
 }
 
 /**

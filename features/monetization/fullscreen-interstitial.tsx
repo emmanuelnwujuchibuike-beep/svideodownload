@@ -95,6 +95,32 @@ export function FullscreenInterstitial({
           video now reaches the edges and the control sits on top of it.
         */
         className={cn("pointer-events-none absolute inset-0 flex items-center justify-center", !shown && "hidden")}
+        /*
+          🔴 SAFE AREA, but nothing more (owner, 2026-08-30: "the interstitial
+          ad on pwa goes to the safe area and cropping and stretching too much …
+          it should be as it is on browser").
+
+          Removing the padding outright — the previous fix for "not full screen"
+          — went too far: with no insets the creative ran under the Dynamic
+          Island and the home indicator in the installed PWA, where it was both
+          clipped by the notch and pushed out of shape.
+
+          These are the INSETS ONLY, not the old 4rem/3.5rem chrome allowance
+          that was producing the black border. In a browser every inset is 0, so
+          the stage stays exactly edge to edge there — "as it is on browser" —
+          and on PWA/APK it steps in by precisely the unusable area.
+
+          `--frenz-safe-top` rather than `env(safe-area-inset-top)` because
+          current iOS reports that env as 0 in a standalone PWA. That variable
+          is the project's existing floor for it (globals.css) and is the whole
+          reason chrome elsewhere stopped jamming under the status bar.
+        */
+        style={{
+          paddingTop: "var(--frenz-safe-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }}
       >
         {/* pointer-events re-enabled on the ad itself so the backdrop stays clickable around it. */}
         {/*

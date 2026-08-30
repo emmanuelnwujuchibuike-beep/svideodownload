@@ -295,7 +295,23 @@ export function ExoClickUnit({
           creative's own aspect ratio, so contain fits it exactly with no bars,
           and cover would crop an ad nobody asked to have cropped.
         */
-        className={cn("h-full w-full", fill ? "object-cover" : "object-contain")}
+        /*
+          🔴 COVER only in the REELS deck (owner, 2026-08-30: the interstitial
+          was "cropping and stretching too much").
+
+          Cover crops whatever does not fit. That is right for the reels slide,
+          which is a true full-screen 9:16 stage where letterboxing would break
+          the illusion — and wrong everywhere else, especially the interstitial,
+          whose stage is now inset by the safe area and so crops even harder.
+
+          Decided from the ZONE rather than a prop: it is a property of the
+          surface, and threading a flag through AdSurface and AdSlot to reach
+          here is how the two get out of step.
+        */
+        className={cn(
+          "h-full w-full",
+          fill && zone === "reels_interstitial" ? "object-cover" : "object-contain",
+        )}
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           if (v.videoWidth > 0 && v.videoHeight > 0) setRatio(v.videoWidth / v.videoHeight);

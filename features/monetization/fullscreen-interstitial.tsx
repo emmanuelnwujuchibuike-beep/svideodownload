@@ -6,6 +6,8 @@ import Link from "next/link";
 import type { AdZone } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
+import { Portal } from "@/components/ui/portal";
+
 import { AdSlot } from "./ad-slot";
 
 /**
@@ -41,7 +43,22 @@ export function FullscreenInterstitial({
   remaining?: number;
   upsell?: { text: string; cta: string; href: string };
 }) {
+  /*
+      🔴 PORTALLED (owner, 2026-08-30: "multi link fetch video ad is showing a
+      black background", with a screenshot showing page chrome around it).
+
+      It was not full screen at all. `position: fixed` is resolved against the
+      nearest TRANSFORMED or FILTERED ancestor, not the viewport — and this
+      renders inside the downloader card, which carries `glass`
+      (backdrop-blur), and now also inside a `translateZ(0)` wrapper. So the
+      overlay was trapped inside a card: the black the owner saw was this
+      backdrop painting a card-sized box, with the creative centered in it.
+
+      This is a standing law in this codebase — components/ui/portal.tsx exists
+      precisely because it has been hit three times before. Fourth time.
+  */
   return (
+    <Portal>
     <div
       className={cn(
         "fixed inset-0 z-[60] bg-black transition-opacity duration-200",
@@ -143,5 +160,6 @@ export function FullscreenInterstitial({
         </Link>
       ) : null}
     </div>
+    </Portal>
   );
 }

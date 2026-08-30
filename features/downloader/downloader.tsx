@@ -638,20 +638,24 @@ export function Downloader({
       {metadata ? (
         <div ref={previewRef} className="scroll-mt-24">
           {/*
-            The ExoClick STICKY banner, anchored to the result card.
+            The ExoClick STICKY banner.
 
-            🔴 `transform: translateZ(0)` is load-bearing, not a paint hint. A
-            transformed element becomes the CONTAINING BLOCK for any
-            `position: fixed` descendant, so ExoClick's sticky script — which
-            pins itself to the viewport — is scoped to this box instead of the
-            page. Without it the banner floated over the header and covered the
-            Install button.
+            🔴 The `translateZ(0)` containment is REMOVED (owner, 2026-08-30:
+            "sticky banner is not showing").
 
-            This codebase has hit that rule three times from the other
-            direction (see components/ui/portal.tsx, added because blurred
-            chrome broke `position: fixed`). Here it is used deliberately.
+            It was added to stop the banner floating over the header, by making
+            this wrapper the containing block for its `position: fixed`. That
+            worked too well: the wrapper is a zero-height box in the page flow,
+            so ExoClick pinned the banner inside nothing and it never became
+            visible. Containing a self-positioning unit inside a box with no
+            height is the same class of mistake as reserving a box that never
+            fills.
+
+            It goes back to positioning against the viewport, which is what a
+            sticky banner is FOR. If it lands somewhere unwanted, the answer is
+            ExoClick's own zone placement setting, not a CSS trap on our side.
           */}
-          <div className="relative isolate mb-3 [transform:translateZ(0)]">
+          <div className="mb-3">
             <ExoClickSticky />
           </div>
           <FetchedAd key={`ad-${metadata.id}`} />

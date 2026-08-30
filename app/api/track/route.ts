@@ -24,7 +24,21 @@ export const dynamic = "force-dynamic";
 const schema = z.object({
   kind: z.enum(["impression", "click"]),
   zone: z.enum(AD_ZONES),
-  adId: z.string().uuid().nullable().optional(),
+  /*
+    🔴 NOT `.uuid()` any more (2026-08-30).
+
+    Shared-mode ExoClick slots have no ad ROW, so they carry a synthetic id
+    (`exoclick-shared-<zone>`). That is not a uuid, so the whole payload
+    failed validation and returned 400 — dropping the impression AND the
+    zone with it. `sendBeacon` never surfaces a response, so this was exactly
+    the silent, confident-zero failure the note above describes, reintroduced
+    by a different field.
+
+    Accepted as free text and narrowed below: a real row id is stored, and
+    anything else records against the ZONE with a null id. Losing which row
+    served is a rounding error; losing the impression is the whole number.
+  */
+  adId: z.string().max(80).nullable().optional(),
 });
 
 /** Beacon endpoint for ad impressions/clicks. Rate-limited to resist floods. */
@@ -53,7 +67,17 @@ export async function POST(request: Request) {
     /* anon */
   }
 
-  const { kind, zone, adId } = parsed.data;
+  const { kind, zone } = parsed.data;
+  /*
+    Only a real row id reaches storage — `ad_events.ad_id` references `ads.id`,
+    so a synthetic label would either violate the constraint or pollute the
+    per-row report with a value that resolves to nothing.
+  */
+  const raw = parsed.data.adId ?? null;
+  const adId =
+    raw && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)
+      ? raw
+      : null;
   if (kind === "impression") {
     recordAdImpression(zone, adId ?? null, userId);
   } else {

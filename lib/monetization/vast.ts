@@ -61,6 +61,15 @@ export interface VastCreative {
   clickThrough: string | null;
   /** Fired alongside a click. */
   clickTracking: string[];
+  /**
+   * OUR ad row id, attached by `/api/ads/exoclick` — not part of the VAST.
+   *
+   * Optional because `parseVast` never sets it: the parser only knows what the
+   * network sent. The route adds it on the way out so the client can attribute a
+   * click in our own analytics, and it is a synthetic label rather than a uuid
+   * for shared-mode slots, which have no row.
+   */
+  adId?: string;
 }
 
 /** Pull the text out of an element, whether it is CDATA-wrapped or bare. */

@@ -372,6 +372,25 @@ export function ExoClickUnit({
           aria-label="Visit advertiser"
           onClick={() => {
             pixel(ad.clickTracking);
+            /*
+              Our OWN click beacon, alongside ExoClick's.
+
+              The player owns its click target, so `AdSlot`'s built-in click
+              tracking never saw it — ExoClick's dashboard counted the click
+              and the admin dashboard recorded nothing, which is exactly the
+              kind of divergence that makes an internal report untrustworthy.
+            */
+            try {
+              navigator.sendBeacon?.(
+                "/api/track",
+                new Blob(
+                  [JSON.stringify({ kind: "click", zone, adId: ad.adId ?? null })],
+                  { type: "application/json" },
+                ),
+              );
+            } catch {
+              /* A dropped beacon must never cost the visitor the click-through. */
+            }
             window.open(ad.clickThrough!, "_blank", "noopener,noreferrer");
           }}
           className="absolute inset-0 h-full w-full cursor-pointer"

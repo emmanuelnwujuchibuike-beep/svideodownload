@@ -273,6 +273,27 @@ describe("Ad slots — formats", () => {
     expect(resolveExoClickZoneId({ exoclickSharedZoneId: "" }, "reels_interstitial", null)).toBeNull();
   });
 
+  it("🔴 /api/track accepts a shared-mode ad id instead of dropping the beacon", () => {
+    /*
+     * THE CONFIDENT-ZERO BUG, reintroduced through a different field.
+     *
+     * `adId` was `z.string().uuid()`. Shared-mode ExoClick slots have no ad ROW,
+     * so they send a synthetic `exoclick-shared-<zone>` label — which failed
+     * validation, returned 400, and took the impression AND its zone down with
+     * it. `sendBeacon` never surfaces a response, so every impression and click
+     * on a shared-mode slot was dropped in silence while the dashboard showed a
+     * confident zero. That is the exact failure this route's own header warns
+     * about, one field over.
+     */
+    const src = stripComments(readFileSync(path.join(ROOT, "app/api/track/route.ts"), "utf8"));
+    expect(src, "adId is uuid-only again — shared-mode beacons will 400").not.toMatch(
+      /adId:\s*z\.string\(\)\.uuid\(\)/,
+    );
+    // …and a non-uuid must still be narrowed away before it reaches storage,
+    // because `ad_events.ad_id` references `ads.id`.
+    expect(src).toMatch(/\[0-9a-f\]\{8\}-/);
+  });
+
   it("🔴 classifies EVERY zone as marketing or app", () => {
     /*
      * `ZONE_SURFACE` is what tells an operator whether a Google reviewer can

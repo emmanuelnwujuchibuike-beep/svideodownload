@@ -79,6 +79,15 @@ export function ExoClickUnit({
   const [ad, setAd] = useState<VastCreative | null>(null);
   const [dead, setDead] = useState(false);
   const [muted, setMuted] = useState(true);
+  /**
+   * The box's aspect ratio, as `width / height`.
+   *
+   * Starts at 9/16 — the shape these zones are sold as — and is replaced with
+   * the creative's real ratio the moment metadata arrives. Holding a ratio
+   * rather than letting height be `auto` is what keeps the result section from
+   * jumping when the video resolves.
+   */
+  const [ratio, setRatio] = useState(9 / 16);
   const video = useRef<HTMLVideoElement | null>(null);
   const host = useRef<HTMLDivElement | null>(null);
   /** The last answer given to `onFill`, so it is only re-sent on a real change. */
@@ -192,13 +201,26 @@ export function ExoClickUnit({
       ref={host}
       className={cn(
         "relative overflow-hidden bg-black",
-        fill
-          ? "h-full w-full"
-          : // 9:16, capped so a vertical unit cannot dominate a page that is not
-            // vertical.
-            "mx-auto aspect-[9/16] w-full max-w-[300px] rounded-xl",
+        /*
+          🔴 FULL WIDTH, sized to the CREATIVE'S OWN ASPECT (owner, 2026-08-30:
+          "i want it to be full width like a platform reels … so users can enjoy
+          watching it").
+
+          This was `aspect-[9/16] max-w-[300px]` — a fixed vertical box in a
+          narrow column, which is what made a full-motion video read as a boxed
+          advert rather than something to watch. It now spans its container and
+          takes its height from the video, so there are no letterbox bars at any
+          width and no cropping.
+
+          `aspectRatio` is applied inline from the real dimensions once they are
+          known (see `onLoadedMetadata`), with 9/16 held until then — a plain
+          `h-auto` would collapse to zero height before metadata lands and then
+          snap open, which is a layout shift on the result section.
+        */
+        fill ? "h-full w-full" : "w-full rounded-xl",
         className,
       )}
+      style={fill ? undefined : { aspectRatio: ratio }}
     >
       <video
         ref={video}
@@ -210,6 +232,10 @@ export function ExoClickUnit({
         // Loops are not free impressions: each replay would re-fire nothing (the
         // pixels are latched) but would keep pulling bytes. One play, then stop.
         className="h-full w-full object-contain"
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget;
+          if (v.videoWidth > 0 && v.videoHeight > 0) setRatio(v.videoWidth / v.videoHeight);
+        }}
         onPlaying={() => {
           if (started.current) return;
           started.current = true;

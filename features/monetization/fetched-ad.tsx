@@ -1,7 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -47,7 +46,6 @@ import { useShowAds } from "./use-show-ads";
  */
 export function FetchedAd() {
   const { showAds } = useShowAds();
-  const [visible, setVisible] = useState(true);
   /*
     Three states, not two. `null` is "the slot has not answered yet" and renders
     nothing — starting at `true` is precisely what produced the empty box, and
@@ -74,34 +72,40 @@ export function FetchedAd() {
 
   if (!showAds) return null;
 
-  const show = hasAd === true && visible;
+  const show = hasAd === true;
 
   return (
     <div
-      className={cn("relative mx-auto mt-6 w-full max-w-2xl", !show && "hidden")}
+      /*
+        🔴 FULL-BLEED, NO CHROME (owner, 2026-08-30: "i dont like the video
+        wrapper, i want it to be full width like a platform reels … remove those
+        artificial sponsored, background and X, it should reach full width of the
+        download result section, so users can enjoy watching it").
+
+        Gone: the `max-w-2xl` cap, the bordered gradient card, the padding, the
+        "SPONSORED" caption row and the close button. All of it was framing built
+        for a small banner, and it made a full-motion video look like a boxed
+        advert bolted onto the page instead of something worth watching.
+
+        The unit now spans the result section exactly as a reel does. Its own
+        controls live ON the video — a small "Ad" badge top-left and the mute
+        toggle bottom-right — which is how TikTok and Instagram present a
+        sponsored clip, and is why the disclosure is not lost with the caption.
+      */
+      className={cn("relative mt-6 w-full", !show && "hidden")}
       // `hidden` rather than unmounting: the slot inside must keep its position
       // in the tree so it is never re-requested. Hidden elements are out of the
       // layout entirely, so this reserves no space.
       aria-hidden={!show}
     >
-      <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.06] to-transparent p-3">
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Sponsored
-          </span>
-          <button
-            type="button"
-            onClick={() => setVisible(false)}
-            aria-label="Close"
-            tabIndex={show ? 0 : -1}
-            className="rounded-md p-0.5 text-muted-foreground transition hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        {/* not individually dismissible — the whole banner has its own X + 5s timer */}
-        <AdSlot zone="result_top" dismissible={false} onResolved={setHasAd} />
-      </div>
+      {/*
+        `fullBleed` — the video sizes itself to the section's width and its own
+        aspect, rather than being capped into a narrow column.
+
+        Not dismissible, by explicit instruction: no X here, and `dismissible`
+        stays false so `AdSlot` cannot draw one either.
+      */}
+      <AdSlot zone="result_top" dismissible={false} fullBleed onResolved={setHasAd} />
     </div>
   );
 }

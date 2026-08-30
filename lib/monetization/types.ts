@@ -80,7 +80,18 @@ export type AdZone =
   | "landing_section_break"
   | "multilink_above_batch"
   | "multilink_card_inline"
-  | "reels_interstitial";
+  | "reels_interstitial"
+  /*
+    While a link is being fetched and the file prepared (2026-08-30).
+
+    Owner: play a video in the background as the file is preparing, so the wait
+    is something to watch rather than a spinner. It is NOT a gate — the download
+    never waits on it and it disappears the moment the file is ready.
+
+    ⚠️ Same rule as every note in this union: no semicolon and no double-quoted
+    lowercase word inside a comment here.
+  */
+  | "download_preparing";
 
 export type DeviceType = "mobile" | "desktop";
 

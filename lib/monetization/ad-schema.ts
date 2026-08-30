@@ -49,6 +49,8 @@ export const AD_ZONES = [
   "multilink_above_batch",
   "multilink_card_inline",
   "reels_interstitial",
+  // Plays while a link is fetched / the file prepared (2026-08-30).
+  "download_preparing",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -194,10 +196,22 @@ export const EXOCLICK_PROVIDER_SRC = "https://a.magsrv.com/ad-provider.js";
  */
 export const EXOCLICK_ZONES = [
   "downloader_above_fetch",
+  /*
+    Under the paste box (owner, 2026-08-30: "put an exoclick ad slot under the
+    fetch card"). The slot already existed and every downloader surface already
+    renders it — it simply was not on this list, so the shared Zone ID could
+    never reach it.
+
+    ⚠️ If an Adsterra (or any other) row is active on this zone, THAT row wins:
+    the shared id only ever fills a placement that has nothing in it. Switch the
+    other row off to hand this slot to ExoClick.
+  */
+  "under_download",
   "landing_section_break",
   "multilink_above_batch",
   "multilink_card_inline",
   "reels_interstitial",
+  "download_preparing",
 ] as const;
 
 export type ExoClickZoneId = (typeof EXOCLICK_ZONES)[number];
@@ -547,6 +561,22 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       See features/feed/reel-viewer.tsx.
     */
     prefetch: false,
+  },
+  download_preparing: {
+    label: "While the file is preparing",
+    description:
+      "Plays full-width under the paste box from the moment a link is submitted until the result appears — the wait becomes something to watch instead of a spinner. Never a gate: the fetch does not wait on it, and it disappears the instant the file is ready.",
+    // Not an interruption the visitor should be dismissing — it IS the waiting
+    // state, and it removes itself.
+    persistent: true,
+    supportsSkip: false,
+    /*
+      🔴 Prefetched, unlike every other ExoClick zone. This one has to be ON
+      SCREEN the instant Download is tapped — resolving the zone at that moment
+      would spend a round trip during the very wait it exists to fill, and the
+      creative would arrive about when the result does.
+    */
+    prefetch: true,
   },
   exit_intent_popup: {
     label: "Exit intent",

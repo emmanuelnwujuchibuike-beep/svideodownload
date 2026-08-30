@@ -45,14 +45,64 @@ function createUpstashLimiter(tokens: number, window: `${number} ${"s" | "m" | "
     redis,
     limiter: Ratelimit.slidingWindow(tokens, window),
     prefix: "svd:rl",
-    analytics: true,
+    /*
+      🔴 Analytics OFF (2026-08-30). It writes an EXTRA Redis command per
+      request purely for dashboard counters — on the free tier that is a
+      meaningful share of the request budget being spent on telemetry nobody
+      reads, and the budget running out is what caused the outage below.
+    */
+    analytics: false,
   });
+
+  /*
+    🔴 A LIMITER OUTAGE MUST NOT TAKE THE PRODUCT DOWN (owner, 2026-08-30:
+    "download needs to be back online").
+
+    Upstash hit its monthly request cap. `rl.limit()` then REJECTS, and every
+    caller does a bare `await metadataLimiter.limit(id)` with no try/catch — so
+    the rejection propagated out of the route handler and Next answered 500 with
+    an empty body. Verified against production: `/api/metadata` returned 500 for
+    every input including malformed JSON, i.e. it was crashing before it had
+    even parsed the request. Downloads were completely offline, sitewide, and
+    nothing in the UI could explain it — the user saw "Network error. Please
+    check your connection."
+
+    Falling back to the in-memory limiter is the right failure direction and not
+    merely "fail open": the process still enforces the same per-minute ceiling,
+    it just does so per instance instead of globally. A burst spread across
+    serverless instances could exceed the true limit, which is a far smaller
+    problem than the entire download flow returning 500.
+
+    This is the same lesson as the empty `CRON_SECRET` and the swallowed Resend
+    rejection: infrastructure that fails must degrade visibly, not take a
+    product feature with it.
+  */
+  const fallback = createMemoryLimiter(tokens, windowMs(window));
+  let warned = false;
+
   return {
     async limit(id) {
-      const r = await rl.limit(id);
-      return { success: r.success, remaining: r.remaining, reset: r.reset };
+      try {
+        const r = await rl.limit(id);
+        return { success: r.success, remaining: r.remaining, reset: r.reset };
+      } catch (err) {
+        // Once per instance — a quota outage would otherwise log per request,
+        // which on a busy site is its own incident.
+        if (!warned) {
+          warned = true;
+          console.error("[rate-limit] Upstash unavailable, using in-memory fallback:", err);
+        }
+        return fallback.limit(id);
+      }
     },
   };
+}
+
+/** `"1 m"` → 60000. Keeps the fallback's window identical to the real one. */
+function windowMs(window: `${number} ${"s" | "m" | "h"}`): number {
+  const [n, unit] = window.split(" ") as [string, "s" | "m" | "h"];
+  const mult = unit === "s" ? 1000 : unit === "m" ? 60_000 : 3_600_000;
+  return Number(n) * mult;
 }
 
 /** Minimal in-memory limiter for local development only. */

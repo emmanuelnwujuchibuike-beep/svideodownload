@@ -486,11 +486,22 @@ describe("Ad slots — no decorated empty boxes", () => {
      * most in this file is the one nobody has ever seen fail — and it silently
      * did not work at all until comment-stripping was added.
      */
+    /*
+     * Fixture moved from `fetched-ad.tsx` to `ad-surface.tsx` (2026-08-30).
+     *
+     * FetchedAd stopped being a valid fixture when the owner asked for the
+     * result-page ad to be full-bleed: its card, its "SPONSORED" caption and its
+     * close button were all removed, so it no longer HAS chrome for an absent
+     * collapse mechanism to expose. `AdSurface` is now the canonical
+     * chrome-bearing call site — it draws the label and the card every other
+     * placement inherits — so the proof moves with the pattern rather than the
+     * check quietly passing on a component that can no longer fail it.
+     */
     const src = stripComments(
-      readFileSync(path.join(ROOT, "features/monetization/fetched-ad.tsx"), "utf8"),
+      readFileSync(path.join(ROOT, "features/monetization/ad-surface.tsx"), "utf8"),
     );
     const broken = src.replace(/onResolved=\{[^}]*\}/g, "");
-    expect(/onResolved=/.test(broken), "fixture did not remove the mechanism").toBe(false);
+    expect(/onResolved=\{/.test(broken), "fixture did not remove the mechanism").toBe(false);
     expect(/empty:hidden/.test(broken), "empty:hidden survived comment stripping").toBe(false);
     // …and it still has the chrome that makes the absence a problem.
     expect(/Sponsored|min-h-\[|aria-label="Close ad"/.test(broken)).toBe(true);

@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { SupportedPlatforms } from "@/components/landing/supported-platforms";
+import { AdSurface } from "@/features/monetization/ad-surface";
+import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { MultiLinkButton } from "@/features/downloader/multi-link/multi-link-button";
 import { DEFAULT_MULTI_LINK_PUBLIC, type MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import type { PlatformStatusMap } from "@/lib/platform-status";
@@ -247,6 +249,26 @@ export function DownloadBox({
 
   return (
     <div className="w-full">
+      {/*
+        🔴 The above-the-fetch-box placement, on the surface that actually has
+        the landing's fetch box (2026-08-30).
+
+        It was added to `Downloader` only — which renders on the ~148 generated
+        SEO pages, on /home and in the guest library, but NOT on the marketing
+        landing page. The landing's paste card is THIS component. So the zone the
+        owner asked for ("above the fetch card") rendered on every page except
+        the one they were looking at, and a browser check on `/` found no ad
+        element at all.
+
+        Same zone id as `Downloader`'s, deliberately: it is one placement in the
+        operator's terms — "above the paste box" — and splitting it into two
+        would mean seeding two rows to fill one conceptual slot.
+
+        Only on the CARD surface. On the hero gradient the paste box sits inside
+        a coloured panel where a white ad card has no ground to sit on, and the
+        hero is the LCP element on the page with the 1.6s budget.
+      */}
+      {onCard ? <AdSurface zone="downloader_above_fetch" maxWidth="max-w-2xl" className="mb-4" /> : null}
       <form onSubmit={onSubmit} className={cn("rounded-2xl p-1.5 ring-1 ring-inset", onCard ? "bg-secondary/40 ring-border/60" : "bg-white/10 ring-white/15 backdrop-blur")}>
         <div className="flex flex-col gap-2 sm:flex-row">
           {/*
@@ -338,6 +360,13 @@ export function DownloadBox({
         specifies — not a new dependency for this file.
       */}
       {afterForm}
+
+      {/*
+        The waiting-state video — same placement, same rule, on the landing's
+        paste card. Unmounts the instant the fetch resolves, so it fills the wait
+        and never covers the result.
+      */}
+      <PreparingAd active={isBusy} />
 
       {/*
         The secondary control, directly below the primary paste box, expanding

@@ -28,6 +28,7 @@ import { PublishButton } from "@/features/social/publish-button";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
+import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
@@ -544,6 +545,21 @@ export function Downloader({
         unconfigured site has exactly the layout it had before.
       */}
       {resultOnly ? null : <AdSurface zone="under_download" maxWidth="max-w-2xl" className="mt-5" />}
+
+      {/*
+        The waiting-state video (owner, 2026-08-30: "make an exoclick video play
+        in background as the file is preparing for more interaction").
+
+        Mounted only while a fetch is actually in flight, and unmounted the
+        moment `metadata` lands — so it fills the wait and never sits on top of
+        the result. It is NOT a gate: nothing about the download waits on it,
+        and if the zone is empty the layout is exactly as before.
+
+        Full-bleed rather than the boxed treatment, for the same reason the
+        result-page unit is: at this size a video is something to watch, and the
+        point is to make the wait feel shorter, not to frame an advert.
+      */}
+      <PreparingAd active={isBusy} />
 
       {/*
         A route down to the platform section.

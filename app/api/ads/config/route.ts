@@ -37,6 +37,9 @@ export async function GET() {
   ]);
   return NextResponse.json(
     {
+      /* The interstitial config the lazy client module reads once per page load.
+         Public and non-user-specific, exactly like the skip delay beside it. */
+      vastInterstitial: settings.vastInterstitial,
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

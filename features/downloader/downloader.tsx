@@ -225,6 +225,31 @@ export function Downloader({
     });
     setJustDownloaded(true);
     countDownload();
+
+    /*
+      🔴 THE INTERSTITIAL IS FIRED IN PARALLEL, NEVER AWAITED.
+      (owner brief: "the download must NEVER depend on ExoClick")
+
+      `enqueueDownload` above has ALREADY started the transfer by this point, so
+      the strongest possible guarantee holds by construction rather than by
+      careful timeout handling: there is no branch, anywhere, in which a slow,
+      broken, blocked or absent ad can delay or cancel a download. The worst an
+      ad failure can do is not appear.
+
+      The `import()` is what keeps this off the critical path. Nothing in the
+      interstitial — not the config fetch, not the VAST request, not the player,
+      not a video element — is parsed or executed until this handler runs on a
+      real click, so a cold page load is byte-for-byte unaffected.
+
+      `void` + `.catch` because the module resolves rather than rejects on every
+      expected failure, and an unhandled rejection here would surface as a
+      console error on a path the visitor is not even watching.
+    */
+    void import("@/features/monetization/vast-interstitial/request")
+      .then((m) => m.requestVastInterstitial())
+      .catch(() => {
+        /* An ad that cannot even load its own module is not the visitor's problem. */
+      });
     setSavedContext(
       buildDownloadContext({
         metadata,

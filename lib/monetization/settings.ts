@@ -2,6 +2,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AD_ZONES, isExoClickZone, type AdZoneId } from "./ad-schema";
 import {
+  DEFAULT_VAST_INTERSTITIAL,
+  normalizeVastInterstitial,
+  type VastInterstitialConfig,
+} from "./vast-interstitial";
+import {
   isMonetagAdType,
   isMonetagPlacementId,
   isMonetagSurfaceId,
@@ -334,6 +339,8 @@ export interface MonetizationSettings {
    * pointed somewhere else without abandoning the shared default.
    */
   exoclickSharedZoneId: string;
+  /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
+  vastInterstitial: VastInterstitialConfig;
   /**
    * Whether HD/top-tier downloads require a server-verified reward session at
    * all. Off skips the reward-session flow entirely — `preview-card.tsx` falls
@@ -419,6 +426,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickZones: {},
   // Empty = off. Per-zone ad rows are the default arrangement.
   exoclickSharedZoneId: "",
+  vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,
   rewardHdDailyLimit: 0,
@@ -650,6 +658,9 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
     // or a non-boolean, and a truthy `"false"` would turn a switched-off
     // placement back on.
     merged.exoclickZones = normalizeExoClickZones(merged.exoclickZones);
+    // Clamped on READ as well as on write: a hand-edited blob must never reach
+    // the player as a negative timeout or a 10-minute skip timer.
+    merged.vastInterstitial = normalizeVastInterstitial(merged.vastInterstitial);
     cache = { at: Date.now(), value: merged };
     if (merged.adsensePublisherId.trim()) lastKnownPublisherId = merged.adsensePublisherId.trim();
     return { settings: merged, degraded: false };

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
+import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
 import { setMonetizationSettings } from "@/lib/monetization/settings";
 
@@ -90,6 +91,19 @@ const schema = z.object({
     the same filter again on the way back out.
   */
   exoclickZones: z.record(z.enum(AD_ZONES), z.boolean()).default({}),
+  /* Bounds mirror VAST_LIMITS. Validated server-side per the brief: a negative
+     or absurd value must never reach the player, and a missing block falls back
+     to the safe defaults rather than 400ing an otherwise valid save. */
+  vastInterstitial: z
+    .object({
+      enabled: z.boolean().default(false),
+      enabledOnDownload: z.boolean().default(true),
+      skipEnabled: z.boolean().default(true),
+      skipAfterSeconds: z.number().int().min(0).max(30).default(5),
+      timeoutMs: z.number().int().min(500).max(5000).default(3000),
+      cooldownMs: z.number().int().min(0).max(86400000).default(90000),
+    })
+    .default(DEFAULT_VAST_INTERSTITIAL),
   /*
     One zone id for every ExoClick placement. Empty clears it. Shape-checked
     rather than merely trimmed: the whole snippet pasted in by mistake

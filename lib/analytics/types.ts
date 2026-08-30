@@ -21,6 +21,17 @@ export type AnalyticsEventType =
   | "download_failed"
   | "download_cancelled"
   | "download_retried"
+  // VAST interstitial lifecycle (2026-08-30). Kept as distinct verbs rather
+  // than reusing ad_impression, because the whole point is telling a request
+  // apart from a start apart from a timeout.
+  | "vast_requested"
+  | "vast_loaded"
+  | "vast_started"
+  | "vast_completed"
+  | "vast_skipped"
+  | "vast_closed"
+  | "vast_timeout"
+  | "vast_error"
   | "ad_impression"
   | "ad_click"
   /**

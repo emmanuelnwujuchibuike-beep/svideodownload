@@ -350,6 +350,17 @@ export interface MonetizationSettings {
    * `<ins>` — the markup never reaches the DOM.
    */
   exoclickStickySnippet: string;
+  /**
+   * The ExoClick OUTSTREAM VIDEO snippet for the history slot.
+   *
+   * Same `<ins>` mechanism as the sticky banner and a different product from
+   * the five VAST zones: outstream is filled by ExoClick's own loader rather
+   * than played by our `<video>`. It gets its own field because it is a
+   * different zone with a different class — the owner's three ExoClick tags so
+   * far are `eas6a97888e`, `eas6a97888e17` and `eas6a97888e37`, which is
+   * exactly why none of this is hardcoded.
+   */
+  exoclickHistorySnippet: string;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -438,6 +449,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   // Empty = off. Per-zone ad rows are the default arrangement.
   exoclickSharedZoneId: "",
   exoclickStickySnippet: "",
+  exoclickHistorySnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,

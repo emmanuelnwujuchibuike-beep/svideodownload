@@ -134,7 +134,8 @@ export function MonetizationSettings({
       | "offeriumSdkUrl"
       | "offeriumPublisherId"
       | "offeriumPlacementId"
-      | "exoclickStickySnippet",
+      | "exoclickStickySnippet"
+      | "exoclickHistorySnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
 
@@ -228,6 +229,7 @@ export function MonetizationSettings({
   /* Parsed for the operator's benefit only — the server parses it again on
      the way out, so this can never be the thing that decides what renders. */
   const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
+  const historyTag = parseExoClickSticky(state.exoclickHistorySnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
     const next = { ...state, vastInterstitial: { ...vast, ...patch } };
@@ -429,6 +431,38 @@ export function MonetizationSettings({
               <AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an
               eas… class from that — the banner will not show.
             </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
+          )}
+        </div>
+      </div>
+
+      {/*
+        HISTORY OUTSTREAM VIDEO. Same <ins> mechanism as the sticky banner
+        above, different ExoClick product and a different zone — outstream is
+        filled and played by their loader, so it does not go through the VAST
+        pipeline the five vertical zones use.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">History — outstream video</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Shown full width on the History page, directly under the column-count control.
+          Paste the ExoClick <strong>Outstream Video</strong> zone snippet. Gated by the
+          {" "}<strong>ExoClick</strong> switch above.
+        </p>
+        <textarea
+          value={state.exoclickHistorySnippet ?? ""}
+          disabled={busy}
+          onChange={(e) => setText("exoclickHistorySnippet", e.target.value)}
+          placeholder={'<ins class="eas6a97888e37" data-zoneid="6015590"></ins>'}
+          className="min-h-[70px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => void persist(state)} className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">Save</button>
+          {historyTag ? (
+            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Read zone {historyTag.zoneId} · class {historyTag.cls}</span>
+          ) : state.exoclickHistorySnippet?.trim() ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
           ) : (
             <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
           )}

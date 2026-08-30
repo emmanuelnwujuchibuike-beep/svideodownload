@@ -60,7 +60,16 @@ declare global {
   }
 }
 
-export function ExoClickSticky() {
+/**
+ * Which configured ins-tag this instance renders.
+ *
+ * `sticky` pins itself to the viewport; `history` is an outstream video that
+ * sits in the page. Both are the same ExoClick DISPLAY mechanism — an <ins>
+ * their loader fills — so they share one component rather than two that drift.
+ */
+export type ExoClickInsSlot = "sticky" | "history";
+
+export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } = {}) {
   /*
     Resolves its OWN tag from the public config rather than taking a prop.
     The furniture that mounts it is shared by ~150 marketing routes, and
@@ -72,8 +81,8 @@ export function ExoClickSticky() {
     let alive = true;
     fetch("/api/ads/config")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { exoclickSticky?: ExoClickStickyTag | null }) => {
-        if (alive) setTag(d.exoclickSticky ?? null);
+      .then((d: Record<string, ExoClickStickyTag | null | undefined>) => {
+        if (alive) setTag((slot === "history" ? d.exoclickHistory : d.exoclickSticky) ?? null);
       })
       .catch(() => {
         /* No sticky banner is the safe outcome. */
@@ -81,7 +90,7 @@ export function ExoClickSticky() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [slot]);
 
   const { showAds, ready } = useShowAds();
   const host = useRef<HTMLModElement | null>(null);
@@ -130,7 +139,7 @@ export function ExoClickSticky() {
         to the result card it is the opposite: it needs its own space above the
         thumbnail, or the creative would overlap the video it sits on top of.
       */
-      style={{ display: "block" }}
+      style={{ display: "block", width: "100%" }}
     />
   );
 }

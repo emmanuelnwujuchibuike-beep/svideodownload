@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { AdSurface } from "@/features/monetization/ad-surface";
+import { ExoClickSticky } from "@/features/monetization/exoclick-sticky";
 import { type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
@@ -333,6 +334,22 @@ export function MediaGallery({
         it collapses to nothing when unseeded, so a site without ExoClick sees
         the gallery it always had.
       */}
+      {/*
+        🔴 An ExoClick OUTSTREAM VIDEO tag, not the VAST surface (owner,
+        2026-08-30: "make the history above the grid to use this style of ad
+        format, outstream video").
+
+        Outstream is ExoClick's DISPLAY product — their loader fills an <ins>
+        and manages the player itself — so it does not go through the VAST
+        pipeline the five vertical zones use. Full width, in the page's flow,
+        directly under the column-count control.
+
+        The `history_above_grid` zone stays declared: an operator can still
+        seed it with any other format, and this tag simply renders above it.
+      */}
+      <div className="mb-4 w-full">
+        <ExoClickSticky slot="history" />
+      </div>
       <AdSurface zone="history_above_grid" fullBleed className="mb-4" />
 
       {sorted.length === 0 ? (

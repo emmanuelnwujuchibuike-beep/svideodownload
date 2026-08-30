@@ -47,6 +47,7 @@ export async function GET() {
         must not travel to a browser as markup.
       */
       exoclickSticky: parseExoClickSticky(settings.exoclickStickySnippet),
+      exoclickHistory: parseExoClickSticky(settings.exoclickHistorySnippet),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

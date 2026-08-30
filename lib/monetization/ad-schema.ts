@@ -136,9 +136,15 @@ export const AD_FORMAT_META: Record<AdFormatId, AdFormatMeta> = {
       "Runs in the page rather than a frame, which is what Social Bar and similar units need to attach themselves. Requires the in-page script switch to be on.",
   },
   exoclick: {
-    label: "ExoClick zone (vertical video)",
+    label: "ExoClick VIDEO zone (VAST)",
+    /*
+      The label and this text both name VAST explicitly, because ExoClick sells
+      two products behind one number and the difference is invisible from the id.
+      Picking the wrong one produces silence, not an error — which is exactly
+      what happened the first time this shipped.
+    */
     description:
-      "Just the numeric Zone ID from your ExoClick dashboard — paste it into the slot/zone id field. Renders a 9:16 vertical unit. Requires the ExoClick switch in Ad settings to be on, which it is NOT by default.",
+      "For an ExoClick VIDEO zone — the kind whose tag looks like s.magsrv.com/v1/vast.php?idzone=1234567. Paste only the number. Plays as a 9:16 vertical video with sound off until tapped. For an ExoClick BANNER zone instead, use Banner (iframe) and paste its whole <ins> snippet. Requires the ExoClick switch in Ad settings, which is OFF by default.",
   },
 };
 

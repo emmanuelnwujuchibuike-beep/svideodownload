@@ -536,9 +536,12 @@ function AdForm({
               deliberately so.
             */}
             <p className="sm:col-span-2 self-end text-xs leading-relaxed text-muted-foreground">
-              Just the <strong className="text-foreground">number</strong> from the Zone ID column in
-              your ExoClick dashboard — not the <code className="font-mono">&lt;ins&gt;</code> snippet.
-              Renders a 9:16 vertical unit.
+              Just the <strong className="text-foreground">number</strong> — from a VIDEO zone, whose
+              tag looks like{" "}
+              <code className="font-mono">s.magsrv.com/v1/vast.php?idzone=1234567</code>. Plays as a
+              9:16 vertical video, muted until tapped. A <strong>banner</strong> zone is a different
+              ExoClick product: for those pick <em>Banner (iframe)</em> and paste the whole{" "}
+              <code className="font-mono">&lt;ins&gt;</code> snippet instead.
               <br />
               <strong className="text-amber-600 dark:text-amber-400">
                 Nothing serves until you turn on ExoClick

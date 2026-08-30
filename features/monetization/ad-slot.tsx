@@ -388,23 +388,23 @@ export function AdSlot({
   }
 
   /*
-    ExoClick — an `<ins>` placeholder plus a shared loader, in the top-level
-    document.
+    ExoClick — a VIDEO zone, played from its VAST response.
 
-    Like AdSense (and unlike `display`), it cannot go in the sandboxed frame:
-    the loader fills placeholders it finds in the document it runs in, so a
-    per-slot iframe would mean a duplicate copy of that loader for every unit on
-    the page. The zone id is the only field it needs — see `ExoClickUnit`.
+    The zone id is NOT passed down: `ExoClickUnit` asks `/api/ads/exoclick` for
+    this zone by name, and the server resolves the id, fetches the VAST document
+    (which has no CORS header, so the browser cannot) and returns a playable
+    creative. Passing the id to the client would also make the endpoint an open
+    relay for arbitrary ExoClick inventory.
 
-    Server-gated by the `exoclick` switch, which is off by default, so reaching
-    this branch at all means an operator deliberately enabled the network.
+    Server-gated by the `exoclick` switch and this zone's own switch, both off by
+    default, so reaching this branch means an operator deliberately opted in.
   */
   if (ad.format === "exoclick" && ad.adSlotId) {
     return (
       <div ref={hostRef} className={cn("relative flex justify-center", className)}>
         {closeBtn}
         <ExoClickUnit
-          zoneId={ad.adSlotId}
+          zone={zone}
           fill={fullBleed}
           className="w-full"
           /* The real answer for this format — see the fetch above. */

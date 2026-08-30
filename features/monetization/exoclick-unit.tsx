@@ -1,224 +1,261 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { EXOCLICK_INS_CLASS, EXOCLICK_PROVIDER_SRC } from "@/lib/monetization/ad-schema";
+import type { VastCreative } from "@/lib/monetization/vast";
 import { cn } from "@/lib/utils";
 
 /**
- * One ExoClick zone, rendered as a 9:16 vertical unit.
+ * One ExoClick VIDEO zone, played from its VAST response.
  *
- * ── Why this is not a `display` row in an iframe ──────────────────────────────
+ * ── What this replaced, and why ───────────────────────────────────────────────
  *
- * ExoClick's embed is three parts that only work together: a loader script, an
- * `<ins>` placeholder carrying the zone id, and a `push` that tells the loader
- * to go and fill every placeholder it can find. Pasted whole into a `display`
- * placement it would technically run — the srcdoc frame is self-contained — but
- * every slot would then load its own copy of the loader, which on a landing page
- * carrying eight section-break slots is eight duplicate third-party scripts on
- * the one route with a hard cold-entry budget.
+ * The first version rendered ExoClick's `<ins class="eas…">` display tag and
+ * loaded `ad-provider.js`. That is a real ExoClick product — just not the one
+ * the owner's zone is. Their zone answers on `s.magsrv.com/v1/vast.php`, which
+ * is the VIDEO product: XML describing a creative, inert without a player. The
+ * provider script duly loaded, called its API, found no placeholder it
+ * recognised, and rendered nothing, with no error anywhere. Since the ask was
+ * for vertical VIDEO ads from the start, VAST is the right pipeline.
  *
- * So the loader is a module-level singleton, shared by every unit on the page,
- * and each unit contributes only its own `<ins>`.
+ * An ExoClick BANNER zone is still perfectly serviceable today — paste its
+ * `<ins>` snippet into a `display` placement, which renders it in the sandboxed
+ * iframe like every other network's banner code.
  *
- * ── The operator only ever types a zone id ───────────────────────────────────
+ * ── The player is deliberately small ──────────────────────────────────────────
  *
- * The whole snippet is reconstructed here from one number. That is the
- * difference between an operator pasting five snippets into five zones (and one
- * of them silently being the wrong product, which is the mistake
- * `looksLikeHijackScript` exists to catch for the other networks) and typing
- * five numbers.
+ * A plain `<video>` on a progressive MP4. No IMA SDK, no VAST library: the
+ * parser picked a progressive file precisely so nothing more is needed, and the
+ * brief said not to add dependencies. What it does implement is the part that
+ * pays — the impression and quartile pixels, and the click-through — because an
+ * ad that plays without reporting is an ad that earns nothing.
  */
 
-/* -------------------------------- the loader ------------------------------- */
+/** VAST quartile events, as fractions of duration. */
+const QUARTILES: [number, string][] = [
+  [0.25, "firstQuartile"],
+  [0.5, "midpoint"],
+  [0.75, "thirdQuartile"],
+];
 
-declare global {
-  interface Window {
-    AdProvider?: unknown[];
+/** Fire a tracking pixel. Image, not fetch — no CORS, no preflight, fire-and-forget. */
+function pixel(urls: string[] | undefined) {
+  for (const url of urls ?? []) {
+    try {
+      const img = new Image();
+      img.referrerPolicy = "no-referrer-when-downgrade";
+      img.src = url;
+    } catch {
+      /* A tracking pixel must never be able to break playback. */
+    }
   }
 }
-
-/**
- * The single in-flight/settled load of ExoClick's provider script.
- *
- * Module scope, so N units on a page share one script tag and one promise. Not
- * reset on unmount: the script stays in the document once loaded, exactly as a
- * `<script async>` in the markup would, and re-adding it per mount is what would
- * make a Reels deck accumulate a tag per ad slide.
- */
-let providerPromise: Promise<boolean> | null = null;
-
-function loadProvider(): Promise<boolean> {
-  if (providerPromise) return providerPromise;
-
-  providerPromise = new Promise<boolean>((resolve) => {
-    if (typeof document === "undefined") {
-      resolve(false);
-      return;
-    }
-    // Already present (a previous load, or a hand-placed tag) — nothing to do.
-    if (document.querySelector(`script[src="${EXOCLICK_PROVIDER_SRC}"]`)) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.async = true;
-    script.type = "application/javascript";
-    script.src = EXOCLICK_PROVIDER_SRC;
-    /*
-      Resolves FALSE on error rather than rejecting, and an ad blocker is the
-      common case rather than an exceptional one. A rejection here would leave
-      every waiting unit in its unresolved state forever, which is precisely the
-      "decorated box around nothing" the ad-slot suite exists to prevent — the
-      unit needs to hear "no" so it can collapse.
-    */
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
-
-  return providerPromise;
-}
-
-/** Ask ExoClick to fill every placeholder it has not filled yet. */
-function serve(): void {
-  try {
-    (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
-  } catch {
-    /* A malformed provider must never take a page down over an ad. */
-  }
-}
-
-/* --------------------------------- the unit -------------------------------- */
-
-/**
- * How long to wait for a creative before declaring the slot empty.
- *
- * ExoClick answers in well under a second on a warm connection, but a cold
- * mobile connection plus the loader's own round trip can genuinely take a few.
- * Too short reports a real ad as absent (and collapses a card that was about to
- * fill); too long leaves a reserved box open on a slot that will never fill.
- */
-const FILL_TIMEOUT_MS = 6000;
 
 export function ExoClickUnit({
-  zoneId,
+  zone,
   /**
-   * Fill the parent instead of sitting in a constrained column.
-   *
-   * The Reels slide is a full-screen 9:16 surface and should use all of it; the
-   * in-page placements are 9:16 inside a page that is not, so they cap their
-   * width and centre. One prop rather than two components because everything
-   * else about them — the loader, the serve call, the fill detection — is
-   * identical, and a second component is how the two drift.
+   * Fill the parent instead of sitting in a constrained column. The Reels slide
+   * owns a whole 9:16 screen; the in-page placements sit in a page that is not
+   * vertical, so they cap their width and centre.
    */
   fill = false,
   className,
   onFill,
 }: {
-  zoneId: string;
+  /** OUR zone name. The ExoClick zone id is resolved server-side. */
+  zone: string;
   fill?: boolean;
   className?: string;
   /**
-   * Reports whether a creative actually arrived.
+   * Whether a creative actually arrived AND started playing.
    *
-   * Mirrors `AdSenseUnit`'s `onFill` and exists for the same reason: a
-   * CONFIGURED zone is not a filled one. ExoClick returns nothing when it has no
-   * demand for the geo/device, and the `<ins>` simply stays empty — so the only
-   * honest answer comes from watching the element, not from the row.
+   * Reported late and honestly: a configured zone is not a filled one, and a
+   * VAST document that parses is still not a video that plays. Everything
+   * upstream — the "Sponsored" card, the reels slide — collapses on `false`.
    */
   onFill?: (filled: boolean) => void;
 }) {
-  const host = useRef<HTMLModElement | null>(null);
+  const [ad, setAd] = useState<VastCreative | null>(null);
+  const [dead, setDead] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const video = useRef<HTMLVideoElement | null>(null);
+  const host = useRef<HTMLDivElement | null>(null);
   const answered = useRef(false);
-  const [failed, setFailed] = useState(false);
+  const started = useRef(false);
+  const fired = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    answered.current = false;
-    setFailed(false);
-    const el = host.current;
-    if (!el) return;
-
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let observer: MutationObserver | null = null;
-
-    const answer = (filled: boolean) => {
-      if (!alive || answered.current) return;
+  const answer = useCallback(
+    (filled: boolean) => {
+      if (answered.current) return;
       answered.current = true;
-      if (timer) clearTimeout(timer);
-      observer?.disconnect();
-      if (!filled) setFailed(true);
+      if (!filled) setDead(true);
       onFill?.(filled);
-    };
+    },
+    // `onFill` is an inline arrow at every call site; including it would restart
+    // the effect below on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
-    void loadProvider().then((ok) => {
-      if (!alive) return;
-      if (!ok) {
-        // Blocked or offline. Collapse rather than hold a box open.
-        answer(false);
-        return;
-      }
-
-      /*
-        Fill is detected by WATCHING THE ELEMENT, because nothing else can tell
-        us. ExoClick injects an iframe (or nothing at all) into the `<ins>`
-        asynchronously and provides no callback, so the presence of a child node
-        is the only signal that a creative exists. Without this the surrounding
-        "Sponsored" card would render around an empty box on every unfilled
-        slot — the exact bug lib/monetization/ad-slots.test.ts pins.
-      */
-      if (el.childElementCount > 0) {
-        answer(true);
-        return;
-      }
-      observer = new MutationObserver(() => {
-        if (el.childElementCount > 0) answer(true);
+  // ── Resolve the creative ──────────────────────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`)
+      .then((r) => (r.ok ? r.json() : { ad: null }))
+      .then((d: { ad: VastCreative | null }) => {
+        if (!alive) return;
+        if (!d.ad?.mediaUrl) {
+          answer(false);
+          return;
+        }
+        setAd(d.ad);
+      })
+      .catch(() => {
+        if (alive) answer(false);
       });
-      observer.observe(el, { childList: true });
-      timer = setTimeout(() => answer(false), FILL_TIMEOUT_MS);
-
-      serve();
-    });
-
     return () => {
       alive = false;
-      if (timer) clearTimeout(timer);
-      observer?.disconnect();
     };
-    // `onFill` deliberately omitted: an inline arrow from the parent changes
-    // identity every render and would restart the whole load/serve cycle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zoneId]);
+  }, [zone, answer]);
 
-  // Nothing arrived — render no box at all, so the parent's card collapses with
+  // ── Play only once it is actually on screen ───────────────────────────────
+  /*
+    An autoplaying video that starts below the fold burns the advertiser's
+    impression on nobody and burns the visitor's data on nothing. It also fires
+    an impression pixel for a view that did not happen, which is the kind of
+    thing that gets a publisher account reviewed.
+  */
+  useEffect(() => {
+    const el = video.current;
+    const box = host.current;
+    if (!ad || !el || !box) return;
+
+    const tryPlay = () => {
+      // Muted is not a preference, it is the only autoplay browsers permit.
+      el.muted = true;
+      void el.play().catch(() => {
+        /* Blocked anyway — the poster frame stays, and `onError` handles a
+           genuinely broken file. Not treated as no-fill: the creative is there. */
+      });
+    };
+
+    if (typeof IntersectionObserver === "undefined") {
+      tryPlay();
+      return;
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) tryPlay();
+          else el.pause();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    obs.observe(box);
+    return () => obs.disconnect();
+  }, [ad]);
+
+  // Nothing to show — render no box at all, so the parent's card collapses with
   // it rather than framing an empty 9:16 hole.
-  if (failed) return null;
+  if (dead || !ad) return null;
 
   return (
     <div
+      ref={host}
       className={cn(
-        "relative overflow-hidden",
+        "relative overflow-hidden bg-black",
         fill
           ? "h-full w-full"
-          : // 9:16, capped so a vertical unit cannot dominate a page that is
-            // not vertical. 300px wide is ExoClick's own smallest vertical
-            // display size, which keeps the creative at its native scale.
+          : // 9:16, capped so a vertical unit cannot dominate a page that is not
+            // vertical.
             "mx-auto aspect-[9/16] w-full max-w-[300px] rounded-xl",
         className,
       )}
     >
-      {/*
-        `<ins>` with ExoClick's class and the zone id — the exact placeholder
-        their loader looks for. Rendered as a real element from a validated
-        numeric id rather than injected as markup, so an admin field can never
-        become a script on the page.
-      */}
-      <ins
-        ref={host}
-        className={`${EXOCLICK_INS_CLASS} block h-full w-full`}
-        data-zoneid={zoneId}
+      <video
+        ref={video}
+        src={ad.mediaUrl}
+        muted={muted}
+        playsInline
+        autoPlay
+        preload="metadata"
+        // Loops are not free impressions: each replay would re-fire nothing (the
+        // pixels are latched) but would keep pulling bytes. One play, then stop.
+        className="h-full w-full object-contain"
+        onPlaying={() => {
+          if (started.current) return;
+          started.current = true;
+          // The impression belongs to the moment pixels actually moved, not to
+          // the moment the row was fetched.
+          pixel(ad.impressions);
+          pixel(ad.tracking.start);
+          answer(true);
+        }}
+        onTimeUpdate={(e) => {
+          const el = e.currentTarget;
+          const total = ad.durationSeconds || el.duration;
+          if (!total || !Number.isFinite(total)) return;
+          for (const [at, event] of QUARTILES) {
+            if (el.currentTime >= total * at && !fired.current.has(event)) {
+              fired.current.add(event);
+              pixel(ad.tracking[event]);
+            }
+          }
+        }}
+        onEnded={() => {
+          if (fired.current.has("complete")) return;
+          fired.current.add("complete");
+          pixel(ad.tracking.complete);
+        }}
+        /* A creative that 404s or will not decode is a no-fill, not a black box. */
+        onError={() => answer(false)}
       />
+
+      {/*
+        The click-through, as a real overlay button rather than a handler on the
+        <video>. A bare video click is also the platform's play/pause gesture, so
+        putting navigation on it would hijack the one control the visitor
+        expects. `noopener` because the destination is a third party.
+      */}
+      {ad.clickThrough ? (
+        <button
+          type="button"
+          aria-label="Visit advertiser"
+          onClick={() => {
+            pixel(ad.clickTracking);
+            window.open(ad.clickThrough!, "_blank", "noopener,noreferrer");
+          }}
+          className="absolute inset-0 h-full w-full cursor-pointer"
+        />
+      ) : null}
+
+      {/*
+        Sound is OFF and stays off until asked. Autoplaying audio over a page
+        someone is reading — or over a reel they are already listening to — is
+        the single most hostile thing a video ad can do.
+      */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          const el = video.current;
+          if (!el) return;
+          const next = !muted;
+          setMuted(next);
+          el.muted = next;
+          if (!next) void el.play().catch(() => {});
+        }}
+        aria-label={muted ? "Unmute ad" : "Mute ad"}
+        className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/75"
+      >
+        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+      </button>
+
+      <span className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/85">
+        Ad
+      </span>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
+import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
 import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -11,6 +13,15 @@ import { resolutionBadge, wallpaperCredit, type Wallpaper, type WallpaperComment
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
+
+/**
+ * An ad after every N wallpapers — the same number the reels deck uses.
+ *
+ * Deliberately the same promise on both surfaces: the owner asked for one
+ * shared ad system, and a different cadence on each would be a difference
+ * nobody asked for.
+ */
+const WALLPAPER_AD_EVERY = 3;
 
 /**
  * The wallpaper reels viewer — full-bleed, edge to edge, one wallpaper per
@@ -131,6 +142,32 @@ export function WallpaperReels({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(startIndex);
+  /*
+    🔴 The wallpaper ad SHARES the reels zone (owner, 2026-08-30: "make same
+    reels style ad full to be in wallpaper page, they should both share one ad
+    zone id and slot style and everything").
+
+    Same zone id, same component, same cadence — so a change to one is a
+    change to both, which is the whole point of sharing rather than copying.
+
+    Like the history story ad, it is NOT spliced into `items`. This viewer
+    drives `index` from an IntersectionObserver over real DOM children, so an
+    injected slide would desync the observer's `data-i` from the array — the
+    same index-space bug the reels deck hit three times. Instead the ad is an
+    OVERLAY that appears when a boundary is crossed and dismisses back to the
+    wallpaper the visitor was already on.
+  */
+  const [adAt, setAdAt] = useState<number | null>(null);
+  /*
+    The wallpaper waiting on the reward gate.
+
+    🔴 The download is HELD, not cancelled, and never lost: whatever the gate
+    does — runs, fails, finds no creative — `release` fires and the file
+    downloads. A reward that can strand someone between a tap and their file
+    is worse than no reward at all.
+  */
+  const [pendingDownload, setPendingDownload] = useState<(typeof items)[number] | null>(null);
+  const adShown = useRef<Set<number>>(new Set());
   const [state, setState] = useState<Record<string, { liked: boolean; saved: boolean; likes: number }>>(() =>
     Object.fromEntries(items.map((w) => [w.id, { liked: !!w.viewerLiked, saved: !!w.viewerSaved, likes: w.likes }])),
   );
@@ -194,6 +231,15 @@ export function WallpaperReels({
             if (!Number.isNaN(i)) {
               setIndex(i);
               countView(items[i]);
+              /*
+                Every Nth wallpaper reached, latched per position so scrolling
+                back and forth over one boundary cannot replay the same ad.
+                Counted on ARRIVAL, so it reads as "3 wallpapers, then an ad".
+              */
+              if (i > 0 && i % WALLPAPER_AD_EVERY === 0 && !adShown.current.has(i)) {
+                adShown.current.add(i);
+                setAdAt(i);
+              }
             }
           }
         }
@@ -348,6 +394,34 @@ export function WallpaperReels({
         ref={scroller}
         className="h-[100dvh] w-full snap-y snap-mandatory overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
+        {/*
+          The SAME slide the reels deck renders — one zone, one look, one place
+          to change either.
+        */}
+        {/*
+          The rewarded gate for a wallpaper download. Which network fills it is
+          set per moment in Reward networks, so pointing it at Offerium later
+          needs no change here.
+        */}
+        <WallpaperRewardGate
+          open={pendingDownload !== null}
+          onDone={() => {
+            const w = pendingDownload;
+            setPendingDownload(null);
+            if (w) onDownload(w);
+          }}
+        />
+        {adAt !== null ? (
+          <div className="fixed inset-0 z-[80]">
+            <ReelsAdSlide />
+            <button
+              type="button"
+              aria-label="Continue"
+              onClick={() => setAdAt(null)}
+              className="absolute inset-x-0 bottom-0 z-10 h-24 w-full bg-transparent"
+            />
+          </div>
+        ) : null}
         {items.map((w, i) => (
           <div
             key={w.id}
@@ -538,7 +612,7 @@ export function WallpaperReels({
         {/* One full-width primary action, as in the reference. */}
         <button
           type="button"
-          onClick={() => onDownload(current)}
+          onClick={() => setPendingDownload(current)}
           className="pointer-events-auto mt-3 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-[#2563FF] to-[#6D5CFF] px-5 py-3.5 text-base font-bold text-white shadow-[0_10px_30px_-10px_rgba(37,99,255,0.9)] ring-1 ring-inset ring-white/20 transition active:scale-[0.98]"
         >
           <Download className="h-5 w-5" />

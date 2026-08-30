@@ -111,7 +111,16 @@ export type AdZone =
     ⚠️ Same rule as every note in this union: no semicolon and no
     double-quoted lowercase word inside a comment here.
   */
-  | "history_story_ad";
+  | "history_story_ad"
+  /*
+    A short rewarded full-screen ad when a wallpaper download is tapped
+    (2026-08-30). Routed per MOMENT by reward-networks, so it can be pointed at
+    Offerium once that is approved without touching the gate.
+
+    ⚠️ Same rule as every note in this union: no semicolon and no
+    double-quoted lowercase word inside a comment here.
+  */
+  | "wallpaper_reward";
 
 export type DeviceType = "mobile" | "desktop";
 

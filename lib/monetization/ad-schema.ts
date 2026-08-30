@@ -55,6 +55,8 @@ export const AD_ZONES = [
   "history_above_grid",
   // Full-screen story ad between history media (2026-08-30).
   "history_story_ad",
+  // Rewarded gate on a wallpaper download (2026-08-30).
+  "wallpaper_reward",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -218,6 +220,7 @@ export const EXOCLICK_ZONES = [
   "download_preparing",
   "history_above_grid",
   "history_story_ad",
+  "wallpaper_reward",
 ] as const;
 
 export type ExoClickZoneId = (typeof EXOCLICK_ZONES)[number];
@@ -606,6 +609,16 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       resolving it at that moment would mean a black screen for a round trip
       in the middle of someone paging through their own downloads.
     */
+    prefetch: true,
+  },
+  wallpaper_reward: {
+    label: "Wallpaper download reward",
+    description:
+      "A short full-screen video when a wallpaper download is tapped, in the same style as the reels ad. Which NETWORK fills it is set per moment in Reward networks, so it can be switched to Offerium once that is approved. Never blocks the download: an unseeded zone or a creative that does not arrive releases the file immediately.",
+    persistent: false,
+    // The visitor waits through it, so skippable / skip_after_seconds apply.
+    supportsSkip: true,
+    // Must be on screen the instant Download is tapped.
     prefetch: true,
   },
   exit_intent_popup: {

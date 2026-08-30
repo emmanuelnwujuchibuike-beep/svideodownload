@@ -50,11 +50,24 @@ export function WallpaperRewardGate({
   const [remaining, setRemaining] = useState(seconds);
   const [hasAd, setHasAd] = useState<boolean | null>(null);
 
-  // Reset per open, so a second download gets its own countdown.
+  /*
+    Reset the COUNTDOWN per open, so a second download gets its own.
+
+    🔴 But NOT `hasAd` (owner, 2026-08-30: "wallpaper download button takes time
+    to fire, when i click on download, it takes time before it loads").
+
+    Resetting it to null threw away the answer the prefetch had already
+    obtained, and `AdSlot` resolves once — it does not re-answer for a slot it
+    has already reported on. So from the second tap onward `hasAd` was stuck at
+    null, which meant two things at once: the fail-open timer below took its
+    full 2.5s unresolved path before releasing the download, and `shown` (which
+    requires `=== true`) never became true, so the ad it had just buffered never
+    appeared either. The whole point of mounting this early is that the answer
+    is already in hand by the time anyone taps.
+  */
   useEffect(() => {
     if (!open) return;
     setRemaining(seconds);
-    setHasAd(null);
   }, [open, seconds]);
 
   // The countdown only runs while a creative is actually on screen — counting

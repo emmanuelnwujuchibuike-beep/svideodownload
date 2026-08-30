@@ -6,6 +6,7 @@ import {
   EXOCLICK_PROVIDER_SRC,
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
+import { cn } from "@/lib/utils";
 
 import { useShowAds } from "./use-show-ads";
 
@@ -172,7 +173,25 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
   return (
     <ins
       ref={host}
-      className={tag.cls}
+      /*
+        🔴 CENTRE AND WIDEN WHAT THE LOADER INJECTS (owner, 2026-08-30: "center
+        this banner and make it have more width to reach full width").
+
+        We do not control the creative's markup — ExoClick's loader injects it —
+        and a fixed-size native unit lands hard LEFT inside a full-width <ins>,
+        with the artwork at its natural size rather than the container's. So the
+        centring and the widening have to be applied to whatever arrives:
+        `mx-auto` on the injected children, and a full-width rule on the iframe
+        or image the creative is actually made of.
+
+        Scoped to the history slot. The sticky banner is positioned by the
+        network against the viewport and must keep its own size and placement.
+      */
+      className={cn(
+        tag.cls,
+        slot === "history" &&
+          "text-center [&>*]:!mx-auto [&_iframe]:!w-full [&_img]:!h-auto [&_img]:!w-full",
+      )}
       data-zoneid={tag.zoneId}
       /*
         🔴 The HISTORY slot needs a SIZED box (owner, 2026-08-30: "download
@@ -192,9 +211,16 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
 
         The STICKY slot keeps no size at all: it pins itself and must add no box.
       */
+      /*
+        🔴 A FLOOR, NOT A FIXED ASPECT. `aspectRatio: 16/9` was right for an
+        outstream VIDEO, but the zone also serves fixed-size NATIVE units, and
+        forcing 16:9 onto a taller creative crops it. `minHeight` still gives an
+        outstream player a box to initialise in, and content decides the rest —
+        which is the same "height is earned" rule the fill detection follows.
+      */
       style={
         slot === "history" && filled
-          ? { display: "block", width: "100%", aspectRatio: "16 / 9", minHeight: 180 }
+          ? { display: "block", width: "100%", minHeight: 180 }
           : { display: "block", width: "100%" }
       }
     />

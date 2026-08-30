@@ -362,7 +362,20 @@ export function MediaGallery({
         The `history_above_grid` zone stays declared: an operator can still
         seed it with any other format, and this tag simply renders above it.
       */}
-      <div className="mb-4 w-full">
+      {/*
+        🔴 FULL-BLEED AND CENTRED (owner, 2026-08-30: "center this banner and
+        make it have more width to reach full width with px 1.5").
+
+        The gallery sits in `mx-auto max-w-6xl px-2 sm:px-4`, so the banner was
+        inset by the page gutter AND the creative — a fixed-size native unit —
+        sat hard left inside a full-width <ins>, which is what read as "not
+        centred, not full width".
+
+        The negative margin cancels exactly the gutter this is nested in, then
+        `px-1.5` puts back the 6px the owner asked for. Kept in step with the
+        container above: if that padding changes, this has to change with it.
+      */}
+      <div className="-mx-2 mb-4 px-1.5 sm:-mx-4">
         <ExoClickSticky slot="history" />
       </div>
       {/*

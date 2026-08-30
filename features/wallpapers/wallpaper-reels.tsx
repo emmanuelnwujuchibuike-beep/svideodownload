@@ -166,6 +166,8 @@ export function WallpaperReels({
     empty one, exactly as the reels deck does it.
   */
   const [adSeeded, setAdSeeded] = useState(false);
+  /** True while the slide on screen is the ad rather than a wallpaper. */
+  const [adActive, setAdActive] = useState(false);
   useEffect(() => {
     if (!adsReady || !showAds) return;
     let alive = true;
@@ -255,6 +257,23 @@ export function WallpaperReels({
       (entries) => {
         for (const e of entries) {
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
+            const el = e.target as HTMLElement;
+            /*
+              🔴 THE AD SLIDE CARRIES NO WALLPAPER CHROME (owner, 2026-08-30:
+              "the ad is bow being covered by the wallpaper template, it doesnt
+              suppose to have those like tray, download and all").
+
+              All the chrome — rail, caption, Download, close, counter — is
+              drawn ONCE over the whole viewer rather than per slide, so it kept
+              painting over the ad: a like button for a wallpaper that was not on
+              screen, and a Download button that would have downloaded the
+              wallpaper behind it. Tracking whether the ACTIVE slide is the ad is
+              what lets the one wrapper step aside for it.
+            */
+            if (el.dataset.ad !== undefined) {
+              setAdActive(true);
+              continue;
+            }
             /*
               Ad slides carry no `data-i`, so this is `NaN` for them and they
               are skipped — the viewer's notion of "which wallpaper am I on"
@@ -262,8 +281,9 @@ export function WallpaperReels({
               That is the whole reason the ad slide is identified by its absence
               of an index rather than by a sentinel value.
             */
-            const i = Number((e.target as HTMLElement).dataset.i);
+            const i = Number(el.dataset.i);
             if (!Number.isNaN(i)) {
+              setAdActive(false);
               setIndex(i);
               countView(items[i]);
             }
@@ -520,7 +540,7 @@ export function WallpaperReels({
             every third wallpaper.
           */}
           {adSeeded && (i + 1) % WALLPAPER_AD_EVERY === 0 && i < items.length - 1 ? (
-            <div className="relative h-[100dvh] w-full snap-start snap-always">
+            <div data-ad className="relative h-[100dvh] w-full snap-start snap-always">
               <ReelsAdSlide />
             </div>
           ) : null}
@@ -554,9 +574,19 @@ export function WallpaperReels({
         change on a single element rather than a class toggled on nine of them.
         `pointer-events-none` while hidden is what makes the tap-to-restore land
         on the artwork underneath instead of on an invisible button.
+
+        It is also what the AD slide hides behind: every control in here belongs
+        to `current`, the wallpaper, so on an ad slide they are all either
+        meaningless or actively wrong — a Download button that would download the
+        wallpaper you scrolled past. One flag, one wrapper, all of it gone.
       */}
       <div
->
+        className={cn(
+          "transition-opacity duration-200 motion-reduce:transition-none",
+          adActive && "pointer-events-none opacity-0",
+        )}
+        aria-hidden={adActive}
+      >
 
       {/* Close */}
       <button

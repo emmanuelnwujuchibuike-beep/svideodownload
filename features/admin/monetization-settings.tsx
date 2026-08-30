@@ -19,6 +19,7 @@ import {
   parseMonetagSnippet,
   type MonetagUnit,
 } from "@/lib/monetization/monetag";
+import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -132,7 +133,8 @@ export function MonetizationSettings({
       | "googleTagId"
       | "offeriumSdkUrl"
       | "offeriumPublisherId"
-      | "offeriumPlacementId",
+      | "offeriumPlacementId"
+      | "exoclickStickySnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
 
@@ -223,6 +225,9 @@ export function MonetizationSettings({
     written before this feature shipped carries no `vastInterstitial` at all,
     and reading a field off undefined would take the whole admin panel down.
   */
+  /* Parsed for the operator's benefit only — the server parses it again on
+     the way out, so this can never be the thing that decides what renders. */
+  const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
     const next = { ...state, vastInterstitial: { ...vast, ...patch } };
@@ -373,6 +378,62 @@ export function MonetizationSettings({
           })}
         </div>
       ) : null}
+
+      {/*
+        EXOCLICK STICKY BANNER (owner, 2026-08-30: "set a slot in admin
+        dashboard where i can configure exoclick sticky banner, separate it
+        from other banners").
+
+        Its own field rather than an ad row, because it is a different product:
+        ExoClick's DISPLAY zone, which PLACES ITSELF against the viewport. It
+        has no slot in any page's layout, so it does not belong in the zone
+        registry alongside placements that do.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">ExoClick sticky banner</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Paste the whole zone snippet from ExoClick (the one with
+          {" "}<code className="font-mono">&lt;ins class=&quot;eas…&quot;&gt;</code>). It is parsed into a
+          real tag — the markup itself never reaches the page. Leave empty to
+          turn the sticky banner off. Gated by the <strong>ExoClick</strong> switch above.
+        </p>
+        <textarea
+          value={state.exoclickStickySnippet ?? ""}
+          disabled={busy}
+          onChange={(e) => setText("exoclickStickySnippet", e.target.value)}
+          placeholder={'<script async src="https://a.magsrv.com/ad-provider.js"></script>\n<ins class="eas6a97888e17" data-zoneid="6015556"></ins>'}
+          className="min-h-[80px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void persist(state)}
+            className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+          >
+            Save
+          </button>
+          {/*
+            Parsed feedback, because the failure mode here is silent: an <ins>
+            whose class ExoClick does not recognise is simply left unfilled,
+            with no error anywhere. Showing what was actually read back is the
+            difference between a typo caught now and a banner that never
+            appears for a week.
+          */}
+          {stickyTag ? (
+            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">
+              Read zone {stickyTag.zoneId} · class {stickyTag.cls}
+            </span>
+          ) : state.exoclickStickySnippet?.trim() ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an
+              eas… class from that — the banner will not show.
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
+          )}
+        </div>
+      </div>
 
       {/*
         VAST INTERSTITIAL (owner, 2026-08-30).

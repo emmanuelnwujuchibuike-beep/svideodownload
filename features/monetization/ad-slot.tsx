@@ -372,9 +372,25 @@ export function AdSlot({
         <AdSenseUnit
           client={ad.adClient}
           slotId={ad.adSlotId}
-          layout={ad.adLayout}
-          width={ad.width}
-          height={ad.height}
+          /*
+            🔴 A full-bleed slot forces a RESPONSIVE unit (owner, 2026-08-30:
+            "make adsense video ad to be able to work and fit in the slot when i
+            want to switch").
+
+            These placements are shaped for a creative that spans the column. An
+            AdSense row carrying a fixed `width`/`height` — or a layout like
+            `rectangle` — would render a 300x250 island in the middle of a slot
+            built for something full-width, which is the mismatch that makes a
+            network switch look broken.
+
+            `auto` is AdSense's own responsive mode and the fixed dimensions are
+            dropped, so the unit sizes itself to the slot exactly as the ExoClick
+            video does. Non-full-bleed placements are untouched: there a declared
+            size is the operator's deliberate choice.
+          */
+          layout={fullBleed ? "auto" : ad.adLayout}
+          width={fullBleed ? null : ad.width}
+          height={fullBleed ? null : ad.height}
           className="w-full"
           /* The real answer for this format — see the fetch above. */
           onFill={(filled) => {

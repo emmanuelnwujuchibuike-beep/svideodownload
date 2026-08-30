@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 import { AdSlot } from "./ad-slot";
 
 /**
@@ -33,8 +35,29 @@ export function PreparingAd({
   active: boolean;
   className?: string;
 }) {
-  if (!active) return null;
+  /*
+    🔴 MOUNTED ALWAYS, REVEALED WHEN BUSY (owner, 2026-08-30: "the preparing for
+    download is not showing too").
 
+    It used to `return null` until `active`, which cannot work: mounting only at
+    the moment of the fetch meant the unit still had to resolve its VAST, then
+    fetch an MP4 — a round trip plus a video download — while the fetch it was
+    filling was already finishing. It unmounted before it could ever paint. The
+    zone was serving correctly the whole time (verified live: a real row on
+    `download_preparing`), which is why this looked like a missing ad rather than
+    a race.
+
+    Now the slot mounts with the page and merely HIDES until the fetch starts, so
+    the creative is resolved and buffered in advance — the same "load before the
+    link is pasted" the owner asked for on the above-fetch slot.
+
+    `hidden` (display:none) is safe for BUFFERING — `preload="auto"` still pulls
+    the file — but it is NOT safe for playback: a display:none element measures
+    0x0 and the player's IntersectionObserver never fires. That is the exact
+    deadlock this feature hit twice. It works here only because visibility is
+    driven by `active`, not by the player's own answer, so nothing is waiting on
+    anything.
+  */
   return (
     /*
       `empty:hidden` rather than an `onResolved` latch: the slot is this
@@ -43,7 +66,7 @@ export function PreparingAd({
       band of dead space above the fetching indicator on a site with no ExoClick
       configured.
     */
-    <div className={className ?? "mt-5 w-full empty:hidden"}>
+    <div className={cn(className ?? "mt-5 w-full empty:hidden", !active && "hidden")} aria-hidden={!active}>
       {/*
         Full-bleed and never dismissible. At this size the video is the point —
         a boxed unit with a caption row would be back to framing an advert, and

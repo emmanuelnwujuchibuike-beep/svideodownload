@@ -139,7 +139,29 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
         to the result card it is the opposite: it needs its own space above the
         thumbnail, or the creative would overlap the video it sits on top of.
       */
-      style={{ display: "block", width: "100%" }}
+      /*
+        🔴 The HISTORY slot needs a SIZED box (owner, 2026-08-30: "download
+        history outstream is not showing, is suppose to be showing
+        horizontally").
+
+        Config was verified correct and live — the tag parses to
+        eas6a97888e37 / 6015590 — so the ins element was rendering with the
+        right values and simply had no height. An outstream unit fills its
+        container, and a display-block element with a width but no height
+        collapses to 0px: present in the DOM, invisible on the page. Exactly
+        the kind of silent nothing this integration keeps producing.
+
+        16:9 with a floor, because outstream is a HORIZONTAL format — that is
+        the shape the owner is expecting, and it is what stops the box being
+        the wrong aspect while the creative loads.
+
+        The STICKY slot keeps no size at all: it pins itself and must add no box.
+      */
+      style={
+        slot === "history"
+          ? { display: "block", width: "100%", aspectRatio: "16 / 9", minHeight: 180 }
+          : { display: "block", width: "100%" }
+      }
     />
   );
 }

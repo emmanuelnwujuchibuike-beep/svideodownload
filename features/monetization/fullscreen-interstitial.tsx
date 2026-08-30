@@ -63,11 +63,21 @@ export function FullscreenInterstitial({
 
       {/* The creative — centered on full-screen black, as large as it declares. */}
       <div
-        className={cn("pointer-events-none absolute inset-0 flex items-center justify-center px-3", !shown && "hidden")}
-        style={{
-          paddingTop: "calc(var(--frenz-safe-top) + 4rem)",
-          paddingBottom: "calc(env(safe-area-inset-bottom) + 3.5rem)",
-        }}
+        /*
+          🔴 NO PADDING — the stage is edge to edge (owner, 2026-08-30: "idle
+          interstitial is not full screen").
+
+          It carried `px-3` plus ~4rem of top and 3.5rem of bottom padding, to
+          keep the creative clear of the close button and the bottom chrome. On
+          a full-bleed video that padding IS the black border the owner
+          screenshotted — the overlay showing through on all four sides.
+
+          The close button does not need the space reserved: it is absolutely
+          positioned with its own safe-area offset and floats OVER the creative,
+          which is how every full-screen ad on every platform handles it. The
+          video now reaches the edges and the control sits on top of it.
+        */
+        className={cn("pointer-events-none absolute inset-0 flex items-center justify-center", !shown && "hidden")}
       >
         {/* pointer-events re-enabled on the ad itself so the backdrop stays clickable around it. */}
         {/*

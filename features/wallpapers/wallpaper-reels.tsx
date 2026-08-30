@@ -3,10 +3,12 @@
 import { motion } from "framer-motion";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { WallpaperRewardGate } from "@/features/monetization/wallpaper-reward-gate";
-import { Bookmark, ChevronUp, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { Bookmark, Crown, Download, Heart, Loader2, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
+import { loadZoneAd } from "@/features/monetization/ad-cache";
+import { useShowAds } from "@/features/monetization/use-show-ads";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { startDownload } from "@/features/downloads/manager";
 import { resolutionBadge, wallpaperCredit, type Wallpaper, type WallpaperComment } from "@/lib/wallpapers";
@@ -157,11 +159,27 @@ export function WallpaperReels({
     OVERLAY that appears when a boundary is crossed and dismisses back to the
     wallpaper the visitor was already on.
   */
-  const [adAt, setAdAt] = useState<number | null>(null);
-  /** Whether the ad overlay's zone actually produced a creative. Null = unknown. */
-  const [adFilled, setAdFilled] = useState<boolean | null>(null);
-  /** Y of the touch that may turn out to be a swipe past the ad. */
-  const adTouchFrom = useRef<number | null>(null);
+  const { showAds, ready: adsReady } = useShowAds();
+  /*
+    Whether the shared zone actually has a creative. Probed ONCE, before any ad
+    slide is composed — an unseeded zone must insert NO slide rather than an
+    empty one, exactly as the reels deck does it.
+  */
+  const [adSeeded, setAdSeeded] = useState(false);
+  useEffect(() => {
+    if (!adsReady || !showAds) return;
+    let alive = true;
+    void loadZoneAd("reels_interstitial")
+      .then((ad) => {
+        if (alive) setAdSeeded(!!ad);
+      })
+      .catch(() => {
+        /* No ad is the safe direction — leave the viewer as pure content. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [adsReady, showAds]);
   /*
     The wallpaper waiting on the reward gate.
 
@@ -171,7 +189,6 @@ export function WallpaperReels({
     is worse than no reward at all.
   */
   const [pendingDownload, setPendingDownload] = useState<(typeof items)[number] | null>(null);
-  const adShown = useRef<Set<number>>(new Set());
   const [state, setState] = useState<Record<string, { liked: boolean; saved: boolean; likes: number }>>(() =>
     Object.fromEntries(items.map((w) => [w.id, { liked: !!w.viewerLiked, saved: !!w.viewerSaved, likes: w.likes }])),
   );
@@ -218,11 +235,18 @@ export function WallpaperReels({
   const lastTapRef = useRef(0);
   const DOUBLE_TAP_WINDOW_MS = 280;
 
-  // Jump to the tapped wallpaper without animating past everything before it.
+  /*
+    Jump to the tapped wallpaper without animating past everything before it.
+
+    Selected by `data-i`, NOT by child position: ad slides are real children of
+    this scroller now, so the Nth child stops being the Nth wallpaper as soon as
+    one is composed in. Looking the attribute up keeps this correct however the
+    slides are interleaved.
+  */
   useEffect(() => {
-    const el = scroller.current?.children[startIndex] as HTMLElement | undefined;
+    const el = scroller.current?.querySelector<HTMLElement>(`[data-i="${startIndex}"]`);
     el?.scrollIntoView({ block: "start", behavior: "instant" as ScrollBehavior });
-  }, [startIndex]);
+  }, [startIndex, adSeeded]);
 
   useEffect(() => {
     const root = scroller.current;
@@ -231,19 +255,17 @@ export function WallpaperReels({
       (entries) => {
         for (const e of entries) {
           if (e.isIntersecting && e.intersectionRatio > 0.6) {
+            /*
+              Ad slides carry no `data-i`, so this is `NaN` for them and they
+              are skipped — the viewer's notion of "which wallpaper am I on"
+              stays in wallpaper-space no matter how many ads are interleaved.
+              That is the whole reason the ad slide is identified by its absence
+              of an index rather than by a sentinel value.
+            */
             const i = Number((e.target as HTMLElement).dataset.i);
             if (!Number.isNaN(i)) {
               setIndex(i);
               countView(items[i]);
-              /*
-                Every Nth wallpaper reached, latched per position so scrolling
-                back and forth over one boundary cannot replay the same ad.
-                Counted on ARRIVAL, so it reads as "3 wallpapers, then an ad".
-              */
-              if (i > 0 && i % WALLPAPER_AD_EVERY === 0 && !adShown.current.has(i)) {
-                adShown.current.add(i);
-                setAdAt(i);
-              }
             }
           }
         }
@@ -252,7 +274,7 @@ export function WallpaperReels({
     );
     for (const child of Array.from(root.children)) io.observe(child);
     return () => io.disconnect();
-  }, [items.length]);
+  }, [items.length, adSeeded]);
 
   useEffect(() => {
     // Escape unwinds one layer at a time — sheet, then offer, then the viewer.
@@ -262,9 +284,6 @@ export function WallpaperReels({
       if (e.key !== "Escape") return;
       if (comments) setComments(null);
       else if (upgradeOpen) setUpgradeOpen(false);
-      // The ad is a layer like any other: Escape leaves it before it leaves the
-      // viewer, so dismissing an ad never also costs the wallpaper behind it.
-      else if (adAt !== null) setAdAt(null);
       else onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -274,30 +293,7 @@ export function WallpaperReels({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflowY = prev;
     };
-  }, [onClose, comments, upgradeOpen, adAt]);
-
-  /*
-    🔴 FAIL OPEN (owner, 2026-08-30: "i cant scoll past an ad in wallpaper").
-
-    The overlay is only ever allowed to stay up while a real creative is on
-    screen. `false` — ExoClick had no demand for this geo/device — takes it away
-    at once. No answer at all within four seconds does the same, because a slot
-    that never replies is indistinguishable, from the visitor's side, from one
-    that filled with nothing.
-
-    Same shape as the wallpaper reward gate deliberately: every ad in this
-    feature releases the visitor when it cannot deliver, rather than holding
-    them in front of a blank.
-  */
-  useEffect(() => {
-    if (adAt === null) {
-      setAdFilled(null);
-      return;
-    }
-    if (adFilled === true) return;
-    const id = setTimeout(() => setAdAt(null), adFilled === false ? 0 : 4000);
-    return () => clearTimeout(id);
-  }, [adAt, adFilled]);
+  }, [onClose, comments, upgradeOpen]);
 
   const engage = useCallback(
     async (wallpaper: Wallpaper, action: "like" | "unlike" | "save" | "unsave") => {
@@ -441,62 +437,9 @@ export function WallpaperReels({
             if (w) onDownload(w);
           }}
         />
-        {adAt !== null ? (
-          <div
-            /*
-              🔴 THIS OVERLAY MUST ALWAYS BE ESCAPABLE (owner, 2026-08-30: "i
-              cant scoll past an ad in wallpaper after 3 wallpaper").
-
-              In the reels deck the ad is a real SLIDE, so the swipe the viewer
-              was already making carries them past it. Here it is an overlay
-              over the scroller — deliberately, because splicing a slide into
-              `items` desyncs the IntersectionObserver's `data-i` — and an
-              overlay does not inherit that escape. It covered the scroller,
-              swallowed the touches that would have scrolled it, and offered
-              one way out: an INVISIBLE button in the bottom 96px. Nothing on
-              screen said it was there. If the zone did not fill it was worse
-              still — a black rectangle with no exit at all.
-
-              Three ways out now, and none of them require knowing a secret:
-              the swipe that already means "next", a control you can see, and
-              Escape. Plus the fail-open below, so an empty zone never gets to
-              draw this at all.
-            */
-            className="fixed inset-0 z-[80] bg-black"
-            onTouchStart={(e) => {
-              adTouchFrom.current = e.touches[0]?.clientY ?? null;
-            }}
-            onTouchEnd={(e) => {
-              const from = adTouchFrom.current;
-              adTouchFrom.current = null;
-              const to = e.changedTouches[0]?.clientY;
-              // Upward flick, same direction and roughly the same threshold as
-              // advancing a wallpaper. Not preventDefault'd, so the creative's
-              // own click-through still works on a plain tap.
-              if (from != null && to != null && from - to > 60) setAdAt(null);
-            }}
-          >
-            <ReelsAdSlide
-              /*
-                FAIL OPEN. No creative means no overlay — the visitor is
-                returned to the wallpaper they were on rather than being held
-                on black by a slot that had nothing to show.
-              */
-              onResolved={setAdFilled}
-            />
-            <button
-              type="button"
-              onClick={() => setAdAt(null)}
-              className="absolute inset-x-0 z-10 mx-auto flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/25 backdrop-blur-md transition hover:bg-white/25"
-              style={{ bottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
-            >
-              <ChevronUp aria-hidden className="h-4 w-4" /> Continue
-            </button>
-          </div>
-        ) : null}
         {items.map((w, i) => (
+          <Fragment key={w.id}>
           <div
-            key={w.id}
             data-i={i}
             className="relative h-[100dvh] w-full snap-start snap-always"
             /*
@@ -550,6 +493,38 @@ export function WallpaperReels({
               )}
             />
           </div>
+          {/*
+            🔴 A REAL SLIDE, not an overlay (owner, 2026-08-30: "scrolling on ad
+            on wallpaper page still gets stuck, i dont want users have to click
+            on continue to scroll" / "it doesnt go smootly and the next gets
+            stuck untill i scroll and scroll and scroll").
+
+            The ad used to be a `fixed inset-0` overlay ON TOP of this scroller.
+            An overlay is not part of the scroll container, so the touches that
+            should have scrolled the viewer landed on the overlay and moved
+            nothing — the deck felt jammed, and the only real way out was a
+            button. Adding swipe-to-dismiss on top of that only made a second
+            gesture compete with the browser's own scrolling, which is why it
+            still stuttered.
+
+            As a genuine `snap-start` child it needs no gesture handling, no
+            dismiss control and no escape hatch at all: it scrolls because it is
+            a thing in a scroller, with the same momentum and snapping as every
+            wallpaper. This is what the reels deck has always done.
+
+            It carries NO `data-i` — that is what keeps it invisible to the
+            IntersectionObserver above, so wallpaper indices, view counting and
+            the action rail all stay in wallpaper-space. An ad slide is composed
+            only when the shared zone has actually answered with a creative, so
+            an unconfigured site is unchanged rather than showing a black screen
+            every third wallpaper.
+          */}
+          {adSeeded && (i + 1) % WALLPAPER_AD_EVERY === 0 && i < items.length - 1 ? (
+            <div className="relative h-[100dvh] w-full snap-start snap-always">
+              <ReelsAdSlide />
+            </div>
+          ) : null}
+          </Fragment>
         ))}
       </div>
 

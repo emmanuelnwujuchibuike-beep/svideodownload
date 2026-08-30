@@ -45,6 +45,18 @@ export function FetchAdGate({
   // Null until the slot reports. `false` means "no creative".
   const [hasAd, setHasAd] = useState<boolean | null>(null);
   const [remaining, setRemaining] = useState(0);
+  /*
+    🔴 A FRESH PLAYER PER FETCH (owner, 2026-08-30: "make the video ad to show
+    on every fetch, even if is same link, the page dont need to refresh before
+    showing another video on a new fetch").
+
+    Bumped every time the gate opens and used as the interstitial key, so React
+    unmounts the old player and mounts a new one. That matters because the VAST
+    request lives in the player effect keyed on the ZONE — without a new mount
+    the zone is unchanged, no new request is made, and the visitor would watch
+    the same creative again (or nothing) until a page reload.
+  */
+  const [session, setSession] = useState(0);
 
   const wasBusy = useRef(false);
   const lastReadyCount = useRef(readyCount);
@@ -70,6 +82,9 @@ export function FetchAdGate({
     if (!showAds || network === "none") return;
     setHasAd(null);
     setRemaining(Math.max(0, skipSeconds));
+    // New session -> new player -> a new VAST request, so a second fetch of
+    // the same link still gets its own creative.
+    setSession((n) => n + 1);
     setOpen(true);
   }, [busy, readyCount, showAds, network, skipSeconds]);
 
@@ -103,6 +118,7 @@ export function FetchAdGate({
 
   return (
     <FullscreenInterstitial
+      key={session}
       zone="multilink_fetch_gate"
       /* `=== true`, never `!== false`: `hasAd` is three-state, and testing
          "not false" would flash the interstitial before the slot has

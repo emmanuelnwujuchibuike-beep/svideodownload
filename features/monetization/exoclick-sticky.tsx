@@ -96,6 +96,8 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
   const host = useRef<HTMLModElement | null>(null);
   const served = useRef(false);
   const [mounted, setMounted] = useState(false);
+  /** True once ExoClick has actually put something inside the placeholder. */
+  const [filled, setFilled] = useState(false);
 
   // Client-only: the provider touches `document` and `window.AdProvider`, and a
   // sticky unit has no business existing in server-rendered HTML.
@@ -107,15 +109,55 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
     if (!el) return;
     served.current = true;
 
+    /*
+      🔴 RESERVE NOTHING UNTIL IT ACTUALLY FILLS (owner, 2026-08-30: "history
+      page video outstream is just showing blank").
+
+      Giving the outstream slot a 16:9 box fixed the 0px collapse and created a
+      worse bug: when ExoClick does not fill, that box is a large empty hole in
+      the middle of the page — which is exactly what the owner screenshotted,
+      between the column-count control and the first day group.
+
+      So the height is now EARNED. The element starts with no reserved size, and
+      only takes the 16:9 box once a child actually appears inside it. Same
+      technique the VAST player uses for its own fill detection, and the same
+      rule the ad-slot suite exists to enforce: never draw a box around nothing.
+    */
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new MutationObserver(() => {
+      if (el.childElementCount > 0) {
+        setFilled(true);
+        observer.disconnect();
+        if (timer) clearTimeout(timer);
+      }
+    });
+    observer.observe(el, { childList: true });
+
     void loadProvider().then((ok) => {
-      if (!ok) return;
+      if (!ok) {
+        observer.disconnect();
+        return;
+      }
       try {
         // Tells the loader to fill every placeholder it has not filled yet.
         (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
       } catch {
         /* A broken provider must never take a page down over a banner. */
       }
+      // Already filled between render and this callback.
+      if (el.childElementCount > 0) {
+        setFilled(true);
+        observer.disconnect();
+        return;
+      }
+      // Give up quietly rather than hold a hole open forever.
+      timer = setTimeout(() => observer.disconnect(), 8000);
     });
+
+    return () => {
+      observer.disconnect();
+      if (timer) clearTimeout(timer);
+    };
   }, [mounted, ready, showAds, tag]);
 
   // Premium visitors, an unresolved plan, or nothing configured: render nothing
@@ -132,13 +174,6 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
       ref={host}
       className={tag.cls}
       data-zoneid={tag.zoneId}
-      /*
-        , not .
-
-        While this was page-wide furniture it had to add no box at all. Anchored
-        to the result card it is the opposite: it needs its own space above the
-        thumbnail, or the creative would overlap the video it sits on top of.
-      */
       /*
         🔴 The HISTORY slot needs a SIZED box (owner, 2026-08-30: "download
         history outstream is not showing, is suppose to be showing
@@ -158,7 +193,7 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
         The STICKY slot keeps no size at all: it pins itself and must add no box.
       */
       style={
-        slot === "history"
+        slot === "history" && filled
           ? { display: "block", width: "100%", aspectRatio: "16 / 9", minHeight: 180 }
           : { display: "block", width: "100%" }
       }

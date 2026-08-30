@@ -70,7 +70,26 @@ export function FullscreenInterstitial({
         }}
       >
         {/* pointer-events re-enabled on the ad itself so the backdrop stays clickable around it. */}
-        <AdSlot zone={zone} dismissible={false} onResolved={onResolved} className="pointer-events-auto flex w-full max-w-md items-center justify-center" />
+        {/*
+          🔴 FULL-BLEED, no width cap (owner, 2026-08-30: "multi link fetch
+          video ad is showing a black background instead of full width").
+
+          It was capped at max-w-md — 448px — inside a full-screen black
+          overlay, so a vertical creative sat in the middle with wide black
+          bands either side. That black IS the overlay showing through, not a
+          background on the ad.
+
+          fullBleed makes the player fill the stage the way the reels slide
+          does, which is the same treatment every other video placement now
+          gets.
+        */}
+        <AdSlot
+          zone={zone}
+          dismissible={false}
+          fullBleed
+          onResolved={onResolved}
+          className="pointer-events-auto flex h-full w-full items-center justify-center"
+        />
       </div>
 
       {/* Skip / close — top-right, clear of the status bar / Dynamic Island. */}

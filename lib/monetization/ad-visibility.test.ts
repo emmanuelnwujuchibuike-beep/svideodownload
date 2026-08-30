@@ -159,7 +159,25 @@ describe("no consumer reveals an interstitial on the UNANSWERED state", () => {
 describe("the interstitial only unveils itself for a real creative", () => {
   it("is opaque, so an empty one is a black screen", () => {
     // Documents WHY the above matters: this is not a translucent scrim.
-    expect(SHELL).toMatch(/fixed inset-0 z-\[60\] bg-black/);
+    expect(SHELL).toMatch(/"fixed inset-0 bg-black/);
+  });
+
+  it("stacks above whatever surface it is opened over", () => {
+    /*
+      The level is a PROP now, defaulting to the z-[60] this shell always had.
+
+      It had to become one: z-[60] clears marketing-page chrome, which was all
+      this needed while only the download / idle / exit triggers used it, but it
+      is NOT enough over an app-surface viewer. The wallpaper viewer is
+      `fixed inset-0 z-[100]`, so the reward gate rendered BEHIND it and the
+      creative played its audio with nothing on screen.
+
+      Both halves are pinned: the default, so the marketing call sites keep the
+      level they were designed around, and the fact that it reaches the class
+      list at all, so the prop cannot be quietly accepted and dropped.
+    */
+    expect(SHELL).toMatch(/z = "z-\[60\]"/);
+    expect(SHELL).toMatch(/"fixed inset-0 bg-black transition-opacity duration-200",\s*\n\s*z,/);
   });
 
   it("gates every visible child on `shown`", () => {

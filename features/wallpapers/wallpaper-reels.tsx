@@ -541,7 +541,22 @@ export function WallpaperReels({
           */}
           {adSeeded && (i + 1) % WALLPAPER_AD_EVERY === 0 && i < items.length - 1 ? (
             <div data-ad className="relative h-[100dvh] w-full snap-start snap-always">
-              <ReelsAdSlide />
+              {/*
+                🔴 ONLY THE NEARBY AD IS MOUNTED (owner, 2026-08-30: "the
+                wallpaper perfomance and scroll is broken").
+
+                This viewer renders EVERY item — 266 of them in the owner's
+                library — so composing an ad after every third one mounted ~88
+                `ReelsAdSlide`s at once, each an ExoClick unit with its own VAST
+                request and its own <video>. That is what broke scrolling.
+
+                The slide itself always renders, so the scroll geometry and the
+                snap points never change; only the expensive contents are gated,
+                on the same one-slide window `loading="eager"` already uses for
+                the artwork above. An ad that is two screens away has nothing to
+                play to nobody.
+              */}
+              {Math.abs(i - index) <= 1 ? <ReelsAdSlide /> : null}
             </div>
           ) : null}
           </Fragment>

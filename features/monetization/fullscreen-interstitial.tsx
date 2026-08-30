@@ -32,6 +32,7 @@ export function FullscreenInterstitial({
   canSkip = true,
   remaining = 0,
   upsell,
+  z = "z-[60]",
 }: {
   zone: AdZone;
   /** Open AND the slot has confirmed a creative. */
@@ -42,6 +43,20 @@ export function FullscreenInterstitial({
   canSkip?: boolean;
   remaining?: number;
   upsell?: { text: string; cta: string; href: string };
+  /**
+   * The stacking level, as a literal Tailwind class.
+   *
+   * 🔴 z-[60] clears marketing-page chrome, which is all this needed while it
+   * was only used by the download / idle / exit triggers. It is NOT enough over
+   * an app-surface viewer: the wallpaper viewer is `fixed inset-0 z-[100]`, so
+   * the reward gate rendered BEHIND it — the creative played its audio with
+   * nothing on screen, which is exactly what the owner reported twice.
+   *
+   * A prop rather than a global raise, so the three marketing call sites keep
+   * the level they were designed around and only the surface that needs to
+   * clear a viewer asks for more.
+   */
+  z?: string;
 }) {
   /*
       🔴 PORTALLED (owner, 2026-08-30: "multi link fetch video ad is showing a
@@ -61,7 +76,8 @@ export function FullscreenInterstitial({
     <Portal>
     <div
       className={cn(
-        "fixed inset-0 z-[60] bg-black transition-opacity duration-200",
+        "fixed inset-0 bg-black transition-opacity duration-200",
+        z,
         shown ? "opacity-100" : "pointer-events-none opacity-0",
       )}
       aria-hidden={!shown}

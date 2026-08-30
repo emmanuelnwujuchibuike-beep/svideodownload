@@ -2,16 +2,14 @@
 
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   Cloud,
   Download,
   HardDrive,
   Heart,
   History,
-  Image as ImageIcon,
   Layers,
-  Music2,
-  Play,
   RotateCcw,
   Search,
   Share2,
@@ -52,30 +50,35 @@ const KIND_FILTERS: { key: KindFilter; label: string }[] = [
 ];
 
 /**
- * The /history page's own top card — owner, 2026-08-17, from a reference
- * screenshot of a gradient "Your Downloads" card (eyebrow, gradient headline,
- * stat pills, a prominent Select button and a drawn folder illustration).
+ * The /history page's top bar.
  *
- * `standalone` ONLY. `embedded` (inside the /downloads card) and the bare
- * /library case keep the plain header below completely untouched — the doc
- * comment on `HistoryPanel`'s `embedded` prop is explicit that those two stay
- * identical to each other, and this card is a bigger visual moment than either
- * of THOSE hosts wants sitting inside their own chrome.
+ * 🔴 Owner, 2026-08-30: "remove that top section in history page, the one above
+ * the search placeholder, and put the storage details in a drop d menu, that
+ * drops down and show storage used and all and can be closed back."
  *
- * ── Paid for in paint, not weight ───────────────────────────────────────────
- * No new image asset, no animation library: the folder illustration is the
- * same drawn-icons-in-a-gradient-tile technique `DownloadsHero` already uses
- * (features/downloads/downloads-sections.tsx) — an icon in a rounded gradient
- * square, `motion-safe:animate-float` (a no-op under prefers-reduced-motion,
- * already gated at the Tailwind-variant level), plus small badge chips. Unlike
- * that component it is NOT `hidden` below `sm:` — the reference shows it on a
- * phone viewport, so it stays visible at every width, just smaller.
+ * ── What was here, and why it went ────────────────────────────────────────────
  *
- * Every number is real (`itemCount`/`usedBytes` come from the caller's own
+ * A full gradient "Your Downloads" hero card (2026-08-17): eyebrow, gradient
+ * headline, a paragraph of description, a drawn folder illustration, and the
+ * stats as always-open pills. It pushed the actual downloads — the reason
+ * anyone opens this page — most of a phone screen down, and it restated a page
+ * title the navigation already makes obvious.
+ *
+ * The storage facts were worth keeping; a screenful of chrome to present two
+ * numbers was not. They now live behind a disclosure that starts CLOSED, so the
+ * default view is the grid, and opening it is one tap.
+ *
+ * ── Nothing functional was dropped ────────────────────────────────────────────
+ *
+ * Select and Clear all were both inside that card, so both are re-homed here
+ * rather than lost — Clear all keeps its confirm-before-destroy step. The same
+ * rule the hero itself was held to when it replaced the plain header before it.
+ *
+ * Every number is still real (`itemCount`/`usedBytes` come from the caller's own
  * `useHistory()` read) — no seeded stats, per this codebase's standing rule
  * against invented figures.
  */
-function HistoryHero({
+function HistoryStorageBar({
   itemCount,
   usedBytes,
   selecting,
@@ -94,106 +97,99 @@ function HistoryHero({
   onConfirmClear: () => void;
   onCancelClear: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <div className="lux-enter relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-blue-50 via-violet-50/70 to-indigo-50 p-5 ring-1 ring-inset ring-violet-900/[0.06] dark:from-blue-500/[0.08] dark:via-violet-500/[0.06] dark:to-indigo-500/[0.08] dark:ring-white/10 sm:p-6">
-      {/* Same one-shot static glow the rest of this page uses — painted once,
-          never animated (see the note further down on why nothing here loops). */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -left-10 -top-14 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(37,99,255,0.14),transparent_70%)]"
-      />
-
-      {/* Clear-all — tucked into the corner rather than a full utility row;
-          Select (below) is the header's one prominent action now. Same
-          confirm-before-destroy behaviour as before, just relocated. */}
-      <div className="relative flex justify-end">
-        {confirmClear ? (
-          <span className="flex items-center gap-1 text-sm">
-            <button
-              type="button"
-              onClick={onConfirmClear}
-              className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
-            >
-              Clear all?
-            </button>
-            <button
-              type="button"
-              onClick={onCancelClear}
-              className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={onRequestClear}
-            aria-label="Clear all downloads"
-            className="-mr-1.5 -mt-1.5 rounded-lg p-2 text-muted-foreground/70 transition hover:text-rose-500 active:scale-95"
-          >
-            <Trash2 className="h-[18px] w-[18px]" />
-          </button>
-        )}
-      </div>
-
-      <div className="relative -mt-8 flex items-center gap-4 sm:-mt-9">
-        <div className="min-w-0 flex-1">
-          <span className="text-[13px] font-bold uppercase tracking-wide text-primary">History</span>
-          <h1 className="mt-1 text-[1.7rem] font-extrabold leading-[1.08] tracking-[-0.03em] text-foreground sm:text-4xl">
-            Your{" "}
-            <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
-              Downloads
-            </span>
-          </h1>
-          <p className="mt-2 max-w-sm text-pretty text-sm leading-relaxed text-muted-foreground">
-            Manage, organize and access all your downloaded content in one place.
-          </p>
-        </div>
-
-        {/* Folder + cloud, badged with the page's own three media kinds —
-            drawn, not shipped as an asset. `aria-hidden`: purely decorative,
-            the real facts are the stat pills below. */}
-        <div aria-hidden className="relative h-24 w-24 shrink-0 sm:h-32 sm:w-32">
-          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500/30 to-blue-500/30 blur-2xl" />
-          <span className="absolute inset-2 flex items-center justify-center rounded-[1.5rem] bg-gradient-to-br from-violet-500 to-blue-600 shadow-xl motion-safe:animate-float">
-            <History className="h-10 w-10 text-white sm:h-14 sm:w-14" />
-          </span>
-          <span className="absolute -left-1 top-1 flex h-8 w-8 items-center justify-center rounded-xl bg-card shadow-md ring-1 ring-border/60 sm:h-9 sm:w-9">
-            <ImageIcon className="h-3.5 w-3.5 text-fuchsia-500 sm:h-4 sm:w-4" />
-          </span>
-          <span className="absolute -right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-card shadow-md ring-1 ring-border/60 sm:h-9 sm:w-9">
-            <Play className="h-3.5 w-3.5 fill-current text-blue-500 sm:h-4 sm:w-4" />
-          </span>
-          <span className="absolute -bottom-1 left-1/3 flex h-8 w-8 items-center justify-center rounded-xl bg-card shadow-md ring-1 ring-border/60 sm:h-9 sm:w-9">
-            <Music2 className="h-3.5 w-3.5 text-violet-500 sm:h-4 sm:w-4" />
-          </span>
-        </div>
-      </div>
-
-      {/* Stats + Select, one wrapping row — two real facts as pill-stats, the
-          Private Cloud badge, then the header's one prominent action. */}
-      <div className="relative mt-5 flex flex-wrap items-center gap-2">
-        <StatPill icon={Layers} value={String(itemCount)} label={itemCount === 1 ? "Item" : "Items"} />
-        <StatPill icon={HardDrive} value={formatBytes(usedBytes)} label="Total Size" />
-        <span className="inline-flex items-center gap-1.5 rounded-2xl bg-card px-3.5 py-2.5 text-[13px] font-bold text-primary shadow-sm ring-1 ring-inset ring-border/50">
-          Private Cloud <Cloud className="h-4 w-4" />
-        </span>
+    <div className="mb-3">
+      <div className="flex items-center gap-2">
+        {/*
+          The disclosure. The headline figure — storage used — stays on the
+          button itself, so the number the owner asked to keep is readable
+          WITHOUT opening anything; the panel is for the breakdown.
+        */}
         <button
           type="button"
-          onClick={onToggleSelect}
-          aria-pressed={selecting}
-          className={cn(
-            "lux-btn ml-auto inline-flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-[13px] font-bold transition duration-150 active:scale-95",
-            selecting
-              ? "bg-foreground text-background shadow-sm"
-              : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25 hover:shadow-lg hover:shadow-violet-500/30",
-          )}
+          onClick={() => {
+            tap();
+            setOpen((v) => !v);
+          }}
+          aria-expanded={open}
+          aria-controls="history-storage-details"
+          className="inline-flex items-center gap-2 rounded-2xl bg-card px-3.5 py-2 text-[13px] font-bold text-foreground shadow-sm ring-1 ring-inset ring-border/50 transition active:scale-95"
         >
-          <span className="relative z-[2] inline-flex items-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4" /> {selecting ? "Done" : "Select"}
-          </span>
+          <HardDrive className="h-4 w-4 text-primary" aria-hidden />
+          Storage
+          <span className="font-extrabold text-primary">{formatBytes(usedBytes)}</span>
+          <ChevronDown
+            aria-hidden
+            className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
+          />
         </button>
+
+        <div className="ml-auto flex items-center gap-1">
+          {confirmClear ? (
+            <span className="flex items-center gap-1 text-sm">
+              <button
+                type="button"
+                onClick={onConfirmClear}
+                className="rounded-lg px-2.5 py-1.5 font-bold text-rose-500 transition active:scale-95"
+              >
+                Clear all?
+              </button>
+              <button
+                type="button"
+                onClick={onCancelClear}
+                className="rounded-lg px-2.5 py-1.5 font-semibold text-muted-foreground transition active:scale-95"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onRequestClear}
+              aria-label="Clear all downloads"
+              className="rounded-lg p-2 text-muted-foreground/70 transition hover:text-rose-500 active:scale-95"
+            >
+              <Trash2 className="h-[18px] w-[18px]" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onToggleSelect}
+            aria-pressed={selecting}
+            className={cn(
+              "lux-btn inline-flex items-center gap-1.5 rounded-2xl px-3.5 py-2 text-[13px] font-bold transition duration-150 active:scale-95",
+              selecting
+                ? "bg-foreground text-background shadow-sm"
+                : "bg-gradient-to-r from-blue-600 to-violet-600 text-white shadow-md shadow-violet-500/25",
+            )}
+          >
+            <span className="relative z-[2] inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4" /> {selecting ? "Done" : "Select"}
+            </span>
+          </button>
+        </div>
       </div>
+
+      {/*
+        Unmounted rather than hidden while closed: this is the page held to the
+        cold-entry budget, and a closed panel should cost nothing to paint. The
+        facts are two pills and a badge, so there is no state worth preserving
+        across a close.
+      */}
+      {open ? (
+        <div
+          id="history-storage-details"
+          className="lux-enter mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-card/60 p-3 ring-1 ring-inset ring-border/50"
+        >
+          <StatPill icon={Layers} value={String(itemCount)} label={itemCount === 1 ? "Item" : "Items"} />
+          <StatPill icon={HardDrive} value={formatBytes(usedBytes)} label="Total Size" />
+          <span className="inline-flex items-center gap-1.5 rounded-2xl bg-card px-3.5 py-2.5 text-[13px] font-bold text-primary shadow-sm ring-1 ring-inset ring-border/50">
+            Private Cloud <Cloud className="h-4 w-4" />
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -422,7 +418,7 @@ export function HistoryPanel({
           counts stayed on the filter pills, Favorites keeps its own chip.
         */}
         {standalone ? (
-          <HistoryHero
+          <HistoryStorageBar
             itemCount={items.length}
             usedBytes={usedBytes}
             selecting={selecting}

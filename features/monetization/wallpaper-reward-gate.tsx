@@ -109,6 +109,10 @@ export function WallpaperRewardGate({
   return (
     <FullscreenInterstitial
       zone="wallpaper_reward"
+      /* Clears the wallpaper viewer (`fixed inset-0 z-[100]`), which is what
+         `z-[60]` did not — and the same level the existing wallpaper reward ad
+         already uses. */
+      z="z-[130]"
       /* `=== true`: three-state, and "not false" would flash the overlay
          before the slot has said anything. */
       shown={open && hasAd === true}

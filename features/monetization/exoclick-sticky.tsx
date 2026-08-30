@@ -189,8 +189,7 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
       */
       className={cn(
         tag.cls,
-        slot === "history" &&
-          "text-center [&>*]:!mx-auto [&_iframe]:!w-full [&_img]:!h-auto [&_img]:!w-full",
+        slot === "history" && "[&_iframe]:!w-full [&_img]:!h-auto [&_img]:!w-full",
       )}
       data-zoneid={tag.zoneId}
       /*
@@ -218,9 +217,34 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
         outstream player a box to initialise in, and content decides the rest —
         which is the same "height is earned" rule the fill detection follows.
       */
+      /*
+        🔴 CENTRED STRUCTURALLY, not by inheritance (owner, 2026-08-30: "the
+        history banner is still not centered and fill").
+
+        The previous attempt centred with `text-align` and `mx-auto` on the
+        children. Both are conditional on what the loader happens to inject:
+        `text-align` only moves INLINE content, and `mx-auto` only centres a
+        BLOCK with a width — so a fixed-size iframe, or a div that is neither,
+        stays hard left. We do not control that markup and it differs per
+        creative, which is why guessing at it kept missing.
+
+        `display: flex` + `justify-content: center` on the <ins> itself centres
+        ANY single child regardless of its display type. That is the whole
+        reason to put the rule on the container rather than on the child.
+
+        `minHeight` (not `aspectRatio`) because this zone serves both an
+        outstream video, which needs a box to initialise in, and fixed-size
+        native units, which a rigid 16:9 would crop.
+      */
       style={
-        slot === "history" && filled
-          ? { display: "block", width: "100%", minHeight: 180 }
+        slot === "history"
+          ? {
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              width: "100%",
+              ...(filled ? { minHeight: 180 } : null),
+            }
           : { display: "block", width: "100%" }
       }
     />

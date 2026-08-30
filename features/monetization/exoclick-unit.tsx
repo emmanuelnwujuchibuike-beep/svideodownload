@@ -166,13 +166,34 @@ export function ExoClickUnit({
     const box = host.current;
     if (!ad || !el || !box) return;
 
+    /*
+      🔴 SOUND FIRST, muted only as a FALLBACK (owner, 2026-08-30: "make all
+      video ad start always start with sound and can be muted").
+
+      Unmuted autoplay is not something a page may simply assert — browsers
+      refuse it without user activation, and the refusal arrives as a REJECTED
+      `play()` promise rather than an error anyone would notice. So this asks for
+      sound, and if the browser says no, it immediately retries muted rather than
+      leaving a silent frozen frame.
+
+      In Reels this usually succeeds: the viewer has already tapped and swiped,
+      so the document carries user activation. On a cold landing page it usually
+      does not, and the visitor gets the muted unit plus the unmute control —
+      which is the honest outcome, not a bug.
+    */
     const tryPlay = () => {
-      // Muted is not a preference, it is the only autoplay browsers permit.
-      el.muted = true;
-      void el.play().catch(() => {
-        /* Blocked anyway — the poster frame stays, and `onError` handles a
-           genuinely broken file. Not treated as no-fill: the creative is there. */
-      });
+      el.muted = false;
+      void el
+        .play()
+        .then(() => setMuted(false))
+        .catch(() => {
+          el.muted = true;
+          setMuted(true);
+          void el.play().catch(() => {
+            /* Blocked even muted — the frame stays and `onError` covers a
+               genuinely broken file. Not a no-fill: the creative is there. */
+          });
+        });
     };
 
     if (typeof IntersectionObserver === "undefined") {
@@ -245,7 +266,20 @@ export function ExoClickUnit({
         preload="metadata"
         // Loops are not free impressions: each replay would re-fire nothing (the
         // pixels are latched) but would keep pulling bytes. One play, then stop.
-        className="h-full w-full object-contain"
+        /*
+          🔴 COVER when filling a reel, CONTAIN in-page (owner: "is not full
+          and fills … make it fill like a reels video").
+
+          The reels slide is a full-screen 9:16 stage, and object-contain left
+          black bands above and below any creative that was not exactly that
+          ratio — which is what made the ad read as letterboxed rather than as a
+          reel. Cover fills the screen the way every real reel does.
+
+          In-page stays CONTAIN on purpose: there the box is already set to the
+          creative's own aspect ratio, so contain fits it exactly with no bars,
+          and cover would crop an ad nobody asked to have cropped.
+        */
+        className={cn("h-full w-full", fill ? "object-cover" : "object-contain")}
         onLoadedMetadata={(e) => {
           const v = e.currentTarget;
           if (v.videoWidth > 0 && v.videoHeight > 0) setRatio(v.videoWidth / v.videoHeight);
@@ -345,12 +379,21 @@ export function ExoClickUnit({
           if (!next) void el.play().catch(() => {});
         }}
         aria-label={muted ? "Unmute ad" : "Mute ad"}
-        className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/75"
+        className="absolute bottom-2 left-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/75"
       >
         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
       </button>
 
-      <span className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/85">
+      {/*
+        🔴 Bottom-right, not top-left (owner, 2026-08-30: "take the embedded ad
+        logo and text to the bottom right of the video").
+
+        The mute control moved to the bottom LEFT to make room — the two cannot
+        share a corner, and the disclosure badge is the one whose position was
+        actually asked for. Still on the video and still always visible, so the
+        unit remains labelled as an ad wherever it renders.
+      */}
+      <span className="pointer-events-none absolute bottom-2 right-2 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/85">
         Ad
       </span>
     </div>

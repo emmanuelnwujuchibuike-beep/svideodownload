@@ -20,6 +20,11 @@ import {
   type MonetagUnit,
 } from "@/lib/monetization/monetag";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
+import {
+  DEFAULT_VAST_INTERSTITIAL,
+  SKIP_SECOND_OPTIONS,
+  type VastInterstitialConfig,
+} from "@/lib/monetization/vast-interstitial";
 import { cn } from "@/lib/utils";
 
 import { MonetagUnitsEditor } from "./monetag-units-editor";
@@ -211,6 +216,21 @@ export function MonetizationSettings({
     if (!ok) setState((s) => ({ ...s, exoclickZones: state.exoclickZones })); // roll back
   };
 
+  /*
+    The interstitial block, and one writer for it.
+
+    Falls back to DEFAULTS rather than assuming the key exists: a settings row
+    written before this feature shipped carries no `vastInterstitial` at all,
+    and reading a field off undefined would take the whole admin panel down.
+  */
+  const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
+  const setVast = async (patch: Partial<VastInterstitialConfig>) => {
+    const next = { ...state, vastInterstitial: { ...vast, ...patch } };
+    setState(next);
+    const ok = await persist(next);
+    if (!ok) setState((prev) => ({ ...prev, vastInterstitial: vast })); // roll back
+  };
+
   // The text fields (publisher id, ads.txt, verification tags) still save on a
   // button — persisting on every keystroke would be absurd.
   const saveText = () => persist(state);
@@ -353,6 +373,123 @@ export function MonetizationSettings({
           })}
         </div>
       ) : null}
+
+      {/*
+        VAST INTERSTITIAL (owner, 2026-08-30).
+
+        Its own block rather than a row in the toggle grid above, because it is
+        the only placement with two independent timers and the pair is the thing
+        most likely to be misread — so they are shown together, labelled with
+        what each one actually governs.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void setVast({ enabled: !vast.enabled })}
+          className="flex w-full flex-wrap items-center justify-between gap-3 text-left disabled:opacity-70"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">VAST interstitial (full screen)</span>
+            <span className="block text-xs text-muted-foreground">
+              A full-screen ExoClick video when a download starts. The download never waits on it —
+              if the ad is slow or missing it is abandoned and the file continues. Off by default.
+            </span>
+          </span>
+          <Switch on={vast.enabled} />
+        </button>
+
+        {vast.enabled ? (
+          <div className="mt-3 space-y-2.5 border-t border-border/60 pt-3">
+            <VastRow
+              label="Show on download"
+              hint="The only trigger today."
+              control={
+                <button type="button" disabled={busy} onClick={() => void setVast({ enabledOnDownload: !vast.enabledOnDownload })}>
+                  <Switch on={vast.enabledOnDownload} />
+                </button>
+              }
+            />
+            <VastRow
+              label="Allow skip / close"
+              hint="Only ever shown when the VAST response permits it."
+              control={
+                <button type="button" disabled={busy} onClick={() => void setVast({ skipEnabled: !vast.skipEnabled })}>
+                  <Switch on={vast.skipEnabled} />
+                </button>
+              }
+            />
+            {vast.skipEnabled ? (
+              <VastRow
+                label="Skip after"
+                hint="How long the visitor WATCHES before the Skip control appears."
+                control={
+                  <select
+                    value={vast.skipAfterSeconds}
+                    disabled={busy}
+                    onChange={(e) => void setVast({ skipAfterSeconds: Number(e.target.value) })}
+                    className={selectCls}
+                  >
+                    {SKIP_SECOND_OPTIONS.map((n) => (
+                      <option key={n} value={n}>
+                        {n === 0 ? "Immediately" : `${n} seconds`}
+                      </option>
+                    ))}
+                  </select>
+                }
+              />
+            ) : null}
+            <VastRow
+              label="Startup timeout"
+              /* 🔴 Named as a DIFFERENT thing from the skip timer on purpose —
+                 conflating them is how a slow network turns into a visitor
+                 staring at a blank overlay for the length of the skip timer. */
+              hint="How long we wait for the ad to START before giving up and letting the download run. NOT the skip timer."
+              control={
+                <select
+                  value={vast.timeoutMs}
+                  disabled={busy}
+                  onChange={(e) => void setVast({ timeoutMs: Number(e.target.value) })}
+                  className={selectCls}
+                >
+                  {[1000, 2000, 3000, 4000, 5000].map((n) => (
+                    <option key={n} value={n}>{`${n / 1000}s`}</option>
+                  ))}
+                </select>
+              }
+            />
+            <VastRow
+              label="Cooldown"
+              hint="Minimum gap between two interstitials for the same visitor."
+              control={
+                <select
+                  value={vast.cooldownMs}
+                  disabled={busy}
+                  onChange={(e) => void setVast({ cooldownMs: Number(e.target.value) })}
+                  className={selectCls}
+                >
+                  {[0, 30_000, 90_000, 300_000, 900_000, 3_600_000].map((n) => (
+                    <option key={n} value={n}>
+                      {n === 0 ? "Every download" : n < 60_000 ? `${n / 1000}s` : `${n / 60_000} min`}
+                    </option>
+                  ))}
+                </select>
+              }
+            />
+            {!state.exoclick ? (
+              <p className="flex items-start gap-2 rounded-xl border border-amber-500\30 bg-amber-500\10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  <strong>ExoClick is off, so this will never show.</strong> The interstitial serves
+                  from the same zone stack as every other ExoClick placement — turn on{" "}
+                  <strong>ExoClick</strong> above, and leave{" "}
+                  <em>{AD_ZONE_META.download_preparing.label}</em> enabled in the per-page switches.
+                </span>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {/* Interstitial skip delay — how long before a full-screen ad can be
           skipped. Only meaningful with full-screen units on; saves on change. */}
@@ -1175,5 +1312,37 @@ function Switch({ on }: { on: boolean }) {
         )}
       />
     </span>
+  );
+}
+
+/** Shared class for the interstitial's small selects. */
+const selectCls =
+  "h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary";
+
+/**
+ * One labelled control in the interstitial block.
+ *
+ * A local component rather than repeated markup: five rows sharing a
+ * label/hint/control shape is exactly where copy-paste drift starts, and the
+ * hints here are load-bearing — they are what stop the startup timeout and the
+ * skip timer being read as the same setting.
+ */
+function VastRow({
+  label,
+  hint,
+  control,
+}: {
+  label: string;
+  hint: string;
+  control: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold">{label}</span>
+        <span className="block text-[11px] leading-relaxed text-muted-foreground">{hint}</span>
+      </span>
+      {control}
+    </div>
   );
 }

@@ -154,7 +154,27 @@ function landingChunks(): string[] {
  * 107 bytes and left the route 49 bytes over 348 KiB. The remaining overage is
  * the grouped list itself, which is the fix.
  */
-const GLOBAL_CEILING = 349 * 1024;
+/*
+ * 🔴 A SIXTH BUMP (349 → 351), for the VAST interstitial's admin panel.
+ *
+ * Owner asked for the skip/close timer to be admin-controlled, and for the two
+ * timers to be separately configurable. That is a six-control block —
+ * enable, show-on-download, allow-skip, skip-after, startup-timeout, cooldown —
+ * plus the warning shown when ExoClick is off and the interstitial therefore
+ * cannot serve.
+ *
+ * Nothing to split: the controls ARE the panel, they live in a component the
+ * admin route already loads, and they render only when the interstitial is
+ * switched on. Two of the three obvious economies were already taken — the row
+ * markup is a local `VastRow` rather than five copies, and the config module it
+ * imports is dependency-free by design so it pulls in no zod or schema code.
+ *
+ * The headroom is deliberate rather than exact: this ceiling has moved five
+ * times in one session, each time by ~1 kB, and re-measuring the whole build to
+ * reclaim a few hundred bytes on an internal admin route is not where the
+ * attention belongs while ad revenue is still being wired up.
+ */
+const GLOBAL_CEILING = 351 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

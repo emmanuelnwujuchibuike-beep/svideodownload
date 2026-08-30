@@ -59,9 +59,17 @@ export function ReelsAdSlide({ variant }: { variant: "modal" | "page" }) {
         Positioned in the safe area so it clears the status bar in the installed
         PWA, where the deck draws edge-to-edge under it.
       */}
-      <span className="absolute left-4 top-[calc(var(--frenz-safe-top,1rem)+0.5rem)] z-10 rounded-full bg-white/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/80 backdrop-blur-sm">
-        Sponsored
-      </span>
+      {/*
+        🔴 The "SPONSORED" pill is GONE (owner, 2026-08-30: "remove the sponsored
+        logo … make it fill like a reels video").
+
+        It was a SECOND label: `ExoClickUnit` already draws its own "Ad" badge on
+        the video, so the two stacked on top of each other in the top-left corner
+        and read as a rendering bug rather than a disclosure. Removing this one
+        keeps the deck looking like the deck while the ad stays labelled — which
+        is how TikTok and Instagram mark a sponsored clip, and keeps the AdSense
+        disclosure requirement satisfied.
+      */}
 
       {/*
         `fullBleed` — this placement owns a whole 9:16 screen, so the unit should

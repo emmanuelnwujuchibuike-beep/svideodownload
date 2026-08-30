@@ -18,6 +18,8 @@ import {
   Trash2,
   Video,
 } from "lucide-react";
+
+import { AdSurface } from "@/features/monetization/ad-surface";
 import { type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
@@ -320,6 +322,18 @@ export function MediaGallery({
           </div>
         ) : null}
       </div>
+
+      {/*
+        The history placement (owner, 2026-08-30: "put an exoclick in video
+        banner above history the media in history page just below the grid
+        cols numbers").
+
+        Exactly there: after the toolbar that holds the column-count control,
+        before the media itself. Full-bleed like every other video zone, and
+        it collapses to nothing when unseeded, so a site without ExoClick sees
+        the gallery it always had.
+      */}
+      <AdSurface zone="history_above_grid" fullBleed className="mb-4" />
 
       {sorted.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground">{emptyText}</p>

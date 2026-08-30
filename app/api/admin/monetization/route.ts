@@ -110,6 +110,9 @@ const schema = z.object({
     (`https://s.magsrv.com/v1/vast.php?idzone=123`) would otherwise be written
     into a VAST URL that 404s, and the symptom is silence.
   */
+  /* Free text, PARSED at render into an <ins> — never injected. Capped so a
+     payload cannot bloat the settings row. */
+  exoclickStickySnippet: z.string().max(4000).default(""),
   exoclickSharedZoneId: z
     .string()
     .trim()

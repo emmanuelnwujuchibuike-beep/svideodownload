@@ -4,6 +4,7 @@ import {
   getNetworkCapabilities,
   getRewardNetworks,
 } from "@/lib/monetization/reward-networks-store";
+import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -40,6 +41,12 @@ export async function GET() {
       /* The interstitial config the lazy client module reads once per page load.
          Public and non-user-specific, exactly like the skip delay beside it. */
       vastInterstitial: settings.vastInterstitial,
+      /*
+        The sticky banner as PARSED values, never the pasted snippet. Same
+        rule as the verification tags and the Monetag units: admin free text
+        must not travel to a browser as markup.
+      */
+      exoclickSticky: parseExoClickSticky(settings.exoclickStickySnippet),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

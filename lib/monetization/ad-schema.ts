@@ -51,6 +51,8 @@ export const AD_ZONES = [
   "reels_interstitial",
   // Plays while a link is fetched / the file prepared (2026-08-30).
   "download_preparing",
+  // Above the history media grid (2026-08-30).
+  "history_above_grid",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -212,6 +214,7 @@ export const EXOCLICK_ZONES = [
   "multilink_card_inline",
   "reels_interstitial",
   "download_preparing",
+  "history_above_grid",
 ] as const;
 
 export type ExoClickZoneId = (typeof EXOCLICK_ZONES)[number];
@@ -576,6 +579,16 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
       would spend a round trip during the very wait it exists to fill, and the
       creative would arrive about when the result does.
     */
+    prefetch: true,
+  },
+  history_above_grid: {
+    label: "History — above the media grid",
+    description:
+      "A 9:16 vertical unit on the History page, directly under the column-count control and above the saved media. Sits in the gap the grid already leaves, so it costs the page no layout of its own. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+    // Above the fold on a page people open deliberately, so the zone lookup
+    // is warmed with the rest of the page rather than on mount.
     prefetch: true,
   },
   exit_intent_popup: {

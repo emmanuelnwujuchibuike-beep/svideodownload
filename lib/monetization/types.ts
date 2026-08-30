@@ -91,7 +91,18 @@ export type AdZone =
     ⚠️ Same rule as every note in this union: no semicolon and no double-quoted
     lowercase word inside a comment here.
   */
-  | "download_preparing";
+  | "download_preparing"
+  /*
+    Above the history media grid, under the column-count control
+    (2026-08-30). Its own zone rather than reusing a downloader placement:
+    the history page is a different surface with a different rhythm, and an
+    operator turning ads off there should not have to reason about which
+    downloader slot happens to render on it.
+
+    ⚠️ Same rule as every note in this union: no semicolon and no
+    double-quoted lowercase word inside a comment here.
+  */
+  | "history_above_grid";
 
 export type DeviceType = "mobile" | "desktop";
 

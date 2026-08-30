@@ -339,6 +339,17 @@ export interface MonetizationSettings {
    * pointed somewhere else without abandoning the shared default.
    */
   exoclickSharedZoneId: string;
+  /**
+   * The ExoClick STICKY BANNER snippet, pasted from their dashboard.
+   *
+   * Deliberately its own field rather than an ad row (owner: "separate it
+   * from other banners"). It is ExoClick's DISPLAY product and it places
+   * ITSELF against the viewport, so it has no slot in the page layout and does
+   * not belong in the zone registry, whose premise is where on the page a unit
+   * goes. Parsed into `{ cls, zoneId }` at render time and emitted as a real
+   * `<ins>` — the markup never reaches the DOM.
+   */
+  exoclickStickySnippet: string;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -426,6 +437,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickZones: {},
   // Empty = off. Per-zone ad rows are the default arrangement.
   exoclickSharedZoneId: "",
+  exoclickStickySnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,

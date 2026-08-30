@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { VastInterstitialTriggers } from "@/features/monetization/vast-interstitial/triggers";
+import { ExoClickSticky } from "@/features/monetization/exoclick-sticky";
 import { useEffect, useState } from "react";
 
 import { prefetchZoneIds } from "@/lib/monetization/ad-schema";
@@ -105,6 +107,19 @@ export function DeferredAdFurniture() {
     <>
       <AnnouncementBanner />
       <TopPageBannerAd />
+      {/*
+        The ExoClick sticky banner. It renders no box of its own — the
+        network's loader pins it to the viewport — so it sits with the rest
+        of the deferred furniture rather than in any page's layout.
+      */}
+      {/*
+        Idle + back-swipe, driven by the ExoClick interstitial rather than
+        Monetag (owner: "i dont want to use monetag for idle or backswipe").
+        Ships two listeners and a timer — the ad code stays behind a dynamic
+        import, so this costs a cold page load nothing.
+      */}
+      <VastInterstitialTriggers />
+      <ExoClickSticky />
       <TopBannerAd />
       <IdleInterstitial />
       <ExitIntent />

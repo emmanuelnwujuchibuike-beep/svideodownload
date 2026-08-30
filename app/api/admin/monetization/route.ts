@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
-import { EXOCLICK_ZONES } from "@/lib/monetization/ad-schema";
+import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
 import { setMonetizationSettings } from "@/lib/monetization/settings";
 
@@ -89,9 +89,7 @@ const schema = z.object({
     not a 400 on an otherwise valid form, and `normalizeExoClickZones` applies
     the same filter again on the way back out.
   */
-  exoclickZones: z
-    .record(z.enum(EXOCLICK_ZONES), z.boolean())
-    .default({}),
+  exoclickZones: z.record(z.enum(AD_ZONES), z.boolean()).default({}),
   // Server-verified reward-session gate for HD/batch downloads (see
   // lib/monetization/reward-sessions.ts). Independent of the reward-AD tier/
   // duration settings above, which decide whether a request is gated at all.

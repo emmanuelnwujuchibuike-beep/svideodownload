@@ -7,8 +7,9 @@ import {
   AD_FORMATS,
   AD_ZONES,
   AD_ZONE_META,
-  EXOCLICK_ZONE_SURFACE,
+
   EXOCLICK_ZONES,
+  zoneSurface,
   RETIRED_FORMATS,
   isPersistentZone,
   isServableFormat,
@@ -175,12 +176,12 @@ describe("Ad slots — formats", () => {
     const reelsOnly = {
       exoclick: true,
       exoclickZones: Object.fromEntries(
-        EXOCLICK_ZONES.filter((z) => EXOCLICK_ZONE_SURFACE[z] === "marketing").map((z) => [z, false]),
+        EXOCLICK_ZONES.filter((z) => zoneSurface(z) === "marketing").map((z) => [z, false]),
       ),
     };
     expect(exoClickZoneEnabled(reelsOnly, "reels_interstitial")).toBe(true);
     for (const zone of EXOCLICK_ZONES) {
-      if (EXOCLICK_ZONE_SURFACE[zone] === "marketing") {
+      if (zoneSurface(zone) === "marketing") {
         expect(exoClickZoneEnabled(reelsOnly, zone), `${zone} must be off`).toBe(false);
       }
     }
@@ -200,11 +201,50 @@ describe("Ad slots — formats", () => {
      * admin and still be serving ExoClick above the paste box on it — the exact
      * false sense of safety this split exists to prevent.
      */
-    expect(EXOCLICK_ZONE_SURFACE.downloader_above_fetch).toBe("marketing");
+    expect(zoneSurface("downloader_above_fetch")).toBe("marketing");
     // Reels is the only surface behind sign-in, and therefore the only one no
     // AdSense reviewer can reach.
-    const appZones = EXOCLICK_ZONES.filter((z) => EXOCLICK_ZONE_SURFACE[z] === "app");
+    const appZones = EXOCLICK_ZONES.filter((z) => zoneSurface(z) === "app");
     expect(appZones).toEqual(["reels_interstitial"]);
+  });
+
+  it("🔴 serves an ExoClick row on ANY zone, not just the five it shipped with", () => {
+    /*
+     * THE REGRESSION. `exoClickZoneEnabled` used to return false for any zone
+     * outside `EXOCLICK_ZONES`, so an ExoClick row placed anywhere else served
+     * nothing — silently, with the row still reading "Live" in the admin and
+     * the master switch on.
+     *
+     * Reported within a day of shipping: a row on `result_top` (the one zone
+     * whose label contains the word "fetch") rendered nothing, and no surface
+     * anywhere said why. The admin offered a combination `AdSlot` would happily
+     * render and the server then dropped.
+     */
+    const on = { exoclick: true, exoclickZones: {} };
+    for (const zone of AD_ZONES) {
+      expect(exoClickZoneEnabled(on, zone), `${zone} should serve with the master on`).toBe(true);
+    }
+    // …and a non-native zone is still individually switchable, or the
+    // AdSense-safety split would have a hole exactly where the bug was.
+    expect(exoClickZoneEnabled({ exoclick: true, exoclickZones: { result_top: false } }, "result_top")).toBe(false);
+    expect(normalizeExoClickZones({ result_top: false })).toEqual({ result_top: false });
+  });
+
+  it("🔴 classifies EVERY zone as marketing or app", () => {
+    /*
+     * `ZONE_SURFACE` is what tells an operator whether a Google reviewer can
+     * reach a placement, and it drives the per-page switch grouping. A zone
+     * missing from it would render an unlabelled switch and, worse, would leave
+     * the "is this an AdSense-visible page" question silently unanswered on the
+     * one control built to answer it.
+     */
+    for (const zone of AD_ZONES) {
+      expect(zoneSurface(zone), `${zone} has no surface classification`).toMatch(/^(marketing|app)$/);
+    }
+    // Only the two social-feed placements sit behind sign-in. Everything else
+    // is reachable by a reviewer, and must be classified as such.
+    const appZones = AD_ZONES.filter((z) => zoneSurface(z) === "app");
+    expect([...appZones].sort()).toEqual(["feed_inline", "reels_interstitial"]);
   });
 
   it("🔴 a non-boolean stored value can never turn a disabled zone back on", () => {

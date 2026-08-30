@@ -368,7 +368,14 @@ export default async function AdminPage() {
             <AdminSubsections
               groups={[
                 { id: "placements", label: "Ad placements", content: <AdManager ads={adRecords} /> },
-                { id: "settings", label: "Ad settings", content: <MonetizationSettings settings={monetization} /> },
+                {
+                  id: "settings",
+                  label: "Ad settings",
+                  /* `ads` is read only to decide which zones get a per-page
+                     ExoClick switch — a zone with a row on it must be
+                     switchable, not just the five built-in ones. */
+                  content: <MonetizationSettings settings={monetization} ads={adRecords} />,
+                },
                 {
                   /* Which network pays for which reward moment. Stays in the
                      ads panel beside the network switches it routes between,

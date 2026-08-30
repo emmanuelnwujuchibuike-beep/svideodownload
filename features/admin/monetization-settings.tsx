@@ -2,13 +2,15 @@
 
 import { AlertTriangle, Check, Loader2, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import type { AdRecord } from "@/lib/monetization/ads";
 import {
   AD_ZONE_META,
-  EXOCLICK_ZONE_SURFACE,
-  EXOCLICK_ZONES,
-  type ExoClickZoneId,
+  AD_ZONES,
+  zoneSurface,
+  isExoClickZone,
+  type AdZoneId,
 } from "@/lib/monetization/ad-schema";
 import {
   MONETAG_PLACEMENTS,
@@ -99,7 +101,18 @@ const ROWS: { key: ToggleKey; label: string; hint: string }[] = [
 /** Daily reward-claim limit presets — 0 is unlimited. */
 const DAILY_LIMIT_OPTIONS = [0, 3, 5, 10, 20, 50] as const;
 
-export function MonetizationSettings({ settings }: { settings: MonetizationSettings }) {
+export function MonetizationSettings({
+  settings,
+  /**
+   * The ad rows, read ONLY to decide which zones get a per-page ExoClick
+   * switch. Defaulted so any caller that has not been updated still renders the
+   * five built-in zones rather than crashing.
+   */
+  ads = [],
+}: {
+  settings: MonetizationSettings;
+  ads?: Pick<AdRecord, "zone" | "format">[];
+}) {
   const router = useRouter();
   const [state, setState] = useState<MonetizationSettings>(settings);
   const [busy, setBusy] = useState(false);
@@ -167,7 +180,27 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
    * write an explicit `false` rather than deleting a key — deleting it would
    * read back as enabled and the switch would spring straight back.
    */
-  const toggleExoClickZone = async (zone: ExoClickZoneId) => {
+  /**
+   * Which zones get a per-page switch.
+   *
+   * 🔴 The five ExoClick shipped with, PLUS every zone that actually has an
+   * ExoClick row (2026-08-30). It was the fixed five, and that left a hole the
+   * owner fell into within a day: an ExoClick row placed on `result_top` had no
+   * switch here, and — worse — the server refused to serve it at all. Serving
+   * any zone is the fix on that side; this is the other half, so a zone that can
+   * serve can also be turned off.
+   *
+   * Sorted by the registry's own order rather than by discovery, so the list
+   * does not reshuffle as rows are added.
+   */
+  const switchableZones = useMemo(() => {
+    const placed = new Set<string>(
+      ads.filter((a) => a.format === "exoclick").map((a) => a.zone),
+    );
+    return AD_ZONES.filter((z) => isExoClickZone(z) || placed.has(z));
+  }, [ads]);
+
+  const toggleExoClickZone = async (zone: AdZoneId) => {
     const currentlyOn = state.exoclickZones?.[zone] !== false;
     const next: MonetizationSettings = {
       ...state,
@@ -230,7 +263,8 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
           </p>
 
           {(["marketing", "app"] as const).map((surface) => {
-            const zones = EXOCLICK_ZONES.filter((z) => EXOCLICK_ZONE_SURFACE[z] === surface);
+            const zones = switchableZones.filter((z) => zoneSurface(z) === surface);
+            if (zones.length === 0) return null;
             return (
               <div key={surface} className="mt-3">
                 <p
@@ -582,8 +616,8 @@ export function MonetizationSettings({ settings }: { settings: MonetizationSetti
       */}
       {state.exoclick &&
       state.adsense &&
-      EXOCLICK_ZONES.some(
-        (z) => EXOCLICK_ZONE_SURFACE[z] === "marketing" && state.exoclickZones?.[z] !== false,
+      switchableZones.some(
+        (z) => zoneSurface(z) === "marketing" && state.exoclickZones?.[z] !== false,
       ) ? (
         <p className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500\30 bg-amber-500\10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
           <AlertTriangle aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />

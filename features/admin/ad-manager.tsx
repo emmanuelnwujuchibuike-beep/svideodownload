@@ -9,8 +9,7 @@ import {
   AD_FORMAT_META,
   AD_ZONES,
   AD_ZONE_META,
-  EXOCLICK_ZONE_SURFACE,
-  isExoClickZone,
+  zoneSurface,
   looksLikeHijackScript,
 } from "@/lib/monetization/ad-schema";
 import type { AdRecord } from "@/lib/monetization/ads";
@@ -309,7 +308,11 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
               <ul className="divide-y divide-border/60">
                 {g.rows.map((r) => {
                   const exo = r.format === "exoclick";
-                  const surface = isExoClickZone(r.zone) ? EXOCLICK_ZONE_SURFACE[r.zone] : null;
+                  // Only shown on ExoClick rows — it explains which per-page
+                  // switch governs them, and no other network has one.
+                  const surface = exo
+                    ? zoneSurface(r.zone)
+                    : null;
                   return (
                     <li key={r.id} className="flex items-center gap-3 py-3">
                       <div className="min-w-0 flex-1">

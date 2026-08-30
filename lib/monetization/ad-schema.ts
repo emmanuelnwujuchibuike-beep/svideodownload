@@ -201,25 +201,43 @@ export function isExoClickZone(zone: string): zone is ExoClickZoneId {
 }
 
 /**
- * Which AdSense-facing surface each ExoClick zone renders on.
+ * Which AdSense-facing surface EVERY zone renders on.
  *
- * The admin groups the switches by this, because "will a Google reviewer see
- * it" is the only question that matters when deciding which ones to turn off,
- * and it is not answerable from a zone id.
+ * The admin groups the ExoClick switches by this, because "will a Google
+ * reviewer see it" is the only question that matters when deciding which to
+ * turn off, and it is not answerable from a zone id.
+ *
+ * 🔴 Covers ALL zones, not just the five ExoClick was built for (2026-08-30).
+ * It was originally the five, which quietly made those five the only zones an
+ * ExoClick row could serve on — see the note on `exoClickZoneEnabled`. An
+ * operator is free to put an ExoClick unit on any placement, so the
+ * classification has to answer for any placement.
  *
  * 🔴 `downloader_above_fetch` is `marketing`, and that is not a typo: the
  * landing page renders the shared `Downloader`, so that zone appears ON the
- * landing page as well as on the ~148 generated downloader pages. Grouping it
- * as anything else would let someone switch the landing "off" and still be
- * serving ExoClick above the paste box on it.
+ * landing page as well as on the ~148 generated downloader pages. Marking it
+ * anything else would let someone switch the landing "off" and still be serving
+ * ExoClick above the paste box on it.
+ *
+ * Only the two social-feed placements are `app` — everything else is reachable
+ * without signing in, and therefore reachable by a reviewer.
  */
-export const EXOCLICK_ZONE_SURFACE: Record<ExoClickZoneId, "marketing" | "app"> = {
-  downloader_above_fetch: "marketing",
-  landing_section_break: "marketing",
-  multilink_above_batch: "marketing",
-  multilink_card_inline: "marketing",
-  reels_interstitial: "app",
-};
+/*
+  The rule is small, so it is written small: a placement is behind sign-in, or
+  it is public. Only the two social-feed surfaces are behind sign-in.
+
+  Expressed as an exception set rather than a 25-entry table because the default
+  has to FAIL SAFE. A zone added later and never classified comes back
+  `marketing` — "assume a Google reviewer can reach it" — which is the cautious
+  answer, and the operator sees it under the heading warning them so. A table
+  would return undefined and silently render no warning at all, on the one
+  control built to prevent that.
+*/
+const SIGNED_IN_ZONES: ReadonlySet<string> = new Set(["feed_inline", "reels_interstitial"]);
+
+export function zoneSurface(zone: string): "marketing" | "app" {
+  return SIGNED_IN_ZONES.has(zone) ? "app" : "marketing";
+}
 
 /**
  * Is this a usable ExoClick zone id?
@@ -459,9 +477,16 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     WAITING through, and none of these block anything.
   */
   downloader_above_fetch: {
-    label: "Downloader — above the paste box",
+    /*
+      🔴 Renamed 2026-08-30. It was "Downloader — above the paste box", and the
+      owner — who had asked for an ad "above the fetch card" — picked
+      `result_top` instead, because "Above a fetched result" was the only label
+      in the list containing the word they had used. Two placements either side
+      of the same flow, and the label did not speak the operator's language.
+    */
+    label: "Downloader — above the fetch box (paste + Download)",
     description:
-      "A 9:16 vertical unit directly ABOVE the paste box and Download button, on the home page and every downloader page. Distinct from the under-download placement, which sits below the button. Collapses when empty.",
+      "A 9:16 vertical unit directly ABOVE the fetch/paste box and its Download button, on the home page and every downloader page. This is the one to pick for an ad above the fetch card. Distinct from Above a fetched result, which appears AFTER a fetch, and from Under the Download button. Collapses when empty.",
     persistent: true,
     supportsSkip: false,
     // Above the fold on the site's highest-traffic pages, so the zone data is

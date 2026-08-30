@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { isExoClickZone, type ExoClickZoneId } from "./ad-schema";
+import { AD_ZONES, type AdZoneId } from "./ad-schema";
 import {
   isMonetagAdType,
   isMonetagPlacementId,
@@ -318,7 +318,7 @@ export interface MonetizationSettings {
    * absence means enabled and these are an opt-OUT, while the master remains the
    * deliberate opt-in. See `normalizeExoClickZones`.
    */
-  exoclickZones: Partial<Record<ExoClickZoneId, boolean>>;
+  exoclickZones: Partial<Record<AdZoneId, boolean>>;
   /**
    * Whether HD/top-tier downloads require a server-verified reward session at
    * all. Off skips the reward-session flow entirely — `preview-card.tsx` falls
@@ -425,13 +425,17 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
  * zone silently defaulting to off is the "I enabled it and nothing happened"
  * failure this codebase keeps having to diagnose.
  */
-export function normalizeExoClickZones(value: unknown): Partial<Record<ExoClickZoneId, boolean>> {
+export function normalizeExoClickZones(value: unknown): Partial<Record<AdZoneId, boolean>> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const out: Partial<Record<ExoClickZoneId, boolean>> = {};
+  const out: Partial<Record<AdZoneId, boolean>> = {};
+  const declared = new Set<string>(AD_ZONES);
   for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (!isExoClickZone(key)) continue;
+    // Any DECLARED zone, not just the five ExoClick shipped with — an operator
+    // may place an ExoClick row anywhere, so a switch-off for any of them has
+    // to survive a round trip. Unknown/removed zone ids are still dropped.
+    if (!declared.has(key)) continue;
     if (typeof raw !== "boolean") continue;
-    out[key] = raw;
+    out[key as AdZoneId] = raw;
   }
   return out;
 }
@@ -447,8 +451,27 @@ export function exoClickZoneEnabled(
   zone: string,
 ): boolean {
   if (!settings.exoclick) return false;
-  if (!isExoClickZone(zone)) return false;
-  return settings.exoclickZones?.[zone] !== false;
+  /*
+    🔴 ANY zone, not just the five ExoClick shipped with (fixed 2026-08-30).
+
+    This used to `return false` for any zone outside `EXOCLICK_ZONES`, which
+    meant an ExoClick row placed on any OTHER placement served nothing at all —
+    silently, with the row still reading "Live" in the admin and the master
+    switch still on. It was reported within a day: a row on `result_top` (the
+    one zone whose label contains the word "fetch") rendered nothing, and there
+    was no surface anywhere saying why.
+
+    The five zones are the ones with a purpose-built 9:16 slot in the page. They
+    were never meant to be the only ones an operator may CHOOSE — `AdSlot`
+    renders the ExoClick branch for whatever zone asks for it, so restricting it
+    here made the admin offer a combination the renderer would honour and the
+    server would drop.
+
+    Per-zone opt-out still applies to every zone, so the AdSense-safety split is
+    unchanged: `ZONE_SURFACE` classifies all of them, and the admin renders a
+    switch for every zone that actually has an ExoClick row.
+  */
+  return settings.exoclickZones?.[zone as AdZoneId] !== false;
 }
 
 /** Keep only well-formed Monetag units (known type + string snippet), capped. */

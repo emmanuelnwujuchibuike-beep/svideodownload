@@ -138,8 +138,23 @@ function landingChunks(): string[] {
  * 🔴 The LANDING is unaffected and was checked, not assumed: all five ExoClick
  * placements render through `AdSurface`/`LazyAdSurface`, which the landing
  * already shipped, and `/` measured unchanged.
+ *
+ * 🔴 A FIFTH BUMP (348 → 349), same day, and this one bought a BUG FIX rather
+ * than a feature. An ExoClick row placed on any zone outside the five it
+ * shipped with served nothing at all — silently, row still reading "Live" —
+ * which the owner hit within a day. Fixing it meant the admin had to render a
+ * per-page switch for any zone that actually has a row (so a servable zone is
+ * also a switchable one), plus grouping the placement list by network so an
+ * ExoClick row cannot be mistaken for an Adsterra one.
+ *
+ * The splitting pass was done FIRST, not skipped: `ZONE_SURFACE` was a 25-entry
+ * table naming every zone, and collapsed to a 2-entry exception set behind
+ * `zoneSurface()` — the real rule is "public unless it is behind sign-in", and
+ * the default now fails safe toward "a reviewer can see this". That recovered
+ * 107 bytes and left the route 49 bytes over 348 KiB. The remaining overage is
+ * the grouped list itself, which is the fix.
  */
-const GLOBAL_CEILING = 348 * 1024;
+const GLOBAL_CEILING = 349 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

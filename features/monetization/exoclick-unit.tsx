@@ -3,6 +3,7 @@
 import { Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AD_ZONE_META } from "@/lib/monetization/ad-schema";
 import type { VastCreative } from "@/lib/monetization/vast";
 import { cn } from "@/lib/utils";
 
@@ -263,7 +264,22 @@ export function ExoClickUnit({
         muted={muted}
         playsInline
         autoPlay
-        preload="metadata"
+        /*
+          🔴 Buffer AHEAD for zones declared `prefetch` (owner, 2026-08-30:
+          "the ad video in above fetch card should prefetch and load before the
+          link is pasted and fetched, to avoid the video loading slowing and
+          making users scroll before it loads").
+
+          `metadata` only fetches the header, so the slot sat there empty until
+          it scrolled into view and only THEN started pulling the file — which
+          is exactly the wait being described. The zone registry already knows
+          which placements must be ready before they are looked at, so that one
+          flag decides it rather than a second list to keep in step.
+
+          Everything else stays on `metadata`: buffering a whole MP4 for a slot
+          most visitors never scroll to is bandwidth spent on nobody.
+        */
+        preload={AD_ZONE_META[zone as keyof typeof AD_ZONE_META]?.prefetch ? "auto" : "metadata"}
         // Loops are not free impressions: each replay would re-fire nothing (the
         // pixels are latched) but would keep pulling bytes. One play, then stop.
         /*

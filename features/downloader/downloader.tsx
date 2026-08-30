@@ -27,6 +27,7 @@ import {
 import { PublishButton } from "@/features/social/publish-button";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { DownloadCompleteAd } from "@/features/monetization/download-complete-ad";
+import { ExoClickSticky } from "@/features/monetization/exoclick-sticky";
 import { FetchedAd } from "@/features/monetization/fetched-ad";
 import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
@@ -636,6 +637,23 @@ export function Downloader({
 
       {metadata ? (
         <div ref={previewRef} className="scroll-mt-24">
+          {/*
+            The ExoClick STICKY banner, anchored to the result card.
+
+            🔴 `transform: translateZ(0)` is load-bearing, not a paint hint. A
+            transformed element becomes the CONTAINING BLOCK for any
+            `position: fixed` descendant, so ExoClick's sticky script — which
+            pins itself to the viewport — is scoped to this box instead of the
+            page. Without it the banner floated over the header and covered the
+            Install button.
+
+            This codebase has hit that rule three times from the other
+            direction (see components/ui/portal.tsx, added because blurred
+            chrome broke `position: fixed`). Here it is used deliberately.
+          */}
+          <div className="relative isolate mb-3 [transform:translateZ(0)]">
+            <ExoClickSticky />
+          </div>
           <FetchedAd key={`ad-${metadata.id}`} />
           <PreviewCard metadata={metadata} phase="idle" onDownload={handleDownload} />
 

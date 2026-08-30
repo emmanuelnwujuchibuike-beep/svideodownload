@@ -123,7 +123,14 @@ export function ExoClickSticky() {
       ref={host}
       className={tag.cls}
       data-zoneid={tag.zoneId}
-      style={{ display: "contents" }}
+      /*
+        , not .
+
+        While this was page-wide furniture it had to add no box at all. Anchored
+        to the result card it is the opposite: it needs its own space above the
+        thumbnail, or the creative would overlap the video it sits on top of.
+      */
+      style={{ display: "block" }}
     />
   );
 }

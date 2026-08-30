@@ -119,7 +119,17 @@ export function DeferredAdFurniture() {
         import, so this costs a cold page load nothing.
       */}
       <VastInterstitialTriggers />
-      <ExoClickSticky />
+      {/*
+        🔴 The sticky banner is NOT mounted here any more (owner, 2026-08-30:
+        "let the sticker banner be organised professionally on the fetch card
+        ontop of the video prefetch thumbnail and not on the landing hero").
+
+        Mounted as page-wide furniture, ExoClick pinned it to the viewport and
+        it landed over the header — covering the Install button and the menu
+        on a screenshot the owner sent. It now lives on the fetch card, where
+        it is anchored to content instead of floating over chrome. See
+        features/downloader/downloader.tsx.
+      */}
       <TopBannerAd />
       <IdleInterstitial />
       <ExitIntent />

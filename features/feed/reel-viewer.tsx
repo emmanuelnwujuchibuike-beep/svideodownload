@@ -728,7 +728,7 @@ export function ReelDeck({
               key={`ad-${entry.anchorId}`}
               className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black"
             >
-              <ReelsAdSlide variant={variant} />
+              <ReelsAdSlide />
             </section>
           ) : (
           <section key={entry.data.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black lg:pr-[400px]">

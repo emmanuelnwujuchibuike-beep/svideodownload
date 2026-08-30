@@ -3,8 +3,6 @@
 import { ChevronUp } from "lucide-react";
 import { useState } from "react";
 
-import { cn } from "@/lib/utils";
-
 import { AdSlot } from "./ad-slot";
 
 /**
@@ -29,7 +27,13 @@ import { AdSlot } from "./ad-slot";
  * viewer's plan, whether the zone is seeded at all, and the ExoClick switch
  * being on — so the default remains an ad-free deck.
  */
-export function ReelsAdSlide({ variant }: { variant: "modal" | "page" }) {
+/*
+  No `variant` prop any more. It existed solely to decide the bottom-nav
+  padding, and the slide is edge-to-edge on both variants now — a prop whose
+  only branch has been removed is a prop that will be wired to the wrong
+  thing later.
+*/
+export function ReelsAdSlide() {
   /**
    * Whether the zone actually produced a visible creative.
    *
@@ -44,12 +48,20 @@ export function ReelsAdSlide({ variant }: { variant: "modal" | "page" }) {
 
   return (
     <div
-      className={cn(
-        "relative flex h-full w-full flex-col items-center justify-center bg-black",
-        // Clear of the mobile bottom nav on the standalone /reels route, the
-        // same allowance ReelCard makes for its own chrome.
-        variant === "page" && "pb-16 lg:pb-0",
-      )}
+      /*
+        🔴 NO BOTTOM PADDING — the slide is edge to edge (owner, 2026-08-30:
+        "now is not full and fills … make it fill like a reels video").
+
+        `pb-16` was reserving 64px for the mobile bottom nav, which is what left
+        a black band under the creative even after the fill mode was corrected —
+        `object-cover` can only fill the box it is given, and the box was short.
+
+        Real reels do not do this: the media runs the full height and the chrome
+        FLOATS over it. Matching that is the whole point of the request, and the
+        nav is already drawn above this with its own background, so nothing is
+        obscured by giving the video the space back.
+      */
+      className="relative flex h-full w-full flex-col items-center justify-center bg-black"
     >
       {/*
         The label, and it is not decoration.

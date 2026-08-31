@@ -34,7 +34,6 @@ export const NOTABLE = new Set([
   // Bottom/history banner lifecycle — see events-registry.ts.
   "banner_filled",
   "banner_empty",
-  "interstitial_requested",
   "interstitial_filled",
   "interstitial_empty",
   "batch_authorized",
@@ -53,14 +52,6 @@ const SLOT_LABELS: Record<string, string> = {
   history: "History banner",
   sticky: "Sticky banner",
   interstitial: "Full-page interstitial",
-};
-
-/** Plain words for why a slot came back empty. */
-const REASON_LABELS: Record<string, string> = {
-  "no-ads": "ExoClick had no ad",
-  timeout: "no answer",
-  blocked: "loader blocked",
-  ended: "ad finished",
 };
 
 const EVENT_LABELS: Record<string, string> = Object.fromEntries(
@@ -91,22 +82,11 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
     */
     case "banner_filled":
     case "banner_empty":
-    case "interstitial_requested":
     case "interstitial_filled":
     case "interstitial_empty": {
       const slot = m.slot ? SLOT_LABELS[String(m.slot)] ?? String(m.slot) : null;
       const path = m.path ? String(m.path) : null;
-      /*
-        The REASON is the actionable half. "no-ads" is ExoClick declining —
-        their zone, their approval, or an ads.txt that does not authorise them.
-        "timeout" and "blocked" are ours or the visitor-s. Without it, every
-        empty row looks the same and points nowhere.
-      */
-      const reason = m.reason ? REASON_LABELS[String(m.reason)] ?? String(m.reason) : null;
-      // The network-s own words last, when it gave any — that is the line that
-      // says WHY, and it is the only part an operator can act on directly.
-      const detail = m.detail ? String(m.detail).slice(0, 160) : null;
-      return [slot, reason, path, detail].filter(Boolean).join(" · ") || null;
+      return [slot, path].filter(Boolean).join(" · ") || null;
     }
     case "subscribe":
     case "subscribe_cancel":

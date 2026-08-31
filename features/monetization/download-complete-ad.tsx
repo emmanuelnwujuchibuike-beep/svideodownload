@@ -213,39 +213,11 @@ export function DownloadCompleteAd({
           • the header's own `bg-card` is required: a transparent sticky header
             would have the creative scrolling visibly through it.
       */}
-      {/*
-        🔴 THE HEADER IS ITS OWN ROW, OUTSIDE THE SCROLLER (owner, 2026-08-31:
-        "this download completed ad doesnt show any count down and anything, is
-        just blank ... and this that stays without a way out").
-
-        It was a `sticky top-0` child INSIDE the scrolling sheet. Sticky is only
-        as reliable as the scroll container it is measured against, and when it
-        fails there is no fallback — the panel renders as a blank card with no
-        title, no countdown and, since the Skip control lives in that header, no
-        way out at all. A visitor sealed in an ad is the one outcome this panel
-        must never produce, and this is the second time this header has managed
-        it.
-
-        So the layout no longer depends on sticky working. The sheet is a flex
-        COLUMN with a bounded height; the header is `shrink-0` and the ad is the
-        only thing that scrolls.
-
-        ⚠️ `shrink-0` is the entire lesson from the first attempt at this (see
-        the note above): the header was a flex child with the default
-        `flex-shrink: 1`, so a tall creative squashed it to nothing and
-        `overflow-hidden` clipped what was left. `shrink-0` on the header plus
-        `min-h-0` on the body is the pattern that cannot do that — a flex item's
-        default `min-height: auto` is what stops the BODY shrinking instead.
-
-        `text-card-foreground` is explicit for the same belt-and-braces reason:
-        `bg-card` without it inherits whatever colour an ancestor happens to
-        set, and white-on-white is indistinguishable from "not rendered".
-      */}
       <div
-        className="relative flex w-full flex-col max-h-[calc(100dvh-var(--frenz-safe-top,0px)-1rem)] overscroll-contain rounded-t-3xl border border-border/60 bg-card text-card-foreground pb-4 shadow-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-3xl"
+        className="relative w-full max-h-[calc(100dvh-var(--frenz-safe-top,0px)-1rem)] overflow-y-auto overscroll-contain rounded-t-3xl border border-border/60 bg-card px-4 pb-4 shadow-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-3xl"
         style={{ marginTop: "var(--frenz-safe-top, 0px)" }}
       >
-        <div className="z-10 flex shrink-0 items-center justify-between gap-3 border-b border-border/50 bg-card px-4 pb-3 pt-4">
+        <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between gap-3 border-b border-border/50 bg-card px-4 pb-3 pt-4">
           <div>
             {/*
               🔴 "COMPLETED", not "started" (owner, 2026-08-30).
@@ -303,17 +275,7 @@ export function DownloadCompleteAd({
         {/* Plain flow inside the scroller — no flex, so nothing can be squashed.
             The bottom inset keeps the last of the creative clear of the home
             indicator on a gesture-nav phone. */}
-        {/*
-          The scrolling half. `min-h-0` is what actually makes it scroll: a flex
-          child's default `min-height: auto` refuses to shrink below its
-          content, so without it a tall creative would push the sheet past its
-          own max-height and take the header off screen again — which is the
-          exact bug this structure exists to prevent.
-        */}
-        <div
-          className="min-h-0 flex-1 overflow-y-auto px-4"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-        >
+        <div style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <p className="mb-2 mt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
             Sponsored
           </p>

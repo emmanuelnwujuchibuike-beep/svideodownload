@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { countAdImpression, recordAdClick, recordAdImpression, trackEvent } from "@/lib/analytics/events";
+import { recordAdClick, recordAdImpression, trackEvent } from "@/lib/analytics/events";
 import { emit } from "@/lib/platform/event-bus";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
@@ -38,18 +38,6 @@ const bannerSchema = z.object({
   slot: z.enum(["sticky", "history", "bottomnav", "interstitial"]),
   /** Did a creative actually arrive in the placeholder? */
   filled: z.boolean(),
-  /**
-   * The finer-grained state, when the caller has one.
-   *
-   * "requested" is the row that answers the question neither of the others
-   * can: whether the placement FIRED at all. A moment that never runs and one
-   * the network declines are the same empty screen from the outside.
-   */
-  state: z.enum(["requested", "filled", "empty"]).optional(),
-  /** WHY it was empty — an ExoClick refusal reads very differently from a timeout. */
-  reason: z.enum(["no-ads", "timeout", "blocked", "ended"]).optional(),
-  /** The network-s own API error, when it sent one. Free text, bounded. */
-  detail: z.string().max(300).optional(),
   /** Which page it was on — "the history page in particular". */
   path: z.string().max(120).optional(),
 });
@@ -109,46 +97,20 @@ export async function POST(request: Request) {
     invisible from outside the browser.
   */
   if (parsed.data.kind === "banner") {
-    const { slot, filled, path, state, reason, detail } = parsed.data;
+    const { slot, filled, path } = parsed.data;
     /*
       The fullpage interstitial is the same MECHANISM as the banners — an <ins>
       their loader fills — but it is not a banner, and an operator scanning the
       feed for "did the interstitial fire" should not have to read the slot
       column to tell them apart.
     */
-    /*
-      Count it in the real impression numbers too (owner, 2026-08-31: "bottom
-      banner should count in ad impression"). These placements are not AD_ZONES
-      — each has its own settings key so ExoClick and Adsterra can run side by
-      side — but the impression they produce is an ordinary impression, and the
-      dashboard total is wrong without it. Attributed to the zone that describes
-      the same POSITION, which is what an operator reading the report means.
-
-      Counter only: `banner_filled` below is the feed row, and it names the
-      placement and the page rather than just a zone id.
-    */
-    const IMPRESSION_ZONE: Record<string, string> = {
-      bottomnav: "bottom_banner",
-      history: "history_above_grid",
-      sticky: "global",
-      interstitial: "idle_interstitial",
-    };
-    // Only a real render is an impression — never the ask.
-    if (filled && state !== "requested") countAdImpression(IMPRESSION_ZONE[slot] ?? "global", userId);
-
     const isInterstitial = slot === "interstitial";
     const type = isInterstitial
-      ? state === "requested"
-        ? "interstitial_requested"
-        : filled
-          ? "interstitial_filled"
-          : "interstitial_empty"
-      : filled
-        ? "banner_filled"
-        : "banner_empty";
+      ? (filled ? "interstitial_filled" : "interstitial_empty")
+      : (filled ? "banner_filled" : "banner_empty");
     trackEvent(type, {
       userId,
-      metadata: { slot, path: path ?? null, reason: reason ?? null, detail: detail ?? null },
+      metadata: { slot, path: path ?? null },
     });
     return NextResponse.json({ ok: true });
   }

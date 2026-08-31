@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { VastInterstitialTriggers } from "@/features/monetization/vast-interstitial/triggers";
 import { ExoClickSticky } from "@/features/monetization/exoclick-sticky";
 import { useEffect, useState } from "react";
 
@@ -113,13 +114,7 @@ export function DeferredAdFurniture() {
         Ships two listeners and a timer — the ad code stays behind a dynamic
         import, so this costs a cold page load nothing.
       */}
-      {/*
-        🔴 MOVED TO THE ROOT SHELL (2026-08-31). This component is mounted by
-        the MARKETING layout only, so idle and back-swipe interstitials fired
-        on the landing and SEO pages and nowhere else — no signed-in surface
-        ever had them. They are page-agnostic moments and now live in
-        features/app-shell/deferred-shell.tsx, which every page renders.
-      */}
+      <VastInterstitialTriggers />
       {/*
         🔴 The sticky banner is NOT mounted here any more (owner, 2026-08-30:
         "let the sticker banner be organised professionally on the fetch card

@@ -7,8 +7,6 @@ import {
   EXOCLICK_PROVIDER_SRC,
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
-import { usePageSettled } from "@/lib/dom/use-page-settled";
-import { debugMessages, loaderError, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
 import { cn } from "@/lib/utils";
 
 import { useShowAds } from "./use-show-ads";
@@ -110,40 +108,6 @@ import { useShowAds } from "./use-show-ads";
  */
 const providerPromises = new Map<string, Promise<boolean>>();
 
-/**
- * 🔴 EVERY DOMAIN'S SCRIPT MUST BE LOADED. I got this exactly backwards once.
- *
- * The bundle guards its own construction:
- *
- *     (Array.isArray(window.AdProvider) || void 0 === window.AdProvider)
- *       && (window.AdProvider = function () { … })
- *
- * which is true: the second provider script does NOT rebuild the provider. I
- * concluded from that alone that a second script was a no-op and short-circuited
- * it away. That was wrong, and it is why the fullpage interstitial reported
- * `Interstitial empty` on every ask while its tag was correctly configured.
- *
- * The very next statements in their bundle are a COMMA expression, so they run
- * unconditionally — the `&&` above binds tighter and does not guard them:
- *
- *     …), AdProvider.handleCurrentDomain(n), AdProvider.handleSnippetQueue(e), …
- *
- * and `handleCurrentDomain` is:
- *
- *     function (d) { for (…) if (a[t].syndication === d.syndication) return;
- *                    a.push(d); for (…) W(o[t], d); }
- *
- * So a second script REGISTERS ITS SYNDICATION DOMAIN with the already-running
- * provider and replays the queued commands against it. That is precisely the
- * supported way to serve zones from two domains, and skipping it left zone
- * 6016704 — issued for `pemsrv` — being asked of `magsrv`, which does not have
- * it. "No ads to display", forever, for a zone that was set up correctly.
- *
- * Each domain is still loaded at most ONCE (the promise map above); what is
- * gone is the idea that a live provider makes another domain's script pointless.
- */
-
-
 export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boolean> {
   const existing = providerPromises.get(src);
   if (existing) return existing;
@@ -192,40 +156,6 @@ declare global {
 export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
 
 /**
- * WHY a slot ended up empty — the distinction that turns "no ad" into a lead.
- *
- * "Empty" on its own cannot tell an ExoClick decision apart from a failure on
- * our side, and those need completely different fixes:
- *
- *   no-ads   ExoClick answered "has no ads to display". Their side: the zone,
- *            its approval, demand for this visitor — or an ads.txt that does
- *            not authorise them to sell the inventory.
- *   timeout  we asked and never heard back. Ours, or the network is unreachable.
- *   blocked  the loader script itself never ran — an ad blocker, usually.
- *   ended    it DID fill and then removed itself, which is what an outstream
- *            player does after one play.
- */
-export type EmptyReason = "no-ads" | "timeout" | "blocked" | "ended";
-
-/**
- * How long a slot may hold a box open before we call it empty.
- *
- * This is the maximum time a reader can be looking at a blank gap where an ad
- * might arrive, so it is a UX number, not a network one. Four seconds is long
- * enough for the loader's own request to come back on a phone connection and
- * short enough that a no-fill is not a hole anybody stares at.
- *
- * It does NOT cap the fill: the observers keep watching for the life of the
- * unit, so a creative that lands late still appears and the box comes back with
- * it. All this bounds is how long we are willing to look hopeful.
- */
-const EMPTY_VERDICT_MS = 4000;
-
-/** How often the loader-s log is checked, and the hard ceiling on doing so. */
-const POLL_MS = 400;
-const POLL_MAX_MS = 15_000;
-
-/**
  * Report this slot's state to the operator feed (owner, 2026-08-31: "wire the
  * bottom banner ad activity to the admin live activity").
  *
@@ -239,12 +169,12 @@ const POLL_MAX_MS = 15_000;
  * change, and so a blocked or slow request can never delay the ad it is
  * describing. Fired only on a CHANGE, never per frame.
  */
-function beacon(slot: ExoClickInsSlot, filled: boolean, reason?: EmptyReason, detail?: string | null): void {
+function beacon(slot: ExoClickInsSlot, filled: boolean): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot, filled, reason, detail: detail ?? undefined, path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot, filled, path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -330,14 +260,8 @@ export function ExoClickSticky({
   const { showAds, ready } = useShowAds();
   const host = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  /**
-   * What we know about this slot right now.
-   *
-   * "pending" is the state that matters: it is NOT the same as "empty", and
-   * treating them alike is what starved the outstream slot of the box it needs
-   * to render into. See the style block below.
-   */
-  const [status, setStatus] = useState<"pending" | "filled" | "empty">("pending");
+  /** True once ExoClick has actually put a creative in the host. */
+  const [filled, setFilled] = useState(false);
   /*
     Held in a ref, not a dependency: `onFill` is an inline arrow at the call
     site, so depending on it would tear down and re-serve the placeholder on
@@ -377,23 +301,6 @@ export function ExoClickSticky({
   useEffect(() => setMounted(true), []);
 
   /*
-    🔴 NEVER BEFORE THE PAGE HAS LOADED (owner, 2026-08-31: "frenzsave is stuck
-    loading, it delays a lot, seems the lcp is broken").
-
-    This appended ExoClick-s ~195 KB provider the moment it mounted — during
-    hydration, while the browser is still fetching what the LCP is waiting on.
-    Measured on this build, Pixel 7, slow-4G + 4x CPU, median of 5 runs:
-
-        third parties allowed   LCP 2940ms   21 long tasks (6221ms)
-        third parties blocked   LCP  396ms    4 long tasks  (925ms)
-
-    `ExoClickUnit` has waited for `load` since the same problem was measured on
-    2026-08-30. This placement never did, and it is the one that now runs on
-    every page. See lib/dom/use-page-settled.ts.
-  */
-  const settled = usePageSettled();
-
-  /*
     A navigation asks for a serve ONLY when there is nothing to lose — see the
     note on `serveKey`. A slot that is currently showing an ad is left entirely
     alone, cleanup included, because the cleanup is what was destroying it.
@@ -413,7 +320,7 @@ export function ExoClickSticky({
   }, [pathname]);
 
   useEffect(() => {
-    if (!mounted || !settled || !ready || !showAds || !tag) return;
+    if (!mounted || !ready || !showAds || !tag) return;
     const el = host.current;
     if (!el) return;
 
@@ -424,22 +331,7 @@ export function ExoClickSticky({
       than in JSX also keeps React out of a subtree a third-party script mutates
       from underneath it.
     */
-    /*
-      🔴 THE PENDING BOX IS FOR THE FIRST ATTEMPT ONLY (owner, 2026-08-31: "the
-      history page above the grid is showing blank", with a screenshot of a tall
-      empty gap above the day groups).
-
-      An outstream player needs a container with height to initialise in, so the
-      box has to exist BEFORE the fill — but a box that outlives a no-fill is
-      the "large empty hole in the middle of the page" the 2026-08-30 note
-      warned about, and that is what the screenshot shows. Both are true; the
-      answer is that the box is a short LOAN, not a reservation.
-
-      A retry has already had its chance to be a hole once. It re-asks with a
-      fresh placeholder but keeps the collapsed layout, so the reader never sees
-      the gap twice for the same slot.
-    */
-    setStatus(retried.current ? "empty" : "pending");
+    setFilled(false);
     el.textContent = "";
     const ins = document.createElement("ins");
     /*
@@ -500,102 +392,9 @@ export function ExoClickSticky({
           leading explanation for "shows only once".
     */
     let everFilled = false;
-
-    /*
-      🔴 ASK THE LOADER WHAT HAPPENED, INSTEAD OF TIMING IT (owner, 2026-08-31:
-      "the history banner or outstream video is not showing, the two links are
-      set up").
-
-      Every previous attempt at this inferred the answer from the DOM and a
-      stopwatch, and each guess was wrong in its own way: watch the <ins> (the
-      creative is a sibling), watch for an <img> (it might be a video, or a
-      background), collapse after 4 seconds (an outstream reveals on
-      viewability, which can be later than that). The outstream slot is the
-      worst case, because it needs a sized box to initialise in — so a timer
-      that withdraws the box is a timer that can PREVENT the fill it is waiting
-      for.
-
-      The loader keeps its own log and exposes it: `AdProvider.getDebugMessages()`.
-      It contains, verbatim from their bundle:
-
-        "Request #<n> Placement #<m> was pushed with zone {…\"id\":6015590…}"
-        "Request #<n> Placement #<m> has no ads to display"
-        "Request #<n> handling the response"
-
-      That is the network's OWN verdict, per zone, and it is available before
-      anything paints. So the box now comes down when ExoClick says there is no
-      ad — immediately, so there is no hole — and stays up while a served
-      request is still working, however long the player takes to become
-      viewable. The stopwatch survives only as the fallback for when that log is
-      unavailable.
-    */
-    const logStart = debugMessages().length;
-    let emptyTimer: ReturnType<typeof setTimeout> | null = null;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    let poll: ReturnType<typeof setInterval> | null = null;
-    const stopPoll = () => {
-      if (poll) clearInterval(poll);
-      poll = null;
-    };
-    const clearTimers = () => {
-      if (emptyTimer) clearTimeout(emptyTimer);
-      if (retryTimer) clearTimeout(retryTimer);
-      emptyTimer = null;
-      retryTimer = null;
-    };
-    const settleEmpty = (reason: EmptyReason) => {
-      stopPoll();
-      clearTimers();
-      setStatus("empty");
-      /*
-        When ExoClick declines for a REASON rather than for lack of inventory,
-        their API says so and their loader logs it. That message is the only
-        thing that can tell a paused zone from an unapproved site from genuine
-        no-demand, so it travels with the event.
-      */
-      if (!everFilled) beacon(slot, false, reason, reason === "no-ads" ? loaderError(tag.zoneId, logStart) : null);
-    };
-    /*
-      🔴 THIS POLL IS HARD-BOUNDED, and it was not (owner, 2026-08-31: "frenzsave
-      is stuck loading, it delays a lot, seems the lcp is broken").
-
-      The first version stopped only on a fill or a refusal. On `served` it
-      cleared the fallback timer and then just kept going — every 400ms, running
-      a regex over a debug array that GROWS for the life of the page, forever,
-      once per slot. Two banners on a page is two permanent intervals doing
-      pointless work on the main thread, and that is exactly what a page that
-      "delays a lot" feels like.
-
-      There are now two independent stops. `served` ends it immediately, because
-      at that point the poll has nothing left to learn — the observers take over
-      and they are the ones that see the creative land. And the absolute cap
-      ends it regardless, so no future branch can leave it running.
-    */
-    const pollStartedAt = Date.now();
-    poll = setInterval(() => {
-      if (everFilled || Date.now() - pollStartedAt > POLL_MAX_MS) {
-        stopPoll();
-        return;
-      }
-      const verdict = loaderVerdict(tag.zoneId, logStart);
-      if (verdict === "empty") {
-        // ExoClick has answered: nothing for this visitor. Collapse at once.
-        settleEmpty("no-ads");
-      } else if (verdict === "served") {
-        // An ad IS on its way. The box must survive until the player decides it
-        // is viewable, so the fallback timer goes — and so does the poll, whose
-        // one question has now been answered.
-        stopPoll();
-        clearTimers();
-      }
-    }, POLL_MS);
-
-    emptyTimer = setTimeout(() => {
-      if (everFilled) return;
-      // Fallback only: the loader told us nothing either way. Believing an
-      // unanswered request forever is how the "large empty hole" comes back.
-      settleEmpty("timeout");
-    }, EMPTY_VERDICT_MS);
+    const emptyTimer = setTimeout(() => {
+      if (!everFilled) beacon(slot, false);
+    }, 10_000);
 
     /*
       🔴 ONE RETRY WITH A FRESH PLACEHOLDER (owner, 2026-08-31: "the history
@@ -619,33 +418,25 @@ export function ExoClickSticky({
       `banner_filled` / `banner_empty` events are what will actually say whether
       the second ask was made and what came back.
     */
-    retryTimer = setTimeout(() => {
+    const retryTimer = setTimeout(() => {
       if (hasCreative(el) || retried.current) return;
       retried.current = true;
       setServeKey((k) => k + 1);
-    }, EMPTY_VERDICT_MS + 2000);
+    }, 3500);
     const report = () => {
       const now = hasCreative(el);
       if (now === last) return;
       last = now;
+      setFilled(now);
       fillCb.current?.(now);
       if (now) {
-        stopPoll();
-        clearTimers();
+        clearTimeout(emptyTimer);
+        clearTimeout(retryTimer);
         everFilled = true;
-        setStatus("filled");
         beacon(slot, true);
       } else if (everFilled) {
-        /*
-          It filled and then went away — the outstream player hiding itself
-          after one play. That IS empty now, so the box goes with it; the
-          alternative is a 180px hole where an ad used to be.
-        */
-        setStatus("empty");
-        beacon(slot, false, "ended");
+        beacon(slot, false);
       }
-      // Otherwise still PENDING. Reporting "empty" here would withdraw the box
-      // an outstream unit has not finished initialising in — see the style block.
     };
     const observer = new ResizeObserver(report);
     observer.observe(el);
@@ -659,10 +450,10 @@ export function ExoClickSticky({
         // Blocked, or the loader could not be fetched at all.
         observer.disconnect();
         mo.disconnect();
-        stopPoll();
-        clearTimers();
+        clearTimeout(emptyTimer);
+        clearTimeout(retryTimer);
         fillCb.current?.(false);
-        beacon(slot, false, "blocked");
+        beacon(slot, false);
         return;
       }
       try {
@@ -679,8 +470,8 @@ export function ExoClickSticky({
     return () => {
       observer.disconnect();
       mo.disconnect();
-      stopPoll();
-      clearTimers();
+      clearTimeout(emptyTimer);
+      clearTimeout(retryTimer);
       fillCb.current?.(false);
       /*
         Take the loader's wrapper down with us. It is a foreign node inside a
@@ -691,7 +482,7 @@ export function ExoClickSticky({
     };
     // `serveKey`, NOT `pathname` — a navigation only bumps it when the slot is
     // empty, so this effect's cleanup can never tear down a live creative.
-  }, [mounted, settled, ready, showAds, tag, serveKey, slot]);
+  }, [mounted, ready, showAds, tag, serveKey, slot]);
 
   // Premium visitors, an unresolved plan, or nothing configured: render nothing
   // at all — not even the host, which is what the loader would fill.
@@ -739,47 +530,20 @@ export function ExoClickSticky({
         slot === "bottomnav" && "[&_iframe]:!max-w-full [&_img]:!max-w-full",
       )}
       /*
-        🔴 THE OUTSTREAM SLOT NEEDS ITS BOX **BEFORE** IT FILLS, NOT AFTER
-        (owner, 2026-08-31: "the history above the grid banner doesnt show at
-        all", and "center the history banner to be positioned in center").
+        🔴 A FLOOR, NOT A FIXED ASPECT, and only ONCE SOMETHING FILLED.
 
-        This was `slot === "history" && filled`, which is a deadlock for an
-        outstream video: the player sizes itself to its CONTAINER, a
-        `display:block` element with a width and no height computes to 0px, and
-        a 0px container gives the player nothing to initialise in — so it never
-        renders, so the host never gains height, so `filled` never becomes true,
-        so the box is never granted. "Earn the height" is the right rule for a
-        BANNER, whose creative brings its own size; it is exactly the wrong rule
-        for a unit that asks the page how big it should be. The 2026-08-30 note
-        about the 0px collapse was right the first time.
+        `aspectRatio: 16/9` was right for an outstream VIDEO, but the zone also
+        serves fixed-size NATIVE units and forcing 16:9 onto a taller creative
+        crops it. `minHeight` still gives an outstream player a box to settle
+        into, and content decides the rest.
 
-        So the box exists while the answer is still PENDING, and is withdrawn
-        only once we know there is nothing — which is what stops it being the
-        "large empty hole in the middle of the page" that made the fixed 16:9
-        box wrong. `minHeight`, not `aspectRatio`, because this zone also serves
-        fixed-size native units a rigid 16:9 would crop.
-
-        Centred with flex on the container: it centres ANY single child whatever
-        its display type, which is the whole reason that rule is here rather
-        than on the child, where three earlier attempts put it.
-
-        The STICKY slot keeps no size at all — the network pins it to the
-        viewport itself, so this host must not occupy or reserve any space.
+        The STICKY slot keeps no size at all: the network pins it to the viewport
+        itself, so this host must not occupy or reserve any space.
       */
       style={
-        slot === "history"
-          ? status === "empty"
-            ? { display: "block", width: "100%" }
-            : {
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                width: "100%",
-                minHeight: 180,
-              }
-          : slot === "bottomnav"
-            ? { display: "flex", justifyContent: "center", alignItems: "center", width: "100%" }
-            : { display: "block", width: "100%" }
+        slot === "history" && filled
+          ? { display: "flex", width: "100%", minHeight: 180 }
+          : { display: "block", width: "100%" }
       }
     />
   );

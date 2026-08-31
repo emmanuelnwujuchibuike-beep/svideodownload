@@ -1,6 +1,5 @@
 "use client";
 
-import { showAdsFromCache } from "@/features/auth/use-entitlements";
 import { track } from "@/lib/analytics/client";
 import type { VastCreative } from "@/lib/monetization/vast";
 import {
@@ -96,22 +95,6 @@ export async function requestVastInterstitial(
   // or a double-fire must not open two overlays or make two VAST requests.
   if (phase !== "idle") return { shown: false, reason: "busy" };
 
-  /*
-    🔴 PAYING MEMBERS NEVER SEE THIS.
-
-    Every other placement is gated server-side — `/api/ads/*` refuses to serve
-    to a premium plan — but ExoClick's fullpage unit is a pasted tag their own
-    loader fills in the browser, so no server sits between it and the visitor.
-    Without this check, upgrading would remove every ad in the product except
-    the most intrusive one.
-
-    Read from the entitlement cache rather than a hook: this is a plain async
-    function called from a timer. It defaults to "show ads" while the cache is
-    cold, which is right here — these moments fire tens of seconds into a visit,
-    long after `/api/me` has answered.
-  */
-  if (!showAdsFromCache()) return { shown: false, reason: "disabled" };
-
   let config: VastInterstitialConfig;
   try {
     config = await loadConfig();
@@ -119,36 +102,30 @@ export async function requestVastInterstitial(
     return { shown: false, reason: "error" };
   }
 
-  /*
-    The cooldown is shared: it is a promise to the VISITOR about how often a
-    full-screen ad may appear, not a property of whichever product supplies it.
-  */
+  if (!isEnabledFor(config, trigger)) return { shown: false, reason: "disabled" };
   if (config.cooldownMs > 0 && Date.now() - lastShownAt < config.cooldownMs) {
     return { shown: false, reason: "cooldown" };
   }
 
   /*
-    🔴 EXOCLICK'S FULLPAGE INTERSTITIAL IS GATED BY ITS OWN TAG, AND NOTHING
-    ELSE (owner, 2026-08-31: "you did not do the main exoclick interstitial ad
-    zone, cause is not showing anything").
+    🔴 EXOCLICK'S OWN FULLPAGE INTERSTITIAL FIRST (owner, 2026-08-31: "set up
+    the full idle, backswipe and all interstitial ad to also use this exoclick
+    interstitial ad set up for full page interstitial ad").
 
-    It WAS implemented — the settings key, the admin field, the config route and
-    this call all shipped — and it could still never run, because this block sat
-    BELOW `isEnabledFor(config, …)`. That is the VAST interstitial's master
-    switch, it defaults to OFF, and the owner had turned it off precisely
-    BECAUSE they were removing the video interstitial it controls. So switching
-    products off switched the replacement off with it, and the feature looked
-    unbuilt.
+    Wired HERE rather than into each trigger, because this function is already
+    the single door every interstitial moment goes through — idle and back-swipe
+    (`ambient`), the download start and the download completion. One edit
+    therefore covers all of them, and, far more importantly, they keep sharing
+    ONE set of guards: the busy check above, the cooldown, the master switch and
+    the per-moment switches. A second placement with its own idea of "not too
+    often" is how a visitor meets two full-screen ads back to back.
 
-    A placement with its own settings key must not require another product's
-    switch. The ExoClick attempt now happens BEFORE any VAST gating: pasting the
-    tag is the whole activation, which is what the admin field says it is. The
-    VAST switches are checked further down, where they belong — on the VAST
-    path.
+    It is tried FIRST and the VAST path stays as the fallback, so an operator
+    who has not pasted the tag loses nothing and one who has does not end up
+    running both products at the same moment.
 
-    The guards that survive are the ones about the VISITOR rather than about a
-    product: the busy check above (one full-screen ad at a time) and the
-    cooldown.
+    `lastShownAt` is stamped on success so the cooldown covers this unit too —
+    without it, an ExoClick takeover would not delay the next VAST one.
   */
   /*
     Claimed BEFORE the await, not after. The busy guard at the top of this
@@ -159,46 +136,13 @@ export async function requestVastInterstitial(
   phase = "loading";
   try {
     const { showExoClickInterstitial } = await import("../exoclick-interstitial");
-    const outcome = await showExoClickInterstitial();
-    /*
-      🔴 A CONFIGURED PLACEMENT IS NOT A FALLBACK (owner, 2026-08-31: "the
-      interstitial is not showing after 5secs, rather is the video i used as
-      interstitial before that i already removed that shows").
-
-      Only `no-tag` continues to the VAST path. `empty` deliberately does NOT:
-      once an ExoClick tag is pasted, this moment belongs to ExoClick, and
-      falling through would run the old video interstitial the operator had
-      already removed — which is exactly what was happening, because "did it
-      fill" is measured against markup we do not control and a MISS is
-      indistinguishable from a genuine no-fill. Showing a removed ad because our
-      detector was unsure is worse than showing nothing.
-
-      `lastShownAt` is stamped even on `empty`, so an ExoClick attempt still
-      spends the cooldown. Otherwise a zone that is out of inventory would let
-      every idle timeout re-ask immediately, which is a request loop with a
-      full-screen ad at the end of it.
-    */
-    if (outcome !== "no-tag") {
+    if (await showExoClickInterstitial()) {
       lastShownAt = Date.now();
       phase = "idle";
-      return outcome === "shown"
-        ? { shown: true, reason: "shown" }
-        : { shown: false, reason: "no-ad" };
+      return { shown: true, reason: "shown" };
     }
   } catch {
-    /* The module itself failed to load — fall through to the VAST path. */
-  }
-
-  /*
-    The VAST product's own switches, checked HERE rather than at the top — they
-    govern the VAST interstitial and must not decide whether ExoClick's separate
-    placement above is allowed to run. `phase` is released first: the ExoClick
-    attempt claimed it, and a disabled VAST path must not leave the module stuck
-    in "loading" and refuse every later request as busy.
-  */
-  if (!isEnabledFor(config, trigger)) {
-    phase = "idle";
-    return { shown: false, reason: "disabled" };
+    /* No tag, a blocked loader, or no fill — fall through to the VAST path. */
   }
 
   const ZONE = ZONE_BY_TRIGGER[trigger];

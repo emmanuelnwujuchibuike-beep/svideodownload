@@ -87,7 +87,6 @@ export const EVENTS = [
     nothing — and since the network owns that whole experience once it fires,
     these two rows are the only thing on our side that can say it happened.
   */
-  { id: "interstitial_requested", label: "Interstitial requested", description: "A moment fired and asked ExoClick for a fullpage interstitial.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "interstitial_filled", label: "Interstitial shown", description: "An ExoClick fullpage interstitial rendered.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "interstitial_empty", label: "Interstitial empty", description: "An ExoClick fullpage interstitial was requested but nothing rendered.", domain: "monetization", metadata: ["slot", "path"] },
   /*

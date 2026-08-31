@@ -37,23 +37,6 @@ const FREE: Omit<Entitlements, "ready"> = {
 };
 
 let cache: Omit<Entitlements, "ready"> | null = null;
-
-/**
- * Whether this visitor should be shown ads, read WITHOUT a hook.
- *
- * For module-level ad code that has no component to hang `useEntitlements` off
- * — the interstitial request path is a plain async function called from a
- * timer. Reads the same cache the hook fills, so there is no extra request.
- *
- * Defaults to TRUE when the cache is cold, which is the safe default for the
- * only caller: a full-screen ad that fires on idle or back-swipe, tens of
- * seconds into a visit, by which time `/api/me` has long since answered. The
- * opposite default would suppress ads for every free visitor on a slow
- * connection.
- */
-export function showAdsFromCache(): boolean {
-  return cache ? cache.showAds : true;
-}
 let inflight: Promise<void> | null = null;
 
 /**

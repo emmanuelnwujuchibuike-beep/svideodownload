@@ -56,29 +56,6 @@ export function recordAdImpression(
   trackEvent("ad_impression", { userId, metadata: { zone, adId } });
 }
 
-/**
- * Records an ad impression in the COUNTER only, with no feed event.
- *
- * For placements that already emit their own, better-named event — the ExoClick
- * display banners report `banner_filled`, which says which placement and which
- * page. Calling `recordAdImpression` for those would put the impression in the
- * dashboard totals (right) and a second, blander row in the live feed for the
- * same fill (wrong).
- *
- * Owner, 2026-08-31: "bottom banner should count in ad impression".
- */
-export function countAdImpression(zone: string, userId?: string | null): void {
-  if (!hasSupabase) return;
-  void (async () => {
-    try {
-      const supabase = createAdminClient();
-      await supabase.from("ad_impressions").insert({ zone, ad_id: null, user_id: userId ?? null });
-    } catch {
-      /* analytics must never affect the request */
-    }
-  })();
-}
-
 /** Records an ad click (dedicated counter + unified event). */
 export function recordAdClick(
   zone: string,

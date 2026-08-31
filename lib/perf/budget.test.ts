@@ -237,27 +237,7 @@ function landingChunks(): string[] {
  * streak upgrade — the milestone ceremony, the flame gallery and six live tier
  * marks — is code-split behind `next/dynamic` and adds ~1 kB to `/`.
  */
-/*
- * A TENTH bump (354 → 355), and like every one before it this is the ADMIN
- * route and only the admin route.
- *
- * Owner, 2026-08-31: "wire the bottom banner ad activity to the admin live
- * activity" and "bottom banner should count in ad impression, not showing in
- * gray". What shipped for that is four rows in `activity-feed.tsx`'s `KIND`
- * map (label, dot and chip classes per event) plus the full-page interstitial
- * textarea in the monetization settings form. Both are strings and markup on a
- * screen only an operator ever opens.
- *
- * 🔴 THE PUBLIC CEILINGS BELOW ARE UNTOUCHED and still pass — `ENTRY_CEILING`
- * (275 KiB) and `APP_ENTRY_CEILING` (300 KiB). That distinction is the whole
- * reason this one is allowed to drift: nothing here reaches the landing page,
- * whose 1.6-second budget is the rule everything else bends around.
- *
- * Nothing worth splitting: a colour map that renders on the operator's first
- * paint behind a dynamic import would be a network round trip to save a few
- * hundred bytes on a route that is already 354 KiB.
- */
-const GLOBAL_CEILING = 355 * 1024;
+const GLOBAL_CEILING = 354 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

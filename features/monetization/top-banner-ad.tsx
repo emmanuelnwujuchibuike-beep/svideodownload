@@ -81,7 +81,29 @@ export function TopBannerAd() {
   */
   const revealed = useScrollDirection() === "down";
 
-  const visible = hasPrimary === true || hasLegacy === true || exoFilled;
+  /*
+    🔴 MOUNTED AND SHOWN ARE TWO DIFFERENT QUESTIONS (owner, 2026-08-31: "if i
+    navigate the bottom banner will stopped showing in the landing and download
+    page too").
+
+    Gating the whole bar on `filled` deadlocked it, and that was my own
+    regression from the previous fix. ExoClick's loader fills an <ins> that is in
+    the DOM with real layout; an <ins> inside a `display:none` bar can never be
+    filled, so `exoFilled` could never become true, so the bar could never stop
+    being `display:none`. First load sometimes beat the race; a re-serve after a
+    client-side navigation never did, which is exactly the shape of the report.
+
+    So the two are separated:
+      • CONFIGURED decides whether the bar EXISTS, so the loader always has a
+        live placeholder to fill.
+      • FILLED decides whether it has any CHROME — border, background, padding —
+        and whether it may reveal itself. An unfilled bar is a zero-height,
+        border-less element parked off-screen: present for the loader, invisible
+        to the reader. That is what kills the white line without hiding the
+        element the ad needs.
+  */
+  const configured = hasPrimary === true || hasLegacy === true || hasExoBottomNav;
+  const filled = hasPrimary === true || hasLegacy === true || exoFilled;
   const askLegacy = hasPrimary === false;
 
   /*
@@ -90,16 +112,16 @@ export function TopBannerAd() {
     see `lib/dom/bottom-ad-bar.ts`.
   */
   useEffect(() => {
-    setBottomAdBarPresent(visible);
+    setBottomAdBarPresent(filled);
     return () => setBottomAdBarPresent(false);
-  }, [visible]);
+  }, [filled]);
 
   // Publish the bar's height so the marketing layout can RESERVE that much space at
   // the bottom and the page content clears the ad instead of hiding under it. 0 when
   // hidden, so an ad-free site keeps its exact layout.
   useEffect(() => {
     const root = document.documentElement;
-    if (!visible || !barRef.current) {
+    if (!filled || !barRef.current) {
       root.style.setProperty("--frenz-bottomad-h", "0px");
       return;
     }
@@ -112,9 +134,10 @@ export function TopBannerAd() {
       ro.disconnect();
       root.style.setProperty("--frenz-bottomad-h", "0px");
     };
-  }, [visible]);
+  }, [filled]);
 
-  if (!ready || !showAds) return null;
+  // Nothing configured at all: no bar, no placeholder, no layout cost.
+  if (!ready || !showAds || !configured) return null;
 
   return (
     <div
@@ -142,19 +165,23 @@ export function TopBannerAd() {
           Driven by transform, never by `bottom` or `height`: animating either
           of those would relayout the page underneath on every frame.
         */
-        transform: revealed
-          ? "translateY(var(--frenz-bottomnav-h, 0px))"
-          : "translateY(calc(100% + var(--frenz-bottomnav-h, 0px)))",
+        // Only a bar with something IN it may take the nav's place.
+        transform:
+          revealed && filled
+            ? "translateY(var(--frenz-bottomnav-h, 0px))"
+            : "translateY(calc(100% + var(--frenz-bottomnav-h, 0px)))",
       }}
       className={cn(
         // z-40: below the header (z-50) and the mobile drawer (z-[70]), above content.
         // Solid, no blur — matches the de-glassed nav/header chrome. A top border
         // divides it from the content above; the nav below carries its own border.
-        "fixed inset-x-0 z-40 border-t border-border/60 bg-card",
+        "fixed inset-x-0 z-40",
         "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none",
-        !visible && "hidden",
+        // The chrome is the part that must never appear around nothing. The
+        // ELEMENT still exists either way, so the loader keeps a placeholder.
+        filled && "border-t border-border/60 bg-card",
       )}
-      aria-hidden={!visible}
+      aria-hidden={!filled}
     >
       {/*
         🔴 THE HOME INDICATOR EATS THE BOTTOM OF THE CREATIVE IN A PWA (owner,
@@ -176,8 +203,13 @@ export function TopBannerAd() {
         against the very bottom pixel.
       */}
       <div
-        className="mx-auto flex w-full max-w-5xl items-center justify-center px-3 pt-2"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
+        className={cn(
+          "mx-auto flex w-full max-w-5xl items-center justify-center",
+          // No padding before there is anything to pad — an unfilled bar must
+          // have no height of its own.
+          filled && "px-3 pt-2",
+        )}
+        style={filled ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" } : undefined}
       >
         <div className={cn(hasPrimary !== true && "hidden")}>
           <AdSlot zone="bottom_banner" dismissible={false} onResolved={setHasPrimary} />

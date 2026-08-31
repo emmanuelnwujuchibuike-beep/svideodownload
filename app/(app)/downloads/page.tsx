@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
-import { DownloadsBottomAd } from "@/features/monetization/downloads-bottom-ad";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
@@ -92,7 +91,6 @@ export default function Downloads() {
         their own gestures and full-bleed chrome — and giving all of them a
         docked ad bar is a product decision nobody has asked for.
       */}
-      <DownloadsBottomAd />
     </AppContent>
   );
 }

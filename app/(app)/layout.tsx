@@ -2,6 +2,7 @@ import { MotionConfig } from "framer-motion";
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
+import { AppBottomAd } from "@/features/monetization/app-bottom-ad";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
@@ -74,6 +75,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
       <MobileNav />
+      {/* The docked bottom banner for every signed-in surface that does not
+          already own the bottom edge — see features/monetization/app-bottom-ad.tsx. */}
+      <AppBottomAd />
       {/*
         App-shell chrome, moved here from the ROOT layout (2026-07-19).
 

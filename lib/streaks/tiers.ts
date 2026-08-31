@@ -43,6 +43,15 @@ export interface StreakTier {
   fill: string;
   /** The colour the sparkle burst and the pop ring use. */
   spark: string;
+  /**
+   * The halo around the pill, as a ready-to-use rgb()/alpha string.
+   *
+   * Owner, 2026-08-30: the badge should have "an orange or the color of the
+   * streak grade glow around it". This is the ONE place a tier colour is
+   * allowed to bleed outside the chip - everywhere else a coloured glow is
+   * being removed, but here the glow IS the rank being shown off.
+   */
+  glow: string;
 }
 
 /**
@@ -62,6 +71,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     ring: "ring-slate-900/30 dark:ring-slate-300/30",
     fill: "bg-gradient-to-r from-slate-900/10 to-slate-600/10 dark:from-slate-100/10 dark:to-slate-400/10",
     spark: "bg-slate-900 dark:bg-slate-200",
+    glow: "rgb(15 23 42 / 0.42)",
   },
   {
     id: "gold",
@@ -72,6 +82,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     ring: "ring-amber-600/35 dark:ring-amber-400/30",
     fill: "bg-gradient-to-r from-amber-700/12 to-yellow-600/12",
     spark: "bg-amber-500",
+    glow: "rgb(227 179 65 / 0.55)",
   },
   {
     id: "purple",
@@ -82,6 +93,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     ring: "ring-violet-500/30 dark:ring-violet-400/30",
     fill: "bg-gradient-to-r from-violet-500/12 to-fuchsia-500/12",
     spark: "bg-violet-500",
+    glow: "rgb(139 92 246 / 0.5)",
   },
   {
     id: "green",
@@ -92,6 +104,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     ring: "ring-emerald-500/30 dark:ring-emerald-400/30",
     fill: "bg-gradient-to-r from-emerald-500/12 to-teal-500/12",
     spark: "bg-emerald-500",
+    glow: "rgb(16 185 129 / 0.5)",
   },
   {
     id: "blue",
@@ -102,6 +115,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     ring: "ring-blue-500/30 dark:ring-blue-400/30",
     fill: "bg-gradient-to-r from-blue-500/12 to-sky-500/12",
     spark: "bg-blue-500",
+    glow: "rgb(59 130 246 / 0.5)",
   },
   {
     /*
@@ -126,6 +140,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     ring: "ring-orange-500/30 dark:ring-orange-400/30",
     fill: "bg-gradient-to-r from-amber-500/12 to-orange-500/12",
     spark: "bg-orange-500",
+    glow: "rgb(249 115 22 / 0.55)",
   },
 ];
 

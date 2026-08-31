@@ -547,12 +547,33 @@ export async function listUserPosts(
 async function loadUserPosts(publisherId: string, viewerId: string | null, limit: number): Promise<PostCard[]> {
   const db = createAdminClient();
   const isOwner = viewerId === publisherId;
+  /*
+    🔴 OVER-FETCH, THEN FILTER, THEN TRIM (owner, 2026-08-30: "some posts users
+    made are not showing in their profile page").
+
+    The visibility rule below runs in JS, AFTER the database has already applied
+    `.limit(limit)`. So the old query asked Postgres for the newest 24 posts and
+    then THREW SOME AWAY — and nothing refilled the gap. A creator with four
+    followers-only posts in their most recent 24 showed a viewer 20 tiles, and
+    the four public posts that should have taken those slots were never fetched
+    at all. The more restricted posts someone had, the emptier their profile
+    looked to everyone else.
+
+    The owner's own view was never affected (`isOwner` skips both filters),
+    which is exactly why this survives casual checking: it is invisible to the
+    one person most likely to notice their posts are missing.
+
+    3× is a bounded over-fetch, not "fetch everything": it fully covers a
+    profile where up to two thirds of recent posts are restricted, and the cap
+    stops a large `limit` turning into an unbounded scan.
+  */
+  const fetchLimit = isOwner ? limit : Math.min(limit * 3, 120);
   let q = db
     .from("posts")
     .select(POST_SELECT)
     .eq("publisher_id", publisherId)
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
   if (!isOwner) q = q.eq("status", "published");
   const { data, error } = await q;
   if (error) throw error; // don't cache DB failures as "no posts"
@@ -571,6 +592,9 @@ async function loadUserPosts(publisherId: string, viewerId: string | null, limit
     rows = rows.filter(
       (p) => p.visibility === "public" || (p.visibility === "followers" && follows),
     );
+    // Trim only AFTER filtering, so the page is a full `limit` of posts this
+    // viewer may actually see rather than a short one.
+    rows = rows.slice(0, limit);
   }
   const cards = rows.map(toCard);
   // Album badge data — one query for the whole page of posts; best-effort

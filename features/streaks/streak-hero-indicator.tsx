@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Portal } from "@/components/ui/portal";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { StreakFlame } from "@/features/streaks/streak-flame";
 import { claimStreakSound, readDisplayCache, useStreak } from "@/features/streaks/use-streak";
@@ -51,6 +52,9 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   const [cached] = useState<number | null>(() => readDisplayCache());
   const { data } = useStreak();
   const [open, setOpen] = useState(false);
+  /** Viewport y for the popover, measured from the chip when it is revealed. */
+  const [top, setTop] = useState(0);
+  const anchor = useRef<HTMLButtonElement | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
@@ -116,11 +120,10 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   }, [streak]);
 
   /*
-    🔴 TWO DAYS, NOT ONE (owner, 2026-08-30: "make the streak badge when users
-    reach 2 days streaks to be like this image"). A single day is a visit, not a
-    streak, and a "1 day streak" badge on someone's first session devalues the
-    thing for everyone who actually has one. `tierFor` returns null below the
-    threshold, so the rule lives with the tiers rather than as a loose `< 1`.
+    The visibility threshold lives with the tiers, not as a loose `< 1` here —
+    `tierFor` returns null below it. It is ONE day: see the note on the `spark`
+    tier in lib/streaks/tiers.ts for why raising it removed the badge from
+    nearly every anonymous visitor, and why it must not be raised again.
   */
   const tier = tierFor(streak);
   if (!tier) return null;
@@ -128,6 +131,24 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   const label = `${streak} ${streak === 1 ? "day" : "days"} streak — ${tier.label}`;
   const upcoming = nextTier(streak);
   const reveal = () => {
+    /*
+      🔴 MEASURE THE CHIP, THEN CENTRE IN THE VIEWPORT.
+
+      Two failed attempts before this, and both failed for the same reason: the
+      popover was positioned relative to the CHIP, whose horizontal position is
+      not stable. `left-1/2 -translate-x-1/2` centred it on the chip, which sits
+      at the far right of the hero pill row — so half of it was off the right
+      edge. Anchoring `right-0` fixed that until the row WRAPPED and the chip
+      moved to the left of its own line, at which point it ran off the left
+      edge instead.
+
+      There is no chip-relative side that is correct for both, so it is no
+      longer chip-relative. Only the VERTICAL offset comes from the chip; the
+      horizontal is the viewport's centre, which is what "visible and centered"
+      actually asks for and is correct wherever the chip lands.
+    */
+    const rect = anchor.current?.getBoundingClientRect();
+    if (rect) setTop(rect.bottom + 8);
     setOpen(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setOpen(false), REVEAL_MS);
@@ -136,6 +157,7 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   return (
     <span className={`relative inline-flex ${className}`}>
       <button
+        ref={anchor}
         type="button"
         onClick={reveal}
         aria-label={label}
@@ -160,6 +182,13 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
           All static CSS. No JS, no extra element, no layout change beyond the
           padding — this is on the landing's LCP path.
         */
+        /*
+          The tier's colour is published as a CSS variable so the halo in
+          globals.css can use it. Inline rather than a Tailwind class because
+          there are six tiers and an interpolated class name is never emitted
+          into the CSS — see the note at the top of lib/streaks/tiers.ts.
+        */
+        style={{ ["--streak-glow" as string]: tier.glow }}
         className={`srch-press streak-chip streak-chip-3d relative inline-flex shrink-0 items-center gap-1.5 rounded-full ${tier.fill} px-3 py-1.5 text-[12px] font-bold ${tier.text} ring-1 ring-inset ${tier.ring} ${
           pop ? "streak-chip-pop" : ""
         }`}
@@ -200,8 +229,14 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
             />
           ))}
         </span>
+        {/* 🔴 BIGGER (owner, 2026-08-30: "a more bigger fire"). 15px was smaller
+            than the text beside it, which made the flame read as punctuation
+            rather than as the badge's subject. 20px sits a little above the
+            cap height, so the fire leads and the words follow. `-my-0.5` lets
+            it grow WITHOUT growing the pill — the hero row is on the landing's
+            LCP path and the chip's box must not change height. */}
         <StreakFlame
-          className={`h-[15px] w-[15px] ${pop ? "streak-chip-flame" : ""}`}
+          className={`-my-0.5 h-[20px] w-[20px] ${pop ? "streak-chip-flame" : ""}`}
           gradient
           animated
           tier={tier}
@@ -227,33 +262,30 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
       </button>
 
       {/*
-        The reveal. `absolute` + `pointer-events-none`, so it is outside the
-        hero's flow and can never shift the H1 above it or swallow a tap on the
-        paste box below it. `role="status"` announces it once, politely, without
-        moving focus — which is what makes a self-dismissing popover accessible
-        rather than a trap.
+        The reveal — PORTALLED and viewport-centred.
+
+        `pointer-events-none` so it can never swallow a tap on the paste box
+        below it, and `role="status"` announces it once, politely, without
+        moving focus — what makes a self-dismissing popover accessible rather
+        than a trap.
+
+        🔴 Portalled because it is `position: fixed`, and a fixed element
+        resolves against the nearest TRANSFORMED / FILTERED / BLURRED ancestor
+        rather than the viewport. The hero card carries exactly those, so an
+        un-portalled fixed popover would be clipped back inside it — the
+        standing law this project has now hit five times (components/ui/portal.tsx).
+
+        Rendered only while open: a permanently-mounted portal on the landing
+        page is a body child and a compositing layer carried on every visit for
+        a two-second popover.
       */}
+      <Portal>
+        {open ? (
       <span
         role="status"
         aria-live="polite"
-        /*
-          🔴 RIGHT-ALIGNED, NOT CENTRED ON THE CHIP (owner, 2026-08-30: "the
-          streak description shouldnt be hiding, it should be visible and
-          centered").
-
-          It was `left-1/2 -translate-x-1/2`, which centres the popover on the
-          CHIP — and the chip is the last item in the hero's pill row, hard
-          against the right edge. So half the popover was centred off-screen and
-          the sentence ran off the display.
-
-          Anchoring its right edge to the chip's keeps it fully on screen, and
-          the width is additionally clamped to the viewport so it cannot
-          overflow on a narrow phone either. The TEXT stays centred inside it,
-          which is the "centered" being asked for.
-        */
-        className={`pointer-events-none absolute right-0 top-full z-30 mt-2 w-max max-w-[min(18rem,calc(100vw-2rem))] rounded-2xl bg-foreground px-3 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)] transition-all duration-200 ease-[var(--ease-out)] motion-reduce:transition-none ${
-          open ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
-        }`}
+        style={{ top, left: "50%", transform: "translateX(-50%)" }}
+        className="pointer-events-none fixed z-[80] w-max max-w-[calc(100vw-2rem)] rounded-2xl bg-foreground px-3 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]"
       >
         {open ? (
           <>
@@ -275,6 +307,8 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
           </>
         ) : null}
       </span>
+        ) : null}
+      </Portal>
     </span>
   );
 }

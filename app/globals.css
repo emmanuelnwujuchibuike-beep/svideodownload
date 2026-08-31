@@ -2312,7 +2312,17 @@ body:has(.frenz-canvas-page) {
   glow, which is exactly the treatment being removed elsewhere in the nav.
 */
 .streak-chip-3d {
+  /*
+    The FIRST shadow is the tier halo (owner, 2026-08-30: "it has an orange or
+    the color of the streak grade glow around it"). It is the one coloured glow
+    in the app that is kept deliberately — everywhere else a colour bleed is
+    being removed, but here the glow IS the rank.
+
+    `--streak-glow` is set inline per tier; the fallback keeps the chip sane if
+    the variable is ever missing.
+  */
   box-shadow:
+    0 0 16px -2px var(--streak-glow, rgb(249 115 22 / 0.55)),
     0 1px 1px -0.5px rgb(15 23 42 / 0.16),
     0 4px 10px -3px rgb(15 23 42 / 0.22),
     inset 0 1px 0 0 rgb(255 255 255 / 0.75),
@@ -2332,6 +2342,7 @@ body:has(.frenz-canvas-page) {
 :root[data-theme="dark"] .streak-chip-3d,
 html.dark .streak-chip-3d {
   box-shadow:
+    0 0 18px -2px var(--streak-glow, rgb(249 115 22 / 0.55)),
     0 1px 1px -0.5px rgb(0 0 0 / 0.5),
     0 4px 12px -3px rgb(0 0 0 / 0.55),
     inset 0 1px 0 0 rgb(255 255 255 / 0.16),

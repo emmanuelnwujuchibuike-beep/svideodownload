@@ -94,6 +94,42 @@ export const dynamic = "force-dynamic";
 */
 const FALLBACK_PUBLISHER_ID = process.env.ADSENSE_PUBLISHER_ID ?? "";
 
+/*
+  🔴 THE FALLBACK APPLIES TO A *SUCCESSFUL* READ TOO (2026-08-31).
+
+  Owner: "i woke up today and see my adsense ads.txt showing not found after 1
+  week of showing authorised."
+
+  The 2026-08-10 work made a FAILED read answer 503 instead of 404, which was
+  right, but it left the mirror-image hole open: a read that SUCCEEDS and comes
+  back with a blank `adsensePublisherId` still falls through to the 404 below.
+  That is not hypothetical here —
+
+    • `setMonetizationSettings` upserts the WHOLE settings row, and both
+      `adsensePublisherId` and `adsTxt` are `.default("")` in the admin schema.
+      Any POST to /api/admin/monetization that omits them writes them away. Only
+      one client posts today and it sends full state, but the endpoint accepts a
+      partial payload from anything — a stale cached admin tab, a retried
+      request, a future second panel. This project has already been bitten by
+      exactly this shape (see the reward-network settings, which were given
+      their own key specifically to escape this form's zod defaults).
+    • The admin form seeds its state ONCE from a server prop, so a tab left open
+      across a deploy saves what it loaded, not what is stored now.
+
+  One blank field written for one minute is enough: Google records "not found"
+  and keeps that verdict for days, which is precisely the reported symptom —
+  a week of "Authorized" ending overnight with nothing in the file's live
+  behaviour to explain it (checked: 20/20 fetches 200 text/plain with the
+  correct record, apex + www + http→https, to Googlebot and Mediapartners).
+
+  So the publisher id is resolved from three sources in both branches. The
+  record is an IDENTITY, not a preference — if we can name the publisher at all,
+  the file must contain them.
+*/
+function resolvePublisherId(configured: string): string {
+  return configured.trim() || FALLBACK_PUBLISHER_ID || lastKnownAdsensePublisherId();
+}
+
 export async function GET() {
   const { settings, degraded } = await readMonetizationSettings();
 
@@ -110,7 +146,7 @@ export async function GET() {
       a deployment that never set the env var but has served traffic today.
     */
     const fallback = buildAdsTxt({
-      adsensePublisherId: FALLBACK_PUBLISHER_ID || lastKnownAdsensePublisherId(),
+      adsensePublisherId: resolvePublisherId(""),
     }).trim();
     if (fallback) {
       return new Response(`${fallback}\n`, {
@@ -141,7 +177,15 @@ export async function GET() {
     });
   }
 
-  const body = buildAdsTxt(settings).trim();
+  /*
+    The stored settings win, but a BLANK publisher id falls back to the env var
+    and then to the last id this instance read — see `resolvePublisherId`. This
+    is the branch where a wiped-but-readable setting used to become a 404.
+  */
+  const body = buildAdsTxt({
+    ...settings,
+    adsensePublisherId: resolvePublisherId(settings.adsensePublisherId),
+  }).trim();
 
   /*
     Genuinely nothing configured — no pasted file and no publisher id — so 404.

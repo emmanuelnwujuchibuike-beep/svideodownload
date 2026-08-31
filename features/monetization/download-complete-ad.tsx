@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
 
 import { AdSlot } from "./ad-slot";
+import { useAdGateCountdown } from "./use-ad-gate-countdown";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -27,9 +28,40 @@ import { useShowAds } from "./use-show-ads";
  * countdown would mean a redeploy to change a number that is a commercial
  * decision.
  *
- * The countdown starts when the AD RESOLVES, not when the component mounts. On a
- * slow connection those differ by seconds, and starting at mount lets the skip
- * button appear before the ad it is meant to skip.
+ * 🔴 …and the NETWORK'S timer outranks the operator's (owner, 2026-08-30:
+ * "admin timer set up should only be a fallback"). This ran its own hand-rolled
+ * `setTimeout` chain off `skip_after_seconds` alone — the exact pattern
+ * `useAdGateCountdown` was written to delete — so it was the last gated overlay
+ * in the product still ignoring the length of the ad it was gating. It now uses
+ * the same shared hook as the idle interstitial and the wallpaper reward gate,
+ * which closes on the creative's own `ended`, targets its real duration when
+ * that is shorter, and falls back to the admin number only when the creative has
+ * no timeline to report.
+ *
+ * ── The countdown starts when the panel is SHOWN, and so does the scroll lock ──
+ *
+ * 🔴 THE BUG THIS FIXES (owner, 2026-08-31: "exoclick download complete doesnt
+ * show timer, it just show blank and show the exist after it finished counting
+ * hiddenly").
+ *
+ * The panel was `hidden` until `hasAd === true` — but the effect that locks
+ * `document.body` to `overflow: hidden` was keyed on `open`, not on that. So the
+ * instant a download finished, the page was scroll-locked underneath an overlay
+ * that was `display: none`, and if the zone never filled it STAYED that way:
+ * no ad, no panel, no countdown (that was keyed on `hasAd` too, so it never
+ * started), no Skip control, no Escape — the page simply stopped scrolling with
+ * nothing on screen to explain why, until a reload.
+ *
+ * Everything is now keyed on `shown` — the panel being genuinely visible — which
+ * is the same shape `download-interstitial.tsx` already uses. Nothing is locked
+ * behind an invisible overlay, and a zone that does not fill closes the panel
+ * instead of leaving it open forever (see `onResolved`).
+ *
+ * NOTE, because it was checked and is worth not re-checking: the panel is NOT
+ * clipped. `fixed inset-0` without a portal is the recorded failure mode here,
+ * so every ancestor chain on `/`, `/downloads` and `/history` was measured for a
+ * transform / filter / backdrop-filter / contain / will-change containing block.
+ * There are none. The blank panel was this state bug, not a containing block.
  *
  * ── Half screen on desktop, sheet on mobile ───────────────────────────────────
  *
@@ -47,15 +79,19 @@ export function DownloadCompleteAd({
 }) {
   const { showAds, ready } = useShowAds();
   const [hasAd, setHasAd] = useState<boolean | null>(null);
-  const [remaining, setRemaining] = useState<number | null>(null);
   const [config, setConfig] = useState<{ skippable: boolean; skipAfter: number } | null>(null);
-  const started = useRef(false);
+  /** Reset per opening, so a second download does not inherit the first's answer. */
+  const wasOpen = useRef(open);
 
   const close = useCallback(() => {
-    started.current = false;
-    setRemaining(null);
     onClose();
   }, [onClose]);
+
+  useEffect(() => {
+    if (open === wasOpen.current) return;
+    wasOpen.current = open;
+    if (!open) setHasAd(null);
+  }, [open]);
 
   /*
     Read the placement's own skip settings. Separate from AdSlot's fetch because
@@ -87,24 +123,37 @@ export function DownloadCompleteAd({
     if (open && showAds) window.dispatchEvent(new Event(MONETAG_MOMENT_EVENTS.download_complete));
   }, [open, showAds]);
 
-  // Countdown begins only once there is genuinely an ad on screen.
-  useEffect(() => {
-    if (!open || hasAd !== true || !config || started.current) return;
-    started.current = true;
-    if (!config.skippable) return;
-    setRemaining(config.skipAfter);
-  }, [open, hasAd, config]);
+  /**
+   * Genuinely on screen: open, and with a creative to frame.
+   *
+   * Every timed and locking behaviour below keys on THIS rather than on `open`.
+   * A panel nobody can see must not hold the scroll, run a countdown, or swallow
+   * Escape — all three of which it used to do.
+   */
+  const shown = open && hasAd === true;
+
+  const { remaining, canSkip: countdownDone, onAdTiming } = useAdGateCountdown({
+    fallbackSeconds: config?.skipAfter ?? 5,
+    running: shown,
+  });
+
+  /*
+    `skippable: false` is an operator saying "this one is watched through". The
+    countdown still governs WHEN, and the hook opens the gate the moment the
+    creative reports `ended`, so a non-skippable row is bounded by the ad's own
+    length rather than by nothing.
+
+    Computed above the effects, not below the early return: the Escape handler
+    closes over it, and a `const` initialised later in the same render would be
+    in its temporal dead zone for any render that returned early.
+  */
+  const canSkip = config?.skippable !== false && countdownDone;
+  const counting = !countdownDone && remaining > 0;
 
   useEffect(() => {
-    if (remaining === null || remaining <= 0) return;
-    const t = setTimeout(() => setRemaining((r) => (r === null ? null : r - 1)), 1000);
-    return () => clearTimeout(t);
-  }, [remaining]);
-
-  useEffect(() => {
-    if (!open) return;
+    if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && remaining !== null && remaining <= 0) close();
+      if (e.key === "Escape" && canSkip) close();
     };
     window.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -113,18 +162,15 @@ export function DownloadCompleteAd({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [open, remaining, close]);
+  }, [shown, canSkip, close]);
 
   if (!ready || !showAds || !open) return null;
-
-  const canSkip = config?.skippable !== false && remaining !== null && remaining <= 0;
-  const counting = remaining !== null && remaining > 0;
 
   return (
     <div
       className={cn(
         "fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4",
-        hasAd !== true && "hidden",
+        !shown && "hidden",
       )}
       role="dialog"
       aria-modal="true"
@@ -189,33 +235,43 @@ export function DownloadCompleteAd({
             One control that changes state rather than two that swap places —
             a button that appears where a countdown was is a target that moves
             under the cursor at the exact moment it becomes pressable.
+
+            🔴 THE COUNTING STATE IS LEGIBLE (owner, 2026-08-31: "doesnt show
+            timer … show the exist after it finished counting hiddenly").
+
+            It was `text-muted-foreground` on `bg-card` — a muted 12px label on a
+            card, which is the styling this design system uses for text that is
+            deliberately recessive. So the one element telling the visitor how
+            long they are being held read as disabled chrome, and the control
+            only looked like it had appeared when it flipped to the enabled
+            state. The waiting state now carries a tabular number at full
+            foreground contrast; only the word around it stays muted.
           */}
           <button
             type="button"
             onClick={close}
             disabled={!canSkip}
             aria-label={canSkip ? "Close advertisement" : `Skip available in ${remaining} seconds`}
+            aria-live={counting ? "off" : "polite"}
             className={cn(
-              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium transition",
+              "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition",
               canSkip
-                ? "text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                : "cursor-default text-muted-foreground",
+                ? "border-border text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                : "cursor-default border-border/70 bg-secondary/40 text-muted-foreground",
             )}
           >
-            {counting ? `Skip in ${remaining}` : "Skip"}
+            {counting ? (
+              <>
+                <span>Skip in</span>
+                <span className="tabular-nums text-sm font-semibold text-foreground">{remaining}</span>
+              </>
+            ) : (
+              "Skip"
+            )}
             {canSkip ? <X className="h-3.5 w-3.5" /> : null}
           </button>
         </div>
 
-        {/*
-          The scrolling body. `min-h-0` is what actually makes it scroll: a flex
-          child's default `min-height:auto` refuses to shrink below its content,
-          so without it the creative would push the sheet past its own max-height
-          again and re-create the bug this fix exists for.
-
-          The bottom inset keeps the last of the creative clear of the home
-          indicator on a gesture-nav phone.
-        */}
         {/* Plain flow inside the scroller — no flex, so nothing can be squashed.
             The bottom inset keeps the last of the creative clear of the home
             indicator on a gesture-nav phone. */}
@@ -223,7 +279,25 @@ export function DownloadCompleteAd({
           <p className="mb-2 mt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
             Sponsored
           </p>
-          <AdSlot zone="download_complete" dismissible={false} onResolved={setHasAd} />
+          <AdSlot
+            zone="download_complete"
+            dismissible={false}
+            onAdTiming={onAdTiming}
+            /*
+              🔴 A NO-FILL CLOSES THE PANEL, it does not leave it open.
+
+              `onResolved(false)` means this zone has nothing to show. Holding
+              `open` in that case is what produced an invisible modal that
+              outlived the download — and, before the lock was moved onto
+              `shown`, took the page's scrolling with it. Closing also resets the
+              parent's `completeAdOpen`, so the NEXT completed download gets a
+              fresh attempt rather than finding the panel already "open".
+            */
+            onResolved={(filled) => {
+              setHasAd(filled);
+              if (!filled) close();
+            }}
+          />
         </div>
       </div>
     </div>

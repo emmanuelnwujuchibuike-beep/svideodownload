@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -11,19 +12,82 @@ import { cn } from "@/lib/utils";
 import { useShowAds } from "./use-show-ads";
 
 /**
- * The ExoClick sticky banner — their DISPLAY product, which places itself.
+ * The ExoClick DISPLAY banners — the product their `ad-provider.js` places.
  *
- * Unlike every other ExoClick placement in this codebase, nothing here decides
- * where the unit appears: `ad-provider.js` pins it to the viewport itself. We
- * only supply the `<ins>` placeholder it looks for, which is why this component
- * renders a zero-size host and no chrome at all.
+ * ── What their loader ACTUALLY does (measured, 2026-08-31) ────────────────────
+ *
+ * Everything below follows from reading the real minified `ad-provider.js` and
+ * then driving it in a headless browser (`scripts/exoclick-loader-probe.mjs`).
+ * Two findings, both of which contradict what this file used to assume:
+ *
+ *  1. 🔴 THE CREATIVE IS NOT PUT INSIDE THE `<ins>`. It goes into a NEW `<div>`
+ *     inserted as a SIBLING *before* it:
+ *
+ *         K = function (ins, domain) { …
+ *           var i = document.createElement("div");
+ *           ins.parentElement.insertBefore(i, ins);   // ← sibling, not child
+ *           Q({ zone: …, where: i, insElement: ins });
+ *           ins.setAttribute("data-processed", true);
+ *         }
+ *
+ *     The probe confirms it: after a serve the parent holds
+ *     `["DIV", "INS.eas…"]`, the `<ins>` still has `childElementCount === 0`,
+ *     and a `MutationObserver` on the `<ins>` never fires once.
+ *
+ *     Two bugs fell out of that. The fill detection watched the `<ins>`, so
+ *     `filled` was permanently `false` and the "height is earned" rule could
+ *     never grant the height it exists to grant. And every centring/width rule
+ *     was set on the `<ins>` — a permanently EMPTY element — which is why three
+ *     separate rounds of "centre this banner and make it full width" changed
+ *     nothing on screen. They were styling the wrong box.
+ *
+ *  2. 🟢 RE-SERVING WORKS. The standing hypothesis was that the loader only
+ *     fills placeholders it discovered at its own initialisation, which would
+ *     make this unfixable without a reload. That is FALSE. `serve` re-queries
+ *     the document every time:
+ *
+ *         ne = function (params, domain) {
+ *           for (const el of document.querySelectorAll(X(domain).join(",")))
+ *             …K(el, domain);      // X() ends every selector with
+ *         }                        // :not([data-processed=true])
+ *
+ *     The probe drove mount → serve → unmount → remount → serve, and the loader
+ *     logged `Request #0` and then `Request #1`, the second for the new element.
+ *     A fresh, unstamped `<ins>` is all it takes.
+ *
+ * ── Which is what fixes "shows once, then only after a reload" ────────────────
+ *
+ * Owner, 2026-08-31: "history banner ad shows only once and doesnt show on
+ * repeated entery of the history page unless the page is reloaded", and then:
+ * "the bottom banner have same issue … mostly on signed in download pages".
+ *
+ * Given finding 2, the missing piece was on OUR side: nothing ever re-served.
+ *
+ *  • `served.current` was a one-shot latch, so an instance served exactly once
+ *    in its life. The bottom-nav banner is mounted from a bar that SURVIVES
+ *    client-side navigation, so that one serve was the only one it would ever
+ *    get — a reload really was the only way to get another.
+ *  • `data-processed="true"` is written by the loader onto a React-owned node.
+ *    Any path that re-uses that DOM node instead of recreating it is invisible
+ *    to the loader from then on.
+ *
+ * So the `<ins>` is no longer React's to own. React renders an empty HOST and
+ * the effect below builds the `<ins>` inside it imperatively, keyed on the
+ * pathname: every navigation tears the old one down and puts a brand-new,
+ * unstamped placeholder in its place, then serves it. That is exactly the state
+ * a reload produces — the state the owner reports as working.
+ *
+ * It also keeps the loader's sibling `<div>` INSIDE our host rather than loose
+ * among React's own children, so it can be styled and observed, and it is torn
+ * down with the host instead of orphaned into a parent React still believes it
+ * owns.
  *
  * ── Lazy by construction ──────────────────────────────────────────────────────
  *
  * The loader is only appended once this component mounts with a parsed tag in
- * hand, so a site with no sticky banner configured never fetches it. It is a
- * module-level singleton: several ExoClick display placements would otherwise
- * each add their own copy of the same script.
+ * hand, so a site with no ExoClick banner configured never fetches it. It stays
+ * a module-level singleton: several display placements would otherwise each add
+ * their own copy of the same script.
  */
 
 /** One shared load of ExoClick's provider, for the whole page. */
@@ -73,6 +137,24 @@ declare global {
  */
 export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
 
+/**
+ * Has the loader actually put a CREATIVE in the host?
+ *
+ * Not "are there child nodes": the loader inserts its wrapper `<div>` and a
+ * `<style>` tag the instant it processes the placeholder, and leaves both there
+ * even when the response is `no ads to display` — the probe captures exactly
+ * that, a 217-byte, zero-height wrapper. Counting those as a fill is how a slot
+ * ends up reserving a box around nothing, which is the one rule this
+ * integration keeps breaking.
+ *
+ * So it asks for something a creative is actually made of, or for real painted
+ * height. Either is proof; neither can be produced by the empty scaffolding.
+ */
+function hasCreative(host: HTMLElement): boolean {
+  if (host.querySelector("iframe, video, img, canvas, object, embed, a[href]")) return true;
+  return host.offsetHeight > 0;
+}
+
 export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } = {}) {
   /*
     Resolves its OWN tag from the public config rather than taking a prop.
@@ -92,7 +174,7 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
         setTag(bySlot ?? null);
       })
       .catch(() => {
-        /* No sticky banner is the safe outcome. */
+        /* No banner is the safe outcome. */
       });
     return () => {
       alive = false;
@@ -100,21 +182,58 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
   }, [slot]);
 
   const { showAds, ready } = useShowAds();
-  const host = useRef<HTMLModElement | null>(null);
-  const served = useRef(false);
+  const host = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  /** True once ExoClick has actually put something inside the placeholder. */
+  /** True once ExoClick has actually put a creative in the host. */
   const [filled, setFilled] = useState(false);
+
+  /*
+    🔴 THE RE-SERVE TRIGGER (owner, 2026-08-31).
+
+    A pathname change is what a reload is, minus the reload — a new pageview,
+    which is the unit a banner impression is sold in. Including it here is the
+    whole fix for the mount that never unmounts: the bottom-nav bar lives in a
+    bar shared across routes, so without this it serves once per full page load
+    and never again, which is precisely the report.
+
+    For the history banner, whose subtree DOES unmount, this is merely redundant
+    — the effect would re-run on remount regardless.
+  */
+  const pathname = usePathname();
 
   // Client-only: the provider touches `document` and `window.AdProvider`, and a
   // sticky unit has no business existing in server-rendered HTML.
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    if (!mounted || !ready || !showAds || !tag || served.current) return;
+    if (!mounted || !ready || !showAds || !tag) return;
     const el = host.current;
     if (!el) return;
-    served.current = true;
+
+    /*
+      A FRESH placeholder every time. The loader stamps `data-processed="true"`
+      on whatever it has seen and its selector excludes those forever, so
+      re-using an element is the same as not having one. Building it here rather
+      than in JSX also keeps React out of a subtree a third-party script mutates
+      from underneath it.
+    */
+    setFilled(false);
+    el.textContent = "";
+    const ins = document.createElement("ins");
+    /*
+      🔴 ONLY the network's class, never ours.
+
+      Their `K()` derives the zone TYPE from this very attribute —
+      `parseInt(ins.getAttribute("class").substring(11))` — so anything appended
+      to it is being fed to their parser. `cn(tag.cls, "block w-full …")` worked
+      only because `parseInt` happens to stop at the first space. Our styling
+      belongs on the host, which is also the element the creative lands in.
+    */
+    ins.className = tag.cls;
+    ins.setAttribute("data-zoneid", tag.zoneId);
+    ins.style.display = "block";
+    ins.style.width = "100%";
+    el.appendChild(ins);
 
     /*
       🔴 RESERVE NOTHING UNTIL IT ACTUALLY FILLS (owner, 2026-08-30: "history
@@ -122,23 +241,24 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
 
       Giving the outstream slot a 16:9 box fixed the 0px collapse and created a
       worse bug: when ExoClick does not fill, that box is a large empty hole in
-      the middle of the page — which is exactly what the owner screenshotted,
-      between the column-count control and the first day group.
+      the middle of the page — which is what the owner screenshotted, between
+      the column-count control and the first day group.
 
-      So the height is now EARNED. The element starts with no reserved size, and
-      only takes the 16:9 box once a child actually appears inside it. Same
-      technique the VAST player uses for its own fill detection, and the same
-      rule the ad-slot suite exists to enforce: never draw a box around nothing.
+      So the height is EARNED. Watched on the HOST with `subtree`, because the
+      creative is injected into a wrapper beside the `<ins>` and never into the
+      `<ins>` itself. Watching the `<ins>`, as this did until 2026-08-31, is
+      watching an element that is empty by design.
     */
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const observer = new MutationObserver(() => {
-      if (el.childElementCount > 0) {
-        setFilled(true);
-        observer.disconnect();
-        if (timer) clearTimeout(timer);
-      }
-    });
-    observer.observe(el, { childList: true });
+    const settle = () => {
+      if (!hasCreative(el)) return false;
+      setFilled(true);
+      observer.disconnect();
+      if (timer) clearTimeout(timer);
+      return true;
+    };
+    const observer = new MutationObserver(() => void settle());
+    observer.observe(el, { childList: true, subtree: true });
 
     void loadProvider().then((ok) => {
       if (!ok) {
@@ -146,17 +266,14 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
         return;
       }
       try {
-        // Tells the loader to fill every placeholder it has not filled yet.
+        // Tells the loader to re-scan the document and fill every placeholder it
+        // has not stamped yet — which, after the rebuild above, is ours.
         (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
       } catch {
         /* A broken provider must never take a page down over a banner. */
       }
-      // Already filled between render and this callback.
-      if (el.childElementCount > 0) {
-        setFilled(true);
-        observer.disconnect();
-        return;
-      }
+      // Already filled between the rebuild and this callback.
+      if (settle()) return;
       // Give up quietly rather than hold a hole open forever.
       timer = setTimeout(() => observer.disconnect(), 8000);
     });
@@ -164,101 +281,74 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
     return () => {
       observer.disconnect();
       if (timer) clearTimeout(timer);
+      /*
+        Take the loader's wrapper down with us. It is a foreign node inside a
+        host React believes is empty; leaving it behind would stack one dead
+        creative per navigation inside a bar that never unmounts.
+      */
+      el.textContent = "";
     };
-  }, [mounted, ready, showAds, tag]);
+  }, [mounted, ready, showAds, tag, pathname]);
 
   // Premium visitors, an unresolved plan, or nothing configured: render nothing
-  // at all — not even the placeholder, which is what the loader would fill.
+  // at all — not even the host, which is what the loader would fill.
   if (!mounted || !ready || !showAds || !tag) return null;
 
   /*
-    A real `<ins>` built from two validated values, never the pasted markup.
-    `display:contents` keeps the host out of the layout entirely: the banner
-    positions itself, so this element must not occupy or reserve any space.
+    The HOST. React renders it empty and never renders children into it: the
+    `<ins>` and everything the loader injects beside it are managed by the effect
+    above, so there is no React child list here for a third-party script to
+    invalidate.
+
+    It is also the element every visual rule belongs on, because it is the one
+    the creative is actually inside.
   */
   return (
-    <ins
+    <div
       ref={host}
-      /*
-        🔴 CENTRE AND WIDEN WHAT THE LOADER INJECTS (owner, 2026-08-30: "center
-        this banner and make it have more width to reach full width").
-
-        We do not control the creative's markup — ExoClick's loader injects it —
-        and a fixed-size native unit lands hard LEFT inside a full-width <ins>,
-        with the artwork at its natural size rather than the container's. So the
-        centring and the widening have to be applied to whatever arrives:
-        `mx-auto` on the injected children, and a full-width rule on the iframe
-        or image the creative is actually made of.
-
-        Scoped to the history slot. The sticky banner is positioned by the
-        network against the viewport and must keep its own size and placement.
-      */
       className={cn(
-        tag.cls,
+        /*
+          🔴 CENTRED STRUCTURALLY, not by inheritance (owner, 2026-08-30: "the
+          history banner is still not centered and fill", and for the bottom bar,
+          2026-08-31).
+
+          Earlier attempts centred with `text-align` and `mx-auto`. Both are
+          conditional on what the loader happens to inject: `text-align` only
+          moves INLINE content, and `mx-auto` only centres a BLOCK with a width —
+          so a fixed-size iframe, or a div that is neither, stays hard left. We
+          do not control that markup and it differs per creative.
+
+          `flex` + `justify-center` centres ANY single child whatever its display
+          type. That reasoning was already right; it was simply being applied to
+          the empty `<ins>` instead of to the box the creative is in.
+        */
+        (slot === "history" || slot === "bottomnav") && "flex w-full items-center justify-center",
+        /*
+          The history slot was asked for a FULL-WIDTH horizontal outstream unit,
+          so its iframe/image is stretched to the container.
+        */
         slot === "history" && "[&_iframe]:!w-full [&_img]:!h-auto [&_img]:!w-full",
         /*
-          The bottom-nav banner sits in a bar we DO control the width of, so the
-          same centring the history slot needs applies — a fixed-size creative
-          would otherwise land hard left in a full-width bar. It must not get
-          the history slot-s forced full-width image rule, though: a banner
-          stretched past its natural size is a blurry banner.
+          The bottom-nav banner sits in a bar we control the width of, so it is
+          centred — but deliberately NOT stretched: a fixed-size banner pushed
+          past its natural size is a blurry banner.
         */
-        slot === "bottomnav" && "block w-full [&>*]:mx-auto [&_iframe]:!max-w-full",
+        slot === "bottomnav" && "[&_iframe]:!max-w-full [&_img]:!max-w-full",
       )}
-      data-zoneid={tag.zoneId}
       /*
-        🔴 The HISTORY slot needs a SIZED box (owner, 2026-08-30: "download
-        history outstream is not showing, is suppose to be showing
-        horizontally").
+        🔴 A FLOOR, NOT A FIXED ASPECT, and only ONCE SOMETHING FILLED.
 
-        Config was verified correct and live — the tag parses to
-        eas6a97888e37 / 6015590 — so the ins element was rendering with the
-        right values and simply had no height. An outstream unit fills its
-        container, and a display-block element with a width but no height
-        collapses to 0px: present in the DOM, invisible on the page. Exactly
-        the kind of silent nothing this integration keeps producing.
+        `aspectRatio: 16/9` was right for an outstream VIDEO, but the zone also
+        serves fixed-size NATIVE units and forcing 16:9 onto a taller creative
+        crops it. `minHeight` still gives an outstream player a box to settle
+        into, and content decides the rest.
 
-        16:9 with a floor, because outstream is a HORIZONTAL format — that is
-        the shape the owner is expecting, and it is what stops the box being
-        the wrong aspect while the creative loads.
-
-        The STICKY slot keeps no size at all: it pins itself and must add no box.
-      */
-      /*
-        🔴 A FLOOR, NOT A FIXED ASPECT. `aspectRatio: 16/9` was right for an
-        outstream VIDEO, but the zone also serves fixed-size NATIVE units, and
-        forcing 16:9 onto a taller creative crops it. `minHeight` still gives an
-        outstream player a box to initialise in, and content decides the rest —
-        which is the same "height is earned" rule the fill detection follows.
-      */
-      /*
-        🔴 CENTRED STRUCTURALLY, not by inheritance (owner, 2026-08-30: "the
-        history banner is still not centered and fill").
-
-        The previous attempt centred with `text-align` and `mx-auto` on the
-        children. Both are conditional on what the loader happens to inject:
-        `text-align` only moves INLINE content, and `mx-auto` only centres a
-        BLOCK with a width — so a fixed-size iframe, or a div that is neither,
-        stays hard left. We do not control that markup and it differs per
-        creative, which is why guessing at it kept missing.
-
-        `display: flex` + `justify-content: center` on the <ins> itself centres
-        ANY single child regardless of its display type. That is the whole
-        reason to put the rule on the container rather than on the child.
-
-        `minHeight` (not `aspectRatio`) because this zone serves both an
-        outstream video, which needs a box to initialise in, and fixed-size
-        native units, which a rigid 16:9 would crop.
+        The STICKY slot keeps no size at all: the network pins it to the viewport
+        itself, so this host must not occupy or reserve any space.
       */
       style={
-        slot === "history"
-          ? {
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              width: "100%",
-              ...(filled ? { minHeight: 180 } : null),
-            }
+        slot === "history" && filled
+          ? { display: "flex", width: "100%", minHeight: 180 }
           : { display: "block", width: "100%" }
       }
     />

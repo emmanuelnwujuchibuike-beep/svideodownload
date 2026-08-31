@@ -18,7 +18,7 @@ import { getCachedSoundPrefs } from "@/lib/social/notification-sound-prefs-clien
  * either iOS or Android.
  */
 
-type SoundType = "message" | "mention" | "reaction" | "typing" | "tap" | "wow" | "streak";
+type SoundType = "message" | "mention" | "reaction" | "typing" | "tap" | "wow" | "streak" | "streak-milestone";
 
 let ctx: AudioContext | null = null;
 function getContext(): AudioContext | null {
@@ -59,6 +59,18 @@ interface Note {
   at: number; // seconds from the sound's start
   duration: number; // seconds
   gain: number; // 0-1
+  /**
+   * Oscillator shape. Defaults to `sine`, which every tone above this line
+   * uses and which is why they all read as clean UI blips.
+   *
+   * `triangle` exists for the milestone's low foundation notes: a sine at
+   * 261Hz at a listenable level is felt more than heard on a phone speaker,
+   * which has almost no output that low. A triangle carries odd harmonics up
+   * into the range a phone CAN reproduce, so the note reads as warmth rather
+   * than as nothing — the standard trick for putting a bass note on a device
+   * that has no bass.
+   */
+  wave?: OscillatorType;
 }
 
 const TONES: Record<SoundType, Note[]> = {
@@ -105,12 +117,65 @@ const TONES: Record<SoundType, Note[]> = {
     { freq: 2093.0, at: 0.26, duration: 0.26, gain: 0.1 },
     { freq: 2637.0, at: 0.33, duration: 0.3, gain: 0.045 },
   ],
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     THE MILESTONE (7 / 14 / 30 / 100 / 365 days)
+    ═══════════════════════════════════════════════════════════════════════════
+
+    §17: the milestone cue should be "slightly more distinctive but still
+    elegant" — and, in the same breath, "Very short ... Subtle ... Never forced
+    at high volume."
+
+    🔴 SO IT IS RICHER, NOT LOUDER. Its peak gain is 0.10, BELOW the ordinary
+    streak's 0.12 and below `mention`'s 0.13. Everything that makes it feel
+    bigger is arrangement rather than level:
+
+      • A low C3/G3 foundation the daily cue does not have. This is what gives
+        the phrase a floor to sit on, and it is the quietest part of the sound
+        (0.038) — weight comes from the interval being there at all, not from
+        volume. `triangle` so a phone speaker can actually reproduce it.
+      • The SAME C-major family as the daily cue, so the two are recognisably
+        related — the audio equivalent of the milestone flame being the tier's
+        own flame rather than a different mark.
+      • It goes one step further than the daily phrase resolves: the daily
+        settles on C7, this one passes through C7 and blooms back to a soft
+        held C7 an eighth of a second later, which is what reads as arrival
+        rather than acknowledgement.
+
+    ~1.25s end to end, against a 3.5s ceremony — it finishes while the emblem
+    is still settling and leaves the hold phase silent, which is what keeps it
+    ceremonial instead of a jingle.
+  */
+  "streak-milestone": [
+    // Foundation — felt, not noticed.
+    { freq: 130.81, at: 0, duration: 1.0, gain: 0.038, wave: "triangle" }, // C3
+    { freq: 196.0, at: 0.03, duration: 0.9, gain: 0.03, wave: "triangle" }, // G3
+    // The rising figure, a fifth wider than the daily cue's.
+    { freq: 1046.5, at: 0.06, duration: 0.14, gain: 0.095 }, // C6
+    { freq: 1318.5, at: 0.15, duration: 0.14, gain: 0.1 }, // E6
+    { freq: 1568.0, at: 0.24, duration: 0.16, gain: 0.1 }, // G6
+    { freq: 2093.0, at: 0.34, duration: 0.3, gain: 0.095 }, // C7
+    // Shimmer, then the bloom back to the tonic.
+    { freq: 2637.0, at: 0.44, duration: 0.32, gain: 0.042 }, // E7
+    { freq: 3136.0, at: 0.54, duration: 0.4, gain: 0.028 }, // G7
+    { freq: 2093.0, at: 0.8, duration: 0.45, gain: 0.04 }, // C7, held soft
+  ],
 };
+
+/**
+ * Exported for `sound-fx.test.ts` only.
+ *
+ * §17 puts real constraints on these ("very short", "never forced at high
+ * volume") and they are the kind of thing that drifts one edit at a time until
+ * a celebration is shouting at somebody in a quiet room. A test can hold the
+ * numbers; a comment cannot.
+ */
+export const SOUND_TONES: Readonly<Record<SoundType, readonly Note[]>> = TONES;
 
 function playNote(audioCtx: AudioContext, note: Note): void {
   const osc = audioCtx.createOscillator();
   const gainNode = audioCtx.createGain();
-  osc.type = "sine";
+  osc.type = note.wave ?? "sine";
   osc.frequency.value = note.freq;
   const start = audioCtx.currentTime + note.at;
   const end = start + note.duration;

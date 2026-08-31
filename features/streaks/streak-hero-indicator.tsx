@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { StreakFlameMark, chipStormClass } from "@/features/streaks/streak-flame-mark";
 import { claimStreakSound, readDisplayCache, useStreak } from "@/features/streaks/use-streak";
-import { tierFor } from "@/lib/streaks/tiers";
+import { milestoneFor, tierFor } from "@/lib/streaks/tiers";
 
 /*
   Code-split: the gallery, its six live tier marks and its CSS-heavy panel are
@@ -126,7 +126,24 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
       silent until an AudioContext has been unlocked by a real gesture, so this
       can never be what makes a phone blurt in a quiet room.
     */
-    if (claimStreakSound(streak)) playSound("streak");
+    /*
+      🔴 THE CHIP YIELDS THE MILESTONE MOMENT.
+
+      `claimStreakSound` is first-come-first-served on the streak NUMBER, and
+      the chip and the ceremony fire off the same response within a few hundred
+      ms of each other. Whoever wins the race makes the noise — so on a
+      milestone day the chip could take the claim and play the ORDINARY cue,
+      leaving the ceremony silent. The whole point of the milestone sound is
+      that it plays on the milestone.
+
+      Deciding it from `milestoneFor` rather than by racing is deterministic:
+      both sides read the same pure function off the same number, so exactly one
+      sound happens and it is always the right one. On a day where the ceremony
+      does not mount (the day was already celebrated) the chip is not
+      incrementing either — the display cache already holds today-s number — so
+      this cannot silently swallow a cue that had nowhere else to come from.
+    */
+    if (!milestoneFor(streak) && claimStreakSound(streak)) playSound("streak");
 
     // Matches the CSS duration below. Cleared on unmount so a visitor who
     // navigates mid-bounce leaves no timer behind.

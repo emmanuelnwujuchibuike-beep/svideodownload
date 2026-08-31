@@ -214,7 +214,30 @@ function landingChunks(): string[] {
  * session's work and still pass — including the app-wide pull-to-refresh, which
  * reuses the existing `PullToRefresh` component rather than adding a library.
  */
-const GLOBAL_CEILING = 353 * 1024;
+/*
+ * A NINTH bump (353 → 354), and the smallest this file has ever taken: 76 bytes.
+ *
+ * The milestone celebration cue (§17: the 7-day moment should sound "slightly
+ * more distinctive but still elegant"). It is nine notes of frequency/time/gain
+ * data in `lib/notifications/sound-fx.ts`, which `/admin` pulls in because its
+ * toasts use `playSound` — the tone table is shared, so every route carrying the
+ * sound engine carries all of it.
+ *
+ * 🔴 THE CHEAP BYTES WERE LOOKED FOR FIRST, and there were none worth taking.
+ * The alternatives were all worse than 76 bytes: splitting the streak tones into
+ * their own lazily-imported module to spare a route that never plays them is a
+ * network round trip and an async path on a sound that must fire on the frame
+ * the ceremony mounts; and trimming notes out of the phrase to save data is
+ * cutting the feature to fit the ratchet.
+ *
+ * 🔴 ADMIN ROUTE ONLY. `/admin` is one authenticated operator behind a redirect
+ * and is explicitly outside the visitor budget. The public ceilings are not just
+ * untouched but LOWER than they were this week: `ENTRY_CEILING` came down
+ * 275 → 218 KiB when the Supabase client left the landing page, and the whole
+ * streak upgrade — the milestone ceremony, the flame gallery and six live tier
+ * marks — is code-split behind `next/dynamic` and adds ~1 kB to `/`.
+ */
+const GLOBAL_CEILING = 354 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

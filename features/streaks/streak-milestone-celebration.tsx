@@ -140,7 +140,13 @@ export function StreakMilestoneCelebration({
       // Claim the day on the first frame, not on dismiss: someone who navigates
       // away mid-ceremony must not be shown it again on the next page.
       void markStreakCelebrated();
-      if (claimStreakSound(streak)) playSound("streak");
+      /*
+        The milestone cue, not the daily one — richer arrangement at a LOWER
+        peak level (§17). The claim is still taken so the hero chip cannot also
+        make a noise for the same increment; see the note in the chip for why it
+        yields this moment rather than racing for it.
+      */
+      if (claimStreakSound(streak)) playSound("streak-milestone");
       hapticPattern(MILESTONE_HAPTIC);
     }
 

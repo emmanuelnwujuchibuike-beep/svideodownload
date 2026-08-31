@@ -48,10 +48,6 @@ import { prefetchZones } from "./ad-cache";
  * render immediately; here they are deliberately mounted late, so there is
  * nothing racing the import.
  */
-const TopBannerAd = dynamic(
-  () => import("./top-banner-ad").then((m) => m.TopBannerAd),
-  { ssr: false },
-);
 // The top-of-page ad (content pages only) and the admin announcement bar. Both
 // are code-split here so they never ride the landing's first-load, and both gate
 // themselves by pathname.
@@ -130,7 +126,16 @@ export function DeferredAdFurniture() {
         it is anchored to content instead of floating over chrome. See
         features/downloader/downloader.tsx.
       */}
-      <TopBannerAd />
+      {/*
+        🔴 THE BOTTOM BANNER MOVED TO THE ROOT LAYOUT (2026-08-31).
+
+        It was mounted here and again in (app)/layout.tsx. Those are SIBLING
+        layouts, so navigating between the marketing pages and a signed-in one
+        unmounted this whole subtree and destroyed the live creative — the
+        owner-s -after sometime when i moved around it started happening again-.
+        One mount above both groups cannot be unmounted by routing.
+        See features/monetization/app-bottom-ad.tsx.
+      */}
       <IdleInterstitial />
       <ExitIntent />
       <AdScripts />

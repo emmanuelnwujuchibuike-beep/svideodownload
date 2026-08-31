@@ -1,0 +1,193 @@
+"use client";
+
+import {
+  EXOCLICK_PROVIDER_SRC,
+  type ExoClickStickyTag,
+} from "@/lib/monetization/exoclick-sticky";
+
+import { loadProvider } from "./exoclick-sticky";
+
+/**
+ * ExoClick's FULLPAGE INTERSTITIAL, for every interstitial moment in the app.
+ *
+ * Owner, 2026-08-31: "set up the full idle, backswipe and all interstitial ad
+ * to also use this exoclick interstitial ad set up for full page interstitial
+ * ad", with the tag:
+ *
+ *     <script async src="https://a.pemsrv.com/ad-provider.js"></script>
+ *     <ins class="eas6a97888e33" data-zoneid="6016704"></ins>
+ *     <script>(AdProvider = window.AdProvider || []).push({"serve": {}});</script>
+ *
+ * ── This is a DIFFERENT PRODUCT from the VAST interstitial ───────────────────
+ *
+ * The existing interstitial fetches a VAST document, parses it, and plays the
+ * creative in an overlay we own — our own skip timer, our own close button, our
+ * own gate. This one is a DISPLAY unit: the network's loader takes over the page
+ * itself and owns the whole experience, including whatever skip control it
+ * decides to show.
+ *
+ * So there is deliberately no overlay, no player and no skip UI here. Building
+ * one would mean drawing our chrome around a takeover we do not control and
+ * cannot measure — the same mistake as styling the `<ins>` the creative never
+ * goes into. What we own is WHEN it is allowed to fire; the rest is theirs.
+ *
+ * The class suffix says which product it is: `K()` in their bundle reads
+ * `parseInt(class.substring(11))` as the zone type, so `eas6a97888e33` is type
+ * 33 (fullpage interstitial) where the history banner's `…37` is outstream
+ * video. That is also why the tag's own provider domain is honoured rather than
+ * ours — this zone was activated against `pemsrv`, not `magsrv`.
+ *
+ * ── What this module does NOT decide ─────────────────────────────────────────
+ *
+ * Nothing about frequency, cooldown or which moments are eligible. All of that
+ * already exists in `vast-interstitial/request.ts` — one session at a time, a
+ * cooldown, a master switch, per-moment switches — and this is called from
+ * inside it so every one of those still applies. Two placements with two
+ * independent ideas of "not too often" is how a visitor meets two full-screen
+ * ads in a row.
+ */
+
+/** Memoised public config — fetched at most once per page load. */
+let tagPromise: Promise<ExoClickStickyTag | null> | null = null;
+
+function loadTag(): Promise<ExoClickStickyTag | null> {
+  tagPromise ??= fetch("/api/ads/config")
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((d: { exoclickInterstitial?: ExoClickStickyTag | null }) => d.exoclickInterstitial ?? null)
+    .catch(() => null);
+  return tagPromise;
+}
+
+/**
+ * Report the outcome to the operator feed.
+ *
+ * A real fill needs an authorised referer, so this cannot be exercised on
+ * localhost at all — which is exactly why the answer has to be readable from
+ * production. Without it, "the interstitial never appeared" and "the network
+ * had nothing for this visitor" are the same observation.
+ */
+function beacon(filled: boolean): void {
+  try {
+    navigator.sendBeacon?.(
+      "/api/track",
+      new Blob(
+        [JSON.stringify({ kind: "banner", slot: "interstitial", filled, path: location.pathname })],
+        { type: "application/json" },
+      ),
+    );
+  } catch {
+    /* Diagnostics must never break the thing they describe. */
+  }
+}
+
+/** How long to wait for the network to put something on screen. */
+const FILL_TIMEOUT_MS = 6000;
+/** How long a takeover may stay before the host is reclaimed. */
+const MAX_LIFETIME_MS = 90_000;
+
+/**
+ * Ask ExoClick for a fullpage interstitial. Resolves `true` only if something
+ * actually rendered.
+ *
+ * Always resolves, never throws, and never blocks the caller for longer than
+ * the fill timeout — an ad is an enhancement to whatever the visitor was doing,
+ * never a step in it.
+ */
+export async function showExoClickInterstitial(): Promise<boolean> {
+  if (typeof document === "undefined") return false;
+
+  const tag = await loadTag();
+  if (!tag) return false;
+
+  /*
+    A host we own and can remove. The unit positions ITSELF — the loader's
+    fullpage ad types are handled specially in their bundle — so this element
+    must add no box of its own and must not constrain what is put in it.
+  */
+  const host = document.createElement("div");
+  host.setAttribute("data-exoclick-interstitial", "");
+  document.body.appendChild(host);
+
+  const ins = document.createElement("ins");
+  /*
+    Only the network's class. Their `K()` derives the zone TYPE from this exact
+    attribute, so anything appended to it is being fed to their parser.
+  */
+  ins.className = tag.cls;
+  ins.setAttribute("data-zoneid", tag.zoneId);
+  host.appendChild(ins);
+
+  const cleanup = () => host.remove();
+
+  const ok = await loadProvider(tag.src ?? EXOCLICK_PROVIDER_SRC);
+  if (!ok) {
+    cleanup();
+    beacon(false);
+    return false;
+  }
+
+  try {
+    (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
+  } catch {
+    cleanup();
+    beacon(false);
+    return false;
+  }
+
+  /*
+    Did anything actually render? Measured, never pattern-matched on markup we
+    do not control — the same rule the banner detection had to learn. A fullpage
+    unit may attach itself to `body` rather than to our host, so BOTH are
+    checked: our host gaining height, or the document gaining a new fixed,
+    full-viewport element that was not there before.
+  */
+  const before = new Set(document.body.children);
+  const filled = await new Promise<boolean>((resolve) => {
+    const started = Date.now();
+    const check = () => {
+      if (host.offsetHeight > 0) return true;
+      for (const el of document.body.children) {
+        if (before.has(el) || el === host) continue;
+        const cs = getComputedStyle(el);
+        if (cs.position !== "fixed") continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > window.innerWidth * 0.6 && r.height > window.innerHeight * 0.6) return true;
+      }
+      return false;
+    };
+    const tick = () => {
+      if (check()) {
+        resolve(true);
+        return;
+      }
+      if (Date.now() - started >= FILL_TIMEOUT_MS) {
+        resolve(false);
+        return;
+      }
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
+
+  beacon(filled);
+
+  if (!filled) {
+    cleanup();
+    return false;
+  }
+
+  /*
+    The network owns the takeover from here — including closing it. The host is
+    reclaimed on a long ceiling so a unit that never tidies up after itself
+    cannot leave an orphan in `body` for the rest of the session; it is
+    deliberately far longer than any interstitial should live, so it never cuts
+    a real ad short.
+  */
+  setTimeout(cleanup, MAX_LIFETIME_MS);
+  return true;
+}
+
+/** Test/debug seam — resets the module singleton. */
+export function __resetExoClickInterstitial(): void {
+  tagPromise = null;
+}

@@ -136,7 +136,8 @@ export function MonetizationSettings({
       | "offeriumPlacementId"
       | "exoclickStickySnippet"
       | "exoclickBottomNavSnippet"
-      | "exoclickHistorySnippet",
+      | "exoclickHistorySnippet"
+      | "exoclickInterstitialSnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
 
@@ -232,6 +233,7 @@ export function MonetizationSettings({
   const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
   const bottomNavTag = parseExoClickSticky(state.exoclickBottomNavSnippet ?? "");
   const historyTag = parseExoClickSticky(state.exoclickHistorySnippet ?? "");
+  const interstitialTag = parseExoClickSticky(state.exoclickInterstitialSnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
     const next = { ...state, vastInterstitial: { ...vast, ...patch } };
@@ -523,6 +525,38 @@ export function MonetizationSettings({
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
           ) : (
             <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-secondary/40 p-4 ring-1 ring-inset ring-border/60">
+        <p className="text-sm font-semibold">Full-page interstitial</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Paste the ExoClick <strong>Fullpage Interstitial</strong> zone snippet. Once set,
+          it is used for <strong>every</strong> interstitial moment — idle, back-swipe, the
+          download start and the download completion — in place of the VAST interstitial
+          below, which stays as the fallback when this is empty. ExoClick owns the whole
+          takeover, including its own close control, so there is no skip timer to set here.
+          The cooldown and the per-moment switches below still apply.
+        </p>
+        <textarea
+          value={state.exoclickInterstitialSnippet ?? ""}
+          disabled={busy}
+          onChange={(e) => setText("exoclickInterstitialSnippet", e.target.value)}
+          placeholder={'<ins class="eas6a97888e33" data-zoneid="6016704"></ins>'}
+          className="min-h-[70px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => void persist(state)} className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">Save</button>
+          {interstitialTag ? (
+            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">
+              Read zone {interstitialTag.zoneId} · class {interstitialTag.cls}
+              {interstitialTag.src ? ` · loader ${new URL(interstitialTag.src).hostname}` : ""}
+            </span>
+          ) : state.exoclickInterstitialSnippet?.trim() ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Off — the VAST interstitial is used instead.</span>
           )}
         </div>
       </div>

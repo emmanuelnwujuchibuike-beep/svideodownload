@@ -72,10 +72,16 @@ import { useShowAds } from "./use-show-ads";
  *    to the loader from then on.
  *
  * So the `<ins>` is no longer React's to own. React renders an empty HOST and
- * the effect below builds the `<ins>` inside it imperatively, keyed on the
- * pathname: every navigation tears the old one down and puts a brand-new,
- * unstamped placeholder in its place, then serves it. That is exactly the state
- * a reload produces — the state the owner reports as working.
+ * the effect below builds the `<ins>` inside it imperatively, so a fresh,
+ * unstamped placeholder can be produced on demand — which is the state a reload
+ * produces, and the state the owner reports as working.
+ *
+ * 🔴 ON DEMAND, NOT ON EVERY NAVIGATION. That rebuild was briefly keyed on the
+ * pathname, which meant every client-side navigation tore down a LIVE creative
+ * and asked for a replacement the network frequently declines — trading a
+ * working banner for a coin flip ("navigating still destroys the bottom
+ * banner"). A navigation now only asks when the slot is genuinely empty; see
+ * `serveKey`.
  *
  * It also keeps the loader's sibling `<div>` INSIDE our host rather than loose
  * among React's own children, so it can be styled and observed, and it is torn
@@ -284,6 +290,8 @@ export function ExoClickSticky({
    * which is the case that needed recovering in the first place.
    */
   const [serveKey, setServeKey] = useState(0);
+  /** One extra serve attempt per mount — see the retry timer below. */
+  const retried = useRef(false);
   const pathname = usePathname();
   /** The first pathname is the mount, which the serve effect already handles. */
   const seenFirstPath = useRef(false);
@@ -387,6 +395,34 @@ export function ExoClickSticky({
     const emptyTimer = setTimeout(() => {
       if (!everFilled) beacon(slot, false);
     }, 10_000);
+
+    /*
+      🔴 ONE RETRY WITH A FRESH PLACEHOLDER (owner, 2026-08-31: "the history
+      above the grid still disappear after viewing ones and navigating out and
+      coming back, it only reshow when i refresh").
+
+      A re-push alone cannot work: the loader stamps `data-processed="true"` on
+      the element it has seen and its selector excludes those forever, so asking
+      again with the SAME <ins> is asking about an element it will not look at.
+      Only a new placeholder is a new question — which is what bumping
+      `serveKey` builds.
+
+      Bounded to one attempt per mount. A slot that is empty because the network
+      has nothing for this visitor must not turn into a request loop, and the
+      difference between "declined" and "lost a race" is not something the
+      client can tell — so it gets exactly one more chance and then stops.
+
+      ⚠️ This is a mitigation, not the diagnosis. "It only reshows when I
+      refresh" points at state inside ExoClick's own loader that a client-side
+      navigation does not clear, and that is not reachable from here. The
+      `banner_filled` / `banner_empty` events are what will actually say whether
+      the second ask was made and what came back.
+    */
+    const retryTimer = setTimeout(() => {
+      if (hasCreative(el) || retried.current) return;
+      retried.current = true;
+      setServeKey((k) => k + 1);
+    }, 3500);
     const report = () => {
       const now = hasCreative(el);
       if (now === last) return;
@@ -395,6 +431,7 @@ export function ExoClickSticky({
       fillCb.current?.(now);
       if (now) {
         clearTimeout(emptyTimer);
+        clearTimeout(retryTimer);
         everFilled = true;
         beacon(slot, true);
       } else if (everFilled) {
@@ -414,6 +451,7 @@ export function ExoClickSticky({
         observer.disconnect();
         mo.disconnect();
         clearTimeout(emptyTimer);
+        clearTimeout(retryTimer);
         fillCb.current?.(false);
         beacon(slot, false);
         return;
@@ -433,6 +471,7 @@ export function ExoClickSticky({
       observer.disconnect();
       mo.disconnect();
       clearTimeout(emptyTimer);
+      clearTimeout(retryTimer);
       fillCb.current?.(false);
       /*
         Take the loader's wrapper down with us. It is a foreign node inside a

@@ -107,6 +107,44 @@ export async function requestVastInterstitial(
     return { shown: false, reason: "cooldown" };
   }
 
+  /*
+    🔴 EXOCLICK'S OWN FULLPAGE INTERSTITIAL FIRST (owner, 2026-08-31: "set up
+    the full idle, backswipe and all interstitial ad to also use this exoclick
+    interstitial ad set up for full page interstitial ad").
+
+    Wired HERE rather than into each trigger, because this function is already
+    the single door every interstitial moment goes through — idle and back-swipe
+    (`ambient`), the download start and the download completion. One edit
+    therefore covers all of them, and, far more importantly, they keep sharing
+    ONE set of guards: the busy check above, the cooldown, the master switch and
+    the per-moment switches. A second placement with its own idea of "not too
+    often" is how a visitor meets two full-screen ads back to back.
+
+    It is tried FIRST and the VAST path stays as the fallback, so an operator
+    who has not pasted the tag loses nothing and one who has does not end up
+    running both products at the same moment.
+
+    `lastShownAt` is stamped on success so the cooldown covers this unit too —
+    without it, an ExoClick takeover would not delay the next VAST one.
+  */
+  /*
+    Claimed BEFORE the await, not after. The busy guard at the top of this
+    function is the only thing stopping a batch finishing eight files at once
+    from opening eight takeovers, and an `await` with `phase` still "idle" is a
+    hole straight through it.
+  */
+  phase = "loading";
+  try {
+    const { showExoClickInterstitial } = await import("../exoclick-interstitial");
+    if (await showExoClickInterstitial()) {
+      lastShownAt = Date.now();
+      phase = "idle";
+      return { shown: true, reason: "shown" };
+    }
+  } catch {
+    /* No tag, a blocked loader, or no fill — fall through to the VAST path. */
+  }
+
   const ZONE = ZONE_BY_TRIGGER[trigger];
 
   phase = "loading";

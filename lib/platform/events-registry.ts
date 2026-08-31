@@ -75,8 +75,20 @@ export const EVENTS = [
     own script put a creative in the placeholder. Fired once per state change
     per mount, never per frame.
   */
-  { id: "banner_filled", label: "Banner filled", description: "An ExoClick display banner rendered a creative.", domain: "monetization", metadata: ["slot", "path"] },
-  { id: "banner_empty", label: "Banner empty", description: "An ExoClick display banner was served but no creative arrived.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "banner_filled", label: "Banner impression", description: "An ExoClick display banner rendered a creative.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "banner_empty", label: "Banner no-fill", description: "An ExoClick display banner was served but no creative arrived.", domain: "monetization", metadata: ["slot", "path"] },
+  /*
+    ExoClick FULLPAGE INTERSTITIAL (owner, 2026-08-31: "wire the exoclick
+    interstial activity to the admin dashboard live activity").
+
+    Separate from the banner pair because it answers a different question. A
+    banner not filling is lost revenue; an INTERSTITIAL not filling means every
+    idle timeout, back-swipe and download moment asked for a takeover and got
+    nothing — and since the network owns that whole experience once it fires,
+    these two rows are the only thing on our side that can say it happened.
+  */
+  { id: "interstitial_filled", label: "Interstitial shown", description: "An ExoClick fullpage interstitial rendered.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "interstitial_empty", label: "Interstitial empty", description: "An ExoClick fullpage interstitial was requested but nothing rendered.", domain: "monetization", metadata: ["slot", "path"] },
   /*
     Multi-Link batch lifecycle, emitted SERVER-side from
     app/api/downloads/batch/* — the three moments where the server itself made

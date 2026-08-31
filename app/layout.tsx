@@ -6,6 +6,7 @@ import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { DeferredShell } from "@/features/app-shell/deferred-shell";
+import { AppBottomAd } from "@/features/monetization/app-bottom-ad";
 import { PendingTapScript } from "@/features/app-shell/pending-tap";
 import { LocaleBootScript } from "@/components/i18n/locale-boot-script";
 import { A11yBootScript, A11yColorFilters } from "@/components/a11y/a11y-boot-script";
@@ -472,6 +473,12 @@ export default function RootLayout({
                 so nothing behind app content is ever transparent. */}
             <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-background" />
             {children}
+            {/*
+              The docked bottom banner. Mounted HERE, above both route groups,
+              so a navigation between them cannot unmount it and destroy the
+              creative — see features/monetization/app-bottom-ad.tsx.
+            */}
+            <AppBottomAd />
             {/*
               ⌘K, the service worker, error capture, web vitals and the
               analytics tracker — all mounted one paint LATER (see

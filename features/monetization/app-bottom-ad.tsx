@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 /**
- * The docked bottom banner for the SIGNED-IN app surfaces.
+ * The docked bottom banner, mounted ONCE for the whole app.
  *
  * ── What this replaced ───────────────────────────────────────────────────────
  *
@@ -53,8 +53,41 @@ const TopBannerAd = dynamic(() => import("./top-banner-ad").then((m) => m.TopBan
   ssr: false,
 });
 
-/** Surfaces that already own the bottom edge — see the note above. */
-const EXCLUDED_PREFIXES = ["/reels", "/messages", "/create"];
+/**
+ * Surfaces that already own the bottom edge, plus the ones an ad has no
+ * business on at all.
+ *
+ * 🔴 MOUNTED AT THE ROOT, so this list is now the only thing deciding where the
+ * bar appears (owner, 2026-08-31: "the bottom banner navigation destroying
+ * still happens ... after sometime when i moved around it started happening
+ * again").
+ *
+ * It used to be mounted once in `(marketing)/layout.tsx` and again in
+ * `(app)/layout.tsx`. Those are SIBLING layouts: navigating from `/` to `/home`
+ * unmounts one and mounts the other, which unmounts `ExoClickSticky`, which
+ * runs its cleanup, which destroys the live creative — and the replacement
+ * serve is frequently declined by the network. Staying inside one group looked
+ * fixed; crossing between them was the "after sometime when i moved around"
+ * case exactly.
+ *
+ * The ROOT layout wraps both groups, so one mount there survives every
+ * client-side navigation in the app and routing can no longer tear the creative
+ * down at all.
+ */
+const EXCLUDED_PREFIXES = [
+  // Own the bottom edge: the reels action rail, the chat composer, the
+  // studio's publish bar.
+  "/reels",
+  "/messages",
+  "/create",
+  // Operator and auth surfaces. An ad bar over a sign-in form or the admin
+  // console is noise at best.
+  "/admin",
+  "/login",
+  "/signup",
+  "/welcome",
+  "/auth",
+];
 
 function isExcluded(pathname: string): boolean {
   return EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

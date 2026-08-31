@@ -375,6 +375,16 @@ export interface MonetizationSettings {
    * exactly why none of this is hardcoded.
    */
   exoclickHistorySnippet: string;
+  /**
+   * ExoClick FULLPAGE INTERSTITIAL tag (owner, 2026-08-31: "set up the full
+   * idle, backswipe and all interstitial ad to also use this exoclick
+   * interstitial ad set up for full page interstitial ad").
+   *
+   * Its own key, like every other ExoClick display placement, so it can be
+   * switched on without touching the VAST interstitial an operator may still
+   * be running — the two are different products from the same network.
+   */
+  exoclickInterstitialSnippet: string;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -465,6 +475,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickStickySnippet: "",
   exoclickBottomNavSnippet: "",
   exoclickHistorySnippet: "",
+  exoclickInterstitialSnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,

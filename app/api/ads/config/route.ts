@@ -48,6 +48,7 @@ export async function GET() {
       */
       exoclickSticky: parseExoClickSticky(settings.exoclickStickySnippet),
       exoclickHistory: parseExoClickSticky(settings.exoclickHistorySnippet),
+      exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
       exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the

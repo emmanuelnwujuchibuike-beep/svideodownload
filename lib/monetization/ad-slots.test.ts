@@ -565,13 +565,44 @@ describe("Ad slots — no decorated empty boxes", () => {
     const furniture = stripComments(
       readFileSync(path.join(ROOT, "features/monetization/deferred-ad-furniture.tsx"), "utf8"),
     );
-    expect(furniture).toMatch(/<TopBannerAd\b/);
     expect(furniture).toMatch(/<IdleInterstitial\b/);
 
-    // Mounting them in BOTH places is the other failure — two banners and
-    // two idle timers on the one page that has them inline.
+    /*
+     * 🔴 THE BOTTOM BANNER IS MOUNTED IN THE ROOT LAYOUT, EXACTLY ONCE
+     * (2026-08-31).
+     *
+     * It used to live in this furniture component, and later ALSO in
+     * `(app)/layout.tsx`. Those are SIBLING layouts: navigating between a
+     * marketing page and a signed-in one unmounts one and mounts the other,
+     * which tears down `ExoClickSticky` and destroys the live creative — and
+     * the network frequently declines the replacement serve. That was the
+     * owner's "after sometime when i moved around it started happening again".
+     *
+     * The root layout wraps both groups, so a mount there cannot be unmounted
+     * by routing. The requirement this test has always encoded — the LAYOUT
+     * carries the furniture, never a page — is unchanged and now stronger; only
+     * which layout has moved.
+     *
+     * Mounting it in more than one place is the failure that matters, because
+     * two bars means two `<ins>` placeholders competing for one zone, so this
+     * asserts every other candidate does NOT carry it.
+     */
+    const root = stripComments(readFileSync(path.join(ROOT, "app/layout.tsx"), "utf8"));
+    expect(root, "the root layout must mount the bottom banner").toMatch(/<AppBottomAd\b/);
+
+    for (const file of [
+      "features/monetization/deferred-ad-furniture.tsx",
+      "app/(app)/layout.tsx",
+      "app/(marketing)/layout.tsx",
+      "app/(marketing)/page.tsx",
+      "app/(app)/downloads/page.tsx",
+    ]) {
+      const src = stripComments(readFileSync(path.join(ROOT, file), "utf8"));
+      expect(src, `${file} mounts a second bottom banner`).not.toMatch(/<TopBannerAd\b/);
+      expect(src, `${file} mounts a second bottom banner`).not.toMatch(/<AppBottomAd\b/);
+    }
+
     const home = stripComments(readFileSync(path.join(ROOT, "app/(marketing)/page.tsx"), "utf8"));
-    expect(home, "landing page mounts a second top banner").not.toMatch(/<TopBannerAd\b/);
     expect(home, "landing page mounts a second idle interstitial").not.toMatch(/<IdleInterstitial\b/);
   });
 

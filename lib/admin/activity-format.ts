@@ -34,6 +34,8 @@ export const NOTABLE = new Set([
   // Bottom/history banner lifecycle — see events-registry.ts.
   "banner_filled",
   "banner_empty",
+  "interstitial_filled",
+  "interstitial_empty",
   "batch_authorized",
   "batch_started",
   "batch_refused",
@@ -43,6 +45,14 @@ export const NOTABLE = new Set([
   "upgrade_prompt_view",
   "pwa_installed",
 ]);
+
+/** What each ExoClick display placement is called in the admin. */
+const SLOT_LABELS: Record<string, string> = {
+  bottomnav: "Bottom banner",
+  history: "History banner",
+  sticky: "Sticky banner",
+  interstitial: "Full-page interstitial",
+};
 
 const EVENT_LABELS: Record<string, string> = Object.fromEntries(
   getEvents().map((e) => [e.id, e.label]),
@@ -60,12 +70,21 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
     case "ad_impression":
       return m.zone ? String(m.zone) : null;
     /*
-      The SLOT and the PAGE, because "the banner did not show" is always about a
-      particular one of each — and the history page is the one being reported.
+      The PLACEMENT and the PAGE, because "the banner did not show" is always
+      about a particular one of each.
+
+      🔴 The placement is named the way the OPERATOR names it, not the way the
+      code does (owner, 2026-08-31: "it is showing bottom NAV fill, i didnt ask
+      for that, i said bottom banner activity not bottom NAV"). `bottomnav` is
+      an internal slot id; the thing it renders is the Bottom banner, which is
+      also what it is called in the admin. A feed that reads back the source
+      code makes the operator translate it.
     */
     case "banner_filled":
-    case "banner_empty": {
-      const slot = m.slot ? String(m.slot) : null;
+    case "banner_empty":
+    case "interstitial_filled":
+    case "interstitial_empty": {
+      const slot = m.slot ? SLOT_LABELS[String(m.slot)] ?? String(m.slot) : null;
       const path = m.path ? String(m.path) : null;
       return [slot, path].filter(Boolean).join(" · ") || null;
     }

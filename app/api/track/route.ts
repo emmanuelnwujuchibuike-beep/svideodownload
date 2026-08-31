@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
  */
 const bannerSchema = z.object({
   kind: z.literal("banner"),
-  slot: z.enum(["sticky", "history", "bottomnav"]),
+  slot: z.enum(["sticky", "history", "bottomnav", "interstitial"]),
   /** Did a creative actually arrive in the placeholder? */
   filled: z.boolean(),
   /** Which page it was on — "the history page in particular". */
@@ -98,7 +98,17 @@ export async function POST(request: Request) {
   */
   if (parsed.data.kind === "banner") {
     const { slot, filled, path } = parsed.data;
-    trackEvent(filled ? "banner_filled" : "banner_empty", {
+    /*
+      The fullpage interstitial is the same MECHANISM as the banners — an <ins>
+      their loader fills — but it is not a banner, and an operator scanning the
+      feed for "did the interstitial fire" should not have to read the slot
+      column to tell them apart.
+    */
+    const isInterstitial = slot === "interstitial";
+    const type = isInterstitial
+      ? (filled ? "interstitial_filled" : "interstitial_empty")
+      : (filled ? "banner_filled" : "banner_empty");
+    trackEvent(type, {
       userId,
       metadata: { slot, path: path ?? null },
     });

@@ -252,7 +252,37 @@ export function ExoClickUnit({
       does not, and the visitor gets the muted unit plus the unmute control —
       which is the honest outcome, not a bug.
     */
+    /*
+      🔴 IN-PAGE UNITS START MUTED (owner, 2026-08-31: "make the video ad below
+      the hero to always start on muted not with sound").
+
+      This narrows the 2026-08-30 instruction quoted above rather than reversing
+      it, and the line is `fill`:
+
+        • A FULL-BLEED unit — the reels slide, the interstitial — occupies the
+          whole screen and only appears after the visitor has tapped and swiped
+          their way into it. Sound is the point there, and the document usually
+          carries the user activation needed to start it.
+        • An IN-PAGE unit sits in a page someone is reading. It starts playing
+          the moment it scrolls into view, which the reader did not ask for, so
+          starting it with audio is the single most hostile thing this component
+          can do. The unmute control right below is how they ask for sound.
+
+      Decided from `fill` rather than a zone list on purpose: it is a property
+      of the SURFACE, and a hardcoded list of zone ids is both the thing
+      `ad-slots.test.ts` rejects and the thing that goes stale the next time a
+      placement is added.
+    */
     const tryPlay = () => {
+      if (!fill) {
+        el.muted = true;
+        setMuted(true);
+        void el.play().catch(() => {
+          /* Blocked even muted — the frame stays and `onError` covers a
+             genuinely broken file. Not a no-fill: the creative is there. */
+        });
+        return;
+      }
       el.muted = false;
       void el
         .play()
@@ -261,8 +291,7 @@ export function ExoClickUnit({
           el.muted = true;
           setMuted(true);
           void el.play().catch(() => {
-            /* Blocked even muted — the frame stays and `onError` covers a
-               genuinely broken file. Not a no-fill: the creative is there. */
+            /* Blocked even muted — see above. */
           });
         });
     };
@@ -282,7 +311,8 @@ export function ExoClickUnit({
     );
     obs.observe(box);
     return () => obs.disconnect();
-  }, [ad]);
+    // `fill` decides whether playback starts muted — see `tryPlay`.
+  }, [ad, fill]);
 
   // Nothing to show — render no box at all, so the parent's card collapses with
   // it rather than framing an empty 9:16 hole.

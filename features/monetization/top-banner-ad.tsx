@@ -134,7 +134,29 @@ export function TopBannerAd() {
       )}
       aria-hidden={!visible}
     >
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-center px-3 py-2">
+      {/*
+        🔴 THE HOME INDICATOR EATS THE BOTTOM OF THE CREATIVE IN A PWA (owner,
+        2026-08-31: "add a small padding at the bottom ad so it doesnt pack down
+        and cutting off some part in pwa but is perfect on broswer").
+
+        The bar docks at `max(env(safe-area-inset-bottom), --frenz-bottomnav-h)`
+        and then, once revealed, translates DOWN by the nav's height to take the
+        space the nav vacated. Those cancel: the bar's bottom edge lands on the
+        true bottom of the viewport — which on an installed PWA is underneath
+        the home indicator, so the last strip of the ad is covered.
+
+        In a browser tab `env(safe-area-inset-bottom)` is 0, which is why it
+        looked right there and only there. The inset is added back as PADDING
+        rather than by changing the dock position, so the bar's own background
+        still runs to the edge (a gap under a docked bar reads as a rendering
+        bug) and only the creative is inset. The extra 6px is the "small
+        padding" asked for, and it applies on both so the unit never sits flush
+        against the very bottom pixel.
+      */}
+      <div
+        className="mx-auto flex w-full max-w-5xl items-center justify-center px-3 pt-2"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
+      >
         <div className={cn(hasPrimary !== true && "hidden")}>
           <AdSlot zone="bottom_banner" dismissible={false} onResolved={setHasPrimary} />
         </div>

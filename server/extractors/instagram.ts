@@ -2,6 +2,7 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
+import { pickWidest } from "./media-quality";
 import { DESKTOP_UA } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
@@ -56,8 +57,10 @@ interface IgItem extends IgMedia {
 }
 
 function bestImage(m: IgMedia): IgImageCandidate | null {
-  const c = m.image_versions2?.candidates ?? [];
-  return c.slice().sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0] ?? null;
+  // Same ranking as the video path above — see `media-quality.ts`. This was
+  // the only correct rendition picker in the extractors; it is now the shared
+  // one rather than a local copy the others could drift from.
+  return pickWidest(m.image_versions2?.candidates);
 }
 
 function buildFormats(item: IgItem): MediaFormat[] {
@@ -66,7 +69,17 @@ function buildFormats(item: IgItem): MediaFormat[] {
   const formats: MediaFormat[] = [];
 
   children.forEach((child, i) => {
-    const video = child.video_versions?.find((v) => v.url?.startsWith("http"));
+    /*
+      🔴 THE WIDEST rendition, not the first one with a URL (audited
+      2026-08-31).
+
+      `bestImage` already refuses to trust Meta's array order for
+      PHOTOS — it ranks by size — while this line took whichever video version
+      appeared first. Meta usually emits those largest-first, but "usually" is
+      precisely what the photo path was written not to depend on, and the two
+      disagreeing is how one of them silently drifts. Same ranking, one helper.
+    */
+    const video = pickWidest(child.video_versions);
     if (video?.url) {
       formats.push({
         formatId: children.length > 1 ? `vid-${i}` : "ig-hd",

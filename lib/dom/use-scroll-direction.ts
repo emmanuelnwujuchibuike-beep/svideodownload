@@ -1,6 +1,13 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useLayoutEffect, useSyncExternalStore } from "react";
+
+/**
+ * `useLayoutEffect` on the client, `useEffect` on the server — React warns
+ * about the former during SSR, and there is no layout to read there anyway.
+ */
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /**
  * Which way the page is currently being scrolled.
@@ -105,6 +112,45 @@ const getSnapshot = (): ScrollDirection => direction;
 /** The server has no scroll position; "up" is the bars-visible default. */
 const getServerSnapshot = (): ScrollDirection => "up";
 
+/**
+ * Forget the last gesture and re-anchor to the current scroll position.
+ *
+ * 🔴 THE BUG THIS FIXES (owner, 2026-08-31: "any other page doesnt hide the
+ * bottom nav, instead they seems to be a comflict when i enter any other pages
+ * causing it to hide entirely in the landing and download page too").
+ *
+ * `direction` is module state, and `subscribe`'s cleanup only resets it once
+ * the listener count reaches ZERO. `MobileNav` is mounted by every layout in
+ * the app, so the count never reaches zero and the reset never ran. Scrolling
+ * down anywhere — /history, /reels, a settings page, none of which hide their
+ * nav — left the store holding "down", and the next visit to `/` or
+ * `/downloads` read that stale answer on its first render: nav already
+ * translated off-screen, ad bar already risen, before the reader had scrolled
+ * at all. Exactly "it hides entirely".
+ *
+ * `lastY` was stale for the same reason. Arriving on a fresh page at y=0 while
+ * `lastY` still held the previous page's 3000 makes the first `measure()`
+ * compute a 3000px UPWARD delta from a scroll that never happened.
+ *
+ * A route change is the natural boundary: a new page has no gesture history, so
+ * it starts from the bars-visible default — the same state a full page load
+ * gives, which is what nobody has ever reported a problem with.
+ */
+export function resetScrollDirection(): void {
+  lastY = typeof window === "undefined" ? 0 : window.scrollY;
+  publish("up");
+}
+
 export function useScrollDirection(): ScrollDirection {
+  const pathname = usePathname();
+  /*
+    Layout effect, not a passive one: this must land BEFORE the browser paints
+    the new route, or the nav paints one frame in its hidden position and then
+    snaps back — a visible flicker on every navigation, and the transform is
+    animated, so it would read as the bar sliding in for no reason.
+  */
+  useIsomorphicLayoutEffect(() => {
+    resetScrollDirection();
+  }, [pathname]);
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

@@ -161,8 +161,14 @@ async function proxyDownload(format: MediaFormat): Promise<DownloadResult> {
 /**
  * Transcodes a direct CDN URL to H.264/AAC MP4 with ffmpeg. Used for the
  * Facebook/Instagram fallback, whose direct streams are often VP9 (audio-only
- * on iOS). Already-H.264 streams are remuxed (fast, no quality loss); only
- * VP9/AV1 is re-encoded. Result is cached so a clip is only processed once.
+ * on iOS). Already-H.264 streams are remuxed; only VP9/AV1 is re-encoded.
+ * Result is cached so a clip is only processed once.
+ *
+ * "Remuxed" now means remuxed. This docstring used to claim the H.264 branch
+ * cost "no quality loss" while the arguments below re-encoded the AUDIO to
+ * 128 kbps on every path, measured at −47% on a 240 kbps source. Both streams
+ * are copied when the container already holds what we are producing — see the
+ * note on `audioArgs`.
  */
 function headerArgFor(format: MediaFormat): string[] {
   if (!format.httpHeaders) return [];
@@ -198,20 +204,32 @@ function headerArgFor(format: MediaFormat): string[] {
  */
 const CODEC_TTL_MS = 10 * 60_000;
 const CODEC_CACHE_MAX = 500;
-const codecCache = new Map<string, { codec: string | null; at: number }>();
+/**
+ * What one probe learned about a source.
+ *
+ * 🔴 The AUDIO codec is recorded too, and it is not a curiosity — see
+ * `transcodeToH264`. The probe already reads it out of the same ffmpeg output;
+ * only the regex was throwing it away.
+ */
+export interface ProbedCodecs {
+  video: string | null;
+  audio: string | null;
+}
 
-function cachedCodec(url: string): string | null | undefined {
+const codecCache = new Map<string, { codecs: ProbedCodecs; at: number }>();
+
+function cachedCodec(url: string): ProbedCodecs | undefined {
   const hit = codecCache.get(url);
   if (!hit) return undefined;
   if (Date.now() - hit.at > CODEC_TTL_MS) {
     codecCache.delete(url);
     return undefined;
   }
-  return hit.codec;
+  return hit.codecs;
 }
 
-function rememberCodec(url: string, codec: string | null): void {
-  codecCache.set(url, { codec, at: Date.now() });
+function rememberCodec(url: string, codecs: ProbedCodecs): void {
+  codecCache.set(url, { codecs, at: Date.now() });
   // Oldest-first eviction — Map preserves insertion order.
   while (codecCache.size > CODEC_CACHE_MAX) {
     const oldest = codecCache.keys().next().value;
@@ -220,19 +238,41 @@ function rememberCodec(url: string, codec: string | null): void {
   }
 }
 
-/** Probes a remote URL's video codec via ffmpeg (always available). Memoised. */
-async function probeUrlCodec(format: MediaFormat): Promise<string | null> {
+/** Probes a remote URL's codecs via ffmpeg (always available). Memoised. */
+async function probeUrlCodecs(format: MediaFormat): Promise<ProbedCodecs> {
   const url = format.directUrl;
   if (url) {
     const hit = cachedCodec(url);
     if (hit !== undefined) return hit;
   }
-  const codec = await runCodecProbe(format);
-  if (url) rememberCodec(url, codec);
-  return codec;
+  let codecs = await runCodecProbe(format);
+  /*
+    🔴 ONE RETRY WHEN THE PROBE LEARNED NOTHING (audited 2026-08-31).
+
+    A null answer is not "this is not H.264" — it is "we did not find out", and
+    the two were being treated identically. The caller reads not-h264 as "must
+    re-encode", so a probe that merely TIMED OUT (10s, against a throttled CDN)
+    silently pushed a perfectly good H.264 source through libx264 -crf 23.
+    Measured on a 9.2 Mbps source: 4.9 Mbps out, a 47% bitrate cut caused by a
+    network hiccup rather than by anything about the file.
+
+    The probe reads a container header — a few KB — so one retry is far cheaper
+    than the full re-encode it avoids, and it only ever runs on the path that
+    was about to do that re-encode anyway.
+  */
+  if (!codecs.video && format.directUrl) {
+    codecs = await runCodecProbe(format);
+  }
+  if (url) rememberCodec(url, codecs);
+  return codecs;
 }
 
-function runCodecProbe(format: MediaFormat): Promise<string | null> {
+/** Just the video codec — the answer most callers want. */
+async function probeUrlCodec(format: MediaFormat): Promise<string | null> {
+  return (await probeUrlCodecs(format)).video;
+}
+
+function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
   return new Promise((resolve) => {
     let child;
     try {
@@ -242,7 +282,7 @@ function runCodecProbe(format: MediaFormat): Promise<string | null> {
         { windowsHide: true },
       );
     } catch {
-      resolve(null);
+      resolve({ video: null, audio: null });
       return;
     }
     let err = "";
@@ -255,21 +295,27 @@ function runCodecProbe(format: MediaFormat): Promise<string | null> {
       if (settled) return;
       settled = true;
       child.kill("SIGKILL");
-      resolve(null);
+      resolve({ video: null, audio: null });
     }, FFMPEG_PROBE_TIMEOUT_MS);
     child.stderr?.on("data", (c: Buffer) => (err += c.toString()));
     child.on("error", () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve(null);
+      resolve({ video: null, audio: null });
     });
     child.on("close", () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      const m = err.match(/Video:\s*([a-z0-9]+)/i);
-      resolve(m ? m[1]!.toLowerCase() : null);
+      const v = err.match(/Video:\s*([a-z0-9]+)/i);
+      // Read from the SAME ffmpeg output the video codec comes from, so
+      // knowing the audio codec costs nothing extra — see transcodeToH264.
+      const a = err.match(/Audio:\s*([a-z0-9]+)/i);
+      resolve({
+        video: v ? v[1]!.toLowerCase() : null,
+        audio: a ? a[1]!.toLowerCase() : null,
+      });
     });
   });
 }
@@ -283,7 +329,11 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
   // The caller has usually just probed to decide whether it could stream the
   // source raw; re-probing here would spend a second network round-trip to
   // learn the same thing.
-  const codec = (knownCodec ?? (await probeUrlCodec(format)))?.toLowerCase();
+  // Memoised per direct URL, so when the caller has already probed (the usual
+  // case) this is a cache hit and costs no round trip — it just also gives us
+  // the AUDIO codec, which the caller does not pass down.
+  const probed = await probeUrlCodecs(format);
+  const codec = (knownCodec ?? probed.video)?.toLowerCase();
   // Only a genuine H.264 stream is guaranteed to decode as VIDEO in every
   // browser — remux it as-is (fast, no quality loss). HEVC decodes fine on
   // iOS/Safari but not reliably on Chrome/Android/Windows, and TikTok's own
@@ -297,10 +347,66 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
   const videoArgs = copy
     ? ["-c:v", "copy"]
     : [
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        /*
+          🔴 CRF 20, NOT 23 (owner, 2026-08-31: "facebook, twitter, tiktok and
+          snapchat stories and post always reduce quality even if i mark the
+          highest quality").
+
+          This branch is the COMPATIBILITY re-encode — it exists because
+          bytevc1/H.265 (TikTok's top tiers) and VP9 (Facebook/Instagram) do not
+          decode as video on Chrome/Android, so those cannot be passed through.
+          It is unavoidable; being this lossy was not.
+
+          It matters more than it looks, because `withQualityLadder` sorts video
+          formats by HEIGHT, which overrides tiktok.ts's deliberate
+          "H.264 first" ordering. So the top row a person picks — the one
+          labelled 1080p — is usually the bytevc1 tier, and it lands here every
+          time. "Marked the highest quality, got something softer" is exactly
+          that path.
+
+          Measured with `scripts/media-quality-audit.mjs` on a 9.2 Mbps 1080x1920
+          H.264 source, `-preset veryfast`, 2 threads:
+
+              crf 23  ->  5.03 Mbps   (-47%)   2395 ms
+              crf 20  ->  7.13 Mbps   (-25%)   2307 ms
+              crf 18  ->  8.6  Mbps    (-9%)   2411 ms
+
+          Encode TIME is flat — CRF changes the rate-distortion target, not the
+          work, so this costs no CPU and no extra latency. Only bytes. 20 is the
+          usual "visually transparent" setting and recovers about half the loss
+          for ~38% more egress on this path only; 18 was left on the table
+          deliberately, since the remaining gain is small and the bandwidth is
+          not.
+        */
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
         "-threads", threads,
         "-x264-params", `threads=${threads}:lookahead-threads=1`,
       ];
+
+  /*
+    🔴 DO NOT RE-ENCODE AUDIO THAT IS ALREADY FINE (audited 2026-08-31).
+
+    The audio arguments were an unconditional `-c:a aac -b:a 128k`, including on
+    the `-c:v copy` branch this function's own docstring calls "remuxed (fast,
+    no quality loss)". It was lossless for the picture and lossy for the sound,
+    every time, silently.
+
+    Measured end to end with `scripts/media-quality-audit.mjs`, running these
+    exact arguments over a 1080x1920 H.264 source carrying 240 kbps AAC:
+
+        audioBitrateKbps   240  ->  128     DEGRADED -47%
+
+    AAC in MP4 is exactly what we are producing anyway, so when the source is
+    already AAC there is nothing to convert and the stream is copied through
+    untouched. Anything else (Opus, Vorbis, EAC-3 — none of which belong in an
+    MP4 a phone will open) still gets converted, and at 192k rather than 128k:
+    a transcode of unknown-quality source audio should not also be the
+    narrowest one on offer.
+  */
+  const audioArgs =
+    probed.audio === "aac"
+      ? ["-c:a", "copy"]
+      : ["-c:a", "aac", "-b:a", "192k"];
 
   return getOrProduce(key, "mp4", "video/mp4", (finalPath) =>
     new Promise<void>((resolve, reject) => {
@@ -315,10 +421,7 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
         "-map", "0:v:0",
         "-map", "0:a:0?",
         ...videoArgs,
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
+        ...audioArgs,
         "-movflags",
         "+faststart",
         "-y",

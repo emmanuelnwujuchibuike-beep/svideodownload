@@ -2,6 +2,7 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
+import { metaImageCandidates, metaVideoCandidates } from "./media-quality";
 import { DESKTOP_UA, firstMatch, metaContent, unescapeJsonUrl } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
@@ -20,11 +21,28 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
+/**
+ * The best video rendition on the page.
+ *
+ * 🔴 `video_versions` IS RANKED, AND IT COMES FIRST (audited 2026-08-31).
+ *
+ * This used to read it with `"video_versions":\[\{"[^}]*?"url":"([^"]+)"` —
+ * the same unmatchable pattern the photo path had (see `media-quality.ts`), so
+ * it never fired — and it sat BELOW `"video_url"` in the fallback chain, which
+ * `firstMatch` resolves in order. Even had it matched, it would have taken the
+ * FIRST rendition rather than the largest.
+ *
+ * `video_versions` is the only source here that describes SEVERAL renditions
+ * with their dimensions, so it is the only one that can be ranked — which is
+ * exactly why it should be asked first. The single-URL sources below it stay as
+ * fallbacks, ending with `og:video`, which is a share preview.
+ */
 function findVideoUrl(html: string): string | null {
+  const ranked = metaVideoCandidates(html);
+  if (ranked.length > 0) return unescapeJsonUrl(ranked[0]!.url);
   const raw = firstMatch(
     html,
     /"video_url":"([^"]+)"/,
-    /"video_versions":\[\{"[^}]*?"url":"([^"]+)"/,
     /property=["']og:video["'][^>]+content=["']([^"']+)["']/i,
     /property=["']og:video:secure_url["'][^>]+content=["']([^"']+)["']/i,
   );
@@ -74,18 +92,45 @@ export const threadsExtractor: Extractor = {
         httpHeaders: headers,
       });
     } else {
-      // Photo / carousel post → offer each image (Meta image_versions2/display_url).
+      /*
+        Photo / carousel post → one entry per picture, at its LARGEST rendition.
+
+        🔴 THE OLD PATTERN COULD NOT MATCH WHAT META EMITS (audited 2026-08-31).
+
+        It was `"image_versions2":\{"candidates":\[\{"[^}]*?"url":"([^"]+)"`.
+        The `\[\{"` consumes the opening quote of the first key, so the pattern
+        then needs ANOTHER `"url":"` before the first `}` — and `[^}]` cannot
+        cross that brace. Meta writes `url` as the FIRST key of a candidate, so
+        the match died every time and every photo fell through to the
+        `display_url` loop below: the resized DISPLAY copy, not the original.
+
+        It also treated `display_url` as an ADDITIONAL photo. Since that is the
+        same picture as a candidate at a different size, a single-photo post
+        could be reported as two photos, and "Photo 1" was whichever rendition
+        the regexes happened to reach first.
+
+        `metaImageCandidates` locates each block and reads its candidates as
+        objects, so key order is irrelevant, and returns the widest per block —
+        one entry per picture, in page order.
+      */
       const imgs: string[] = [];
-      for (const m of html.matchAll(
-        /"image_versions2":\{"candidates":\[\{"[^}]*?"url":"([^"]+)"/g,
-      )) {
-        const u = unescapeJsonUrl(m[1]!);
+      for (const { url } of metaImageCandidates(html)) {
+        const u = unescapeJsonUrl(url);
         if (u.startsWith("http") && !imgs.includes(u)) imgs.push(u);
       }
-      for (const m of html.matchAll(/"display_url":"([^"]+)"/g)) {
-        const u = unescapeJsonUrl(m[1]!);
-        if (u.startsWith("http") && !imgs.includes(u)) imgs.push(u);
+      /*
+        `display_url` is now a FALLBACK, not an addition. A post whose payload
+        carries no candidates array at all (Meta varies this by surface) still
+        has to yield its photos, and this is the only other place they appear.
+      */
+      if (imgs.length === 0) {
+        for (const m of html.matchAll(/"display_url":"([^"]+)"/g)) {
+          const u = unescapeJsonUrl(m[1]!);
+          if (u.startsWith("http") && !imgs.includes(u)) imgs.push(u);
+        }
       }
+      // Last resort: the share preview. Smaller than either of the above, and
+      // only ever better than returning nothing at all.
       if (imgs.length === 0) {
         const og = metaContent(html, "og:image");
         if (og) imgs.push(og);

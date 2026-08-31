@@ -2,6 +2,7 @@ import { detectPlatform } from "@/lib/platforms";
 import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
+import { rankRenditions } from "./media-quality";
 import { DESKTOP_UA, firstMatch, metaContent, unescapeJsonUrl } from "./parse";
 import { ExtractionError, type Extractor } from "./types";
 
@@ -99,9 +100,30 @@ function buildFormats(html: string): MediaFormat[] {
     "just give me the image" is a real, separate choice from "give me the
     video" here — unlike most platforms, where a thumbnail is throwaway.
   */
-  const img =
-    metaContent(html, "og:image") ||
-    firstMatch(html, /"orig":\{"url":"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/);
+  /*
+    🔴 THE ORIGINAL FIRST, THE SHARE PREVIEW ONLY AS A FALLBACK
+    (audited 2026-08-31).
+
+    This asked for `og:image` BEFORE `orig`, and `||` means the first truthy
+    branch wins — so the preview was taken whenever it existed, which on a pin
+    page is always. Pinterest's `og:image` is the `i.pinimg.com/736x/…` share
+    rendition; `orig` is `i.pinimg.com/originals/…`, the file the pinner
+    actually uploaded. Every Pinterest photo download was therefore capped at
+    736px wide while the original sat one branch below, unused.
+
+    Both are still collected — a pin whose page has no `orig` must keep
+    working, which is the reason the `og:image` branch was added in the first
+    place (see the note at the top of this file). `rankRenditions` picks
+    between them instead of the order they happen to be written in.
+  */
+  const rawOrig = firstMatch(html, /"orig":\{"url":"([^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"/);
+  const candidates = [
+    // Unescaped BEFORE ranking: the JSON form spells the path `/originals/`,
+    // which neither the original-marker nor the size-hint test would recognise.
+    rawOrig ? unescapeJsonUrl(rawOrig) : null,
+    metaContent(html, "og:image"),
+  ].filter((u): u is string => !!u && u.startsWith("http"));
+  const img = rankRenditions(candidates)[0] ?? null;
   if (img && img.startsWith("http")) {
     formats.push({
       formatId: "pin-img",

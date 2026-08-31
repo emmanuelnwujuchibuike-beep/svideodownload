@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { setBottomAdBarPresent } from "@/lib/dom/bottom-ad-bar";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,17 @@ export function TopBannerAd() {
     tag and self-hides; this only decides whether the container exists.
   */
   const [hasExoBottomNav, setHasExoBottomNav] = useState(false);
+  /*
+    🔴 CONFIGURED IS NOT FILLED (owner, 2026-08-31: "something like white line
+    like the ad slot but the bottom nav still persist").
+
+    `hasExoBottomNav` only says a banner is set up in the admin. The bar used
+    that as its visibility, so a configured zone that did not fill still drew
+    its top border and its padding — a thin white line above the nav, framing
+    nothing at all. The unit itself is the only thing that knows whether a
+    creative arrived, and it now says so.
+  */
+  const [exoFilled, setExoFilled] = useState(false);
   useEffect(() => {
     let alive = true;
     fetch("/api/ads/config")
@@ -69,8 +81,18 @@ export function TopBannerAd() {
   */
   const revealed = useScrollDirection() === "down";
 
-  const visible = hasPrimary === true || hasLegacy === true || hasExoBottomNav;
+  const visible = hasPrimary === true || hasLegacy === true || exoFilled;
   const askLegacy = hasPrimary === false;
+
+  /*
+    Tell the bottom NAV whether there is a real bar for it to step aside for.
+    Without this the nav hid on a pathname alone and left nothing behind it —
+    see `lib/dom/bottom-ad-bar.ts`.
+  */
+  useEffect(() => {
+    setBottomAdBarPresent(visible);
+    return () => setBottomAdBarPresent(false);
+  }, [visible]);
 
   // Publish the bar's height so the marketing layout can RESERVE that much space at
   // the bottom and the page content clears the ad instead of hiding under it. 0 when
@@ -174,7 +196,7 @@ export function TopBannerAd() {
           Renders nothing at all unless an ExoClick banner is configured and the
           viewer is on an ad-supported plan — the component decides that itself.
         */}
-        {hasExoBottomNav ? <ExoClickSticky slot="bottomnav" /> : null}
+        {hasExoBottomNav ? <ExoClickSticky slot="bottomnav" onFill={setExoFilled} /> : null}
 
         {askLegacy ? (
           <div className={cn("md:hidden", hasLegacy !== true && "hidden")}>

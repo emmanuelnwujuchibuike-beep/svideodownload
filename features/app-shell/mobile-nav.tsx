@@ -5,6 +5,7 @@ import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
+import { useBottomAdBarPresent } from "@/lib/dom/bottom-ad-bar";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { useEffect, useRef } from "react";
 
@@ -142,13 +143,17 @@ export function MobileNav({
 }) {
   const pathname = usePathname();
   /*
-    Scroll-away nav, on the two surfaces the owner named (2026-08-31: "i want
-    the bottom nav in the landing pages and download page to hide when scrolling
-    down"). Deliberately NOT app-wide: /home, /reels and the messaging surfaces
-    are navigation-heavy and own their own gestures, and taking their nav away
-    mid-scroll would be a different, unrequested change.
+    Scroll-away nav (owner, 2026-08-31: "i want the bottom nav in the landing
+    pages and download page to hide when scrolling down").
+
+    The surface is no longer named here. It is wherever a real docked ad bar
+    exists to take the nav's place — see `hideForScroll` below. /home, /reels
+    and the messaging surfaces mount no such bar, so they keep their nav
+    exactly as before without needing to be listed.
   */
   const scrollDir = useScrollDirection();
+  /* Whether a real, filled ad bar is docked below — see bottom-ad-bar.ts. */
+  const bottomAdBarPresent = useBottomAdBarPresent();
   const router = useRouter();
   const mode = useAppMode();
   const { handle, avatarUrl } = useEntitlements();
@@ -277,11 +282,27 @@ export function MobileNav({
   }, []);
 
   /*
-    The landing page and the download page only. `/` is exact — every other
-    marketing route keeps its nav parked — and `/downloads` covers the hub.
+    🔴 THE NAV ONLY STEPS ASIDE FOR SOMETHING THAT IS ACTUALLY THERE
+    (owner, 2026-08-31: "on landing and download page the bottom nav hides but
+    no bottom banner shows").
+
+    This was gated on the PATHNAME alone — `/` or `/downloads` — on the premise
+    that the ad bar would rise into the space the nav vacated. Nothing checked
+    whether it had. When the bar had no fill (no configured zone, or a
+    configured one the network did not fill, which is most of the time) the
+    navigation slid away and left a gap. The whole point of the choreography is
+    that the two bars TRADE places; a trade with one participant is just losing
+    the nav.
+
+    So the condition is now the bar's own report of itself, and the route no
+    longer comes into it. That also answers the other half of the same report —
+    "other pages still doesnt hide the bottom nav" — correctly and by
+    construction rather than by adding route names: any page that grows a real
+    docked ad bar gets the choreography, and any page without one keeps its nav
+    exactly where it is. Two facts that used to be derived separately are now
+    one fact, read from one place.
   */
-  const scrollAwaySurface = pathname === "/" || pathname.startsWith("/downloads");
-  const hideForScroll = scrollAwaySurface && scrollDir === "down";
+  const hideForScroll = bottomAdBarPresent && scrollDir === "down";
 
   return (
     // Edge-to-edge, no floating margins — the bar itself owns the safe-area

@@ -155,7 +155,21 @@ function hasCreative(host: HTMLElement): boolean {
   return host.offsetHeight > 0;
 }
 
-export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } = {}) {
+export function ExoClickSticky({
+  slot = "sticky",
+  onFill,
+}: {
+  slot?: ExoClickInsSlot;
+  /**
+   * Whether a creative is actually on screen in this host.
+   *
+   * Reported so the bar that CONTAINS this unit can tell "a banner is
+   * configured" from "a banner is showing" — the difference between docking a
+   * real ad and drawing an empty white line above the nav. Fires false on
+   * teardown and on the give-up timeout, so a bar can collapse again.
+   */
+  onFill?: (filled: boolean) => void;
+} = {}) {
   /*
     Resolves its OWN tag from the public config rather than taking a prop.
     The furniture that mounts it is shared by ~150 marketing routes, and
@@ -186,6 +200,13 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
   const [mounted, setMounted] = useState(false);
   /** True once ExoClick has actually put a creative in the host. */
   const [filled, setFilled] = useState(false);
+  /*
+    Held in a ref, not a dependency: `onFill` is an inline arrow at the call
+    site, so depending on it would tear down and re-serve the placeholder on
+    every parent render — which is an ad request per render.
+  */
+  const fillCb = useRef(onFill);
+  fillCb.current = onFill;
 
   /*
     🔴 THE RE-SERVE TRIGGER (owner, 2026-08-31).
@@ -253,6 +274,7 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
     const settle = () => {
       if (!hasCreative(el)) return false;
       setFilled(true);
+      fillCb.current?.(true);
       observer.disconnect();
       if (timer) clearTimeout(timer);
       return true;
@@ -262,7 +284,9 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
 
     void loadProvider().then((ok) => {
       if (!ok) {
+        // Blocked, or the loader could not be fetched at all.
         observer.disconnect();
+        fillCb.current?.(false);
         return;
       }
       try {
@@ -274,13 +298,18 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
       }
       // Already filled between the rebuild and this callback.
       if (settle()) return;
-      // Give up quietly rather than hold a hole open forever.
-      timer = setTimeout(() => observer.disconnect(), 8000);
+      // Give up quietly rather than hold a hole open forever — and SAY so, so
+      // the containing bar collapses instead of framing an empty slot.
+      timer = setTimeout(() => {
+        observer.disconnect();
+        fillCb.current?.(false);
+      }, 8000);
     });
 
     return () => {
       observer.disconnect();
       if (timer) clearTimeout(timer);
+      fillCb.current?.(false);
       /*
         Take the loader's wrapper down with us. It is a foreign node inside a
         host React believes is empty; leaving it behind would stack one dead

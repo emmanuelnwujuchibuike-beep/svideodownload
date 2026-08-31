@@ -7,7 +7,6 @@ import {
   EXOCLICK_PROVIDER_SRC,
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
-import { cn } from "@/lib/utils";
 
 import { useShowAds } from "./use-show-ads";
 
@@ -260,8 +259,13 @@ export function ExoClickSticky({
   const { showAds, ready } = useShowAds();
   const host = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  /** True once ExoClick has actually put a creative in the host. */
-  const [filled, setFilled] = useState(false);
+  /*
+    There is deliberately no local "filled" STATE here any more. It existed only
+    to drive this host's size and centring, and the host no longer has any — the
+    unit decides its own dimensions and placement (owner, 2026-08-31: "let them
+    decide everything"). The fill is still reported UPWARD through `fillCb`, for
+    the bar that contains this unit.
+  */
   /*
     Held in a ref, not a dependency: `onFill` is an inline arrow at the call
     site, so depending on it would tear down and re-serve the placeholder on
@@ -331,7 +335,6 @@ export function ExoClickSticky({
       than in JSX also keeps React out of a subtree a third-party script mutates
       from underneath it.
     */
-    setFilled(false);
     el.textContent = "";
     const ins = document.createElement("ins");
     /*
@@ -340,13 +343,17 @@ export function ExoClickSticky({
       Their `K()` derives the zone TYPE from this very attribute —
       `parseInt(ins.getAttribute("class").substring(11))` — so anything appended
       to it is being fed to their parser. `cn(tag.cls, "block w-full …")` worked
-      only because `parseInt` happens to stop at the first space. Our styling
-      belongs on the host, which is also the element the creative lands in.
+      only because `parseInt` happens to stop at the first space.
+
+      🔴 And no inline style either (owner, 2026-08-31: "dont give the banner or
+      interstilla any artificial size or position, let them decide everything").
+      This carried `display: block; width: 100%`, which is not what their own
+      snippet ships — their snippet is a bare `<ins class data-zoneid>` and
+      nothing more. This element is now exactly that, byte for byte, so the unit
+      sizes and places itself the way it does on any other publisher's page.
     */
     ins.className = tag.cls;
     ins.setAttribute("data-zoneid", tag.zoneId);
-    ins.style.display = "block";
-    ins.style.width = "100%";
     el.appendChild(ins);
 
     /*
@@ -427,7 +434,6 @@ export function ExoClickSticky({
       const now = hasCreative(el);
       if (now === last) return;
       last = now;
-      setFilled(now);
       fillCb.current?.(now);
       if (now) {
         clearTimeout(emptyTimer);
@@ -497,54 +503,33 @@ export function ExoClickSticky({
     It is also the element every visual rule belongs on, because it is the one
     the creative is actually inside.
   */
-  return (
-    <div
-      ref={host}
-      className={cn(
-        /*
-          🔴 CENTRED STRUCTURALLY, not by inheritance (owner, 2026-08-30: "the
-          history banner is still not centered and fill", and for the bottom bar,
-          2026-08-31).
+  /*
+    🔴 NO SIZE, NO POSITION, NO CSS OF OURS AT ALL (owner, 2026-08-31: "before
+    the banner was showing, dont give the banner or interstilla any artificial
+    size or position, let them decide everything").
 
-          Earlier attempts centred with `text-align` and `mx-auto`. Both are
-          conditional on what the loader happens to inject: `text-align` only
-          moves INLINE content, and `mx-auto` only centres a BLOCK with a width —
-          so a fixed-size iframe, or a div that is neither, stays hard left. We
-          do not control that markup and it differs per creative.
+    This host used to carry a flex-centring rule, a `width: 100%`, a `minHeight`
+    floor for the outstream slot, and `!important` overrides forcing the injected
+    iframe and img to full width. Every one of them was added to fix a symptom,
+    and between them they caused:
 
-          `flex` + `justify-center` centres ANY single child whatever its display
-          type. That reasoning was already right; it was simply being applied to
-          the empty `<ins>` instead of to the box the creative is in.
-        */
-        (slot === "history" || slot === "bottomnav") && "flex w-full items-center justify-center",
-        /*
-          The history slot was asked for a FULL-WIDTH horizontal outstream unit,
-          so its iframe/image is stretched to the container.
-        */
-        slot === "history" && "[&_iframe]:!w-full [&_img]:!h-auto [&_img]:!w-full",
-        /*
-          The bottom-nav banner sits in a bar we control the width of, so it is
-          centred — but deliberately NOT stretched: a fixed-size banner pushed
-          past its natural size is a blurry banner.
-        */
-        slot === "bottomnav" && "[&_iframe]:!max-w-full [&_img]:!max-w-full",
-      )}
-      /*
-        🔴 A FLOOR, NOT A FIXED ASPECT, and only ONCE SOMETHING FILLED.
+      • a tall empty gap above the history grid when the box was reserved and
+        nothing arrived;
+      • a DEADLOCK on the outstream slot, whose player sizes itself to its
+        container — so a container we collapsed to earn its height gave the
+        player nothing to initialise in, and it could never fill;
+      • three rounds of "still not centred", because the rules were being
+        applied to a box whose contents we do not control and cannot measure.
 
-        `aspectRatio: 16/9` was right for an outstream VIDEO, but the zone also
-        serves fixed-size NATIVE units and forcing 16:9 onto a taller creative
-        crops it. `minHeight` still gives an outstream player a box to settle
-        into, and content decides the rest.
+    The unit knows its own dimensions and its own placement; the loader has
+    `exoDynamicParams` for exactly that and positions its fullpage and sticky
+    products itself. Anything we assert here is a guess competing with the
+    network's own answer, and the guess kept losing.
 
-        The STICKY slot keeps no size at all: the network pins it to the viewport
-        itself, so this host must not occupy or reserve any space.
-      */
-      style={
-        slot === "history" && filled
-          ? { display: "flex", width: "100%", minHeight: 180 }
-          : { display: "block", width: "100%" }
-      }
-    />
-  );
+    So the host is a bare `<div>` with the `<ins>` inside it and nothing else.
+    It is still OUR element — that is what keeps the loader's injected sibling
+    contained and torn down with us rather than orphaned among React's children
+    (see the header) — but it contributes no layout of its own.
+  */
+  return <div ref={host} />;
 }

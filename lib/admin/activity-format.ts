@@ -34,6 +34,7 @@ export const NOTABLE = new Set([
   // Bottom/history banner lifecycle — see events-registry.ts.
   "banner_filled",
   "banner_empty",
+  "interstitial_requested",
   "interstitial_filled",
   "interstitial_empty",
   "batch_authorized",
@@ -82,6 +83,7 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
     */
     case "banner_filled":
     case "banner_empty":
+    case "interstitial_requested":
     case "interstitial_filled":
     case "interstitial_empty": {
       const slot = m.slot ? SLOT_LABELS[String(m.slot)] ?? String(m.slot) : null;

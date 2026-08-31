@@ -38,6 +38,14 @@ const bannerSchema = z.object({
   slot: z.enum(["sticky", "history", "bottomnav", "interstitial"]),
   /** Did a creative actually arrive in the placeholder? */
   filled: z.boolean(),
+  /**
+   * The finer-grained state, when the caller has one.
+   *
+   * "requested" is the row that answers the question neither of the others
+   * can: whether the placement FIRED at all. A moment that never runs and one
+   * the network declines are the same empty screen from the outside.
+   */
+  state: z.enum(["requested", "filled", "empty"]).optional(),
   /** Which page it was on — "the history page in particular". */
   path: z.string().max(120).optional(),
 });
@@ -97,7 +105,7 @@ export async function POST(request: Request) {
     invisible from outside the browser.
   */
   if (parsed.data.kind === "banner") {
-    const { slot, filled, path } = parsed.data;
+    const { slot, filled, path, state } = parsed.data;
     /*
       The fullpage interstitial is the same MECHANISM as the banners — an <ins>
       their loader fills — but it is not a banner, and an operator scanning the
@@ -121,12 +129,19 @@ export async function POST(request: Request) {
       sticky: "global",
       interstitial: "idle_interstitial",
     };
-    if (filled) countAdImpression(IMPRESSION_ZONE[slot] ?? "global", userId);
+    // Only a real render is an impression — never the ask.
+    if (filled && state !== "requested") countAdImpression(IMPRESSION_ZONE[slot] ?? "global", userId);
 
     const isInterstitial = slot === "interstitial";
     const type = isInterstitial
-      ? (filled ? "interstitial_filled" : "interstitial_empty")
-      : (filled ? "banner_filled" : "banner_empty");
+      ? state === "requested"
+        ? "interstitial_requested"
+        : filled
+          ? "interstitial_filled"
+          : "interstitial_empty"
+      : filled
+        ? "banner_filled"
+        : "banner_empty";
     trackEvent(type, {
       userId,
       metadata: { slot, path: path ?? null },

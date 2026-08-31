@@ -88,6 +88,7 @@ const KIND: Record<string, KindMeta> = {
   */
   banner_filled: { label: "Banner impression", dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" },
   banner_empty: { label: "Banner no-fill", dot: "bg-amber-400/30", chip: "bg-secondary text-muted-foreground" },
+  interstitial_requested: { label: "Interstitial requested", dot: "bg-sky-400", chip: "bg-sky-400/12 text-sky-600 dark:text-sky-300" },
   interstitial_filled: { label: "Interstitial shown", dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
   interstitial_empty: { label: "Interstitial empty", dot: "bg-amber-400/30", chip: "bg-secondary text-muted-foreground" },
 };

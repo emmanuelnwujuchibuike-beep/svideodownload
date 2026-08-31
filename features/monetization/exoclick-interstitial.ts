@@ -66,12 +66,12 @@ function loadTag(): Promise<ExoClickStickyTag | null> {
  * production. Without it, "the interstitial never appeared" and "the network
  * had nothing for this visitor" are the same observation.
  */
-function beacon(filled: boolean): void {
+function beacon(state: "requested" | "filled" | "empty"): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot: "interstitial", filled, path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot: "interstitial", state, filled: state === "filled", path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -124,6 +124,16 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     fullpage ad types are handled specially in their bundle — so this element
     must add no box of its own and must not constrain what is put in it.
   */
+  /*
+    🔴 REPORT THE ASK, NOT ONLY THE ANSWER.
+
+    "Is it even being requested?" has been the open question for two rounds, and
+    nothing on our side could answer it: a placement that never fires and one
+    the network declines both look like an empty screen. This row is the
+    difference, and it is emitted before anything can go wrong afterwards.
+  */
+  beacon("requested");
+
   const host = document.createElement("div");
   host.setAttribute("data-exoclick-interstitial", "");
   document.body.appendChild(host);
@@ -142,7 +152,7 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
   const ok = await loadProvider(tag.src ?? EXOCLICK_PROVIDER_SRC);
   if (!ok) {
     cleanup();
-    beacon(false);
+    beacon("empty");
     return "empty";
   }
 
@@ -150,7 +160,7 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
   } catch {
     cleanup();
-    beacon(false);
+    beacon("empty");
     return "empty";
   }
 
@@ -189,21 +199,30 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     tick();
   });
 
-  beacon(filled);
-
-  if (!filled) {
-    cleanup();
-    return "empty";
-  }
+  beacon(filled ? "filled" : "empty");
 
   /*
-    The network owns the takeover from here — including closing it. The host is
-    reclaimed on a long ceiling so a unit that never tidies up after itself
-    cannot leave an orphan in `body` for the rest of the session; it is
-    deliberately far longer than any interstitial should live, so it never cuts
-    a real ad short.
+    🔴 A NO-FILL VERDICT MUST NOT DELETE THE PLACEHOLDER (owner, 2026-08-31:
+    "the interstitial is not showing").
+
+    This used to `cleanup()` here — `host.remove()`, which takes the `<ins>` and
+    everything the loader put beside it out of the document. So if ExoClick's
+    fullpage unit rendered even a moment after the six-second window, or
+    rendered into a structure the detector does not recognise, WE DELETED THE
+    AD. A detector that is unsure was tearing down the very thing it was unsure
+    about, and the symptom is precisely "nothing shows".
+
+    The verdict is telemetry, not a decision. An unfilled `<ins>` and its empty
+    wrapper occupy no space and cost nothing to leave in place, so they stay,
+    and a takeover that arrives late still appears. Only the long lifetime
+    ceiling below ever removes the host — and it is far longer than any
+    interstitial should live, so it cannot cut a real ad short either.
+
+    The RETURN value is still honest: `empty` means we did not see it render,
+    which is what the caller needs to know to avoid stacking a second ad on top.
   */
   setTimeout(cleanup, MAX_LIFETIME_MS);
+  if (!filled) return "empty";
   return "shown";
 }
 

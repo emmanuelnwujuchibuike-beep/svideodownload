@@ -35,7 +35,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .select("publisher_id")
     .eq("id", id)
     .maybeSingle();
-  if (!post) return NextResponse.json({ comments: [] });
+  /*
+    🔴 THE SAME SHAPE ON EVERY PATH.
+
+    This used to return a bare `{ comments: [] }` when the post was missing —
+    no `canComment`, no `loggedIn`. The client treats any non-null body as a
+    successful load (`if (data) setComments(data)`), so it then rendered the
+    comments UI with `undefined` where two booleans were required, and every
+    consumer downstream had to survive a shape the type said was impossible.
+
+    A partial payload is worse than an error here: it type-checks at the call
+    site (the cast in `loadPostComments<CommentsData>` asserts the full shape)
+    and only fails at runtime, deep inside whichever child dereferences it
+    first. Returning the complete, honest shape means "no post" renders as an
+    empty comments list instead of a half-initialised one.
+  */
+  if (!post) return NextResponse.json({ comments: [], canComment: false, loggedIn: !!viewerId });
 
   const comments = await listComments(id, post.publisher_id as string, viewerId);
   const gate = viewerId ? await canComment(id, viewerId) : { ok: false as const, reason: "unavailable" as const };

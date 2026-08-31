@@ -260,8 +260,14 @@ export function ExoClickSticky({
   const { showAds, ready } = useShowAds();
   const host = useRef<HTMLDivElement | null>(null);
   const [mounted, setMounted] = useState(false);
-  /** True once ExoClick has actually put a creative in the host. */
-  const [filled, setFilled] = useState(false);
+  /**
+   * What we know about this slot right now.
+   *
+   * "pending" is the state that matters: it is NOT the same as "empty", and
+   * treating them alike is what starved the outstream slot of the box it needs
+   * to render into. See the style block below.
+   */
+  const [status, setStatus] = useState<"pending" | "filled" | "empty">("pending");
   /*
     Held in a ref, not a dependency: `onFill` is an inline arrow at the call
     site, so depending on it would tear down and re-serve the placeholder on
@@ -331,7 +337,7 @@ export function ExoClickSticky({
       than in JSX also keeps React out of a subtree a third-party script mutates
       from underneath it.
     */
-    setFilled(false);
+    setStatus("pending");
     el.textContent = "";
     const ins = document.createElement("ins");
     /*
@@ -393,7 +399,10 @@ export function ExoClickSticky({
     */
     let everFilled = false;
     const emptyTimer = setTimeout(() => {
-      if (!everFilled) beacon(slot, false);
+      if (everFilled) return;
+      // The verdict: asked, waited, nothing came. Only now is the box withdrawn.
+      setStatus("empty");
+      beacon(slot, false);
     }, 10_000);
 
     /*
@@ -427,16 +436,24 @@ export function ExoClickSticky({
       const now = hasCreative(el);
       if (now === last) return;
       last = now;
-      setFilled(now);
       fillCb.current?.(now);
       if (now) {
         clearTimeout(emptyTimer);
         clearTimeout(retryTimer);
         everFilled = true;
+        setStatus("filled");
         beacon(slot, true);
       } else if (everFilled) {
+        /*
+          It filled and then went away — the outstream player hiding itself
+          after one play. That IS empty now, so the box goes with it; the
+          alternative is a 180px hole where an ad used to be.
+        */
+        setStatus("empty");
         beacon(slot, false);
       }
+      // Otherwise still PENDING. Reporting "empty" here would withdraw the box
+      // an outstream unit has not finished initialising in — see the style block.
     };
     const observer = new ResizeObserver(report);
     observer.observe(el);
@@ -530,20 +547,47 @@ export function ExoClickSticky({
         slot === "bottomnav" && "[&_iframe]:!max-w-full [&_img]:!max-w-full",
       )}
       /*
-        🔴 A FLOOR, NOT A FIXED ASPECT, and only ONCE SOMETHING FILLED.
+        🔴 THE OUTSTREAM SLOT NEEDS ITS BOX **BEFORE** IT FILLS, NOT AFTER
+        (owner, 2026-08-31: "the history above the grid banner doesnt show at
+        all", and "center the history banner to be positioned in center").
 
-        `aspectRatio: 16/9` was right for an outstream VIDEO, but the zone also
-        serves fixed-size NATIVE units and forcing 16:9 onto a taller creative
-        crops it. `minHeight` still gives an outstream player a box to settle
-        into, and content decides the rest.
+        This was `slot === "history" && filled`, which is a deadlock for an
+        outstream video: the player sizes itself to its CONTAINER, a
+        `display:block` element with a width and no height computes to 0px, and
+        a 0px container gives the player nothing to initialise in — so it never
+        renders, so the host never gains height, so `filled` never becomes true,
+        so the box is never granted. "Earn the height" is the right rule for a
+        BANNER, whose creative brings its own size; it is exactly the wrong rule
+        for a unit that asks the page how big it should be. The 2026-08-30 note
+        about the 0px collapse was right the first time.
 
-        The STICKY slot keeps no size at all: the network pins it to the viewport
-        itself, so this host must not occupy or reserve any space.
+        So the box exists while the answer is still PENDING, and is withdrawn
+        only once we know there is nothing — which is what stops it being the
+        "large empty hole in the middle of the page" that made the fixed 16:9
+        box wrong. `minHeight`, not `aspectRatio`, because this zone also serves
+        fixed-size native units a rigid 16:9 would crop.
+
+        Centred with flex on the container: it centres ANY single child whatever
+        its display type, which is the whole reason that rule is here rather
+        than on the child, where three earlier attempts put it.
+
+        The STICKY slot keeps no size at all — the network pins it to the
+        viewport itself, so this host must not occupy or reserve any space.
       */
       style={
-        slot === "history" && filled
-          ? { display: "flex", width: "100%", minHeight: 180 }
-          : { display: "block", width: "100%" }
+        slot === "history"
+          ? status === "empty"
+            ? { display: "block", width: "100%" }
+            : {
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                width: "100%",
+                minHeight: 180,
+              }
+          : slot === "bottomnav"
+            ? { display: "flex", justifyContent: "center", alignItems: "center", width: "100%" }
+            : { display: "block", width: "100%" }
       }
     />
   );

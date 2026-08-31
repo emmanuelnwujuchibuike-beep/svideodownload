@@ -136,13 +136,34 @@ export async function requestVastInterstitial(
   phase = "loading";
   try {
     const { showExoClickInterstitial } = await import("../exoclick-interstitial");
-    if (await showExoClickInterstitial()) {
+    const outcome = await showExoClickInterstitial();
+    /*
+      🔴 A CONFIGURED PLACEMENT IS NOT A FALLBACK (owner, 2026-08-31: "the
+      interstitial is not showing after 5secs, rather is the video i used as
+      interstitial before that i already removed that shows").
+
+      Only `no-tag` continues to the VAST path. `empty` deliberately does NOT:
+      once an ExoClick tag is pasted, this moment belongs to ExoClick, and
+      falling through would run the old video interstitial the operator had
+      already removed — which is exactly what was happening, because "did it
+      fill" is measured against markup we do not control and a MISS is
+      indistinguishable from a genuine no-fill. Showing a removed ad because our
+      detector was unsure is worse than showing nothing.
+
+      `lastShownAt` is stamped even on `empty`, so an ExoClick attempt still
+      spends the cooldown. Otherwise a zone that is out of inventory would let
+      every idle timeout re-ask immediately, which is a request loop with a
+      full-screen ad at the end of it.
+    */
+    if (outcome !== "no-tag") {
       lastShownAt = Date.now();
       phase = "idle";
-      return { shown: true, reason: "shown" };
+      return outcome === "shown"
+        ? { shown: true, reason: "shown" }
+        : { shown: false, reason: "no-ad" };
     }
   } catch {
-    /* No tag, a blocked loader, or no fill — fall through to the VAST path. */
+    /* The module itself failed to load — fall through to the VAST path. */
   }
 
   const ZONE = ZONE_BY_TRIGGER[trigger];

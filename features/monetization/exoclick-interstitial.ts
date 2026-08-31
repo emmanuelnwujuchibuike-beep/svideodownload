@@ -86,18 +86,38 @@ const FILL_TIMEOUT_MS = 6000;
 const MAX_LIFETIME_MS = 90_000;
 
 /**
- * Ask ExoClick for a fullpage interstitial. Resolves `true` only if something
- * actually rendered.
+ * What happened when we asked.
+ *
+ * 🔴 THREE STATES, NOT A BOOLEAN, and the distinction is the whole point
+ * (owner, 2026-08-31: "the interstitial is not showing after 5secs, rather is
+ * the video i used as interstitial before that i already removed that shows").
+ *
+ * This used to return `false` both when no tag was configured AND when a
+ * configured tag did not visibly fill, and the caller treated both as "fall
+ * back to the VAST interstitial". So an operator who had switched this
+ * placement to ExoClick still got the old video interstitial they had removed —
+ * and worse, they got it INSTEAD of an ExoClick takeover that may well have
+ * rendered, because "did it fill" is measured against markup we do not control
+ * and a miss is indistinguishable from a no-fill.
+ *
+ * `no-tag` is the only answer that means "this placement is not configured, use
+ * the fallback". Once a tag exists, this placement belongs to ExoClick and the
+ * fallback must not run behind its back.
+ */
+export type InterstitialOutcome = "no-tag" | "shown" | "empty";
+
+/**
+ * Ask ExoClick for a fullpage interstitial.
  *
  * Always resolves, never throws, and never blocks the caller for longer than
  * the fill timeout — an ad is an enhancement to whatever the visitor was doing,
  * never a step in it.
  */
-export async function showExoClickInterstitial(): Promise<boolean> {
-  if (typeof document === "undefined") return false;
+export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
+  if (typeof document === "undefined") return "no-tag";
 
   const tag = await loadTag();
-  if (!tag) return false;
+  if (!tag) return "no-tag";
 
   /*
     A host we own and can remove. The unit positions ITSELF — the loader's
@@ -123,7 +143,7 @@ export async function showExoClickInterstitial(): Promise<boolean> {
   if (!ok) {
     cleanup();
     beacon(false);
-    return false;
+    return "empty";
   }
 
   try {
@@ -131,7 +151,7 @@ export async function showExoClickInterstitial(): Promise<boolean> {
   } catch {
     cleanup();
     beacon(false);
-    return false;
+    return "empty";
   }
 
   /*
@@ -173,7 +193,7 @@ export async function showExoClickInterstitial(): Promise<boolean> {
 
   if (!filled) {
     cleanup();
-    return false;
+    return "empty";
   }
 
   /*
@@ -184,7 +204,7 @@ export async function showExoClickInterstitial(): Promise<boolean> {
     a real ad short.
   */
   setTimeout(cleanup, MAX_LIFETIME_MS);
-  return true;
+  return "shown";
 }
 
 /** Test/debug seam — resets the module singleton. */

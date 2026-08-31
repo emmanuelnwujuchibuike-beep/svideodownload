@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { recordAdClick, recordAdImpression, trackEvent } from "@/lib/analytics/events";
+import { countAdImpression, recordAdClick, recordAdImpression, trackEvent } from "@/lib/analytics/events";
 import { emit } from "@/lib/platform/event-bus";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
@@ -104,6 +104,25 @@ export async function POST(request: Request) {
       feed for "did the interstitial fire" should not have to read the slot
       column to tell them apart.
     */
+    /*
+      Count it in the real impression numbers too (owner, 2026-08-31: "bottom
+      banner should count in ad impression"). These placements are not AD_ZONES
+      — each has its own settings key so ExoClick and Adsterra can run side by
+      side — but the impression they produce is an ordinary impression, and the
+      dashboard total is wrong without it. Attributed to the zone that describes
+      the same POSITION, which is what an operator reading the report means.
+
+      Counter only: `banner_filled` below is the feed row, and it names the
+      placement and the page rather than just a zone id.
+    */
+    const IMPRESSION_ZONE: Record<string, string> = {
+      bottomnav: "bottom_banner",
+      history: "history_above_grid",
+      sticky: "global",
+      interstitial: "idle_interstitial",
+    };
+    if (filled) countAdImpression(IMPRESSION_ZONE[slot] ?? "global", userId);
+
     const isInterstitial = slot === "interstitial";
     const type = isInterstitial
       ? (filled ? "interstitial_filled" : "interstitial_empty")

@@ -4,7 +4,6 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { MediaProtection } from "@/features/media/media-protection";
-import { VastDownloadCompleteTrigger } from "@/features/monetization/vast-interstitial/download-complete-trigger";
 import { StreakTracker } from "@/features/streaks/streak-tracker";
 
 /**
@@ -140,7 +139,23 @@ export function DeferredShell() {
         budget. The ad itself (config, VAST request, player) stays behind a
         dynamic import that only runs once a download actually completes.
       */}
-      <VastDownloadCompleteTrigger />
+      {/*
+        🔴 REMOVED — TWO ADS FIRED ON ONE DOWNLOAD (owner, 2026-08-31: "they
+        seems to be showing two download complete, 2 of 5 secs that disppears
+        before 5 secs and this that stays without a way out").
+
+        The completion moment already HAS a dedicated placement:
+        `DownloadCompleteAd`, the skippable sheet mounted by the downloader,
+        the download hub and /history. This trigger listened to the same
+        completion event and raised a SECOND, full-screen ad on top of it, so
+        one finished download produced two overlays — one counting down and
+        vanishing, one sitting over the page.
+
+        The interstitial keeps every moment that has no ad of its own: idle,
+        back-swipe and the download START. The completion moment belongs to the
+        sheet, which is where its skip timer, its zone and its admin switch
+        already live.
+      */}
       <CommandCenterMount />
       <RegisterServiceWorker />
       <GlobalErrorCapture />

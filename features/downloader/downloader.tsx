@@ -186,14 +186,36 @@ export function Downloader({
   const [completeAdOpen, setCompleteAdOpen] = useState(false);
 
   useEffect(() => {
+    /*
+      🔴 NOT WHILE ANYTHING IS STILL RUNNING (owner, 2026-08-31: "it shows
+      before download completes", with the progress pill reading "Working…"
+      behind the ad).
+
+      This fired on the first task to report `completed`, which in a BATCH is
+      the first FILE, not the download. The panel then covered the page saying
+      "Your download has completed" while the rest of the batch was still
+      transferring behind it — and the visitor could not see the progress they
+      were being told was finished.
+
+      A file finishing is still what ARMS it (each id is announced once, so a
+      later separate download shows its own panel); the panel just waits for the
+      queue to be quiet before it opens.
+    */
+    // "paused" counts as at rest: a paused item is waiting on the visitor, not
+    // on the transfer, and treating it as busy would hold the panel back for
+    // as long as they leave it paused — which is forever.
+    const AT_REST = new Set(["completed", "failed", "cancelled", "paused"]);
+    const busy = tasks.some((t) => !AT_REST.has(t.status));
+    let finishedSomething = false;
     for (const task of tasks) {
       // Keyed per task id so a second download in the same session shows again,
       // while re-renders of the same finished task do not.
       if (task.status === "completed" && !announced.current.has(task.id)) {
         announced.current.add(task.id);
-        setCompleteAdOpen(true);
+        finishedSomething = true;
       }
     }
+    if (finishedSomething && !busy) setCompleteAdOpen(true);
   }, [tasks]);
 
   /** Actually start the transfer — reached once any gate has passed. */

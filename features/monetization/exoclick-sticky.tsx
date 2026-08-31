@@ -108,12 +108,48 @@ import { useShowAds } from "./use-show-ads";
  */
 const providerPromises = new Map<string, Promise<boolean>>();
 
+/**
+ * Has an ExoClick provider already taken over the global?
+ *
+ * 🔴 ONLY ONE PROVIDER DOMAIN CAN EVER BE ACTIVE PER PAGE, and this is from
+ * their own bundle:
+ *
+ *     (Array.isArray(window.AdProvider) || void 0 === window.AdProvider)
+ *       && (window.AdProvider = function () { … })
+ *
+ * The script only initialises while `window.AdProvider` is still the plain
+ * command ARRAY. The first provider to load replaces it with its own object —
+ * so every provider script loaded afterwards, from any other domain, parses and
+ * then does absolutely nothing. Its zones are never served, with no error
+ * anywhere.
+ *
+ * That is fatal for "one domain per placement": the banners load
+ * `a.magsrv.com`, the fullpage interstitial tag is issued for `a.pemsrv.com`,
+ * and whichever lost the race was silently dead. Appending the second script
+ * was worse than useless — it looked like the integration was wired.
+ *
+ * So a live provider is REUSED rather than competed with. The domains are the
+ * same publisher's (the `eas6a97888e…` hash is identical across the tags), and
+ * `serve` scans the document for placeholders by class, so the provider that is
+ * actually running will pick up any of our `<ins>` elements.
+ */
+function providerAlreadyLive(): boolean {
+  const p = (window as { AdProvider?: unknown }).AdProvider;
+  return !!p && !Array.isArray(p) && typeof (p as { push?: unknown }).push === "function";
+}
+
 export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boolean> {
   const existing = providerPromises.get(src);
   if (existing) return existing;
   const promise = new Promise<boolean>((resolve) => {
     if (typeof document === "undefined") {
       resolve(false);
+      return;
+    }
+    // Someone else's provider is already the global — see above. Appending
+    // ours would be a no-op script tag and a false sense of having loaded.
+    if (providerAlreadyLive()) {
+      resolve(true);
       return;
     }
     if (document.querySelector(`script[src="${src}"]`)) {
@@ -154,6 +190,20 @@ declare global {
  * one component rather than three that drift apart.
  */
 export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
+
+/**
+ * How long a slot may hold a box open before we call it empty.
+ *
+ * This is the maximum time a reader can be looking at a blank gap where an ad
+ * might arrive, so it is a UX number, not a network one. Four seconds is long
+ * enough for the loader's own request to come back on a phone connection and
+ * short enough that a no-fill is not a hole anybody stares at.
+ *
+ * It does NOT cap the fill: the observers keep watching for the life of the
+ * unit, so a creative that lands late still appears and the box comes back with
+ * it. All this bounds is how long we are willing to look hopeful.
+ */
+const EMPTY_VERDICT_MS = 4000;
 
 /**
  * Report this slot's state to the operator feed (owner, 2026-08-31: "wire the
@@ -337,7 +387,22 @@ export function ExoClickSticky({
       than in JSX also keeps React out of a subtree a third-party script mutates
       from underneath it.
     */
-    setStatus("pending");
+    /*
+      🔴 THE PENDING BOX IS FOR THE FIRST ATTEMPT ONLY (owner, 2026-08-31: "the
+      history page above the grid is showing blank", with a screenshot of a tall
+      empty gap above the day groups).
+
+      An outstream player needs a container with height to initialise in, so the
+      box has to exist BEFORE the fill — but a box that outlives a no-fill is
+      the "large empty hole in the middle of the page" the 2026-08-30 note
+      warned about, and that is what the screenshot shows. Both are true; the
+      answer is that the box is a short LOAN, not a reservation.
+
+      A retry has already had its chance to be a hole once. It re-asks with a
+      fresh placeholder but keeps the collapsed layout, so the reader never sees
+      the gap twice for the same slot.
+    */
+    setStatus(retried.current ? "empty" : "pending");
     el.textContent = "";
     const ins = document.createElement("ins");
     /*
@@ -403,7 +468,7 @@ export function ExoClickSticky({
       // The verdict: asked, waited, nothing came. Only now is the box withdrawn.
       setStatus("empty");
       beacon(slot, false);
-    }, 10_000);
+    }, EMPTY_VERDICT_MS);
 
     /*
       🔴 ONE RETRY WITH A FRESH PLACEHOLDER (owner, 2026-08-31: "the history
@@ -431,7 +496,7 @@ export function ExoClickSticky({
       if (hasCreative(el) || retried.current) return;
       retried.current = true;
       setServeKey((k) => k + 1);
-    }, 3500);
+    }, EMPTY_VERDICT_MS + 2000);
     const report = () => {
       const now = hasCreative(el);
       if (now === last) return;

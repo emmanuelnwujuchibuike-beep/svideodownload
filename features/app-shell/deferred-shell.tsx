@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { MediaProtection } from "@/features/media/media-protection";
+import { VastInterstitialTriggers } from "@/features/monetization/vast-interstitial/triggers";
 import { StreakTracker } from "@/features/streaks/streak-tracker";
 
 /**
@@ -156,6 +157,12 @@ export function DeferredShell() {
         sheet, which is where its skip timer, its zone and its admin switch
         already live.
       */}
+      {/*
+        Idle and back-swipe interstitials, on EVERY page. Two listeners and a
+        timer; the ad itself stays behind a dynamic import that only runs when
+        a moment actually fires.
+      */}
+      <VastInterstitialTriggers />
       <CommandCenterMount />
       <RegisterServiceWorker />
       <GlobalErrorCapture />

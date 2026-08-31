@@ -529,7 +529,37 @@ export function ExoClickSticky({
     So the host is a bare `<div>` with the `<ins>` inside it and nothing else.
     It is still OUR element — that is what keeps the loader's injected sibling
     contained and torn down with us rather than orphaned among React's children
-    (see the header) — but it contributes no layout of its own.
+    (see the header) — but it asserts nothing about the creative.
+
+    ── 🔴 EXCEPT `width: 100%`, WHICH IS THE ABSENCE OF A SIZE, NOT ONE ─────────
+
+    Removing this too was a regression, and it is measurable on PRODUCTION
+    (`scripts/exoclick-prod-probe.mjs`, 2026-08-31 — a local run cannot see it,
+    because localhost is an unauthorised referer and every zone is declined):
+
+        zone 6016480  host 0x0  display=block | parent display=flex w=412
+        processed=true  siblings=1 (DIV)  painted=0
+
+    Read that carefully, because it says the opposite of "the network has
+    nothing for us": `processed=true` and a sibling `<div>` mean their loader
+    FOUND our placeholder, read our zone id, asked, and inserted its wrapper.
+    It then rendered into a box **zero pixels wide**.
+
+    The cause is one line of CSS we do not own. `TopBannerAd`'s inner container
+    is `flex`, so this host is a FLEX ITEM; an empty flex item's `flex-basis:
+    auto` resolves against its content, and its content is an `<ins>` that is
+    empty by design (finding 1 — the creative is a SIBLING). Width 0. A creative
+    that sizes to its container then has nothing to size to, which on screen is
+    indistinguishable from a no-fill — so "no size at all" became "no ad at
+    all", on every page at once.
+
+    A container collapsed to zero is not the absence of an artificial size, it
+    is the most restrictive one it is possible to impose. "Let them decide
+    everything" means handing the unit the space that exists and letting it
+    choose what to occupy — so width is offered, and HEIGHT is still never
+    asserted (no `minHeight`, no aspect box), which is the half that was
+    actually reserving empty gaps. Nothing here centres, stretches or overrides
+    the creative; those `!important` rules stay gone.
   */
-  return <div ref={host} />;
+  return <div ref={host} style={{ width: "100%" }} />;
 }

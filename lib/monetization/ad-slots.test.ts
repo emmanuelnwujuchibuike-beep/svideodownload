@@ -662,4 +662,40 @@ describe("Ad slots — no decorated empty boxes", () => {
     expect(src).toMatch(/useState<boolean \| null>\(null\)/);
     expect(src).toMatch(/hasAd === true/);
   });
+
+  /**
+   * 🔴 THE ZERO-WIDTH HOST (production probe, 2026-08-31).
+   *
+   * `TopBannerAd` docks the ExoClick banner inside a `flex` container, so the
+   * unit's host is a FLEX ITEM. Its only child is an `<ins>` that stays empty by
+   * design — ExoClick injects the creative into a SIBLING `<div>`, never into
+   * the `<ins>` — so with no width of its own the host's `flex-basis: auto`
+   * resolves to 0 and the ad renders into a box zero pixels wide.
+   *
+   * Measured on frenzsave.com: `host 0x0 | parent display=flex w=412`, with
+   * `data-processed=true` and the loader's wrapper present. Their side worked;
+   * ours had no room. On screen that is identical to a no-fill, which is how it
+   * survived a full round of "the banner is not showing at all".
+   *
+   * Guarded in the SOURCE because the failure needs a real browser, an
+   * authorised referer and a filled ad to reproduce — none of which a unit test
+   * has. The rule is narrow on purpose: offering WIDTH is allowed, asserting a
+   * HEIGHT is what reserves empty boxes and is still banned.
+   */
+  it("gives the ExoClick host a width, and still never asserts a height", () => {
+    const src = readFileSync(path.join(ROOT, "features/monetization/exoclick-sticky.tsx"), "utf8");
+    const code = stripComments(src);
+
+    // The host must offer the width it has, or a flex parent collapses it to 0.
+    expect(
+      /<div\s+ref=\{host\}[^>]*width:\s*"100%"/.test(code),
+      "The ExoClick host must carry width:100% — its parent is a flex container and an empty flex item collapses to zero width, which renders every creative into nothing.",
+    ).toBe(true);
+
+    // But never a height: that is what draws a box around an ad that did not come.
+    expect(
+      /minHeight|aspectRatio|min-h-\[|aspect-\[/.test(code),
+      "The ExoClick host must not reserve height — an unfilled slot would become a visible empty gap.",
+    ).toBe(false);
+  });
 });

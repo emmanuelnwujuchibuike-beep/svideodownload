@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  crossedTier,
+  nextTier,
+  STREAK_BADGE_MIN_DAYS,
+  STREAK_TIERS,
+  tierFor,
+} from "./tiers";
+
+/**
+ * The tier boundaries, asserted because they are invisible in review and very
+ * visible to the person who hit 100 days and got the wrong flame.
+ *
+ * Owner, 2026-08-30: badge starts at 2 days; the fire changes colour at 7, 14,
+ * 30 and 100 days, plus a one-year black tier.
+ */
+
+describe("tierFor", () => {
+  it("🔴 shows nothing below 2 days — one day is a visit, not a streak", () => {
+    expect(tierFor(0)).toBeNull();
+    expect(tierFor(1)).toBeNull();
+    expect(STREAK_BADGE_MIN_DAYS).toBe(2);
+  });
+
+  it("🔴 lands on the right tier at each exact threshold", () => {
+    // The off-by-one that would ship silently.
+    expect(tierFor(2)?.id).toBe("spark");
+    expect(tierFor(7)?.id).toBe("blue");
+    expect(tierFor(14)?.id).toBe("green");
+    expect(tierFor(30)?.id).toBe("purple");
+    expect(tierFor(100)?.id).toBe("gold");
+    expect(tierFor(365)?.id).toBe("black");
+  });
+
+  it("holds the tier for the day BEFORE the next one", () => {
+    expect(tierFor(6)?.id).toBe("spark");
+    expect(tierFor(13)?.id).toBe("blue");
+    expect(tierFor(29)?.id).toBe("green");
+    expect(tierFor(99)?.id).toBe("purple");
+    expect(tierFor(364)?.id).toBe("gold");
+    expect(tierFor(10_000)?.id).toBe("black");
+  });
+
+  it("never throws on a broken number", () => {
+    expect(tierFor(NaN)).toBeNull();
+    expect(tierFor(-5)).toBeNull();
+    // Infinity is not a streak anyone has. Refusing it (rather than awarding
+    // the top flame) keeps a corrupt cached value from minting a black tier.
+    expect(tierFor(Infinity)).toBeNull();
+  });
+});
+
+describe("crossedTier — a milestone is a different event from a day", () => {
+  it("fires only when the tier actually changes", () => {
+    expect(crossedTier(6, 7)?.id).toBe("blue");
+    expect(crossedTier(99, 100)?.id).toBe("gold");
+    // An ordinary day inside a tier is not a milestone.
+    expect(crossedTier(7, 8)).toBeNull();
+    expect(crossedTier(2, 3)).toBeNull();
+  });
+
+  it("counts the very first badge as a milestone", () => {
+    // 1 -> 2 is the chip APPEARING, which is worth celebrating.
+    expect(crossedTier(1, 2)?.id).toBe("spark");
+  });
+
+  it("does not fire on a decrease", () => {
+    expect(crossedTier(100, 2)).toBeNull();
+    expect(crossedTier(7, 0)).toBeNull();
+  });
+});
+
+describe("nextTier", () => {
+  it("points at the next milestone up, not the top one", () => {
+    expect(nextTier(2)).toEqual({ tier: expect.objectContaining({ id: "blue" }), inDays: 5 });
+    expect(nextTier(14)).toEqual({ tier: expect.objectContaining({ id: "purple" }), inDays: 16 });
+    expect(nextTier(100)).toEqual({ tier: expect.objectContaining({ id: "black" }), inDays: 265 });
+  });
+
+  it("is null at the top", () => {
+    expect(nextTier(365)).toBeNull();
+    expect(nextTier(9999)).toBeNull();
+  });
+});
+
+describe("the table itself", () => {
+  it("🔴 is ordered longest-first, which tierFor depends on", () => {
+    const mins = STREAK_TIERS.map((t) => t.minDays);
+    expect(mins).toEqual([...mins].sort((a, b) => b - a));
+  });
+
+  it("🔴 writes every Tailwind class out in full", () => {
+    /*
+      Tailwind scans source TEXT. An interpolated class name is never emitted
+      into the CSS, and the symptom is an unstyled chip in production while dev
+      looks fine — a trap this project has hit before.
+
+      Asserted on the resolved DATA rather than the file's bytes: a source scan
+      also matches the sentence explaining the rule, which is how the first
+      version of this test failed on its own documentation.
+    */
+    for (const t of STREAK_TIERS) {
+      for (const [field, value] of Object.entries({ text: t.text, ring: t.ring, fill: t.fill, spark: t.spark })) {
+        expect(value, `${t.id}.${field} contains an interpolation`).not.toMatch(/\$\{|undefined|NaN/);
+        expect(value.trim().length, `${t.id}.${field} is empty`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("gives every tier a distinct colour — the colour IS the rank", () => {
+    const flames = STREAK_TIERS.map((t) => t.flame.join());
+    expect(new Set(flames).size).toBe(STREAK_TIERS.length);
+    const sparks = STREAK_TIERS.map((t) => t.spark);
+    expect(new Set(sparks).size).toBe(STREAK_TIERS.length);
+  });
+});

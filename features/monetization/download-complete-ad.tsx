@@ -132,8 +132,35 @@ export function DownloadCompleteAd({
     >
       <div aria-hidden className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
 
-      <div className="relative w-full rounded-t-3xl border border-border/60 bg-card p-4 shadow-card sm:max-w-lg sm:rounded-3xl">
-        <div className="mb-3 flex items-center justify-between gap-3">
+      {/*
+        🔴 BOUNDED HEIGHT, AND THE HEADER PINNED (owner, 2026-08-30: "the after
+        download completes is not showing properly, is being covered by the top
+        header", with a screenshot of the Skip control cut in half by the
+        Dynamic Island).
+
+        This is a bottom sheet (`items-end`) with NO height cap. A 9:16 ExoClick
+        creative is taller than the viewport, so the sheet grew past the top of
+        the screen and its header — the line explaining what happened AND THE
+        ONLY SKIP CONTROL — was pushed off it, underneath the status bar.
+
+        That is not a cosmetic bug: with Skip off-screen and `body` locked to
+        `overflow:hidden` by the effect above, the visitor is sealed inside an
+        ad with no way out but a reload.
+
+        Three parts to the fix, all load-bearing:
+          • `max-h` against `100dvh` — dvh, not vh, because mobile browser
+            chrome makes vh taller than the visible viewport, which is the same
+            class of mistake that caused this.
+          • the safe-area inset, so the top clears the notch / Dynamic Island
+            rather than merely clearing the viewport edge.
+          • `overflow-y-auto` on the body with the header `sticky`, so a tall
+            creative scrolls UNDER a Skip button that is always on screen.
+      */}
+      <div
+        className="relative flex w-full max-h-[calc(100dvh-var(--frenz-safe-top,0px)-1rem)] flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-3xl"
+        style={{ marginTop: "var(--frenz-safe-top, 0px)" }}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border/50 bg-card px-4 pb-3 pt-4">
           <div>
             <p className="text-sm font-semibold">Your download has started</p>
             <p className="text-xs text-muted-foreground">Check your downloads folder.</p>
@@ -161,10 +188,24 @@ export function DownloadCompleteAd({
           </button>
         </div>
 
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-          Sponsored
-        </p>
-        <AdSlot zone="download_complete" dismissible={false} onResolved={setHasAd} />
+        {/*
+          The scrolling body. `min-h-0` is what actually makes it scroll: a flex
+          child's default `min-height:auto` refuses to shrink below its content,
+          so without it the creative would push the sheet past its own max-height
+          again and re-create the bug this fix exists for.
+
+          The bottom inset keeps the last of the creative clear of the home
+          indicator on a gesture-nav phone.
+        */}
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-4 pt-3"
+          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+        >
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+            Sponsored
+          </p>
+          <AdSlot zone="download_complete" dismissible={false} onResolved={setHasAd} />
+        </div>
       </div>
     </div>
   );

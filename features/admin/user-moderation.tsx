@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff, Eye, Loader2, Search, ShieldCheck } from "lucide-react";
+import { Ban, EyeOff, Eye, Loader2, Search, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -98,15 +98,77 @@ export function UserModeration() {
     }
   };
 
+  /*
+    ═══════════════════════════════════════════════════════════════════════
+     BAN — the community-guidelines lockout (owner, 2026-08-30)
+    ═══════════════════════════════════════════════════════════════════════
+
+    "put a way in admin dashboard where I can banned users from using the app
+    for violating community guidelines."
+
+    ── Deliberately NOT a new mechanism ─────────────────────────────────────
+
+    `is_suspended` — a full lockout — already existed, and `moderate()` already
+    implements `suspend`/`unsuspend` behind the admin guard with an audit trail.
+    What did not exist was any way to REACH it without a report: the only
+    Suspend button in the product lives in the report queue, so an account could
+    only be banned if somebody had reported it first. An admin who spots a
+    violation themselves had nowhere to go.
+
+    So this is the missing entry point, wired to the proven path. No new
+    privilege, no second write path, no second audit trail — the same
+    `/api/admin/moderation` call the queue makes.
+
+    ── Why the confirmation spells out the consequence ──────────────────────
+
+    A ban is the most severe action in this admin and it is one tap away from a
+    hide, which is explicitly NOT a punishment. The two must never be confused,
+    so the dialog names exactly what a ban does and what it does not.
+  */
+  const toggleBanned = async (u: AdminUser) => {
+    const banning = !u.is_suspended;
+    if (
+      banning &&
+      !window.confirm(
+        `Ban @${u.handle} for violating community guidelines?\n\n` +
+          `They are locked out of the app: they cannot post, comment, react, chat or be seen by anyone — including themselves.\n\n` +
+          `This is a punishment, not a hide. Reversible at any time from here.`,
+      )
+    ) {
+      return;
+    }
+    setBusyId(u.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/moderation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetType: "user",
+          targetId: u.id,
+          action: banning ? "suspend" : "unsuspend",
+        }),
+      });
+      if (!res.ok) throw new Error();
+      // Patched in place for the same reason the hide toggle is — see there.
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, is_suspended: banning } : x)));
+    } catch {
+      setError("That change didn't save.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
       <h2 className="flex items-center gap-2 text-base font-bold">
         <ShieldCheck className="h-4 w-4 text-primary" />
-        Account visibility
+        Accounts — hide or ban
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Hide an account from everyone it isn&apos;t friends with. It keeps posting and chatting normally with its existing
-        friends — this is not a suspension. Works without a report, for security cases you spot first.
+        <strong>Hide</strong> keeps an account posting and chatting with its existing friends but removes it from
+        strangers — not a punishment. <strong>Ban</strong> locks the account out of the app entirely for violating
+        community guidelines. Both work without a report, and both are reversible.
       </p>
 
       <div className="relative mt-4">
@@ -178,6 +240,30 @@ export function UserModeration() {
                   <EyeOff className="h-3.5 w-3.5" />
                 )}
                 {u.is_hidden ? "Unhide" : "Hide"}
+              </button>
+              {/*
+                Ban sits next to Hide but is styled to outrank it: a solid fill
+                rather than a tint, because the two actions are one tap apart and
+                only one of them is a punishment. An admin must never reach for
+                the wrong one because they look interchangeable.
+              */}
+              <button
+                type="button"
+                onClick={() => void toggleBanned(u)}
+                disabled={busyId === u.id}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:opacity-50",
+                  u.is_suspended
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "bg-red-600 text-white hover:bg-red-700",
+                )}
+              >
+                {busyId === u.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Ban className="h-3.5 w-3.5" />
+                )}
+                {u.is_suspended ? "Unban" : "Ban"}
               </button>
             </li>
           ))

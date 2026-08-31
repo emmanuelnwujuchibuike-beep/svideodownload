@@ -2,6 +2,7 @@ import { MotionConfig } from "framer-motion";
 import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
+import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
 import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
@@ -69,7 +70,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* Sticky top ad — Downloads page only, mounted here (outside the page
               transition template) so its sticky pin is reliable. */}
           <DownloadTopAd />
-          {children}
+          <PageRefresh>{children}</PageRefresh>
         </div>
       </div>
       <MobileNav />

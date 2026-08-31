@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { StreakFlame } from "@/features/streaks/streak-flame";
 import { claimStreakSound, readDisplayCache, useStreak } from "@/features/streaks/use-streak";
+import { nextTier, tierFor } from "@/lib/streaks/tiers";
 
 /**
  * The persistent hero chip: 🔥 12, or 🔥 12 Day Streak where there is room.
@@ -33,6 +34,16 @@ import { claimStreakSound, readDisplayCache, useStreak } from "@/features/streak
 
 /** Long enough to read, short enough to stay out of the way. */
 const REVEAL_MS = 2000;
+
+/**
+ * Where the sparkle ticks sit, in degrees around the pill.
+ *
+ * Eight, and deliberately NOT evenly spaced: the four diagonals are the corners
+ * of a rounded pill, where a tick has room to breathe, and the four axes are
+ * pulled slightly off so the burst reads as hand-drawn rather than as a compass
+ * rose. Even spacing looked like a loading spinner.
+ */
+const SPARK_ANGLES = [18, 52, 128, 162, 198, 232, 308, 342] as const;
 
 export function StreakHeroIndicator({ className = "" }: { className?: string }) {
   // `useState(initialiser)` runs during the first render, so the cached number
@@ -104,9 +115,18 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
     return () => clearTimeout(t);
   }, [streak]);
 
-  if (streak < 1) return null;
+  /*
+    🔴 TWO DAYS, NOT ONE (owner, 2026-08-30: "make the streak badge when users
+    reach 2 days streaks to be like this image"). A single day is a visit, not a
+    streak, and a "1 day streak" badge on someone's first session devalues the
+    thing for everyone who actually has one. `tierFor` returns null below the
+    threshold, so the rule lives with the tiers rather than as a loose `< 1`.
+  */
+  const tier = tierFor(streak);
+  if (!tier) return null;
 
-  const label = `${streak} day streak`;
+  const label = `${streak} day streak — ${tier.label}`;
+  const upcoming = nextTier(streak);
   const reveal = () => {
     setOpen(true);
     if (timer.current) clearTimeout(timer.current);
@@ -120,7 +140,7 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
         onClick={reveal}
         aria-label={label}
         aria-expanded={open}
-        className={`srch-press relative inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500/12 to-orange-500/12 px-2.5 py-1 text-[12px] font-bold text-orange-600 ring-1 ring-inset ring-orange-500/25 dark:text-orange-300 dark:ring-orange-400/25 ${
+        className={`srch-press streak-chip relative inline-flex shrink-0 items-center gap-1.5 rounded-full ${tier.fill} px-2.5 py-1 text-[12px] font-bold ${tier.text} ring-1 ring-inset ${tier.ring} ${
           pop ? "streak-chip-pop" : ""
         }`}
       >
@@ -131,20 +151,50 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
         {pop ? (
           <span
             aria-hidden
-            className="streak-chip-ring pointer-events-none absolute inset-0 rounded-full ring-2 ring-orange-400/70"
+            className={`streak-chip-ring pointer-events-none absolute inset-0 rounded-full ring-2 ${tier.ring}`}
           />
         ) : null}
+        {/*
+          THE SPARKLE BURST (owner, 2026-08-30: the badge should "feel alive").
+
+          Eight ticks radiating from the pill, drawn as one absolutely-positioned
+          layer so they add nothing to the chip's own box and cannot shift the
+          hero row — the same CLS rule the chip itself obeys.
+
+          They idle at a slow twinkle and go bright on an increment. Purely
+          decorative and `aria-hidden`: the streak is already announced by the
+          button's label and the popover's `role="status"`.
+        */}
+        <span aria-hidden className={`streak-sparks pointer-events-none absolute inset-0 ${pop ? "streak-sparks-burst" : ""}`}>
+          {SPARK_ANGLES.map((deg) => (
+            <span
+              key={deg}
+              className={`streak-spark ${tier.spark}`}
+              style={{ ["--spark-rotate" as string]: `${deg}deg` }}
+            />
+          ))}
+        </span>
         <StreakFlame
           className={`h-[15px] w-[15px] ${pop ? "streak-chip-flame" : ""}`}
           gradient
           animated
+          tier={tier}
         />
         <span aria-hidden className={pop ? "streak-chip-count inline-block" : undefined}>
           {streak}
         </span>
-        {/* "Day Streak" only where there is room; the number alone below that. */}
-        <span aria-hidden className="hidden sm:inline">
-          Day Streak
+        {/*
+          🔴 ALWAYS VISIBLE, and uppercase — matching the owner's reference
+          screenshot (2026-08-30), which is a PHONE showing the full
+          "4 DAY STREAK".
+
+          This was `hidden sm:inline`, so on the exact device in that screenshot
+          the label was suppressed and the chip read as a bare "🔥 4". The
+          wording is what makes it a streak rather than an unexplained number,
+          and it is four short characters wider — the hero row already wraps.
+        */}
+        <span aria-hidden className="tracking-[0.06em]">
+          DAY STREAK
         </span>
       </button>
 
@@ -165,12 +215,17 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
         {open ? (
           <>
             <span className="block text-[14px] font-bold text-background">
-              🎉 {streak} day{streak === 1 ? "" : "s"} streak!
+              {tier.label} · {streak} days
             </span>
             <span className="mt-0.5 block text-[11.5px] font-medium text-background/70">
-              {streak === 1
-                ? "You started today — come back tomorrow to keep it going."
-                : `${streak} days in a row on Frenzsave. Keep it alive!`}
+              {/*
+                The NEXT flame is the reason to come back, so the popover names
+                it. Saying "keep it going" asks for the same thing without ever
+                telling anyone what they are working toward.
+              */}
+              {upcoming
+                ? `${upcoming.inDays} more ${upcoming.inDays === 1 ? "day" : "days"} unlocks the ${upcoming.tier.label.toLowerCase()} flame.`
+                : "The rarest flame there is. Nothing above this one."}
             </span>
           </>
         ) : null}

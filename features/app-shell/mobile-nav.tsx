@@ -78,7 +78,21 @@ import { cn } from "@/lib/utils";
   which reaches the same "more contrast, more premium" ask without moving
   a class every other selector in this file depends on.
 */
-const GLYPH_ACTIVE = "text-primary [filter:drop-shadow(0_4px_10px_rgba(79,70,229,0.7))]";
+/*
+  🔴 NO DROP-SHADOW (owner, 2026-08-30: "Remove this blue shadow from the feed
+  button", with a screenshot of the glyph haloed in indigo).
+
+  It was `drop-shadow(0 4px 10px rgba(79,70,229,0.7))` — a 70%-opacity indigo
+  glow under whichever tab was active. At that opacity and blur it does not read
+  as elevation, it reads as the icon bleeding colour onto the bar, and it was
+  the loudest thing on an otherwise flat, solid nav.
+
+  The active state is carried by `text-primary` alone now, which is the same
+  signal every other surface in the app uses. A previous pass already removed a
+  BLACK drop-shadow from this constant for the same reason; this removes the
+  colour one it left behind.
+*/
+const GLYPH_ACTIVE = "text-primary";
 // Black drop-shadow removed (owner, 2026-08-25) — the color base
 // (`text-muted-foreground`) is untouched on purpose: the immersive Reels
 // variant re-tints every inactive glyph white via a selector keyed on that

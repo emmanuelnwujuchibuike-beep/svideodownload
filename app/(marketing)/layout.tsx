@@ -1,6 +1,7 @@
 import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ReelsWarmup } from "@/components/landing/reels-warmup";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
+import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { getFeed } from "@/lib/social/feed";
 
 /**
@@ -70,7 +71,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         fifth of a second longer to stop moving.
       */}
       <div style={{ paddingTop: "calc(var(--frenz-announce-h, 0px) + var(--frenz-topbanner-h, 0px))" }}>
-        {children}
+        <PageRefresh>{children}</PageRefresh>
       </div>
       {/* Reserve room for the fixed BOTTOM ad bar (it now sits above the bottom nav
           — see top-banner-ad.tsx), so a page's last content clears it instead of

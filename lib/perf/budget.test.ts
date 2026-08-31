@@ -197,7 +197,24 @@ function landingChunks(): string[] {
  * string constant, not the download manager, precisely so that stays true. See
  * lib/downloads/completion-event.ts.
  */
-const GLOBAL_CEILING = 352 * 1024;
+/*
+ * An EIGHTH bump (352 → 353), for the community-guidelines Ban control.
+ *
+ * Owner, 2026-08-30: "put a way in admin dashboard where I can banned users from
+ * using the app for violating community guidelines." That is a second button per
+ * row in `user-moderation.tsx`, its confirm copy, and the `Ban` glyph — a few
+ * hundred bytes gzipped.
+ *
+ * Nothing to split: the action REUSES the existing `moderate()` suspend path, so
+ * no new client logic shipped with it — only the control that reaches it.
+ *
+ * 🔴 ADMIN ROUTE ONLY, and that distinction is the whole reason this ceiling is
+ * allowed to drift while the others are not. The public entry ceilings below
+ * (`ENTRY_CEILING` 275 KiB, `APP_ENTRY_CEILING` 300 KiB) are untouched by this
+ * session's work and still pass — including the app-wide pull-to-refresh, which
+ * reuses the existing `PullToRefresh` component rather than adding a library.
+ */
+const GLOBAL_CEILING = 353 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

@@ -2298,6 +2298,91 @@ body:has(.frenz-canvas-page) {
   animation: frenz-streak-chip-flame 820ms var(--ease-spring) 60ms both;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   STREAK SPARKLE BURST (owner, 2026-08-30: the badge should "feel alive")
+
+   Eight ticks radiating from the chip. They twinkle slowly at rest so the
+   badge is never a dead sticker, and flare outward on an increment.
+
+   🔴 The whole layer is `position:absolute; inset:0` inside the chip and every
+   tick is transform-only, so this adds NOTHING to the chip's box. The hero row
+   it sits in is on the landing page's 1.6s LCP path and a badge that changed
+   size when it animated would be a layout shift on every visit.
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes frenz-streak-spark-idle {
+  /* Asymmetric on purpose: a tick that fades symmetrically reads as a pulse,
+     which is a status indicator. A quick bright edge and a slow fall reads as
+     a glint. */
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: rotate(var(--spark-rotate)) translateX(var(--spark-gap)) scaleX(0.55);
+  }
+  12% {
+    opacity: 0.95;
+    transform: rotate(var(--spark-rotate)) translateX(var(--spark-gap)) scaleX(1);
+  }
+}
+
+@keyframes frenz-streak-spark-burst {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--spark-rotate)) translateX(calc(var(--spark-gap) - 4px)) scaleX(0.3);
+  }
+  35% {
+    opacity: 1;
+    transform: rotate(var(--spark-rotate)) translateX(calc(var(--spark-gap) + 5px)) scaleX(1.35);
+  }
+  100% {
+    opacity: 0.22;
+    transform: rotate(var(--spark-rotate)) translateX(var(--spark-gap)) scaleX(0.55);
+  }
+}
+
+.streak-sparks {
+  /* The ticks are positioned from the chip's centre, so the layer needs no size
+     of its own — only an origin. */
+  --spark-gap: 30px;
+}
+
+.streak-spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 1.5px;
+  margin: -0.75px 0 0 -2.5px;
+  border-radius: 999px;
+  transform: rotate(var(--spark-rotate)) translateX(var(--spark-gap)) scaleX(0.55);
+  transform-origin: center;
+  opacity: 0.22;
+  /* Staggered off the angle so the eight never twinkle in unison — in unison
+     they read as one blinking ring rather than as sparks. */
+  animation: frenz-streak-spark-idle 3.6s ease-in-out infinite;
+  animation-delay: calc(var(--spark-rotate) * 0.006s);
+}
+
+.streak-sparks-burst .streak-spark {
+  animation: frenz-streak-spark-burst 900ms var(--ease-spring) both;
+  animation-delay: calc(var(--spark-rotate) * 0.0012s);
+}
+
+/*
+  🔴 REDUCED MOTION TURNS THE LOOP OFF, NOT THE SPARKS.
+
+  The ticks are part of the badge's identity, so they stay drawn and stay at
+  their resting opacity — only the perpetual movement stops. Hiding them
+  outright would give a visitor with vestibular sensitivity a visibly different
+  badge from everyone else's, which is not what the preference asks for.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .streak-spark,
+  .streak-sparks-burst .streak-spark {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
 /*
   🔴 Honour the OS setting (§22). Reduced motion removes the MOVEMENT and keeps
   the MEANING: the flame, the number and the words all still render, they simply

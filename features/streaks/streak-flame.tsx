@@ -1,3 +1,5 @@
+import type { StreakTier } from "@/lib/streaks/tiers";
+
 /**
  * The flame mark. One inline SVG, shared by the hero chip, the celebration and
  * the profile card so the brand's fire is drawn once.
@@ -14,16 +16,36 @@ export function StreakFlame({
   className = "h-4 w-4",
   gradient = false,
   animated = false,
+  tier,
 }: {
   className?: string;
-  /** Fill with the brand blue→purple sweep instead of `currentColor`. */
+  /** Fill with the brand sweep instead of `currentColor`. */
   gradient?: boolean;
   /** Add the slow breathing loop. Off by default — most placements are static. */
   animated?: boolean;
+  /**
+   * The streak tier whose colours this flame takes (lib/streaks/tiers.ts).
+   *
+   * Only meaningful with `gradient`. Omitted, the flame keeps the original
+   * orange — which is what every non-streak placement wants, and what a
+   * `spark`-tier streak gets anyway.
+   */
+  tier?: StreakTier | null;
 }) {
-  // A stable id per variant: two gradients with the same id on one page would
-  // have the second silently win, so the gradient variant owns exactly one.
-  const fill = gradient ? "url(#frenz-flame-grad)" : "currentColor";
+  /*
+    🔴 THE GRADIENT ID MUST BE UNIQUE PER TIER.
+
+    SVG gradient ids are GLOBAL to the document. The original code used one
+    fixed id and noted that "two gradients with the same id would have the
+    second silently win" — which was fine while there was one palette, and is a
+    real bug now: the hero chip (blue, say) and the profile card (gold) on the
+    same page would both render whichever `<defs>` painted last. Keying the id
+    to the tier means each palette owns its own definition and identical tiers
+    can safely share one.
+  */
+  const gradientId = `frenz-flame-grad-${tier?.id ?? "base"}`;
+  const stops = tier?.flame ?? ["#F97316", "#FBBF24"];
+  const fill = gradient ? `url(#${gradientId})` : "currentColor";
   return (
     <svg
       viewBox="0 0 24 24"
@@ -33,10 +55,10 @@ export function StreakFlame({
     >
       {gradient ? (
         <defs>
-          <linearGradient id="frenz-flame-grad" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0%" stopColor="#F97316" />
-            <stop offset="55%" stopColor="#FB923C" />
-            <stop offset="100%" stopColor="#FBBF24" />
+          <linearGradient id={gradientId} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stopColor={stops[0]} />
+            <stop offset="55%" stopColor={stops[1]} />
+            <stop offset="100%" stopColor={stops[1]} />
           </linearGradient>
         </defs>
       ) : null}

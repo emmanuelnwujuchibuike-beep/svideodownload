@@ -485,10 +485,12 @@ export function MonetizationSettings({
           className="flex w-full flex-wrap items-center justify-between gap-3 text-left disabled:opacity-70"
         >
           <span className="min-w-0">
-            <span className="block text-sm font-semibold">VAST interstitial (full screen)</span>
+            <span className="block text-sm font-semibold">
+              Full-screen skippable video ad (download complete)
+            </span>
             <span className="block text-xs text-muted-foreground">
-              A full-screen ExoClick video when a download starts. The download never waits on it —
-              if the ad is slow or missing it is abandoned and the file continues. Off by default.
+              Full-screen video when a download FINISHES, on every page. Turn on for the timing
+              controls. Fills from the shared Zone ID above. The download never waits on it.
             </span>
           </span>
           <Switch on={vast.enabled} />

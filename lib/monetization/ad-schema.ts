@@ -218,6 +218,23 @@ export const EXOCLICK_ZONES = [
   "multilink_card_inline",
   "reels_interstitial",
   "download_preparing",
+  /*
+    🔴 SECOND TIME THIS LIST HAS CAUSED A SILENT NO-FILL — see `under_download`
+    above, same cause (owner, 2026-08-30: "i dont see a slot in admin dashboard
+    to set up the download completed full screen video ad").
+
+    The post-download full-screen video ad serves from this zone. Everything
+    else about it was wired — the trigger fired, `/api/ads/exoclick` was
+    reached, `exoClickZoneEnabled` returned true — but `resolveExoClickZoneId`
+    hands the SHARED Zone ID only to a zone in THIS list (`isExoClickZone`). It
+    was not one, so with no per-placement row it resolved to null and the route
+    answered `{ ad: null }` forever, with no error on any surface. A feature
+    that looks installed and can never show an ad once.
+
+    `ad-timing.test.ts` now asserts every zone in `ZONE_BY_TRIGGER` is on this
+    list, so a third occurrence fails the build instead of shipping silence.
+  */
+  "download_complete",
   "history_above_grid",
   "history_story_ad",
   "wallpaper_reward",

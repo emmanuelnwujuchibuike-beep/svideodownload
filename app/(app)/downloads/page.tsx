@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { AppContent } from "@/features/app-shell/app-content";
+import { DownloadsBottomAd } from "@/features/monetization/downloads-bottom-ad";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
@@ -77,6 +78,21 @@ export default function Downloads() {
       <Suspense fallback={<DownloadsSkeleton />}>
         <DownloadsData />
       </Suspense>
+      {/*
+        🔴 THE BOTTOM BANNER, WHICH THIS PAGE NEVER HAD (owner, 2026-08-31:
+        "the bottom banner doesnt show in the signed in download pages").
+
+        `DeferredAdFurniture` — the thing that mounts TopBannerAd — lives in
+        `app/(marketing)/layout.tsx` only. This route is in the (app) group, so
+        the bar was never rendered here at all: the landing page and the
+        SIGNED-OUT downloader had it, and the signed-in download hub did not.
+
+        Mounted on this PAGE rather than in the (app) layout on purpose. That
+        layout is shared with /home, /reels and messaging — surfaces that own
+        their own gestures and full-bleed chrome — and giving all of them a
+        docked ad bar is a product decision nobody has asked for.
+      */}
+      <DownloadsBottomAd />
     </AppContent>
   );
 }

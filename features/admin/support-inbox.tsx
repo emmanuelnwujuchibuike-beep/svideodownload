@@ -12,18 +12,32 @@ import {
 import type { AdminSupportThread, SupportMessage } from "@/lib/support/chat";
 import { cn } from "@/lib/utils";
 
+import { useAdminLive } from "./live/use-admin-live";
+
 /**
  * The admin side of Support Chat — a two-pane inbox: threads on the left (newest
  * activity first, unread badge), the selected conversation on the right with a
- * reply box. Both panes poll (threads every 5s, the open thread every 4s) so an
- * operator sees new messages arrive live without a refresh; sending a reply
- * notifies the member by push + email (server-side, via postAdminReply).
+ * reply box. Both panes refresh so an operator sees new messages without a
+ * manual reload; sending a reply notifies the member by push + email
+ * (server-side, via postAdminReply).
+ *
+ * 🔴 The cadences were 5s and 4s (owner, 2026-08-30: runaway Vercel spend on a
+ * dashboard left open for hours). Between them that was 1,620 server actions an
+ * hour from a support inbox that, at ~90–100 daily users, receives a handful of
+ * messages a DAY. Worse, the `setInterval`s kept firing while the tab was
+ * hidden — each tick checked `visibilityState` and returned, so the timer cost
+ * remained and only the request was skipped, which is the wrong half to save.
+ *
+ * Both panes now run on the SHARED admin scheduler (`features/admin/live/`),
+ * which stops dead while the tab is hidden and backs off on failure: the thread
+ * LIST at the `stats` tier (60s) and the OPEN thread at `live` (15s). A support
+ * reply is not a real-time medium; the member is not sitting in the thread
+ * waiting on a 4-second refresh.
  *
  * Data comes only through getAdminUser-guarded actions, so this renders empty for
  * anyone who somehow reaches it without admin rights.
  */
-const THREADS_MS = 5000;
-const MESSAGES_MS = 4000;
+// Cadence now comes from the scheduler's tiers, not from constants here.
 
 function timeLabel(iso: string): string {
   const d = new Date(iso);
@@ -60,24 +74,37 @@ export function SupportInbox() {
     setMessages(list);
   }, []);
 
-  useEffect(() => {
-    void refreshThreads();
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") void refreshThreads();
-    }, THREADS_MS);
-    return () => clearInterval(id);
-  }, [refreshThreads]);
+  /*
+    The scheduler drives both panes. It fetches immediately on subscribe, so the
+    separate priming call each of these effects used to make is gone — that was
+    a duplicate request on every mount and on every thread switch.
+  */
+  useAdminLive<null>({
+    key: "admin:support:threads",
+    tier: "stats",
+    fetcher: async () => {
+      await refreshThreads();
+      return null;
+    },
+  });
 
+  useAdminLive<null>({
+    // Keyed by thread: switching threads is different data, and the old key's
+    // entry is dropped when its last subscriber goes — so a closed thread stops
+    // being fetched rather than lingering.
+    key: `admin:support:messages:${activeId ?? "none"}`,
+    tier: "live",
+    fetcher: async () => {
+      if (activeId) await refreshMessages(activeId);
+      return null;
+    },
+  });
+
+  // Opening a thread clears its unread; reflect that in the list immediately.
   useEffect(() => {
     if (!activeId) return;
-    void refreshMessages(activeId);
-    // Opening a thread clears its unread; reflect that in the list immediately.
     setThreads((ts) => ts.map((t) => (t.id === activeId ? { ...t, adminUnread: 0 } : t)));
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") void refreshMessages(activeId);
-    }, MESSAGES_MS);
-    return () => clearInterval(id);
-  }, [activeId, refreshMessages]);
+  }, [activeId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });

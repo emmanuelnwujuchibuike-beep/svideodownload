@@ -7,6 +7,8 @@ import { Repeat, UserPlus } from "lucide-react";
 import type { ActivityItem, ActivityTotals, MetricTotals } from "@/lib/admin/activity";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
+import { adminJson, useAdminLive } from "./live/use-admin-live";
+
 /**
  * Live activity feed — every notable event as it lands, including anonymous.
  *
@@ -23,16 +25,26 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  */
 
 /*
-  Two and a half seconds, down from six.
+  🔴 THE 2.5-SECOND POLL IS GONE (owner, 2026-08-30: Vercel had eaten $15 of a
+  $20 monthly credit against ~90–100 daily users, with this dashboard left open
+  for hours).
 
-  The feed is a live operations view — an operator watching it is watching for
-  something specific to appear, and six seconds is long enough to make them
-  reload the page instead, which costs far more than the poll does. The request
-  is incremental (a timestamp cursor, usually returning nothing), so the extra
-  frequency is a few hundred bytes rather than a query of the whole table.
+  The old note here argued that a 2.5s incremental poll is cheap because the
+  response is usually empty. The response is — the REQUEST is not. Every one of
+  those 1,440 hits an hour ran the full admin guard, and `getAdminUser`
+  deliberately re-reads the role from the database on every call so a demoted
+  admin loses access immediately. So the cost was one Vercel invocation plus an
+  auth round trip plus a role query, 1,440 times an hour, to learn "nothing new"
+  about 1,400 of those times. And the recursive `setTimeout` did not stop when
+  the tab was hidden — only the browser's own background throttling slowed it.
+
+  It now runs through the shared admin scheduler at the `live` tier (15s),
+  stopped entirely while the tab is hidden and backed off on failure. Fifteen
+  seconds is still a live operations view; 2.5s was paying ~6× for a difference
+  an operator cannot act on.
 */
-const POLL_MS = 2500;
 const MAX_ITEMS = 100;
+const ACTIVITY_KEY = "admin:activity";
 
 interface KindMeta {
   label: string;
@@ -92,75 +104,41 @@ export function ActivityFeed({
   totals?: ActivityTotals | null;
 }) {
   const [items, setItems] = useState<ActivityItem[]>(() => dedupe(initial));
-  const [live, setLive] = useState(true);
   const sinceRef = useRef<string | null>(initial[0]?.at ?? null);
 
-  useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
+  /*
+    The cursor is what makes a slower poll lossless. `?since=` is a TIMESTAMP,
+    not a page number, so one request after any gap — a slow tick, a hidden tab,
+    a backed-off failure — carries everything that happened in that gap rather
+    than only the newest few. That is why dropping from 2.5s to 15s costs the
+    operator no events, only latency.
 
-    const tick = async () => {
-      try {
-        const url = sinceRef.current
+    The scheduler's own catch-up sweep on `visibilitychange` replaces the
+    hand-rolled one that used to live here (owner, 2026-08-10: a backgrounded
+    tab showed a stale feed), so returning to the tab still resyncs at once.
+  */
+  const { data, error } = useAdminLive<{ items: ActivityItem[] }>({
+    key: ACTIVITY_KEY,
+    tier: "live",
+    fetcher: () =>
+      adminJson<{ items: ActivityItem[] }>(
+        sinceRef.current
           ? `/api/admin/activity?since=${encodeURIComponent(sinceRef.current)}`
-          : "/api/admin/activity";
-        const res = await fetch(url, { cache: "no-store" });
-        if (res.ok) {
-          const { items: fresh } = (await res.json()) as { items: ActivityItem[] };
-          if (alive && fresh.length > 0) {
-            setItems((prev) => {
-              const merged = dedupe([...fresh, ...prev]).slice(0, MAX_ITEMS);
-              sinceRef.current = merged[0]?.at ?? sinceRef.current;
-              return merged;
-            });
-          }
-          if (alive) setLive(true);
-        } else if (alive) {
-          setLive(false);
-        }
-      } catch {
-        if (alive) setLive(false);
-      }
-      if (alive) timer = setTimeout(tick, POLL_MS);
-    };
+          : "/api/admin/activity",
+      ),
+  });
 
-    /*
-      🔴 Poll IMMEDIATELY, then on an interval (owner, 2026-08-10: the feed
-      "doesn't update instantly, in real time").
+  useEffect(() => {
+    const fresh = data?.items;
+    if (!fresh || fresh.length === 0) return;
+    setItems((prev) => {
+      const merged = dedupe([...fresh, ...prev]).slice(0, MAX_ITEMS);
+      sinceRef.current = merged[0]?.at ?? sinceRef.current;
+      return merged;
+    });
+  }, [data]);
 
-      The first fetch used to wait a full interval. Opening the dashboard meant
-      staring at server-rendered rows for six seconds before anything could
-      arrive — and since that page is the thing an operator opens BECAUSE
-      something is happening, the first six seconds are the ones that matter
-      most. There is no cost to asking straight away: the request is small and
-      the cursor makes it incremental.
-    */
-    void tick();
-
-    /*
-      🔴 And catch up the moment the tab comes back.
-
-      A background tab is throttled hard by every browser — timers can be
-      clamped to once a minute or stopped entirely — so switching away and back
-      previously showed a feed that was minutes stale and only corrected on the
-      next tick. Now returning to the tab fetches at once, and because the
-      cursor is a timestamp rather than a page number, that single request
-      carries everything missed while away rather than only the newest few.
-    */
-    const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        clearTimeout(timer);
-        void tick();
-      }
-    };
-    document.addEventListener("visibilitychange", onVisible);
-
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, []);
+  const live = error === null;
 
   // Live breakdown of what's currently in view, by kind — the "clear stats".
   const breakdown = useMemo(() => {

@@ -29,15 +29,21 @@ import { cn, formatCompactNumber } from "@/lib/utils";
 
 import { DownloadLogTable } from "./download-log";
 import { GeoMap } from "./geo-map";
+import { adminJson, useAdminLive } from "./live/use-admin-live";
 import { MetricCard } from "./metric-card";
 
 /**
- * Live admin analytics dashboard. Streams a fresh snapshot over Server-Sent Events
- * (`/api/admin/analytics/stream`) — one long-lived connection the server pushes to
- * every ~10s — with a poll fallback if a proxy buffers the stream. Surfaces traffic,
- * a trend chart, ad performance + revenue, a world map, engagement drill-downs,
- * and error/security monitoring. Reads the Phase-1 event pipeline + the monetization
+ * Live admin analytics dashboard. Refreshes on the shared admin scheduler
+ * (`features/admin/live/`) at the `stats` tier — once a minute while the tab is
+ * visible, and NOT AT ALL while it is hidden. Surfaces traffic, a trend chart,
+ * ad performance + revenue, a world map, engagement drill-downs, and
+ * error/security monitoring. Reads the Phase-1 event pipeline + the monetization
  * and security tables; empty until traffic flows.
+ *
+ * 🔴 It used to hold an SSE connection open instead. That is the change worth
+ * knowing about before editing this file — see the block comment on the effect
+ * below for why a long-lived stream was the most expensive possible way to
+ * deliver a number that moves a few times a minute.
  */
 /**
  * The ranges this selector OFFERS — deliberately narrower than `Range`.
@@ -118,56 +124,67 @@ export function AnalyticsDashboard() {
   const [live, setLive] = useState(false);
   const lastMsg = useRef(0);
 
+  /*
+    ═════════════════════════════════════════════════════════════════════════
+     🔴 THE SSE STREAM IS GONE, AND IT WAS THE SINGLE BIGGEST VERCEL COST
+    ═════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-08-30: $15 of a $20 monthly Vercel credit consumed against
+    ~90–100 daily users, with this dashboard left open for hours.
+
+    `/api/admin/analytics/stream` held a Node serverless function OPEN for five
+    minutes per connection, re-running the full analytics aggregate every 10
+    seconds inside it — and `EventSource` reconnects automatically when the
+    server closes, so the five-minute cap did not bound anything: it just
+    started another one. A dashboard left open for an hour bought 60
+    function-MINUTES of continuously-billed compute and ~360 runs of a query set
+    that fans out across `ad_impressions`, `ad_clicks`, `analytics_downloads`
+    and several RPCs.
+
+    Nothing about that was buying real-time. `getAnalyticsSummary` is an
+    AGGREGATE over rolling windows — the numbers are counts over 24h/7d/30d, and
+    they cannot meaningfully change 360 times an hour on this traffic. The
+    stream was paying continuous-compute prices for a number that moves a few
+    times a minute at most.
+
+    Nor could it be salvaged by shortening its lifetime: an EventSource is
+    indifferent to `visibilitychange`, so a hidden tab kept the connection — and
+    the billing — alive.
+
+    It is now an ordinary refresh on the shared scheduler at the `stats` tier
+    (60s), which stops dead while the tab is hidden. That is the brief's
+    "important dashboard statistics: 30–60 seconds", and it costs one short
+    invocation a minute instead of a function that never stops running.
+
+    Supabase Realtime is NOT the answer here either: there is no row to
+    subscribe to. The value is an aggregate computed across several tables, so
+    it has to be computed somewhere, and computing it in the browser would mean
+    handing the browser those tables.
+  */
+  const { data: fresh, error } = useAdminLive<AnalyticsSummary>({
+    // The range is part of the key: switching tabs is a different dataset, and
+    // sharing one key across ranges would serve 7d numbers under the 24h tab.
+    key: `admin:analytics:${range}`,
+    tier: "stats",
+    fetcher: () => adminJson<AnalyticsSummary>(`/api/admin/analytics?range=${range}`),
+  });
+
   useEffect(() => {
-    let cancelled = false;
+    if (!fresh) return;
+    setData(fresh);
+    setLoading(false);
+    setLive(true);
+    lastMsg.current = Date.now();
+  }, [fresh]);
+
+  useEffect(() => {
+    if (error) setLive(false);
+  }, [error]);
+
+  // A range change shows the spinner until that range's first payload lands.
+  useEffect(() => {
     setLoading(true);
     setLive(false);
-
-    const apply = (d: AnalyticsSummary) => {
-      if (cancelled) return;
-      setData(d);
-      setLoading(false);
-      lastMsg.current = Date.now();
-    };
-
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/admin/analytics?range=${range}`, { cache: "no-store" });
-        if (res.ok) apply(await res.json());
-      } catch {
-        /* keep the last snapshot */
-      }
-    };
-
-    let es: EventSource | null = null;
-    try {
-      es = new EventSource(`/api/admin/analytics/stream?range=${range}`);
-      es.addEventListener("summary", (e) => {
-        try {
-          apply(JSON.parse((e as MessageEvent).data) as AnalyticsSummary);
-          setLive(true);
-        } catch {
-          /* ignore a malformed frame */
-        }
-      });
-      es.onopen = () => setLive(true);
-      es.onerror = () => setLive(false); // EventSource auto-reconnects
-    } catch {
-      /* environment without EventSource — the poll below carries it */
-    }
-
-    void poll(); // prime immediately, don't wait for the first SSE tick
-
-    // Fallback: if the stream is silent for 20s (buffered/blocked), poll.
-    const watchdog = setInterval(() => {
-      if (Date.now() - lastMsg.current > 20_000) void poll();
-    }, 20_000);
-
-    return () => {
-      cancelled = true;
-      es?.close();
-      clearInterval(watchdog);
-    };
   }, [range]);
 
   const empty = data && data.totalEvents === 0 && data.ads.impressions === 0;

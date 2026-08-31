@@ -1,0 +1,40 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+--  0139 — the one index the admin live-activity feed was missing
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- Owner, 2026-08-30: Vercel/Supabase spend audit of the admin dashboard.
+--
+-- `fetchRecentActivity()` (lib/admin/activity.ts) merges two sources newest-first:
+--
+--   events    → covered. `events_type_created_idx (type, created_at desc)` from
+--               0004 serves `type IN (…) AND created_at > $1 ORDER BY created_at
+--               DESC`.
+--   downloads → NOT covered. The table's only indexes are
+--               `(user_id, created_at desc)` and `(platform)` (0001). The feed
+--               reads across ALL users, so neither applies: Postgres had to scan
+--               the whole table and sort it, on every single poll.
+--
+-- That query ran 1,440 times an hour while the dashboard sat open. It is now
+-- ~240 times an hour and stops entirely when the tab is hidden, so this index is
+-- no longer load-bearing for spend — but the query is still the feed's hot path
+-- and a table scan that grows with every download ever recorded is the kind of
+-- thing that is cheap today and a problem at 10×.
+--
+-- 🔴 DELIBERATELY ONE INDEX, NOT A HANDFUL. The brief was explicit: verify an
+-- index is actually useful before adding it, and do not blindly create dozens.
+-- Every other query behind the dashboard was checked against the existing
+-- indexes and is already served:
+--   • analytics_downloads  → `analytics_downloads_time_idx (created_at desc)` (0103)
+--   • ad_impressions / ad_clicks → counted with `head: true` over `created_at`,
+--     and their own time indexes already exist.
+--   • the visitor-split RPCs → their own definitions, unchanged here.
+--
+-- Not CONCURRENTLY: Supabase runs migrations inside a transaction, where
+-- CREATE INDEX CONCURRENTLY is not permitted. On this table's size the brief
+-- exclusive lock is milliseconds.
+--
+-- Pure DDL, no dollar-quoted blocks — so nothing here can be silently skipped
+-- the way statements after a function body have been in this project before.
+
+create index if not exists downloads_created_at_idx
+  on public.downloads (created_at desc);

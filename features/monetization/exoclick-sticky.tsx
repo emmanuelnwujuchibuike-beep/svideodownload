@@ -90,23 +90,34 @@ import { useShowAds } from "./use-show-ads";
  * their own copy of the same script.
  */
 
-/** One shared load of ExoClick's provider, for the whole page. */
-let providerPromise: Promise<boolean> | null = null;
+/**
+ * One shared load of ExoClick's provider PER DOMAIN, for the whole page.
+ *
+ * 🔴 Keyed by src, not a single global (owner, 2026-08-31: the fullpage
+ * interstitial tag is served from `a.pemsrv.com`, the banners from
+ * `a.magsrv.com`). ExoClick rotates provider domains and a zone is activated
+ * against the one its snippet names, so a single hardcoded loader would either
+ * serve the wrong domain's zones or silently serve nothing. Still one load per
+ * domain: several placements sharing a domain must not each append a copy.
+ */
+const providerPromises = new Map<string, Promise<boolean>>();
 
-function loadProvider(): Promise<boolean> {
-  providerPromise ??= new Promise<boolean>((resolve) => {
+export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boolean> {
+  const existing = providerPromises.get(src);
+  if (existing) return existing;
+  const promise = new Promise<boolean>((resolve) => {
     if (typeof document === "undefined") {
       resolve(false);
       return;
     }
-    if (document.querySelector(`script[src="${EXOCLICK_PROVIDER_SRC}"]`)) {
+    if (document.querySelector(`script[src="${src}"]`)) {
       resolve(true);
       return;
     }
     const el = document.createElement("script");
     el.async = true;
     el.type = "application/javascript";
-    el.src = EXOCLICK_PROVIDER_SRC;
+    el.src = src;
     /*
       Resolves FALSE rather than rejecting. An ad blocker is the common case, not
       an exceptional one, and a rejection would leave the waiting unit unresolved
@@ -116,7 +127,8 @@ function loadProvider(): Promise<boolean> {
     el.onerror = () => resolve(false);
     document.head.appendChild(el);
   });
-  return providerPromise;
+  providerPromises.set(src, promise);
+  return promise;
 }
 
 declare global {
@@ -252,23 +264,52 @@ export function ExoClickSticky({
   const fillCb = useRef(onFill);
   fillCb.current = onFill;
 
-  /*
-    🔴 THE RE-SERVE TRIGGER (owner, 2026-08-31).
-
-    A pathname change is what a reload is, minus the reload — a new pageview,
-    which is the unit a banner impression is sold in. Including it here is the
-    whole fix for the mount that never unmounts: the bottom-nav bar lives in a
-    bar shared across routes, so without this it serves once per full page load
-    and never again, which is precisely the report.
-
-    For the history banner, whose subtree DOES unmount, this is merely redundant
-    — the effect would re-run on remount regardless.
-  */
+  /**
+   * Bumped to ask for a NEW serve. Never bumped while a creative is on screen.
+   *
+   * 🔴 A NAVIGATION MUST NOT DESTROY A WORKING AD (owner, 2026-08-31:
+   * "navigating still destroys the bottom banner").
+   *
+   * The serve effect was keyed directly on `pathname`, so every client-side
+   * navigation ran its cleanup — `el.textContent = ""`, which throws away a
+   * live, filled creative — and then gambled that a fresh serve would produce
+   * another. ExoClick caps how often a zone serves the same visitor, so that
+   * second request is frequently declined, and the bar went from showing an ad
+   * to showing nothing. I had traded a real banner for a re-serve that usually
+   * loses.
+   *
+   * A docked bar surviving a navigation with the ad it already has is the
+   * normal, correct behaviour — and the state the owner is asking for. So a
+   * navigation now only asks for a serve when the slot is genuinely EMPTY,
+   * which is the case that needed recovering in the first place.
+   */
+  const [serveKey, setServeKey] = useState(0);
   const pathname = usePathname();
+  /** The first pathname is the mount, which the serve effect already handles. */
+  const seenFirstPath = useRef(false);
 
   // Client-only: the provider touches `document` and `window.AdProvider`, and a
   // sticky unit has no business existing in server-rendered HTML.
   useEffect(() => setMounted(true), []);
+
+  /*
+    A navigation asks for a serve ONLY when there is nothing to lose — see the
+    note on `serveKey`. A slot that is currently showing an ad is left entirely
+    alone, cleanup included, because the cleanup is what was destroying it.
+
+    A slot that is EMPTY still retries on every new page, which is the recovery
+    the pathname trigger was added for: a zone that declined once gets another
+    chance on the next route rather than staying blank until a full reload.
+  */
+  useEffect(() => {
+    if (!seenFirstPath.current) {
+      seenFirstPath.current = true;
+      return;
+    }
+    const el = host.current;
+    if (!el || hasCreative(el)) return;
+    setServeKey((k) => k + 1);
+  }, [pathname]);
 
   useEffect(() => {
     if (!mounted || !ready || !showAds || !tag) return;
@@ -367,7 +408,7 @@ export function ExoClickSticky({
     const mo = new MutationObserver(report);
     mo.observe(el, { childList: true, subtree: true });
 
-    void loadProvider().then((ok) => {
+    void loadProvider(tag.src).then((ok) => {
       if (!ok) {
         // Blocked, or the loader could not be fetched at all.
         observer.disconnect();
@@ -400,7 +441,9 @@ export function ExoClickSticky({
       */
       el.textContent = "";
     };
-  }, [mounted, ready, showAds, tag, pathname]);
+    // `serveKey`, NOT `pathname` — a navigation only bumps it when the slot is
+    // empty, so this effect's cleanup can never tear down a live creative.
+  }, [mounted, ready, showAds, tag, serveKey, slot]);
 
   // Premium visitors, an unresolved plan, or nothing configured: render nothing
   // at all — not even the host, which is what the loader would fill.

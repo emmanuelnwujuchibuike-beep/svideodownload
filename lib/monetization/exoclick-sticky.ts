@@ -34,10 +34,56 @@ export interface ExoClickStickyTag {
   cls: string;
   /** The numeric zone id. */
   zoneId: string;
+  /**
+   * The loader this tag was issued with.
+   *
+   * 🔴 NOT ALWAYS magsrv (owner, 2026-08-31, pasting a fullpage-interstitial
+   * tag served from `a.pemsrv.com`). ExoClick hands out the same provider from
+   * several domains, and a snippet's own domain is the one its zone was
+   * activated against — substituting ours for theirs is the same class of
+   * mistake as hardcoding the `<ins>` class was.
+   *
+   * Absent when the snippet carried no script tag, in which case the caller
+   * falls back to `EXOCLICK_PROVIDER_SRC`.
+   */
+  src?: string;
 }
 
-/** ExoClick's loader. Shared with any other ExoClick display placement. */
+/** ExoClick's loader. The default when a pasted snippet names no other. */
 export const EXOCLICK_PROVIDER_SRC = "https://a.magsrv.com/ad-provider.js";
+
+/**
+ * Hosts a pasted snippet may load its loader from.
+ *
+ * An allowlist, not a pattern: this value ends up as the `src` of a `<script>`
+ * in the top-level document, so "whatever the operator pasted" is a
+ * remote-code-execution field with a friendly name. These are ExoClick's own
+ * provider domains (they rotate them to survive blocklists); anything else
+ * falls back to the default rather than being honoured.
+ */
+const PROVIDER_HOSTS = new Set([
+  "a.magsrv.com",
+  "a.pemsrv.com",
+  "a.exdynsrv.com",
+  "a.realsrv.com",
+  "a.exoclick.com",
+]);
+
+/** The provider URL a snippet names, if it names an allowed one. */
+export function parseProviderSrc(snippet: string): string | undefined {
+  const raw = snippet.match(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i)?.[1];
+  if (!raw) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw, "https://a.magsrv.com");
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "https:") return undefined;
+  if (!PROVIDER_HOSTS.has(url.hostname)) return undefined;
+  if (!/\/ad-provider\.js$/.test(url.pathname)) return undefined;
+  return url.toString();
+}
 
 /**
  * Read `{ cls, zoneId }` out of a pasted ExoClick zone snippet.
@@ -61,5 +107,5 @@ export function parseExoClickSticky(snippet: string | null | undefined): ExoClic
   */
   if (!/^eas[a-z0-9]+$/i.test(cls)) return null;
 
-  return { cls, zoneId };
+  return { cls, zoneId, src: parseProviderSrc(snippet) };
 }

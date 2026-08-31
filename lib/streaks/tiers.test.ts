@@ -17,10 +17,17 @@ import {
  */
 
 describe("tierFor", () => {
-  it("🔴 shows nothing below 2 days — one day is a visit, not a streak", () => {
+  it("🔴 SHOWS FROM DAY ONE — a day-1 anonymous visitor is the common case", () => {
+    /*
+      This threshold was briefly 2, which removed the badge from essentially
+      every anonymous landing visitor (they are on day 1) and was reported
+      within the hour. The badge appearing on day 1 is what tells a first-time
+      visitor a streak exists at all. Raising this again is a regression.
+    */
+    expect(STREAK_BADGE_MIN_DAYS).toBe(1);
+    expect(tierFor(1)?.id).toBe("spark");
+    // Zero is genuinely "no streak" and still renders nothing.
     expect(tierFor(0)).toBeNull();
-    expect(tierFor(1)).toBeNull();
-    expect(STREAK_BADGE_MIN_DAYS).toBe(2);
   });
 
   it("🔴 lands on the right tier at each exact threshold", () => {
@@ -61,8 +68,10 @@ describe("crossedTier — a milestone is a different event from a day", () => {
   });
 
   it("counts the very first badge as a milestone", () => {
-    // 1 -> 2 is the chip APPEARING, which is worth celebrating.
-    expect(crossedTier(1, 2)?.id).toBe("spark");
+    // 0 -> 1 is the chip APPEARING, which is worth celebrating.
+    expect(crossedTier(0, 1)?.id).toBe("spark");
+    // 1 -> 2 is an ordinary day inside the spark tier.
+    expect(crossedTier(1, 2)).toBeNull();
   });
 
   it("does not fire on a decrease", () => {

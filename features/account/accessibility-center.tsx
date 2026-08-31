@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, RotateCcw } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { A11Y_STORAGE_KEY, cssVariables, dataAttributes } from "@/lib/a11y/apply";
@@ -14,6 +15,7 @@ import {
   TEXT_SCALES,
   type A11yPreferences,
 } from "@/lib/a11y/preferences";
+import { hapticsEnabled, setHapticsEnabled } from "@/lib/motion/haptic-prefs";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +46,14 @@ export function AccessibilityCenter() {
     real values are in hand.
   */
   const [prefs, setPrefs] = useState<A11yPreferences | null>(null);
+  /*
+    Haptics live in their own device-local store rather than in `prefs`
+    (lib/motion/haptic-prefs.ts). Read in an effect, not during render: the
+    server has no idea what this device chose, so rendering the default first
+    and correcting after hydration would flash the setting someone turned OFF
+    back on — the same reason `prefs` renders nothing until it is read.
+  */
+  const [haptics, setHaptics] = useState(true);
 
   useEffect(() => {
     try {
@@ -52,6 +62,7 @@ export function AccessibilityCenter() {
     } catch {
       setPrefs({ ...DEFAULT_A11Y });
     }
+    setHaptics(hapticsEnabled());
   }, []);
 
   /** Write once: to the DOM (instant), then to storage (persistent). */
@@ -198,6 +209,52 @@ export function AccessibilityCenter() {
           on={prefs.strongFocus}
           onChange={(v) => set("strongFocus", v)}
         />
+        {/*
+          🔴 HAPTICS HAD NO OFF SWITCH AT ALL (owner, 2026-08-30: "make users to
+          be able to turn off and on haptic click sound in profile settings").
+
+          `playSound` has been gated on a stored preference since it was
+          written; `haptic()` was not gated on anything, so all ~40 call sites
+          vibrated unconditionally with no way to stop them. The settings
+          registry has advertised "Haptics & sounds" as live on this page the
+          whole time — the sounds half existed, the haptics half did not.
+
+          Device-local rather than account-synced on purpose: this is about the
+          hardware in your hand, and syncing it would silence your tablet
+          because you silenced your phone. See lib/motion/haptic-prefs.ts.
+        */}
+        <Toggle
+          label="Vibration on tap"
+          hint="The short buzz when you tap a button, send, or pull to refresh. Turning this off is per-device."
+          on={haptics}
+          onChange={(v) => {
+            setHaptics(v);
+            setHapticsEnabled(v);
+            // Fired AFTER the write, so turning it ON confirms itself with the
+            // very feedback being enabled — and turning it off stays silent.
+            if (v) haptic("selection");
+          }}
+        />
+        {/*
+          The tap SOUND deliberately stays where it already lives.
+
+          `masterEnabled` is an account-synced preference with its own editor and
+          its own server route. A second toggle here would be a second writer for
+          one value — and the local-only setter available on this page would
+          silently not persist, so the switch would flip back on next load. A
+          pointer to the real control is honest; a control that forgets is not.
+        */}
+        <Row
+          label="Sound on tap"
+          hint="The soft click when you tap. Lives with every other Frenz sound, because it is synced to your account rather than this device."
+        >
+          <Link
+            href="/account/notifications"
+            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-border px-3 py-1.5 text-xs font-semibold transition hover:bg-secondary"
+          >
+            Sounds
+          </Link>
+        </Row>
       </Group>
 
       {isCustomised(prefs) ? (

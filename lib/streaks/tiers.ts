@@ -105,10 +105,18 @@ export const STREAK_TIERS: readonly StreakTier[] = [
   },
   {
     /*
-      The base tier, and the reason the chip starts at TWO (owner: "make the
-      streak badge when users reach 2 days streaks"). One day is not a streak —
-      it is a visit — and a "1 day streak" badge on a first-time visitor's
-      screen devalues the thing entirely.
+      🔴 THE BADGE SHOWS FROM DAY ONE. DO NOT RAISE THIS.
+
+      It was briefly raised to 2, on a misreading of "make the streak badge when
+      users reach 2 days streaks to be like this image" — that sentence is about
+      how the badge LOOKS, not about when it first appears. Raising it removed
+      the badge from every day-1 visitor, which on the landing page is almost
+      every ANONYMOUS visitor there is (owner: "that streak is not showing in
+      the landing page for anonymous like the previous used to").
+
+      Anonymous visitors have real streaks (lib/streaks/identity.ts mints them a
+      server-side id), and day 1 is when the badge does its most useful work:
+      it is the thing that tells a first-time visitor a streak exists at all.
     */
     id: "spark",
     minDays: MIN_STREAK_DAYS(),
@@ -129,7 +137,7 @@ export const STREAK_TIERS: readonly StreakTier[] = [
  * being the single place the number lives.
  */
 function MIN_STREAK_DAYS(): number {
-  return 2;
+  return 1;
 }
 
 /** The streak at which the badge first appears. Below this, render nothing. */

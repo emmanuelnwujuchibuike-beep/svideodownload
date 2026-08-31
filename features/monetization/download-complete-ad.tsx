@@ -173,8 +173,16 @@ export function DownloadCompleteAd({
       >
         <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between gap-3 border-b border-border/50 bg-card px-4 pb-3 pt-4">
           <div>
-            <p className="text-sm font-semibold">Your download has started</p>
-            <p className="text-xs text-muted-foreground">Check your downloads folder.</p>
+            {/*
+              🔴 "COMPLETED", not "started" (owner, 2026-08-30).
+
+              This panel is mounted by the download manager's COMPLETION path —
+              the file is already on the device by the time it renders. The old
+              copy described the wrong moment, and told someone their download
+              had begun at the exact instant it had finished.
+            */}
+            <p className="text-sm font-semibold">Your download has completed</p>
+            <p className="text-xs text-muted-foreground">Saved — check your downloads folder.</p>
           </div>
 
           {/*

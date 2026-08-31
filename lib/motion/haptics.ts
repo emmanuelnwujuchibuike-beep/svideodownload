@@ -23,6 +23,8 @@
  * fixed system tick, so intent tiers all feel the same on iOS.
  */
 
+import { hapticsEnabled } from "./haptic-prefs";
+
 const PATTERNS = {
   /** A light acknowledgement — double-tap-to-Wow, pull-to-refresh trigger,
    *  a seek/step gesture. The most common, lowest-weight buzz. */
@@ -73,6 +75,9 @@ function iosHapticTick(): void {
  *  desktop no-ops harmlessly) and the iOS switch-control system tick where it
  *  doesn't — never throws, never needs its own try/catch at the call site. */
 export function haptic(intent: HapticIntent): void {
+  // The device-level off switch. Checked FIRST so a silenced device does no
+  // work at all — not even the iOS fallback's DOM click. See haptic-prefs.ts.
+  if (!hapticsEnabled()) return;
   try {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
       const pattern = PATTERNS[intent];
@@ -89,6 +94,7 @@ export function haptic(intent: HapticIntent): void {
 /** A custom vibration pattern for the rare case a named intent isn't a fit
  *  (e.g. share-sheet's multi-pulse copy-link confirmation). */
 export function hapticPattern(pattern: number | number[]): void {
+  if (!hapticsEnabled()) return;
   try {
     if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
       navigator.vibrate(pattern);

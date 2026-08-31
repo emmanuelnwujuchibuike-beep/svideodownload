@@ -125,7 +125,7 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   const tier = tierFor(streak);
   if (!tier) return null;
 
-  const label = `${streak} day streak — ${tier.label}`;
+  const label = `${streak} ${streak === 1 ? "day" : "days"} streak — ${tier.label}`;
   const upcoming = nextTier(streak);
   const reveal = () => {
     setOpen(true);
@@ -219,8 +219,10 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
           wording is what makes it a streak rather than an unexplained number,
           and it is four short characters wider — the hero row already wraps.
         */}
+        {/* 🔴 "2 DAYS STREAK", not "2 DAY STREAK" (owner, 2026-08-30). Only a
+            streak of exactly one is singular. */}
         <span aria-hidden className="tracking-[0.06em]">
-          DAY STREAK
+          {streak === 1 ? "DAY STREAK" : "DAYS STREAK"}
         </span>
       </button>
 
@@ -234,7 +236,22 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
       <span
         role="status"
         aria-live="polite"
-        className={`pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-max max-w-[16rem] -translate-x-1/2 rounded-2xl bg-foreground px-3 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)] transition-all duration-200 ease-[var(--ease-out)] motion-reduce:transition-none ${
+        /*
+          🔴 RIGHT-ALIGNED, NOT CENTRED ON THE CHIP (owner, 2026-08-30: "the
+          streak description shouldnt be hiding, it should be visible and
+          centered").
+
+          It was `left-1/2 -translate-x-1/2`, which centres the popover on the
+          CHIP — and the chip is the last item in the hero's pill row, hard
+          against the right edge. So half the popover was centred off-screen and
+          the sentence ran off the display.
+
+          Anchoring its right edge to the chip's keeps it fully on screen, and
+          the width is additionally clamped to the viewport so it cannot
+          overflow on a narrow phone either. The TEXT stays centred inside it,
+          which is the "centered" being asked for.
+        */
+        className={`pointer-events-none absolute right-0 top-full z-30 mt-2 w-max max-w-[min(18rem,calc(100vw-2rem))] rounded-2xl bg-foreground px-3 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)] transition-all duration-200 ease-[var(--ease-out)] motion-reduce:transition-none ${
           open ? "translate-y-0 opacity-100" : "-translate-y-1 opacity-0"
         }`}
       >
@@ -249,8 +266,10 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
                 it. Saying "keep it going" asks for the same thing without ever
                 telling anyone what they are working toward.
               */}
+              {/* Tier names keep their capitals — "unlocks the on a roll flame"
+                  read as a typo. */}
               {upcoming
-                ? `${upcoming.inDays} more ${upcoming.inDays === 1 ? "day" : "days"} unlocks the ${upcoming.tier.label.toLowerCase()} flame.`
+                ? `${upcoming.inDays} more ${upcoming.inDays === 1 ? "day" : "days"} to unlock the “${upcoming.tier.label}” flame.`
                 : "The rarest flame there is. Nothing above this one."}
             </span>
           </>

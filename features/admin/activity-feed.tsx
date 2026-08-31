@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Repeat, UserPlus } from "lucide-react";
@@ -43,6 +44,18 @@ import { adminJson, useAdminLive } from "./live/use-admin-live";
   seconds is still a live operations view; 2.5s was paying ~6× for a difference
   an operator cannot act on.
 */
+/*
+  Code-split: the detail panel only ever renders after a row is TAPPED, so its
+  bytes have no business in the admin dashboard-s first load. /admin is held to
+  a global ceiling (lib/perf/budget.test.ts) and this is exactly the kind of
+  on-demand panel that ceiling exists to keep out — the same pattern the
+  downloader detail sheet already uses.
+*/
+const ActivityDetail = dynamic(
+  () => import("./activity-detail").then((m) => m.ActivityDetail),
+  { ssr: false },
+);
+
 const MAX_ITEMS = 100;
 const ACTIVITY_KEY = "admin:activity";
 
@@ -104,6 +117,8 @@ export function ActivityFeed({
   totals?: ActivityTotals | null;
 }) {
   const [items, setItems] = useState<ActivityItem[]>(() => dedupe(initial));
+  /** The row whose full payload is open, if any. */
+  const [detail, setDetail] = useState<ActivityItem | null>(null);
   const sinceRef = useRef<string | null>(initial[0]?.at ?? null);
 
   /*
@@ -187,7 +202,18 @@ export function ActivityFeed({
           {items.map((item) => {
             const meta = metaFor(item.kind);
             return (
-              <li key={item.id} className="flex items-start gap-3 rounded-xl px-1 py-2.5 text-sm">
+              <li key={item.id}>
+                {/*
+                  🔴 A BUTTON, not a static row (owner, 2026-08-31: clicking a
+                  live activity "doesnt show anything, it should show all
+                  details and information of each"). The whole row is the target
+                  — an operator on a phone should not have to find a chevron.
+                */}
+                <button
+                  type="button"
+                  onClick={() => setDetail(item)}
+                  className="flex w-full items-start gap-3 rounded-xl px-1 py-2.5 text-left text-sm transition hover:bg-secondary/50"
+                >
                 <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", meta.dot)} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -206,11 +232,16 @@ export function ActivityFeed({
                 >
                   {timeAgo(item.at)}
                 </time>
+                </button>
               </li>
             );
           })}
         </ul>
       )}
+
+      {/* Rendered only while open — it portals itself, so the blurred admin
+          chrome cannot clip it (the standing fixed-overlay law). */}
+      {detail ? <ActivityDetail item={detail} onClose={() => setDetail(null)} /> : null}
     </section>
   );
 }

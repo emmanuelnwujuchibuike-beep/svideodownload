@@ -31,6 +31,24 @@ export interface ActivityItem {
   /** Null = anonymous / no signed-in user. */
   actor: ActivityActor | null;
   at: string;
+  /**
+   * Everything else the row carried, for the detail view.
+   *
+   * 🔴 Owner, 2026-08-31: "when i click on a live activity download or ad
+   * impression, clicks, install, upgrade view, it doesnt show anything, it
+   * should show all details and information of each".
+   *
+   * The feed was lossy by construction: it reduced every row to a one-line
+   * `detail` string and discarded the rest, so there was nothing to open even
+   * once the rows became clickable. An ad impression knows its zone, network
+   * and placement; a download knows its platform, format and source URL — none
+   * of that survived the mapping.
+   *
+   * Deliberately an open record rather than a typed union: this is an operator
+   * diagnostic, and the useful thing is to show whatever the event ACTUALLY
+   * logged, including keys added later by code that never touches this file.
+   */
+  meta: Record<string, unknown> | null;
 }
 
 const hasSupabase =
@@ -201,6 +219,9 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
         actor: null,
         userId: e.user_id,
         at: e.created_at,
+        // The raw logged payload, plus the identifiers an operator needs in
+        // order to go and find this exact row in the database.
+        meta: { eventId: e.id, eventType: e.type, ...(e.metadata ?? {}) },
       }));
 
     const downloadItems: (ActivityItem & { userId: string | null })[] = dedupeAttributedDownloads(
@@ -217,6 +238,13 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
         // bug the operator reported. Guest downloads stay null → Anonymous.
         userId: d.user_id,
         at: d.created_at,
+        meta: {
+          downloadId: d.id,
+          platform: d.platform,
+          format: d.format,
+          title: d.title,
+          sourceUrl: d.source_url,
+        },
       }),
     );
 

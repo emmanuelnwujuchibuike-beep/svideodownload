@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
 import { recordStreakActivity } from "@/features/streaks/use-streak";
+import { milestoneFor } from "@/lib/streaks/tiers";
 
 /**
  * The single place a day's activity is recorded, and the only thing that can
@@ -33,6 +34,23 @@ const StreakCelebration = dynamic(
   { ssr: false },
 );
 
+/*
+  🔴 A SECOND, SEPARATE CHUNK — not a prop on the daily celebration.
+
+  The ceremony carries its own environment, emblem staging and metallic
+  typography, and it plays on FIVE days of a member-s life (7, 14, 30, 100,
+  365). Bundling it with the daily overlay would mean every ordinary
+  celebration downloaded a milestone it will almost never show; splitting it
+  means the ceremony-s bytes are fetched on exactly the days it runs.
+*/
+const StreakMilestoneCelebration = dynamic(
+  () =>
+    import("@/features/streaks/streak-milestone-celebration").then(
+      (m) => m.StreakMilestoneCelebration,
+    ),
+  { ssr: false },
+);
+
 export function StreakTracker() {
   const [celebrate, setCelebrate] = useState<number | null>(null);
   const ran = useRef(false);
@@ -56,5 +74,28 @@ export function StreakTracker() {
   }, []);
 
   if (celebrate === null) return null;
-  return <StreakCelebration streak={celebrate} onDone={() => setCelebrate(null)} />;
+
+  /*
+    🔴 THE MILESTONE FORK, and why it is safe to decide from the number alone.
+
+    `milestoneFor` returns a tier only when the streak landed EXACTLY on a
+    threshold, and a streak moves one day at a time (a reset goes to 1, never to
+    7) — so landing on 7 can only mean the 6 -> 7 transition. Paired with
+    `shouldCelebrate`, which the server sets false for the rest of the day the
+    moment it is claimed, the two together are exactly "the increment that
+    crossed this threshold, once" (§12).
+
+    A refresh, a second tab, a route change, a remount, a PWA relaunch or a
+    sign-in all return `shouldCelebrate: false` and mount neither overlay.
+  */
+  const milestone = milestoneFor(celebrate);
+  return milestone ? (
+    <StreakMilestoneCelebration
+      streak={celebrate}
+      tier={milestone}
+      onDone={() => setCelebrate(null)}
+    />
+  ) : (
+    <StreakCelebration streak={celebrate} onDone={() => setCelebrate(null)} />
+  );
 }

@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  crossedTier,
-  nextTier,
-  STREAK_BADGE_MIN_DAYS,
-  STREAK_TIERS,
-  tierFor,
-} from "./tiers";
+import { STREAK_BADGE_MIN_DAYS, STREAK_TIERS, crossedTier, milestoneFor, nextTier, tierFor } from "./tiers";
 
 /**
  * The tier boundaries, asserted because they are invisible in review and very
@@ -122,5 +116,64 @@ describe("the table itself", () => {
     expect(new Set(flames).size).toBe(STREAK_TIERS.length);
     const sparks = STREAK_TIERS.map((t) => t.spark);
     expect(new Set(sparks).size).toBe(STREAK_TIERS.length);
+  });
+});
+
+describe("milestoneFor — the 6→7 transition, not 'currently 7'", () => {
+  it("🔴 fires on the exact threshold day", () => {
+    expect(milestoneFor(7)?.id).toBe("blue");
+    expect(milestoneFor(14)?.id).toBe("green");
+    expect(milestoneFor(30)?.id).toBe("purple");
+    expect(milestoneFor(100)?.id).toBe("gold");
+    expect(milestoneFor(365)?.id).toBe("black");
+  });
+
+  it("🔴 does NOT fire on the days either side of a threshold", () => {
+    for (const d of [6, 8, 13, 15, 29, 31, 99, 101, 364, 366]) {
+      expect(milestoneFor(d)).toBeNull();
+    }
+  });
+
+  /*
+    Day 1 is the one threshold every visitor trips on their first page view, and
+    arriving is not an achievement (§28 — day 1 never celebrates).
+  */
+  it("🔴 never treats day 1 as a milestone", () => {
+    expect(milestoneFor(1)).toBeNull();
+  });
+
+  it("never throws on a broken number", () => {
+    expect(milestoneFor(Number.NaN)).toBeNull();
+    expect(milestoneFor(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(milestoneFor(-7)).toBeNull();
+  });
+
+  /*
+    The architecture requirement: a new milestone is added by adding a TIER, so
+    there can never be a second list to forget to update.
+  */
+  it("🔴 derives milestones from the tier table, with no separate list", () => {
+    for (const t of STREAK_TIERS) {
+      if (t.minDays <= STREAK_BADGE_MIN_DAYS) continue;
+      expect(milestoneFor(t.minDays)?.id).toBe(t.id);
+    }
+  });
+});
+
+describe("the gallery metadata", () => {
+  it("🔴 gives every tier a blurb — an unexplained colour is decoration", () => {
+    for (const t of STREAK_TIERS) {
+      expect(t.blurb.length).toBeGreaterThan(10);
+      expect(t.blurb.trim()).toBe(t.blurb);
+    }
+  });
+
+  it("🔴 escalates motion with rank, so the flame is not colour alone", () => {
+    const byId = Object.fromEntries(STREAK_TIERS.map((t) => [t.id, t.motion]));
+    expect(byId.spark).toBe("steady");
+    expect(byId.blue).toBe("ascend");
+    expect(byId.purple).toBe("smoke");
+    expect(byId.gold).toBe("storm");
+    expect(byId.black).toBe("storm");
   });
 });

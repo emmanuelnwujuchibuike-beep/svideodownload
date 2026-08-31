@@ -60,6 +60,17 @@ function usePageSettled(): boolean {
   return settled;
 }
 
+/**
+ * The tallest an IN-PAGE ad unit may be (the reels/full-screen `fill` variant
+ * is unaffected — it is meant to own the screen).
+ *
+ * 62% of the small viewport leaves the section heading above it and the next
+ * section's edge below it visible at the same time, so the unit reads as one
+ * item in a page rather than as a wall the reader has to scroll through. See
+ * the note at the call site for why the width is capped from this too.
+ */
+const IN_PAGE_MAX_H = "62svh";
+
 /** VAST quartile events, as fractions of duration. */
 const QUARTILES: [number, string][] = [
   [0.25, "firstQuartile"],
@@ -312,10 +323,35 @@ export function ExoClickUnit({
           `h-auto` would collapse to zero height before metadata lands and then
           snap open, which is a layout shift on the result section.
         */
-        fill ? "h-full w-full" : "w-full rounded-xl",
+        fill ? "h-full w-full" : "mx-auto w-full rounded-xl",
         className,
       )}
-      style={fill ? undefined : { aspectRatio: ratio }}
+      /*
+        🔴 HEIGHT-CAPPED IN PAGE (owner, 2026-08-31: "reduce the height of the
+        sections video ad slot, is too long on a scroll, makes users cant see it
+        full and fast without scrolling").
+
+        This is in tension with the 2026-08-30 instruction directly above ("full
+        width like a platform reels"), and the cap is how both hold. A 9/16
+        creative at `w-full` is 1.78× the viewport WIDTH tall — on a 390px phone
+        that is ~693px, taller than the screen, so the unit could never be seen
+        whole and scrolled past as an endless slab.
+
+        `maxHeight` alone would letterbox: the box would keep its full width, go
+        short, and `object-contain` would paint bars down both sides. So the
+        WIDTH is capped from the same number through the ratio — the box keeps
+        the creative's exact shape, simply smaller, and `mx-auto` centres it.
+        No bars, no crop, no layout shift (both values are static).
+
+        `svh`, not `vh`: on mobile `vh` is the tallest-possible viewport, so a
+        `vh` cap still overflows while the browser's toolbar is on screen —
+        which is precisely the moment the reader is scrolling past this.
+      */
+      style={
+        fill
+          ? undefined
+          : { aspectRatio: ratio, maxHeight: IN_PAGE_MAX_H, maxWidth: `calc(${IN_PAGE_MAX_H} * ${ratio})` }
+      }
     >
       <video
         ref={video}

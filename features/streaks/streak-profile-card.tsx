@@ -4,7 +4,9 @@ import { Trophy } from "lucide-react";
 import { useState } from "react";
 
 import { StreakFlame } from "@/features/streaks/streak-flame";
+import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
 import { restoreStreak, useStreak } from "@/features/streaks/use-streak";
+import { tierFor } from "@/lib/streaks/tiers";
 import type { StreakState } from "@/lib/streaks/types";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +30,19 @@ export function StreakProfileCard({ className }: { className?: string }) {
 }
 
 function StreakCard({ state, className }: { state: StreakState; className?: string }) {
+  /*
+    🔴 THE CARD CARRIES THE RANK (owner, 2026-08-31: "the streaks flames and
+    streak card in the profile, download and landing page are the same, only
+    different is the color, they suppose to look more prestigious and glorious
+    as it increases").
+
+    It was worse than that here — this card was not even tier-COLOURED. It hard-
+    coded the amber/orange tile and rendered a tier-less flame, so a 100-day
+    member with a gold storming flame on the download hero opened their profile
+    and found the day-one orange spark. The tier table has been the single
+    source of the colours since 2026-08-30; this surface simply never joined.
+  */
+  const tier = tierFor(state.currentStreak);
   return (
     <section
       className={cn(
@@ -37,12 +52,35 @@ function StreakCard({ state, className }: { state: StreakState; className?: stri
       aria-labelledby="streak-card-heading"
     >
       <div className="flex items-center gap-3">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/15 to-orange-500/15">
-          <StreakFlame className="h-7 w-7" gradient animated />
+        <span
+          className={cn(
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 ring-inset",
+            tier ? `${tier.fill} ${tier.ring}` : "bg-gradient-to-br from-amber-500/15 to-orange-500/15 ring-transparent",
+          )}
+          /* The rank glow, at the same low alpha the hero chip uses — enough to
+             read as lit, not enough to become a second focal point on a page
+             that is mostly someone-s own content. */
+          style={tier ? { boxShadow: `0 0 24px -10px ${tier.glow}` } : undefined}
+        >
+          <StreakFlameMark tier={tier} className="h-7 w-7" wrapperClassName="h-8 w-8" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id="streak-card-heading" className="text-[17px] font-semibold tracking-[-0.01em]">
-            {state.currentStreak} Day Streak
+          <h2 id="streak-card-heading" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[17px] font-semibold tracking-[-0.01em]">
+            <span>{state.currentStreak} Day Streak</span>
+            {/* §10 — the milestone is named, not merely coloured. A rank that
+                only exists as a hue is invisible to anyone who does not already
+                know the ladder, and unreadable to a screen reader. */}
+            {tier ? (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.07em] ring-1 ring-inset",
+                  tier.text,
+                  tier.ring,
+                )}
+              >
+                {tier.label}
+              </span>
+            ) : null}
           </h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
             {state.currentStreak === 1
@@ -55,7 +93,9 @@ function StreakCard({ state, className }: { state: StreakState; className?: stri
       {state.canRestore ? <RestoreRow state={state} /> : null}
 
       <dl className="mt-4 grid grid-cols-3 gap-2">
-        <Stat label="Current" value={`${state.currentStreak}`} icon={<StreakFlame className="h-3.5 w-3.5" gradient />} />
+        {/* Effects off at 14px: licks and smoke on a glyph this small are noise,
+            not rank. The colour still comes from the tier. */}
+        <Stat label="Current" value={`${state.currentStreak}`} icon={<StreakFlame className="h-3.5 w-3.5" gradient tier={tier} />} />
         <Stat label="Longest" value={`${state.longestStreak}`} icon={<Trophy className="h-3.5 w-3.5 text-amber-500" />} />
         <Stat label="Active days" value={`${state.totalActiveDays}`} />
       </dl>

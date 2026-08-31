@@ -1,12 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
-import { Portal } from "@/components/ui/portal";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { StreakFlame } from "@/features/streaks/streak-flame";
+import { StreakFlameMark, chipStormClass } from "@/features/streaks/streak-flame-mark";
 import { claimStreakSound, readDisplayCache, useStreak } from "@/features/streaks/use-streak";
-import { nextTier, tierFor } from "@/lib/streaks/tiers";
+import { tierFor } from "@/lib/streaks/tiers";
+
+/*
+  Code-split: the gallery, its six live tier marks and its CSS-heavy panel are
+  fetched on the FIRST TAP and never on a page open. The landing page is held to
+  a 218 kB first-load ceiling (lib/perf/budget.test.ts) and nothing here is
+  needed to paint the chip.
+*/
+const StreakTiersSheet = dynamic(
+  () => import("@/features/streaks/streak-tiers-sheet").then((m) => m.StreakTiersSheet),
+  { ssr: false },
+);
 
 /**
  * The persistent hero chip: 🔥 12, or 🔥 12 Day Streak where there is room.
@@ -26,15 +37,17 @@ import { nextTier, tierFor } from "@/lib/streaks/tiers";
  * has no cache, renders nothing, and gets their chip on the next visit — no
  * shift either way.
  *
- * ── Tap to see the streak ────────────────────────────────────────────────
- * Owner (2026-08-24): tapping the flame shows the streak for ~2s. It is a
- * popover anchored to the chip, NOT a dialog — it steals no focus, traps
- * nothing, blocks nothing, and dismisses itself. Absolutely positioned, so
- * showing it cannot move the hero.
+ * ── Tap to open the flame gallery ────────────────────────────────────────
+ * Owner (2026-08-31): tapping the chip must show "all the flames and
+ * description ... so they can be ecouraged to get it", and the panel
+ * "shouldnt close after 3secs" — it stays until the visitor taps around it.
+ *
+ * That replaces the 2026-08-24 behaviour (a 2s self-dismissing popover showing
+ * only the current tier). It was the right object for a glance and the wrong
+ * one for a gallery: six flames with a sentence each cannot be read in two
+ * seconds, and the popover was `pointer-events-none`, so tapping it could not
+ * dismiss it either. See streak-tiers-sheet.tsx.
  */
-
-/** Long enough to read, short enough to stay out of the way. */
-const REVEAL_MS = 2000;
 
 /**
  * Where the sparkle ticks sit, in degrees around the pill.
@@ -52,14 +65,7 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   const [cached] = useState<number | null>(() => readDisplayCache());
   const { data } = useStreak();
   const [open, setOpen] = useState(false);
-  /** Viewport y for the popover, measured from the chip when it is revealed. */
-  const [top, setTop] = useState(0);
   const anchor = useRef<HTMLButtonElement | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
 
   const streak = data?.currentStreak ?? cached ?? 0;
 
@@ -97,6 +103,15 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   */
   const prev = useRef<number | null>(cached);
   const [pop, setPop] = useState(false);
+  /*
+    The chip storm is added AFTER mount, never during hydration. Adding it in
+    the server render would make the class list differ from the first client
+    render on any device where the decision could vary, and a mismatch costs a
+    subtree re-render on the landing page. One frame later is free; a mismatch
+    is not.
+  */
+  const [stormReady, setStormReady] = useState(false);
+  useEffect(() => setStormReady(true), []);
 
   useEffect(() => {
     const before = prev.current;
@@ -128,39 +143,22 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
   const tier = tierFor(streak);
   if (!tier) return null;
 
-  const label = `${streak} ${streak === 1 ? "day" : "days"} streak — ${tier.label}`;
-  const upcoming = nextTier(streak);
-  const reveal = () => {
-    /*
-      🔴 MEASURE THE CHIP, THEN CENTRE IN THE VIEWPORT.
-
-      Two failed attempts before this, and both failed for the same reason: the
-      popover was positioned relative to the CHIP, whose horizontal position is
-      not stable. `left-1/2 -translate-x-1/2` centred it on the chip, which sits
-      at the far right of the hero pill row — so half of it was off the right
-      edge. Anchoring `right-0` fixed that until the row WRAPPED and the chip
-      moved to the left of its own line, at which point it ran off the left
-      edge instead.
-
-      There is no chip-relative side that is correct for both, so it is no
-      longer chip-relative. Only the VERTICAL offset comes from the chip; the
-      horizontal is the viewport's centre, which is what "visible and centered"
-      actually asks for and is correct wherever the chip lands.
-    */
-    const rect = anchor.current?.getBoundingClientRect();
-    if (rect) setTop(rect.bottom + 8);
-    setOpen(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setOpen(false), REVEAL_MS);
-  };
+  const label = `${streak} ${streak === 1 ? "day" : "days"} streak — ${tier.label}. See all flames.`;
+  /*
+    No measuring and no anchoring any more. The gallery is a centred dialog, so
+    the two failed attempts recorded here — centring on a chip that sits at the
+    right of the hero row, then anchoring `right-0` until the row WRAPPED and
+    the chip moved — are both moot: it is no longer chip-relative at all.
+  */
 
   return (
     <span className={`relative inline-flex ${className}`}>
       <button
         ref={anchor}
         type="button"
-        onClick={reveal}
+        onClick={() => setOpen(true)}
         aria-label={label}
+        aria-haspopup="dialog"
         aria-expanded={open}
         /*
           🔴 RAISED, NOT FLAT (owner, 2026-08-30: "i want it more 3d like it is
@@ -189,7 +187,7 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
           into the CSS — see the note at the top of lib/streaks/tiers.ts.
         */
         style={{ ["--streak-glow" as string]: tier.glow }}
-        className={`srch-press streak-chip streak-chip-3d relative inline-flex shrink-0 items-center gap-1.5 rounded-full ${tier.fill} px-3 py-1.5 text-[12px] font-bold ${tier.text} ring-1 ring-inset ${tier.ring} ${
+        className={`srch-press streak-chip streak-chip-3d ${chipStormClass(tier, stormReady)} relative inline-flex shrink-0 items-center gap-1.5 overflow-hidden rounded-full ${tier.fill} px-3 py-1.5 text-[12px] font-bold ${tier.text} ring-1 ring-inset ${tier.ring} ${
           pop ? "streak-chip-pop" : ""
         }`}
       >
@@ -235,11 +233,14 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
             cap height, so the fire leads and the words follow. `-my-0.5` lets
             it grow WITHOUT growing the pill — the hero row is on the landing's
             LCP path and the chip's box must not change height. */}
-        <StreakFlame
-          className={`-my-0.5 h-[20px] w-[20px] ${pop ? "streak-chip-flame" : ""}`}
-          gradient
-          animated
+        {/* 🔴 The MARK, not the bare glyph — the tier's own motion (blue licks,
+            purple smoke, gold/black storm) rides with it. The wrapper keeps the
+            same 20px box the glyph used to occupy, so the effects paint outside
+            it without changing the chip's height. */}
+        <StreakFlameMark
           tier={tier}
+          className={`-my-0.5 h-[20px] w-[20px] ${pop ? "streak-chip-flame" : ""}`}
+          wrapperClassName="h-[20px] w-[20px]"
         />
         <span aria-hidden className={pop ? "streak-chip-count inline-block" : undefined}>
           {streak}
@@ -262,53 +263,17 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
       </button>
 
       {/*
-        The reveal — PORTALLED and viewport-centred.
+        The gallery. Mounted only while open — the sheet is a `next/dynamic`
+        chunk, so on a page where nobody taps the chip its bytes are never
+        fetched at all, which is what keeps six live tier marks off the
+        landing page-s first-load budget.
 
-        `pointer-events-none` so it can never swallow a tap on the paste box
-        below it, and `role="status"` announces it once, politely, without
-        moving focus — what makes a self-dismissing popover accessible rather
-        than a trap.
-
-        🔴 Portalled because it is `position: fixed`, and a fixed element
-        resolves against the nearest TRANSFORMED / FILTERED / BLURRED ancestor
-        rather than the viewport. The hero card carries exactly those, so an
-        un-portalled fixed popover would be clipped back inside it — the
-        standing law this project has now hit five times (components/ui/portal.tsx).
-
-        Rendered only while open: a permanently-mounted portal on the landing
-        page is a body child and a compositing layer carried on every visit for
-        a two-second popover.
+        It portals itself (see streak-tiers-sheet.tsx): a `fixed inset-0`
+        overlay resolves against the nearest TRANSFORMED / FILTERED / BLURRED
+        ancestor rather than the viewport, and the hero card carries exactly
+        those -- the standing law this project has now hit five times.
       */}
-      <Portal>
-        {open ? (
-      <span
-        role="status"
-        aria-live="polite"
-        style={{ top, left: "50%", transform: "translateX(-50%)" }}
-        className="pointer-events-none fixed z-[80] w-max max-w-[calc(100vw-2rem)] rounded-2xl bg-foreground px-3 py-2 text-center shadow-[0_10px_30px_-10px_rgba(0,0,0,0.5)]"
-      >
-        {open ? (
-          <>
-            <span className="block text-[14px] font-bold text-background">
-              {tier.label} · {streak} days
-            </span>
-            <span className="mt-0.5 block text-[11.5px] font-medium text-background/70">
-              {/*
-                The NEXT flame is the reason to come back, so the popover names
-                it. Saying "keep it going" asks for the same thing without ever
-                telling anyone what they are working toward.
-              */}
-              {/* Tier names keep their capitals — "unlocks the on a roll flame"
-                  read as a typo. */}
-              {upcoming
-                ? `${upcoming.inDays} more ${upcoming.inDays === 1 ? "day" : "days"} to unlock the “${upcoming.tier.label}” flame.`
-                : "The rarest flame there is. Nothing above this one."}
-            </span>
-          </>
-        ) : null}
-      </span>
-        ) : null}
-      </Portal>
+      {open ? <StreakTiersSheet streak={streak} onClose={() => setOpen(false)} /> : null}
     </span>
   );
 }

@@ -2518,3 +2518,486 @@ html.dark .streak-chip-3d {
     transition: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIER MOTION — rank is not carried by colour alone
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner, 2026-08-31: "the streaks flames and streak card ... are the same, only
+   different is the color, they suppose to look more prestigious and glorious as
+   it increases".
+
+   So each tier from blue up earns a distinct behaviour, and they escalate:
+   blue LICKS upward like a real flame, purple SMOKES, gold and black carry a
+   THUNDERSTORM. `lib/streaks/tiers.ts` owns which tier gets which; this file
+   only draws them.
+
+   🔴 Every one of these is transform + opacity ONLY. No `filter: blur()` in a
+   loop, no box-shadow animation, no canvas, no library — those are the three
+   things that cook a mid-range Android, and this mark sits on the landing page
+   which has a 1.6s budget. Blur appears once, as a STATIC value on the smoke
+   puffs, never as an animated property.
+
+   Layers are `aria-hidden` decoration inside a `.streak-mark` wrapper that is
+   `contain: layout paint` — so none of this can reflow the chip it sits in. */
+
+.streak-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  contain: layout paint;
+}
+
+.streak-mark-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* The licks and smoke rise ABOVE the glyph box; letting them paint outside
+     costs nothing because `contain: paint` on the wrapper clips at the wrapper,
+     which is deliberately larger than the glyph. */
+  overflow: visible;
+}
+
+/* ── BLUE: a real flame, licking upward ─────────────────────────────────────
+   Three tongues on staggered delays. Each is born at the flame's tip, narrows
+   as it rises, and is gone before the next one from the same slot appears — a
+   fire reads as continuous because the tongues OVERLAP, not because any single
+   one is long-lived. */
+@keyframes frenz-flame-lick {
+  0%   { opacity: 0;    transform: translate(-50%, 0) scale(0.55, 0.7); }
+  22%  { opacity: 0.85; }
+  100% { opacity: 0;    transform: translate(-50%, -132%) scale(0.12, 1.35); }
+}
+
+.streak-lick {
+  position: absolute;
+  left: 50%;
+  bottom: 58%;
+  width: 34%;
+  height: 46%;
+  border-radius: 50% 50% 46% 46% / 62% 62% 38% 38%;
+  transform-origin: 50% 100%;
+  background: linear-gradient(to top, var(--streak-lick-a, #60a5fa), transparent 78%);
+  animation: frenz-flame-lick var(--lick-dur, 1.5s) ease-out infinite;
+  animation-delay: var(--lick-delay, 0s);
+  will-change: transform, opacity;
+}
+
+/* ── PURPLE: smoke ascending off the fire ───────────────────────────────────
+   Owner: "purple flame should have a purple smoke ascending from the fire
+   icon". Puffs drift up and sideways, expanding as they thin out. The blur is
+   a STATIC value on the element — animating a filter would repaint the whole
+   layer every frame. */
+@keyframes frenz-flame-smoke {
+  0%   { opacity: 0;    transform: translate(-50%, 10%) scale(0.4); }
+  18%  { opacity: 0.5; }
+  100% { opacity: 0;    transform: translate(calc(-50% + var(--smoke-drift, 6px)), -165%) scale(1.5); }
+}
+
+.streak-smoke {
+  position: absolute;
+  left: 50%;
+  bottom: 62%;
+  width: 30%;
+  height: 30%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(196, 132, 252, 0.7), rgba(139, 92, 246, 0) 70%);
+  filter: blur(2px);
+  animation: frenz-flame-smoke var(--smoke-dur, 2.8s) linear infinite;
+  animation-delay: var(--smoke-delay, 0s);
+  will-change: transform, opacity;
+}
+
+/* ── GOLD & BLACK: the storm ────────────────────────────────────────────────
+   Owner: "gold and black should [have] a 3d lighting and thunder around the
+   fire icon and streak button ... it should animate a 3d thunder and lightening
+   every 10 seconds".
+
+   ONE 10s cycle drives everything, and ~96% of that timeline is idle — the
+   strike occupies about 400ms. A double flash, because real lightning almost
+   never strikes once, and because a single blink reads as a rendering glitch. */
+@keyframes frenz-storm-strike {
+  0%, 88%      { opacity: 0; transform: scale(0.92); }
+  89%          { opacity: 0.95; transform: scale(1); }
+  90.5%        { opacity: 0.15; }
+  92%          { opacity: 0.85; transform: scale(1.04); }
+  94%          { opacity: 0.1; }
+  95.5%        { opacity: 0.45; }
+  100%         { opacity: 0; transform: scale(0.98); }
+}
+
+/* The ambient rim light — this is the "3d lighting" half, and unlike the strike
+   it is always on: a slow sweep that keeps the mark looking lit from a moving
+   source rather than flat. */
+@keyframes frenz-storm-rim {
+  0%, 100% { opacity: 0.30; transform: rotate(0deg); }
+  50%      { opacity: 0.60; transform: rotate(180deg); }
+}
+
+.streak-bolt {
+  position: absolute;
+  inset: -22%;
+  animation: frenz-storm-strike 10s linear infinite;
+  will-change: opacity, transform;
+}
+
+.streak-rim {
+  position: absolute;
+  inset: -14%;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--streak-rim, rgba(227, 179, 65, 0.85)) 40deg,
+    transparent 110deg,
+    transparent 250deg,
+    var(--streak-rim, rgba(227, 179, 65, 0.5)) 300deg,
+    transparent 350deg
+  );
+  /* A ring, not a disc: the mask is what stops this covering the flame. */
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 62%);
+  mask: radial-gradient(circle, transparent 58%, #000 62%);
+  animation: frenz-storm-rim 7s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+/* The chip itself flashes with the same 10s cycle, so the thunder is "around
+   the fire icon AND the streak button" rather than only on the glyph. Offset
+   by a hair so the button lights a frame after the bolt — light travels. */
+.streak-chip-storm::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, var(--streak-rim, rgba(227, 179, 65, 0.55)) 50%, transparent 80%);
+  mix-blend-mode: screen;
+  animation: frenz-storm-strike 10s linear infinite;
+  animation-delay: 60ms;
+  will-change: opacity;
+}
+
+/* ── 🔴 LOW-END DEVICES AND REDUCED MOTION ──────────────────────────────────
+
+   `.streak-fx-lite` is set by the mark itself after mount (never during
+   hydration — a server/client difference here would be a hydration mismatch,
+   and this project has just spent a session paying for one of those).
+
+   Lite keeps the IDENTITY and drops the COST: the rim light and one lick/puff
+   survive, the rest stop. A cheap Android still sees a lit, moving flame. */
+.streak-fx-lite .streak-lick:nth-child(n + 2),
+.streak-fx-lite .streak-smoke:nth-child(n + 2) {
+  display: none;
+}
+
+.streak-fx-lite .streak-smoke {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+    Movement stops; the mark does not become a different mark. The bolt and the
+    rim stay DRAWN at a resting opacity so a gold flame still looks like a gold
+    flame — the preference asks for less motion, not for a downgraded rank.
+  */
+  .streak-lick,
+  .streak-smoke,
+  .streak-bolt,
+  .streak-rim,
+  .streak-chip-storm::after {
+    animation: none;
+  }
+  .streak-lick,
+  .streak-smoke {
+    opacity: 0.32;
+    transform: translate(-50%, -40%) scale(0.9);
+  }
+  .streak-bolt { opacity: 0.42; }
+  .streak-rim  { opacity: 0.4; }
+  .streak-chip-storm::after { opacity: 0.25; }
+}
+
+/* ── The flame gallery's ground ──────────────────────────────────────────────
+
+   Owner, 2026-08-31: "make change the modal background from black to a premium
+   background."
+
+   The scrim is a warm radial wash over a soft neutral veil rather than a flat
+   black rectangle — the page stays faintly legible behind it, which is what
+   makes an overlay feel like a layer of the app instead of a light switch.
+   `backdrop-filter` appears ONCE here, on a single full-screen element that
+   exists only while the sheet is open; it is never applied per-item (this
+   project has a standing rule against `backdrop-blur` on repeated list rows). */
+.streak-sheet-scrim {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(251, 191, 36, 0.16), transparent 62%),
+    rgba(248, 246, 242, 0.82);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  animation: frenz-streak-fade 200ms var(--ease-out) both;
+}
+
+:root[data-theme="dark"] .streak-sheet-scrim,
+html.dark .streak-sheet-scrim {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(227, 179, 65, 0.14), transparent 60%),
+    rgba(6, 9, 20, 0.82);
+}
+
+/* The panel itself: a warm off-white in light, a deep indigo-black in dark, each
+   with a champagne sheen along the top edge so the card catches light. §19 —
+   light mode is DESIGNED, not the dark design inverted. */
+.streak-sheet-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.7)),
+    linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(255, 255, 255, 0) 46%),
+    #fdfcfa;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  animation: frenz-streak-sheet-in 260ms var(--ease-spring) both;
+}
+
+:root[data-theme="dark"] .streak-sheet-panel,
+html.dark .streak-sheet-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    linear-gradient(135deg, rgba(227, 179, 65, 0.12), rgba(255, 255, 255, 0) 44%),
+    #0b1020;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+@keyframes frenz-streak-sheet-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-sheet-panel { animation: frenz-streak-fade 180ms var(--ease-out) both; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE MILESTONE CEREMONY (§4–§8)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner, 2026-08-31: a 7-day streak must feel like "a premium achievement
+   ceremony ... Luxury + cinematic + elegant + exclusive + powerful", and NOT
+   like the daily celebration with more particles.
+
+   🔴 Gold is an ACCENT, never the ground (§5: "Do not make the entire screen
+   gold"). The environment is a deep neutral in dark and a warm off-white in
+   light; the champagne only ever appears as light falling ON things — the ring,
+   the halo, the numeral, the rim of the motes.
+
+   🔴 Everything animates transform/opacity only, and every layer is finite —
+   no infinite loops run after the ceremony settles (§14 calls out continuously
+   running particle animations explicitly). The overlay unmounts at ~3.7s, so
+   nothing survives it. */
+
+.streak-ms {
+  /* `--ms-accent` / `--ms-glow` are set inline from the TIER, so the same
+     ceremony is champagne at 7 days and near-black at 365 with no per-tier CSS. */
+  animation: frenz-ms-in 320ms var(--ease-out) both;
+  isolation: isolate;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@keyframes frenz-ms-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes frenz-ms-out { to   { opacity: 0; transform: scale(1.03); } }
+
+.streak-ms-leaving {
+  /* §7, 2500-3500ms: the celebration disappears smoothly rather than snapping. */
+  animation: frenz-ms-out 420ms var(--ease-out) both;
+  pointer-events: none;
+}
+
+/* ── The environment (§5) ──────────────────────────────────────────────────── */
+.streak-ms-env {
+  background:
+    radial-gradient(90% 60% at 50% 38%, color-mix(in srgb, var(--ms-accent) 16%, transparent), transparent 70%),
+    radial-gradient(120% 90% at 50% 120%, rgba(15, 23, 42, 0.10), transparent 60%),
+    #f7f5f1;
+  animation: frenz-ms-env 700ms var(--ease-out) both;
+}
+
+:root[data-theme="dark"] .streak-ms-env,
+html.dark .streak-ms-env {
+  background:
+    radial-gradient(90% 60% at 50% 38%, color-mix(in srgb, var(--ms-accent) 22%, transparent), transparent 68%),
+    radial-gradient(120% 90% at 50% 120%, rgba(2, 6, 23, 0.9), transparent 55%),
+    #05070f;
+}
+
+@keyframes frenz-ms-env {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Very subtle light rays (§5). One conic gradient masked to a soft cone — two
+   elements would double the compositing for no visible gain. */
+.streak-ms-rays {
+  background: conic-gradient(
+    from 200deg at 50% 34%,
+    transparent 0deg,
+    color-mix(in srgb, var(--ms-accent) 12%, transparent) 16deg,
+    transparent 34deg,
+    transparent 120deg,
+    color-mix(in srgb, var(--ms-accent) 9%, transparent) 140deg,
+    transparent 160deg
+  );
+  -webkit-mask: radial-gradient(70% 55% at 50% 34%, #000, transparent 76%);
+  mask: radial-gradient(70% 55% at 50% 34%, #000, transparent 76%);
+  opacity: 0;
+  animation: frenz-ms-rays 1400ms var(--ease-out) 240ms both;
+}
+
+@keyframes frenz-ms-rays {
+  from { opacity: 0; transform: scale(1.12) rotate(-3deg); }
+  to   { opacity: 0.75; transform: none; }
+}
+
+/* ── Motes gathering toward the centre (§7, 300–700ms) ─────────────────────── */
+.streak-ms-mote {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ms-accent) 85%, white);
+  /* Each mote starts on its own spoke, far out, and drifts inward. `--i` seeds
+     both the angle and the timing, so twelve elements need one rule. */
+  opacity: 0;
+  animation: frenz-ms-mote 2600ms var(--ease-out) both;
+  animation-delay: calc(300ms + var(--i) * 55ms);
+}
+
+@keyframes frenz-ms-mote {
+  0%   { opacity: 0;    transform: rotate(calc(var(--i) * 30deg)) translateX(46vmin) scale(0.6); }
+  30%  { opacity: 0.85; }
+  100% { opacity: 0;    transform: rotate(calc(var(--i) * 30deg + 14deg)) translateX(9vmin) scale(1.1); }
+}
+
+/* ── The ring + halo (§7, 300–1100ms) ─────────────────────────────────────── */
+.streak-ms-stage { width: 9rem; height: 9rem; }
+
+.streak-ms-ring {
+  width: 9rem;
+  height: 9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ms-accent) 62%, transparent);
+  box-shadow: 0 0 34px -8px var(--ms-glow), inset 0 0 24px -10px var(--ms-glow);
+  animation: frenz-ms-ring 900ms var(--ease-spring) 300ms both;
+}
+
+@keyframes frenz-ms-ring {
+  from { opacity: 0; transform: scale(0.55) rotate(-24deg); }
+  to   { opacity: 1; transform: none; }
+}
+
+.streak-ms-halo {
+  width: 13rem;
+  height: 13rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--ms-glow), transparent 66%);
+  animation: frenz-ms-halo 1100ms var(--ease-out) 700ms both;
+}
+
+@keyframes frenz-ms-halo {
+  from { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 0.9; }
+  to   { opacity: 0.55; transform: scale(1); }
+}
+
+/* The emblem emerges from darkness on a premium spring (§7, 700–1100ms). */
+.streak-ms-emblem {
+  animation: frenz-ms-emblem 820ms var(--ease-spring) 700ms both;
+  filter: drop-shadow(0 18px 40px var(--ms-glow));
+}
+
+@keyframes frenz-ms-emblem {
+  from { opacity: 0; transform: scale(0.45) translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── The numeral (§8) ──────────────────────────────────────────────────────── */
+.streak-ms-number {
+  font-size: clamp(5rem, 30vw, 9rem);
+  font-weight: 900;
+  letter-spacing: -0.06em;
+  animation: frenz-ms-number 700ms var(--ease-spring) 950ms both;
+}
+
+/* The metal: a four-stop champagne sweep clipped to the glyph, over a
+   controlled glow. NOT a flat gold fill, which reads as a warning colour at
+   this size. */
+.streak-ms-number-ink {
+  background-image: linear-gradient(
+    168deg,
+    color-mix(in srgb, var(--ms-accent) 55%, white) 0%,
+    var(--ms-accent) 42%,
+    color-mix(in srgb, var(--ms-accent) 62%, black) 72%,
+    color-mix(in srgb, var(--ms-accent) 40%, white) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 6px 22px var(--ms-glow));
+}
+
+@keyframes frenz-ms-number {
+  /* Scale-up, opacity, a very small upward move. Explicitly not a bounce. */
+  from { opacity: 0; transform: scale(0.88) translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.streak-ms-title   { animation: frenz-ms-rise 520ms var(--ease-out) 1250ms both; }
+.streak-ms-caption { animation: frenz-ms-rise 560ms var(--ease-out) 1500ms both; }
+
+.streak-ms-rank {
+  display: block;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--ms-accent) 78%, black);
+}
+
+:root[data-theme="dark"] .streak-ms-rank,
+html.dark .streak-ms-rank {
+  color: color-mix(in srgb, var(--ms-accent) 82%, white);
+}
+
+@keyframes frenz-ms-rise {
+  from { opacity: 0; transform: translateY(9px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── 🔴 LOW-END DEVICES (§15) ──────────────────────────────────────────────
+   Half the motes and no rays. The ring, halo, emblem and numeral — everything
+   carrying the MEANING — are untouched, so the ceremony still lands on a cheap
+   Android; only the atmosphere thins. Keyed off the same `.streak-fx-lite` the
+   flame mark sets, so there is ONE capability decision in the codebase. */
+.streak-fx-lite .streak-ms-mote:nth-child(2n) { display: none; }
+.streak-fx-lite .streak-ms-rays { display: none; }
+
+/* ── 🔴 REDUCED MOTION (§16) ───────────────────────────────────────────────
+   Movement goes; the ceremony stays. Every layer still renders, in place, as a
+   plain fade — the achievement must never be communicated by animation alone,
+   and a visitor with vestibular sensitivity should not get a visibly poorer
+   milestone than everyone else. */
+@media (prefers-reduced-motion: reduce) {
+  .streak-ms-rays,
+  .streak-ms-motes {
+    display: none;
+  }
+  .streak-ms-env,
+  .streak-ms-ring,
+  .streak-ms-halo,
+  .streak-ms-emblem,
+  .streak-ms-number,
+  .streak-ms-title,
+  .streak-ms-caption {
+    animation: frenz-ms-in 260ms var(--ease-out) both;
+    transform: none;
+  }
+  .streak-ms-emblem { filter: drop-shadow(0 10px 24px var(--ms-glow)); }
+}

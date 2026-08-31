@@ -33,6 +33,37 @@ export interface StreakTier {
   minDays: number;
   /** Shown in the reveal popover when a tier is reached. */
   label: string;
+  /**
+   * One line explaining what this flame IS, for the tier gallery.
+   *
+   * Owner, 2026-08-31: anonymous and signed-in visitors should be able to tap
+   * the streak chip and "see an example of all the flames and description so
+   * they can be encouraged to get it". A gallery of six unexplained colours is
+   * decoration; the sentence is what turns it into something to aim at.
+   *
+   * Written in the second person and about the ACHIEVEMENT, never about the
+   * artwork — "a full week without missing a day" is a reason to come back,
+   * "a blue flame" is not.
+   */
+  blurb: string;
+  /**
+   * How this flame behaves, beyond its colour.
+   *
+   * Owner, 2026-08-31: "the streaks flames … are the same, only different is
+   * the color, they suppose to look more prestigious and glorious as it
+   * increases". So rank is no longer carried by hue alone — each tier from blue
+   * up adds a distinct motion, and the motions escalate:
+   *
+   *   • `steady` — the base breathing loop (spark, green).
+   *   • `ascend` — a real flame licking upward, blue's "real life blue flame".
+   *   • `smoke`  — violet smoke drifting up off the flame (purple).
+   *   • `storm`  — dimensional lighting with a thunder crack every 10s, on the
+   *                flame AND on the chip around it (gold, black).
+   *
+   * Every one is CSS on transform/opacity only, gated on `prefers-reduced-
+   * motion` and on the device's own capability — see globals.css.
+   */
+  motion: "steady" | "ascend" | "smoke" | "storm";
   /** The two SVG gradient stops for the flame, dark end first. */
   flame: [string, string];
   /** Chip text colour, light and dark. */
@@ -63,6 +94,8 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "black",
     minDays: 365,
     label: "One year",
+    blurb: "365 days without a single miss. Almost nobody gets here.",
+    motion: "storm",
     // Not pure black: a flat #000 flame reads as a rendering failure, and it
     // disappears entirely in dark mode. Near-black with a graphite highlight
     // keeps the silhouette legible on both grounds.
@@ -77,6 +110,8 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "gold",
     minDays: 100,
     label: "Legendary",
+    blurb: "100 days running. Gold, lit by its own storm.",
+    motion: "storm",
     flame: ["#8A6100", "#E3B341"],
     text: "text-amber-700 dark:text-amber-300",
     ring: "ring-amber-600/35 dark:ring-amber-400/30",
@@ -88,6 +123,8 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "purple",
     minDays: 30,
     label: "Elite",
+    blurb: "A full month. The flame burns violet and starts to smoke.",
+    motion: "smoke",
     flame: ["#6D28D9", "#C084FC"],
     text: "text-violet-600 dark:text-violet-300",
     ring: "ring-violet-500/30 dark:ring-violet-400/30",
@@ -99,6 +136,8 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "green",
     minDays: 14,
     label: "Committed",
+    blurb: "Two weeks straight. The habit has taken hold.",
+    motion: "steady",
     flame: ["#047857", "#4ADE80"],
     text: "text-emerald-600 dark:text-emerald-300",
     ring: "ring-emerald-500/30 dark:ring-emerald-400/30",
@@ -110,6 +149,8 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "blue",
     minDays: 7,
     label: "On a roll",
+    blurb: "Seven days in a row. The fire burns hotter, and turns blue.",
+    motion: "ascend",
     flame: ["#1D4ED8", "#60A5FA"],
     text: "text-blue-600 dark:text-blue-300",
     ring: "ring-blue-500/30 dark:ring-blue-400/30",
@@ -135,6 +176,8 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "spark",
     minDays: MIN_STREAK_DAYS(),
     label: "Streak started",
+    blurb: "Day one. Come back tomorrow and it grows.",
+    motion: "steady",
     flame: ["#F97316", "#FBBF24"],
     text: "text-orange-600 dark:text-orange-300",
     ring: "ring-orange-500/30 dark:ring-orange-400/30",
@@ -185,6 +228,41 @@ export function crossedTier(before: number, after: number): StreakTier | null {
   if (!b) return null;
   if (a?.id === b.id) return null;
   return b;
+}
+
+/**
+ * Is TODAY the day this streak became a milestone?
+ *
+ * ── Why exact equality, and why that is enough ───────────────────────────────
+ *
+ * Owner, 2026-08-31: the 7-day celebration "must happen exactly when the streak
+ * transitions 6 → 7. It must NOT trigger simply because the user currently has
+ * a 7-day streak."
+ *
+ * Landing exactly ON a threshold can only happen by incrementing onto it — a
+ * streak moves one day at a time, and a reset goes to 1, never to 7. Combined
+ * with the caller's `shouldCelebrate`, which the SERVER sets false for the rest
+ * of the day the moment the celebration is claimed (`lastCelebrationDate`), the
+ * pair is exactly "the increment that crossed this threshold, once".
+ *
+ * That is why this takes only the current streak and needs no `previous`: the
+ * client never has a trustworthy previous value anyway (a second tab, a fresh
+ * PWA launch and a cleared cache all start with none), and anything decided
+ * from client state replays. Refreshes, extra tabs, route changes, remounts and
+ * re-authentication all come back with `shouldCelebrate: false` and get nothing.
+ *
+ * ── Adding 60/90/180-day milestones later ────────────────────────────────────
+ *
+ * Add the tier to `STREAK_TIERS` and it is a milestone automatically — there is
+ * no second list to keep in sync, which is the whole reason this reads off the
+ * tier table rather than a `MILESTONES = [7, 14, 30]` array sitting beside it.
+ * Day 1 is excluded because arriving is not an achievement (§28: day 1 never
+ * celebrates), and it is the one threshold every visitor trips on their first
+ * page view.
+ */
+export function milestoneFor(days: number): StreakTier | null {
+  if (!Number.isFinite(days) || days <= STREAK_BADGE_MIN_DAYS) return null;
+  return STREAK_TIERS.find((t) => t.minDays === days) ?? null;
 }
 
 /** Days remaining until the next tier, and which one. Null at the top tier. */

@@ -8,7 +8,7 @@ import {
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
 import { usePageSettled } from "@/lib/dom/use-page-settled";
-import { debugMessages, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
+import { debugMessages, loaderError, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
 import { cn } from "@/lib/utils";
 
 import { useShowAds } from "./use-show-ads";
@@ -239,12 +239,12 @@ const POLL_MAX_MS = 15_000;
  * change, and so a blocked or slow request can never delay the ad it is
  * describing. Fired only on a CHANGE, never per frame.
  */
-function beacon(slot: ExoClickInsSlot, filled: boolean, reason?: EmptyReason): void {
+function beacon(slot: ExoClickInsSlot, filled: boolean, reason?: EmptyReason, detail?: string | null): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot, filled, reason, path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot, filled, reason, detail: detail ?? undefined, path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -547,7 +547,13 @@ export function ExoClickSticky({
       stopPoll();
       clearTimers();
       setStatus("empty");
-      if (!everFilled) beacon(slot, false, reason);
+      /*
+        When ExoClick declines for a REASON rather than for lack of inventory,
+        their API says so and their loader logs it. That message is the only
+        thing that can tell a paused zone from an unapproved site from genuine
+        no-demand, so it travels with the event.
+      */
+      if (!everFilled) beacon(slot, false, reason, reason === "no-ads" ? loaderError(tag.zoneId, logStart) : null);
     };
     /*
       🔴 THIS POLL IS HARD-BOUNDED, and it was not (owner, 2026-08-31: "frenzsave

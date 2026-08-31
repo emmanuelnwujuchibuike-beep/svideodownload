@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loaderVerdict } from "@/lib/monetization/exoclick-verdict";
+import { loaderError, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
 
 /**
  * Guards the parsing of ExoClick's own debug log.
@@ -108,5 +108,43 @@ describe("loaderVerdict — reading ExoClick's own answer", () => {
       "2026-08-31T16:06:51.391Z: Request #2 Placement #1 Group #3 has no ads to display",
     ]);
     expect(loaderVerdict(HISTORY_ZONE, 0)).toBe("empty");
+  });
+});
+
+describe("loaderError — the network's own words", () => {
+  it("🔴 surfaces the API error when ExoClick sent one", () => {
+    /*
+      "has no ads to display" cannot tell a paused zone from a site under review
+      from genuine lack of demand. When their API gives a reason, this is it.
+    */
+    setLog([
+      '2026-08-31T16:06:50.468Z: Request #0 Placement #0 was pushed with zone {"custom_targeting":{},"id":6015590}',
+      '2026-08-31T16:06:51.100Z: Request #0 Placement #0 had these errors on API request:{"code":"zone_not_found"}',
+      "2026-08-31T16:06:51.391Z: Request #0 Placement #0 has no ads to display",
+    ]);
+    expect(loaderError(HISTORY_ZONE, 0)).toBe('{"code":"zone_not_found"}');
+    expect(loaderVerdict(HISTORY_ZONE, 0)).toBe("empty");
+  });
+
+  it("returns null for an ordinary no-fill", () => {
+    // No error line: they simply had nothing. That is not a fault to report.
+    setLog(REAL_NO_FILL);
+    expect(loaderError(HISTORY_ZONE, 0)).toBeNull();
+  });
+
+  it("never attributes another zone's error to this one", () => {
+    setLog([
+      '2026-08-31T16:06:50.468Z: Request #0 Placement #0 was pushed with zone {"custom_targeting":{},"id":9999999}',
+      '2026-08-31T16:06:51.100Z: Request #0 Placement #0 had these errors on API request:{"code":"nope"}',
+    ]);
+    expect(loaderError(HISTORY_ZONE, 0)).toBeNull();
+  });
+
+  it("bounds the payload — their JSON is not ours to trust for size", () => {
+    setLog([
+      '2026-08-31T16:06:50.468Z: Request #0 Placement #0 was pushed with zone {"custom_targeting":{},"id":6015590}',
+      `2026-08-31T16:06:51.100Z: Request #0 Placement #0 had these errors on API request:${"x".repeat(5000)}`,
+    ]);
+    expect(loaderError(HISTORY_ZONE, 0)!.length).toBeLessThanOrEqual(300);
   });
 });

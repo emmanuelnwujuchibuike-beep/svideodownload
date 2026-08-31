@@ -5,7 +5,7 @@ import {
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
 
-import { debugMessages, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
+import { debugMessages, loaderError, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
 
 import { loadProvider } from "./exoclick-sticky";
 
@@ -68,12 +68,12 @@ function loadTag(): Promise<ExoClickStickyTag | null> {
  * production. Without it, "the interstitial never appeared" and "the network
  * had nothing for this visitor" are the same observation.
  */
-function beacon(state: "requested" | "filled" | "empty", reason?: "no-ads" | "timeout" | "blocked"): void {
+function beacon(state: "requested" | "filled" | "empty", reason?: "no-ads" | "timeout" | "blocked", detail?: string | null): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot: "interstitial", state, filled: state === "filled", reason, path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot: "interstitial", state, filled: state === "filled", reason, detail: detail ?? undefined, path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -207,7 +207,11 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     ExoClick refusal and a request that never came back need different fixes.
   */
   const verdict = loaderVerdict(tag.zoneId, logStart);
-  beacon(filled ? "filled" : "empty", filled ? undefined : verdict === "empty" ? "no-ads" : "timeout");
+  beacon(
+    filled ? "filled" : "empty",
+    filled ? undefined : verdict === "empty" ? "no-ads" : "timeout",
+    filled || verdict !== "empty" ? null : loaderError(tag.zoneId, logStart),
+  );
 
   /*
     🔴 A NO-FILL VERDICT MUST NOT DELETE THE PLACEHOLDER (owner, 2026-08-31:

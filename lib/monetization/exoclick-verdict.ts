@@ -59,21 +59,66 @@ export function debugMessages(): string[] {
  * several placements share it: without it, a previous mount's no-fill — or
  * another slot's — would be read as this one's answer.
  */
+/**
+ * The API's OWN error for a zone, when it sent one.
+ *
+ * ── Why this is worth reaching for ───────────────────────────────────────────
+ *
+ * "has no ads to display" is the end of the line from outside: it cannot
+ * distinguish a zone that is paused, a site still under review, a zone id that
+ * does not exist on the domain being asked, and genuine lack of demand. Those
+ * need completely different actions and only one of them is ours.
+ *
+ * Their bundle logs the API's structured error whenever the response carries
+ * one for a placement:
+ *
+ *     M("Request #" + t + " Placement #" + m +
+ *       " had these errors on API request:" + JSON.stringify(c[m]))
+ *
+ * So when ExoClick declines for a REASON rather than for lack of inventory,
+ * that reason is sitting in the log. Surfacing it in the operator feed turns
+ * "no ads, again" into something answerable.
+ *
+ * Returns null when there is no error line — which is the ordinary, healthy
+ * "we simply had nothing" case.
+ */
+export function loaderError(zoneId: string, since: number): string | null {
+  const recent = debugMessages().slice(since);
+  if (recent.length === 0) return null;
+
+  const ours = requestIdsFor(recent, zoneId);
+  if (ours.size === 0) return null;
+
+  for (const line of recent) {
+    const m = /Request #(\d+) Placement #\d+ had these errors on API request:(.+)$/.exec(line);
+    // Bounded: this ends up in an event payload, and their JSON is not ours to
+    // trust for size.
+    if (m && ours.has(m[1]!)) return m[2]!.trim().slice(0, 300);
+  }
+  return null;
+}
+
+/** Which request numbers carried this zone. Shared by the verdict and the error. */
+function requestIdsFor(lines: readonly string[], zoneId: string): Set<string> {
+  const ours = new Set<string>();
+  for (const line of lines) {
+    const pushed = /Request #(\d+) Placement #\d+ was pushed with zone (.+)$/.exec(line);
+    /*
+      The id is matched with a word boundary so `601559` cannot satisfy a lookup
+      for `6015590` — a neighbouring zone's answer landing on the wrong slot is
+      exactly the kind of quiet wrongness this module exists to end.
+    */
+    if (pushed && new RegExp(`"id":\\s*${zoneId}\\b`).test(pushed[2]!)) ours.add(pushed[1]!);
+  }
+  return ours;
+}
+
 export function loaderVerdict(zoneId: string, since: number): LoaderVerdict {
   const recent = debugMessages().slice(since);
   if (recent.length === 0) return "pending";
 
-  /*
-    Which request numbers carried OUR zone. The id is matched with a word
-    boundary so `601559` cannot satisfy a lookup for `6015590` — a neighbouring
-    zone's verdict landing on this slot is exactly the kind of quiet wrongness
-    this module is meant to end.
-  */
-  const ours = new Set<string>();
-  for (const line of recent) {
-    const pushed = /Request #(\d+) Placement #\d+ was pushed with zone (.+)$/.exec(line);
-    if (pushed && new RegExp(`"id":\\s*${zoneId}\\b`).test(pushed[2]!)) ours.add(pushed[1]!);
-  }
+  // Which request numbers carried OUR zone — see `requestIdsFor`.
+  const ours = requestIdsFor(recent, zoneId);
   if (ours.size === 0) return "pending";
 
   // A definite refusal outranks everything else. `Group #` appears on grouped

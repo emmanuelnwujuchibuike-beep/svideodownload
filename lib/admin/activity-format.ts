@@ -103,7 +103,10 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
         empty row looks the same and points nowhere.
       */
       const reason = m.reason ? REASON_LABELS[String(m.reason)] ?? String(m.reason) : null;
-      return [slot, reason, path].filter(Boolean).join(" · ") || null;
+      // The network-s own words last, when it gave any — that is the line that
+      // says WHY, and it is the only part an operator can act on directly.
+      const detail = m.detail ? String(m.detail).slice(0, 160) : null;
+      return [slot, reason, path, detail].filter(Boolean).join(" · ") || null;
     }
     case "subscribe":
     case "subscribe_cancel":

@@ -2298,6 +2298,46 @@ body:has(.frenz-canvas-page) {
   animation: frenz-streak-chip-flame 820ms var(--ease-spring) 60ms both;
 }
 
+/*
+  The streak chip's 3D moulding (owner, 2026-08-30: "i want it more 3d").
+
+  Two OUTER shadows give it height — a tight contact shadow that anchors it to
+  the row and a softer ambient one that lifts it — and two INSET shadows curve
+  the surface: a light top edge and a darker bottom edge. The insets are the
+  part that reads as three-dimensional; drop shadows alone only read as
+  "floating".
+
+  Colour is deliberately neutral (slate, not the tier hue) so the depth stays
+  believable across all six tiers. A blue chip with a blue shadow looks like a
+  glow, which is exactly the treatment being removed elsewhere in the nav.
+*/
+.streak-chip-3d {
+  box-shadow:
+    0 1px 1px -0.5px rgb(15 23 42 / 0.16),
+    0 4px 10px -3px rgb(15 23 42 / 0.22),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.75),
+    inset 0 -1.5px 2px -1px rgb(15 23 42 / 0.14);
+  /* The press already scales via `srch-press`; easing the shadow with it keeps
+     the pill feeling like a physical button rather than a picture of one. */
+  transition: box-shadow 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+.streak-chip-3d:active {
+  /* Sinks: contact shadow tightens, ambient collapses, top highlight dims. */
+  box-shadow:
+    0 0.5px 1px -0.5px rgb(15 23 42 / 0.2),
+    0 1px 3px -2px rgb(15 23 42 / 0.2),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.4),
+    inset 0 -1px 1px -1px rgb(15 23 42 / 0.1);
+}
+:root[data-theme="dark"] .streak-chip-3d,
+html.dark .streak-chip-3d {
+  box-shadow:
+    0 1px 1px -0.5px rgb(0 0 0 / 0.5),
+    0 4px 12px -3px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.16),
+    inset 0 -1.5px 2px -1px rgb(0 0 0 / 0.4);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    STREAK SPARKLE BURST (owner, 2026-08-30: the badge should "feel alive")
 

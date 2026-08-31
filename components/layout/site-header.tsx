@@ -736,8 +736,17 @@ export function SiteHeader({
                     onClick={closeMenu}
                     className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-secondary/50 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-secondary"
                   >
+                    {/*
+                      🔴 THE BLUE HALO IS GONE (owner, 2026-08-30: "Remove this
+                      blue shadow from the feed button", with a screenshot of
+                      exactly this LayoutGrid glyph haloed in blue).
+
+                      It was a `from-blue-500/60 to-violet-500/60 blur-md` disc
+                      pulsing behind the icon. The `attract-loop` movement on the
+                      glyph is kept — that is the 15s attention pulse this link
+                      was given deliberately, and it is motion rather than colour.
+                    */}
                     <span aria-hidden className="relative inline-flex">
-                      <span className="attract-loop-glow pointer-events-none absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-blue-500/60 to-violet-500/60 blur-md" />
                       <LayoutGrid className="attract-loop h-4 w-4" />
                     </span>
                     Watch the feed

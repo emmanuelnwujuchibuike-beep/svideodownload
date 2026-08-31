@@ -140,10 +140,36 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
         onClick={reveal}
         aria-label={label}
         aria-expanded={open}
-        className={`srch-press streak-chip relative inline-flex shrink-0 items-center gap-1.5 rounded-full ${tier.fill} px-2.5 py-1 text-[12px] font-bold ${tier.text} ring-1 ring-inset ${tier.ring} ${
+        /*
+          🔴 RAISED, NOT FLAT (owner, 2026-08-30: "i want it more 3d like it is
+          in my screenshot").
+
+          Four layers do the depth, and each is doing a specific job — a single
+          `shadow-lg` reads as a floating sticker, not as a moulded pill:
+
+            • `streak-chip-3d`  a two-stop drop shadow (tight contact + soft
+                                ambient) plus an INSET top highlight and an inset
+                                bottom shade. The inset pair is what makes the
+                                surface look curved rather than merely lifted.
+            • the tier gradient sits under a white-to-transparent sheen, so the
+                                top of the pill catches light.
+            • `ring-inset`      keeps the rim crisp against the sheen.
+            • `py-1.5`/`px-3`   a little more body — a 3D object needs thickness,
+                                and the previous padding made it a decal.
+
+          All static CSS. No JS, no extra element, no layout change beyond the
+          padding — this is on the landing's LCP path.
+        */
+        className={`srch-press streak-chip streak-chip-3d relative inline-flex shrink-0 items-center gap-1.5 rounded-full ${tier.fill} px-3 py-1.5 text-[12px] font-bold ${tier.text} ring-1 ring-inset ${tier.ring} ${
           pop ? "streak-chip-pop" : ""
         }`}
       >
+        {/* The light catch. Purely a surface, so it sits above the fill and
+            below the content, and never intercepts the tap. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/55 via-white/10 to-transparent dark:from-white/20 dark:via-white/5"
+        />
         {/* The ring only exists during the bounce. Rendered conditionally rather
             than parked at `opacity-0`, because an always-present absolutely
             positioned sibling is a compositing layer this chip carries on every

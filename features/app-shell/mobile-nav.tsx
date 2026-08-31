@@ -623,15 +623,21 @@ function NavTab({
     >
       <NavLift active={active}>
         <PressIcon active={active} className="relative">
-          {/* The glow sits BEHIND the glyph and is purely decorative — it never
-              takes pointer events and is removed entirely under
-              prefers-reduced-motion (see globals.css). */}
-          {attract ? (
-            <span
-              aria-hidden
-              className="attract-loop-glow pointer-events-none absolute inset-0 -z-10 rounded-full bg-gradient-to-br from-blue-500/60 to-violet-500/60 blur-md"
-            />
-          ) : null}
+          {/*
+            🔴 THE BLUE HALO IS GONE (owner, 2026-08-30: "the bottom nav still
+            glows, especially when the page just open").
+
+            This was a `from-blue-500/60 to-violet-500/60 blur-md` disc pulsing
+            behind the glyph on the `attract-loop` cycle — whose first beat lands
+            about two seconds after mount, which is precisely why it read as
+            "when the page just opens". Removing the active glyph's drop-shadow
+            earlier the same day left this one behind, so the bar still glowed.
+
+            The `attract-loop` pulse on the glyph itself is KEPT: it is a small
+            scale movement, not a glow, and it is the part that does the job the
+            attract state was added for. The complaint was about the colour
+            bleeding onto the bar, and that is what has been removed.
+          */}
           <Glyph strokeWidth={2.1} className={cn("h-7 w-7 transition-colors", active ? GLYPH_ACTIVE : GLYPH_INACTIVE, attract && "attract-loop")} />
           {badge > 0 ? (
             <span className="absolute -right-3 -top-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card">

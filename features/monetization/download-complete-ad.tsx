@@ -147,20 +147,31 @@ export function DownloadCompleteAd({
         `overflow:hidden` by the effect above, the visitor is sealed inside an
         ad with no way out but a reload.
 
-        Three parts to the fix, all load-bearing:
+        🔴 THE FIRST ATTEMPT AT THIS FIX MADE IT WORSE, and how is worth
+        recording: the header was a flex child of a `flex-col overflow-hidden`
+        box with no `shrink-0`. A flex item's default `flex-shrink: 1` let the
+        tall creative SQUASH the header to nothing, and `overflow-hidden`
+        clipped what was left — so the title and the Skip button vanished
+        entirely and the visitor was sealed in the ad again, worse than before.
+
+        So this is deliberately NOT a flex column any more. The SHEET ITSELF is
+        the scroll container and the header is `sticky top-0` inside it. Sticky
+        needs a scrolling ancestor to stick to; making the sheet that ancestor
+        is what makes the pin real rather than decorative, and there is no flex
+        sizing left to get wrong.
+
           • `max-h` against `100dvh` — dvh, not vh, because mobile browser
             chrome makes vh taller than the visible viewport, which is the same
-            class of mistake that caused this.
-          • the safe-area inset, so the top clears the notch / Dynamic Island
-            rather than merely clearing the viewport edge.
-          • `overflow-y-auto` on the body with the header `sticky`, so a tall
-            creative scrolls UNDER a Skip button that is always on screen.
+            class of mistake that caused the original bug.
+          • the safe-area inset, so the top clears the notch / Dynamic Island.
+          • the header's own `bg-card` is required: a transparent sticky header
+            would have the creative scrolling visibly through it.
       */}
       <div
-        className="relative flex w-full max-h-[calc(100dvh-var(--frenz-safe-top,0px)-1rem)] flex-col overflow-hidden rounded-t-3xl border border-border/60 bg-card shadow-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-3xl"
+        className="relative w-full max-h-[calc(100dvh-var(--frenz-safe-top,0px)-1rem)] overflow-y-auto overscroll-contain rounded-t-3xl border border-border/60 bg-card px-4 pb-4 shadow-card sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:rounded-3xl"
         style={{ marginTop: "var(--frenz-safe-top, 0px)" }}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border/50 bg-card px-4 pb-3 pt-4">
+        <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between gap-3 border-b border-border/50 bg-card px-4 pb-3 pt-4">
           <div>
             <p className="text-sm font-semibold">Your download has started</p>
             <p className="text-xs text-muted-foreground">Check your downloads folder.</p>
@@ -197,11 +208,11 @@ export function DownloadCompleteAd({
           The bottom inset keeps the last of the creative clear of the home
           indicator on a gesture-nav phone.
         */}
-        <div
-          className="min-h-0 flex-1 overflow-y-auto px-4 pt-3"
-          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
-        >
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
+        {/* Plain flow inside the scroller — no flex, so nothing can be squashed.
+            The bottom inset keeps the last of the creative clear of the home
+            indicator on a gesture-nav phone. */}
+        <div style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          <p className="mb-2 mt-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
             Sponsored
           </p>
           <AdSlot zone="download_complete" dismissible={false} onResolved={setHasAd} />

@@ -7,6 +7,7 @@ import {
   EXOCLICK_PROVIDER_SRC,
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
+import { debugMessages, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
 import { cn } from "@/lib/utils";
 
 import { useShowAds } from "./use-show-ads";
@@ -109,34 +110,38 @@ import { useShowAds } from "./use-show-ads";
 const providerPromises = new Map<string, Promise<boolean>>();
 
 /**
- * Has an ExoClick provider already taken over the global?
+ * 🔴 EVERY DOMAIN'S SCRIPT MUST BE LOADED. I got this exactly backwards once.
  *
- * 🔴 ONLY ONE PROVIDER DOMAIN CAN EVER BE ACTIVE PER PAGE, and this is from
- * their own bundle:
+ * The bundle guards its own construction:
  *
  *     (Array.isArray(window.AdProvider) || void 0 === window.AdProvider)
  *       && (window.AdProvider = function () { … })
  *
- * The script only initialises while `window.AdProvider` is still the plain
- * command ARRAY. The first provider to load replaces it with its own object —
- * so every provider script loaded afterwards, from any other domain, parses and
- * then does absolutely nothing. Its zones are never served, with no error
- * anywhere.
+ * which is true: the second provider script does NOT rebuild the provider. I
+ * concluded from that alone that a second script was a no-op and short-circuited
+ * it away. That was wrong, and it is why the fullpage interstitial reported
+ * `Interstitial empty` on every ask while its tag was correctly configured.
  *
- * That is fatal for "one domain per placement": the banners load
- * `a.magsrv.com`, the fullpage interstitial tag is issued for `a.pemsrv.com`,
- * and whichever lost the race was silently dead. Appending the second script
- * was worse than useless — it looked like the integration was wired.
+ * The very next statements in their bundle are a COMMA expression, so they run
+ * unconditionally — the `&&` above binds tighter and does not guard them:
  *
- * So a live provider is REUSED rather than competed with. The domains are the
- * same publisher's (the `eas6a97888e…` hash is identical across the tags), and
- * `serve` scans the document for placeholders by class, so the provider that is
- * actually running will pick up any of our `<ins>` elements.
+ *     …), AdProvider.handleCurrentDomain(n), AdProvider.handleSnippetQueue(e), …
+ *
+ * and `handleCurrentDomain` is:
+ *
+ *     function (d) { for (…) if (a[t].syndication === d.syndication) return;
+ *                    a.push(d); for (…) W(o[t], d); }
+ *
+ * So a second script REGISTERS ITS SYNDICATION DOMAIN with the already-running
+ * provider and replays the queued commands against it. That is precisely the
+ * supported way to serve zones from two domains, and skipping it left zone
+ * 6016704 — issued for `pemsrv` — being asked of `magsrv`, which does not have
+ * it. "No ads to display", forever, for a zone that was set up correctly.
+ *
+ * Each domain is still loaded at most ONCE (the promise map above); what is
+ * gone is the idea that a live provider makes another domain's script pointless.
  */
-function providerAlreadyLive(): boolean {
-  const p = (window as { AdProvider?: unknown }).AdProvider;
-  return !!p && !Array.isArray(p) && typeof (p as { push?: unknown }).push === "function";
-}
+
 
 export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boolean> {
   const existing = providerPromises.get(src);
@@ -144,12 +149,6 @@ export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boole
   const promise = new Promise<boolean>((resolve) => {
     if (typeof document === "undefined") {
       resolve(false);
-      return;
-    }
-    // Someone else's provider is already the global — see above. Appending
-    // ours would be a no-op script tag and a false sense of having loaded.
-    if (providerAlreadyLive()) {
-      resolve(true);
       return;
     }
     if (document.querySelector(`script[src="${src}"]`)) {
@@ -463,11 +462,79 @@ export function ExoClickSticky({
           leading explanation for "shows only once".
     */
     let everFilled = false;
-    const emptyTimer = setTimeout(() => {
-      if (everFilled) return;
-      // The verdict: asked, waited, nothing came. Only now is the box withdrawn.
+
+    /*
+      🔴 ASK THE LOADER WHAT HAPPENED, INSTEAD OF TIMING IT (owner, 2026-08-31:
+      "the history banner or outstream video is not showing, the two links are
+      set up").
+
+      Every previous attempt at this inferred the answer from the DOM and a
+      stopwatch, and each guess was wrong in its own way: watch the <ins> (the
+      creative is a sibling), watch for an <img> (it might be a video, or a
+      background), collapse after 4 seconds (an outstream reveals on
+      viewability, which can be later than that). The outstream slot is the
+      worst case, because it needs a sized box to initialise in — so a timer
+      that withdraws the box is a timer that can PREVENT the fill it is waiting
+      for.
+
+      The loader keeps its own log and exposes it: `AdProvider.getDebugMessages()`.
+      It contains, verbatim from their bundle:
+
+        "Request #<n> Placement #<m> was pushed with zone {…\"id\":6015590…}"
+        "Request #<n> Placement #<m> has no ads to display"
+        "Request #<n> handling the response"
+
+      That is the network's OWN verdict, per zone, and it is available before
+      anything paints. So the box now comes down when ExoClick says there is no
+      ad — immediately, so there is no hole — and stays up while a served
+      request is still working, however long the player takes to become
+      viewable. The stopwatch survives only as the fallback for when that log is
+      unavailable.
+    */
+    const logStart = debugMessages().length;
+    let emptyTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let poll: ReturnType<typeof setInterval> | null = null;
+    const stopPoll = () => {
+      if (poll) clearInterval(poll);
+      poll = null;
+    };
+    const clearTimers = () => {
+      if (emptyTimer) clearTimeout(emptyTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+      emptyTimer = null;
+      retryTimer = null;
+    };
+    const settleEmpty = () => {
+      stopPoll();
+      clearTimers();
       setStatus("empty");
-      beacon(slot, false);
+      if (!everFilled) beacon(slot, false);
+    };
+    poll = setInterval(() => {
+      if (everFilled) {
+        stopPoll();
+        return;
+      }
+      const verdict = loaderVerdict(tag.zoneId, logStart);
+      if (verdict === "empty") {
+        // ExoClick has answered: nothing for this visitor. Collapse at once.
+        settleEmpty();
+      } else if (verdict === "served") {
+        /*
+          An ad IS on its way. Stop the fallback timer entirely — the box has to
+          survive until the player decides it is viewable, and cutting it short
+          is what stops an outstream ever appearing.
+        */
+        clearTimers();
+      }
+    }, 400);
+
+    emptyTimer = setTimeout(() => {
+      if (everFilled) return;
+      // Fallback only: the loader told us nothing either way. Believing an
+      // unanswered request forever is how the "large empty hole" comes back.
+      settleEmpty();
     }, EMPTY_VERDICT_MS);
 
     /*
@@ -492,7 +559,7 @@ export function ExoClickSticky({
       `banner_filled` / `banner_empty` events are what will actually say whether
       the second ask was made and what came back.
     */
-    const retryTimer = setTimeout(() => {
+    retryTimer = setTimeout(() => {
       if (hasCreative(el) || retried.current) return;
       retried.current = true;
       setServeKey((k) => k + 1);
@@ -503,8 +570,8 @@ export function ExoClickSticky({
       last = now;
       fillCb.current?.(now);
       if (now) {
-        clearTimeout(emptyTimer);
-        clearTimeout(retryTimer);
+        stopPoll();
+        clearTimers();
         everFilled = true;
         setStatus("filled");
         beacon(slot, true);
@@ -532,8 +599,8 @@ export function ExoClickSticky({
         // Blocked, or the loader could not be fetched at all.
         observer.disconnect();
         mo.disconnect();
-        clearTimeout(emptyTimer);
-        clearTimeout(retryTimer);
+        stopPoll();
+        clearTimers();
         fillCb.current?.(false);
         beacon(slot, false);
         return;
@@ -552,8 +619,8 @@ export function ExoClickSticky({
     return () => {
       observer.disconnect();
       mo.disconnect();
-      clearTimeout(emptyTimer);
-      clearTimeout(retryTimer);
+      stopPoll();
+      clearTimers();
       fillCb.current?.(false);
       /*
         Take the loader's wrapper down with us. It is a foreign node inside a

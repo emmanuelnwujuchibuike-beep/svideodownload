@@ -31,6 +31,9 @@ export const NOTABLE = new Set([
     equally worth seeing, and a feed showing only successes makes a limit that
     is biting look like quiet demand.
   */
+  // Bottom/history banner lifecycle — see events-registry.ts.
+  "banner_filled",
+  "banner_empty",
   "batch_authorized",
   "batch_started",
   "batch_refused",
@@ -56,6 +59,16 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
     case "ad_click":
     case "ad_impression":
       return m.zone ? String(m.zone) : null;
+    /*
+      The SLOT and the PAGE, because "the banner did not show" is always about a
+      particular one of each — and the history page is the one being reported.
+    */
+    case "banner_filled":
+    case "banner_empty": {
+      const slot = m.slot ? String(m.slot) : null;
+      const path = m.path ? String(m.path) : null;
+      return [slot, path].filter(Boolean).join(" · ") || null;
+    }
     case "subscribe":
     case "subscribe_cancel":
       return m.plan ? String(m.plan) : null;

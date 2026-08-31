@@ -138,6 +138,34 @@ declare global {
 export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
 
 /**
+ * Report this slot's state to the operator feed (owner, 2026-08-31: "wire the
+ * bottom banner ad activity to the admin live activity").
+ *
+ * A real fill needs an authorised referer, so this integration cannot be
+ * exercised on localhost at all — every local run gets "no ads to display".
+ * That is precisely why the answer has to be readable from PRODUCTION: without
+ * it, "the banner did not show" is indistinguishable from "the network had
+ * nothing", and both of those look like a blank space on a phone.
+ *
+ * `sendBeacon` so it survives the navigation that often causes the state
+ * change, and so a blocked or slow request can never delay the ad it is
+ * describing. Fired only on a CHANGE, never per frame.
+ */
+function beacon(slot: ExoClickInsSlot, filled: boolean): void {
+  try {
+    navigator.sendBeacon?.(
+      "/api/track",
+      new Blob(
+        [JSON.stringify({ kind: "banner", slot, filled, path: location.pathname })],
+        { type: "application/json" },
+      ),
+    );
+  } catch {
+    /* Diagnostics must never be able to break the thing they describe. */
+  }
+}
+
+/**
  * Has the loader actually put a CREATIVE in the host?
  *
  * Not "are there child nodes": the loader inserts its wrapper `<div>` and a
@@ -151,7 +179,23 @@ export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
  * height. Either is proof; neither can be produced by the empty scaffolding.
  */
 function hasCreative(host: HTMLElement): boolean {
-  if (host.querySelector("iframe, video, img, canvas, object, embed, a[href]")) return true;
+  /*
+    🔴 MEASURE IT. DO NOT PATTERN-MATCH IT (owner, 2026-08-31: "is still the
+    same, nothing changed").
+
+    This used to ask whether the host contained an <iframe>/<video>/<img>/… and
+    fall back to height. That is a GUESS about markup we do not control and
+    cannot see locally — an authorised referer is required for a real fill, so
+    every local test ran against a stub that injected an <img>, which is exactly
+    the one shape the guess got right. Whatever ExoClick actually injects for a
+    given zone — a background-image div, a shadow root, a canvas painted later
+    — that did not match became "no fill", the bar stayed chromeless, and the
+    banner "never showed".
+
+    Occupying space is the only property that matters and the only one that is
+    true of every creative: if it has height, there is something to show. It is
+    also what the reader is actually asking about.
+  */
   return host.offsetHeight > 0;
 }
 
@@ -270,23 +314,67 @@ export function ExoClickSticky({
       `<ins>` itself. Watching the `<ins>`, as this did until 2026-08-31, is
       watching an element that is empty by design.
     */
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const settle = () => {
-      if (!hasCreative(el)) return false;
-      setFilled(true);
-      fillCb.current?.(true);
-      observer.disconnect();
-      if (timer) clearTimeout(timer);
-      return true;
+    /*
+      🔴 CONTINUOUS, NOT ONE-SHOT.
+
+      The old detector ran on mutations, latched on the first positive answer and
+      gave up after 8 seconds. Both halves were wrong for a network that answers
+      over the wire:
+        • a creative that arrives at 9s was declared a no-fill forever;
+        • a creative that is REPLACED or removed (the outstream player hides
+          itself when it finishes) left the bar's chrome up around nothing.
+      A ResizeObserver reports both directions for as long as the unit lives, so
+      the bar's chrome tracks what is actually on screen instead of a one-time
+      verdict about it. It also costs nothing when nothing changes.
+    */
+    let last: boolean | null = null;
+    /*
+      The UI reacts to every change; the operator FEED does not.
+
+      Beaconing "empty" on every state change would put one event in the live
+      feed for every page view of every visitor — the feed is a place to notice
+      things, and a per-pageview row is how it stops being one. So:
+        • FILLED is reported the moment it happens, and cancels the timer;
+        • EMPTY is reported once, and only after a grace period with nothing —
+          which is the actual finding ("we asked, nothing came"), rather than
+          the ordinary fact that an ad has not arrived yet;
+        • an ad that fills and then GOES AWAY is reported too, because that is
+          the outstream player hiding itself after one play, and it is the
+          leading explanation for "shows only once".
+    */
+    let everFilled = false;
+    const emptyTimer = setTimeout(() => {
+      if (!everFilled) beacon(slot, false);
+    }, 10_000);
+    const report = () => {
+      const now = hasCreative(el);
+      if (now === last) return;
+      last = now;
+      setFilled(now);
+      fillCb.current?.(now);
+      if (now) {
+        clearTimeout(emptyTimer);
+        everFilled = true;
+        beacon(slot, true);
+      } else if (everFilled) {
+        beacon(slot, false);
+      }
     };
-    const observer = new MutationObserver(() => void settle());
-    observer.observe(el, { childList: true, subtree: true });
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    // The wrapper is inserted as a SIBLING of the <ins>, so watch the subtree
+    // for it too — a child resizing does not resize the host on every layout.
+    const mo = new MutationObserver(report);
+    mo.observe(el, { childList: true, subtree: true });
 
     void loadProvider().then((ok) => {
       if (!ok) {
         // Blocked, or the loader could not be fetched at all.
         observer.disconnect();
+        mo.disconnect();
+        clearTimeout(emptyTimer);
         fillCb.current?.(false);
+        beacon(slot, false);
         return;
       }
       try {
@@ -296,19 +384,14 @@ export function ExoClickSticky({
       } catch {
         /* A broken provider must never take a page down over a banner. */
       }
-      // Already filled between the rebuild and this callback.
-      if (settle()) return;
-      // Give up quietly rather than hold a hole open forever — and SAY so, so
-      // the containing bar collapses instead of framing an empty slot.
-      timer = setTimeout(() => {
-        observer.disconnect();
-        fillCb.current?.(false);
-      }, 8000);
+      // Whatever the state is now — the observers keep it current from here.
+      report();
     });
 
     return () => {
       observer.disconnect();
-      if (timer) clearTimeout(timer);
+      mo.disconnect();
+      clearTimeout(emptyTimer);
       fillCb.current?.(false);
       /*
         Take the loader's wrapper down with us. It is a foreign node inside a

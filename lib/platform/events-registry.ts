@@ -60,6 +60,24 @@ export const EVENTS = [
   { id: "reward_started", label: "Reward ad started", description: "A visitor opened a rewarded ad to unlock a download.", domain: "monetization", metadata: ["rewardType", "items"] },
   { id: "reward_granted", label: "Reward ad completed", description: "A rewarded ad was verified and the download authorized.", domain: "monetization", metadata: ["rewardType", "items"] },
   /*
+    ExoClick DISPLAY banner lifecycle (owner, 2026-08-31: "wire the bottom
+    banner ad activity to the admin live activity").
+
+    TWO events, for the same reason the reward pair above is two: the question
+    is not "did a banner exist" but "was one ASKED for and did one ARRIVE". The
+    banner is reported as showing once and then never again, and from the
+    outside a slot that was never served and a slot the network declined look
+    identical — both are a blank space. `banner_empty` is the one that earns
+    its place: it is the only record of the loader being asked and answering
+    with nothing, carrying WHICH slot and WHICH page.
+
+    Client-emitted, unavoidably: only the browser can see whether the network's
+    own script put a creative in the placeholder. Fired once per state change
+    per mount, never per frame.
+  */
+  { id: "banner_filled", label: "Banner filled", description: "An ExoClick display banner rendered a creative.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "banner_empty", label: "Banner empty", description: "An ExoClick display banner was served but no creative arrived.", domain: "monetization", metadata: ["slot", "path"] },
+  /*
     Multi-Link batch lifecycle, emitted SERVER-side from
     app/api/downloads/batch/* — the three moments where the server itself made
     a decision, which is the only part of the flow worth auditing.

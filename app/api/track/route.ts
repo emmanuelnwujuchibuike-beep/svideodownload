@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { recordAdClick, recordAdImpression } from "@/lib/analytics/events";
+import { recordAdClick, recordAdImpression, trackEvent } from "@/lib/analytics/events";
 import { emit } from "@/lib/platform/event-bus";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
@@ -21,7 +21,28 @@ export const dynamic = "force-dynamic";
   click on a new placement would have been dropped, and the admin dashboard
   would have shown a confident zero.
 */
-const schema = z.object({
+/**
+ * The banner-lifecycle beacon (owner, 2026-08-31: "wire the bottom banner ad
+ * activity to the admin live activity").
+ *
+ * A SEPARATE shape rather than a new `zone`, because ExoClick's display
+ * banners deliberately are not AD_ZONES — sticky, history and bottomnav each
+ * have their own settings key so ExoClick and Adsterra can run side by side
+ * rather than competing for one placement (see exoclick-sticky.ts). Forcing
+ * them through the zone enum would either fail validation, silently, exactly
+ * as the shared-id bug below did, or require inventing zones that no operator
+ * can configure.
+ */
+const bannerSchema = z.object({
+  kind: z.literal("banner"),
+  slot: z.enum(["sticky", "history", "bottomnav"]),
+  /** Did a creative actually arrive in the placeholder? */
+  filled: z.boolean(),
+  /** Which page it was on — "the history page in particular". */
+  path: z.string().max(120).optional(),
+});
+
+const adSchema = z.object({
   kind: z.enum(["impression", "click"]),
   zone: z.enum(AD_ZONES),
   /*
@@ -40,6 +61,8 @@ const schema = z.object({
   */
   adId: z.string().max(80).nullable().optional(),
 });
+
+const schema = z.union([bannerSchema, adSchema]);
 
 /** Beacon endpoint for ad impressions/clicks. Rate-limited to resist floods. */
 export async function POST(request: Request) {
@@ -65,6 +88,21 @@ export async function POST(request: Request) {
     userId = user?.id ?? null;
   } catch {
     /* anon */
+  }
+
+  /*
+    The banner beacon records and returns — it has no ad ROW, no zone counter
+    and no click to attribute. It exists purely so the operator feed can answer
+    "was the loader asked, and did anything come back", which is otherwise
+    invisible from outside the browser.
+  */
+  if (parsed.data.kind === "banner") {
+    const { slot, filled, path } = parsed.data;
+    trackEvent(filled ? "banner_filled" : "banner_empty", {
+      userId,
+      metadata: { slot, path: path ?? null },
+    });
+    return NextResponse.json({ ok: true });
   }
 
   const { kind, zone } = parsed.data;

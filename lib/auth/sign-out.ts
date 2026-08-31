@@ -1,6 +1,6 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "@/lib/supabase/client-lazy";
 
 import { clearIdentity } from "./identity-cache";
 
@@ -45,7 +45,7 @@ export async function signOutClient(): Promise<void> {
   }
 
   try {
-    await createClient().auth.signOut({ scope: "local" });
+    await (await getClient()).auth.signOut({ scope: "local" });
   } catch {
     /* the cookie clear + hard nav below still sign this browser out */
   }

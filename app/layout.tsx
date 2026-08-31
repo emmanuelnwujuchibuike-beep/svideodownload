@@ -6,6 +6,7 @@ import { ThemeCacheSync } from "@/components/theme-cache-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BootHead, BootSplash, ThemeBootScript } from "@/features/app-shell/boot-splash";
 import { DeferredShell } from "@/features/app-shell/deferred-shell";
+import { PendingTapScript } from "@/features/app-shell/pending-tap";
 import { LocaleBootScript } from "@/components/i18n/locale-boot-script";
 import { A11yBootScript, A11yColorFilters } from "@/components/a11y/a11y-boot-script";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
@@ -341,6 +342,18 @@ export default function RootLayout({
             text because they cannot read the default must not be shown the
             default first and a reflow second. Runs offline, needs no bundle. */}
         <A11yBootScript />
+        {/* The DEAD FIRST TAP, app-wide (owner: "some buttons occasionally feel
+            delayed or require two presses" … "it happens to all pages, also in
+            signed in pages"). A button paints ~3s before React attaches its
+            handler on a throttled phone, and taps in that window are simply
+            lost. This remembers such a tap and replays it the moment that
+            button hydrates. In <head> for the plainest possible reason: the
+            listener has to exist before the button it is protecting is parsed.
+            It reads only — never preventDefault, never stopPropagation — and it
+            considers <button> and nothing else, so navigation and prefetch are
+            untouched. See pending-tap.tsx for why this, and not "hydrate
+            faster": −243 kB of first-load JS moved the number by 2ms. */}
+        <PendingTapScript />
         {/* Boot-splash STYLE + dismissal DECISION — also in <head>, before
             first paint, so a streamed force-dynamic page (e.g. /messages)
             can't paint the F splash and then leave it up for seconds waiting

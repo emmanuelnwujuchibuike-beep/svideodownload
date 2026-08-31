@@ -1,7 +1,8 @@
 "use client";
 
 import { PLATFORMS } from "@/lib/platforms";
-import { createClient } from "@/lib/supabase/client";
+import type { BrowserClient } from "@/lib/supabase/client-instance";
+import { getClient } from "@/lib/supabase/client-lazy";
 import type { DownloadRecord, MediaKind, PlatformId } from "@/types";
 
 /**
@@ -59,7 +60,7 @@ export function remoteId(id: string): string | null {
 }
 
 async function userId(
-  supabase: ReturnType<typeof createClient>,
+  supabase: BrowserClient,
 ): Promise<string | null> {
   try {
     const { data } = await supabase.auth.getUser();
@@ -109,7 +110,7 @@ function dedupeFormat(r: { formatId: string; kind: MediaKind; qualityLabel: stri
 
 export async function fetchRemote(): Promise<DownloadRecord[]> {
   if (!hasSupabase) return [];
-  const supabase = createClient();
+  const supabase = await getClient();
   const uid = await userId(supabase);
   if (!uid) return [];
 
@@ -153,7 +154,7 @@ export async function fetchRemote(): Promise<DownloadRecord[]> {
 /** Inserts a record; returns its `remote:<id>` on success. */
 export async function pushAdd(rec: DownloadRecord): Promise<string | null> {
   if (!hasSupabase) return null;
-  const supabase = createClient();
+  const supabase = await getClient();
   const uid = await userId(supabase);
   if (!uid) return null;
 
@@ -194,7 +195,7 @@ export async function pushAdd(rec: DownloadRecord): Promise<string | null> {
 
 export async function pushFavorite(dbId: string, favorite: boolean): Promise<void> {
   if (!hasSupabase) return;
-  const supabase = createClient();
+  const supabase = await getClient();
   const uid = await userId(supabase);
   if (!uid) return;
   await supabase
@@ -206,7 +207,7 @@ export async function pushFavorite(dbId: string, favorite: boolean): Promise<voi
 
 export async function pushRemove(dbId: string): Promise<void> {
   if (!hasSupabase) return;
-  const supabase = createClient();
+  const supabase = await getClient();
   const uid = await userId(supabase);
   if (!uid) return;
   await supabase.from("downloads").delete().eq("id", dbId).eq("user_id", uid);
@@ -214,7 +215,7 @@ export async function pushRemove(dbId: string): Promise<void> {
 
 export async function pushClear(): Promise<void> {
   if (!hasSupabase) return;
-  const supabase = createClient();
+  const supabase = await getClient();
   const uid = await userId(supabase);
   if (!uid) return;
   await supabase.from("downloads").delete().eq("user_id", uid);

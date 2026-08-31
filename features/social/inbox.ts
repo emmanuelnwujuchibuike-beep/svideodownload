@@ -4,7 +4,8 @@ import { useEffect } from "react";
 
 import { revalidate } from "@/features/data";
 import type { ConversationSummary } from "@/lib/social/messages";
-import { createClient } from "@/lib/supabase/client";
+import type { BrowserClient } from "@/lib/supabase/client-instance";
+import { getClient } from "@/lib/supabase/client-lazy";
 
 /**
  * Shared inbox state for the topbar badge AND the /messages list — one cache key
@@ -36,27 +37,49 @@ export async function loadInbox(): Promise<Inbox> {
  */
 export function useInboxRealtime(): void {
   useEffect(() => {
-    // Memoized singleton (lib/supabase/client.ts) — safe to call again here
-    // even though conversation-room.tsx also calls it; both share one client
-    // and one Realtime socket now instead of each opening its own.
-    const supabase = createClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    /*
+      Memoized singleton (lib/supabase/client-instance.ts) — safe to request
+      again here even though conversation-room.tsx also does; both share one
+      client and one Realtime socket instead of each opening its own.
+
+      Awaited now rather than constructed inline: this module sits on the
+      landing page's critical path (via mobile-nav), and a static import of
+      `@supabase/ssr` here put 60 kB of it in front of the first tap. See
+      lib/supabase/client-lazy.ts. `supabase` is captured so cleanup can remove
+      the channel from the same client that created it.
+    */
+    let supabase: BrowserClient | null = null;
+    let channel: Parameters<BrowserClient["removeChannel"]>[0] | null = null;
     let cancelled = false;
 
     const bump = () => void revalidate(INBOX_KEY, loadInbox, 0).catch(() => {});
 
-    supabase.auth.getUser().then(({ data: auth }) => {
-      const uid = auth.user?.id;
-      if (!uid || cancelled) return;
-      channel = supabase
-        .channel(`inbox:${uid}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${uid}` },
-          bump,
-        )
-        .subscribe();
-    });
+    void getClient()
+      .then(async (client) => {
+        if (cancelled) return;
+        supabase = client;
+        const { data: auth } = await client.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid || cancelled) return;
+        channel = client
+          .channel(`inbox:${uid}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "conversation_members", filter: `user_id=eq.${uid}` },
+            bump,
+          )
+          .subscribe();
+        // Unmounted while `getUser()` was in flight — the subscribe above still
+        // happened, so tear it down rather than leak the channel.
+        if (cancelled) {
+          void client.removeChannel(channel);
+          channel = null;
+        }
+      })
+      .catch(() => {
+        // Offline, or a stale hashed chunk after a deploy. The badge simply
+        // stops live-updating; `loadInbox()` still populates it on navigation.
+      });
 
     // Refresh the inbox when the network reconnects (a genuine "realtime
     // restored" event that can carry messages missed while offline) — but NOT on
@@ -72,7 +95,7 @@ export function useInboxRealtime(): void {
     return () => {
       cancelled = true;
       window.removeEventListener("online", bump);
-      if (channel) void supabase.removeChannel(channel);
+      if (channel && supabase) void supabase.removeChannel(channel);
     };
   }, []);
 }

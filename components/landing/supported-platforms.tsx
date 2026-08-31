@@ -1,35 +1,50 @@
 import { PlatformStatusDot } from "@/components/platform/platform-status-dot";
 import { BRAND_ICONS, BRAND_MARKS } from "@/lib/platform-icons";
 import { statusOf, type PlatformStatusMap } from "@/lib/platform-status";
-import { getPlatformStatus } from "@/lib/platform-status-store";
 import { PLATFORMS } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import type { PlatformId } from "@/types";
 
-/**
- * The strip with live platform health, for SERVER callers.
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THIS MODULE MUST NEVER IMPORT A DATA READER. MEASURED, 2026-08-31.
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * 🔴 Two components rather than one async component, and the split is a
- * performance requirement, not a style choice:
+ * A `SupportedPlatformsLive` wrapper used to live here: an async server
+ * component that called `getPlatformStatus()` and rendered the strip with the
+ * result. Its doc-comment claimed the file cost the landing's client bundle
+ * "not a single byte", because nothing in it says `"use client"`.
  *
- *  • `download-box.tsx` is `"use client"` and renders this strip. A client
- *    component cannot render an async server component, so making the strip
- *    itself async would break that page outright.
- *  • The landing must stay STATIC. This wrapper reads through the service-role
- *    client (no cookies, no headers), exactly like `PhoneMockup` already reads
- *    the landing settings, so `/` is still prerendered and the read happens at
- *    ISR revalidation rather than per request. LCP is untouched.
+ * That reasoning is wrong, and it cost the landing page 60.2 kB gzipped —
+ * 22% of a 275 kB ceiling that had 3 kB of headroom.
  *
- * Both components are server-only — no `"use client"` anywhere in this file or
- * in `PlatformStatusDot` — so the landing's client bundle does not grow by a
- * single byte. That is what keeps this inside the 275 kB cold-entry ceiling.
+ * `features/downloads/download-box.tsx` IS `"use client"`, and it imports
+ * `SupportedPlatforms` from this file. A bundler pulls in the whole MODULE,
+ * not the one export that was named, so the client graph got:
+ *
+ *     download-box.tsx  ("use client")
+ *       -> components/landing/supported-platforms.tsx
+ *       -> lib/platform-status-store.ts
+ *       -> lib/supabase/admin.ts
+ *       -> @supabase/supabase-js          ← 47.2 kB + 13.0 kB gzipped
+ *
+ * So every visitor downloaded, parsed and evaluated the Supabase client (the
+ * SERVICE-ROLE one, no less) before React could hydrate the page and attach the
+ * Download button's handler. `SupportedPlatformsLive` had ZERO call sites — it
+ * was dead code — so all of that was paid for a component nobody rendered.
+ * The service-role KEY was never exposed: it is not a `NEXT_PUBLIC_` var, so
+ * Next replaces it with `undefined` in client code (verified against the built
+ * chunks). The weight was real; the key leak was not.
+ *
+ * Every live caller already resolves the status at a proper server boundary and
+ * passes it down as the `statuses` prop — `components/landing/hero.tsx`,
+ * `app/(app)/downloads/page.tsx`, `app/admin/page.tsx`. That is the pattern; the
+ * wrapper was a second way to do the same thing that only a server component
+ * could ever have used.
+ *
+ * ⛔ If a live-data variant is ever wanted back, it goes in its OWN module. A
+ * server-only reader and a client-imported component cannot share a file.
  */
-export async function SupportedPlatformsLive(
-  props: Omit<Parameters<typeof SupportedPlatforms>[0], "statuses">,
-) {
-  const statuses = await getPlatformStatus();
-  return <SupportedPlatforms {...props} statuses={statuses} />;
-}
 
 /**
  * The "Supported Platforms:" badge strip.

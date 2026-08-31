@@ -291,8 +291,42 @@ const GLOBAL_CEILING = 353 * 1024;
  * teaches people to raise it. ~10 kB of working room, ~30 kB of the win locked
  * in permanently. The rule is unchanged and now has somewhere to be spent from:
  * a feature that wants bytes here still has to find them.
+ *
+ * ── 275 → 218 kB (2026-08-31): THE SUPABASE CLIENT LEAVES THE FRONT DOOR ────
+ *
+ * The landing measured 271.9 kB against this 275 kB ceiling — 3.1 kB of room —
+ * and 60.2 kB of that was `@supabase/ssr` + gotrue: 22% of the budget, on a
+ * page whose visitors are overwhelmingly signed out and pasting a link.
+ *
+ * Two independent paths put it there, and the second is the interesting one:
+ *
+ *  • Four modules on the critical path imported the browser client at module
+ *    scope purely to use it inside an effect or an async function
+ *    (`features/auth/use-user`, `lib/auth/sign-out`, `features/social/inbox`,
+ *    `features/history/sync`, plus `features/navigation/command-center`). They
+ *    now go through `lib/supabase/client-lazy`, which `import()`s the library
+ *    on first use. Same client instance, same cookie flags — see
+ *    lib/supabase/client-instance.ts.
+ *
+ *  • 🔴 `components/landing/supported-platforms.tsx` exported a dead async
+ *    server wrapper that called `getPlatformStatus()` → the SERVICE-ROLE admin
+ *    client. `features/downloads/download-box.tsx` is `"use client"` and
+ *    imports a component from that file, and a bundler takes the whole MODULE,
+ *    not the export you named — so the admin client's dependency chain landed
+ *    in the client bundle. The wrapper had zero call sites. Its own comment
+ *    claimed the file cost "not a single byte".
+ *
+ * Landing: 271.9 → 207.9 kB. Heaviest gated entry route is now
+ * `/(marketing)/page` at 207.9 kB, so 218 keeps the same ~10 kB of working room
+ * this ceiling has always been set with.
+ *
+ * ⚠️ THIS DID NOT FIX THE DEAD FIRST TAP, and the ratchet should not be read as
+ * if it did. Interleaved A/B (7 pairs, in-page timing): the Download button
+ * became interactive at 4945ms before and 4947ms after — no change — while
+ * 243 kB less JavaScript crossed the wire. The dead tap is main-thread
+ * hydration work, not bytes. See landing-paint-vs-hydration-2026-08-31.
  */
-const ENTRY_CEILING = 275 * 1024;
+const ENTRY_CEILING = 218 * 1024;
 
 const ENTRY_ROUTES = [
   "/(marketing)/page",

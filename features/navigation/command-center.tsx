@@ -11,7 +11,7 @@ import { useUser } from "@/features/auth/use-user";
 import { toast } from "@/features/ui/toast";
 import { COMMANDS } from "@/lib/navigation/registry";
 import { searchNavigation, type NavViewer } from "@/lib/navigation/queries";
-import { createClient } from "@/lib/supabase/client";
+import { getClient } from "@/lib/supabase/client-lazy";
 
 /**
  * Universal Command Center™ — the palette.
@@ -113,7 +113,7 @@ export function CommandCenter({ open, onClose }: { open: boolean; onClose: () =>
         }
         if (cmd?.action === "sign-out") {
           close();
-          await createClient().auth.signOut();
+          await (await getClient()).auth.signOut();
           router.refresh();
           return;
         }

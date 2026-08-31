@@ -67,6 +67,23 @@ interface DownloadRow {
   platform: string | null;
   title: string | null;
   format: string | null;
+  /**
+   * The real status COLUMN.
+   *
+   * 🔴 Owner, 2026-08-31: "anonymous download in live activity doesnt show
+   * download status."
+   *
+   * There are TWO ways a status reaches this table and the feed only knew about
+   * one of them. A signed-in member-s downloads are mirrored from the browser by
+   * features/history/sync.ts, which PACKS the status into the `format` text.
+   * Rows written SERVER-side — wallpaper downloads, and every guest download —
+   * set this column and write a plain `format` like "image" instead.
+   *
+   * So decoding `format` alone produced a status for signed-in rows and nothing
+   * at all for anonymous ones, which is exactly the report. This column is now
+   * selected and preferred.
+   */
+  status: string | null;
   created_at: string;
   source_url: string | null;
 }
@@ -250,7 +267,7 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
       .limit(take);
     let dlQ = db
       .from("downloads")
-      .select("id, user_id, platform, title, format, created_at, source_url")
+      .select("id, user_id, platform, title, format, status, created_at, source_url")
       .order("created_at", { ascending: false })
       .limit(take);
     if (since) {
@@ -303,6 +320,14 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
           // to open in the platform".
           sourceUrl: d.source_url,
           ...decodePackedFormat(d.format),
+          /*
+            The COLUMN wins when it is set. A server-written row has an accurate
+            status there and a plain `format` that decodes to nothing; a
+            client-synced row has no column value and carries its status inside
+            `format`. Falling through to "completed" matches types/index.ts,
+            where an absent status has always meant a finished download.
+          */
+          status: d.status || decodePackedFormat(d.format).status || "completed",
         },
       }),
     );

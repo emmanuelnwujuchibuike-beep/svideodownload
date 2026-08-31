@@ -65,10 +65,13 @@ declare global {
  * Which configured ins-tag this instance renders.
  *
  * `sticky` pins itself to the viewport; `history` is an outstream video that
- * sits in the page. Both are the same ExoClick DISPLAY mechanism — an <ins>
- * their loader fills — so they share one component rather than two that drift.
+ * sits in the page; `bottomnav` is the banner docked above the bottom nav,
+ * configured separately from the `bottom_banner` AD ZONE so ExoClick and
+ * Adsterra can both run rather than competing for one slot. All three are the
+ * same ExoClick DISPLAY mechanism — an <ins> their loader fills — so they share
+ * one component rather than three that drift apart.
  */
-export type ExoClickInsSlot = "sticky" | "history";
+export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
 
 export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } = {}) {
   /*
@@ -83,7 +86,10 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
     fetch("/api/ads/config")
       .then((r) => (r.ok ? r.json() : {}))
       .then((d: Record<string, ExoClickStickyTag | null | undefined>) => {
-        if (alive) setTag((slot === "history" ? d.exoclickHistory : d.exoclickSticky) ?? null);
+        if (!alive) return;
+        const bySlot =
+          slot === "history" ? d.exoclickHistory : slot === "bottomnav" ? d.exoclickBottomNav : d.exoclickSticky;
+        setTag(bySlot ?? null);
       })
       .catch(() => {
         /* No sticky banner is the safe outcome. */
@@ -190,6 +196,14 @@ export function ExoClickSticky({ slot = "sticky" }: { slot?: ExoClickInsSlot } =
       className={cn(
         tag.cls,
         slot === "history" && "[&_iframe]:!w-full [&_img]:!h-auto [&_img]:!w-full",
+        /*
+          The bottom-nav banner sits in a bar we DO control the width of, so the
+          same centring the history slot needs applies — a fixed-size creative
+          would otherwise land hard left in a full-width bar. It must not get
+          the history slot-s forced full-width image rule, though: a banner
+          stretched past its natural size is a blurry banner.
+        */
+        slot === "bottomnav" && "block w-full [&>*]:mx-auto [&_iframe]:!max-w-full",
       )}
       data-zoneid={tag.zoneId}
       /*

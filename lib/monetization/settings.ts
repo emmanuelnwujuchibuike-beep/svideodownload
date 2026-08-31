@@ -351,6 +351,20 @@ export interface MonetizationSettings {
    */
   exoclickStickySnippet: string;
   /**
+   * The ExoClick DISPLAY BANNER snippet for the bottom-nav bar.
+   *
+   * Owner, 2026-08-31: "configure the bottom nav to use this exoclick banner
+   * link and separate it with others network banner like adsterra."
+   *
+   * Its own key, and that separation is the whole point: the bottom bar already
+   * serves the `bottom_banner` AD ZONE, which is where the Adsterra row and
+   * every other network row lives. Running an ExoClick `<ins>` through that
+   * same zone would make the two networks compete for one slot, so an operator
+   * could not have both. Same reasoning that gave the sticky and history
+   * banners their own keys rather than a zone entry.
+   */
+  exoclickBottomNavSnippet: string;
+  /**
    * The ExoClick OUTSTREAM VIDEO snippet for the history slot.
    *
    * Same `<ins>` mechanism as the sticky banner and a different product from
@@ -449,6 +463,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   // Empty = off. Per-zone ad rows are the default arrangement.
   exoclickSharedZoneId: "",
   exoclickStickySnippet: "",
+  exoclickBottomNavSnippet: "",
   exoclickHistorySnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

@@ -135,6 +135,7 @@ export function MonetizationSettings({
       | "offeriumPublisherId"
       | "offeriumPlacementId"
       | "exoclickStickySnippet"
+      | "exoclickBottomNavSnippet"
       | "exoclickHistorySnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
@@ -229,6 +230,7 @@ export function MonetizationSettings({
   /* Parsed for the operator's benefit only — the server parses it again on
      the way out, so this can never be the thing that decides what renders. */
   const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
+  const bottomNavTag = parseExoClickSticky(state.exoclickBottomNavSnippet ?? "");
   const historyTag = parseExoClickSticky(state.exoclickHistorySnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
@@ -427,6 +429,62 @@ export function MonetizationSettings({
               Read zone {stickyTag.zoneId} · class {stickyTag.cls}
             </span>
           ) : state.exoclickStickySnippet?.trim() ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an
+              eas… class from that — the banner will not show.
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
+          )}
+        </div>
+      </div>
+
+      {/*
+        🔴 THE BOTTOM-NAV BANNER, SEPARATE FROM THE ZONE (owner, 2026-08-31:
+        "configure the bottom nav to use this exoclick banner link and separate
+        it with others network banner like adsterra").
+
+        The bottom bar already serves the `bottom_banner` AD ZONE, which is
+        where the Adsterra row and every other network row lives. Running an
+        ExoClick <ins> through that same zone would make the two networks
+        compete for one placement, so an operator could not run both at once.
+        Its own key and its own field — the same shape the sticky and history
+        ExoClick banners already use.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">ExoClick bottom-nav banner</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          The banner docked directly above the bottom navigation. Paste the whole
+          zone snippet from ExoClick (the one with
+          {" "}<code className="font-mono">&lt;ins class=&quot;eas…&quot;&gt;</code>). Parsed into a real
+          tag — the markup never reaches the page. This runs <strong>alongside</strong> the
+          Adsterra / other-network banner in that bar, not instead of it. Leave empty
+          to turn it off. Gated by the <strong>ExoClick</strong> switch above.
+        </p>
+        <textarea
+          value={state.exoclickBottomNavSnippet ?? ""}
+          disabled={busy}
+          onChange={(e) => setText("exoclickBottomNavSnippet", e.target.value)}
+          placeholder={'<script async src="https://a.magsrv.com/ad-provider.js"></script>\n<ins class="eas6a97888e2" data-zoneid="6016480"></ins>'}
+          className="min-h-[80px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void persist(state)}
+            className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+          >
+            Save
+          </button>
+          {/* Same silent-failure guard as the sticky field: an <ins> whose class
+              ExoClick does not recognise is simply never filled, with no error
+              anywhere, so what was actually parsed is shown back. */}
+          {bottomNavTag ? (
+            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">
+              Read zone {bottomNavTag.zoneId} · class {bottomNavTag.cls}
+            </span>
+          ) : state.exoclickBottomNavSnippet?.trim() ? (
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
               <AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an
               eas… class from that — the banner will not show.

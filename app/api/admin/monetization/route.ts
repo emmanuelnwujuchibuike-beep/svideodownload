@@ -117,6 +117,7 @@ const schema = z.object({
   /* Free text, PARSED at render into an <ins> — never injected. Capped so a
      payload cannot bloat the settings row. */
   exoclickStickySnippet: z.string().max(4000).default(""),
+  exoclickBottomNavSnippet: z.string().max(4000).default(""),
   exoclickHistorySnippet: z.string().max(4000).default(""),
   exoclickSharedZoneId: z
     .string()

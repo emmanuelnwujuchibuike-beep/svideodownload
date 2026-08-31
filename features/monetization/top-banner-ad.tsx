@@ -6,6 +6,7 @@ import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
+import { ExoClickSticky } from "./exoclick-sticky";
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -35,6 +36,31 @@ export function TopBannerAd() {
   const { showAds, ready } = useShowAds();
   const [hasPrimary, setHasPrimary] = useState<boolean | null>(null);
   const [hasLegacy, setHasLegacy] = useState<boolean | null>(null);
+  /*
+    Is an ExoClick bottom-nav banner configured? (owner, 2026-08-31: "configure
+    the bottom nav to use this exoclick banner link and separate it with others
+    network banner like adsterra".)
+
+    The bar has to know, because it returns null before rendering anything when
+    no OTHER network filled — so a site running ONLY the ExoClick banner would
+    never get a bar for it to sit in. `ExoClickSticky` still resolves its own
+    tag and self-hides; this only decides whether the container exists.
+  */
+  const [hasExoBottomNav, setHasExoBottomNav] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { exoclickBottomNav?: unknown }) => {
+        if (alive) setHasExoBottomNav(Boolean(d.exoclickBottomNav));
+      })
+      .catch(() => {
+        /* No banner is the safe outcome. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const barRef = useRef<HTMLDivElement | null>(null);
 
   /*
@@ -43,7 +69,7 @@ export function TopBannerAd() {
   */
   const revealed = useScrollDirection() === "down";
 
-  const visible = hasPrimary === true || hasLegacy === true;
+  const visible = hasPrimary === true || hasLegacy === true || hasExoBottomNav;
   const askLegacy = hasPrimary === false;
 
   // Publish the bar's height so the marketing layout can RESERVE that much space at
@@ -112,6 +138,21 @@ export function TopBannerAd() {
         <div className={cn(hasPrimary !== true && "hidden")}>
           <AdSlot zone="bottom_banner" dismissible={false} onResolved={setHasPrimary} />
         </div>
+
+        {/*
+          🔴 ITS OWN SLOT, beside the zone — never through it.
+
+          `bottom_banner` is the AD ZONE where the Adsterra row and every other
+          network row lives. Serving ExoClick through that same zone would make
+          the two compete for one placement, so an operator could not run both.
+          A separate settings key and a separate element is what "separate it
+          with others network banner like adsterra" asks for, and it matches how
+          the sticky and history ExoClick banners are already modelled.
+
+          Renders nothing at all unless an ExoClick banner is configured and the
+          viewer is on an ad-supported plan — the component decides that itself.
+        */}
+        {hasExoBottomNav ? <ExoClickSticky slot="bottomnav" /> : null}
 
         {askLegacy ? (
           <div className={cn("md:hidden", hasLegacy !== true && "hidden")}>

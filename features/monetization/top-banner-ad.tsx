@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
@@ -36,6 +37,12 @@ export function TopBannerAd() {
   const [hasLegacy, setHasLegacy] = useState<boolean | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
 
+  /*
+    Revealed while the reader is scrolling DOWN — the moment the nav steps
+    aside. Scrolling back up hands the space to the nav again.
+  */
+  const revealed = useScrollDirection() === "down";
+
   const visible = hasPrimary === true || hasLegacy === true;
   const askLegacy = hasPrimary === false;
 
@@ -69,12 +76,34 @@ export function TopBannerAd() {
         // on desktop the nav is display:none so the var is 0 and the bar rests on the
         // safe-area inset at the very bottom instead.
         bottom: "max(env(safe-area-inset-bottom), var(--frenz-bottomnav-h, 0px))",
+        /*
+          🔴 THE TWO BARS TRADE PLACES (owner, 2026-08-31: "the bottom ad banner
+          slot should pop up smoothly like a luxurious design ... they should
+          transform smoothly and premiumly like a design and not like an ad pop
+          up").
+
+          Scrolling DOWN, the nav slides out and this slides DOWN by exactly the
+          nav-s height to take the space it left — so the two move as one
+          gesture rather than one vanishing and another appearing. Scrolling UP,
+          this drops away below the fold and the nav returns.
+
+          Both bars run the same duration and the same easing off the SAME
+          shared scroll signal (lib/dom/use-scroll-direction.ts), which is what
+          keeps them from ever disagreeing for a frame.
+
+          Driven by transform, never by `bottom` or `height`: animating either
+          of those would relayout the page underneath on every frame.
+        */
+        transform: revealed
+          ? "translateY(var(--frenz-bottomnav-h, 0px))"
+          : "translateY(calc(100% + var(--frenz-bottomnav-h, 0px)))",
       }}
       className={cn(
         // z-40: below the header (z-50) and the mobile drawer (z-[70]), above content.
         // Solid, no blur — matches the de-glassed nav/header chrome. A top border
         // divides it from the content above; the nav below carries its own border.
         "fixed inset-x-0 z-40 border-t border-border/60 bg-card",
+        "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none",
         !visible && "hidden",
       )}
       aria-hidden={!visible}

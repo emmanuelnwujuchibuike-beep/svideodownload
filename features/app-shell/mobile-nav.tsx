@@ -4,6 +4,8 @@ import { Headset, History, LayoutGrid } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+
+import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { useEffect, useRef } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
@@ -139,6 +141,14 @@ export function MobileNav({
   marketing?: boolean;
 }) {
   const pathname = usePathname();
+  /*
+    Scroll-away nav, on the two surfaces the owner named (2026-08-31: "i want
+    the bottom nav in the landing pages and download page to hide when scrolling
+    down"). Deliberately NOT app-wide: /home, /reels and the messaging surfaces
+    are navigation-heavy and own their own gestures, and taking their nav away
+    mid-scroll would be a different, unrequested change.
+  */
+  const scrollDir = useScrollDirection();
   const router = useRouter();
   const mode = useAppMode();
   const { handle, avatarUrl } = useEntitlements();
@@ -266,11 +276,28 @@ export function MobileNav({
     };
   }, []);
 
+  /*
+    The landing page and the download page only. `/` is exact — every other
+    marketing route keeps its nav parked — and `/downloads` covers the hub.
+  */
+  const scrollAwaySurface = pathname === "/" || pathname.startsWith("/downloads");
+  const hideForScroll = scrollAwaySurface && scrollDir === "down";
+
   return (
     // Edge-to-edge, no floating margins — the bar itself owns the safe-area
     // padding (home-indicator inset on notched/installed devices; zero extra
     // gap on a plain browser tab) rather than sitting inset inside a wrapper.
-    <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
+    <div
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-40 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform lg:hidden motion-reduce:transition-none",
+        // 🔴 Hidden by TRANSFORM, never by unmounting or by height. The bar keeps
+        // publishing --frenz-bottomnav-h either way, so the ad bar below can keep
+        // docking against a stable number and nothing in the page reflows as the
+        // two trade places. That is the difference between this reading as one
+        // designed movement and reading as an ad popping up.
+        hideForScroll && "translate-y-full",
+      )}
+    >
       <nav
         ref={navRef}
         aria-label="Primary"

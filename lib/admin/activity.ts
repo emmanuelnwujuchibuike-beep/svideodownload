@@ -154,6 +154,63 @@ function dedupeAttributedDownloads(rows: DownloadRow[]): DownloadRow[] {
  * Recent notable activity, events + downloads merged newest-first. `since` (ISO)
  * returns only rows strictly newer — the incremental fetch the feed polls with.
  */
+/**
+ * Unpack the `downloads.format` column into its real fields.
+ *
+ * 🔴 Owner, 2026-08-31: "add download status in the live activity details sheet
+ * and all other detailed information".
+ *
+ * The status was never missing from the database — it was hiding in plain
+ * sight. `features/history/sync.ts` PACKS six values into that one text column,
+ * separated by `~|~`:
+ *
+ *     formatId ~|~ kind ~|~ qualityLabel ~|~ sizeBytes ~|~ status ~|~ reason
+ *
+ * so the feed was rendering `"best~|~video~|~1080p~|~5242880~|~failed~|~..."`
+ * as an opaque blob, or slicing off just the first field. Splitting it here is
+ * what turns "Download" into "a 1080p MP4 that FAILED, and why".
+ *
+ * ⚠️ The encoder is the source of truth for this layout. It lives in a
+ * `"use client"` module, so the shape is duplicated rather than imported —
+ * importing it would drag the browser Supabase client into a server path. If
+ * the encoder ever gains a seventh field, this needs the same field.
+ *
+ * Trailing fields are optional: rows written before status/reason existed have
+ * four segments, and an unsplittable value is returned as-is rather than
+ * discarded — an operator would rather see a raw string than nothing.
+ */
+function decodePackedFormat(raw: string | null): Record<string, unknown> {
+  if (!raw) return { format: null };
+  const parts = raw.split("~|~");
+  if (parts.length < 2) return { format: raw };
+  const [formatId, kind, qualityLabel, sizeBytes, status, failureReason] = parts;
+  const size = Number(sizeBytes);
+  return {
+    formatId: formatId || null,
+    mediaKind: kind || null,
+    quality: qualityLabel || null,
+    // Bytes are unreadable at a glance; the operator wants "5.2 MB".
+    size: Number.isFinite(size) && size > 0 ? formatBytes(size) : null,
+    // The headline fact for this request. Older rows have no status field, and
+    // `types/index.ts` defines a missing status as "completed".
+    status: status || "completed",
+    failureReason: failureReason || null,
+  };
+}
+
+/** Bytes → a short human string. Local to avoid pulling a client util server-side. */
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(v >= 10 ? 0 : 1)} ${units[i]}`;
+}
+
 export async function fetchRecentActivity(limit = 40, since?: string): Promise<ActivityItem[]> {
   if (!hasSupabase) return [];
   try {
@@ -241,9 +298,11 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
         meta: {
           downloadId: d.id,
           platform: d.platform,
-          format: d.format,
           title: d.title,
+          // Clickable in the detail sheet — the operator's "link so i can click
+          // to open in the platform".
           sourceUrl: d.source_url,
+          ...decodePackedFormat(d.format),
         },
       }),
     );

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { Portal } from "@/components/ui/portal";
 import type { ActivityItem } from "@/lib/admin/activity";
+import { cn } from "@/lib/utils";
 
 /**
  * Everything one live-activity row actually knows.
@@ -37,6 +38,32 @@ function humanize(key: string): string {
     .trim();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
+
+/**
+ * Is this value something the operator can open?
+ *
+ * Strictly http(s) — anything else (`javascript:`, `data:`) must never become a
+ * live link in an admin panel, and these values come from third-party ad
+ * networks and user-pasted source URLs.
+ */
+function isHttpUrl(value: string): boolean {
+  if (value.length > 2048) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** A download's outcome, read at a glance rather than as another grey string. */
+const STATUS_TINT: Record<string, string> = {
+  completed: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-300",
+  failed: "bg-red-500/12 text-red-600 dark:text-red-300",
+  cancelled: "bg-amber-500/12 text-amber-600 dark:text-amber-300",
+  queued: "bg-blue-500/12 text-blue-600 dark:text-blue-300",
+  downloading: "bg-blue-500/12 text-blue-600 dark:text-blue-300",
+};
 
 /** Primitives print directly; objects/arrays print as indented JSON. */
 function renderValue(value: unknown): string {
@@ -132,6 +159,35 @@ export function ActivityDetail({ item, onClose }: { item: ActivityItem; onClose:
                       <pre className="overflow-x-auto rounded-lg bg-secondary/50 p-2 text-[11.5px] leading-snug">
                         {text}
                       </pre>
+                    ) : isHttpUrl(text) ? (
+                      /*
+                        🔴 Owner: "and link so i can click to open in the
+                        platform." A source URL is the one field an operator
+                        actually needs to ACT on — to go and look at the TikTok
+                        or Instagram post a download came from.
+
+                        `noopener noreferrer` because this is a third-party URL
+                        the app did not author: `noopener` stops the opened page
+                        reaching back through `window.opener`, and `noreferrer`
+                        keeps the admin URL out of its referer log.
+                      */
+                      <a
+                        href={text}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="break-all font-medium text-blue-600 underline underline-offset-2 hover:text-blue-500 dark:text-blue-400"
+                      >
+                        {text}
+                      </a>
+                    ) : key === "status" ? (
+                      <span
+                        className={cn(
+                          "inline-flex rounded-md px-1.5 py-0.5 text-[11.5px] font-bold uppercase tracking-wide",
+                          STATUS_TINT[text] ?? "bg-secondary text-muted-foreground",
+                        )}
+                      >
+                        {text}
+                      </span>
                     ) : (
                       text
                     )}

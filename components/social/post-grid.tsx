@@ -92,6 +92,17 @@ export function PostCover({
  * link", keyboard Enter-then-open-in-new-tab all still work normally) so
  * nothing about sharing/SEO/deep-linking changes, only the plain-click path.
  */
+/**
+ * How many tiles one page reveals.
+ *
+ * The media grid is 3 columns on a phone, so ten lines is thirty tiles — the
+ * "see more after the 10th grid line" in the request. Wider screens fit 4–5
+ * across and so get fewer than ten lines per page, which is right: the point is
+ * a bounded first paint, and a desktop showing six lines before the button is
+ * not a worse experience than a phone showing ten.
+ */
+const PAGE_SIZE = 30;
+
 export function PostGrid({
   posts,
   emptyText = "No posts yet.",
@@ -103,6 +114,23 @@ export function PostGrid({
 }) {
   const [openItem, setOpenItem] = useState<FeedItem | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  /*
+    🔴 REVEAL IN PAGES, rather than mounting every tile at once.
+
+    Owner, 2026-08-31: "there should be a see more after the 10th grid line and
+    all cards and thumbnail should loads one after the others accordingly to
+    avoid loading junk and delay."
+
+    A creator with 200 posts was mounting 200 tiles in a single commit — 200
+    `next/image` elements and 200 intersection targets, in one long main-thread
+    task, on the page most likely to be opened from a phone. `loading="lazy"`
+    holds the BYTES back but does nothing about the elements themselves, which
+    is the "loading junk and delay" in the report.
+
+    Paging the DOM is what fixes that. The browser then lazy-loads the
+    thumbnails of the page it has, in viewport order — "one after the other".
+  */
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   const openPost = useCallback(async (e: React.MouseEvent, post: PostCard) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return; // let modified clicks navigate normally
@@ -124,6 +152,9 @@ export function PostGrid({
     }
   }, [loadingId]);
 
+  const shown = posts.length > visible ? posts.slice(0, visible) : posts;
+  const remaining = posts.length - shown.length;
+
   if (posts.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border/70 p-10 text-center text-sm text-muted-foreground">
@@ -141,17 +172,41 @@ export function PostGrid({
     <>
       {layout === "reel" || layout === "photo" ? (
         <div className="grid grid-cols-3 gap-1 sm:gap-1.5 md:grid-cols-4 lg:grid-cols-5">
-          {posts.map((p) => (
+          {shown.map((p) => (
             <MediaTile key={p.id} post={p} aspect={layout === "reel" ? "portrait" : "square"} onOpen={openPost} loading={loadingId === p.id} />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {posts.map((p) => (
+          {shown.map((p) => (
             <PostCardItem key={p.id} post={p} onOpen={openPost} loading={loadingId === p.id} />
           ))}
         </div>
       )}
+
+      {/*
+        The rest of the grid, on request. Deliberately a BUTTON and not an
+        infinite scroller: this sits on a profile, where people arrive looking
+        for one particular post and scroll with intent, and an auto-loader would
+        keep the page growing under them and make the footer unreachable.
+
+        It says how many are left, because "See more" with no number gives no
+        sense of whether the next tap ends the list or is the first of ten.
+      */}
+      {remaining > 0 ? (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVisible((v) => v + PAGE_SIZE)}
+            className="srch-press inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-secondary px-6 text-sm font-bold text-foreground ring-1 ring-inset ring-border/60 transition hover:bg-secondary/80"
+          >
+            See more
+            <span className="text-xs font-semibold text-muted-foreground">
+              {remaining} left
+            </span>
+          </button>
+        </div>
+      ) : null}
 
       {isVideo ? (
         <ReelsFeed initialItems={[openItem!]} initialOffset={null} startId={openItem!.id} onClose={() => setOpenItem(null)} />

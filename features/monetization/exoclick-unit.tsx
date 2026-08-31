@@ -337,11 +337,20 @@ export function ExoClickUnit({
         that is ~693px, taller than the screen, so the unit could never be seen
         whole and scrolled past as an endless slab.
 
-        `maxHeight` alone would letterbox: the box would keep its full width, go
-        short, and `object-contain` would paint bars down both sides. So the
-        WIDTH is capped from the same number through the ratio — the box keeps
-        the creative's exact shape, simply smaller, and `mx-auto` centres it.
-        No bars, no crop, no layout shift (both values are static).
+        🔴 HEIGHT ONLY — the width cap was REVERTED the same day it shipped.
+
+        The first version also capped the WIDTH (from the same number, through
+        the ratio) so the box kept the creative's exact shape with no letterbox
+        bars. That is the tidier answer and the wrong one: it cut a 412px-wide
+        unit to about 297px — roughly HALVING an ad's on-screen area — on the
+        same deploy after which the owner reported losing ExoClick impressions
+        and clicks.
+
+        Viewable area is the product here. Bars beside a vertical creative cost
+        nothing but neatness; a unit half the size costs viewability on every
+        single impression. So the width stays full and only the height is
+        bounded, which is all the original complaint actually asked for: the
+        whole unit visible without scrolling.
 
         `svh`, not `vh`: on mobile `vh` is the tallest-possible viewport, so a
         `vh` cap still overflows while the browser's toolbar is on screen —
@@ -350,7 +359,7 @@ export function ExoClickUnit({
       style={
         fill
           ? undefined
-          : { aspectRatio: ratio, maxHeight: IN_PAGE_MAX_H, maxWidth: `calc(${IN_PAGE_MAX_H} * ${ratio})` }
+          : { aspectRatio: ratio, maxHeight: IN_PAGE_MAX_H }
       }
     >
       <video

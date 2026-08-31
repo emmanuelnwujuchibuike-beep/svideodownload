@@ -1246,13 +1246,29 @@ async function ProfileSectionsLoader({
   const [posts, liked, saved, reposted, jar, viewerCircles] = await Promise.all([
     // The viewer id is what lets a FOLLOWER see followers-only posts, so it
     // must stay the real viewer — not a stand-in derived from the role.
-    listUserPosts(profileId, viewerId),
-    isOwner || allowedGoverned.includes("liked") ? listLikedPosts(profileId) : Promise.resolve([]),
-    isOwner || allowedGoverned.includes("saved") ? listSavedPosts(profileId) : Promise.resolve([]),
+    /*
+      🔴 120, NOT THE DEFAULT 24 (owner, 2026-08-31: "I checked my profile post
+      gallery and i saw just a few of what I have posted and many didn't show
+      but they show in feed").
+
+      The limit-before-filter bug fixed on 2026-08-30 was real but was only half
+      of it: even after that, this asked for TWENTY-FOUR posts and rendered all
+      of them, so post 25 onward simply did not exist on the page. Nothing was
+      broken — the profile had never been able to show more than 24.
+
+      The tiles are now revealed a page at a time by `PostGrid` (30 per "See
+      more"), so a bigger fetch costs one query and no extra DOM: 120 rows of
+      post METADATA, no media, behind the existing 30s cache. That is the same
+      ceiling `loadUserPosts` already over-fetches to for visibility filtering,
+      so it adds no new worst case to the database.
+    */
+    listUserPosts(profileId, viewerId, 120),
+    isOwner || allowedGoverned.includes("liked") ? listLikedPosts(profileId, 120) : Promise.resolve([]),
+    isOwner || allowedGoverned.includes("saved") ? listSavedPosts(profileId, 120) : Promise.resolve([]),
     // The viewer id matters here for the same reason it does on `listUserPosts`
     // above: from 0116 an individual repost can be friends-only or private, so
     // the tab being visible is not the same question as each row being visible.
-    isOwner || allowedGoverned.includes("reposted") ? listUserReposts(profileId, viewerId) : Promise.resolve([]),
+    isOwner || allowedGoverned.includes("reposted") ? listUserReposts(profileId, viewerId, 120) : Promise.resolve([]),
     cookies(),
     // Part 17 — which of THIS owner's circles the viewer is in, so a module
     // gated to "Family" resolves against real membership. Ids only; the viewer

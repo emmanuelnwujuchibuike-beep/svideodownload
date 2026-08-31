@@ -3,6 +3,7 @@
 import { Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { usePageSettled } from "@/lib/dom/use-page-settled";
 import { AD_ZONE_META } from "@/lib/monetization/ad-schema";
 import type { AdTiming } from "@/lib/monetization/ad-timing";
 import type { VastCreative } from "@/lib/monetization/vast";
@@ -34,31 +35,8 @@ import { cn } from "@/lib/utils";
  * ad that plays without reporting is an ad that earns nothing.
  */
 
-/**
- * True once the document has finished loading — the gate every ad creative
- * waits behind so none of them competes with the page's own first paint.
- *
- * The 4-second cap is a safety net, not a target: if `load` has not fired by
- * then the page has something else wrong with it, and LCP has long since
- * happened either way. Without the cap a single hanging subresource would mean
- * no ad on the page ever resolves, which is a worse failure than a late one.
- */
-function usePageSettled(): boolean {
-  const [settled, setSettled] = useState(
-    () => typeof document !== "undefined" && document.readyState === "complete",
-  );
-  useEffect(() => {
-    if (settled) return;
-    const done = () => setSettled(true);
-    window.addEventListener("load", done, { once: true });
-    const cap = setTimeout(done, 4000);
-    return () => {
-      window.removeEventListener("load", done);
-      clearTimeout(cap);
-    };
-  }, [settled]);
-  return settled;
-}
+/* `usePageSettled` now lives in lib/dom/use-page-settled.ts — the banner
+   placement needed the same gate and was the one page-wide unit without it. */
 
 /**
  * The tallest an IN-PAGE ad unit may be (the reels/full-screen `fill` variant

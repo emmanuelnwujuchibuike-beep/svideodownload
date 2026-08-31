@@ -7,6 +7,7 @@ import {
   EXOCLICK_PROVIDER_SRC,
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
+import { usePageSettled } from "@/lib/dom/use-page-settled";
 import { debugMessages, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
 import { cn } from "@/lib/utils";
 
@@ -191,6 +192,22 @@ declare global {
 export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
 
 /**
+ * WHY a slot ended up empty — the distinction that turns "no ad" into a lead.
+ *
+ * "Empty" on its own cannot tell an ExoClick decision apart from a failure on
+ * our side, and those need completely different fixes:
+ *
+ *   no-ads   ExoClick answered "has no ads to display". Their side: the zone,
+ *            its approval, demand for this visitor — or an ads.txt that does
+ *            not authorise them to sell the inventory.
+ *   timeout  we asked and never heard back. Ours, or the network is unreachable.
+ *   blocked  the loader script itself never ran — an ad blocker, usually.
+ *   ended    it DID fill and then removed itself, which is what an outstream
+ *            player does after one play.
+ */
+export type EmptyReason = "no-ads" | "timeout" | "blocked" | "ended";
+
+/**
  * How long a slot may hold a box open before we call it empty.
  *
  * This is the maximum time a reader can be looking at a blank gap where an ad
@@ -203,6 +220,10 @@ export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
  * it. All this bounds is how long we are willing to look hopeful.
  */
 const EMPTY_VERDICT_MS = 4000;
+
+/** How often the loader-s log is checked, and the hard ceiling on doing so. */
+const POLL_MS = 400;
+const POLL_MAX_MS = 15_000;
 
 /**
  * Report this slot's state to the operator feed (owner, 2026-08-31: "wire the
@@ -218,12 +239,12 @@ const EMPTY_VERDICT_MS = 4000;
  * change, and so a blocked or slow request can never delay the ad it is
  * describing. Fired only on a CHANGE, never per frame.
  */
-function beacon(slot: ExoClickInsSlot, filled: boolean): void {
+function beacon(slot: ExoClickInsSlot, filled: boolean, reason?: EmptyReason): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot, filled, path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot, filled, reason, path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -356,6 +377,23 @@ export function ExoClickSticky({
   useEffect(() => setMounted(true), []);
 
   /*
+    🔴 NEVER BEFORE THE PAGE HAS LOADED (owner, 2026-08-31: "frenzsave is stuck
+    loading, it delays a lot, seems the lcp is broken").
+
+    This appended ExoClick-s ~195 KB provider the moment it mounted — during
+    hydration, while the browser is still fetching what the LCP is waiting on.
+    Measured on this build, Pixel 7, slow-4G + 4x CPU, median of 5 runs:
+
+        third parties allowed   LCP 2940ms   21 long tasks (6221ms)
+        third parties blocked   LCP  396ms    4 long tasks  (925ms)
+
+    `ExoClickUnit` has waited for `load` since the same problem was measured on
+    2026-08-30. This placement never did, and it is the one that now runs on
+    every page. See lib/dom/use-page-settled.ts.
+  */
+  const settled = usePageSettled();
+
+  /*
     A navigation asks for a serve ONLY when there is nothing to lose — see the
     note on `serveKey`. A slot that is currently showing an ad is left entirely
     alone, cleanup included, because the cleanup is what was destroying it.
@@ -375,7 +413,7 @@ export function ExoClickSticky({
   }, [pathname]);
 
   useEffect(() => {
-    if (!mounted || !ready || !showAds || !tag) return;
+    if (!mounted || !settled || !ready || !showAds || !tag) return;
     const el = host.current;
     if (!el) return;
 
@@ -505,36 +543,52 @@ export function ExoClickSticky({
       emptyTimer = null;
       retryTimer = null;
     };
-    const settleEmpty = () => {
+    const settleEmpty = (reason: EmptyReason) => {
       stopPoll();
       clearTimers();
       setStatus("empty");
-      if (!everFilled) beacon(slot, false);
+      if (!everFilled) beacon(slot, false, reason);
     };
+    /*
+      🔴 THIS POLL IS HARD-BOUNDED, and it was not (owner, 2026-08-31: "frenzsave
+      is stuck loading, it delays a lot, seems the lcp is broken").
+
+      The first version stopped only on a fill or a refusal. On `served` it
+      cleared the fallback timer and then just kept going — every 400ms, running
+      a regex over a debug array that GROWS for the life of the page, forever,
+      once per slot. Two banners on a page is two permanent intervals doing
+      pointless work on the main thread, and that is exactly what a page that
+      "delays a lot" feels like.
+
+      There are now two independent stops. `served` ends it immediately, because
+      at that point the poll has nothing left to learn — the observers take over
+      and they are the ones that see the creative land. And the absolute cap
+      ends it regardless, so no future branch can leave it running.
+    */
+    const pollStartedAt = Date.now();
     poll = setInterval(() => {
-      if (everFilled) {
+      if (everFilled || Date.now() - pollStartedAt > POLL_MAX_MS) {
         stopPoll();
         return;
       }
       const verdict = loaderVerdict(tag.zoneId, logStart);
       if (verdict === "empty") {
         // ExoClick has answered: nothing for this visitor. Collapse at once.
-        settleEmpty();
+        settleEmpty("no-ads");
       } else if (verdict === "served") {
-        /*
-          An ad IS on its way. Stop the fallback timer entirely — the box has to
-          survive until the player decides it is viewable, and cutting it short
-          is what stops an outstream ever appearing.
-        */
+        // An ad IS on its way. The box must survive until the player decides it
+        // is viewable, so the fallback timer goes — and so does the poll, whose
+        // one question has now been answered.
+        stopPoll();
         clearTimers();
       }
-    }, 400);
+    }, POLL_MS);
 
     emptyTimer = setTimeout(() => {
       if (everFilled) return;
       // Fallback only: the loader told us nothing either way. Believing an
       // unanswered request forever is how the "large empty hole" comes back.
-      settleEmpty();
+      settleEmpty("timeout");
     }, EMPTY_VERDICT_MS);
 
     /*
@@ -582,7 +636,7 @@ export function ExoClickSticky({
           alternative is a 180px hole where an ad used to be.
         */
         setStatus("empty");
-        beacon(slot, false);
+        beacon(slot, false, "ended");
       }
       // Otherwise still PENDING. Reporting "empty" here would withdraw the box
       // an outstream unit has not finished initialising in — see the style block.
@@ -602,7 +656,7 @@ export function ExoClickSticky({
         stopPoll();
         clearTimers();
         fillCb.current?.(false);
-        beacon(slot, false);
+        beacon(slot, false, "blocked");
         return;
       }
       try {
@@ -631,7 +685,7 @@ export function ExoClickSticky({
     };
     // `serveKey`, NOT `pathname` — a navigation only bumps it when the slot is
     // empty, so this effect's cleanup can never tear down a live creative.
-  }, [mounted, ready, showAds, tag, serveKey, slot]);
+  }, [mounted, settled, ready, showAds, tag, serveKey, slot]);
 
   // Premium visitors, an unresolved plan, or nothing configured: render nothing
   // at all — not even the host, which is what the loader would fill.

@@ -55,6 +55,14 @@ const SLOT_LABELS: Record<string, string> = {
   interstitial: "Full-page interstitial",
 };
 
+/** Plain words for why a slot came back empty. */
+const REASON_LABELS: Record<string, string> = {
+  "no-ads": "ExoClick had no ad",
+  timeout: "no answer",
+  blocked: "loader blocked",
+  ended: "ad finished",
+};
+
 const EVENT_LABELS: Record<string, string> = Object.fromEntries(
   getEvents().map((e) => [e.id, e.label]),
 );
@@ -88,7 +96,14 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
     case "interstitial_empty": {
       const slot = m.slot ? SLOT_LABELS[String(m.slot)] ?? String(m.slot) : null;
       const path = m.path ? String(m.path) : null;
-      return [slot, path].filter(Boolean).join(" · ") || null;
+      /*
+        The REASON is the actionable half. "no-ads" is ExoClick declining —
+        their zone, their approval, or an ads.txt that does not authorise them.
+        "timeout" and "blocked" are ours or the visitor-s. Without it, every
+        empty row looks the same and points nowhere.
+      */
+      const reason = m.reason ? REASON_LABELS[String(m.reason)] ?? String(m.reason) : null;
+      return [slot, reason, path].filter(Boolean).join(" · ") || null;
     }
     case "subscribe":
     case "subscribe_cancel":

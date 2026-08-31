@@ -5,6 +5,8 @@ import {
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
 
+import { debugMessages, loaderVerdict } from "@/lib/monetization/exoclick-verdict";
+
 import { loadProvider } from "./exoclick-sticky";
 
 /**
@@ -66,12 +68,12 @@ function loadTag(): Promise<ExoClickStickyTag | null> {
  * production. Without it, "the interstitial never appeared" and "the network
  * had nothing for this visitor" are the same observation.
  */
-function beacon(state: "requested" | "filled" | "empty"): void {
+function beacon(state: "requested" | "filled" | "empty", reason?: "no-ads" | "timeout" | "blocked"): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot: "interstitial", state, filled: state === "filled", path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot: "interstitial", state, filled: state === "filled", reason, path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -152,7 +154,7 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
   const ok = await loadProvider(tag.src ?? EXOCLICK_PROVIDER_SRC);
   if (!ok) {
     cleanup();
-    beacon("empty");
+    beacon("empty", "blocked");
     return "empty";
   }
 
@@ -160,7 +162,7 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
   } catch {
     cleanup();
-    beacon("empty");
+    beacon("empty", "blocked");
     return "empty";
   }
 
@@ -171,6 +173,7 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     checked: our host gaining height, or the document gaining a new fixed,
     full-viewport element that was not there before.
   */
+  const logStart = debugMessages().length;
   const before = new Set(document.body.children);
   const filled = await new Promise<boolean>((resolve) => {
     const started = Date.now();
@@ -199,7 +202,12 @@ export async function showExoClickInterstitial(): Promise<InterstitialOutcome> {
     tick();
   });
 
-  beacon(filled ? "filled" : "empty");
+  /*
+    The loader-s own answer when it has one, so "empty" is not a dead end: an
+    ExoClick refusal and a request that never came back need different fixes.
+  */
+  const verdict = loaderVerdict(tag.zoneId, logStart);
+  beacon(filled ? "filled" : "empty", filled ? undefined : verdict === "empty" ? "no-ads" : "timeout");
 
   /*
     🔴 A NO-FILL VERDICT MUST NOT DELETE THE PLACEHOLDER (owner, 2026-08-31:

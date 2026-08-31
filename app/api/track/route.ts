@@ -46,6 +46,8 @@ const bannerSchema = z.object({
    * the network declines are the same empty screen from the outside.
    */
   state: z.enum(["requested", "filled", "empty"]).optional(),
+  /** WHY it was empty — an ExoClick refusal reads very differently from a timeout. */
+  reason: z.enum(["no-ads", "timeout", "blocked", "ended"]).optional(),
   /** Which page it was on — "the history page in particular". */
   path: z.string().max(120).optional(),
 });
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
     invisible from outside the browser.
   */
   if (parsed.data.kind === "banner") {
-    const { slot, filled, path, state } = parsed.data;
+    const { slot, filled, path, state, reason } = parsed.data;
     /*
       The fullpage interstitial is the same MECHANISM as the banners — an <ins>
       their loader fills — but it is not a banner, and an operator scanning the
@@ -144,7 +146,7 @@ export async function POST(request: Request) {
         : "banner_empty";
     trackEvent(type, {
       userId,
-      metadata: { slot, path: path ?? null },
+      metadata: { slot, path: path ?? null, reason: reason ?? null },
     });
     return NextResponse.json({ ok: true });
   }

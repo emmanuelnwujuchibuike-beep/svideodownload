@@ -86,7 +86,22 @@ export type InterstitialTrigger =
 const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
   download: "download_preparing",
   "download-complete": "download_complete",
-  ambient: "download_preparing",
+  /*
+    🔴 ITS OWN ZONE NOW (owner, 2026-09-01: "the idle interstilla shows more of
+    banner and less of vast video").
+
+    `ambient` is idle + back-swipe, and it was pointed at `download_preparing` —
+    a DOWNLOAD zone. So the idle moment had two different paths answering it: the
+    `IdleInterstitial` component rendering `idle_interstitial` through AdSlot,
+    which can only paint a banner, and this one occasionally playing a video from
+    a zone belonging to another moment. Mostly banner, sometimes video, exactly
+    as reported.
+
+    Both now resolve `idle_interstitial`, and the component stands down when that
+    zone is set to `vast` — so the moment has ONE answer and the admin picker
+    decides which.
+  */
+  ambient: "idle_interstitial",
   "history-story": "history_story_ad",
 };
 

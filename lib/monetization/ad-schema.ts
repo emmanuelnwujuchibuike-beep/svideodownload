@@ -240,6 +240,11 @@ export const EXOCLICK_ZONES = [
     list, so a third occurrence fails the build instead of shipping silence.
   */
   "download_complete",
+  /* The idle / back-swipe / return moment. Added 2026-09-01 when the ambient
+     trigger moved off download_preparing and onto its own zone -- a zone a VAST
+     trigger serves has to be fillable by the shared id, or it dies silently for
+     any operator who has not switched HilltopAds on. */
+  "idle_interstitial",
   "history_above_grid",
   "history_story_ad",
   "wallpaper_reward",

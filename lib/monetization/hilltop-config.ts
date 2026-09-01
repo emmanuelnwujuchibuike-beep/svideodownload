@@ -129,7 +129,12 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
     is showing banner instead of vast that shows on interstilla".
   */
   history_story_ad: "vast",
-  idle_interstitial: "banner",
+  /*
+    The idle overlay plays the video too. `IdleInterstitial` stands down when
+    this is `vast` and the `ambient` trigger takes the moment instead — see the
+    trigger map. Set it to `banner` to get the in-page unit back.
+  */
+  idle_interstitial: "vast",
   /*
     ⚠️ The reward gate too, and for the same mechanical reason rather than a
     change of intent: it renders through `FullscreenInterstitial` → `AdSlot`, so

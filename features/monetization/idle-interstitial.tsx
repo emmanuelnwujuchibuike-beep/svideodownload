@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
+
 import { isPlayerOpen } from "@/features/downloads/player-store";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
@@ -192,8 +194,38 @@ export function IdleInterstitial() {
     };
   }, [shown, close]);
 
+  /*
+    🔴 STAND DOWN WHEN THE VIDEO OWNS THIS MOMENT (owner, 2026-09-01: "the idle
+    interstilla shows more of banner and less of vast video").
+
+    This component renders an ad ROW through AdSlot, which has no video branch,
+    so it can only ever show a banner here. When the zone is set to `vast` the
+    `ambient` trigger plays the real video instead, and two answers to one moment
+    is what produced "mostly banner, sometimes video".
+
+    Fails to the BANNER on a config error rather than to nothing: a missed video
+    is a rounding error, a silently dead idle placement is not.
+  */
+  const [videoOwnsMoment, setVideoOwnsMoment] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { hilltop?: HilltopConfig }) => {
+        if (alive && d.hilltop) {
+          setVideoOwnsMoment(hilltopZoneSource(d.hilltop, "idle_interstitial") === "vast");
+        }
+      })
+      .catch(() => {
+        /* The banner is the safe outcome. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Nothing for premium visitors, and nothing until the plan is known.
-  if (!ready || !showAds) return null;
+  if (!ready || !showAds || videoOwnsMoment) return null;
 
   /*
     Always rendered so the ad PRELOADS, but only interactive once open AND

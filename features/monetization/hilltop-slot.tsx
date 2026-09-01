@@ -264,7 +264,34 @@ export function HilltopSlot({
       { rootMargin: "600px 0px" },
     );
     obs.observe(el);
-    return () => obs.disconnect();
+
+    /*
+      🔴 THE OBSERVER IS AN OPTIMISATION, NOT A CORRECTNESS REQUIREMENT (owner,
+      2026-09-01: "the below the wallpaper button still doesnt show, check if
+      something is blocking it").
+
+      Something is. Probed on production after the placeholder fix:
+
+          {"id":"hilltop-landing","y":835,"w":388,"h":1,
+           "init":null,"kids":1,"iframe":false}
+
+      The container is laid out, one pixel high as intended, INSIDE the viewport
+      (top 835 of a 915 tall window) and within a 600px root margin — and the
+      observer still never reported it. An intersection rect is clipped by every
+      ancestor, so any one of them with `overflow: hidden` or a zero-height
+      collapse in the hero stack is enough to make a visible element read as
+      never intersecting, and finding which one is not worth another round trip.
+
+      So the observer keeps its job — defer past first paint, protect LCP — and
+      loses its veto. If it has not fired by this deadline the slot mounts
+      anyway. Worst case the script loads 2.5s after paint, which is the whole
+      benefit; best case the observer fires first and this never runs.
+    */
+    const fallback = setTimeout(() => setNear(true), 2500);
+    return () => {
+      obs.disconnect();
+      clearTimeout(fallback);
+    };
   }, [near]);
   const viewportAllowed = isMobile ? config.mobile : config.desktop;
   const placementOn = isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed;

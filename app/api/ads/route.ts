@@ -291,9 +291,14 @@ async function withHilltopZone(
     of only the first.
   */
   if (source === "banner" || source === "slider") {
+    /*
+      A per-ZONE tag when one is pasted, else the shared banner tag. Same
+      fallback the page placements use, so an operator can give a busy moment
+      its own Hilltop zone — and its own capping and reporting — one at a time.
+    */
     const tag = parseHilltopTag(
       source === "banner"
-        ? settings.hilltopSnippets?.idle || settings.hilltopBannerSnippet
+        ? settings.hilltopSnippets?.[zone] || settings.hilltopBannerSnippet
         : settings.hilltopVideoSliderSnippet,
     );
     if (!tag) return found;

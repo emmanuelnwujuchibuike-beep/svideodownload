@@ -95,23 +95,44 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
     renders in them. Each of these is played by our own VAST player, which is
     what a VAST tag is for, and the slider is measured blank there.
   */
-  download_preparing: "vast",
-  result_top: "vast",
-  download_result_page: "vast",
-  // "for download completed" — same surface, same reasoning.
-  download_complete: "vast",
-  // "the history after 3 videos watched to be hiltop video slider or vast" —
-  // the owner offered both here, and vast is the one that plays.
-  history_story_ad: "vast",
   /*
-    The idle overlay is NOT played by the VAST player — it renders an ad ROW
-    through AdSlot, which has no video branch. So it takes the banner, the one
-    Hilltop product observed rendering reliably in a frame.
+    🔴 ONLY TWO MOMENTS ARE PLAYED BY OUR VAST PLAYER. Everything else renders an
+    ad ROW through `AdSlot`, and AdSlot has NO VIDEO BRANCH — a `vast` row there
+    resolves, reports itself present, and paints nothing. That is the broken
+    black video card the owner photographed on the result screen
+    (2026-09-01: "the result card show a blank video card instead of the hiltop
+    banner"), and it is the same failure the slider had in the overlays, arrived
+    at from the other direction.
+
+    `requestVastInterstitial` — and therefore `/api/ads/exoclick` — owns exactly
+    these two:
   */
+  download_preparing: "vast",
+  download_complete: "vast",
+
+  /*
+    Everything below renders through AdSlot, so it takes the BANNER: the one
+    Hilltop product observed painting reliably in a frame.
+
+    "the result shows the exoclick banner instead of the hiltop banner", "replace
+    all exoclick vast video between sections with a hiltop banner", "i want
+    hiltop banner to show in under the download button where adsterra banner slot
+    is … and it should be in both".
+  */
+  result_top: "banner",
+  download_result_page: "banner",
+  under_download: "banner",
+  landing_section_break: "banner",
+  history_story_ad: "banner",
   idle_interstitial: "banner",
-  // "but not for reward" — the reward gate keeps the VAST video and its watch
-  // requirement, which is the one moment where a measured duration matters.
-  wallpaper_reward: "vast",
+  /*
+    ⚠️ The reward gate too, and for the same mechanical reason rather than a
+    change of intent: it renders through `FullscreenInterstitial` → `AdSlot`, so
+    a `vast` row here shows nothing and the gate fails open — the download is
+    released with no ad seen at all. A banner held for the configured 15 seconds
+    is an ad the visitor actually watches, which is what the gate is for.
+  */
+  wallpaper_reward: "banner",
 };
 
 export interface HilltopConfig {

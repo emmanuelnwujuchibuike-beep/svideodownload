@@ -41,6 +41,25 @@ export async function GET() {
     getRewardNetworks(),
     getNetworkCapabilities(),
   ]);
+  /*
+    🔴 THE EXOCLICK MASTER SWITCH NOW ACTUALLY GATES EXOCLICK (owner,
+    2026-09-01: "i dont want to use any exoclick vast", and before that "disable
+    the exoclick ads generally").
+
+    It did not. `settings.exoclick` gated the AD ZONES — the rows in the ads
+    table — but every ExoClick SNIPPET tag on this endpoint was parsed and
+    returned unconditionally. So switching the network off left the sticky
+    banner, the bottom-nav banner and the history units serving exactly as
+    before, and the switch looked broken because in this half of the system it
+    was.
+
+    Same rule the HilltopAds master switch already follows: resolved SERVER-side,
+    so with the network off its tags are not in the payload at all and no browser
+    can load one by mistake.
+  */
+  const exo = (snippet: string) =>
+    settings.exoclick ? parseExoClickSticky(snippet) : null;
+
   return NextResponse.json(
     {
       /* The interstitial config the lazy client module reads once per page load.
@@ -51,7 +70,7 @@ export async function GET() {
         rule as the verification tags and the Monetag units: admin free text
         must not travel to a browser as markup.
       */
-      exoclickSticky: parseExoClickSticky(settings.exoclickStickySnippet),
+      exoclickSticky: exo(settings.exoclickStickySnippet),
       /*
         🔴 ONE SLOT ABOVE THE HISTORY GRID, RESOLVED HERE (owner, 2026-09-01:
         "put a switch in admin dashboard to turn off and on so one link can
@@ -73,8 +92,8 @@ export async function GET() {
         blank the slot.
       */
       exoclickHistory: (() => {
-        const multi = parseExoClickSticky(settings.exoclickMultiFormatSnippet);
-        const outstream = parseExoClickSticky(settings.exoclickHistorySnippet);
+        const multi = exo(settings.exoclickMultiFormatSnippet);
+        const outstream = exo(settings.exoclickHistorySnippet);
         return settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
       })(),
       /*
@@ -97,8 +116,8 @@ export async function GET() {
         capped zone answers a re-ask exactly as it answered the first.
       */
       exoclickHistoryFallback: (() => {
-        const multi = parseExoClickSticky(settings.exoclickMultiFormatSnippet);
-        const outstream = parseExoClickSticky(settings.exoclickHistorySnippet);
+        const multi = exo(settings.exoclickMultiFormatSnippet);
+        const outstream = exo(settings.exoclickHistorySnippet);
         const primary = settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
         const other = settings.exoclickHistoryUseMultiFormat ? outstream : multi;
         if (!other || !primary) return null;
@@ -133,11 +152,11 @@ export async function GET() {
         impossible. Falling back here would put one zone in both placements and
         blank them both, which is the bug this split exists to fix.
       */
-      exoclickHistoryFeed: parseExoClickSticky(settings.exoclickHistoryFeedSnippet),
-      exoclickHistoryFeedLastWeek: parseExoClickSticky(settings.exoclickHistoryFeedLastWeekSnippet),
-      exoclickLanding: parseExoClickSticky(settings.exoclickLandingSnippet),
-      exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
-      exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),
+      exoclickHistoryFeed: exo(settings.exoclickHistoryFeedSnippet),
+      exoclickHistoryFeedLastWeek: exo(settings.exoclickHistoryFeedLastWeekSnippet),
+      exoclickLanding: exo(settings.exoclickLandingSnippet),
+      exoclickInterstitial: exo(settings.exoclickInterstitialSnippet),
+      exoclickBottomNav: exo(settings.exoclickBottomNavSnippet),
       /*
         HILLTOPADS, parsed to a bare `https` loader URL and never as markup —
         the same rule as every other pasted snippet on this endpoint.

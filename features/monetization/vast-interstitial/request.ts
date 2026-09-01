@@ -58,12 +58,17 @@ const lastShownAt = new Map<InterstitialTrigger, number>();
 /**
  * A floor between ANY two interstitials, whatever their moments.
  *
- * Per-trigger cooldowns alone would allow an idle ad and a download-complete ad
- * back to back — two full-screen takeovers in a few seconds, which is the exact
- * thing the shared cooldown was protecting against and worth keeping. Short
- * enough that it never stands in for the real per-moment cooldown.
+ * Deliberately TINY (owner, 2026-09-01: "all hiltop vast video should not have
+ * cooldown, so a user who downloads repeated can always see the interstilla and
+ * download completed").
+ *
+ * A download start and its own completion are seconds apart and the owner wants
+ * BOTH, so this cannot be a real gap. It exists only so two overlays cannot
+ * stack in the same instant — and the `phase` guard above already covers the
+ * concurrent case, which makes this a belt to that braces rather than a policy.
+ * The real frequency control is `cooldownMs`, which is admin-set and can be 0.
  */
-const BACK_TO_BACK_MS = 20_000;
+const BACK_TO_BACK_MS = 3_000;
 let lastAnyShownAt = 0;
 /** Memoised public config — fetched at most once per page load. */
 let configPromise: Promise<VastInterstitialConfig> | null = null;
@@ -108,7 +113,32 @@ export type InterstitialTrigger =
    * Gated by the master switch alone, like `ambient`: it is not a download
    * moment, so neither download flag describes it.
    */
-  | "history-story";
+  | "history-story"
+  /**
+   * The wallpaper download gate (owner, 2026-09-01: "the wallpaper download
+   * started and completed is suppose to be hiltop vast video and not hiltop
+   * banner, cause now it only shows a 5sec hiltop banner").
+   *
+   * Same reason as `history-story`: the gate rendered through AdSlot, which has
+   * no video branch, so it could only ever show the banner the owner is
+   * describing.
+   */
+  | "wallpaper"
+  /**
+   * An IN-PAGE position that has been scrolled to — the history period
+   * separators and the landing section breaks.
+   *
+   * Owner, 2026-09-01: "the vast video shown on download completed should be
+   * used as general interstilla and not hiltop banner, same for the landing page
+   * sections … in history today, yesterday, this week, last week, it should be
+   * the vast video, only the first above the grid should be hiltop banner."
+   *
+   * 🔴 THE POSITION IS THE TRIGGER, NOT THE SURFACE. These slots cannot PLAY a
+   * video — there is no in-page player — but reaching one is a moment, and a
+   * moment can open the same full-screen VAST the download completion opens.
+   * That is what "used as general interstilla" means.
+   */
+  | "in-page";
 
 /** The zone each moment serves from. Reuses the existing zone registry. */
 const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
@@ -131,6 +161,8 @@ const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
   */
   ambient: "idle_interstitial",
   "history-story": "history_story_ad",
+  wallpaper: "wallpaper_reward",
+  "in-page": "landing_section_break",
 };
 
 function isEnabledFor(config: VastInterstitialConfig, trigger: InterstitialTrigger): boolean {

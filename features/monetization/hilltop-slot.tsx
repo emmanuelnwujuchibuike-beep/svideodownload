@@ -196,6 +196,23 @@ export function HilltopSlot({
   const pathname = usePathname();
   /** Bumped to re-run the injection effect when the placement was busy. */
   const [attempt, setAttempt] = useState(0);
+  /**
+   * Whether this position renders a UNIT, or simply OPENS THE INTERSTITIAL when
+   * the reader reaches it.
+   *
+   * 🔴 THE POSITION IS THE TRIGGER, NOT THE SURFACE (owner, 2026-09-01: "the
+   * vast video shown on download completed should be used as general interstilla
+   * and not hiltop banner, same for the landing page sections … in history
+   * today, yesterday, this week, last week, it should be the vast video").
+   *
+   * These slots cannot PLAY a video — there is no in-page player, and building
+   * one is a video player rather than a setting. But REACHING one is a moment,
+   * and a moment can open the same full-screen VAST the download completion
+   * opens. So an `interstitial` slot renders nothing at all and fires that
+   * instead, once, when it is scrolled to.
+   */
+  const [mode, setMode] = useState<"unit" | "interstitial">("unit");
+  const firedInterstitial = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -205,11 +222,13 @@ export function HilltopSlot({
         (d: {
           hilltopBanners?: Partial<Record<string, HilltopTag | null>>;
           hilltopBanner?: HilltopTag | null;
+          hilltopSlotSource?: Record<string, string>;
           hilltop?: HilltopConfig;
         }) => {
           if (!alive) return;
           // This placement's OWN tag, or the shared one it falls back to.
           setTag(d.hilltopBanners?.[slot] ?? d.hilltopBanner ?? null);
+          setMode(d.hilltopSlotSource?.[slot] === "interstitial" ? "interstitial" : "unit");
           if (d.hilltop) setConfig(d.hilltop);
         },
       )
@@ -330,7 +349,26 @@ export function HilltopSlot({
     ? `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center}</style></head><body><script async referrerpolicy="no-referrer-when-downgrade" src="${tag.src}"></script></body></html>`
     : "";
 
+  /*
+    The interstitial path. Guarded by `near`, so it fires when the reader
+    actually reaches this position rather than on mount, and once per instance —
+    the interstitial's own cooldown and busy guard handle everything beyond that,
+    which is why this does not need a cooldown of its own.
+  */
   useEffect(() => {
+    if (mode !== "interstitial" || !near || !ready || !showAds || !placementOn) return;
+    if (firedInterstitial.current) return;
+    firedInterstitial.current = true;
+    log("slot opens interstitial", domId);
+    void import("./vast-interstitial/request")
+      .then((m) => m.requestVastInterstitial("in-page"))
+      .catch(() => {
+        /* A position that cannot open an ad is simply a position. */
+      });
+  }, [mode, near, ready, showAds, placementOn, domId]);
+
+  useEffect(() => {
+    if (mode !== "unit") return;
     if (!ready || !showAds || !tag || !placementOn || !near) return;
     const el = host.current;
     if (!el) return;
@@ -362,7 +400,7 @@ export function HilltopSlot({
       el.removeAttribute("data-ad-initialized");
       log("slot torn down", domId);
     };
-  }, [ready, showAds, tag, slot, domId, placementOn, near, config.timeoutMs, pathname, attempt]);
+  }, [mode, ready, showAds, tag, slot, domId, placementOn, near, config.timeoutMs, pathname, attempt]);
 
   // Premium visitors, an unresolved plan, or nothing configured: no element at
   // all, so the slot costs an unconfigured page nothing.
@@ -404,7 +442,11 @@ export function HilltopSlot({
         flexWrap: "wrap",
       }}
     >
-      {!near ? (
+      {mode === "interstitial" ? (
+        // Nothing of its own — the overlay owns the screen when it opens. The
+        // 1px node keeps the observer able to measure this position.
+        <div aria-hidden style={{ width: "100%", height: 1 }} />
+      ) : !near ? (
         /*
           🔴 A REAL PLACEHOLDER CHILD WHILE WAITING, AND IT IS LOAD-BEARING.
 

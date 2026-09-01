@@ -199,6 +199,9 @@ export async function GET() {
         the banner tag, or the in-page video (slider) tag. Resolved here so the
         client never has to know which snippet field a slot reads.
       */
+      // The in-page slot modes, so a slot knows whether to render a unit or to
+      // open the interstitial when it is reached.
+      hilltopSlotSource: settings.hilltop.slotSource,
       hilltopBanners: settings.hilltop.enabled
         ? Object.fromEntries(
             HILLTOP_BANNER_SLOTS.map((id) => [

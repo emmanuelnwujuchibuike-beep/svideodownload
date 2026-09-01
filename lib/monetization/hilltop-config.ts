@@ -142,7 +142,7 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
     released with no ad seen at all. A banner held for the configured 15 seconds
     is an ad the visitor actually watches, which is what the gate is for.
   */
-  wallpaper_reward: "banner",
+  wallpaper_reward: "vast",
 };
 
 export interface HilltopConfig {
@@ -206,7 +206,7 @@ export interface HilltopConfig {
    * designed — but that has not been observed yet, so every slot is switchable
    * and flipping one back to `banner` restores exactly what works today.
    */
-  slotSource: Record<string, "banner" | "slider">;
+  slotSource: Record<string, "banner" | "slider" | "interstitial">;
 }
 
 export const DEFAULT_HILLTOP: HilltopConfig = {
@@ -224,7 +224,18 @@ export const DEFAULT_HILLTOP: HilltopConfig = {
     `history` stays a banner — "except from the top history hiltop banner". The
     rest take the in-page video the owner asked for.
   */
-  slotSource: { history: "banner", historyfeed: "slider", landing: "slider", feed: "slider" },
+  /*
+    `history` — the one above the grid — stays a banner, exactly as asked. Every
+    other in-page position OPENS THE INTERSTITIAL when it is scrolled to, rather
+    than rendering a unit of its own: "it should be the vast video, only the
+    first above the grid should be hiltop banner".
+  */
+  slotSource: {
+    history: "banner",
+    historyfeed: "interstitial",
+    landing: "interstitial",
+    feed: "interstitial",
+  },
 };
 
 /** Lower bound on either cadence. Below this a feed is mostly advertising. */
@@ -262,10 +273,14 @@ export function normalizeHilltop(value: unknown): HilltopConfig {
       zoneSource[zone] = value;
     }
   }
-  const slotSource: Record<string, "banner" | "slider"> = { ...DEFAULT_HILLTOP.slotSource };
+  const slotSource: Record<string, "banner" | "slider" | "interstitial"> = {
+    ...DEFAULT_HILLTOP.slotSource,
+  };
   const storedSlots = (raw.slotSource ?? {}) as Record<string, unknown>;
   for (const [slot, value] of Object.entries(storedSlots)) {
-    if (value === "banner" || value === "slider") slotSource[slot] = value;
+    if (value === "banner" || value === "slider" || value === "interstitial") {
+      slotSource[slot] = value;
+    }
   }
   return {
     enabled: raw.enabled === true,

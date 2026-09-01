@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
 
 import { useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
 
@@ -67,6 +69,56 @@ export function WallpaperRewardGate({
     };
   }, []);
   const holdSeconds = seconds ?? configured ?? 10;
+
+  /*
+    🔴 THE VIDEO PATH (owner, 2026-09-01: "the wallpaper download started and
+    completed is suppose to be hiltop vast video and not hiltop banner, cause now
+    it only shows a 5sec hiltop banner and doesnt show a download complete vast
+    video on wallpaper download").
+
+    This gate renders through `FullscreenInterstitial` → `AdSlot`, and AdSlot has
+    NO VIDEO BRANCH — so a banner was the only thing it could ever show, which is
+    exactly the 5-second banner being described. The video is the VAST
+    interstitial, and `requestVastInterstitial` is the only thing that plays one.
+
+    With the zone set to `vast` this gate hands the moment to it and releases the
+    download when it resolves — shown, skipped, or nothing to show. The download
+    is NEVER blocked on the ad: every path calls `onDone`, including the failure
+    one, which is the standing rule for this gate.
+  */
+  const [videoMode, setVideoMode] = useState<"unknown" | "vast" | "slot">("unknown");
+  const firedVideo = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { hilltop?: HilltopConfig }) => {
+        if (!alive) return;
+        setVideoMode(
+          d.hilltop && hilltopZoneSource(d.hilltop, "wallpaper_reward") === "vast" ? "vast" : "slot",
+        );
+      })
+      .catch(() => alive && setVideoMode("slot"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || videoMode !== "vast" || firedVideo.current) return;
+    firedVideo.current = true;
+    void import("./vast-interstitial/request")
+      .then((m) => m.requestVastInterstitial("wallpaper"))
+      .catch(() => {
+        /* A gate that cannot load its ad must still release the download. */
+      })
+      .finally(onDone);
+  }, [open, videoMode, onDone]);
+
+  // Re-arm for the next wallpaper once this one has been released.
+  useEffect(() => {
+    if (!open) firedVideo.current = false;
+  }, [open]);
   /*
     Read only so the admin's per-moment routing is honoured. ExoClick serves it
     today through the shared zone stack; when the moment is pointed at Offerium
@@ -142,6 +194,9 @@ export function WallpaperRewardGate({
     hidden. That is what stopped the ad playing its AUDIO behind a hidden
     overlay.
   */
+  // The video path owns this moment — the gate renders nothing there.
+  if (videoMode === "vast") return null;
+
   return (
     <FullscreenInterstitial
       zone="wallpaper_reward"

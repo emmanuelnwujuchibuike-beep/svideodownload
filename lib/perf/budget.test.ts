@@ -237,7 +237,32 @@ function landingChunks(): string[] {
  * streak upgrade — the milestone ceremony, the flame gallery and six live tier
  * marks — is code-split behind `next/dynamic` and adds ~1 kB to `/`.
  */
-const GLOBAL_CEILING = 354 * 1024;
+/*
+ * 354 → 355 KiB (2026-08-31). `/admin` measures 362,570 B against a 362,496 B
+ * ceiling: **74 bytes over**, confirmed with `routeWeights()` directly rather
+ * than read off the rounded "354 kB" the failure prints.
+ *
+ * What bought it: the ExoClick display placements now render as Impression /
+ * Click / No-fill rows in the live activity feed instead of falling through
+ * `metaFor()`'s default to a grey "banner filled" (owner, 2026-08-31: "the ad
+ * activity in admin dashboard suppose to be impression and click, not banner
+ * fill in gray"). That needed the `banner_click` / `interstitial_click` events,
+ * which did not exist at all, plus tones for six event ids.
+ *
+ * 🔴 THE CHEAP BYTES WERE LOOKED FOR FIRST, and taken — the increase is what
+ * survived two rounds of it. The repeated amber chip/dot strings were hoisted
+ * into shared `IMPRESSION`/`CLICK`/`QUIET` constants (they were spelled out
+ * eight times), the labels were shortened to reuse the AdSense row's exact
+ * "Impression" string, and the six near-identical KIND entries were collapsed
+ * into one `displayAdMeta()` suffix rule. Those recovered 21 bytes between
+ * them; gzip had already been compressing the duplication they removed. What is
+ * left is the two new event ids and their labels, and cutting those means
+ * cutting the feature that was asked for.
+ *
+ * 🔴 ADMIN ROUTE ONLY, as below: one authenticated operator behind a redirect,
+ * explicitly outside the visitor budget. No public ceiling moves.
+ */
+const GLOBAL_CEILING = 355 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

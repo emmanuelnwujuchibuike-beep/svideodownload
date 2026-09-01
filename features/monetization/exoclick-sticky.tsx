@@ -226,22 +226,51 @@ function hasCreative(host: HTMLElement): boolean {
     false for the empty scaffolding — the loader drops a wrapper `<div>` and a
     `<style>` even on a no-fill, and those measure 0.
   */
+  // An IN-FLOW creative gives the host height. That is the whole test for it.
   if (host.offsetHeight > 0) return true;
 
   /*
-    A floor, not a pixel test. The scaffolding is 0-sized and tracking pixels are
-    1x1; anything a person could actually see clears 20x20 comfortably. Capped so
-    a pathological subtree can never make an observer callback expensive — real
-    ad markup is a few dozen nodes.
+    🔴 ONLY `position: fixed` DESCENDANTS COUNT FROM HERE (owner, 2026-08-31:
+    "it showed banner filled in admin dashboard but nothing showed").
+
+    This used to accept ANY descendant measuring 20x20 or more, which was too
+    loose in a way that reported invisible ads as impressions — my own bug, and
+    exactly what the owner saw.
+
+    `getBoundingClientRect()` returns an element's own geometry whether or not an
+    ancestor is showing it. The history outstream is precisely that case: before
+    their player opens, `._effect` is `max-height: 0; overflow: hidden`, and the
+    `_cta_wrapper` inside it still measures 412x48. Clipped to nothing, visible
+    to no one, and counted as a fill — so the feed logged a Banner impression for
+    a blank space, and the bar drew chrome around it.
+
+    If the host itself has no height, the ONLY thing that can still be on screen
+    is a creative that took itself out of flow — which is what the two units that
+    actually render do (`DIV 300x250 pos=fixed z=999999` for the sticky,
+    `.ex-over-top pos=fixed` for the interstitial). Anything still in flow is,
+    by definition, inside the zero-height box we just measured.
+
+    Capped so a pathological subtree can never make an observer callback
+    expensive — real ad markup is a few dozen nodes.
   */
   let seen = 0;
   for (const el of host.querySelectorAll<HTMLElement>("*")) {
     if (++seen > 200) break;
     if (el.tagName === "STYLE" || el.tagName === "SCRIPT" || el.tagName === "INS") continue;
-    const r = el.getBoundingClientRect();
-    if (r.width < 20 || r.height < 20) continue;
     const cs = getComputedStyle(el);
+    if (cs.position !== "fixed") continue;
     if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
+    const r = el.getBoundingClientRect();
+    // A floor, not a pixel test: tracking pixels are 1x1, anything a person can
+    // see clears 20x20 comfortably.
+    if (r.width < 20 || r.height < 20) continue;
+    /*
+      And it has to be ON the screen. A fixed element parked at a negative offset
+      or below the fold is as invisible as a clipped one, and reporting it would
+      reintroduce the same false impression through a different door.
+    */
+    if (r.bottom <= 0 || r.right <= 0) continue;
+    if (r.top >= window.innerHeight || r.left >= window.innerWidth) continue;
     return true;
   }
   return false;
@@ -545,11 +574,41 @@ export function ExoClickSticky({
     const onClick = () => beacon(slot, true, true);
     el.addEventListener("pointerdown", onClick, { capture: true, passive: true });
 
-    const observer = new ResizeObserver(report);
+    /*
+      🔴 COALESCED TO ONE CHECK PER FRAME (owner, 2026-08-31: "the history page
+      now delays to open and is now laggy … since the previous banner and
+      outstream video fix").
+
+      My regression, and an obvious one in hindsight. `report()` calls
+      `hasCreative()`, which walks up to 200 nodes calling `getComputedStyle` and
+      `getBoundingClientRect` — each a forced style/layout flush. It was wired
+      DIRECTLY to a MutationObserver with `subtree: true`, watching an ad player
+      that injects and mutates markup continuously as it initialises. So the
+      scan ran many times per frame, and every run flushed layout on a page that
+      was still trying to paint its grid.
+
+      One rAF-coalesced run per frame collapses a burst of mutations into a
+      single check, which is all the UI can act on anyway — nothing can change
+      twice within one frame from the reader's point of view.
+
+      The steady state is then free: once the creative is in flow the very first
+      line of `hasCreative` (`host.offsetHeight > 0`) answers before any walk
+      happens, so a PLAYING outstream costs one property read per frame.
+    */
+    let frame = 0;
+    const scheduleReport = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        report();
+      });
+    };
+
+    const observer = new ResizeObserver(scheduleReport);
     observer.observe(el);
     // The wrapper is inserted as a SIBLING of the <ins>, so watch the subtree
     // for it too — a child resizing does not resize the host on every layout.
-    const mo = new MutationObserver(report);
+    const mo = new MutationObserver(scheduleReport);
     mo.observe(el, { childList: true, subtree: true });
 
     void loadProvider(tag.src).then((ok) => {
@@ -577,6 +636,8 @@ export function ExoClickSticky({
     return () => {
       observer.disconnect();
       mo.disconnect();
+      // A queued check must not run against a host this cleanup is about to empty.
+      if (frame) cancelAnimationFrame(frame);
       el.removeEventListener("pointerdown", onClick, { capture: true });
       clearTimeout(emptyTimer);
       clearTimeout(retryTimer);

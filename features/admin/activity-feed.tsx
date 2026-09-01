@@ -65,10 +65,25 @@ interface KindMeta {
   chip: string;
 }
 
+/*
+  The three monetization tones, named once and shared.
+
+  Every ad row is one of: an impression, a click, or a diagnostic. Spelling the
+  same two long Tailwind strings out per event duplicated them eight times and
+  pushed /admin past its gzipped budget; naming them also makes the rule visible
+  — an ExoClick impression is styled identically to an AdSense one because it is
+  worth the same, and no-fills are deliberately quiet because they are not
+  revenue. Written as literals so Tailwind's scanner still sees every class.
+*/
+const IMPRESSION = { dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" } as const;
+const CLICK = { dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" } as const;
+/** Diagnostics — a slot that was asked for and came back empty. Not earnings. */
+const QUIET = { dot: "bg-muted-foreground/40", chip: "bg-secondary text-muted-foreground" } as const;
+
 const KIND: Record<string, KindMeta> = {
   download: { label: "Download", dot: "bg-blue-500", chip: "bg-blue-500/12 text-blue-600 dark:text-blue-300" },
-  ad_click: { label: "Ad click", dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
-  ad_impression: { label: "Impression", dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" },
+  ad_click: { label: "Ad click", ...CLICK },
+  ad_impression: { label: "Impression", ...IMPRESSION },
   affiliate_click: { label: "Affiliate", dot: "bg-fuchsia-500", chip: "bg-fuchsia-500/12 text-fuchsia-600 dark:text-fuchsia-300" },
   subscribe: { label: "Subscribe", dot: "bg-green-500", chip: "bg-green-500/12 text-green-600 dark:text-green-300" },
   subscribe_cancel: { label: "Cancel", dot: "bg-red-500", chip: "bg-red-500/12 text-red-600 dark:text-red-300" },
@@ -92,16 +107,38 @@ const KIND: Record<string, KindMeta> = {
     one. They keep the muted chip ON PURPOSE, which is the opposite of the
     accident above.
   */
-  banner_filled: { label: "Banner impression", dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" },
-  banner_click: { label: "Banner click", dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
-  banner_empty: { label: "Banner no-fill", dot: "bg-muted-foreground/40", chip: "bg-secondary text-muted-foreground" },
-  interstitial_filled: { label: "Interstitial shown", dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" },
-  interstitial_click: { label: "Interstitial click", dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
-  interstitial_empty: { label: "Interstitial no-fill", dot: "bg-muted-foreground/40", chip: "bg-secondary text-muted-foreground" },
 };
 
+/**
+ * ExoClick display placements — `banner_*` and `interstitial_*`.
+ *
+ * ONE RULE rather than six near-identical KIND rows, which is both smaller (the
+ * six entries pushed /admin past its gzipped ceiling) and truer: every one of
+ * these events is an impression, a click, or a no-fill, and the suffix already
+ * says which.
+ *
+ * The label says WHAT happened; the DETAIL column already says which placement
+ * ("Bottom banner · /history", "Full-page interstitial · /"). Spelling the
+ * placement into the label too gave "Banner impression · Bottom banner" — the
+ * same word twice on one row. Reusing the AdSense row's exact "Impression"
+ * string is deliberate: the two are worth the same and should scan as one
+ * column.
+ */
+function displayAdMeta(kind: string): KindMeta | null {
+  if (!kind.startsWith("banner_") && !kind.startsWith("interstitial_")) return null;
+  if (kind.endsWith("_click")) return { label: "Click", ...CLICK };
+  // No-fills stay muted ON PURPOSE — a slot that came back empty is a
+  // diagnostic, and colouring it like earnings would report a blank as revenue.
+  if (kind.endsWith("_empty")) return { label: "No-fill", ...QUIET };
+  return { label: "Impression", ...IMPRESSION };
+}
+
 function metaFor(kind: string): KindMeta {
-  return KIND[kind] ?? { label: kind.replace(/_/g, " "), dot: "bg-muted-foreground/50", chip: "bg-secondary text-muted-foreground" };
+  return (
+    KIND[kind] ??
+    displayAdMeta(kind) ??
+    { label: kind.replace(/_/g, " "), dot: "bg-muted-foreground/50", chip: "bg-secondary text-muted-foreground" }
+  );
 }
 
 function timeAgo(iso: string): string {

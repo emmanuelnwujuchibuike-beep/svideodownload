@@ -197,23 +197,54 @@ function beacon(slot: ExoClickInsSlot, filled: boolean): void {
  */
 function hasCreative(host: HTMLElement): boolean {
   /*
-    🔴 MEASURE IT. DO NOT PATTERN-MATCH IT (owner, 2026-08-31: "is still the
-    same, nothing changed").
+    🔴 THE HOST'S OWN HEIGHT IS THE WRONG QUESTION — IT MEASURES ZERO FOR A REAL,
+    VISIBLE AD (production dump, 2026-08-31: `scripts/exoclick-creative-dump.mjs`).
 
-    This used to ask whether the host contained an <iframe>/<video>/<img>/… and
-    fall back to height. That is a GUESS about markup we do not control and
-    cannot see locally — an authorised referer is required for a real fill, so
-    every local test ran against a stub that injected an <img>, which is exactly
-    the one shape the guess got right. Whatever ExoClick actually injects for a
-    given zone — a background-image div, a shadow root, a canvas painted later
-    — that did not match became "no fill", the bar stayed chromeless, and the
-    banner "never showed".
+    This was `host.offsetHeight > 0`, which replaced an even worse markup guess.
+    Both were wrong, and this one was actively destructive. Injecting the sticky
+    zone's tag on frenzsave.com produced THIS, inside our host:
 
-    Occupying space is the only property that matters and the only one that is
-    true of every creative: if it has height, there is something to show. It is
-    also what the reader is actually asking about.
+        DIV 300x250 pos=fixed z=999999 top=20
+          IMG 300x250 src=https://z6v2p9a8.bkcdn.net/library/397286/…
+
+    A real 300x250 creative, painted, centred, on screen. Our host measured
+    `412x0` the whole time — because `position: fixed` takes the creative OUT OF
+    FLOW, so it contributes nothing to its parent's height. Which is not an edge
+    case: it is what a sticky banner and a fullpage interstitial ARE. Every
+    ExoClick product that positions itself was therefore recorded as a no-fill
+    at the exact moment it succeeded.
+
+    🔴 And a no-fill verdict is not passive here. The 3.5s retry re-serves on it,
+    the effect's cleanup runs `el.textContent = ""`, and that DELETES the live
+    creative — then the replacement ask is frequency-capped and declined. That is
+    the mechanism behind "shows only once and doesn't show again unless the page
+    is reloaded", and behind an ad that appears and vanishes seconds later.
+
+    So the question is asked of the SUBTREE, not of the host: is there anything
+    in here that is actually painting? That is true of an in-flow banner, of a
+    `fixed` sticky unit, and of an outstream player once it expands, and it stays
+    false for the empty scaffolding — the loader drops a wrapper `<div>` and a
+    `<style>` even on a no-fill, and those measure 0.
   */
-  return host.offsetHeight > 0;
+  if (host.offsetHeight > 0) return true;
+
+  /*
+    A floor, not a pixel test. The scaffolding is 0-sized and tracking pixels are
+    1x1; anything a person could actually see clears 20x20 comfortably. Capped so
+    a pathological subtree can never make an observer callback expensive — real
+    ad markup is a few dozen nodes.
+  */
+  let seen = 0;
+  for (const el of host.querySelectorAll<HTMLElement>("*")) {
+    if (++seen > 200) break;
+    if (el.tagName === "STYLE" || el.tagName === "SCRIPT" || el.tagName === "INS") continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 20 || r.height < 20) continue;
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
+    return true;
+  }
+  return false;
 }
 
 export function ExoClickSticky({

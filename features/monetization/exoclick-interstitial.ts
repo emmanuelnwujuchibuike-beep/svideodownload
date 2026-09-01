@@ -80,10 +80,14 @@ function beacon(filled: boolean): void {
   }
 }
 
-/** How long to wait for the network to put something on screen. */
+/**
+ * How long to wait for the network to put something on screen.
+ *
+ * A ceiling on WAITING, not on the ad's life. There is deliberately no
+ * teardown timer any more: the host is armed once for the page and their
+ * script owns the takeover, including when to show and close it.
+ */
 const FILL_TIMEOUT_MS = 6000;
-/** How long a takeover may stay before the host is reclaimed. */
-const MAX_LIFETIME_MS = 90_000;
 
 /**
  * Ask ExoClick for a fullpage interstitial. Resolves `true` only if something
@@ -93,6 +97,44 @@ const MAX_LIFETIME_MS = 90_000;
  * the fill timeout — an ad is an enhancement to whatever the visitor was doing,
  * never a step in it.
  */
+/**
+ * The armed host, created at most ONCE per page.
+ *
+ * 🔴 ARM IT AND LEAVE IT ARMED — NEVER DELETE IT (production evidence,
+ * 2026-08-31: `scripts/exoclick-interstitial-gesture.mjs`).
+ *
+ * Their zone DOES return an ad — `s.pemsrv.com` answers
+ * `{"idzone":6016704,"type":"mobile_fullpage_interstitial","data":{…}}` — and
+ * their script injects the overlay into our host:
+ *
+ *     DIV.ex-over-top  pos=fixed  display:none  z=2147483647
+ *
+ * `display: none` is not a no-fill. It is ARMED: the markup is there, styled,
+ * at the maximum z-index, waiting for the moment THEIR script picks. The probe
+ * left it armed through six idle seconds, two real taps and a scroll and it
+ * stayed hidden, so that moment is not something we can ask for.
+ *
+ * What the old code did was fatal to it: wait 6s, see nothing painted, call
+ * `host.remove()`. Every attempt therefore threw away the armed overlay and fell
+ * through to the VAST video — the owner's "the main interstitial ad doesnt show,
+ * rather is the video i used as interstilla before that i already removed".
+ *
+ * So the host is a page-lifetime singleton. Arming is idempotent, it is never
+ * torn down, and their script keeps its standing chance to fire.
+ */
+let armedHost: HTMLElement | null = null;
+
+/** Is a fullpage overlay actually ON SCREEN right now (ours or theirs)? */
+function overlayVisible(): boolean {
+  for (const el of document.querySelectorAll<HTMLElement>(".ex-over-top, [id^='ad_'][class*='ex-over']")) {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
+    const r = el.getBoundingClientRect();
+    if (r.width > window.innerWidth * 0.6 && r.height > window.innerHeight * 0.6) return true;
+  }
+  return false;
+}
+
 export async function showExoClickInterstitial(): Promise<boolean> {
   if (typeof document === "undefined") return false;
 
@@ -100,94 +142,111 @@ export async function showExoClickInterstitial(): Promise<boolean> {
   if (!tag) return false;
 
   /*
-    A host we own and can remove. The unit positions ITSELF — the loader's
-    fullpage ad types are handled specially in their bundle — so this element
-    must add no box of its own and must not constrain what is put in it.
+    Already showing from an earlier arming — their script picked this moment.
+    Report it so the caller does not stack a second interstitial on top.
   */
-  const host = document.createElement("div");
-  host.setAttribute("data-exoclick-interstitial", "");
-  document.body.appendChild(host);
+  if (overlayVisible()) return true;
 
-  const ins = document.createElement("ins");
-  /*
-    Only the network's class. Their `K()` derives the zone TYPE from this exact
-    attribute, so anything appended to it is being fed to their parser.
-  */
-  ins.className = tag.cls;
-  ins.setAttribute("data-zoneid", tag.zoneId);
-  host.appendChild(ins);
+  if (!armedHost) {
+    /*
+      A host we own. The unit positions ITSELF — the loader's fullpage ad types
+      are handled specially in their bundle — so this element must add no box of
+      its own and must not constrain what is put in it.
+    */
+    const host = document.createElement("div");
+    host.setAttribute("data-exoclick-interstitial", "");
+    document.body.appendChild(host);
 
-  const cleanup = () => host.remove();
+    const ins = document.createElement("ins");
+    /*
+      Only the network's class. Their `K()` derives the zone TYPE from this exact
+      attribute, so anything appended to it is being fed to their parser.
+    */
+    ins.className = tag.cls;
+    ins.setAttribute("data-zoneid", tag.zoneId);
+    host.appendChild(ins);
+    armedHost = host;
 
-  const ok = await loadProvider(tag.src ?? EXOCLICK_PROVIDER_SRC);
-  if (!ok) {
-    cleanup();
-    beacon(false);
-    return false;
-  }
-
-  try {
-    (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
-  } catch {
-    cleanup();
-    beacon(false);
-    return false;
-  }
-
-  /*
-    Did anything actually render? Measured, never pattern-matched on markup we
-    do not control — the same rule the banner detection had to learn. A fullpage
-    unit may attach itself to `body` rather than to our host, so BOTH are
-    checked: our host gaining height, or the document gaining a new fixed,
-    full-viewport element that was not there before.
-  */
-  const before = new Set(document.body.children);
-  const filled = await new Promise<boolean>((resolve) => {
-    const started = Date.now();
-    const check = () => {
-      if (host.offsetHeight > 0) return true;
-      for (const el of document.body.children) {
-        if (before.has(el) || el === host) continue;
-        const cs = getComputedStyle(el);
-        if (cs.position !== "fixed") continue;
-        const r = el.getBoundingClientRect();
-        if (r.width > window.innerWidth * 0.6 && r.height > window.innerHeight * 0.6) return true;
-      }
+    const ok = await loadProvider(tag.src ?? EXOCLICK_PROVIDER_SRC);
+    if (!ok) {
+      /*
+        Blocked or unreachable — nothing was ever armed, so there is nothing to
+        preserve and the host would be an empty orphan.
+      */
+      host.remove();
+      armedHost = null;
+      beacon(false);
       return false;
-    };
+    }
+
+    try {
+      (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
+    } catch {
+      host.remove();
+      armedHost = null;
+      beacon(false);
+      return false;
+    }
+  }
+
+  /*
+    Did a takeover actually get PUT ON SCREEN inside the window we can wait?
+
+    Measured, never pattern-matched — the same rule the banner detection had to
+    learn the hard way. `overlayVisible()` asks only for a fixed element covering
+    most of the viewport, which is what a fullpage interstitial IS, wherever
+    their script chose to attach it.
+  */
+  const shown = await new Promise<boolean>((resolve) => {
+    const started = Date.now();
     const tick = () => {
-      if (check()) {
-        resolve(true);
-        return;
-      }
-      if (Date.now() - started >= FILL_TIMEOUT_MS) {
-        resolve(false);
-        return;
-      }
+      if (overlayVisible()) return resolve(true);
+      if (Date.now() - started >= FILL_TIMEOUT_MS) return resolve(false);
       setTimeout(tick, 250);
     };
     tick();
   });
 
-  beacon(filled);
+  beacon(shown);
 
-  if (!filled) {
-    cleanup();
+  if (!shown) {
+    /*
+      🔴 LEAVE IT ARMED. Do NOT remove the host.
+
+      "Not on screen within six seconds" is not "no ad": the overlay is injected
+      and waiting for a moment their script picks, and deleting it is what turned
+      every interstitial moment into the VAST video fallback. It stays in the
+      document for the rest of the page's life, at zero layout cost — `.ex-over-top`
+      is `position: fixed` and `display: none` — so it can still fire later, and
+      the next call sees it through `overlayVisible()` rather than arming a second.
+
+      The caller falls back to its VAST interstitial for THIS moment, which is
+      the honest outcome: the reader gets an ad now, and ExoClick keeps its
+      standing chance.
+    */
     return false;
   }
 
   /*
-    The network owns the takeover from here — including closing it. The host is
-    reclaimed on a long ceiling so a unit that never tidies up after itself
-    cannot leave an orphan in `body` for the rest of the session; it is
-    deliberately far longer than any interstitial should live, so it never cuts
-    a real ad short.
+    The network owns the takeover from here — including closing it.
+
+    Nothing is scheduled to tear the host down any more. It used to be reclaimed
+    on a `MAX_LIFETIME_MS` ceiling, which was written for a host that was rebuilt
+    on every attempt; now that the host is armed once for the page, that timer
+    would delete the standing placeholder and any overlay their script had put in
+    it. `.ex-over-top` is `position: fixed`, so a dormant one costs no layout.
   */
-  setTimeout(cleanup, MAX_LIFETIME_MS);
   return true;
 }
 
-/** Test/debug seam — resets the module singleton. */
+/**
+ * Test/debug seam — resets the module singletons.
+ *
+ * Drops the armed host too, or a test that arms an interstitial leaks it into
+ * the next one and the second arming is skipped as "already armed".
+ */
 export function __resetExoClickInterstitial(): void {
   tagPromise = null;
+  armedHost?.remove();
+  armedHost = null;
 }

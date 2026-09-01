@@ -122,7 +122,14 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
   result_top: "banner",
   download_result_page: "banner",
   under_download: "banner",
-  landing_section_break: "banner",
+  /*
+    🔴 `vast`, because the IN-PAGE POSITIONS now OPEN the interstitial and this
+    is the zone that trigger resolves. Probed on production while it was
+    `banner`: /api/ads/exoclick?zone=landing_section_break answered
+    `{"ad":null}` — the VAST endpoint only serves a zone whose source is `vast`,
+    so every in-page position was firing a trigger that could never fill.
+  */
+  landing_section_break: "vast",
   /*
     The story ad between history media plays through the VAST player now, not
     AdSlot — see the `history-story` trigger. Owner: "history view after 3 view
@@ -230,9 +237,15 @@ export const DEFAULT_HILLTOP: HilltopConfig = {
     than rendering a unit of its own: "it should be the vast video, only the
     first above the grid should be hiltop banner".
   */
+  /*
+    Owner, 2026-09-01: "i notice the hiltop vast doesnt work on placement, so put
+    the hiltop banner back in the history page." So both HISTORY positions render
+    a banner — the one above the grid and the period separators — and the landing
+    and feed positions open the interstitial.
+  */
   slotSource: {
     history: "banner",
-    historyfeed: "interstitial",
+    historyfeed: "banner",
     landing: "interstitial",
     feed: "interstitial",
   },

@@ -12,6 +12,7 @@ import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
 import { DeviceCheck } from "@/features/app-shell/device-check";
 import { FloatingMessages } from "@/features/app-shell/floating-messages";
+import { VastInterstitialTriggers } from "@/features/monetization/vast-interstitial/triggers";
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { DownloadTopAd } from "@/features/monetization/download-top-ad";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
@@ -73,6 +74,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <PageRefresh>{children}</PageRefresh>
         </div>
       </div>
+      {/*
+        🔴 IDLE, BACK-SWIPE AND RETURN, ON THE SIGNED-IN TREE TOO (owner,
+        2026-09-01: "the hiltop vast is not showing as idle interstilla,
+        backswipe, return to site, they are all suppose to trigger it").
+
+        They were mounted only inside `DeferredAdFurniture`, which lives in the
+        MARKETING layout — so on /home, /downloads, the feed and every other
+        signed-in route these three moments did not exist at all. Not a fill
+        problem and not a configuration one: no listener was ever attached.
+
+        The component ships two listeners and a timer; the ad itself stays behind
+        a dynamic import, so this costs a cold page load nothing.
+      */}
+      <VastInterstitialTriggers />
       <MobileNav />
       {/*
         App-shell chrome, moved here from the ROOT layout (2026-07-19).

@@ -222,6 +222,8 @@ export async function GET() {
       // The wallpaper download-started hold. Public and non-user-specific, like
       // every other gate duration on this endpoint.
       wallpaperGateSeconds: clampSeconds(settings.wallpaperGateSeconds, 10, 60),
+      // How long without interaction before the idle interstitial fires.
+      idleInterstitialSeconds: clampSeconds(settings.idleInterstitialSeconds, 5, 600),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

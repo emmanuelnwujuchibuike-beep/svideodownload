@@ -989,6 +989,26 @@ export function MonetizationSettings({
         is admin-set, and this is the one a visitor meets most often.
       */}
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">Idle interstitial — how long before it fires</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Seconds without interaction before the full-screen video opens. It was fixed at
+          45, which on a phone is long enough that the moment looked broken.
+          <strong> Low numbers are aggressive</strong>: at 5 seconds, with the interstitial
+          cooldown at 0, a reader who stops scrolling to read something meets an ad. The
+          back-swipe and return-to-site triggers share this placement, so the real
+          frequency is higher than this number alone.
+        </p>
+        <HilltopNumber
+          label="Seconds idle"
+          value={state.idleInterstitialSeconds ?? 5}
+          min={3}
+          max={600}
+          busy={busy}
+          onCommit={(n) => void persist({ ...state, idleInterstitialSeconds: n })}
+        />
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
         <p className="text-sm font-semibold">Wallpaper — hold before download starts</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
           How long the ad is held on screen after a wallpaper download is tapped, before

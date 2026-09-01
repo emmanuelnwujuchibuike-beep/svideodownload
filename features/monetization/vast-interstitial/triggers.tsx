@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /**
  * Idle and back-swipe triggers for the ExoClick interstitial.
@@ -28,8 +28,15 @@ import { useEffect } from "react";
  * behaviour all live in `request.ts` and apply here unchanged.
  */
 
-/** How long without interaction counts as idle. */
-const IDLE_MS = 45_000;
+/**
+ * How long without interaction counts as idle, until the admin value arrives.
+ *
+ * The admin number replaces this the moment `/api/ads/config` answers — see the
+ * effect below. It stays as the pre-config value rather than something shorter
+ * so a slow config fetch cannot produce a surprise ad on the first few seconds
+ * of a page.
+ */
+const IDLE_FALLBACK_MS = 45_000;
 
 /** Fire the interstitial, loading it only at that moment. */
 function fire() {
@@ -43,6 +50,29 @@ function fire() {
 }
 
 export function VastInterstitialTriggers() {
+  /*
+    The admin-set idle threshold (owner, 2026-09-01: "it triggers very late, it
+    should be 5secs or setable in the admin dashboard"). It was hard-coded at 45
+    seconds, which on a phone is long enough that the moment looked broken.
+  */
+  const [idleMs, setIdleMs] = useState(IDLE_FALLBACK_MS);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { idleInterstitialSeconds?: number }) => {
+        if (alive && typeof d.idleInterstitialSeconds === "number") {
+          setIdleMs(d.idleInterstitialSeconds * 1000);
+        }
+      })
+      .catch(() => {
+        /* The fallback threshold is the safe outcome. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -56,7 +86,7 @@ export function VastInterstitialTriggers() {
     const arm = () => {
       window.clearTimeout(timer);
       if (document.visibilityState !== "visible") return;
-      timer = window.setTimeout(fire, IDLE_MS);
+      timer = window.setTimeout(fire, idleMs);
     };
     const ACTIVITY = [
       "pointerdown",
@@ -88,7 +118,7 @@ export function VastInterstitialTriggers() {
       document.removeEventListener("visibilitychange", arm);
       window.removeEventListener("popstate", onPop);
     };
-  }, []);
+  }, [idleMs]);
 
   return null;
 }

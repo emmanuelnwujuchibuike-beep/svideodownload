@@ -584,6 +584,21 @@ export interface MonetizationSettings {
    */
   wallpaperGateSeconds: number;
   /**
+   * Seconds without interaction before the IDLE interstitial fires (owner,
+   * 2026-09-01: "it triggers very late, it should be 5secs or setable in the
+   * admin dashboard").
+   *
+   * It was a hard-coded 45 in triggers.tsx, which is a long time to sit still on
+   * a phone — long enough that the moment looked broken rather than rare.
+   *
+   * ⚠️ LOW NUMBERS ARE AGGRESSIVE. At 5 seconds, with the interstitial cooldown
+   * at 0, a reader who stops scrolling to read something meets a full-screen ad.
+   * That is the owner's call to make, which is exactly why it is a setting — but
+   * the back-swipe and return triggers share this placement, so the effective
+   * frequency is higher than this number alone suggests.
+   */
+  idleInterstitialSeconds: number;
+  /**
    * A HilltopAds banner tag PER PLACEMENT (owner, 2026-09-01: "i want all pages
    * should have a separate ad link slot and serving at once in different pages
    * so when it shows in landing page, it should still show in other pages and
@@ -702,6 +717,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   hilltop: DEFAULT_HILLTOP,
   hilltopVastUrl: "",
   wallpaperGateSeconds: 10,
+  idleInterstitialSeconds: 5,
   hilltopSnippets: {},
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

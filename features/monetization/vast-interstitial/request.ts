@@ -207,6 +207,65 @@ export interface InterstitialResult {
  * every completed download would misreport the placement and burn the viewer's
  * frequency cap on moments that never happened.
  */
+/**
+ * A creative fetched ahead of the moment that will play it.
+ *
+ * 🔴 FETCHING THE VAST DOES NOT COUNT AN IMPRESSION, and an earlier note in this
+ * file said otherwise. Impressions are fired by `pixel(creative.impression)` in
+ * overlay.ts, at PLAYBACK — pulling the XML is a request, not a view. So a
+ * creative can be in hand before it is needed without misreporting anything,
+ * and the reason not to do it on every page view is simply that it would ask
+ * for creatives on moments that never happen.
+ *
+ * Short TTL: a VAST response is targeted and time-limited, and a stale creative
+ * is worse than a fresh fetch. Two minutes covers a download comfortably.
+ */
+const CREATIVE_TTL_MS = 120_000;
+const creativeCache = new Map<string, { creative: unknown; at: number }>();
+
+/** Which START moment implies which COMPLETION moment is seconds away. */
+const PREFETCHES_ON_START: Partial<Record<InterstitialTrigger, InterstitialTrigger>> = {
+  download: "download-complete",
+  wallpaper: "download-complete",
+};
+
+/**
+ * Put the completion creative in hand while the download is still running.
+ *
+ * Owner, 2026-09-01: "make the download complete hiltop vast video interstills
+ * to trigger more instant".
+ *
+ * The remaining wait after the module warm-up was one request to
+ * /api/ads/exoclick, which fetches the tag, FOLLOWS WRAPPERS server-side and
+ * parses the XML — the slowest step by a distance, and it was starting only
+ * once the file had already saved.
+ *
+ * A download START is the honest moment to ask: a completion is seconds away,
+ * so this is one request per download rather than one per page view, which is
+ * the same number of requests the completion itself would have made.
+ */
+function prefetchCreative(trigger: InterstitialTrigger): void {
+  const zone = ZONE_BY_TRIGGER[trigger];
+  if (!zone) return;
+  void fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d) => {
+      const creative = d?.ad ?? null;
+      if (creative) creativeCache.set(zone, { creative, at: Date.now() });
+    })
+    .catch(() => {
+      /* The real path re-requests — this is only a head start. */
+    });
+}
+
+/** A cached creative for this zone, if one is in hand and still fresh. */
+function takeCachedCreative(zone: string): unknown | null {
+  const hit = creativeCache.get(zone);
+  if (!hit) return null;
+  creativeCache.delete(zone);
+  return Date.now() - hit.at < CREATIVE_TTL_MS ? hit.creative : null;
+}
+
 export function warmVastInterstitial(): void {
   void loadConfig().catch(() => {
     /* Warming must never surface an error — the real path re-tries. */
@@ -263,6 +322,14 @@ export async function requestVastInterstitial(
     from opening eight takeovers, and an `await` with `phase` still "idle" is a
     hole straight through it.
   */
+  /*
+    The completion creative, requested now rather than when the file lands. This
+    runs before the current moment's own ad is even resolved, so the two requests
+    overlap instead of queueing.
+  */
+  const follows = PREFETCHES_ON_START[trigger];
+  if (follows) prefetchCreative(follows);
+
   phase = "loading";
   try {
     const { showExoClickInterstitial } = await import("../exoclick-interstitial");
@@ -293,10 +360,20 @@ export async function requestVastInterstitial(
   track("vast_requested", { zone: ZONE });
 
   try {
-    const res = await fetch(`/api/ads/exoclick?zone=${encodeURIComponent(ZONE)}`, {
-      signal: controller.signal,
-    });
-    const creative: VastCreative | null = res.ok ? ((await res.json()).ad ?? null) : null;
+    /*
+      A creative prefetched at download START, if one is waiting — that removes
+      the whole request from the completion path, which is the slowest step in
+      it. Falls straight through to the live fetch when there is none.
+    */
+    const cached = takeCachedCreative(ZONE) as VastCreative | null;
+    const creative: VastCreative | null =
+      cached ??
+      (await (async () => {
+        const res = await fetch(`/api/ads/exoclick?zone=${encodeURIComponent(ZONE)}`, {
+          signal: controller.signal,
+        });
+        return res.ok ? ((await res.json()).ad ?? null) : null;
+      })());
 
     if (!creative?.mediaUrl) {
       clearTimeout(budget);

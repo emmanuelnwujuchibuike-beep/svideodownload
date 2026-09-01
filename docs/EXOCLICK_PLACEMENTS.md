@@ -31,6 +31,61 @@ working slot down with it.
 
 ---
 
+## 🟢 THE LIVE SET-UP (2026-09-01, end of day)
+
+**One ExoClick unit per page, every one of them a zone type observed serving.**
+
+| page | unit | zone | type | note |
+|---|---|---|---|---|
+| `/`, `/downloads` | sticky banner | `6016708` | 17 | pins itself; 54% fill and 14 clicks when alone on the page |
+| `/history` | outstream, above the grid | `6015606` | 37 | 16 fills + 8 clicks per 4h — but see the scroll rule below |
+| any page | fullpage interstitial | `6016704` | 33 | ExoClick owns the takeover |
+
+Everything else is deliberately **empty**: both History in-feed slots, the
+landing slot, the multi-format above the grid, the interstitial fallback and the
+bottom banner. None of them are broken; each was switched off because a second
+unit on a page measurably costs the first one (see the section below).
+
+### ⚠️ WHICH SLOT IS ON WHICH PAGE — check before believing "it never showed"
+
+Beacon paths over 12h, which is the authoritative answer:
+
+| slot | `/` | `/downloads` | `/history` |
+|---|---|---|---|
+| sticky | 68 | 3 | **1** |
+| history (outstream) | — | — | 72 |
+| landing | 23 | — | — |
+
+**There is no sticky banner on /history.** It mounts inside the downloader and
+the download box only — `features/downloader/downloader.tsx` and
+`features/downloads/download-box.tsx`. "I never saw the sticky on the history
+page" is not a fill problem, a cap or a bug; that placement does not exist. The
+single stray beacon is a component lingering through a client-side navigation.
+
+### ⚠️ AN OUTSTREAM IS INVISIBLE UNTIL YOU SCROLL
+
+The unit above the History grid is a type-37 outstream, and ExoClick holds it
+collapsed behind their own `._effect { max-height: 0 }` until THEIR viewability
+function adds `exo_wrapper_show` — a function bound only to scroll, resize and
+focus. **Landing on /history and not scrolling shows nothing, by their design.**
+That is the whole of "the history page never showed" while the same slot logged
+16 fills and 8 clicks in four hours.
+
+A multi-format (type 38) zone paints on arrival and is the fix for that — but it
+has to REPLACE the outstream via the admin switch, never join it.
+
+### ⚠️ EXOCLICK CAPS PER VIEWER — "it showed once" is the cap, not a bug
+
+Zones carry a **Capping** setting in the ExoClick dashboard (impressions per user
+per period). One person reloading a page sees the ad once and then never again,
+while the activity feed shows it serving steadily to everyone else. Two
+consequences:
+
+- **Your own eyes are not a measurement.** Every "it is not showing" in this
+  project's history was checked against the feed and most were the ad working.
+- Repeated probing from one IP burns the cap for that machine, which is why a
+  blank in `exoclick-try-tag.mjs` proves nothing after the first few runs.
+
 ## The placements
 
 Admin → **Monetization controls**. Zones as set on 2026-09-01.

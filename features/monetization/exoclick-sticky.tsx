@@ -124,6 +124,52 @@ const RETRY_MS = 9000;
 
 const providerPromises = new Map<string, Promise<boolean>>();
 
+/**
+ * ONE `serve()` per frame, however many slots asked for it.
+ *
+ * 🔴 EVERY EXTRA PUSH IS A WHOLE AD REQUEST, AND IT BURNS THE FREQUENCY CAP
+ * (owner, 2026-09-01: "the multi format in history stop showing when i navigates
+ * outs twice and come back").
+ *
+ * `serve` is not per-placement. Their loader re-queries the WHOLE document and
+ * fills every `<ins>` it has not stamped:
+ *
+ *     ne = function (params, domain) {
+ *       for (const el of document.querySelectorAll(X(domain).join(",")))
+ *         …K(el, domain);          // X() ends every selector with
+ *     }                            // :not([data-processed=true])
+ *
+ * So one push already covers every slot that mounted in the same tick — and
+ * each instance pushing its own turned /history's four placements (the
+ * above-grid unit, two in-feed units and the docked bottom-nav banner) into FOUR
+ * full requests per visit. ExoClick caps impressions per visitor per zone, so a
+ * couple of navigations is enough to exhaust it, which is exactly the shape of
+ * "stops showing after I navigate out twice and come back".
+ *
+ * Coalescing to one push per frame per domain makes the number of requests match
+ * the number of ROUNDS of mounting, not the number of slots. Keyed by domain
+ * because a zone is activated against the provider its snippet names, and asking
+ * magsrv for a pemsrv zone serves nothing.
+ */
+const pendingServe = new Set<string>();
+let serveFrame = 0;
+
+function requestServe(src: string): void {
+  pendingServe.add(src);
+  if (serveFrame) return;
+  serveFrame = requestAnimationFrame(() => {
+    serveFrame = 0;
+    pendingServe.clear();
+    try {
+      // One push serves every unstamped placeholder currently in the document,
+      // across every domain whose provider has loaded.
+      (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
+    } catch {
+      /* A broken provider must never take a page down over a banner. */
+    }
+  });
+}
+
 export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boolean> {
   const existing = providerPromises.get(src);
   if (existing) return existing;
@@ -169,7 +215,7 @@ declare global {
  * same ExoClick DISPLAY mechanism — an <ins> their loader fills — so they share
  * one component rather than three that drift apart.
  */
-export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
+export type ExoClickInsSlot = "sticky" | "history" | "historyfeed" | "landing" | "bottomnav";
 
 /**
  * Report this slot's state to the operator feed (owner, 2026-08-31: "wire the
@@ -397,7 +443,15 @@ export function ExoClickSticky({
           multi-format tag, loses nothing.
         */
         const bySlot =
-          slot === "history" ? d.exoclickHistory : slot === "bottomnav" ? d.exoclickBottomNav : d.exoclickSticky;
+          slot === "history"
+            ? d.exoclickHistory
+            : slot === "historyfeed"
+              ? d.exoclickHistoryFeed
+              : slot === "landing"
+                ? d.exoclickLanding
+                : slot === "bottomnav"
+                  ? d.exoclickBottomNav
+                  : d.exoclickSticky;
         setTag(bySlot ?? null);
       })
       .catch(() => {
@@ -703,23 +757,47 @@ export function ExoClickSticky({
       fired once per mount, only once their player markup exists, and only while
       the host is genuinely inside the viewport.
     */
-    const nudge = () => {
-      const r = el.getBoundingClientRect();
-      const onScreen = r.top < window.innerHeight && r.bottom > 0 && r.width > 0;
-      if (!onScreen || !el.querySelector("video")) return false;
-      window.dispatchEvent(new Event("scroll"));
-      window.dispatchEvent(new Event("resize"));
-      return true;
-    };
     /*
-      Two attempts, a second apart: the player needs its <video> in place before
-      the check can measure anything, and the creative lands ~4.5s in. Cheap,
-      bounded, and it stops as soon as it has fired once.
+      🔴 TEN PERCENT IS ENOUGH (owner, 2026-09-01: "make it show even if user
+      sees 10% of the ad").
+
+      An IntersectionObserver at a 0.1 threshold, NOT a polling timer. It is the
+      browser telling us the moment the slot is a tenth visible, computed off the
+      main thread, instead of us asking every second and paying a layout read for
+      each ask — which is the cost that made the history page lag in the first
+      place.
+
+      What it triggers is still only an EVALUATION. ExoClick's own function
+      decides, on the real geometry:
+
+          m = ceil(video.top);  m > 0 && m + halfHeight < innerHeight
+
+      and it is bound solely to scroll/resize/focus, so a unit that is already in
+      view when it loads is never assessed at all. Dispatching the event it is
+      waiting for is the difference between "their rule said no" and "their rule
+      was never asked" — and only the second one is our bug. We never add
+      `exo_wrapper_show` ourselves; an ad nobody can see must never report an
+      impression.
+
+      Fires once. `once` is latched before the dispatch so a re-entrant
+      scroll handler cannot double-fire it.
     */
-    let nudges = 0;
-    const nudgeTimer = setInterval(() => {
-      if (++nudges > 8 || nudge()) clearInterval(nudgeTimer);
-    }, 1000);
+    let nudged = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (nudged || e.intersectionRatio < 0.1) continue;
+          // Their check needs the player in the DOM before it can measure it.
+          if (!el.querySelector("video, iframe, img")) continue;
+          nudged = true;
+          window.dispatchEvent(new Event("scroll"));
+          window.dispatchEvent(new Event("resize"));
+          io.disconnect();
+        }
+      },
+      { threshold: [0.1, 0.5] },
+    );
+    io.observe(el);
 
     void loadProvider(tag.src).then((ok) => {
       if (!ok) {
@@ -732,13 +810,16 @@ export function ExoClickSticky({
         beacon(slot, false);
         return;
       }
-      try {
-        // Tells the loader to re-scan the document and fill every placeholder it
-        // has not stamped yet — which, after the rebuild above, is ours.
-        (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
-      } catch {
-        /* A broken provider must never take a page down over a banner. */
-      }
+      /*
+        Tells the loader to re-scan the document and fill every placeholder it
+        has not stamped yet — which, after the rebuild above, includes ours.
+
+        COALESCED: `serve` is document-wide, so one push covers every slot that
+        mounted this frame. Pushing per instance turned /history's four
+        placements into four full ad requests per visit and exhausted the
+        per-visitor cap in a couple of navigations. See `requestServe`.
+      */
+      requestServe(tag.src ?? EXOCLICK_PROVIDER_SRC);
       // Whatever the state is now — the observers keep it current from here.
       report();
     });
@@ -748,7 +829,7 @@ export function ExoClickSticky({
       mo.disconnect();
       // A queued check must not run against a host this cleanup is about to empty.
       if (frame) cancelAnimationFrame(frame);
-      clearInterval(nudgeTimer);
+      io.disconnect();
       el.removeEventListener("pointerdown", onClick, { capture: true });
       clearTimeout(emptyTimer);
       clearTimeout(retryTimer);

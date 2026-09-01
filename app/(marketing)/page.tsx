@@ -16,6 +16,7 @@ import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL } from "@/lib/site";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
+import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 
 /**
  * The marketing landing page — the first page a new visitor ever loads, and the
@@ -245,6 +246,24 @@ export default function HomePage() {
 
         {/* Ecosystem grid (Product Genome). */}
         <ProductGrid />
+
+        {/*
+          🔴 THE EXOCLICK MULTI-FORMAT SLOT (owner, 2026-09-01: "put a multi
+          format slot in the landing page above the storage card and below the
+          explore feature and wallpaper button").
+
+          Exactly here: `ProductGrid` above ends with the feature cards and then
+          the Explore-wallpapers CTA, so this is the first thing after that
+          button and it sits above everything below.
+
+          LAZY, and code-split, because this is the 1.6s route. The unit is not
+          imported into the first-load bundle and is not mounted until it nears
+          the viewport — see features/monetization/lazy-exoclick-slot.tsx. It
+          reserves no height, so an empty zone leaves the page exactly as it was.
+        */}
+        <div className="container max-w-5xl px-3">
+          <LazyExoClickSlot slot="landing" />
+        </div>
 
         {/*
           Ad slot — same zone, on the shared premium surface. Renders nothing until

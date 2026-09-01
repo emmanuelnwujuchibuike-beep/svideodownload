@@ -420,6 +420,46 @@ export interface MonetizationSettings {
    */
   exoclickHistoryUseMultiFormat: boolean;
   /**
+   * ExoClick tag for the IN-FEED slots on the History page (owner, 2026-09-01:
+   * "put an ad slot that can serve multi format, banner and video outstream in
+   * between the time period in history page … and also add a new time zone of
+   * last week and add a slot there").
+   *
+   * Takes ANY ExoClick zone — multi-format, display banner or outstream video —
+   * because the mechanism is identical for all three: an `<ins>` their loader
+   * fills. Only the zone type differs, and that is the operator's choice, not
+   * something this field should constrain.
+   *
+   * ONE field serving BOTH in-feed positions (after Yesterday, and in Last
+   * week). Their loader is explicitly happy with several placements of one zone
+   * — its own log reports "Zones Batch Size: 10, Multi-zones Batch Size: 3" —
+   * and a second admin field for what is the same in-feed placement, twice, is
+   * a second thing to keep in step for no gain.
+   *
+   * ⚠️ An outstream tag here only opens once the reader scrolls it into view
+   * (ExoClick's own viewability rule). In a FEED that is close to ideal — the
+   * reader is scrolling past it by definition — which is the opposite of the
+   * above-the-grid slot, where it made the unit invisible on landing.
+   */
+  exoclickHistoryFeedSnippet: string;
+  /**
+   * ExoClick tag for the LANDING page, between the feature cards and the
+   * storage card (owner, 2026-09-01: "put a multi format slot in the landing
+   * page above the storage card and below the explore feature and wallpaper
+   * button").
+   *
+   * Its own field rather than a reuse of any other: this is the one placement
+   * that sits on the LANDING page, which is the only surface held to the 1.6s
+   * budget — so it must be separately switchable off without touching the
+   * history or bottom-nav units, and it must be obvious in the admin that
+   * turning it on affects the page the whole site is judged on.
+   *
+   * Takes any ExoClick zone; multi-format is the one measured to render on
+   * arrival with no scroll (`scripts/exoclick-try-tag.mjs eas6a97888e38
+   * 6017110` → host=250px, DIV 300x250).
+   */
+  exoclickLandingSnippet: string;
+  /**
    * ExoClick FULLPAGE INTERSTITIAL tag (owner, 2026-08-31: "set up the full
    * idle, backswipe and all interstitial ad to also use this exoclick
    * interstitial ad set up for full page interstitial ad").
@@ -521,6 +561,8 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickHistorySnippet: "",
   exoclickMultiFormatSnippet: "",
   exoclickHistoryUseMultiFormat: true,
+  exoclickHistoryFeedSnippet: "",
+  exoclickLandingSnippet: "",
   exoclickInterstitialSnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

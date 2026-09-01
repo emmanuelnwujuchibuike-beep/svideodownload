@@ -36,6 +36,8 @@ import { MonetagUnitsEditor } from "./monetag-units-editor";
   typing this as `keyof` would let one of them be dropped into the toggle grid,
   where `!s[key]` would turn a publisher id into `false`.
 */
+const MULTI_FORMAT_PLACEHOLDER = String.raw`<ins class="eas6a97888e38" data-zoneid="6017110"></ins>`;
+
 type ToggleKey = {
   [K in keyof MonetizationSettings]: MonetizationSettings[K] extends boolean ? K : never;
 }[keyof MonetizationSettings];
@@ -138,6 +140,8 @@ export function MonetizationSettings({
       | "exoclickBottomNavSnippet"
       | "exoclickHistorySnippet"
       | "exoclickMultiFormatSnippet"
+      | "exoclickHistoryFeedSnippet"
+      | "exoclickLandingSnippet"
       | "exoclickInterstitialSnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
@@ -235,6 +239,8 @@ export function MonetizationSettings({
   const bottomNavTag = parseExoClickSticky(state.exoclickBottomNavSnippet ?? "");
   const historyTag = parseExoClickSticky(state.exoclickHistorySnippet ?? "");
   const multiFormatTag = parseExoClickSticky(state.exoclickMultiFormatSnippet ?? "");
+  const historyFeedTag = parseExoClickSticky(state.exoclickHistoryFeedSnippet ?? "");
+  const landingTag = parseExoClickSticky(state.exoclickLandingSnippet ?? "");
   const interstitialTag = parseExoClickSticky(state.exoclickInterstitialSnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
@@ -517,6 +523,48 @@ export function MonetizationSettings({
         works without the reader doing anything, and because it takes precedence
         over that field above the history grid.
       */}
+      {/*
+        The two placements added 2026-09-01: between the history time periods,
+        and on the landing page under the wallpaper button. Both take ANY
+        ExoClick zone — multi-format, display banner or outstream — because the
+        mechanism is one `<ins>` their loader fills and only the zone type
+        differs. The guidance says which behaves how; the choice is the
+        operator's.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">History — between time periods</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Shown twice inside the History feed: after <strong>Yesterday</strong>, and
+          after <strong>Last week</strong>. Multi-format, display banner or outstream
+          video all work here — an outstream is a good fit, because the reader is
+          scrolling past it by definition. Gated by the <strong>ExoClick</strong> switch.
+        </p>
+        <SnippetField
+          value={state.exoclickHistoryFeedSnippet ?? ""}
+          busy={busy}
+          placeholder={MULTI_FORMAT_PLACEHOLDER}
+          onChange={(next) => setText("exoclickHistoryFeedSnippet", next)}
+          onSave={() => void persist(state)}
+        />
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">Landing page — under the wallpaper button</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Sits on the landing page directly below the feature cards and the
+          Explore-wallpapers button. Loaded lazily and code-split, so it stays off
+          the landing page&apos;s first-load budget and only mounts as the reader
+          approaches it. Gated by the <strong>ExoClick</strong> switch.
+        </p>
+        <SnippetField
+          value={state.exoclickLandingSnippet ?? ""}
+          busy={busy}
+          placeholder={MULTI_FORMAT_PLACEHOLDER}
+          onChange={(next) => setText("exoclickLandingSnippet", next)}
+          onSave={() => void persist(state)}
+        />
+      </div>
+
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
         <p className="text-sm font-semibold">Multi-format — above the History grid</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
@@ -527,23 +575,13 @@ export function MonetizationSettings({
           <strong> instead of</strong> the outstream field below. Gated by the
           {" "}<strong>ExoClick</strong> switch above.
         </p>
-        <textarea
+        <SnippetField
           value={state.exoclickMultiFormatSnippet ?? ""}
-          disabled={busy}
-          onChange={(e) => setText("exoclickMultiFormatSnippet", e.target.value)}
-          placeholder={'<ins class="eas6a97888e38" data-zoneid="6017110"></ins>'}
-          className="min-h-[70px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          busy={busy}
+          placeholder={MULTI_FORMAT_PLACEHOLDER}
+          onChange={(next) => setText("exoclickMultiFormatSnippet", next)}
+          onSave={() => void persist(state)}
         />
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" disabled={busy} onClick={() => void persist(state)} className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">Save</button>
-          {multiFormatTag ? (
-            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Read zone {multiFormatTag.zoneId} · class {multiFormatTag.cls}</span>
-          ) : state.exoclickMultiFormatSnippet?.trim() ? (
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
-          ) : (
-            <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
-          )}
-        </div>
 
         {/*
           🔴 ONE SLOT, ONE TAG — and the operator can SEE which (owner,
@@ -621,23 +659,13 @@ export function MonetizationSettings({
           as soon as it loads, paste a <strong>display banner</strong> zone here instead
           (the same kind as the bottom-nav banner).
         </p>
-        <textarea
+        <SnippetField
           value={state.exoclickHistorySnippet ?? ""}
-          disabled={busy}
-          onChange={(e) => setText("exoclickHistorySnippet", e.target.value)}
+          busy={busy}
           placeholder={'<ins class="eas6a97888e37" data-zoneid="6015590"></ins>'}
-          className="min-h-[70px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+          onChange={(next) => setText("exoclickHistorySnippet", next)}
+          onSave={() => void persist(state)}
         />
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" disabled={busy} onClick={() => void persist(state)} className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">Save</button>
-          {historyTag ? (
-            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Read zone {historyTag.zoneId} · class {historyTag.cls}</span>
-          ) : state.exoclickHistorySnippet?.trim() ? (
-            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
-          ) : (
-            <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
-          )}
-        </div>
       </div>
 
       <div className="rounded-2xl bg-secondary/40 p-4 ring-1 ring-inset ring-border/60">
@@ -1610,6 +1638,64 @@ export function MonetizationSettings({
         ) : null}
       </div>
     </section>
+  );
+}
+
+/**
+ * The textarea + Save + "read zone N" status line shared by the ExoClick
+ * snippet fields.
+ *
+ * Four of these blocks were byte-identical apart from the settings key, and the
+ * duplication is what pushed /admin over its gzipped ceiling when two more
+ * placements were added. Extracting it is the cheap saving the budget note in
+ * lib/perf/budget.test.ts asks to be taken before raising the number again.
+ *
+ * The sticky, bottom-nav and interstitial blocks keep their own markup on
+ * purpose — the interstitial also reports which provider DOMAIN its tag names,
+ * which matters because a zone is activated against one provider and asking the
+ * wrong one serves nothing.
+ */
+function SnippetField({
+  value,
+  placeholder,
+  busy,
+  onChange,
+  onSave,
+}: {
+  value: string;
+  placeholder: string;
+  busy: boolean;
+  onChange: (next: string) => void;
+  onSave: () => void;
+}) {
+  const tag = parseExoClickSticky(value);
+  return (
+    <>
+      <textarea
+        value={value}
+        disabled={busy}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="min-h-[70px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+      />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onSave}
+          className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+        >
+          Save
+        </button>
+        {tag ? (
+          <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Read zone {tag.zoneId} · class {tag.cls}</span>
+        ) : value.trim() ? (
+          <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
+        )}
+      </div>
+    </>
   );
 }
 

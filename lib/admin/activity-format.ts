@@ -52,6 +52,8 @@ export const NOTABLE = new Set([
 const SLOT_LABELS: Record<string, string> = {
   bottomnav: "Bottom banner",
   history: "History banner",
+  historyfeed: "History in-feed",
+  landing: "Landing banner",
   sticky: "Sticky banner",
   interstitial: "Full-page interstitial",
 };

@@ -21,7 +21,7 @@ import {
 
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { ExoClickSticky } from "@/features/monetization/exoclick-sticky";
-import { type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
 import { startDownload } from "@/features/downloads/manager";
@@ -45,6 +45,20 @@ import type { DownloadRecord, MediaKind } from "@/types";
  * for.
  */
 const HISTORY_STORY_AD_EVERY = 3;
+
+/**
+ * Which time-period sections are followed by an in-feed ad.
+ *
+ * Owner, 2026-09-01: "in between the time period in history page, the yesterday
+ * ending that divides the week … and add a new time zone of last week and add a
+ * slot there".
+ *
+ * Two placements, at the two natural divisions — where Yesterday gives way to
+ * the week, and where Last week gives way to Earlier. Named by BUCKET KEY rather
+ * than by index so a section that is empty (and therefore filtered out) cannot
+ * shift an ad onto a different boundary than the one asked for.
+ */
+const AD_AFTER_GROUP = new Set(["yesterday", "lastweek"]);
 
 
 /**
@@ -241,16 +255,23 @@ export function MediaGallery({
     const today = midnight.getTime();
     const yesterday = today - 86_400_000;
     const week = today - 6 * 86_400_000;
+    /*
+      "Last week" (owner, 2026-09-01: "add a new time zone of last week").
+      The seven days before "This week" — so the two together cover a fortnight
+      and "Earlier" starts where a reader stops thinking in weeks at all.
+    */
+    const lastWeek = today - 13 * 86_400_000;
 
     const buckets: { key: string; label: string; items: DownloadRecord[] }[] = [
       { key: "today", label: "Today", items: [] },
       { key: "yesterday", label: "Yesterday", items: [] },
       { key: "week", label: "This week", items: [] },
+      { key: "lastweek", label: "Last week", items: [] },
       { key: "earlier", label: "Earlier", items: [] },
     ];
     for (const item of sorted) {
       const t = item.createdAt;
-      const bucket = t >= today ? 0 : t >= yesterday ? 1 : t >= week ? 2 : 3;
+      const bucket = t >= today ? 0 : t >= yesterday ? 1 : t >= week ? 2 : t >= lastWeek ? 3 : 4;
       buckets[bucket]!.items.push(item);
     }
     return buckets.filter((b) => b.items.length > 0);
@@ -429,8 +450,8 @@ export function MediaGallery({
               still a hundred trees to build and hydrate. This is the half that
               was missing.
             */
-            <section
-              key={g.key}
+            <Fragment key={g.key}>
+              <section
               className="[content-visibility:auto] [contain-intrinsic-size:auto_420px]"
             >
               <button
@@ -461,7 +482,30 @@ export function MediaGallery({
                   ))}
                 </div>
               )}
-            </section>
+              </section>
+              {/*
+                🔴 IN-FEED AD, BETWEEN THE TIME PERIODS (owner, 2026-09-01: "put
+                an ad slot … in between the time period in history page, the
+                yesterday ending that divides the week … and add a new time zone
+                of last week and add a slot there").
+
+                OUTSIDE the <section>, deliberately. Each section carries
+                `content-visibility: auto`, which lets the browser skip layout and
+                paint for it while off-screen — and an ad slot inside one would be
+                skipped with it, so the loader would be filling a placeholder the
+                browser has not laid out. A sibling between sections is both the
+                position asked for and the only place the unit is always real.
+
+                An outstream tag is a GOOD fit here, unlike above the grid: their
+                viewability rule wants the slot scrolled into view, and a reader
+                moving between time periods is doing exactly that.
+              */}
+              {AD_AFTER_GROUP.has(g.key) ? (
+                <div className="-mx-2 px-1.5 sm:-mx-4">
+                  <ExoClickSticky slot="historyfeed" />
+                </div>
+              ) : null}
+            </Fragment>
           ))}
         </div>
       ) : view === "grid" ? (

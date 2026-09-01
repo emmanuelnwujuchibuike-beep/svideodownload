@@ -72,6 +72,8 @@ export async function GET() {
         const outstream = parseExoClickSticky(settings.exoclickHistorySnippet);
         return settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
       })(),
+      exoclickHistoryFeed: parseExoClickSticky(settings.exoclickHistoryFeedSnippet),
+      exoclickLanding: parseExoClickSticky(settings.exoclickLandingSnippet),
       exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
       exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),
       /*

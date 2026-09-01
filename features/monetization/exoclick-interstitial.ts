@@ -124,6 +124,164 @@ const FILL_TIMEOUT_MS = 6000;
  */
 let armedHost: HTMLElement | null = null;
 
+/**
+ * The MULTI-FORMAT FALLBACK interstitial (owner, 2026-09-01: "can i use
+ * multiformat is fallback interstilla so when it doesnt show the multi format
+ * shows as interstilla").
+ *
+ * ── Why this is the right shape ──────────────────────────────────────────────
+ *
+ * The fullpage zone (type 33) serves — `s.pemsrv.com` returns
+ * `{"type":"mobile_fullpage_interstitial",…}` — and then their script holds the
+ * overlay at `display: none` through idle, taps and scrolling. That decision is
+ * theirs and cannot be asked for. So the moment still needs an ad, and the
+ * multi-format zone is the one MEASURED to render on arrival with no scroll:
+ * `host=250px, DIV 300x250` (`scripts/exoclick-try-tag.mjs eas6a97888e38`).
+ *
+ * The difference is who owns the takeover. The fullpage product positions
+ * ITSELF; a multi-format unit is an in-page creative, so if it is to serve an
+ * interstitial moment WE have to provide the surface — the backdrop, the
+ * countdown and the way out.
+ *
+ * ── 🔴 NOTHING VISIBLE UNTIL SOMETHING FILLED ────────────────────────────────
+ *
+ * The overlay is mounted TRANSPARENT and click-through, and only becomes a
+ * backdrop once a creative is actually painting inside it. Mounting an opaque
+ * black sheet first and hoping would put a full-screen black flash in front of
+ * every reader whose zone did not fill — this project already has that bug on
+ * record once, and an interstitial is the worst possible place for it.
+ *
+ * The unit is given WIDTH and no height, the same rule as every other placement
+ * here: it decides its own dimensions.
+ */
+async function showMultiFormatFallback(): Promise<boolean> {
+  const tag = await fetch("/api/ads/config")
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((d: { exoclickMultiFormat?: ExoClickStickyTag | null; interstitialSkipSeconds?: number }) => d)
+    .catch(() => null);
+  const unit = tag?.exoclickMultiFormat;
+  if (!unit) return false;
+
+  const host = document.createElement("div");
+  host.setAttribute("data-exoclick-fallback", "");
+  host.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "z-index:2147483000",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "padding:16px",
+    // Invisible and click-through until a creative arrives — see above.
+    "background:transparent",
+    "pointer-events:none",
+    "transition:background 200ms ease",
+  ].join(";");
+
+  const box = document.createElement("div");
+  // Width only. The creative decides its own height, as everywhere else here.
+  box.style.cssText = "width:100%;max-width:360px";
+  const ins = document.createElement("ins");
+  ins.className = unit.cls;
+  ins.setAttribute("data-zoneid", unit.zoneId);
+  box.appendChild(ins);
+  host.appendChild(box);
+  document.body.appendChild(host);
+
+  const ok = await loadProvider(unit.src ?? EXOCLICK_PROVIDER_SRC);
+  if (!ok) {
+    host.remove();
+    return false;
+  }
+  try {
+    (window.AdProvider = window.AdProvider ?? []).push({ serve: {} });
+  } catch {
+    host.remove();
+    return false;
+  }
+
+  /** Is anything actually painting in the box? Same rule as the banner units. */
+  const painted = (): boolean => {
+    for (const el of box.querySelectorAll<HTMLElement>("*")) {
+      if (el.tagName === "STYLE" || el.tagName === "SCRIPT" || el.tagName === "INS") continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.height < 40) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") continue;
+      return true;
+    }
+    return false;
+  };
+
+  const filled = await new Promise<boolean>((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      if (painted()) return resolve(true);
+      if (Date.now() - started >= FILL_TIMEOUT_MS) return resolve(false);
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
+
+  if (!filled) {
+    // Nothing arrived, and nothing was ever shown — remove it and let the
+    // caller's own interstitial have the moment.
+    host.remove();
+    return false;
+  }
+
+  // Only NOW does it become a takeover.
+  host.style.background = "rgba(0,0,0,0.92)";
+  host.style.pointerEvents = "auto";
+  beacon(true);
+
+  /*
+    The way out. A countdown first, then a real button — the same contract the
+    VAST interstitial already makes, so the two moments behave identically from
+    the reader's side. Never a dead end: the button always arrives.
+  */
+  const secs = Math.min(30, Math.max(0, Math.round(tag?.interstitialSkipSeconds ?? 5)));
+  const close = document.createElement("button");
+  close.type = "button";
+  close.style.cssText = [
+    "position:absolute",
+    "top:calc(env(safe-area-inset-top,0px) + 12px)",
+    "right:12px",
+    "min-width:84px",
+    "height:36px",
+    "padding:0 12px",
+    "border:0",
+    "border-radius:999px",
+    "background:rgba(255,255,255,0.16)",
+    "color:#fff",
+    "font:600 13px/1 system-ui,sans-serif",
+    "cursor:default",
+  ].join(";");
+  host.appendChild(close);
+
+  await new Promise<void>((resolve) => {
+    let left = secs;
+    const paint = () => {
+      close.textContent = left > 0 ? `${left}` : "Close";
+    };
+    paint();
+    const id = setInterval(() => {
+      left -= 1;
+      paint();
+      if (left > 0) return;
+      clearInterval(id);
+      close.style.cursor = "pointer";
+      close.style.background = "rgba(255,255,255,0.28)";
+      close.onclick = () => resolve();
+      // A hard ceiling so a reader who never taps is not trapped in an ad.
+      setTimeout(resolve, 60_000);
+    }, 1000);
+  });
+
+  host.remove();
+  return true;
+}
+
 /** Is a fullpage overlay actually ON SCREEN right now (ours or theirs)? */
 function overlayVisible(): boolean {
   for (const el of document.querySelectorAll<HTMLElement>(".ex-over-top, [id^='ad_'][class*='ex-over']")) {
@@ -210,6 +368,20 @@ export async function showExoClickInterstitial(): Promise<boolean> {
   beacon(shown);
 
   if (!shown) {
+    /*
+      🔴 THE MULTI-FORMAT FALLBACK, BEFORE GIVING UP ON THIS MOMENT (owner,
+      2026-09-01: "can i use multiformat is fallback interstilla so when it
+      doesnt show the multi format shows as interstilla").
+
+      The fullpage unit stays armed either way — it is not consumed by this — so
+      if their script later picks its moment, it still fires. This just stops the
+      moment being wasted while it waits.
+
+      Tried BEFORE the VAST path so an operator who has pasted a multi-format tag
+      gets ExoClick, and one who has not loses nothing.
+    */
+    if (await showMultiFormatFallback()) return true;
+
     /*
       🔴 LEAVE IT ARMED. Do NOT remove the host.
 

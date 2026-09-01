@@ -72,6 +72,17 @@ export async function GET() {
         const outstream = parseExoClickSticky(settings.exoclickHistorySnippet);
         return settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
       })(),
+      /*
+        The RAW multi-format tag, for the interstitial FALLBACK (owner,
+        2026-09-01: "can i use multiformat is fallback interstilla so when it
+        doesnt show the multi format shows as interstilla").
+
+        Deliberately separate from `exoclickHistory` above, which is the RESOLVED
+        answer to "what fills the one slot above the history grid". Two
+        consumers, two questions: the history slot needs a decision, and the
+        interstitial needs the tag itself regardless of that switch.
+      */
+      exoclickMultiFormat: parseExoClickSticky(settings.exoclickMultiFormatSnippet),
       exoclickHistoryFeed: parseExoClickSticky(settings.exoclickHistoryFeedSnippet),
       exoclickLanding: parseExoClickSticky(settings.exoclickLandingSnippet),
       exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),

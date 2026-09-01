@@ -63,13 +63,31 @@ async function loadConfig(): Promise<VastInterstitialConfig> {
  * misnomer, and would now switch itself off with that field's new default —
  * silently removing two placements nobody asked to remove.
  */
-export type InterstitialTrigger = "download" | "download-complete" | "ambient";
+export type InterstitialTrigger =
+  | "download"
+  | "download-complete"
+  | "ambient"
+  /**
+   * The full-screen ad between saved media on the History page, after every N
+   * items (owner, 2026-09-01: "history view after 3 view is showing banner
+   * instead of vast that shows on interstilla").
+   *
+   * It is here rather than in `AdSlot` because AdSlot HAS NO VIDEO BRANCH — a
+   * video row there resolves, reports itself present and paints nothing. The
+   * story slide wanted the same video the interstitial plays, and this module is
+   * the only thing that plays one.
+   *
+   * Gated by the master switch alone, like `ambient`: it is not a download
+   * moment, so neither download flag describes it.
+   */
+  | "history-story";
 
 /** The zone each moment serves from. Reuses the existing zone registry. */
 const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
   download: "download_preparing",
   "download-complete": "download_complete",
   ambient: "download_preparing",
+  "history-story": "history_story_ad",
 };
 
 function isEnabledFor(config: VastInterstitialConfig, trigger: InterstitialTrigger): boolean {

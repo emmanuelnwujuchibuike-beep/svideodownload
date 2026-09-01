@@ -1,5 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
+import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
+
 import { AdSlot } from "./ad-slot";
 
 /**
@@ -40,6 +44,58 @@ export function StoryAdSlide({
   onNext: () => void;
   onResolved: (hasAd: boolean) => void;
 }) {
+  /*
+    🔴 THE VIDEO PATH, WHEN THIS MOMENT IS SET TO ONE (owner, 2026-09-01:
+    "history view after 3 view is showing banner instead of vast that shows on
+    interstilla").
+
+    `AdSlot` below has no video branch, so this slide could only ever render a
+    banner — which is why it was configured with one. The video the owner means
+    is the VAST interstitial, and `requestVastInterstitial` is the only thing
+    that plays one, so this moment now asks IT when its source is `vast`.
+
+    The overlay is portalled and full-screen, so it simply covers this slide
+    while it plays. When it resolves — shown, skipped, or nothing to show — the
+    queue advances, which is exactly what the tap zones below would have done.
+
+    `onResolved(false)` in that case, deliberately: this component renders no ad
+    of its own on the video path, and telling the player otherwise would have it
+    hold a slide with nothing in it.
+  */
+  const [mode, setMode] = useState<"unknown" | "vast" | "slot">("unknown");
+  const fired = useRef(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { hilltop?: HilltopConfig }) => {
+        if (!alive) return;
+        setMode(
+          d.hilltop && hilltopZoneSource(d.hilltop, zone) === "vast" ? "vast" : "slot",
+        );
+      })
+      .catch(() => alive && setMode("slot"));
+    return () => {
+      alive = false;
+    };
+  }, [zone]);
+
+  useEffect(() => {
+    if (mode !== "vast" || fired.current) return;
+    fired.current = true;
+    onResolved(false);
+    void import("./vast-interstitial/request")
+      .then((m) => m.requestVastInterstitial("history-story"))
+      .catch(() => {
+        /* A slide that cannot load its ad must still advance. */
+      })
+      .finally(onNext);
+  }, [mode, onNext, onResolved]);
+
+  // Nothing of our own on the video path — the overlay owns the screen.
+  if (mode !== "slot") return null;
+
   return (
     <div
       /*

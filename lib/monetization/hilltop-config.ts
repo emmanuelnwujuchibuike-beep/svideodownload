@@ -123,7 +123,12 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
   download_result_page: "banner",
   under_download: "banner",
   landing_section_break: "banner",
-  history_story_ad: "banner",
+  /*
+    The story ad between history media plays through the VAST player now, not
+    AdSlot — see the `history-story` trigger. Owner: "history view after 3 view
+    is showing banner instead of vast that shows on interstilla".
+  */
+  history_story_ad: "vast",
   idle_interstitial: "banner",
   /*
     ⚠️ The reward gate too, and for the same mechanical reason rather than a

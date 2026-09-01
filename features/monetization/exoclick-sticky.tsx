@@ -247,6 +247,48 @@ function hasCreative(host: HTMLElement): boolean {
   return false;
 }
 
+/**
+ * Is there a creative HERE AT ALL — painted yet or not?
+ *
+ * 🔴 TWO DIFFERENT QUESTIONS WERE BEING ASKED OF ONE FUNCTION, AND THE
+ * DESTRUCTIVE ONE GOT THE STRICT ANSWER (owner, 2026-08-31: "no ad are showing,
+ * since you fixed the ad json stringify").
+ *
+ * The owner pinpointed the regression to 9825998, which deleted exactly this:
+ *
+ *     if (host.querySelector("iframe, video, img, canvas, object, embed, a[href]"))
+ *       return true;
+ *
+ * and replaced it with `host.offsetHeight > 0`. That markup test was NOT the
+ * wrong idea — the production dump shows the sticky zone injecting a real
+ * `IMG 300x250`, which it would have caught and the height test cannot.
+ *
+ * Two consumers, with opposite risk profiles, were sharing one verdict:
+ *
+ *   • "May I DESTROY this slot and ask again?" — the 3.5s retry and the
+ *     navigation re-serve, both of which run `el.textContent = ""`. A false
+ *     negative here DELETES A REAL AD, and the replacement ask is
+ *     frequency-capped. This must be as reluctant as possible.
+ *   • "Should the BAR draw its chrome?" — a false positive here paints a border
+ *     and padding around nothing, which is the white line above the nav. This
+ *     must be strict.
+ *
+ * Answering both with "is it painted right now" meant an `<iframe>` or `<img>`
+ * that had been injected but had not loaded yet — 0x0 for its first moments —
+ * was destroyed at 3.5 seconds, every time, before it could ever paint. So the
+ * strict answer stays for the chrome, and DESTRUCTION now asks this instead:
+ * is there anything here a creative is actually made of?
+ *
+ * The loader's no-fill scaffolding cannot trip it. On a genuine `zones:[null]`
+ * it leaves only a wrapper `<div>` and a `<style>` — 304 bytes, no media
+ * element, measured on production — while a served zone brings 1.4k-16k of real
+ * markup with it.
+ */
+function hasCreativeMarkup(host: HTMLElement): boolean {
+  if (host.querySelector("iframe, video, img, canvas, object, embed, a[href]")) return true;
+  return hasCreative(host);
+}
+
 export function ExoClickSticky({
   slot = "sticky",
   onFill,
@@ -350,7 +392,9 @@ export function ExoClickSticky({
       return;
     }
     const el = host.current;
-    if (!el || hasCreative(el)) return;
+    // Reluctant on purpose: bumping `serveKey` re-runs the effect, whose cleanup
+    // wipes the host. Anything that even LOOKS like a creative is left alone.
+    if (!el || hasCreativeMarkup(el)) return;
     setServeKey((k) => k + 1);
   }, [pathname]);
 
@@ -457,7 +501,13 @@ export function ExoClickSticky({
       the second ask was made and what came back.
     */
     const retryTimer = setTimeout(() => {
-      if (hasCreative(el) || retried.current) return;
+      /*
+        🔴 `hasCreativeMarkup`, NOT `hasCreative`. This branch DELETES the slot.
+        An <iframe> or <img> that has been injected but has not loaded yet is
+        0x0 for its first moments, and the strict test threw exactly those away
+        at 3.5 seconds — every time, before they could paint.
+      */
+      if (hasCreativeMarkup(el) || retried.current) return;
       retried.current = true;
       setServeKey((k) => k + 1);
     }, 3500);

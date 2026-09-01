@@ -682,6 +682,43 @@ describe("Ad slots — no decorated empty boxes", () => {
    * has. The rule is narrow on purpose: offering WIDTH is allowed, asserting a
    * HEIGHT is what reserves empty boxes and is still banned.
    */
+  /**
+   * 🔴 THE DESTRUCTIVE PATH MUST USE THE RELUCTANT TEST.
+   *
+   * Owner, 2026-08-31: "no ad are showing, since you fixed the ad json
+   * stringify" — pinpointing 9825998, which deleted the markup test
+   * (`querySelector("iframe, video, img, …")`) in favour of
+   * `host.offsetHeight > 0`.
+   *
+   * Two consumers with opposite risk profiles shared one verdict. The 3.5s retry
+   * and the navigation re-serve both run `el.textContent = ""`, so a false
+   * negative there DELETES A REAL AD and the replacement ask is
+   * frequency-capped. An <iframe>/<img> that has been injected but not yet
+   * loaded is 0x0 for its first moments — so the strict test destroyed exactly
+   * those, every time.
+   *
+   * Chrome stays strict (a false positive paints a border around nothing — the
+   * white line above the nav). Destruction is reluctant.
+   */
+  it("never lets the ad-destroying paths use the strict paint test", () => {
+    const src = readFileSync(path.join(ROOT, "features/monetization/exoclick-sticky.tsx"), "utf8");
+    const code = stripComments(src);
+
+    // The markup test must still exist — this exact line was deleted once.
+    expect(
+      /querySelector\(\s*["']iframe, video, img/.test(code),
+      "The reluctant creative test must keep asking for real media markup: a creative that has not painted YET is still a creative, and the retry path deletes whatever it calls empty.",
+    ).toBe(true);
+
+    // Every branch that can wipe the host must call the reluctant one.
+    const retry = code.match(/if \(hasCreative\w*\(el\) \|\| retried\.current\) return;/);
+    expect(retry?.[0], "the 3.5s retry guard should still exist").toBeTruthy();
+    expect(
+      retry?.[0].includes("hasCreativeMarkup"),
+      "The retry guard runs `el.textContent = \"\"`; it must use hasCreativeMarkup, not the strict paint test.",
+    ).toBe(true);
+  });
+
   it("gives the ExoClick host a width, and still never asserts a height", () => {
     const src = readFileSync(path.join(ROOT, "features/monetization/exoclick-sticky.tsx"), "utf8");
     const code = stripComments(src);

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
+import { parseHilltopVastUrl } from "@/lib/monetization/hilltop";
+import { isHilltopPlacementOn } from "@/lib/monetization/hilltop-config";
 import { getUserPlan } from "@/lib/monetization/plan";
 import {
   exoClickZoneEnabled,
@@ -178,6 +180,68 @@ async function withSharedExoClick(
   return zoneId ? sharedExoClickSlot(zone, zoneId) : null;
 }
 
+/**
+ * How long the wallpaper reward video must be watched.
+ *
+ * Owner, 2026-09-01: "remove the exoclick video for wallpaper download and use
+ * hiltop vast video, and must be watched for 15seconds."
+ *
+ * ⚠️ This is a CEILING, not a floor, and the difference matters. The gate opens
+ * at 15 seconds, or when the creative ends if it is shorter — `useAdGateCountdown`
+ * takes the smaller of the two, on the owner's own earlier instruction
+ * (2026-08-30: "to be skipable when the ad finishes in the ad network, admin
+ * timer set up should only be a fallback"). Holding someone in front of a
+ * finished, frozen video is the bug that rule exists to prevent, so a 9-second
+ * creative still releases at 9 seconds rather than at 15.
+ */
+const HILLTOP_WALLPAPER_SKIP_SECONDS = 15;
+
+/**
+ * Serve the HilltopAds VAST tag as the wallpaper reward video.
+ *
+ * 🔴 RUNS BEFORE THE SHARED EXOCLICK FALLBACK, which is what "remove the
+ * exoclick video for wallpaper download" means in practice. No ExoClick row
+ * exists on this zone — its video came from `exoclickSharedZoneId` filling the
+ * gap — so taking the gap first is what replaces it, and it does so WITHOUT
+ * touching the shared id that still serves every other ExoClick zone.
+ *
+ * An explicit ads-table row still wins over both, exactly as before.
+ *
+ * ⚠️ THIS DOES NOT GRANT ANYTHING. It supplies a video for the existing gate to
+ * play; the reward is still decided by the server-verified reward session, and
+ * the watch is still measured by our own player. Hilltop has no rewarded product
+ * and nothing here pretends otherwise.
+ */
+async function withHilltopWallpaperVast(
+  zone: string,
+  found: AdSlotData | null,
+): Promise<AdSlotData | null> {
+  if (found) return found;
+  if (zone !== "wallpaper_reward") return null;
+  const settings = await getMonetizationSettings();
+  if (!isHilltopPlacementOn(settings.hilltop, "wallpaper")) return null;
+  const url = parseHilltopVastUrl(settings.hilltopVastUrl);
+  if (!url) return null;
+  return {
+    id: `hilltop-vast-${zone}`,
+    zone,
+    network: "hilltopads",
+    format: "video",
+    // The VAST endpoint the player calls. Same field an ads-table video row uses.
+    scriptCode: url,
+    imageUrl: null,
+    targetUrl: null,
+    headline: null,
+    width: null,
+    height: null,
+    adClient: null,
+    adSlotId: null,
+    adLayout: null,
+    skippable: true,
+    skipAfterSeconds: HILLTOP_WALLPAPER_SKIP_SECONDS,
+  };
+}
+
 export async function GET(request: Request) {
   const sp = new URL(request.url).searchParams;
   const zone = sp.get("zone") ?? "";
@@ -215,7 +279,13 @@ export async function GET(request: Request) {
         async (z) =>
           [
             z,
-            await withSharedExoClick(z, (await getAdsForZone(z)).filter((a) => allowed(a, z))[0] ?? null),
+            await withSharedExoClick(
+              z,
+              await withHilltopWallpaperVast(
+                z,
+                (await getAdsForZone(z)).filter((a) => allowed(a, z))[0] ?? null,
+              ),
+            ),
           ] as const,
       ),
     );
@@ -235,5 +305,8 @@ export async function GET(request: Request) {
   const ads = (await getAdsForZone(zone)).filter((a) => allowed(a, zone));
   const headers = { "Cache-Control": "private, max-age=10" };
   if (all) return NextResponse.json({ ads }, { headers });
-  return NextResponse.json({ ad: await withSharedExoClick(zone, ads[0] ?? null) }, { headers });
+  return NextResponse.json(
+    { ad: await withSharedExoClick(zone, await withHilltopWallpaperVast(zone, ads[0] ?? null)) },
+    { headers },
+  );
 }

@@ -27,6 +27,7 @@ export const HILLTOP_PLACEMENTS = [
   { id: "landing", label: "Landing — under the wallpaper button", hint: "Banner below the Explore and Wallpaper cards." },
   { id: "feed", label: "Feed — in-feed banner", hint: "Banner in the scrolling feed, at its own interval." },
   { id: "historyvideo", label: "History — video between items", hint: "Full-screen video ad between saved media." },
+  { id: "wallpaper", label: "Wallpaper download — reward video", hint: "The VAST video watched before a wallpaper download." },
   { id: "slider", label: "Video slider (site-wide)", hint: "Self-placing corner video. No position to choose." },
 ] as const;
 

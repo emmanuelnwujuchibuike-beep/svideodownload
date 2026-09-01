@@ -364,8 +364,18 @@ export function ExoClickSticky({
       .then((d: Record<string, ExoClickStickyTag | null | undefined>) => {
         if (!alive) return;
         /*
-          🔴 ABOVE THE HISTORY GRID, MULTI-FORMAT WINS (owner, 2026-09-01, with
-          the tag: `<ins class="eas6a97888e38" data-zoneid="6017110">`).
+          🔴 ABOVE THE HISTORY GRID, THE SERVER HAS ALREADY CHOSEN.
+
+          `exoclickHistory` is resolved in /api/ads/config from the admin switch
+          (owner, 2026-09-01: "put a switch in admin dashboard to turn off and on
+          so one link can serve in one slot position in the history page"), so
+          this reads ONE value and cannot mount two units in one position. The
+          choice deliberately does not live here: precedence expressed in the
+          component is invisible to the operator who has to work out which of
+          their two tags is actually running.
+
+          Why the multi-format tag is the default side of that switch
+          (`<ins class="eas6a97888e38" data-zoneid="6017110">`).
 
           Measured on production before wiring it — `scripts/exoclick-try-tag.mjs
           eas6a97888e38 6017110`:
@@ -387,9 +397,7 @@ export function ExoClickSticky({
           multi-format tag, loses nothing.
         */
         const bySlot =
-          slot === "history"
-            ? (d.exoclickMultiFormat ?? d.exoclickHistory)
-            : slot === "bottomnav" ? d.exoclickBottomNav : d.exoclickSticky;
+          slot === "history" ? d.exoclickHistory : slot === "bottomnav" ? d.exoclickBottomNav : d.exoclickSticky;
         setTag(bySlot ?? null);
       })
       .catch(() => {

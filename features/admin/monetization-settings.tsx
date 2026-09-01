@@ -544,6 +544,42 @@ export function MonetizationSettings({
             <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
           )}
         </div>
+
+        {/*
+          🔴 ONE SLOT, ONE TAG — and the operator can SEE which (owner,
+          2026-09-01: "put a switch in admin dashboard to turn off and on so one
+          link can serve in one slot position in the history page").
+
+          There is exactly one placement above the history grid and two tags that
+          could fill it. This switch is the choice, resolved server-side in
+          /api/ads/config so the page is never handed both — stacking them is
+          what produced the wrong-shaped double slot on 2026-08-30.
+
+          It goes through `toggle()` like every other switch here, so it writes
+          immediately with an optimistic flip and a rollback if the write fails.
+          A switch that looks flipped but has not persisted is how an operator
+          ends up debugging the wrong configuration — which is the note on
+          `toggle` itself.
+        */}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void toggle("exoclickHistoryUseMultiFormat")}
+          className="mt-2.5 flex w-full flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 p-3 text-left transition hover:border-foreground/20 disabled:opacity-70"
+        >
+          <span className="min-w-0">
+            <span className="block text-xs font-semibold">
+              Use the multi-format tag above the History grid
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+              {state.exoclickHistoryUseMultiFormat !== false
+                ? "On — the multi-format tag serves. The outstream tag below is ignored."
+                : "Off — the outstream tag below serves instead. It only appears once the reader scrolls."}
+            </span>
+          </span>
+          {/* Absent means on — the default, and the unit measured to render. */}
+          <Switch on={state.exoclickHistoryUseMultiFormat !== false} />
+        </button>
       </div>
 
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">

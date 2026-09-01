@@ -120,6 +120,7 @@ const schema = z.object({
   exoclickBottomNavSnippet: z.string().max(4000).default(""),
   exoclickHistorySnippet: z.string().max(4000).default(""),
   exoclickMultiFormatSnippet: z.string().max(4000).default(""),
+  exoclickHistoryUseMultiFormat: z.boolean().default(true),
   exoclickInterstitialSnippet: z.string().max(4000).default(""),
   exoclickSharedZoneId: z
     .string()

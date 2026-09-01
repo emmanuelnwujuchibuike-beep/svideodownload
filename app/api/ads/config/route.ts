@@ -47,8 +47,31 @@ export async function GET() {
         must not travel to a browser as markup.
       */
       exoclickSticky: parseExoClickSticky(settings.exoclickStickySnippet),
-      exoclickHistory: parseExoClickSticky(settings.exoclickHistorySnippet),
-      exoclickMultiFormat: parseExoClickSticky(settings.exoclickMultiFormatSnippet),
+      /*
+        🔴 ONE SLOT ABOVE THE HISTORY GRID, RESOLVED HERE (owner, 2026-09-01:
+        "put a switch in admin dashboard to turn off and on so one link can
+        serve in one slot position in the history page").
+
+        There is exactly ONE placement there and two candidate tags, so the
+        choice is made SERVER-side and the client is handed a single value. It
+        was briefly implicit precedence in the component — multi-format wins if
+        present — which is unanswerable from the admin: with both pasted, an
+        operator could not tell which was running, and the only way to switch was
+        to delete a snippet they might want back.
+
+        Resolving it here also makes the double-slot impossible rather than
+        merely unlikely: the page is never given two tags for one position, which
+        is what produced the stacked, wrong-shaped unit on 2026-08-30.
+
+        Each side falls back to the other when its own snippet is empty, so
+        flipping the switch with nothing pasted on that side cannot silently
+        blank the slot.
+      */
+      exoclickHistory: (() => {
+        const multi = parseExoClickSticky(settings.exoclickMultiFormatSnippet);
+        const outstream = parseExoClickSticky(settings.exoclickHistorySnippet);
+        return settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
+      })(),
       exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
       exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),
       /*

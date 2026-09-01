@@ -397,6 +397,29 @@ export interface MonetizationSettings {
    */
   exoclickMultiFormatSnippet: string;
   /**
+   * WHICH of the two tags occupies the single slot above the History grid
+   * (owner, 2026-09-01: "put a switch in admin dashboard to turn off and on so
+   * one link can serve in one slot position in the history page").
+   *
+   * 🔴 ONE SLOT, ONE TAG, DECIDED IN ONE PLACE. There is exactly one placement
+   * above the history grid and two candidates for it, so something has to
+   * choose. That used to be implicit precedence in the client — multi-format
+   * wins if present — which is unanswerable from the admin: an operator with
+   * both pasted could not tell which was running, and turning one off meant
+   * deleting a snippet they might want back.
+   *
+   * `true` (default) serves the MULTI-FORMAT tag, which is the one measured to
+   * render on arrival; `false` serves the OUTSTREAM tag. Either way it resolves
+   * SERVER-side in /api/ads/config into a single `exoclickHistory` value, so the
+   * page physically cannot mount two units there — stacking them is what
+   * produced the wrong-shaped double slot on 2026-08-30.
+   *
+   * Each side still falls back to the other when its own snippet is empty, so
+   * flipping the switch with nothing pasted on that side is not a way to
+   * accidentally blank the slot.
+   */
+  exoclickHistoryUseMultiFormat: boolean;
+  /**
    * ExoClick FULLPAGE INTERSTITIAL tag (owner, 2026-08-31: "set up the full
    * idle, backswipe and all interstitial ad to also use this exoclick
    * interstitial ad set up for full page interstitial ad").
@@ -497,6 +520,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickBottomNavSnippet: "",
   exoclickHistorySnippet: "",
   exoclickMultiFormatSnippet: "",
+  exoclickHistoryUseMultiFormat: true,
   exoclickInterstitialSnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

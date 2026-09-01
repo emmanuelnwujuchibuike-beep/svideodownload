@@ -90,9 +90,26 @@ function historyAdEvery(hilltop: HilltopConfig | null): number {
  * zone claim shipped it took the first one down with it. Two placements, two
  * slots, two admin fields, two zones.
  */
+/*
+  🔴 THE BOUNDARIES MOVED UP ONE (owner, 2026-09-01: "the history banner doesn't
+  show between yesterday and today. Also it doesn't show between last week and
+  this week").
+
+  They were keyed on `yesterday` and `lastweek`, and this map renders AFTER the
+  named section — so the units sat between Yesterday and This week, and between
+  Last week and Earlier. One section lower than described, at both boundaries.
+
+  Keyed on `today` and `week` they land where the owner is looking: between
+  Today and Yesterday, and between This week and Last week.
+
+  ⚠️ A boundary only exists when the section ABOVE it does. An account with
+  nothing downloaded today has no Today section, so there is no Today/Yesterday
+  seam to put an ad in and the slot correctly renders nothing — which is a second
+  reason these can look missing, and is not a bug.
+*/
 const AD_AFTER_GROUP = new Map<string, ExoClickInsSlot>([
-  ["yesterday", "historyfeed"],
-  ["lastweek", "historyfeedlastweek"],
+  ["today", "historyfeed"],
+  ["week", "historyfeedlastweek"],
 ]);
 
 

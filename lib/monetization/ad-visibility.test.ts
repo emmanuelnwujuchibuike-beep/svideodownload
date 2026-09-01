@@ -157,9 +157,29 @@ describe("no consumer reveals an interstitial on the UNANSWERED state", () => {
 });
 
 describe("the interstitial only unveils itself for a real creative", () => {
-  it("is opaque, so an empty one is a black screen", () => {
-    // Documents WHY the above matters: this is not a translucent scrim.
-    expect(SHELL).toMatch(/"fixed inset-0 bg-black/);
+  it("still paints a real ground, so a creative is never read as page content", () => {
+    /*
+      🔴 NO LONGER FULLY OPAQUE (owner, 2026-09-01: "it should show the main size
+      and blur the background"). `bg-black` became `bg-black/80 backdrop-blur-md`
+      so a rectangular creative — the Hilltop video slider is 300x250 — reads as
+      an overlay instead of as a full-screen player that failed to paint.
+
+      That is SAFE, and it is worth being explicit about why, because the header
+      of this file describes an opaque sheet as part of an incident.
+
+      Opacity was never the guard. What prevents the black screen is `AdSlot`
+      reporting whether a row RENDERS VISIBLY rather than whether it exists, plus
+      `shown = open && hasAd === true` — both still pinned, by the assertions
+      above and below this one. Opacity only decided how BAD the failure looked
+      when the guard was missing: fully opaque made it a dead black page, while a
+      translucent, blurred ground leaves the page visible behind it. So this
+      change makes the old failure mode less severe, not more.
+
+      A ground is still asserted. Removing it altogether would put a creative
+      straight onto the page with nothing separating the two, which is a
+      different problem: an ad indistinguishable from content.
+    */
+    expect(SHELL).toMatch(/"fixed inset-0 bg-black\/80 backdrop-blur/);
   });
 
   it("stacks above whatever surface it is opened over", () => {
@@ -177,7 +197,9 @@ describe("the interstitial only unveils itself for a real creative", () => {
       list at all, so the prop cannot be quietly accepted and dropped.
     */
     expect(SHELL).toMatch(/z = "z-\[60\]"/);
-    expect(SHELL).toMatch(/"fixed inset-0 bg-black transition-opacity duration-200",\s*\n\s*z,/);
+    expect(SHELL).toMatch(
+      /"fixed inset-0 bg-black\/80 backdrop-blur-md transition-opacity duration-200",\s*\n\s*z,/,
+    );
   });
 
   it("gates every visible child on `shown`", () => {

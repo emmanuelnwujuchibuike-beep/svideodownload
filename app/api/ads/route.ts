@@ -300,6 +300,30 @@ async function withHilltopZone(
       zone,
       format: "display",
       scriptCode: `<script async referrerpolicy="no-referrer-when-downgrade" src="${tag.src}"></script>`,
+      /*
+        🔴 A RECTANGLE, NOT THE VIEWPORT (owner, 2026-09-01: "the video slider
+        interstilla shouldn't show full screen because slider are rectangle, it
+        should show the main size and blur the background … nothing renders on
+        the video during interstilla but it show Hilltop mute button but a blank
+        black screen").
+
+        A slot with no declared size stretches to the frame it is given, and the
+        frame here is the full-screen interstitial. The slider is not a
+        full-screen product: stretched, it laid out to nothing and left exactly
+        what the screenshot shows — a black sheet with their mute button, which
+        is `position: fixed` inside the frame and so was the only thing left with
+        a size of its own.
+
+        300x250 is THEIR default, not a guess. From the same loader bundle:
+
+            width:  function () { return +(this.settings.ads[0].iframeWidth  || 300) }
+            height: function () { return +(this.settings.ads[0].iframeHeight || 250) }
+
+        With a declared size the interstitial centres the unit on its own
+        backdrop, which is the "main size and blur the background" asked for.
+      */
+      width: 300,
+      height: 250,
       skipAfterSeconds: 5,
     };
   }

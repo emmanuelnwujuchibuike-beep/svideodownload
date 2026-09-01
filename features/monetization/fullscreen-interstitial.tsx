@@ -84,7 +84,22 @@ export function FullscreenInterstitial({
     <Portal>
     <div
       className={cn(
-        "fixed inset-0 bg-black transition-opacity duration-200",
+        /*
+          🔴 BLURRED, NOT SOLID (owner, 2026-09-01: "it should show the main
+          size and blur the background").
+
+          A rectangular creative centred on a solid black sheet reads as a
+          broken full-screen video — which is exactly how the slider was
+          reported. A blurred, translucent ground keeps the page visible behind
+          the unit, so a 300x250 rectangle reads as an overlay rather than as a
+          player that failed to paint.
+
+          The blur is on THIS element, which is portalled to the body — see the
+          note above. Putting a `backdrop-filter` on an element that is itself
+          inside a filtered ancestor is what trapped this overlay in a card
+          three times before; portalling is what makes it safe here.
+        */
+        "fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-200",
         z,
         shown ? "opacity-100" : "pointer-events-none opacity-0",
       )}

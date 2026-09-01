@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
+import { parseHilltopVastUrl } from "@/lib/monetization/hilltop";
+import { isHilltopPlacementOn } from "@/lib/monetization/hilltop-config";
 import { getUserPlan } from "@/lib/monetization/plan";
 import {
   exoClickZoneEnabled,
@@ -98,6 +100,12 @@ async function fetchVast(url: string, request: Request): Promise<string | null> 
   }
 }
 
+/** Which HilltopAds placement switch owns which VAST moment on this endpoint. */
+const HILLTOP_VAST_ZONES: Record<string, "wallpaper" | "download" | undefined> = {
+  download_complete: "download",
+  wallpaper_reward: "wallpaper",
+};
+
 export async function GET(request: Request) {
   const zone = new URL(request.url).searchParams.get("zone") ?? "";
   if (!ZONES.has(zone)) return NextResponse.json({ ad: null }, { status: 400 });
@@ -105,18 +113,53 @@ export async function GET(request: Request) {
   if (await isPremium(request)) return NextResponse.json({ ad: null });
 
   const settings = await getMonetizationSettings();
-  if (!exoClickZoneEnabled(settings, zone)) return NextResponse.json({ ad: null });
 
   /*
-    An explicit row first, then the shared zone id as a fallback — the same
-    precedence `resolveExoClickZoneId` applies everywhere, so a placement cannot
-    resolve to one id here and a different one in /api/ads.
-  */
-  const row = (await getAdsForZone(zone)).find((a) => a.format === "exoclick" && a.adSlotId);
-  const zoneId = resolveExoClickZoneId(settings, zone, row?.adSlotId ?? null);
-  if (!zoneId) return NextResponse.json({ ad: null });
+    🔴 THIS ENDPOINT IS THE ONE THE VAST INTERSTITIAL ACTUALLY CALLS (owner,
+    2026-09-01: "download complete doesnt trigger the video slider or vast").
 
-  let url = exoClickVastUrl(zoneId);
+    The HilltopAds resolver added for these moments lives in /api/ads, and the
+    zones answered correctly there — but `requestVastInterstitial` does not use
+    /api/ads. It fetches `/api/ads/exoclick?zone=…`, which resolves an ExoClick
+    zone id and plays ExoClick's VAST. So the download-complete moment was still
+    asking ExoClick for a video while every other surface had moved to Hilltop,
+    and there was no error anywhere to say so.
+
+    The endpoint is only "exoclick" in its path. What it really does is turn a
+    ZONE into a playable VAST creative, and it follows wrappers to get there, so
+    starting it from a Hilltop tag needs nothing more than a different first URL.
+
+    Hilltop takes precedence when its placement switch owns the moment; otherwise
+    every line below is exactly what it was, including the ExoClick per-zone
+    switch — which is deliberately NOT consulted for Hilltop, since an operator
+    turning ExoClick off on a page must not also silence the network replacing it.
+  */
+  const hilltopVast = HILLTOP_VAST_ZONES[zone]
+    ? isHilltopPlacementOn(settings.hilltop, HILLTOP_VAST_ZONES[zone]!)
+      ? parseHilltopVastUrl(settings.hilltopVastUrl)
+      : null
+    : null;
+
+  let adId: string;
+  let url: string;
+  if (hilltopVast) {
+    adId = `hilltop-vast-${zone}`;
+    url = hilltopVast;
+  } else {
+    if (!exoClickZoneEnabled(settings, zone)) return NextResponse.json({ ad: null });
+
+    /*
+      An explicit row first, then the shared zone id as a fallback — the same
+      precedence `resolveExoClickZoneId` applies everywhere, so a placement cannot
+      resolve to one id here and a different one in /api/ads.
+    */
+    const row = (await getAdsForZone(zone)).find((a) => a.format === "exoclick" && a.adSlotId);
+    const zoneId = resolveExoClickZoneId(settings, zone, row?.adSlotId ?? null);
+    if (!zoneId) return NextResponse.json({ ad: null });
+    adId = row?.id ?? `exoclick-shared-${zone}`;
+    url = exoClickVastUrl(zoneId);
+  }
+
   for (let depth = 0; depth <= MAX_WRAPPER_DEPTH; depth++) {
     const xml = await fetchVast(url, request);
     if (!xml) return NextResponse.json({ ad: null });
@@ -124,7 +167,7 @@ export async function GET(request: Request) {
     const creative = parseVast(xml);
     if (creative) {
       return NextResponse.json(
-        { ad: { ...creative, adId: row?.id ?? `exoclick-shared-${zone}`, zone } },
+        { ad: { ...creative, adId, zone } },
         // Never shared between visitors: the creative is targeted to this one,
         // and a cached VAST would also mean a reused impression pixel.
         { headers: { "Cache-Control": "private, no-store" } },

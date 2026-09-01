@@ -40,6 +40,35 @@ import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
  * (`batchCompleteSeconds`) is a separate, longer-standing placement, untouched.
  */
 export function VastDownloadCompleteTrigger() {
+  /*
+    Warm the modules and the config while the browser is idle, so a completed
+    download pays for the VAST request and the media file and nothing else. See
+    `warmVastInterstitial`.
+
+    `requestIdleCallback` where it exists, a late timeout where it does not —
+    this must never compete with the page load it is mounted into, and Safari
+    still has no idle callback.
+  */
+  useEffect(() => {
+    let cancelled = false;
+    const warm = () => {
+      if (cancelled) return;
+      void import("./request")
+        .then((m) => m.warmVastInterstitial())
+        .catch(() => {
+          /* The on-demand path still works — this is only a head start. */
+        });
+    };
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    const id = ric ? ric(warm, { timeout: 4000 }) : window.setTimeout(warm, 2500);
+    return () => {
+      cancelled = true;
+      if (!ric) window.clearTimeout(id as number);
+    };
+  }, []);
+
   useEffect(() => {
     const onCompleted = () => {
       void import("./request")

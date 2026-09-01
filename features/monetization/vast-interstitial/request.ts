@@ -88,6 +88,40 @@ export interface InterstitialResult {
  * Try to show a full-screen ad. Always resolves, never throws, never blocks
  * longer than the configured startup budget.
  */
+/**
+ * Warm everything the completion path would otherwise pay for.
+ *
+ * Owner, 2026-09-01: "the interstilla video also triggers on download complete
+ * but triggers late, i want it to trigger early".
+ *
+ * 🔴 THE LATENESS IS THREE MODULE FETCHES AND A CONFIG ROUND TRIP, ALL AFTER THE
+ * FILE HAS ALREADY SAVED. Counted from the completion event, the old path was:
+ *
+ *   1. `import("./request")`            — this module, fetched on demand
+ *   2. `loadConfig()`                   — /api/ads/config
+ *   3. `import("../exoclick-interstitial")`
+ *   4. `fetch("/api/ads/exoclick?zone=…")` — the VAST, wrappers followed server-side
+ *   5. `import("./overlay")`
+ *   6. the media file itself
+ *
+ * Only 4 and 6 have to happen at the moment of the download. Steps 1, 2, 3 and 5
+ * are the same bytes every time and can be in hand long before, which is what
+ * this does — on an IDLE callback, so nothing about it competes with the page
+ * load or the download itself.
+ *
+ * Deliberately does NOT prefetch the VAST. A creative fetched early is an
+ * impression counted early, and one requested on every page view rather than on
+ * every completed download would misreport the placement and burn the viewer's
+ * frequency cap on moments that never happened.
+ */
+export function warmVastInterstitial(): void {
+  void loadConfig().catch(() => {
+    /* Warming must never surface an error — the real path re-tries. */
+  });
+  void import("./overlay").catch(() => {});
+  void import("../exoclick-interstitial").catch(() => {});
+}
+
 export async function requestVastInterstitial(
   trigger: InterstitialTrigger = "download",
 ): Promise<InterstitialResult> {

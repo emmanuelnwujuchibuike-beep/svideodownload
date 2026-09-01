@@ -188,6 +188,9 @@ export async function GET() {
         ? parseHilltopTag(settings.hilltopVideoSliderSnippet)
         : null,
       hilltopVast: settings.hilltop.enabled ? parseHilltopVastUrl(settings.hilltopVastUrl) : null,
+      // The wallpaper download-started hold. Public and non-user-specific, like
+      // every other gate duration on this endpoint.
+      wallpaperGateSeconds: clampSeconds(settings.wallpaperGateSeconds, 10, 60),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

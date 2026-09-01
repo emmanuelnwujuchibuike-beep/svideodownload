@@ -932,7 +932,36 @@ export function MonetizationSettings({
             differs. The guidance says which behaves how; the choice is the
             operator's.
           */}
-          <DuplicateZoneWarning
+          {/*
+        🔴 THE WALLPAPER DOWNLOAD-STARTED HOLD (owner, 2026-09-01: "reduce
+        wallpaper download started interstilla from 30secs to 10 secs and put in
+        admin dashboard where i can always set it").
+
+        It was not settable at all: the gate took a `seconds` prop with a
+        hard-coded default and no caller passed one, so changing the wallpaper
+        hold meant editing the component. Every other gate duration on this site
+        is admin-set, and this is the one a visitor meets most often.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">Wallpaper — hold before download starts</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          How long the ad is held on screen after a wallpaper download is tapped, before
+          it can be dismissed. A <strong>ceiling, not a floor</strong>: the gate opens
+          early the moment the creative finishes, so a shorter ad releases sooner. If the
+          zone has nothing to show, the download is released immediately and this never
+          applies.
+        </p>
+        <HilltopNumber
+          label="Seconds"
+          value={state.wallpaperGateSeconds ?? 10}
+          min={3}
+          max={60}
+          busy={busy}
+          onCommit={(n) => void persist({ ...state, wallpaperGateSeconds: n })}
+        />
+      </div>
+
+      <DuplicateZoneWarning
             fields={[
               { label: "Sticky banner", snippet: state.exoclickStickySnippet ?? "" },
               { label: "Bottom banner", snippet: state.exoclickBottomNavSnippet ?? "" },

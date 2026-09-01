@@ -34,14 +34,39 @@ import { useAdGateCountdown } from "./use-ad-gate-countdown";
 export function WallpaperRewardGate({
   open,
   onDone,
-  /** Seconds before the gate can be dismissed. */
-  seconds = 5,
+  /**
+   * Seconds before the gate can be dismissed.
+   *
+   * A FALLBACK for a caller that wants to override it. The real value is
+   * admin-set and fetched below — see `wallpaperGateSeconds`.
+   */
+  seconds,
 }: {
   open: boolean;
   /** Called exactly once, whether the ad ran, failed, or never existed. */
   onDone: () => void;
   seconds?: number;
 }) {
+  /*
+    The admin-set hold. Starts at the built-in default so a slow or failed config
+    fetch behaves exactly as before rather than releasing the download instantly.
+  */
+  const [configured, setConfigured] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { wallpaperGateSeconds?: number }) => {
+        if (alive && typeof d.wallpaperGateSeconds === "number") setConfigured(d.wallpaperGateSeconds);
+      })
+      .catch(() => {
+        /* The default is the safe outcome. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const holdSeconds = seconds ?? configured ?? 10;
   /*
     Read only so the admin's per-moment routing is honoured. ExoClick serves it
     today through the shared zone stack; when the moment is pointed at Offerium
@@ -85,7 +110,7 @@ export function WallpaperRewardGate({
     the visitor for nothing.
   */
   const { remaining, canSkip, onAdTiming } = useAdGateCountdown({
-    fallbackSeconds: seconds,
+    fallbackSeconds: holdSeconds,
     running: open && hasAd === true,
   });
 

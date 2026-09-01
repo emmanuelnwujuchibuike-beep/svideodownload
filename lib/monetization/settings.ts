@@ -567,6 +567,23 @@ export interface MonetizationSettings {
    */
   hilltopVastUrl: string;
   /**
+   * How long the wallpaper DOWNLOAD-STARTED gate holds before it can be
+   * dismissed (owner, 2026-09-01: "reduce wallpaper download started interstilla
+   * from 30secs to 10 secs and put in admin dashboard where i can always set
+   * it").
+   *
+   * Its own setting because it was not one: the gate took a `seconds` prop with
+   * a hard-coded default and no caller passed it, so the only way to change the
+   * wallpaper hold was to edit the component. Every other gate on the site is
+   * admin-set, and this is the one a visitor meets most often.
+   *
+   * ⚠️ Still a CEILING, not a floor. `useAdGateCountdown` opens the gate the
+   * moment the creative ends and targets the creative's own length when it is
+   * shorter — the owner's standing rule from 2026-08-30 ("skipable when the ad
+   * finishes in the ad network, admin timer set up should only be a fallback").
+   */
+  wallpaperGateSeconds: number;
+  /**
    * A HilltopAds banner tag PER PLACEMENT (owner, 2026-09-01: "i want all pages
    * should have a separate ad link slot and serving at once in different pages
    * so when it shows in landing page, it should still show in other pages and
@@ -684,6 +701,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   hilltopVideoSliderSnippet: "",
   hilltop: DEFAULT_HILLTOP,
   hilltopVastUrl: "",
+  wallpaperGateSeconds: 10,
   hilltopSnippets: {},
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

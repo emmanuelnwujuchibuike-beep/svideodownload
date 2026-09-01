@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
+import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 import { DownloadBox } from "@/features/downloads/download-box";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import {
@@ -74,6 +75,7 @@ export function DownloadPageCore({
    *  and passed straight through, exactly like `platformStatus`. */
   multiLink,
   installBanner = true,
+  multiFormatSlot = false,
 }: {
   platformStatus?: PlatformStatusMap;
   ctaWallpaperUrl?: string | null;
@@ -90,6 +92,16 @@ export function DownloadPageCore({
    * keeps the banner it has always had.
    */
   installBanner?: boolean;
+  /**
+   * Whether to render the ExoClick multi-format slot above the Cloud storage
+   * card. LANDING ONLY.
+   *
+   * Off by default because this component is shared with `/downloads`, and an
+   * ExoClick `<ins>` that appears on a second page is a second placement — one
+   * zone id cannot serve two of them, so a slot that quietly follows the
+   * component onto another route is how the duplicate-zone bug comes back.
+   */
+  multiFormatSlot?: boolean;
 }) {
   const { items } = useHistory();
 
@@ -144,6 +156,34 @@ export function DownloadPageCore({
 
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
+
+      {/*
+        🔴 THE MULTI-FORMAT SLOT, WHERE IT WAS ACTUALLY ASKED FOR (owner,
+        2026-09-01: "put a multi format slot in the landing page ABOVE THE
+        STORAGE CARD and below the explore feature and wallpaper button").
+
+        It shipped in app/(marketing)/page.tsx instead, after `ProductGrid`,
+        on the reading that the grid "ends with the feature cards and then the
+        Explore-wallpapers CTA". Those are different cards with similar names.
+        Measured on the live page: that put the unit at **y=7698 of an 11,315px
+        document**, and the events table proves the consequence — every other
+        ExoClick slot reported fills and no-fills for two and a half hours while
+        `landing` reported NOTHING AT ALL, because no reader ever scrolled to
+        it. The cards the owner named are these two, at y≈700.
+
+        ⚠️ This DOES sit above Cloud storage, which reverses the 2026-08-30 rule
+        below ("the sections starts from below the cloud storage section") for
+        this one unit. The 09-01 instruction names the position explicitly and is
+        newer, so it wins; the `under_download` zone below keeps the old rule.
+
+        Lazy and code-split exactly as before — the unit is not in the landing's
+        first-load bundle and does not mount until it is near the viewport.
+      */}
+      {multiFormatSlot ? (
+        <div className="mt-3">
+          <LazyExoClickSlot slot="landing" />
+        </div>
+      ) : null}
 
       <div className="mt-3">
         <CloudStorageCard items={items} />

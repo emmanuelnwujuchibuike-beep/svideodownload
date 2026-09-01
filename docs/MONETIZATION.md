@@ -88,6 +88,11 @@ the plan. "Manage billing" opens Paystack's subscription manage link
 
 ## 4. Ads — Adsterra & PropellerAds
 
+> **ExoClick display placements have their own runbook:**
+> [EXOCLICK_PLACEMENTS.md](EXOCLICK_PLACEMENTS.md) — every placement, which admin
+> field feeds it, and the one-zone-per-placement rule that silently empties every
+> duplicated slot. Read it before adding or moving an ExoClick unit.
+
 You don't touch code: paste each network's ad tag into a row in the `ads` table
 and it renders. Two things decide how it's rendered: **format** and **zone**.
 

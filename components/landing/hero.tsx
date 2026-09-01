@@ -67,6 +67,10 @@ export async function Hero() {
         rotateUrls={recentWallpaperUrls}
         showDisclaimer
         multiLink={publicMultiLinkConfig(multiLink)}
+        /* The ExoClick multi-format slot is LANDING ONLY — see the note at the
+           placement. /downloads must not carry a second placeholder for the
+           same zone. */
+        multiFormatSlot
         /*
           🔴 NO INSTALL BANNER IN THE LANDING HERO (owner, 2026-08-25: "i think
           the install CTA in the landing hero is causing visual noise").

@@ -16,7 +16,6 @@ import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL } from "@/lib/site";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
-import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 
 /**
  * The marketing landing page — the first page a new visitor ever loads, and the
@@ -248,22 +247,19 @@ export default function HomePage() {
         <ProductGrid />
 
         {/*
-          🔴 THE EXOCLICK MULTI-FORMAT SLOT (owner, 2026-09-01: "put a multi
-          format slot in the landing page above the storage card and below the
-          explore feature and wallpaper button").
+          🔴 THE EXOCLICK MULTI-FORMAT SLOT IS NOT HERE ANY MORE (owner,
+          2026-09-01: "put a multi format slot in the landing page above the
+          storage card and below the explore feature and wallpaper button").
 
-          Exactly here: `ProductGrid` above ends with the feature cards and then
-          the Explore-wallpapers CTA, so this is the first thing after that
-          button and it sits above everything below.
-
-          LAZY, and code-split, because this is the 1.6s route. The unit is not
-          imported into the first-load bundle and is not mounted until it nears
-          the viewport — see features/monetization/lazy-exoclick-slot.tsx. It
-          reserves no height, so an empty zone leaves the page exactly as it was.
+          It was here, after `ProductGrid`, because that grid ends with feature
+          cards and an Explore-wallpapers CTA — cards with almost the same names
+          as the ones the owner meant. Measured live, this position is y=7698 of
+          an 11,315px document, and the events table showed the cost: every other
+          ExoClick slot reported fills and no-fills for two and a half hours
+          while this one reported nothing at all, because nobody scrolls that
+          far. It now sits between the Explore/Wallpaper cards and the Cloud
+          storage card in features/downloads/download-page-core.tsx, at y≈700.
         */}
-        <div className="container max-w-5xl px-3">
-          <LazyExoClickSlot slot="landing" />
-        </div>
 
         {/*
           Ad slot — same zone, on the shared premium surface. Renders nothing until

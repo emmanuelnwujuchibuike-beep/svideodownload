@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { HilltopBannerSlot, HilltopTag } from "@/lib/monetization/hilltop";
+import {
+  DEFAULT_HILLTOP,
+  isHilltopPlacementOn,
+  type HilltopConfig,
+  type HilltopPlacementId,
+} from "@/lib/monetization/hilltop-config";
 
 import { useShowAds } from "./use-show-ads";
 
@@ -35,6 +41,15 @@ import { useShowAds } from "./use-show-ads";
  * here anyway — a `<script>` written that way is inert, which is a trap worth
  * naming because it looks correct and silently does nothing.
  */
+/**
+ * Placements with a live script on the page right now.
+ *
+ * Module scope on purpose — see the note at the claim. This is HilltopAds' own
+ * registry and shares nothing with ExoClick's `claimedZones`: the two networks
+ * must not be able to stand each other down.
+ */
+const mounted = new Set<string>();
+
 export function HilltopSlot({
   slot,
   className,
@@ -45,14 +60,17 @@ export function HilltopSlot({
 }) {
   const { showAds, ready } = useShowAds();
   const [tag, setTag] = useState<HilltopTag | null>(null);
+  const [config, setConfig] = useState<HilltopConfig>(DEFAULT_HILLTOP);
   const host = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
     fetch("/api/ads/config")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { hilltopBanner?: HilltopTag | null }) => {
-        if (alive) setTag(d.hilltopBanner ?? null);
+      .then((d: { hilltopBanner?: HilltopTag | null; hilltop?: HilltopConfig }) => {
+        if (!alive) return;
+        setTag(d.hilltopBanner ?? null);
+        if (d.hilltop) setConfig(d.hilltop);
       })
       .catch(() => {
         /* No banner is the safe outcome. */
@@ -62,10 +80,36 @@ export function HilltopSlot({
     };
   }, []);
 
+  /*
+    Viewport rule (brief §12: "Do not force desktop-sized HilltopAds banners
+    onto mobile"). Read once on mount rather than tracked: a resize across the
+    breakpoint mid-session should not tear down a creative that is already
+    serving, which would spend a second impression for one viewer.
+  */
+  const [isMobile] = useState(() =>
+    typeof window === "undefined" ? false : window.matchMedia("(max-width: 767px)").matches,
+  );
+  const viewportAllowed = isMobile ? config.mobile : config.desktop;
+  const placementOn = isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed;
+
   useEffect(() => {
-    if (!ready || !showAds || !tag) return;
+    if (!ready || !showAds || !tag || !placementOn) return;
     const el = host.current;
     if (!el) return;
+
+    /*
+      🔴 ONE LIVE INSTANCE PER PLACEMENT (brief §11: "Never allow the same
+      HilltopAds placement to mount twice … duplicate ads caused by React Strict
+      Mode … duplicate ads after navigation").
+
+      A module-level registry rather than a ref, because a ref is per-instance
+      and would not see a SECOND instance of the same placement — which is
+      exactly what a strict-mode double mount, or two renders of one component,
+      produces. Claiming is the first thing this effect does and releasing is
+      the last thing its cleanup does, so a navigation hands the placement back.
+    */
+    if (mounted.has(slot)) return;
+    mounted.add(slot);
 
     const script = document.createElement("script");
     script.src = tag.src;
@@ -99,18 +143,19 @@ export function HilltopSlot({
       } catch {
         /* Diagnostics must never break the thing they describe. */
       }
-    }, 10_000);
+    }, config.timeoutMs);
 
     return () => {
       clearTimeout(timer);
+      mounted.delete(slot);
       // Take the loader's own nodes down with us — see the header.
       el.replaceChildren();
     };
-  }, [ready, showAds, tag, slot]);
+  }, [ready, showAds, tag, slot, placementOn, config.timeoutMs]);
 
   // Premium visitors, an unresolved plan, or nothing configured: no element at
   // all, so the slot costs an unconfigured page nothing.
-  if (!ready || !showAds || !tag) return null;
+  if (!ready || !showAds || !tag || !placementOn) return null;
 
   /*
     A 300x250 unit in a box that may be narrower on a small phone. `maxWidth`

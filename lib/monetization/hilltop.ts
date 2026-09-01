@@ -108,6 +108,6 @@ export function parseHilltopTag(snippet: string | null | undefined): HilltopTag 
  * used". Each reports separately to the admin activity feed, so an operator can
  * see which position is earning rather than one lumped number.
  */
-export const HILLTOP_BANNER_SLOTS = ["history", "historyfeed", "landing"] as const;
+export const HILLTOP_BANNER_SLOTS = ["history", "historyfeed", "landing", "feed"] as const;
 
 export type HilltopBannerSlot = (typeof HILLTOP_BANNER_SLOTS)[number];

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AD_ZONES, isExoClickZone, type AdZoneId } from "./ad-schema";
+import { DEFAULT_HILLTOP, normalizeHilltop, type HilltopConfig } from "./hilltop-config";
 import {
   DEFAULT_VAST_INTERSTITIAL,
   normalizeVastInterstitial,
@@ -546,6 +547,14 @@ export interface MonetizationSettings {
    * control whose output renders nowhere.
    */
   hilltopVideoSliderSnippet: string;
+  /**
+   * HilltopAds BEHAVIOUR — the master switch, the per-placement switches, the
+   * frequency caps, the timeout and the mobile/desktop rules.
+   *
+   * Kept apart from the two snippet fields above so a placement can be switched
+   * off without deleting the tag behind it. See lib/monetization/hilltop-config.ts.
+   */
+  hilltop: HilltopConfig;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -645,6 +654,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickInterstitialFallbackSnippet: "",
   hilltopBannerSnippet: "",
   hilltopVideoSliderSnippet: "",
+  hilltop: DEFAULT_HILLTOP,
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,
@@ -877,6 +887,12 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
     // or a non-boolean, and a truthy `"false"` would turn a switched-off
     // placement back on.
     merged.exoclickZones = normalizeExoClickZones(merged.exoclickZones);
+    /*
+      Same reason as the line above: a settings row written before HilltopAds
+      existed carries no `hilltop` key, and every consumer reads fields off it.
+      Normalising here means no caller has to defend against a partial object.
+    */
+    merged.hilltop = normalizeHilltop(merged.hilltop);
     // Clamped on READ as well as on write: a hand-edited blob must never reach
     // the player as a negative timeout or a 10-minute skip timer.
     merged.vastInterstitial = normalizeVastInterstitial(merged.vastInterstitial);

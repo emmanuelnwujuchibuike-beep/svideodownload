@@ -145,8 +145,24 @@ export async function GET() {
 
         `hilltopVideoSlider` places ITSELF and is loaded once per page.
       */
-      hilltopBanner: parseHilltopTag(settings.hilltopBannerSnippet),
-      hilltopVideoSlider: parseHilltopTag(settings.hilltopVideoSliderSnippet),
+      /*
+        🔴 THE MASTER SWITCH IS APPLIED HERE, NOT IN THE CLIENT.
+
+        Owner's brief: "HilltopAds = OFF must mean: Remove/disable only
+        HilltopAds placements. All other networks continue normally."
+
+        Resolving it server-side makes that literal — with the switch off the
+        tags are not in the payload at all, so no HilltopAds URL reaches a
+        browser and nothing on the page can load one even by mistake. A client
+        that checked a flag would still be shipping the credentials to every
+        visitor and relying on itself to not use them. Every other network's
+        entry on this endpoint is untouched by it.
+      */
+      hilltop: settings.hilltop,
+      hilltopBanner: settings.hilltop.enabled ? parseHilltopTag(settings.hilltopBannerSnippet) : null,
+      hilltopVideoSlider: settings.hilltop.enabled
+        ? parseHilltopTag(settings.hilltopVideoSliderSnippet)
+        : null,
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

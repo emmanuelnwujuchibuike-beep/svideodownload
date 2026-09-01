@@ -13,6 +13,8 @@ import { lockTopbarVisible } from "@/features/app-shell/topbar-visibility";
 import { setTopbarCenter } from "@/features/app-shell/topbar-slot";
 import { ContinueInReels } from "@/features/feed/continue-in-reels";
 import { FeedAdSlot } from "@/features/feed/feed-ad-slot";
+import { HilltopFeedAd } from "@/features/feed/hilltop-feed-ad";
+import { useHilltopFeedSlots } from "@/features/feed/use-hilltop-feed-slots";
 import { FeedPostCard } from "@/features/feed/feed-post-card";
 import { FeedSkeleton } from "@/features/feed/feed-skeleton";
 import { ImageOpenFallback } from "@/features/feed/image-open-fallback";
@@ -89,6 +91,19 @@ const SWIPE_ORDER: HomeFeedSort[] = ["for_you", "following"];
 function newFeedSeed(): string {
   return Math.random().toString(36).slice(2, 10);
 }
+
+/**
+ * The rendered feed list: every slot `buildSmartStream` produces, plus the
+ * HilltopAds units composed in afterwards.
+ *
+ * A LOCAL type on purpose. Adding `hilltopad` to `SmartSlot` itself would put a
+ * network-specific variant into the shared stream builder that Reels also uses,
+ * and every exhaustive switch over that union would have to learn about a
+ * placement it will never render.
+ */
+type ComposedSlot =
+  | ReturnType<typeof buildSmartStream>[number]
+  | { type: "hilltopad"; anchorId: string };
 
 export function SmartFeed({
   initialItems,
@@ -815,6 +830,37 @@ export function SmartFeed({
     [items, deck, adInterval],
   );
 
+  /*
+    🔴 HILLTOPADS IN THE FEED, ON ITS OWN CADENCE (owner's brief §3B: "1
+    HilltopAds feed ad every 8-12 organic feed items … Make this configurable").
+
+    Nothing above this line changes. `buildSmartStream` and `insertAdSlots` keep
+    their interval, their keys and their tests: they drive the `feed_inline`
+    zone that AdSense and Adsterra already serve, and re-keying a working
+    placement to make room for a new network would reinitialise every visible ad
+    in the feed — the first rule of the brief, and §10 of the older one.
+
+    So Hilltop counts organic posts itself and is COMPOSED IN afterwards.
+
+    🔴 Composed into the array rather than wrapped around a card in the map.
+    `AnimatePresence` tracks its DIRECT children to run exit animations, so
+    returning a Fragment holding a card plus an ad would hide the card from it
+    and silently break the feed's transitions. Every entry stays a direct child
+    with its own stable key.
+  */
+  const hilltopAnchors = useHilltopFeedSlots(
+    useMemo(() => stream.flatMap((x) => (x.type === "post" ? [x.item.id] : [])), [stream]),
+  );
+  const composed = useMemo<ComposedSlot[]>(
+    () =>
+      stream.flatMap((slot): ComposedSlot[] =>
+        slot.type === "post" && hilltopAnchors.has(slot.item.id)
+          ? [slot, { type: "hilltopad", anchorId: slot.item.id }]
+          : [slot],
+      ),
+    [stream, hilltopAnchors],
+  );
+
   return (
     <section
       className="relative"
@@ -945,8 +991,17 @@ export function SmartFeed({
               */
               <div>
                 <AnimatePresence initial={false}>
-                  {stream.map((slot, index) =>
-                    slot.type === "post" ? (
+                  {composed.map((slot, index) =>
+                    slot.type === "hilltopad" ? (
+                      /*
+                        Keyed on the post it follows, never on the index — the
+                        same rule the note on `anchorId` below records. Removing
+                        a post above must not change this unit's identity, or
+                        React would unmount it and the loader would re-request
+                        an ad the reader is already looking at.
+                      */
+                      <HilltopFeedAd key={`hilltop-${slot.anchorId}`} />
+                    ) : slot.type === "post" ? (
                       <FeedPostCard
                         key={slot.item.id}
                         item={slot.item}

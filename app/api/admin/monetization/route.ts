@@ -5,6 +5,12 @@ import { getAdminUser } from "@/lib/admin/guard";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { DEFAULT_VAST_INTERSTITIAL } from "@/lib/monetization/vast-interstitial";
 import { MONETAG_AD_TYPE_IDS, MONETAG_PLACEMENT_IDS, MONETAG_SURFACE_IDS } from "@/lib/monetization/monetag";
+import {
+  DEFAULT_HILLTOP,
+  HILLTOP_MAX_EVERY,
+  HILLTOP_MIN_EVERY,
+  HILLTOP_PLACEMENTS,
+} from "@/lib/monetization/hilltop-config";
 import { setMonetizationSettings } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -15,6 +21,12 @@ export const dynamic = "force-dynamic";
   may still include it; `.strip()` (zod's default for unknown keys) discards it
   rather than 400ing an otherwise valid save.
 */
+/** The placement ids, as the tuple zod enum wants. */
+const HILLTOP_PLACEMENT_IDS = HILLTOP_PLACEMENTS.map((x) => x.id) as [
+  (typeof HILLTOP_PLACEMENTS)[number]["id"],
+  ...(typeof HILLTOP_PLACEMENTS)[number]["id"][],
+];
+
 const schema = z.object({
   adsense: z.boolean(),
   adsterra: z.boolean(),
@@ -128,6 +140,23 @@ const schema = z.object({
   exoclickInterstitialFallbackSnippet: z.string().max(4000).default(""),
   hilltopBannerSnippet: z.string().max(4000).default(""),
   hilltopVideoSliderSnippet: z.string().max(4000).default(""),
+  /*
+    HilltopAds behaviour. Every field has a default, so an older client that
+    posts the form without this object writes the dormant config rather than
+    failing validation — and `normalizeHilltop` clamps the numbers again on the
+    way out, so a hand-edited row cannot produce a feed that is mostly ads.
+  */
+  hilltop: z
+    .object({
+      enabled: z.boolean().default(false),
+      placements: z.record(z.enum(HILLTOP_PLACEMENT_IDS), z.boolean()).default({}),
+      feedEvery: z.number().int().min(HILLTOP_MIN_EVERY).max(HILLTOP_MAX_EVERY).default(10),
+      historyVideoEvery: z.number().int().min(HILLTOP_MIN_EVERY).max(HILLTOP_MAX_EVERY).default(10),
+      timeoutMs: z.number().int().min(2000).max(30000).default(10000),
+      mobile: z.boolean().default(true),
+      desktop: z.boolean().default(true),
+    })
+    .default(DEFAULT_HILLTOP),
   exoclickSharedZoneId: z
     .string()
     .trim()

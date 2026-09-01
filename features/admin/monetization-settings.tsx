@@ -1,8 +1,16 @@
 "use client";
 
-import { AlertTriangle, Check, Loader2, ToggleRight } from "lucide-react";
+import { AlertTriangle, Check, Loader2, ToggleLeft, ToggleRight } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  DEFAULT_HILLTOP,
+  HILLTOP_MAX_EVERY,
+  HILLTOP_MIN_EVERY,
+  HILLTOP_PLACEMENTS,
+  type HilltopConfig,
+} from "@/lib/monetization/hilltop-config";
 
 import type { AdRecord } from "@/lib/monetization/ads";
 import {
@@ -243,6 +251,20 @@ export function MonetizationSettings({
   const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
   const bottomNavTag = parseExoClickSticky(state.exoclickBottomNavSnippet ?? "");
   const interstitialTag = parseExoClickSticky(state.exoclickInterstitialSnippet ?? "");
+  /*
+    The HilltopAds config writer. Persists on every change like `setVast` beside
+    it — these are switches and numbers, not free text, so a Save button would
+    only be a way to lose a change by navigating away. Rolls back on failure, so
+    the panel never shows a state the server did not accept.
+  */
+  const hilltop: HilltopConfig = state.hilltop ?? DEFAULT_HILLTOP;
+  const setHilltop = async (patch: Partial<HilltopConfig>) => {
+    const next = { ...state, hilltop: { ...hilltop, ...patch } };
+    setState(next);
+    const ok = await persist(next);
+    if (!ok) setState((prev) => ({ ...prev, hilltop }));
+  };
+
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
     const next = { ...state, vastInterstitial: { ...vast, ...patch } };
@@ -548,6 +570,126 @@ export function MonetizationSettings({
         one-zone-per-placement rule below is an ExoClick rule about its single
         batched multi-zone request.
       */}
+      {/*
+        🔴 THE MASTER SWITCH, AND IT TOUCHES ONLY HILLTOPADS (owner's brief §8:
+        "The admin should be able to disable HilltopAds completely without
+        affecting any other ad provider").
+
+        It is applied SERVER-side in /api/ads/config: with this off the Hilltop
+        tags are not in the payload at all, so nothing about the network reaches
+        a browser and no page can load one by mistake. Every other provider's
+        entry on that endpoint is untouched by it, which is what makes this a
+        real kill switch rather than a request not to use something already
+        shipped to the client.
+      */}
+      <div className="mt-4 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void setHilltop({ enabled: !hilltop.enabled })}
+          className="flex w-full items-center justify-between gap-3 text-left disabled:opacity-70"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">HilltopAds</span>
+            <span className="block text-xs text-muted-foreground">
+              {hilltop.enabled
+                ? "On — only the placements switched on below will run."
+                : "Off — no HilltopAds code loads at all. Every other network is unaffected."}
+            </span>
+          </span>
+          {hilltop.enabled ? (
+            <ToggleRight className="h-6 w-6 shrink-0 text-primary" />
+          ) : (
+            <ToggleLeft className="h-6 w-6 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+
+        {hilltop.enabled ? (
+          <div className="mt-3 space-y-2.5 border-t border-border/60 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Placements</p>
+            <div className="grid gap-1.5">
+              {HILLTOP_PLACEMENTS.map((pl) => {
+                const on = hilltop.placements?.[pl.id] !== false;
+                return (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void setHilltop({ placements: { ...hilltop.placements, [pl.id]: !on } })
+                    }
+                    className="flex items-center justify-between gap-3 rounded-xl bg-secondary/30 px-3 py-2 text-left disabled:opacity-70"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-medium">{pl.label}</span>
+                      <span className="block text-[11px] text-muted-foreground">{pl.hint}</span>
+                    </span>
+                    {on ? (
+                      <ToggleRight className="h-5 w-5 shrink-0 text-primary" />
+                    ) : (
+                      <ToggleLeft className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Frequency</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <HilltopNumber
+                label="Feed — one ad every N posts"
+                value={hilltop.feedEvery}
+                min={HILLTOP_MIN_EVERY}
+                max={HILLTOP_MAX_EVERY}
+                busy={busy}
+                onCommit={(n) => void setHilltop({ feedEvery: n })}
+              />
+              <HilltopNumber
+                label="History — one video every N items"
+                value={hilltop.historyVideoEvery}
+                min={HILLTOP_MIN_EVERY}
+                max={HILLTOP_MAX_EVERY}
+                busy={busy}
+                onCommit={(n) => void setHilltop({ historyVideoEvery: n })}
+              />
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              These are HilltopAds&apos; own cadences. The existing in-feed and history
+              placements keep their own intervals and are not affected by either number.
+            </p>
+
+            <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Devices</p>
+            <div className="flex flex-wrap gap-2">
+              <HilltopToggle
+                label="Mobile"
+                on={hilltop.mobile}
+                busy={busy}
+                onToggle={() => void setHilltop({ mobile: !hilltop.mobile })}
+              />
+              <HilltopToggle
+                label="Desktop / tablet"
+                on={hilltop.desktop}
+                busy={busy}
+                onToggle={() => void setHilltop({ desktop: !hilltop.desktop })}
+              />
+            </div>
+
+            <HilltopNumber
+              label="Give up after (seconds)"
+              value={Math.round(hilltop.timeoutMs / 1000)}
+              min={2}
+              max={30}
+              busy={busy}
+              onCommit={(n) => void setHilltop({ timeoutMs: n * 1000 })}
+            />
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              How long a placement waits before it reports its outcome and stops holding
+              any space. Nothing here ever shows a loading spinner.
+            </p>
+          </div>
+        ) : null}
+      </div>
+
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
         <p className="text-sm font-semibold">HilltopAds — MultiTag Banner 300x250</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
@@ -1800,6 +1942,86 @@ export function MonetizationSettings({
  * which matters because a zone is activated against one provider and asking the
  * wrong one serves nothing.
  */
+/**
+ * A bounded integer, committed on blur rather than per keystroke.
+ *
+ * Per-keystroke would persist "1" on the way to "12" — and "1" is a valid,
+ * clamped, catastrophic feed cadence. Committing on blur means the operator's
+ * finished number is the one that is saved, and the clamp is applied here as
+ * well as on the server so the panel cannot show a value the server refused.
+ */
+function HilltopNumber({
+  label,
+  value,
+  min,
+  max,
+  busy,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  busy: boolean;
+  onCommit: (n: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={draft}
+        disabled={busy}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const n = Number(draft);
+          if (!Number.isFinite(n)) {
+            setDraft(String(value));
+            return;
+          }
+          const clamped = Math.min(max, Math.max(min, Math.round(n)));
+          setDraft(String(clamped));
+          if (clamped !== value) onCommit(clamped);
+        }}
+        className="h-9 w-full rounded-xl bg-background px-3 text-sm outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+      />
+    </label>
+  );
+}
+
+/** A small on/off pill, for the device switches. */
+function HilltopToggle({
+  label,
+  on,
+  busy,
+  onToggle,
+}: {
+  label: string;
+  on: boolean;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onToggle}
+      className={cn(
+        "inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-medium transition disabled:opacity-70",
+        on ? "border-primary/40 bg-primary/10 text-foreground" : "border-border text-muted-foreground",
+      )}
+    >
+      {on ? <ToggleRight className="h-4 w-4 text-primary" /> : <ToggleLeft className="h-4 w-4" />}
+      {label}
+    </button>
+  );
+}
+
 function SnippetField({
   value,
   placeholder,

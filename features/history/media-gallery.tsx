@@ -22,6 +22,7 @@ import {
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/exoclick-sticky";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
+import { isHilltopPlacementOn, type HilltopConfig } from "@/lib/monetization/hilltop-config";
 import { HistoryGridAd } from "./history-grid-ad";
 import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -47,6 +48,25 @@ import type { DownloadRecord, MediaKind } from "@/types";
  * for.
  */
 const HISTORY_STORY_AD_EVERY = 3;
+
+/**
+ * The HilltopAds video cadence for this surface, when it is switched on.
+ *
+ * Owner's brief §16: "Add video ads naturally into the history experience … Do
+ * not interrupt every few items. The frequency must be configurable."
+ *
+ * 🔴 SEPARATE FROM `HISTORY_STORY_AD_EVERY` ABOVE, which stays at 3 and stays
+ * hard-coded. That constant drives the EXISTING `history_story_ad` zone that
+ * other networks already serve, and changing a working placement's rhythm to
+ * accommodate a new one is the first thing the brief prohibits. When Hilltop's
+ * history video is enabled it takes over the cadence for this queue with its
+ * own admin-set number, and when it is off nothing about the existing behaviour
+ * is different by a single item.
+ */
+function historyAdEvery(hilltop: HilltopConfig | null): number {
+  if (!hilltop || !isHilltopPlacementOn(hilltop, "historyvideo")) return HISTORY_STORY_AD_EVERY;
+  return hilltop.historyVideoEvery;
+}
 
 /**
  * Which time-period sections are followed by an in-feed ad, and WHICH SLOT each
@@ -207,6 +227,28 @@ export function MediaGallery({
   /** Multi-select mode: tiles toggle instead of opening the player. */
   selection?: GallerySelection;
 }) {
+  /*
+    The HilltopAds config, for the video cadence only. One cached request, and
+    null until it lands — `historyAdEvery` falls back to the existing constant,
+    so a slow or failed config fetch leaves the queue exactly as it has always
+    behaved rather than removing its ads.
+  */
+  const [hilltopConfig, setHilltopConfig] = useState<HilltopConfig | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { hilltop?: HilltopConfig }) => {
+        if (alive && d.hilltop) setHilltopConfig(d.hilltop);
+      })
+      .catch(() => {
+        /* The existing cadence is the safe outcome. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const [view, setView] = useState<ViewMode>("grid");
   /*
     TWO columns by default (owner, 2026-08-09: "make the grid cols selectable,
@@ -298,7 +340,7 @@ export function MediaGallery({
       Continue Watching, the review player and the floating card all call
       `openPlayerQueue` and never see one.
     */
-    openPlayerQueueWithAds(sorted, idx, HISTORY_STORY_AD_EVERY);
+    openPlayerQueueWithAds(sorted, idx, historyAdEvery(hilltopConfig));
   };
 
   /*

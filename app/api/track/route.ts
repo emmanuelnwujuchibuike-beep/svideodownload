@@ -43,6 +43,7 @@ const bannerSchema = z.object({
     "hilltop_history",
     "hilltop_historyfeed",
     "hilltop_landing",
+    "hilltop_feed",
     "historyfeedlastweek",
     "landing",
     "bottomnav",

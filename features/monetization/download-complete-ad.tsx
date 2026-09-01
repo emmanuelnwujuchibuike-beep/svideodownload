@@ -70,6 +70,15 @@ import { useShowAds } from "./use-show-ads";
  * mobile it is a bottom sheet, which is the platform-native shape for something
  * that appears after an action completes.
  */
+/**
+ * How long this panel may hold the screen before it becomes closable no matter
+ * what else has gone wrong. Longer than any skip delay an operator can set
+ * (the admin caps `download_complete` well below this), so it never front-runs
+ * the real countdown — it only catches the cases where the real countdown never
+ * arrives.
+ */
+const HARD_ESCAPE_MS = 20_000;
+
 export function DownloadCompleteAd({
   open,
   onClose,
@@ -91,6 +100,48 @@ export function DownloadCompleteAd({
     if (open === wasOpen.current) return;
     wasOpen.current = open;
     if (!open) setHasAd(null);
+  }, [open]);
+
+  /*
+    🔴 ONE AD PER COMPLETED DOWNLOAD (owner, 2026-09-01: "the white ad, itsnt
+    suppose to be the download complte because another 15second download complte
+    video still plays").
+
+    TWO placements answer the same `DOWNLOAD_COMPLETED_EVENT` and neither knew
+    about the other: this panel, and the VAST skippable video
+    (`vast-interstitial/download-complete-trigger.tsx`, owner 2026-08-30:
+    "download completed ... should trigger a 5 to 15 sec skipable video ad").
+    `requestVastInterstitial` guards against ITSELF — a busy phase and a
+    cooldown — so a batch of twelve files still shows one video. It has never
+    guarded against this panel, so one finished download produced a sponsored
+    sheet AND a fifteen-second video, back to back.
+
+    The video is the placement the owner specified for this moment, so this panel
+    STANDS DOWN whenever that video is armed. Not "both, ordered nicely": two
+    full-screen ads for one download is the complaint, and sequencing them is
+    still two.
+
+    Fails OPEN, deliberately: if the config cannot be read, this panel behaves as
+    it always did. A missed ad is a rounding error; a download that silently
+    shows nothing because a fetch failed is a revenue bug.
+  */
+  const [videoOwnsMoment, setVideoOwnsMoment] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { vastInterstitial?: { enabled?: boolean; enabledOnDownloadComplete?: boolean } }) => {
+        if (!alive) return;
+        const v = d.vastInterstitial;
+        setVideoOwnsMoment(v?.enabled === true && v?.enabledOnDownloadComplete === true);
+      })
+      .catch(() => {
+        /* Fails open — see above. */
+      });
+    return () => {
+      alive = false;
+    };
   }, [open]);
 
   /*
@@ -147,8 +198,52 @@ export function DownloadCompleteAd({
     closes over it, and a `const` initialised later in the same render would be
     in its temporal dead zone for any render that returned early.
   */
-  const canSkip = config?.skippable !== false && countdownDone;
-  const counting = !countdownDone && remaining > 0;
+  /*
+    🔴 THE ESCAPE HATCH — A CEILING THAT DEPENDS ON NOTHING (owner, 2026-09-01:
+    "the download complete card is not showing an X button again, users get
+    stock").
+
+    Every other route out of this panel is conditional on something reporting
+    correctly: `countdownDone` needs `shown`, `shown` needs `AdSlot` to call
+    `onResolved(true)`, and the button that carries it needs the sticky header
+    to survive a creative taller than the sheet. Each of those has failed at
+    least once, and every one of them fails the SAME way — a full-screen overlay
+    with `body` locked and no way out but a reload.
+
+    So this timer keys on `open` alone. Not `shown`, not the ad, not the
+    countdown, not the config: if this panel has been mounted for
+    HARD_ESCAPE_MS, it becomes closable, whatever else is or is not working.
+    `skippable: false` does not suppress it either — an operator saying "watch
+    this through" is not an operator asking to trap someone forever.
+
+    It is deliberately longer than any configured skip delay, so in normal
+    operation the real countdown always opens the gate first and this is never
+    the thing the visitor waits for.
+  */
+  const [hardEscape, setHardEscape] = useState(false);
+  useEffect(() => {
+    if (!open) {
+      setHardEscape(false);
+      return;
+    }
+    const id = setTimeout(() => setHardEscape(true), HARD_ESCAPE_MS);
+    return () => clearTimeout(id);
+  }, [open]);
+
+  /*
+    Hand the parent's `completeAdOpen` back when the video takes the moment.
+    In an effect, not in render: `close()` is the PARENT's setState, and calling
+    it while this component renders is the "cannot update a component while
+    rendering a different component" bug. Releasing it also means the NEXT
+    completed download finds the panel closed and gets a fresh attempt, rather
+    than one that believes it is already open.
+  */
+  useEffect(() => {
+    if (open && videoOwnsMoment) close();
+  }, [open, videoOwnsMoment, close]);
+
+  const canSkip = (config?.skippable !== false && countdownDone) || hardEscape;
+  const counting = !canSkip && remaining > 0;
 
   useEffect(() => {
     if (!shown) return;
@@ -164,7 +259,7 @@ export function DownloadCompleteAd({
     };
   }, [shown, canSkip, close]);
 
-  if (!ready || !showAds || !open) return null;
+  if (!ready || !showAds || !open || videoOwnsMoment) return null;
 
   return (
     <div
@@ -176,7 +271,20 @@ export function DownloadCompleteAd({
       aria-modal="true"
       aria-label="Advertisement"
     >
-      <div aria-hidden className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+      {/*
+        The backdrop is a SECOND way out, available the moment the gate opens.
+        The header control can be scrolled away or squashed by a creative taller
+        than the sheet — both have happened — but the backdrop is a sibling of
+        the sheet, so no amount of creative height can reach it.
+      */}
+      <div
+        aria-hidden
+        onClick={canSkip ? close : undefined}
+        className={cn(
+          "absolute inset-0 bg-background/80 backdrop-blur-sm",
+          canSkip && "cursor-pointer",
+        )}
+      />
 
       {/*
         🔴 BOUNDED HEIGHT, AND THE HEADER PINNED (owner, 2026-08-30: "the after

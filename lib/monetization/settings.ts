@@ -555,6 +555,16 @@ export interface MonetizationSettings {
    * off without deleting the tag behind it. See lib/monetization/hilltop-config.ts.
    */
   hilltop: HilltopConfig;
+  /**
+   * HILLTOPADS — the Video: VAST 3.0 tag URL (owner, 2026-09-01, with the URL).
+   *
+   * A URL, not a snippet: their VAST product is a plain endpoint the PLAYER
+   * calls, with no script and no placement of its own. It is stored here so the
+   * Hilltop video placements can reach it without an operator having to
+   * hand-build an ads row for every zone that wants one — and it is deliberately
+   * ONE url, because a VAST tag is not tied to a position the way a banner is.
+   */
+  hilltopVastUrl: string;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -655,6 +665,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   hilltopBannerSnippet: "",
   hilltopVideoSliderSnippet: "",
   hilltop: DEFAULT_HILLTOP,
+  hilltopVastUrl: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,

@@ -101,6 +101,32 @@ export function parseHilltopTag(snippet: string | null | undefined): HilltopTag 
 }
 
 /**
+ * Read a Hilltop VAST tag URL, or null.
+ *
+ * A VAST tag is a bare URL, not a script block — their dashboard hands it over
+ * as `https://vapid-size.com/d/…` with nothing around it. So it is validated as
+ * a URL rather than parsed out of markup, and the same shape rules apply: https
+ * only, a real host, a real path.
+ *
+ * Kept in this file rather than beside the VAST player because what makes it a
+ * HILLTOP tag is the domain it comes from, and that is a network fact, not a
+ * player one.
+ */
+export function parseHilltopVastUrl(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return null;
+  if (!SAFE_SRC.test(value)) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return null;
+    if (!url.hostname.includes(".") || url.pathname.length < 2) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Where a Hilltop BANNER may be placed.
  *
  * The same positions the ExoClick snippet slots occupy, because that is what

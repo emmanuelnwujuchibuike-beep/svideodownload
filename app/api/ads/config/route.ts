@@ -5,7 +5,7 @@ import {
   getRewardNetworks,
 } from "@/lib/monetization/reward-networks-store";
 import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
-import { parseHilltopTag } from "@/lib/monetization/hilltop";
+import { parseHilltopTag, parseHilltopVastUrl } from "@/lib/monetization/hilltop";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -163,6 +163,7 @@ export async function GET() {
       hilltopVideoSlider: settings.hilltop.enabled
         ? parseHilltopTag(settings.hilltopVideoSliderSnippet)
         : null,
+      hilltopVast: settings.hilltop.enabled ? parseHilltopVastUrl(settings.hilltopVastUrl) : null,
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

@@ -982,5 +982,29 @@ export function ExoClickSticky({
     actually reserving empty gaps. Nothing here centres, stretches or overrides
     the creative; those `!important` rules stay gone.
   */
-  return <div ref={host} style={{ width: "100%" }} />;
+  /*
+    ── 🔴 AND `maxWidth` + `overflow`, WHICH ARE A FENCE, NOT A SIZE ───────────
+
+    Owner, 2026-09-01: the landing unit "showed once too large below the landing
+    page wallpaper button".
+
+    A multi-format zone is a CONTAINER whose creative comes from a child zone,
+    so its intrinsic width is whatever the advertiser's unit happens to be —
+    600x250 was observed on 6017110. Offered a 100%-wide box narrower than that,
+    the creative does not shrink: it overflows, and on a phone that is an ad
+    wider than the screen dragging a horizontal scrollbar across the page.
+
+    These two declarations say only "you may not be wider than the space you were
+    given". They assert no width, no height and no position, so none of the
+    failures recorded above can come back: the box the creative sizes itself
+    against is still exactly 100% of the container, which is what the outstream
+    player needs to initialise and what the 0px flex-item bug was about.
+
+    `overflow` is on OUR host, deliberately, not on the loader's injected
+    wrapper — styling their element is what three rounds of "still not centred"
+    got wrong, and a `position: fixed` creative (the sticky and fullpage
+    products place themselves) is unaffected by an ancestor's overflow, so this
+    cannot clip the products that own their own placement.
+  */
+  return <div ref={host} style={{ width: "100%", maxWidth: "100%", overflow: "hidden" }} />;
 }

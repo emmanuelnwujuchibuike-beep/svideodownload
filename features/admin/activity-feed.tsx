@@ -75,6 +75,29 @@ const KIND: Record<string, KindMeta> = {
   upgrade_prompt_view: { label: "Upgrade view", dot: "bg-violet-500", chip: "bg-violet-500/12 text-violet-600 dark:text-violet-300" },
   pwa_installed: { label: "Install", dot: "bg-cyan-500", chip: "bg-cyan-500/12 text-cyan-600 dark:text-cyan-300" },
   api_key_created: { label: "API key", dot: "bg-slate-400", chip: "bg-slate-400/15 text-slate-600 dark:text-slate-300" },
+  /*
+    🔴 ExoClick display placements are IMPRESSIONS AND CLICKS, and must read as
+    such (owner, 2026-08-31: "the ad activity in admin dashboard suppose to be
+    impression and click, not banner fill in gray").
+
+    These had no entry at all, so `metaFor` fell through to its default — the
+    raw event id with the underscores swapped for spaces, on the muted chip.
+    That is where "banner filled", in grey, came from: not a decision, an
+    absence. An ExoClick impression is worth exactly what an AdSense one is, so
+    it gets the same amber the `ad_impression` row already uses, and the click
+    gets the stronger amber `ad_click` uses.
+
+    The no-fills stay deliberately quiet — they are diagnostics, not revenue,
+    and colouring them like earnings would misreport an empty slot as a filled
+    one. They keep the muted chip ON PURPOSE, which is the opposite of the
+    accident above.
+  */
+  banner_filled: { label: "Banner impression", dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" },
+  banner_click: { label: "Banner click", dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
+  banner_empty: { label: "Banner no-fill", dot: "bg-muted-foreground/40", chip: "bg-secondary text-muted-foreground" },
+  interstitial_filled: { label: "Interstitial shown", dot: "bg-amber-400/70", chip: "bg-amber-400/12 text-amber-600 dark:text-amber-300" },
+  interstitial_click: { label: "Interstitial click", dot: "bg-amber-500", chip: "bg-amber-500/12 text-amber-600 dark:text-amber-300" },
+  interstitial_empty: { label: "Interstitial no-fill", dot: "bg-muted-foreground/40", chip: "bg-secondary text-muted-foreground" },
 };
 
 function metaFor(kind: string): KindMeta {

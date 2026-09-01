@@ -78,6 +78,20 @@ export const EVENTS = [
   { id: "banner_filled", label: "Banner impression", description: "An ExoClick display banner rendered a creative.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "banner_empty", label: "Banner no-fill", description: "An ExoClick display banner was served but no creative arrived.", domain: "monetization", metadata: ["slot", "path"] },
   /*
+    The CLICK half (owner, 2026-08-31: "the ad activity in admin dashboard
+    suppose to be impression and click").
+
+    ⚠️ HONEST LIMIT, so nobody reads a zero here as "nobody clicks". This can
+    only see a click that lands on a creative in OUR document — which is the
+    case for the sticky zone, whose creative is a plain <img>. When the network
+    serves the creative inside an <iframe>, the click happens in another
+    browsing context and is invisible to us by design; ExoClick's own dashboard
+    remains the authority on click counts and revenue. This makes the feed show
+    real engagement as it happens, not replace their reporting.
+  */
+  { id: "banner_click", label: "Banner click", description: "A visitor clicked an ExoClick display banner. Only observable for creatives rendered outside an iframe — ExoClick's dashboard remains authoritative.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "interstitial_click", label: "Interstitial click", description: "A visitor clicked an ExoClick fullpage interstitial. Same iframe limitation as banner_click.", domain: "monetization", metadata: ["slot", "path"] },
+  /*
     ExoClick FULLPAGE INTERSTITIAL (owner, 2026-08-31: "wire the exoclick
     interstial activity to the admin dashboard live activity").
 

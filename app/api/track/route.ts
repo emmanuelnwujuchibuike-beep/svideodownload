@@ -38,6 +38,15 @@ const bannerSchema = z.object({
   slot: z.enum(["sticky", "history", "bottomnav", "interstitial"]),
   /** Did a creative actually arrive in the placeholder? */
   filled: z.boolean(),
+  /**
+   * A CLICK on the creative, rather than its arrival (owner, 2026-08-31: "the
+   * ad activity in admin dashboard suppose to be impression and click").
+   *
+   * Optional so every existing beacon stays valid — `sendBeacon` gives no
+   * response, so a schema change that rejected the old shape would silently
+   * drop impressions, which is the exact failure the note below records.
+   */
+  click: z.boolean().optional(),
   /** Which page it was on — "the history page in particular". */
   path: z.string().max(120).optional(),
 });
@@ -97,7 +106,7 @@ export async function POST(request: Request) {
     invisible from outside the browser.
   */
   if (parsed.data.kind === "banner") {
-    const { slot, filled, path } = parsed.data;
+    const { slot, filled, path, click } = parsed.data;
     /*
       The fullpage interstitial is the same MECHANISM as the banners — an <ins>
       their loader fills — but it is not a banner, and an operator scanning the
@@ -105,9 +114,16 @@ export async function POST(request: Request) {
       column to tell them apart.
     */
     const isInterstitial = slot === "interstitial";
-    const type = isInterstitial
-      ? (filled ? "interstitial_filled" : "interstitial_empty")
-      : (filled ? "banner_filled" : "banner_empty");
+    /*
+      A CLICK outranks the fill state it implies: you cannot click a creative
+      that is not there, so a click beacon is reported as a click rather than as
+      a second impression for the same placement.
+    */
+    const type = click
+      ? (isInterstitial ? "interstitial_click" : "banner_click")
+      : isInterstitial
+        ? (filled ? "interstitial_filled" : "interstitial_empty")
+        : (filled ? "banner_filled" : "banner_empty");
     trackEvent(type, {
       userId,
       metadata: { slot, path: path ?? null },

@@ -34,8 +34,10 @@ export const NOTABLE = new Set([
   // Bottom/history banner lifecycle — see events-registry.ts.
   "banner_filled",
   "banner_empty",
+  "banner_click",
   "interstitial_filled",
   "interstitial_empty",
+  "interstitial_click",
   "batch_authorized",
   "batch_started",
   "batch_refused",
@@ -82,8 +84,10 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
     */
     case "banner_filled":
     case "banner_empty":
+    case "banner_click":
     case "interstitial_filled":
-    case "interstitial_empty": {
+    case "interstitial_empty":
+    case "interstitial_click": {
       const slot = m.slot ? SLOT_LABELS[String(m.slot)] ?? String(m.slot) : null;
       const path = m.path ? String(m.path) : null;
       return [slot, path].filter(Boolean).join(" · ") || null;

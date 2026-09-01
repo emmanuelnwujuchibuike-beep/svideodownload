@@ -168,12 +168,12 @@ export type ExoClickInsSlot = "sticky" | "history" | "bottomnav";
  * change, and so a blocked or slow request can never delay the ad it is
  * describing. Fired only on a CHANGE, never per frame.
  */
-function beacon(slot: ExoClickInsSlot, filled: boolean): void {
+function beacon(slot: ExoClickInsSlot, filled: boolean, click = false): void {
   try {
     navigator.sendBeacon?.(
       "/api/track",
       new Blob(
-        [JSON.stringify({ kind: "banner", slot, filled, path: location.pathname })],
+        [JSON.stringify({ kind: "banner", slot, filled, click, path: location.pathname })],
         { type: "application/json" },
       ),
     );
@@ -525,6 +525,26 @@ export function ExoClickSticky({
         beacon(slot, false);
       }
     };
+    /*
+      CLICKS on the creative (owner, 2026-08-31: "the ad activity in admin
+      dashboard suppose to be impression and click").
+
+      🔴 PASSIVE, CAPTURE-PHASE, AND IT NEVER TOUCHES THE EVENT. No
+      `preventDefault`, no `stopPropagation`, no re-dispatch: the click belongs
+      to the network's creative and must reach it exactly as it would have. This
+      only observes one going past. `passive: true` also guarantees the listener
+      cannot delay the navigation the click is about to cause.
+
+      ⚠️ It can only see clicks that land in OUR document — true for the sticky
+      zone, whose creative is a plain <img>. A creative inside an <iframe> is a
+      separate browsing context and its clicks are invisible to us by design, so
+      a zero here is not evidence of no clicks; ExoClick's dashboard stays the
+      authority. Recorded because a real click in the live feed is worth seeing
+      as it happens.
+    */
+    const onClick = () => beacon(slot, true, true);
+    el.addEventListener("pointerdown", onClick, { capture: true, passive: true });
+
     const observer = new ResizeObserver(report);
     observer.observe(el);
     // The wrapper is inserted as a SIBLING of the <ins>, so watch the subtree
@@ -557,6 +577,7 @@ export function ExoClickSticky({
     return () => {
       observer.disconnect();
       mo.disconnect();
+      el.removeEventListener("pointerdown", onClick, { capture: true });
       clearTimeout(emptyTimer);
       clearTimeout(retryTimer);
       fillCb.current?.(false);

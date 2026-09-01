@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
-import { parseHilltopVastUrl } from "@/lib/monetization/hilltop";
+import { parseHilltopTag, parseHilltopVastUrl } from "@/lib/monetization/hilltop";
 import { isHilltopPlacementOn } from "@/lib/monetization/hilltop-config";
 import { getUserPlan } from "@/lib/monetization/plan";
 import {
@@ -196,49 +196,125 @@ async function withSharedExoClick(
  */
 const HILLTOP_WALLPAPER_SKIP_SECONDS = 15;
 
+/** The skip delay for every other Hilltop moment — the existing default. */
+const HILLTOP_SKIP_SECONDS = 5;
+
+/** Which HilltopAds placement switch governs which ad zone. */
+const HILLTOP_ZONE_PLACEMENT: Record<string, "wallpaper" | "download" | "idle" | undefined> = {
+  wallpaper_reward: "wallpaper",
+  download_complete: "download",
+  idle_interstitial: "idle",
+};
+
 /**
- * Serve the HilltopAds VAST tag as the wallpaper reward video.
+ * Zones where Hilltop REPLACES an existing row rather than filling a gap.
  *
- * 🔴 RUNS BEFORE THE SHARED EXOCLICK FALLBACK, which is what "remove the
- * exoclick video for wallpaper download" means in practice. No ExoClick row
- * exists on this zone — its video came from `exoclickSharedZoneId` filling the
- * gap — so taking the gap first is what replaces it, and it does so WITHOUT
- * touching the shared id that still serves every other ExoClick zone.
+ * Only the two moments the owner asked it to take over. Everywhere else an
+ * explicit ads-table row still wins, exactly as before.
+ */
+const HILLTOP_OVERRIDES = new Set(["download_complete", "idle_interstitial"]);
+
+/** The fields every Hilltop slot shares. */
+const HILLTOP_SLOT_BASE = {
+  network: "hilltopads",
+  imageUrl: null,
+  targetUrl: null,
+  headline: null,
+  width: null,
+  height: null,
+  adClient: null,
+  adSlotId: null,
+  adLayout: null,
+  skippable: true,
+} as const;
+
+/**
+ * Serve HilltopAds on the three MOMENTS it has been given.
  *
- * An explicit ads-table row still wins over both, exactly as before.
+ * | zone                | Hilltop source        | switch      |
+ * |---------------------|-----------------------|-------------|
+ * | `wallpaper_reward`   | VAST 3.0 tag          | `wallpaper` |
+ * | `download_complete`  | VAST 3.0 tag          | `download`  |
+ * | `idle_interstitial`  | inline video (slider) | `idle`      |
  *
- * ⚠️ THIS DOES NOT GRANT ANYTHING. It supplies a video for the existing gate to
- * play; the reward is still decided by the server-verified reward session, and
- * the watch is still measured by our own player. Hilltop has no rewarded product
+ * Owner, 2026-09-01: "i want hiltop inline video and vast to be used as idle
+ * interstilla and download completed trigger … video inline should be used as
+ * idle interstilla, and the vast as the new download complete", and earlier
+ * "remove the exoclick video for wallpaper download and use hiltop vast video".
+ *
+ * 🔴 RUNS BEFORE THE SHARED EXOCLICK FALLBACK. On `wallpaper_reward` there is no
+ * ads-table row at all — its video came from `exoclickSharedZoneId` filling the
+ * gap — so taking the gap first is what replaces it, WITHOUT touching the shared
+ * id that still serves every other ExoClick zone.
+ *
+ * ⚠️ THIS GRANTS NOTHING. It supplies a video for the existing gates to play.
+ * The reward is still decided by the server-verified reward session and the
+ * watch is still measured by our own player — Hilltop has no rewarded product
  * and nothing here pretends otherwise.
  */
-async function withHilltopWallpaperVast(
+async function withHilltopZone(
   zone: string,
   found: AdSlotData | null,
 ): Promise<AdSlotData | null> {
-  if (found) return found;
-  if (zone !== "wallpaper_reward") return null;
+  const placement = HILLTOP_ZONE_PLACEMENT[zone];
+  if (!placement) return found;
   const settings = await getMonetizationSettings();
-  if (!isHilltopPlacementOn(settings.hilltop, "wallpaper")) return null;
+  if (!isHilltopPlacementOn(settings.hilltop, placement)) return found;
+
+  /*
+    🔴 WHERE HILLTOP OVERRIDES AN EXISTING ROW, AND WHERE IT ONLY FILLS A GAP.
+
+    `wallpaper_reward` has no ads-table row — its video came from
+    `exoclickSharedZoneId` filling the gap — so Hilltop takes the gap and an
+    explicit row would still win.
+
+    `download_complete` and `idle_interstitial` DO have rows, and the owner asked
+    for Hilltop to replace what is on those two moments (2026-09-01: "i want
+    hiltop inline video and vast to be used as idle interstilla and download
+    completed trigger … the vast as the new download complete"). So when the
+    placement switch is on, Hilltop wins; when it is off, this returns `found`
+    untouched and those moments behave exactly as they always did. The switch is
+    the whole of the difference, which is what makes it reversible from the admin
+    rather than by a deploy.
+  */
+  if (found && !HILLTOP_OVERRIDES.has(zone)) return found;
+
+  /*
+    THE IDLE MOMENT TAKES THE INLINE VIDEO, NOT THE VAST TAG (owner: "video
+    inline should be used as idle interstilla, and the vast as the new download
+    complete").
+
+    Served as a `display` slot carrying the video-slider script, which
+    `FullscreenInterstitial` renders inside a SANDBOXED IFRAME. That is not
+    incidental here: an iframe is its own `window`, so the once-per-page-load
+    guard in their loader (`init` returns if `window[globalNameLoaded]`) is
+    scoped to that frame and the idle ad can fire on every idle moment instead
+    of only the first.
+  */
+  if (zone === "idle_interstitial") {
+    const tag = parseHilltopTag(settings.hilltopVideoSliderSnippet);
+    if (!tag) return found;
+    return {
+      ...HILLTOP_SLOT_BASE,
+      id: `hilltop-inline-${zone}`,
+      zone,
+      format: "display",
+      scriptCode: `<script async referrerpolicy="no-referrer-when-downgrade" src="${tag.src}"></script>`,
+      skipAfterSeconds: 5,
+    };
+  }
+
   const url = parseHilltopVastUrl(settings.hilltopVastUrl);
-  if (!url) return null;
+  if (!url) return found;
   return {
+    ...HILLTOP_SLOT_BASE,
     id: `hilltop-vast-${zone}`,
     zone,
-    network: "hilltopads",
     format: "video",
     // The VAST endpoint the player calls. Same field an ads-table video row uses.
     scriptCode: url,
-    imageUrl: null,
-    targetUrl: null,
-    headline: null,
-    width: null,
-    height: null,
-    adClient: null,
-    adSlotId: null,
-    adLayout: null,
-    skippable: true,
-    skipAfterSeconds: HILLTOP_WALLPAPER_SKIP_SECONDS,
+    skipAfterSeconds:
+      zone === "wallpaper_reward" ? HILLTOP_WALLPAPER_SKIP_SECONDS : HILLTOP_SKIP_SECONDS,
   };
 }
 
@@ -281,7 +357,7 @@ export async function GET(request: Request) {
             z,
             await withSharedExoClick(
               z,
-              await withHilltopWallpaperVast(
+              await withHilltopZone(
                 z,
                 (await getAdsForZone(z)).filter((a) => allowed(a, z))[0] ?? null,
               ),
@@ -306,7 +382,7 @@ export async function GET(request: Request) {
   const headers = { "Cache-Control": "private, max-age=10" };
   if (all) return NextResponse.json({ ads }, { headers });
   return NextResponse.json(
-    { ad: await withSharedExoClick(zone, await withHilltopWallpaperVast(zone, ads[0] ?? null)) },
+    { ad: await withSharedExoClick(zone, await withHilltopZone(zone, ads[0] ?? null)) },
     { headers },
   );
 }

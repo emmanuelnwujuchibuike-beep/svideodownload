@@ -269,132 +269,54 @@ export function HilltopSlot({
   const viewportAllowed = isMobile ? config.mobile : config.desktop;
   const placementOn = isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed;
 
+  /*
+    🔴 EACH SLOT GETS ITS OWN WINDOW (owner, 2026-09-01: "it only show banner in
+    history page, suppose to be in both and also in period separator section").
+
+    The once-per-page-load guard is the reason, one step further along than the
+    last fix reached. Their `init` returns when `window[globalNameLoaded]` is
+    set, and clearing that flag before each injection is not enough when two
+    slots mount in the SAME commit: both clear it, both inject, then the first
+    script to load sets the flag and the second returns. So one slot painted and
+    every other slot on the page stayed blank — the landing unit and both period
+    separators.
+
+    Clearing harder does not fix it. Serialising the injections would, and would
+    also mean the second ad waits for the first to finish loading.
+
+    An iframe does fix it, structurally: a frame is its own `window`, so the flag
+    is scoped to that frame and every slot is the first slot in its own document.
+    The same reasoning as the idle interstitial, which the ads route already
+    serves through a sandboxed frame for exactly this reason.
+
+    It also contains the third-party script — its parse, its execution and its
+    layout are the frame's, not the main document's, which is the LCP and
+    scrolling cost the owner raised.
+
+    `srcdoc` keeps our ORIGIN, so their referer check still sees frenzsave.com,
+    and the sandbox policy is the one `ad-slot.tsx` already settled on:
+    `allow-top-navigation-by-user-activation` is deliberately absent, so a
+    creative cannot navigate the whole page out from under the reader, while
+    `allow-popups` lets a real click open the advertiser.
+  */
+  const srcDoc = tag
+    ? `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center}</style></head><body><script async referrerpolicy="no-referrer-when-downgrade" src="${tag.src}"></script></body></html>`
+    : "";
+
   useEffect(() => {
     if (!ready || !showAds || !tag || !placementOn || !near) return;
     const el = host.current;
     if (!el) return;
-
-    /*
-      🔴 ONE LIVE INSTANCE PER PLACEMENT (brief §11: "Never allow the same
-      HilltopAds placement to mount twice … duplicate ads caused by React Strict
-      Mode … duplicate ads after navigation").
-
-      A module-level registry rather than a ref, because a ref is per-instance
-      and would not see a SECOND instance of the same placement — which is
-      exactly what a strict-mode double mount, or two renders of one component,
-      produces. Claiming is the first thing this effect does and releasing is
-      the last thing its cleanup does, so a navigation hands the placement back.
-    */
-    /*
-      🔴 A CLAIMED SLOT RETRIES, IT DOES NOT GIVE UP FOR EVER (owner,
-      2026-09-01: "the banner only serve once and needs refresh to show").
-
-      This was a bare `if (mounted.has(slot)) return`, and that is precisely the
-      bug. React mounts the incoming tree before it runs the outgoing one's
-      cleanup, so on a navigation the NEW instance of a slot can find the OLD
-      one's claim still standing. It returned, registered no cleanup, and its
-      effect had no reason to run again — so the slot stayed blank until a hard
-      reload, on every page after the first.
-
-      The guard still prevents two live scripts for one placement, which is what
-      it is for. It just no longer treats "busy right now" as "never".
-    */
-    if (el.getAttribute("data-ad-initialized") === "true") {
-      log("slot already initialized", domId);
-      return;
-    }
-    log("slot detected", domId);
-
-    if (mounted.has(domId)) {
-      log("provider busy, queued", domId);
-      /*
-        Bounded. The claim is released by the other instance's cleanup, which
-        runs in the same commit — a handful of retries covers that comfortably,
-        and an unbounded loop would spin for the life of the page if a claim
-        ever leaked.
-      */
-      if (attempt > 8) return;
-      const retry = setTimeout(() => setAttempt((n) => n + 1), 250);
-      return () => clearTimeout(retry);
-    }
-    mounted.add(domId);
-
-    /*
-      🔴 `appendTo` — THE FIX, AND IT IS THEIR OWN API (owner, 2026-09-01: "think
-      this caching and nav issue not ad network", which is exactly right).
-
-      Read out of their minified loader rather than guessed at:
-
-          saveScriptTag: function (e) {
-            for (var n = document.querySelectorAll('script[src*="' + e + '"]'), t = 0; t < n.length; t++)
-              if (!n[t].used) { this.settings.script = n[t]; n[t].used = true; break }
-          }
-
-          _injectDOM: function () {
-            var n = document.querySelector(this.settings.appendTo), e = this.settings.script;
-            n ? n.appendChild(this.adElement)
-              : e && !e.closest("head") ? e.insertBefore(…)
-          }
-
-          copyUserSettings: … typeof e.appendTo !== "undefined" && (this.settings.appendTo = e.appendTo)
-
-      So by default the loader FINDS ITSELF by scanning the document for a script
-      whose src matches, taking the first one not already flagged `used`, and
-      then places the creative next to THAT element. Three consequences, and they
-      are the three symptoms reported:
-
-        • Several slots on one page all match the same selector, so the ads are
-          handed out in document order to whichever script the scan reaches
-          first — "only the first ad slot initializes".
-        • After an SPA navigation the scan runs against a document that still
-          holds scripts from the page just left, so a fresh slot can be matched
-          to a stale element and the creative is appended somewhere the reader is
-          no longer looking — "empty until a full refresh".
-        • None of it is deterministic, which is why it worked on the landing page
-          and not after navigating.
-
-      `copyUserSettings` reads `appendTo` off the script element — that is the
-      supported way to say WHERE, and it takes precedence over the whole scan.
-      Given an explicit container selector the loader calls
-      `document.querySelector(appendTo).appendChild(...)` and script position
-      stops mattering entirely.
-    */
-    el.id = domId;
-    /*
-      Clear the once-per-page flags BEFORE injecting, so their `init` proceeds
-      rather than returning at its first line. See `guardKeys`.
-    */
-    releaseGuards();
-    const seen = windowKeys();
-    const script = document.createElement("script");
-    script.src = tag.src;
-    script.async = true;
-    script.referrerPolicy = tag.referrerPolicy;
-    /*
-      Their snippet sets `s.settings = {}` before insertion — the object their
-      loader reads its per-tag options from. Ours carries the one option that
-      makes the placement deterministic.
-    */
-    (script as HTMLScriptElement & { settings?: unknown }).settings = { appendTo: `#${domId}` };
-    /*
-      Learn which flag this zone sets, so the next mount can clear it. `load`
-      fires after their `init` has run, which is when the flag exists.
-    */
-    script.addEventListener("load", () => captureGuards(seen), { once: true });
-    script.addEventListener("error", () => log("slot initialization failed", domId), { once: true });
-    el.appendChild(script);
-    // Per-slot initialisation state, readable from the DOM as the brief asks.
-    el.setAttribute("data-ad-initialized", "true");
     log("slot initialized", domId);
+    el.setAttribute("data-ad-initialized", "true");
 
     /*
-      Report what actually happened, on the same 10s window the ExoClick unit
-      uses. This is the only way to tell "the network had nothing" from "the
-      slot never rendered" from outside the browser — the distinction that took
-      a full day to establish for ExoClick, and it is wired from the start here.
+      Report what actually happened. The frame is cross-document, so its
+      contents cannot be inspected — its own painted HEIGHT is the signal, which
+      is what the network's creative gives the frame.
     */
     const timer = setTimeout(() => {
-      const painted = el.getBoundingClientRect().height > 0 || !!el.querySelector("iframe, img, video, a[href]");
+      const painted = el.getBoundingClientRect().height > 0;
       try {
         navigator.sendBeacon?.(
           "/api/track",
@@ -410,15 +332,7 @@ export function HilltopSlot({
 
     return () => {
       clearTimeout(timer);
-      mounted.delete(domId);
-      /*
-        Take the loader's own nodes down with us, and clear the initialisation
-        flag so THIS placement can be built again when the route is revisited —
-        the brief's "an ad container that is removed during navigation can be
-        safely re-created and initialized when that page is visited again".
-      */
       el.removeAttribute("data-ad-initialized");
-      el.replaceChildren();
       log("slot torn down", domId);
     };
   }, [ready, showAds, tag, slot, domId, placementOn, near, config.timeoutMs, pathname, attempt]);
@@ -462,6 +376,26 @@ export function HilltopSlot({
         justifyContent: "center",
         flexWrap: "wrap",
       }}
-    />
+    >
+      {near && tag && placementOn ? (
+        <iframe
+          title="Advertisement"
+          srcDoc={srcDoc}
+          /*
+            The product is "MultiTag: Banner 300x250", so the frame is that size
+            — a frame has no intrinsic height, and a creative inside one cannot
+            push it open. This is the network's own declared size for this tag
+            rather than a guess, and `maxWidth` keeps it inside a narrow phone
+            column.
+          */
+          width={300}
+          height={250}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+          style={{ border: 0, display: "block", maxWidth: "100%" }}
+        />
+      ) : null}
+    </div>
   );
 }

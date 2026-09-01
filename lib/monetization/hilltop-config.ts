@@ -28,6 +28,8 @@ export const HILLTOP_PLACEMENTS = [
   { id: "feed", label: "Feed — in-feed banner", hint: "Banner in the scrolling feed, at its own interval." },
   { id: "historyvideo", label: "History — video between items", hint: "Full-screen video ad between saved media." },
   { id: "wallpaper", label: "Wallpaper download — reward video", hint: "The VAST video watched before a wallpaper download." },
+  { id: "download", label: "Download complete — VAST video", hint: "Replaces whatever else is configured on the download-complete moment." },
+  { id: "idle", label: "Idle interstitial — inline video", hint: "The video slider tag, shown full-screen when the reader goes idle." },
   { id: "slider", label: "Video slider (site-wide)", hint: "Self-placing corner video. No position to choose." },
 ] as const;
 

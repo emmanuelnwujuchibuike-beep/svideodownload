@@ -377,7 +377,30 @@ export function HilltopSlot({
         flexWrap: "wrap",
       }}
     >
-      {near && tag && placementOn ? (
+      {!near ? (
+        /*
+          🔴 A REAL PLACEHOLDER CHILD WHILE WAITING, AND IT IS LOAD-BEARING.
+
+          Measured on production (`scripts/find-ad-slots.mjs` style probe, the
+          landing container): `{"id":"hilltop-landing","y":835,"w":388,"h":0,
+          "init":null,"kids":0,"iframe":false}` — the box exists, is the right
+          width, sits where it should, and is ZERO HIGH with no child and no
+          initialisation. That is the whole of "the landing page hiltop banner is
+          still not showing".
+
+          A flex container with no children has no height, and an
+          IntersectionObserver does not reliably report a zero-area target as
+          intersecting — so `near` never flipped, so no iframe was rendered, so
+          the container stayed childless. A deadlock that looks exactly like a
+          network with no demand.
+
+          `lazy-exoclick-slot.tsx` already carries this lesson from
+          `LazyAdSurface`, which silently disabled every section-break slot the
+          same way. I reintroduced it when I made this slot lazy. One inert,
+          1px-high node is enough to give the observer something to measure.
+        */
+        <div aria-hidden style={{ width: "100%", height: 1 }} />
+      ) : tag && placementOn ? (
         <iframe
           title="Advertisement"
           srcDoc={srcDoc}

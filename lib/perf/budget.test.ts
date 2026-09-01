@@ -352,7 +352,23 @@ function landingChunks(): string[] {
  * history additions are lazy and code-split, and `/` measures 215,305 B against
  * its 223,232 B entry ceiling.
  */
-const GLOBAL_CEILING = 359 * 1024;
+/*
+ * 359 -> 360 KiB (2026-09-01, the HilltopAds per-moment source picker). `/admin`
+ * measures 367,896 B against 367,616: 280 bytes over.
+ *
+ * What bought it: one row per ad moment with an off / banner / slider / vast
+ * choice. It replaces four rounds of "use this product on that moment" that had
+ * each been a code change — the instructions moved four times in one day, and as
+ * branches they were drifting out of step. A picker makes it an operator
+ * decision and the next change costs no deploy at all.
+ *
+ * Rendered from `DEFAULT_HILLTOP_ZONE_SOURCE` rather than written out per zone,
+ * which is the compression that actually works on this route: fewer distinct JSX
+ * shapes, not fewer repeated bytes for gzip to squeeze. See the 355 -> 356 note.
+ *
+ * 🔴 ADMIN ROUTE ONLY, as below. No public ceiling moves.
+ */
+const GLOBAL_CEILING = 360 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

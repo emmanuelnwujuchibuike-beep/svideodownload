@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   DEFAULT_HILLTOP,
+  DEFAULT_HILLTOP_ZONE_SOURCE,
   HILLTOP_MAX_EVERY,
   HILLTOP_MIN_EVERY,
   HILLTOP_PLACEMENTS,
@@ -572,7 +573,65 @@ export function MonetizationSettings({
                   placements keep their own intervals and are not affected by either number.
                 </p>
 
-                <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Devices</p>
+                {/*
+              🔴 WHICH HILLTOP PRODUCT FILLS WHICH MOMENT (owner, 2026-09-01:
+              "the exoclick preparing and result video ad should be changed to
+              hiltop video slider … the history after 3 videos watched to be
+              hiltop video slider or vast … wallpaper should use only hiltop
+              video slider for download started and also for download completed
+              but not for reward").
+
+              Those instructions moved four times in one day. As code each round
+              would be a deploy for what is an operator decision, and the
+              branches would drift apart. As a picker it is one row per moment.
+
+              A moment set to OFF is left to whatever served it before — and
+              where nothing else is configured, it is blank. That is how reels
+              and the wallpaper scroll stay empty: they are simply not listed.
+            */}
+            <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Which product fills which moment
+            </p>
+            <div className="grid gap-1.5">
+              {Object.keys(DEFAULT_HILLTOP_ZONE_SOURCE).map((zone) => {
+                const current =
+                  hilltop.zoneSource?.[zone] ?? DEFAULT_HILLTOP_ZONE_SOURCE[zone] ?? "off";
+                return (
+                  <div
+                    key={zone}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-secondary/30 px-3 py-2"
+                  >
+                    <span className="min-w-0 text-xs font-medium">
+                      {AD_ZONE_META[zone as AdZoneId]?.label ?? zone}
+                    </span>
+                    <span className="flex gap-1">
+                      {(["off", "banner", "slider", "vast"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void setHilltop({
+                              zoneSource: { ...(hilltop.zoneSource ?? {}), [zone]: option },
+                            })
+                          }
+                          className={cn(
+                            "h-7 rounded-lg border px-2 text-[11px] font-medium capitalize transition disabled:opacity-70",
+                            current === option
+                              ? "border-primary/40 bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-secondary",
+                          )}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Devices</p>
                 <div className="flex flex-wrap gap-2">
                   <HilltopToggle
                     label="Mobile"

@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { parseHilltopTag, parseHilltopVastUrl } from "@/lib/monetization/hilltop";
-import { isHilltopPlacementOn } from "@/lib/monetization/hilltop-config";
+import {
+  DEFAULT_HILLTOP_ZONE_SOURCE,
+  hilltopZoneSource,
+} from "@/lib/monetization/hilltop-config";
 import { getUserPlan } from "@/lib/monetization/plan";
 import {
   exoClickZoneEnabled,
@@ -200,19 +203,16 @@ const HILLTOP_WALLPAPER_SKIP_SECONDS = 15;
 const HILLTOP_SKIP_SECONDS = 5;
 
 /** Which HilltopAds placement switch governs which ad zone. */
-const HILLTOP_ZONE_PLACEMENT: Record<string, "wallpaper" | "download" | "idle" | undefined> = {
-  wallpaper_reward: "wallpaper",
-  download_complete: "download",
-  idle_interstitial: "idle",
-};
-
 /**
  * Zones where Hilltop REPLACES an existing row rather than filling a gap.
  *
- * Only the two moments the owner asked it to take over. Everywhere else an
- * explicit ads-table row still wins, exactly as before.
+ * Owner, 2026-09-01: "disable the exoclick ads generally and replace with hiltop
+ * video slider and vast". Every zone the source map names is a zone Hilltop has
+ * been given, so an ads-table row left behind on one must not keep winning —
+ * that is what "replace" means, and it is reversible by setting that zone's
+ * source to `off`.
  */
-const HILLTOP_OVERRIDES = new Set(["download_complete", "idle_interstitial"]);
+const HILLTOP_OVERRIDES = new Set(Object.keys(DEFAULT_HILLTOP_ZONE_SOURCE));
 
 /** The fields every Hilltop slot shares. */
 const HILLTOP_SLOT_BASE = {
@@ -256,10 +256,9 @@ async function withHilltopZone(
   zone: string,
   found: AdSlotData | null,
 ): Promise<AdSlotData | null> {
-  const placement = HILLTOP_ZONE_PLACEMENT[zone];
-  if (!placement) return found;
   const settings = await getMonetizationSettings();
-  if (!isHilltopPlacementOn(settings.hilltop, placement)) return found;
+  const source = hilltopZoneSource(settings.hilltop, zone);
+  if (source === "off") return found;
 
   /*
     🔴 WHERE HILLTOP OVERRIDES AN EXISTING ROW, AND WHERE IT ONLY FILLS A GAP.
@@ -291,8 +290,12 @@ async function withHilltopZone(
     scoped to that frame and the idle ad can fire on every idle moment instead
     of only the first.
   */
-  if (zone === "idle_interstitial") {
-    const tag = parseHilltopTag(settings.hilltopVideoSliderSnippet);
+  if (source === "banner" || source === "slider") {
+    const tag = parseHilltopTag(
+      source === "banner"
+        ? settings.hilltopSnippets?.idle || settings.hilltopBannerSnippet
+        : settings.hilltopVideoSliderSnippet,
+    );
     if (!tag) return found;
     return {
       ...HILLTOP_SLOT_BASE,

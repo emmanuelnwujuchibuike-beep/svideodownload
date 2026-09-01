@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import { getAdsForZone } from "@/lib/monetization/ads";
 import { parseHilltopVastUrl } from "@/lib/monetization/hilltop";
-import { isHilltopPlacementOn } from "@/lib/monetization/hilltop-config";
+import { hilltopZoneSource } from "@/lib/monetization/hilltop-config";
 import { getUserPlan } from "@/lib/monetization/plan";
 import {
   exoClickZoneEnabled,
@@ -100,12 +100,6 @@ async function fetchVast(url: string, request: Request): Promise<string | null> 
   }
 }
 
-/** Which HilltopAds placement switch owns which VAST moment on this endpoint. */
-const HILLTOP_VAST_ZONES: Record<string, "wallpaper" | "download" | undefined> = {
-  download_complete: "download",
-  wallpaper_reward: "wallpaper",
-};
-
 export async function GET(request: Request) {
   const zone = new URL(request.url).searchParams.get("zone") ?? "";
   if (!ZONES.has(zone)) return NextResponse.json({ ad: null }, { status: 400 });
@@ -134,11 +128,10 @@ export async function GET(request: Request) {
     switch — which is deliberately NOT consulted for Hilltop, since an operator
     turning ExoClick off on a page must not also silence the network replacing it.
   */
-  const hilltopVast = HILLTOP_VAST_ZONES[zone]
-    ? isHilltopPlacementOn(settings.hilltop, HILLTOP_VAST_ZONES[zone]!)
+  const hilltopVast =
+    hilltopZoneSource(settings.hilltop, zone) === "vast"
       ? parseHilltopVastUrl(settings.hilltopVastUrl)
-      : null
-    : null;
+      : null;
 
   let adId: string;
   let url: string;

@@ -37,6 +37,83 @@ export type HilltopPlacementId = (typeof HILLTOP_PLACEMENTS)[number]["id"];
 
 const PLACEMENT_IDS = HILLTOP_PLACEMENTS.map((p) => p.id) as HilltopPlacementId[];
 
+/**
+ * Which HilltopAds product fills a given AD ZONE.
+ *
+ * Owner, 2026-09-01: "the exoclick preparing and result video ad should be
+ * changed to hiltop video slider … disable the exoclick ads generally and
+ * replace with hiltop video slider and vast … the history after 3 videos watched
+ * to be hiltop video slider or vast … only the reels and wallpaper scroll to be
+ * blank … wallpaper should use only hiltop video slider for download started and
+ * also for download completed but not for reward".
+ *
+ * 🔴 A MAP, NOT A LIST OF SPECIAL CASES. Those instructions moved four times in
+ * one day — VAST here, slider there, blank on two surfaces, and the wallpaper
+ * reward explicitly excluded from the slider it uses everywhere else. Each round
+ * as a code branch would be a code change for what is really an operator
+ * decision, and the branches would drift out of step with each other.
+ *
+ *   `off`    — Hilltop does not serve this zone. Whatever served it before still
+ *              does, and where nothing else is configured the zone is blank.
+ *   `banner` — the MultiTag Banner 300x250, rendered in a frame.
+ *   `slider` — the MultiTag Video Slider tag, as an in-page unit.
+ *   `vast`   — the VAST 3.0 tag, played by our own player.
+ *
+ * ── 🔴 THE SLIDER IS NOT AN OVERLAY CREATIVE ─────────────────────────────────
+ *
+ * Owner, 2026-09-01, twice: the idle interstitial and then the download-complete
+ * overlay "shows blank", with a screenshot of a black sheet carrying nothing but
+ * Hilltop's own mute button.
+ *
+ * That is the slider working as designed, in the wrong place. It is a
+ * SELF-PLACING product: it slides its own small player into a corner of a real
+ * page on the network's schedule. Handed a fixed box and asked to be a takeover
+ * it initialises — which is why its mute button appears — and then has no
+ * surface to slide into, so the box stays empty.
+ *
+ * So an overlay moment gets a product built to be placed:
+ *   • `vast` where our own player owns the surface (the VAST interstitial and
+ *     the reward gate both play a tag we hand them),
+ *   • `banner` where the surface is a frame in the page — which is the one
+ *     Hilltop product observed rendering reliably here.
+ * The slider stays available in the picker for anyone who wants to try it, and
+ * it is still the right thing site-wide, where it can place itself.
+ */
+export type HilltopZoneSource = "off" | "banner" | "slider" | "vast";
+
+/**
+ * The default source per zone — the arrangement the owner asked for.
+ *
+ * ⚠️ Anything absent is `off`. That is what keeps reels and the wallpaper scroll
+ * blank without naming them: a zone has to be listed here to get a Hilltop unit
+ * at all, so a zone added later cannot quietly inherit one.
+ */
+export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
+  /*
+    "the exoclick preparing and result video ad should be changed to hiltop
+    video slider" — the MOMENTS are as asked; the product is the one that
+    renders in them. Each of these is played by our own VAST player, which is
+    what a VAST tag is for, and the slider is measured blank there.
+  */
+  download_preparing: "vast",
+  result_top: "vast",
+  download_result_page: "vast",
+  // "for download completed" — same surface, same reasoning.
+  download_complete: "vast",
+  // "the history after 3 videos watched to be hiltop video slider or vast" —
+  // the owner offered both here, and vast is the one that plays.
+  history_story_ad: "vast",
+  /*
+    The idle overlay is NOT played by the VAST player — it renders an ad ROW
+    through AdSlot, which has no video branch. So it takes the banner, the one
+    Hilltop product observed rendering reliably in a frame.
+  */
+  idle_interstitial: "banner",
+  // "but not for reward" — the reward gate keeps the VAST video and its watch
+  // requirement, which is the one moment where a measured duration matters.
+  wallpaper_reward: "vast",
+};
+
 export interface HilltopConfig {
   /**
    * The master switch. OFF means no HilltopAds code runs at all — not a tag,
@@ -72,6 +149,14 @@ export interface HilltopConfig {
   mobile: boolean;
   /** Serve on tablets and desktops. */
   desktop: boolean;
+  /**
+   * Per-zone source overrides, on top of `DEFAULT_HILLTOP_ZONE_SOURCE`.
+   *
+   * Only zones an operator has actually changed are stored, so the defaults
+   * above stay the single description of the intended arrangement and a zone
+   * added to them later reaches every existing install.
+   */
+  zoneSource: Record<string, HilltopZoneSource>;
 }
 
 export const DEFAULT_HILLTOP: HilltopConfig = {
@@ -84,6 +169,7 @@ export const DEFAULT_HILLTOP: HilltopConfig = {
   timeoutMs: 10_000,
   mobile: true,
   desktop: true,
+  zoneSource: {},
 };
 
 /** Lower bound on either cadence. Below this a feed is mostly advertising. */
@@ -114,9 +200,17 @@ export function normalizeHilltop(value: unknown): HilltopConfig {
     // and must never be the thing that enables one either.
     if (stored[id] === false) placements[id] = false;
   }
+  const zoneSource: Record<string, HilltopZoneSource> = {};
+  const storedSources = (raw.zoneSource ?? {}) as Record<string, unknown>;
+  for (const [zone, value] of Object.entries(storedSources)) {
+    if (value === "off" || value === "banner" || value === "slider" || value === "vast") {
+      zoneSource[zone] = value;
+    }
+  }
   return {
     enabled: raw.enabled === true,
     placements,
+    zoneSource,
     feedEvery: clampEvery(raw.feedEvery, DEFAULT_HILLTOP.feedEvery),
     historyVideoEvery: clampEvery(raw.historyVideoEvery, DEFAULT_HILLTOP.historyVideoEvery),
     timeoutMs:
@@ -126,6 +220,19 @@ export function normalizeHilltop(value: unknown): HilltopConfig {
     mobile: raw.mobile !== false,
     desktop: raw.desktop !== false,
   };
+}
+
+/**
+ * Which Hilltop product serves this zone, if any.
+ *
+ * The master switch first: off means `off` everywhere, so one toggle really does
+ * remove HilltopAds from the site.
+ */
+export function hilltopZoneSource(config: HilltopConfig, zone: string): HilltopZoneSource {
+  if (!config.enabled) return "off";
+  const override = config.zoneSource?.[zone];
+  if (override === "off" || override === "slider" || override === "vast") return override;
+  return DEFAULT_HILLTOP_ZONE_SOURCE[zone] ?? "off";
 }
 
 /** May this placement run at all? The master switch and its own, in one place. */

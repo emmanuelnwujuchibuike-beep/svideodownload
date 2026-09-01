@@ -157,6 +157,10 @@ const schema = z.object({
       timeoutMs: z.number().int().min(2000).max(30000).default(10000),
       mobile: z.boolean().default(true),
       desktop: z.boolean().default(true),
+      /* Per-zone source. Free-form keys because AD_ZONES grows, and
+         `normalizeHilltop` discards anything that is not one of the three
+         literals on the way back out. */
+      zoneSource: z.record(z.string(), z.enum(["off", "banner", "slider", "vast"])).default({}),
     })
     .default(DEFAULT_HILLTOP),
   exoclickSharedZoneId: z

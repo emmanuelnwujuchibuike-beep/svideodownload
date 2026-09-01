@@ -48,6 +48,7 @@ export async function GET() {
       */
       exoclickSticky: parseExoClickSticky(settings.exoclickStickySnippet),
       exoclickHistory: parseExoClickSticky(settings.exoclickHistorySnippet),
+      exoclickMultiFormat: parseExoClickSticky(settings.exoclickMultiFormatSnippet),
       exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
       exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),
       /*

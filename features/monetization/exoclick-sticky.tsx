@@ -363,8 +363,33 @@ export function ExoClickSticky({
       .then((r) => (r.ok ? r.json() : {}))
       .then((d: Record<string, ExoClickStickyTag | null | undefined>) => {
         if (!alive) return;
+        /*
+          🔴 ABOVE THE HISTORY GRID, MULTI-FORMAT WINS (owner, 2026-09-01, with
+          the tag: `<ins class="eas6a97888e38" data-zoneid="6017110">`).
+
+          Measured on production before wiring it — `scripts/exoclick-try-tag.mjs
+          eas6a97888e38 6017110`:
+
+              html=582  host=250px  processed=true  biggest=DIV 300x250 static
+              🟢 RENDERS ON ITS OWN — no scroll needed
+
+          That is precisely what this slot has never had. The outstream zone
+          serves a real creative and then stays collapsed behind ExoClick's own
+          `._effect { max-height: 0 }` until THEIR viewability function adds
+          `exo_wrapper_show` — a function bound only to scroll/resize/focus. A
+          reader who lands on /history and does not scroll sees nothing, by their
+          design, which is the whole of "the history banner and outstream is
+          still not showing".
+
+          ONE unit above the grid, not two — stacking them is what produced the
+          wrong-shaped double slot on 2026-08-30. The outstream stays as the
+          FALLBACK so an operator who prefers it, or who has not pasted a
+          multi-format tag, loses nothing.
+        */
         const bySlot =
-          slot === "history" ? d.exoclickHistory : slot === "bottomnav" ? d.exoclickBottomNav : d.exoclickSticky;
+          slot === "history"
+            ? (d.exoclickMultiFormat ?? d.exoclickHistory)
+            : slot === "bottomnav" ? d.exoclickBottomNav : d.exoclickSticky;
         setTag(bySlot ?? null);
       })
       .catch(() => {
@@ -646,6 +671,48 @@ export function ExoClickSticky({
     const mo = new MutationObserver(scheduleReport);
     mo.observe(el, { childList: true, subtree: true });
 
+    /*
+      🔴 LET THEIR OWN VIEWABILITY CHECK RUN. DO NOT FAKE ITS ANSWER.
+
+      ExoClick's outstream player evaluates viewability in a function bound ONLY
+      to scroll/resize/focus — it is never polled:
+
+          m = ceil(video.getBoundingClientRect().top)
+          if (m > 0 && m + halfHeight < innerHeight && focused)
+              → add "exo_wrapper_show"   // releases their `max-height: 0`
+
+      So a unit that is ALREADY in view when it loads is never assessed at all,
+      and stays collapsed until the reader happens to scroll. Measured on
+      /history: shut at rest, open 120px into the first scroll.
+
+      A single synthetic `scroll`/`resize` makes that function EVALUATE. It does
+      not decide the outcome — their own arithmetic still has to pass, on the
+      real geometry, so an off-screen or clipped slot stays shut exactly as it
+      should. This is the difference between "their rule said no" and "their rule
+      was never asked", and only the second one is our bug.
+
+      Guarded so it cannot become a nudge for something the reader cannot see:
+      fired once per mount, only once their player markup exists, and only while
+      the host is genuinely inside the viewport.
+    */
+    const nudge = () => {
+      const r = el.getBoundingClientRect();
+      const onScreen = r.top < window.innerHeight && r.bottom > 0 && r.width > 0;
+      if (!onScreen || !el.querySelector("video")) return false;
+      window.dispatchEvent(new Event("scroll"));
+      window.dispatchEvent(new Event("resize"));
+      return true;
+    };
+    /*
+      Two attempts, a second apart: the player needs its <video> in place before
+      the check can measure anything, and the creative lands ~4.5s in. Cheap,
+      bounded, and it stops as soon as it has fired once.
+    */
+    let nudges = 0;
+    const nudgeTimer = setInterval(() => {
+      if (++nudges > 8 || nudge()) clearInterval(nudgeTimer);
+    }, 1000);
+
     void loadProvider(tag.src).then((ok) => {
       if (!ok) {
         // Blocked, or the loader could not be fetched at all.
@@ -673,6 +740,7 @@ export function ExoClickSticky({
       mo.disconnect();
       // A queued check must not run against a host this cleanup is about to empty.
       if (frame) cancelAnimationFrame(frame);
+      clearInterval(nudgeTimer);
       el.removeEventListener("pointerdown", onClick, { capture: true });
       clearTimeout(emptyTimer);
       clearTimeout(retryTimer);

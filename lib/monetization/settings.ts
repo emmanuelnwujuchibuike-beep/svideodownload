@@ -376,6 +376,27 @@ export interface MonetizationSettings {
    */
   exoclickHistorySnippet: string;
   /**
+   * ExoClick MULTI-FORMAT tag — zone type 38 (owner, 2026-09-01, with the
+   * snippet: `<ins class="eas6a97888e38" data-zoneid="6017110">`).
+   *
+   * 🔴 THE ONE THAT ACTUALLY PAINTS ON ARRIVAL. Measured on production before
+   * being wired (`scripts/exoclick-try-tag.mjs eas6a97888e38 6017110`):
+   *
+   *     html=582  host=250px  processed=true  biggest=DIV 300x250 static
+   *     🟢 RENDERS ON ITS OWN — no scroll needed
+   *
+   * That is the property the History slot needed and the outstream cannot give.
+   * A type-37 outstream is held collapsed by ExoClick's own
+   * `._effect { max-height: 0 }` until THEIR viewability function adds
+   * `exo_wrapper_show`, and that function is bound only to scroll/resize/focus —
+   * so a reader who lands and does not scroll sees nothing, by their design.
+   *
+   * It therefore takes PRECEDENCE over `exoclickHistorySnippet` above the
+   * history grid: one unit there, the one confirmed to render, with the
+   * outstream kept as the fallback so an operator who prefers it loses nothing.
+   */
+  exoclickMultiFormatSnippet: string;
+  /**
    * ExoClick FULLPAGE INTERSTITIAL tag (owner, 2026-08-31: "set up the full
    * idle, backswipe and all interstitial ad to also use this exoclick
    * interstitial ad set up for full page interstitial ad").
@@ -475,6 +496,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickStickySnippet: "",
   exoclickBottomNavSnippet: "",
   exoclickHistorySnippet: "",
+  exoclickMultiFormatSnippet: "",
   exoclickInterstitialSnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

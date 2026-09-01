@@ -137,6 +137,7 @@ export function MonetizationSettings({
       | "exoclickStickySnippet"
       | "exoclickBottomNavSnippet"
       | "exoclickHistorySnippet"
+      | "exoclickMultiFormatSnippet"
       | "exoclickInterstitialSnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
@@ -233,6 +234,7 @@ export function MonetizationSettings({
   const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
   const bottomNavTag = parseExoClickSticky(state.exoclickBottomNavSnippet ?? "");
   const historyTag = parseExoClickSticky(state.exoclickHistorySnippet ?? "");
+  const multiFormatTag = parseExoClickSticky(state.exoclickMultiFormatSnippet ?? "");
   const interstitialTag = parseExoClickSticky(state.exoclickInterstitialSnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
@@ -503,12 +505,85 @@ export function MonetizationSettings({
         filled and played by their loader, so it does not go through the VAST
         pipeline the five vertical zones use.
       */}
+      {/*
+        🔴 THE ONE MEASURED TO RENDER ON ITS OWN (owner, 2026-09-01, with the
+        tag). Verified on production BEFORE being wired, with
+        `scripts/exoclick-try-tag.mjs eas6a97888e38 6017110`:
+
+            html=582  host=250px  processed=true  biggest=DIV 300x250 static
+            🟢 RENDERS ON ITS OWN — no scroll needed
+
+        Listed FIRST and above the outstream field because it is the one that
+        works without the reader doing anything, and because it takes precedence
+        over that field above the history grid.
+      */}
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
-        <p className="text-sm font-semibold">History — outstream video</p>
+        <p className="text-sm font-semibold">Multi-format — above the History grid</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Paste an ExoClick <strong>Multi-format</strong> zone snippet (class ending
+          <code className="mx-1 rounded bg-background px-1 py-0.5 font-mono text-[10px]">38</code>).
+          It renders as soon as it loads — no scrolling needed — so this is the
+          recommended unit for above the History grid. When set it is used
+          <strong> instead of</strong> the outstream field below. Gated by the
+          {" "}<strong>ExoClick</strong> switch above.
+        </p>
+        <textarea
+          value={state.exoclickMultiFormatSnippet ?? ""}
+          disabled={busy}
+          onChange={(e) => setText("exoclickMultiFormatSnippet", e.target.value)}
+          placeholder={'<ins class="eas6a97888e38" data-zoneid="6017110"></ins>'}
+          className="min-h-[70px] w-full rounded-xl bg-background p-3 font-mono text-xs outline-none ring-1 ring-inset ring-border focus:ring-2 focus:ring-primary"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => void persist(state)} className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">Save</button>
+          {multiFormatTag ? (
+            <span className="text-[11px] font-medium text-green-600 dark:text-green-400">Read zone {multiFormatTag.zoneId} · class {multiFormatTag.cls}</span>
+          ) : state.exoclickMultiFormatSnippet?.trim() ? (
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">Off — nothing pasted.</span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">History — above the grid</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
           Shown full width on the History page, directly under the column-count control.
-          Paste the ExoClick <strong>Outstream Video</strong> zone snippet. Gated by the
-          {" "}<strong>ExoClick</strong> switch above.
+          Paste <strong>any</strong> ExoClick zone snippet — a display banner or an
+          Outstream Video. Gated by the <strong>ExoClick</strong> switch above.
+        </p>
+        {/*
+          🔴 THE ZONE TYPE DECIDES WHETHER THIS EVER APPEARS, AND NOTHING WE DO
+          CAN CHANGE THAT (measured on production, 2026-09-01).
+
+          The owner reported this slot blank through many rounds of fixes while
+          the bottom-nav banner — the SAME component, the same host, the same
+          width — rendered fine. The difference is not our code, it is the zone:
+
+            • a display banner (class ending 2) paints as soon as it arrives;
+            • an OUTSTREAM VIDEO (class ending 37) is held shut by ExoClick's
+              own CSS — `._effect { max-height: 0 }`, released only by the class
+              `exo_wrapper_show` that THEIR script adds, and only when its own
+              viewability test passes:
+
+                  m = ceil(video.top);  m > 0 && m + halfHeight < innerHeight
+
+              evaluated ONLY on scroll/resize/focus, never polled. Measured, an
+              outstream on /history opened after one 120px scroll and stayed shut
+              until then. A reader who lands and does not scroll sees nothing,
+              and that is by the network's design.
+
+          So this field takes any snippet, and the guidance says which is which,
+          because the reliable fix here is choosing the zone — not another change
+          on our side.
+        */}
+        <p className="mb-2 rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+          <strong>Outstream zones only open after the reader scrolls.</strong> That is
+          ExoClick&apos;s own viewability rule, not something this app can override — the
+          player stays collapsed until its slot is properly in view. For a unit that shows
+          as soon as it loads, paste a <strong>display banner</strong> zone here instead
+          (the same kind as the bottom-nav banner).
         </p>
         <textarea
           value={state.exoclickHistorySnippet ?? ""}

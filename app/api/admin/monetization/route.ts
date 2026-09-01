@@ -162,6 +162,7 @@ const schema = z.object({
          `normalizeHilltop` discards anything that is not one of the three
          literals on the way back out. */
       zoneSource: z.record(z.string(), z.enum(["off", "banner", "slider", "vast"])).default({}),
+      slotSource: z.record(z.string(), z.enum(["banner", "slider"])).default({}),
     })
     .default(DEFAULT_HILLTOP),
   exoclickSharedZoneId: z

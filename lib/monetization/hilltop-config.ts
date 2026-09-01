@@ -188,6 +188,25 @@ export interface HilltopConfig {
    * added to them later reaches every existing install.
    */
   zoneSource: Record<string, HilltopZoneSource>;
+  /**
+   * Banner or in-page VIDEO for each of the in-page slots.
+   *
+   * Owner, 2026-09-01: "replace all hiltop banner with vast in everywhere they
+   * are in landing page and history page, except from the top history hiltop
+   * banner and the landing under the download button".
+   *
+   * 🔴 IN-PAGE VIDEO MEANS THE SLIDER, NOT VAST. VAST is a tag a PLAYER plays,
+   * and the only player here is the full-screen overlay — there is no in-page
+   * VAST unit, and inventing one is a video player, not a setting. The slider IS
+   * Hilltop's in-page video product, so it is what an in-page slot can show.
+   *
+   * ⚠️ UNPROVEN IN THIS POSITION. The slider rendered blank when it was forced
+   * into a fixed overlay box, which is a different failure (it is self-placing
+   * and had nowhere to slide). In a real in-page frame it should behave as
+   * designed — but that has not been observed yet, so every slot is switchable
+   * and flipping one back to `banner` restores exactly what works today.
+   */
+  slotSource: Record<string, "banner" | "slider">;
 }
 
 export const DEFAULT_HILLTOP: HilltopConfig = {
@@ -201,6 +220,11 @@ export const DEFAULT_HILLTOP: HilltopConfig = {
   mobile: true,
   desktop: true,
   zoneSource: {},
+  /*
+    `history` stays a banner — "except from the top history hiltop banner". The
+    rest take the in-page video the owner asked for.
+  */
+  slotSource: { history: "banner", historyfeed: "slider", landing: "slider", feed: "slider" },
 };
 
 /** Lower bound on either cadence. Below this a feed is mostly advertising. */
@@ -238,10 +262,16 @@ export function normalizeHilltop(value: unknown): HilltopConfig {
       zoneSource[zone] = value;
     }
   }
+  const slotSource: Record<string, "banner" | "slider"> = { ...DEFAULT_HILLTOP.slotSource };
+  const storedSlots = (raw.slotSource ?? {}) as Record<string, unknown>;
+  for (const [slot, value] of Object.entries(storedSlots)) {
+    if (value === "banner" || value === "slider") slotSource[slot] = value;
+  }
   return {
     enabled: raw.enabled === true,
     placements,
     zoneSource,
+    slotSource,
     feedEvery: clampEvery(raw.feedEvery, DEFAULT_HILLTOP.feedEvery),
     historyVideoEvery: clampEvery(raw.historyVideoEvery, DEFAULT_HILLTOP.historyVideoEvery),
     timeoutMs:

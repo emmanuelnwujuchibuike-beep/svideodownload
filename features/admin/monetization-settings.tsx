@@ -589,6 +589,52 @@ export function MonetizationSettings({
               where nothing else is configured, it is blank. That is how reels
               and the wallpaper scroll stay empty: they are simply not listed.
             */}
+            {/*
+              The IN-PAGE slots. Separate from the moment picker below because
+              they are a different question: a moment is a full-screen takeover
+              our player owns, an in-page slot is a box in the page. VAST is not
+              an option here — it is a tag a player plays, and there is no
+              in-page player.
+            */}
+            <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              In-page slots — banner or video
+            </p>
+            <div className="grid gap-1.5">
+              {HILLTOP_BANNER_SLOTS.map((id) => {
+                const current = hilltop.slotSource?.[id] ?? "banner";
+                return (
+                  <div
+                    key={id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-secondary/30 px-3 py-2"
+                  >
+                    <span className="min-w-0 text-xs font-medium">{HILLTOP_SLOT_LABELS[id] ?? id}</span>
+                    <span className="flex gap-1">
+                      {(["banner", "slider"] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void setHilltop({
+                              slotSource: { ...(hilltop.slotSource ?? {}), [id]: option },
+                            })
+                          }
+                          className={cn(
+                            "h-7 rounded-lg border px-2 text-[11px] font-medium transition disabled:opacity-70",
+                            current === option
+                              ? "border-primary/40 bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:bg-secondary",
+                          )}
+                        >
+                          {option === "slider" ? "video" : "banner"}
+                        </button>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
             <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Which product fills which moment
             </p>

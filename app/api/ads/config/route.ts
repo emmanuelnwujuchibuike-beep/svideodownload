@@ -194,11 +194,20 @@ export async function GET() {
         placement without its own tag resolves to, and removing it would blank
         every slot the moment this shipped.
       */
+      /*
+        Each in-page slot's tag, already resolved to the PRODUCT it is set to —
+        the banner tag, or the in-page video (slider) tag. Resolved here so the
+        client never has to know which snippet field a slot reads.
+      */
       hilltopBanners: settings.hilltop.enabled
         ? Object.fromEntries(
             HILLTOP_BANNER_SLOTS.map((id) => [
               id,
-              parseHilltopTag(settings.hilltopSnippets?.[id] || settings.hilltopBannerSnippet),
+              parseHilltopTag(
+                settings.hilltop.slotSource?.[id] === "slider"
+                  ? settings.hilltopVideoSliderSnippet
+                  : settings.hilltopSnippets?.[id] || settings.hilltopBannerSnippet,
+              ),
             ]),
           )
         : {},

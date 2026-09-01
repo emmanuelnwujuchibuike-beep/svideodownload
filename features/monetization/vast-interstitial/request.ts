@@ -36,7 +36,35 @@ type Phase = "idle" | "loading" | "playing";
 /** One session at a time, per tab. The guard against duplicate ads. */
 let phase: Phase = "idle";
 /** When the last interstitial finished, for the cooldown. */
-let lastShownAt = 0;
+/**
+ * When each MOMENT last showed an interstitial.
+ *
+ * 🔴 PER TRIGGER, AND THAT IS A REGRESSION FIX (owner, 2026-09-01: "the download
+ * completed vast doesnt show anymore or triggers more late now").
+ *
+ * It was a single number shared by every trigger, which was fine while only the
+ * download moments used this function. Then idle/back-swipe and the history
+ * story ad were routed through it too — so with `cooldownMs` at five minutes, an
+ * idle ad on any page consumed the cooldown for ALL of them and the
+ * download-complete interstitial was suppressed for the next five minutes. The
+ * moment the owner cares most about became the one least likely to fire, and I
+ * caused that by adding consumers to a shared budget.
+ *
+ * Each moment now keeps its own clock, so a frequently-reached one cannot starve
+ * a rare one.
+ */
+const lastShownAt = new Map<InterstitialTrigger, number>();
+
+/**
+ * A floor between ANY two interstitials, whatever their moments.
+ *
+ * Per-trigger cooldowns alone would allow an idle ad and a download-complete ad
+ * back to back — two full-screen takeovers in a few seconds, which is the exact
+ * thing the shared cooldown was protecting against and worth keeping. Short
+ * enough that it never stands in for the real per-moment cooldown.
+ */
+const BACK_TO_BACK_MS = 20_000;
+let lastAnyShownAt = 0;
 /** Memoised public config — fetched at most once per page load. */
 let configPromise: Promise<VastInterstitialConfig> | null = null;
 
@@ -170,7 +198,10 @@ export async function requestVastInterstitial(
   }
 
   if (!isEnabledFor(config, trigger)) return { shown: false, reason: "disabled" };
-  if (config.cooldownMs > 0 && Date.now() - lastShownAt < config.cooldownMs) {
+  if (Date.now() - lastAnyShownAt < BACK_TO_BACK_MS) {
+    return { shown: false, reason: "cooldown" };
+  }
+  if (config.cooldownMs > 0 && Date.now() - (lastShownAt.get(trigger) ?? 0) < config.cooldownMs) {
     return { shown: false, reason: "cooldown" };
   }
 
@@ -204,7 +235,8 @@ export async function requestVastInterstitial(
   try {
     const { showExoClickInterstitial } = await import("../exoclick-interstitial");
     if (await showExoClickInterstitial()) {
-      lastShownAt = Date.now();
+      lastShownAt.set(trigger, Date.now());
+      lastAnyShownAt = Date.now();
       phase = "idle";
       return { shown: true, reason: "shown" };
     }
@@ -255,7 +287,8 @@ export async function requestVastInterstitial(
     });
 
     clearTimeout(budget);
-    lastShownAt = Date.now();
+    lastShownAt.set(trigger, Date.now());
+    lastAnyShownAt = Date.now();
     phase = "idle";
     return { shown: outcome === "completed" || outcome === "skipped", reason: "shown" };
   } catch (err) {
@@ -270,6 +303,7 @@ export async function requestVastInterstitial(
 /** Test/debug seam — resets the module singleton. */
 export function __resetInterstitial(): void {
   phase = "idle";
-  lastShownAt = 0;
+  lastShownAt.clear();
+  lastAnyShownAt = 0;
   configPromise = null;
 }

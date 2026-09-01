@@ -105,6 +105,23 @@ import { useShowAds } from "./use-show-ads";
  * serve the wrong domain's zones or silently serve nothing. Still one load per
  * domain: several placements sharing a domain must not each append a copy.
  */
+/**
+ * How long to wait before asking again with a FRESH placeholder.
+ *
+ * 🔴 Was 3500ms, which was shorter than the network's own answer. Measured on
+ * production (`scripts/history-ad-survival.mjs`), the outstream's markup lands
+ * at ~4.5s:
+ *
+ *     t=3000ms  html=    55  media=0     <- <ins> placed, nothing back yet
+ *     t=4500ms  html= 15926  media=1     <- creative arrives
+ *
+ * So the retry was firing squarely inside the response window and wiping the
+ * question before the answer could arrive — and the replacement ask is then
+ * frequency-capped. Well past it now, and the retry additionally refuses to
+ * touch a placeholder their loader has already claimed (see the guard below).
+ */
+const RETRY_MS = 9000;
+
 const providerPromises = new Map<string, Promise<boolean>>();
 
 export function loadProvider(src: string = EXOCLICK_PROVIDER_SRC): Promise<boolean> {
@@ -537,9 +554,27 @@ export function ExoClickSticky({
         at 3.5 seconds — every time, before they could paint.
       */
       if (hasCreativeMarkup(el) || retried.current) return;
+      /*
+        🔴 NEVER WIPE A REQUEST THAT IS STILL IN FLIGHT.
+
+        `data-processed="true"` is stamped the moment their loader CLAIMS the
+        placeholder, which happens well before the network answers. Measured on
+        production, the outstream's markup lands at ~4.5s while this timer was
+        firing at 3.5s — so the common case was: loader takes our <ins>, we throw
+        it away mid-question, and the replacement ask gets frequency-capped. An
+        empty slot caused by our own impatience, and it is not distinguishable
+        afterwards from the network having nothing.
+
+        The timer is now well past the observed answer window (see RETRY_MS), but
+        a slow network would still race it, so an unanswered claim is left alone
+        outright. If the loader never processed the element at all, a fresh one
+        is the only thing that could help and this still provides it.
+      */
+      const ins = el.querySelector("ins[data-zoneid]");
+      if (ins?.getAttribute("data-processed") === "true") return;
       retried.current = true;
       setServeKey((k) => k + 1);
-    }, 3500);
+    }, RETRY_MS);
     const report = () => {
       const now = hasCreative(el);
       if (now === last) return;

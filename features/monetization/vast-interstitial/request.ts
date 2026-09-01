@@ -138,7 +138,23 @@ export type InterstitialTrigger =
    * moment can open the same full-screen VAST the download completion opens.
    * That is what "used as general interstilla" means.
    */
-  | "in-page";
+  | "in-page"
+  /**
+   * The batch / HD / top-quality download, on the TAP (owner, 2026-09-01: "make
+   * batch download and hd video selection to show the hiltop vast video on
+   * clicking the downoad button instantly, and it shows again when the downloads
+   * finishes").
+   */
+  | "batch"
+  /**
+   * The same download finishing.
+   *
+   * Its own trigger rather than reusing `download-complete`, for two reasons the
+   * owner named: it must be able to fire even when the normal completion moment
+   * just did, and it carries "a different timer in download complete hiltop vast
+   * video interstilla, so it can be lower than normal download complete".
+   */
+  | "batch-complete";
 
 /** The zone each moment serves from. Reuses the existing zone registry. */
 const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
@@ -163,6 +179,44 @@ const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
   "history-story": "history_story_ad",
   wallpaper: "wallpaper_reward",
   "in-page": "landing_section_break",
+  batch: "batch_download_gate",
+  "batch-complete": "batch_download_complete",
+};
+
+/**
+ * Triggers whose skip delay comes from their OWN admin number rather than the
+ * interstitial's shared `skipAfterSeconds`.
+ *
+ * "batch download and hd and top quality should use a different timer in
+ * download complete hiltop vast video interstilla, so it can be lower than
+ * normal download complete interstilla time." Both numbers already existed —
+ * `batchGateSeconds` and `batchCompleteSeconds` — and were being ignored by this
+ * path, because the overlay reads one field for every moment.
+ */
+type SkipField = "batchGateSeconds" | "batchCompleteSeconds" | "ambientSkipSeconds";
+
+const SKIP_FIELD_BY_TRIGGER: Partial<Record<InterstitialTrigger, SkipField>> = {
+  batch: "batchGateSeconds",
+  "batch-complete": "batchCompleteSeconds",
+  /*
+    The gesture moment is skippable sooner than the download ones (owner,
+    2026-09-01: "it shouldnt be 15secs like others"). A download ad is the price
+    of a file the visitor asked for; this one interrupts them doing nothing in
+    particular, and the same hold is a very different bargain in the two cases.
+  */
+  ambient: "ambientSkipSeconds",
+};
+
+/**
+ * Triggers with a cooldown of their OWN, overriding the shared one.
+ *
+ * "only those gesture alone alone should have a cooldown of 5minutes." Every
+ * other moment follows `vastInterstitial.cooldownMs` — which is 0, so repeated
+ * downloads always get their ad — while a gesture the visitor makes constantly
+ * needs a real gap or it becomes a takeover every few seconds.
+ */
+const COOLDOWN_FIELD_BY_TRIGGER: Partial<Record<InterstitialTrigger, "ambientCooldownSeconds">> = {
+  ambient: "ambientCooldownSeconds",
 };
 
 function isEnabledFor(config: VastInterstitialConfig, trigger: InterstitialTrigger): boolean {
@@ -227,6 +281,7 @@ const creativeCache = new Map<string, { creative: unknown; at: number }>();
 const PREFETCHES_ON_START: Partial<Record<InterstitialTrigger, InterstitialTrigger>> = {
   download: "download-complete",
   wallpaper: "download-complete",
+  batch: "batch-complete",
 };
 
 /**
@@ -244,6 +299,24 @@ const PREFETCHES_ON_START: Partial<Record<InterstitialTrigger, InterstitialTrigg
  * so this is one request per download rather than one per page view, which is
  * the same number of requests the completion itself would have made.
  */
+/**
+ * One of the batch skip numbers from the public ad config.
+ *
+ * Read from the same cached endpoint the rest of this module uses, so it costs
+ * no extra round trip in practice.
+ */
+async function loadSkipSeconds(
+  field: SkipField | "ambientCooldownSeconds",
+): Promise<number | null> {
+  try {
+    const d = await fetch("/api/ads/config").then((r) => (r.ok ? r.json() : {}));
+    const value = (d as Record<string, unknown>)[field];
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 function prefetchCreative(trigger: InterstitialTrigger): void {
   const zone = ZONE_BY_TRIGGER[trigger];
   if (!zone) return;
@@ -292,7 +365,16 @@ export async function requestVastInterstitial(
   if (Date.now() - lastAnyShownAt < BACK_TO_BACK_MS) {
     return { shown: false, reason: "cooldown" };
   }
-  if (config.cooldownMs > 0 && Date.now() - (lastShownAt.get(trigger) ?? 0) < config.cooldownMs) {
+  /*
+    This moment's own cooldown where it has one, otherwise the shared number.
+    Read before the ad is requested so a moment still inside its gap costs
+    nothing at all.
+  */
+  const ownCooldownField = COOLDOWN_FIELD_BY_TRIGGER[trigger];
+  const cooldownMs = ownCooldownField
+    ? ((await loadSkipSeconds(ownCooldownField)) ?? 300) * 1000
+    : config.cooldownMs;
+  if (cooldownMs > 0 && Date.now() - (lastShownAt.get(trigger) ?? 0) < cooldownMs) {
     return { shown: false, reason: "cooldown" };
   }
 
@@ -388,9 +470,19 @@ export async function requestVastInterstitial(
     const { showInterstitial } = await import("./overlay");
     phase = "playing";
 
+    /*
+      The per-moment skip delay. The overlay reads one field, so the override is
+      applied to the config it is handed rather than to its signature — which
+      also means every other guard in this function still sees the real config.
+    */
+    const skipField = SKIP_FIELD_BY_TRIGGER[trigger];
+    const effectiveConfig = skipField
+      ? { ...config, skipAfterSeconds: (await loadSkipSeconds(skipField)) ?? config.skipAfterSeconds }
+      : config;
+
     const outcome = await showInterstitial({
       creative,
-      config,
+      config: effectiveConfig,
       startSignal: controller.signal,
       onStarted: () => clearTimeout(budget),
     });

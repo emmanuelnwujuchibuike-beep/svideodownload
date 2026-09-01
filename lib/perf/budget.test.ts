@@ -368,7 +368,22 @@ function landingChunks(): string[] {
  *
  * 🔴 ADMIN ROUTE ONLY, as below. No public ceiling moves.
  */
-const GLOBAL_CEILING = 360 * 1024;
+/*
+ * 360 -> 361 KiB (2026-09-01, the HilltopAds timer panel). `/admin` measures
+ * 369,024 B against 368,640: 384 bytes over.
+ *
+ * What bought it: "all timers should be able to be set in the admin ad hiltop
+ * settings" — every hold and gap the full-screen video uses, in one grid. Six
+ * numbers that were previously spread across three panels or hard-coded in a
+ * component, which is what made them impossible to find and, in two cases,
+ * impossible to change at all without a deploy.
+ *
+ * Rendered through the shared `HilltopNumber`, so the marginal cost is the
+ * labels and the six call sites rather than six fields.
+ *
+ * 🔴 ADMIN ROUTE ONLY, as below. No public ceiling moves.
+ */
+const GLOBAL_CEILING = 361 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

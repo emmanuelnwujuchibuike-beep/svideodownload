@@ -143,6 +143,8 @@ const schema = z.object({
   hilltopVastUrl: z.string().max(2000).default(""),
   wallpaperGateSeconds: z.number().int().min(3).max(60).default(10),
   idleInterstitialSeconds: z.number().int().min(3).max(600).default(5),
+  ambientSkipSeconds: z.number().int().min(0).max(60).default(5),
+  ambientCooldownSeconds: z.number().int().min(0).max(3600).default(300),
   hilltopSnippets: z.record(z.string(), z.string().max(4000)).default({}),
   /*
     HilltopAds behaviour. Every field has a default, so an older client that

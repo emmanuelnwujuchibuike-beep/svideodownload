@@ -224,6 +224,10 @@ export async function GET() {
       wallpaperGateSeconds: clampSeconds(settings.wallpaperGateSeconds, 10, 60),
       // How long without interaction before the idle interstitial fires.
       idleInterstitialSeconds: clampSeconds(settings.idleInterstitialSeconds, 5, 600),
+      // The gesture interstitial's own skip and cooldown — see the notes in
+      // lib/monetization/settings.ts for why it does not share the others'.
+      ambientSkipSeconds: clampSeconds(settings.ambientSkipSeconds, 5, 60),
+      ambientCooldownSeconds: clampSeconds(settings.ambientCooldownSeconds, 300, 3600),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FullscreenInterstitial } from "@/features/monetization/fullscreen-interstitial";
+import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
 import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
 import { useInterstitialConfig, useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
 import { useRewardFlow } from "@/features/monetization/use-reward-flow";
@@ -192,6 +193,58 @@ export function BatchAdGate({
   gptOpenRef.current = gptFlow.open;
 
   /*
+    Whether this gate hands its moment to the VAST interstitial. See the note at
+    the render. Unknown until the config lands, and it falls back to the existing
+    AdSlot path on any error — a missed video is a rounding error, a batch that
+    cannot be released is not.
+  */
+  const [videoMode, setVideoMode] = useState<"unknown" | "vast" | "slot">("unknown");
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/ads/config")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d: { hilltop?: HilltopConfig }) => {
+        if (!alive) return;
+        setVideoMode(
+          d.hilltop && hilltopZoneSource(d.hilltop, "batch_download_gate") === "vast"
+            ? "vast"
+            : "slot",
+        );
+      })
+      .catch(() => alive && setVideoMode("slot"));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  /*
+    `close` is declared further down, so it is reached through a ref rather than
+    the dependency array — the same shape `gptOpenRef` above already uses, and
+    for the same reason. Effects run after render, so the ref is assigned by the
+    time this reads it.
+  */
+  const closeRef = useRef<() => void>(() => {});
+  const firedPhase = useRef<string | null>(null);
+  useEffect(() => {
+    if (videoMode !== "vast") return;
+    if (phase !== "gate" && phase !== "complete") return;
+    if (firedPhase.current === phase) return;
+    firedPhase.current = phase;
+    void import("@/features/monetization/vast-interstitial/request")
+      .then((m) => m.requestVastInterstitial(phase === "gate" ? "batch" : "batch-complete"))
+      .catch(() => {
+        /* A gate that cannot load its ad must still release the batch. */
+      })
+      .finally(() => {
+        if (phase === "gate") closeRef.current();
+      });
+  }, [videoMode, phase]);
+
+  useEffect(() => {
+    if (phase === "idle") firedPhase.current = null;
+  }, [phase]);
+
+  /*
     Declining a rewarded ad earns nothing — so this reports a CANCELLATION, it
     never falls open. That is the one place this gate deliberately differs from
     the interstitial's fail-open rule: "no inventory" is not the visitor's
@@ -307,6 +360,7 @@ export function BatchAdGate({
       onCompleteClosed();
     }
   }, [phase, grant, onCompleteClosed]);
+  closeRef.current = close;
 
   /*
     On the GPT path the interstitial never leaves `idle` — the consent sheet
@@ -318,6 +372,32 @@ export function BatchAdGate({
   if (phase === "idle") return <RewardConsentSheet {...gptFlow.sheetProps} />;
 
   const isGate = phase === "gate";
+  const zone = isGate ? "batch_download_gate" : "batch_download_complete";
+
+  /*
+    🔴 THE VIDEO PATH (owner, 2026-09-01: "make batch download and hd video
+    selection to show the hiltop vast video on clicking the downoad button
+    instantly, and it shows again when the downloads finishes").
+
+    Same mechanism as the wallpaper gate, and the same reason: this renders
+    through `FullscreenInterstitial` → `AdSlot`, and AdSlot has NO VIDEO BRANCH,
+    so a banner is the only thing it could ever show. The video is the VAST
+    interstitial.
+
+    Each phase has its OWN trigger — `batch` on the tap, `batch-complete` when
+    the downloads finish — which is what lets the completion carry a different
+    (lower) skip timer than the normal download completion, and what lets it fire
+    even when that normal one just did. `batch` also prefetches the completion
+    creative, so the second ad is in hand before the files are.
+
+    ⚠️ The gate's own contract is unchanged: `close()` is what releases the
+    batch, and it is called on every path including failure. This never blocks a
+    download that has been paid for.
+  */
+  if (videoMode === "vast") {
+    return <RewardConsentSheet {...gptFlow.sheetProps} />;
+  }
+
   return (
     <FullscreenInterstitial
       zone={isGate ? "batch_download_gate" : "batch_download_complete"}

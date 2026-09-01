@@ -599,6 +599,27 @@ export interface MonetizationSettings {
    */
   idleInterstitialSeconds: number;
   /**
+   * Skip delay for the GESTURE interstitial — idle, back-swipe and return
+   * (owner, 2026-09-01: "idle interstilla, backswipe and return to site should
+   * be skipable, it shouldnt be 15secs like others").
+   *
+   * Shorter than the download moments on purpose: those are the price of a file
+   * the visitor asked for, and this one interrupts them doing nothing in
+   * particular. The same ad held for the same time is a very different bargain
+   * in the two cases.
+   */
+  ambientSkipSeconds: number;
+  /**
+   * Cooldown for the GESTURE interstitial alone (owner: "only those gesture
+   * alone alone should have a cooldown of 5minutes").
+   *
+   * Every other moment follows the shared `vastInterstitial.cooldownMs`, which
+   * is 0 so repeated downloads always get their ad. This one does not, because
+   * a gesture the visitor makes constantly would otherwise mean a takeover every
+   * few seconds.
+   */
+  ambientCooldownSeconds: number;
+  /**
    * A HilltopAds banner tag PER PLACEMENT (owner, 2026-09-01: "i want all pages
    * should have a separate ad link slot and serving at once in different pages
    * so when it shows in landing page, it should still show in other pages and
@@ -718,6 +739,8 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   hilltopVastUrl: "",
   wallpaperGateSeconds: 10,
   idleInterstitialSeconds: 5,
+  ambientSkipSeconds: 5,
+  ambientCooldownSeconds: 300,
   hilltopSnippets: {},
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,

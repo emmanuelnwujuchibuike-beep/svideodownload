@@ -989,6 +989,71 @@ export function MonetizationSettings({
         is admin-set, and this is the one a visitor meets most often.
       */}
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">Timers</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Every hold and gap the full-screen video uses, in one place. All are
+          <strong> ceilings</strong>: a moment opens early when the creative ends, because
+          holding someone in front of a finished video is the bug this rule exists to
+          prevent.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <HilltopNumber
+            label="Download complete — skip after (s)"
+            value={vast.skipAfterSeconds}
+            min={0}
+            max={60}
+            busy={busy}
+            onCommit={(n) => void setVast({ skipAfterSeconds: n })}
+          />
+          <HilltopNumber
+            label="Shared cooldown between ads (s)"
+            value={Math.round((vast.cooldownMs ?? 0) / 1000)}
+            min={0}
+            max={3600}
+            busy={busy}
+            onCommit={(n) => void setVast({ cooldownMs: n * 1000 })}
+          />
+          <HilltopNumber
+            label="Batch / HD — skip after (s)"
+            value={state.batchGateSeconds ?? 30}
+            min={0}
+            max={60}
+            busy={busy}
+            onCommit={(n) => void persist({ ...state, batchGateSeconds: n })}
+          />
+          <HilltopNumber
+            label="Batch / HD complete — skip after (s)"
+            value={state.batchCompleteSeconds ?? 5}
+            min={0}
+            max={30}
+            busy={busy}
+            onCommit={(n) => void persist({ ...state, batchCompleteSeconds: n })}
+          />
+          <HilltopNumber
+            label="Idle / back-swipe — skip after (s)"
+            value={state.ambientSkipSeconds ?? 5}
+            min={0}
+            max={60}
+            busy={busy}
+            onCommit={(n) => void persist({ ...state, ambientSkipSeconds: n })}
+          />
+          <HilltopNumber
+            label="Idle / back-swipe — cooldown (s)"
+            value={state.ambientCooldownSeconds ?? 300}
+            min={0}
+            max={3600}
+            busy={busy}
+            onCommit={(n) => void persist({ ...state, ambientCooldownSeconds: n })}
+          />
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          The gesture moment keeps its own skip and cooldown so it can be gentler than the
+          download ones: a download ad is the price of a file the visitor asked for, and an
+          idle ad interrupts them doing nothing in particular.
+        </p>
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
         <p className="text-sm font-semibold">Idle interstitial — how long before it fires</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
           Seconds without interaction before the full-screen video opens. It was fixed at

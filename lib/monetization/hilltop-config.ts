@@ -109,6 +109,9 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
   */
   download_preparing: "vast",
   download_complete: "vast",
+  // The batch / HD / top-quality gate and its completion, each on its own timer.
+  batch_download_gate: "vast",
+  batch_download_complete: "vast",
 
   /*
     Everything below renders through AdSlot, so it takes the BANNER: the one

@@ -753,6 +753,82 @@ describe("Ad slots — no decorated empty boxes", () => {
     ).toHaveLength(0);
   });
 
+  /**
+   * 🔴 THE DOCKED BAR AND THE NAV MUST NEVER BOTH BE ON SCREEN.
+   *
+   * Owner, 2026-09-01: "the exoclick bottom banner shows a bit when the nav is
+   * showing, and when the banner is showing the bottom nav shows halfly … anyone
+   * that is showing should hide the other completely".
+   *
+   * Two independent causes, both guarded here:
+   *
+   *  1. The bar measured its travel against `--frenz-bottomnav-h`, a variable
+   *     the OTHER bar publishes from a ResizeObserver — 0 on first paint and
+   *     stale for a frame on every re-measure. At 0 the bar's base was the bottom
+   *     edge, exactly where the nav is. Both bars must now anchor at the bottom
+   *     and travel 100% of their OWN height, so "hidden" is self-contained.
+   *  2. They were driven by DIFFERENT booleans — the nav by `configured`, the bar
+   *     by `filled` — so they disagreed for every configured-but-unfilled zone.
+   *
+   * Applies to every network, not just ExoClick: Adsterra's `bottom_banner` and
+   * the legacy `mobile_bottom_banner` render inside this same bar, which is what
+   * makes the choreography network-agnostic.
+   */
+  it("moves the docked ad bar by its own height, on the nav's own condition", () => {
+    const src = readFileSync(path.join(ROOT, "features/monetization/top-banner-ad.tsx"), "utf8");
+    const code = stripComments(src);
+
+    // Self-contained travel: never the other bar's published height.
+    expect(
+      /transform:\s*revealed && configured \? "translateY\(0\)" : "translateY\(100%\)"/.test(code),
+      "The bar must travel 100% of its OWN height on the same condition the nav uses — measuring against --frenz-bottomnav-h is what let the two interleave.",
+    ).toBe(true);
+
+    // The reveal must not be gated on `filled` again: that is the second bug.
+    expect(
+      /transform:\s*revealed && filled/.test(code),
+      "The bar's reveal must not depend on `filled` — the nav hides on `configured`, and two conditions for one trade is how they get out of step.",
+    ).toBe(false);
+
+    // And it must sit above the nav so a cover is geometric, not cooperative.
+    expect(code).toMatch(/z-\[45\]/);
+  });
+
+  /**
+   * 🔴 THE BAR MUST NOT GATE ITS OWN MOUNT ON AN ANSWER ITS CHILD PROVIDES.
+   *
+   * Owner, 2026-09-01: "i removed the exoclick bottom nav so i can use the
+   * adsterra bottom nav" — and the bar, the Adsterra banner and the entire nav
+   * choreography disappeared.
+   *
+   *     configured = hasPrimary === true || hasLegacy === true || hasExoBottomNav
+   *     if (!ready || !showAds || !configured) return null;
+   *     …
+   *     <AdSlot zone="bottom_banner" onResolved={setHasPrimary} />
+   *
+   * `hasPrimary` comes from that AdSlot. So the slot that answers the question
+   * only rendered if the question was already answered yes. `hasExoBottomNav` —
+   * which comes from a config FETCH, not from a child — was the only thing
+   * breaking the circle, so removing the ExoClick snippet closed it.
+   *
+   * Measured on production: `bottomNav: null`, zero `<ins>`, no bar element, and
+   * a nav that never moved because nothing ever published to it.
+   */
+  it("mounts the docked ad bar without waiting for a slot to resolve", () => {
+    const src = readFileSync(path.join(ROOT, "features/monetization/top-banner-ad.tsx"), "utf8");
+    const code = stripComments(src);
+
+    expect(
+      /if \(!ready \|\| !showAds\) return null;/.test(code),
+      "The bar must mount for any ad-supported visitor. Gating it on `configured` deadlocks: the AdSlot that resolves `hasPrimary` cannot render until `hasPrimary` is already true.",
+    ).toBe(true);
+
+    expect(
+      /return null;[\s\S]{0,40}configured/.test(code) || /!showAds \|\| !configured/.test(code),
+      "The mount must not depend on `configured` — that is the circular condition.",
+    ).toBe(false);
+  });
+
   it("gives the ExoClick host a width, and still never asserts a height", () => {
     const src = readFileSync(path.join(ROOT, "features/monetization/exoclick-sticky.tsx"), "utf8");
     const code = stripComments(src);

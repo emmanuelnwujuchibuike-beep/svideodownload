@@ -163,17 +163,67 @@ export function TopBannerAd() {
     };
   }, [filled]);
 
-  // Nothing configured at all: no bar, no placeholder, no layout cost.
-  if (!ready || !showAds || !configured) return null;
+  /*
+    🔴 MOUNT WHENEVER ADS ARE ALLOWED — NEVER ON `configured` (owner,
+    2026-09-01: "i removed the exoclick bottom nav so i can use the adsterra
+    bottom nav", after which the bar and the whole nav choreography vanished).
+
+    This read `!configured`, and `configured` is:
+
+        hasPrimary === true || hasLegacy === true || hasExoBottomNav
+
+    `hasPrimary` is set by the `AdSlot` BELOW, through `onResolved`. So the slot
+    that answers the question only renders if the question is already answered
+    yes — a circle. `hasExoBottomNav` was the only thing breaking it, because it
+    comes from a config fetch rather than from a child. Removing the ExoClick
+    snippet closed the loop, and the Adsterra banner could never even ask:
+    measured on production as `bottomNav: null`, zero `<ins>`, no bar element at
+    all, and a nav that never stepped aside because nothing ever published to it.
+
+    It is the same rule this file already states for the CHROME — mounted and
+    shown are different questions — which I applied to the border and padding
+    and left in place on the mount itself, where an unrelated flag was hiding it.
+
+    So the ELEMENT exists for any ad-supported visitor: zero height, no chrome,
+    parked off-screen, costing a layout of nothing. That is what lets every
+    network's slot resolve honestly — ExoClick's loader needs a live placeholder,
+    and `AdSlot` needs to mount to report. `configured` still decides the CHROME,
+    the reveal and what the nav is told, so nothing about the visible behaviour
+    changes.
+  */
+  if (!ready || !showAds) return null;
 
   return (
     <div
       ref={barRef}
       style={{
-        // Sit above the bottom nav (its height already includes the safe-area pad);
-        // on desktop the nav is display:none so the var is 0 and the bar rests on the
-        // safe-area inset at the very bottom instead.
-        bottom: "max(env(safe-area-inset-bottom), var(--frenz-bottomnav-h, 0px))",
+        /*
+          🔴 ANCHORED AT THE BOTTOM EDGE, EXACTLY LIKE THE NAV (owner,
+          2026-09-01: "the bottom nav shouldnt show slightly at the bottom of the
+          bottom banner when the banner is showing … anyone that is showing
+          should hide the other completely").
+
+          This used to sit at `max(env(safe-area-inset-bottom),
+          --frenz-bottomnav-h)` and travel by `--frenz-bottomnav-h` — measuring
+          itself against the OTHER bar's published height. That coupling is what
+          produced the slivers:
+
+            • the variable is published by MobileNav's own ResizeObserver, so it
+              is 0 on first paint and stale for a frame whenever the nav
+              re-measures. At 0 this bar's base is the bottom edge — precisely
+              where the nav is — and revealing it put the two on top of each
+              other, each showing the part the other did not cover;
+            • and it made the bar's travel depend on a number that has nothing to
+              do with the bar's own height, so "fully off-screen" was only ever
+              true when the two happened to match.
+
+          Both bars now anchor at `bottom: 0` and travel by 100% of THEIR OWN
+          height, so "hidden" means hidden for each of them independently, with
+          no shared variable to get out of step. The safe-area inset is added as
+          PADDING inside (below), never as an offset, so the bar's background
+          still runs to the physical edge.
+        */
+        bottom: 0,
         /*
           🔴 THE TWO BARS TRADE PLACES (owner, 2026-08-31: "the bottom ad banner
           slot should pop up smoothly like a luxurious design ... they should
@@ -192,17 +242,54 @@ export function TopBannerAd() {
           Driven by transform, never by `bottom` or `height`: animating either
           of those would relayout the page underneath on every frame.
         */
-        // Only a bar with something IN it may take the nav's place.
-        transform:
-          revealed && filled
-            ? "translateY(var(--frenz-bottomnav-h, 0px))"
-            : "translateY(calc(100% + var(--frenz-bottomnav-h, 0px)))",
+        /*
+          🔴 THE SAME CONDITION THE NAV USES, NOT A DIFFERENT ONE.
+
+          This was `revealed && filled` while the nav hid on `revealed &&
+          configured`. Two booleans for one trade means they disagree whenever a
+          bar is configured but unfilled — the nav leaves and nothing arrives —
+          and it is the second half of the owner's report.
+
+          `configured` is safe to reveal on because an UNFILLED bar has no chrome
+          and no padding (see below): it is a zero-height, transparent, invisible
+          element. Revealing it shows nothing; revealing it is simply how the two
+          stay in lockstep. FILL still decides whether anything is drawn.
+        */
+        transform: revealed && configured ? "translateY(0)" : "translateY(100%)",
+        /*
+          🔴 AT LEAST AS TALL AS THE NAV IT REPLACES, once there is an ad in it.
+
+          A creative shorter than the nav would leave a strip of nav visible
+          ABOVE this bar's top edge — "the bottom nav shows halfly" — because the
+          two are docked to the same edge and only this one is opaque. Matching
+          the nav's published height makes the cover complete whatever size the
+          network serves.
+
+          Only when FILLED: an unfilled bar must keep no height of its own, which
+          is the rule that stops a white line appearing above the nav.
+        */
+        minHeight: filled ? "var(--frenz-bottomnav-h, 0px)" : undefined,
       }}
       className={cn(
         // z-40: below the header (z-50) and the mobile drawer (z-[70]), above content.
         // Solid, no blur — matches the de-glassed nav/header chrome. A top border
         // divides it from the content above; the nav below carries its own border.
-        "fixed inset-x-0 z-40",
+        /*
+          🔴 ABOVE THE NAV, NOT LEVEL WITH IT (owner, 2026-09-01: "anyone that is
+          showing should hide the other completely").
+
+          Both bars were `z-40`, which is a tie — so if the nav ever failed to
+          hide, or was mid-transition, the two interleaved and each showed the
+          part the other did not cover. z-[45] keeps this above the nav (z-40)
+          and still below the header (z-50) and the mobile drawer (z-[70]), so a
+          revealed bar COVERS the nav geometrically rather than relying on the
+          nav to get out of the way. Defence in depth: the nav still hides, this
+          just means a failure there is invisible instead of ugly.
+        */
+        // `flex items-center` so a creative shorter than the nav sits centred in
+        // the min-height above, rather than pinned to the top with dead space
+        // under it. Harmless when unfilled: the child is then zero-height too.
+        "fixed inset-x-0 z-[45] flex items-center",
         "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none",
         // The chrome is the part that must never appear around nothing. The
         // ELEMENT still exists either way, so the loader keeps a placeholder.

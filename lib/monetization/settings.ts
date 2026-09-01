@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AD_ZONES, isExoClickZone, type AdZoneId } from "./ad-schema";
+import { HILLTOP_BANNER_SLOTS } from "./hilltop";
 import { DEFAULT_HILLTOP, normalizeHilltop, type HilltopConfig } from "./hilltop-config";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -565,6 +566,23 @@ export interface MonetizationSettings {
    * ONE url, because a VAST tag is not tied to a position the way a banner is.
    */
   hilltopVastUrl: string;
+  /**
+   * A HilltopAds banner tag PER PLACEMENT (owner, 2026-09-01: "i want all pages
+   * should have a separate ad link slot and serving at once in different pages
+   * so when it shows in landing page, it should still show in other pages and
+   * doesnt disappear on navigates").
+   *
+   * 🔴 ONE ZONE ASKED FOR FROM SEVERAL PAGES IS STILL ONE ZONE. Hilltop does not
+   * batch the way ExoClick does, so two placements do not cancel each other out
+   * — but a single zone still carries its own capping and its own reporting, so
+   * "did the landing earn this, or the history page" is unanswerable and a cap
+   * hit on one surface is a blank on the others. A tag per placement fixes both.
+   *
+   * Falls back to `hilltopBannerSnippet` for any placement with no tag of its
+   * own, so an operator with a single tag today keeps working and can split
+   * them one at a time rather than all at once.
+   */
+  hilltopSnippets: Partial<Record<string, string>>;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -666,6 +684,7 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   hilltopVideoSliderSnippet: "",
   hilltop: DEFAULT_HILLTOP,
   hilltopVastUrl: "",
+  hilltopSnippets: {},
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,
@@ -904,6 +923,18 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
       Normalising here means no caller has to defend against a partial object.
     */
     merged.hilltop = normalizeHilltop(merged.hilltop);
+    /*
+      Keep only known placement keys, and only real strings — this map is
+      admin-written free text and every value becomes a script URL candidate.
+    */
+    {
+      const raw = (merged.hilltopSnippets ?? {}) as Record<string, unknown>;
+      const clean: Partial<Record<string, string>> = {};
+      for (const id of HILLTOP_BANNER_SLOTS) {
+        if (typeof raw[id] === "string" && raw[id].trim()) clean[id] = raw[id] as string;
+      }
+      merged.hilltopSnippets = clean;
+    }
     // Clamped on READ as well as on write: a hand-edited blob must never reach
     // the player as a negative timeout or a 10-minute skip timer.
     merged.vastInterstitial = normalizeVastInterstitial(merged.vastInterstitial);

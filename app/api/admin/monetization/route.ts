@@ -141,6 +141,7 @@ const schema = z.object({
   hilltopBannerSnippet: z.string().max(4000).default(""),
   hilltopVideoSliderSnippet: z.string().max(4000).default(""),
   hilltopVastUrl: z.string().max(2000).default(""),
+  hilltopSnippets: z.record(z.string(), z.string().max(4000)).default({}),
   /*
     HilltopAds behaviour. Every field has a default, so an older client that
     posts the form without this object writes the dormant config rather than

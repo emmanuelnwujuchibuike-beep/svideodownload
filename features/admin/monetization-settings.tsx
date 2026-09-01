@@ -30,7 +30,11 @@ import {
   type MonetagUnit,
 } from "@/lib/monetization/monetag";
 import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
-import { parseHilltopTag, parseHilltopVastUrl } from "@/lib/monetization/hilltop";
+import {
+  HILLTOP_BANNER_SLOTS,
+  parseHilltopTag,
+  parseHilltopVastUrl,
+} from "@/lib/monetization/hilltop";
 import type { MonetizationSettings } from "@/lib/monetization/settings";
 import {
   DEFAULT_VAST_INTERSTITIAL,
@@ -48,6 +52,14 @@ import { MonetagUnitsEditor } from "./monetag-units-editor";
   where `!s[key]` would turn a publisher id into `false`.
 */
 const HILLTOP_PLACEHOLDER = String.raw`<script>(function(x){ … s.src = "//massivesalad.com/…"; … })({})</script>`;
+
+/** What each HilltopAds banner placement is called in the admin. */
+const HILLTOP_SLOT_LABELS: Record<string, string> = {
+  history: "History — above the grid",
+  historyfeed: "History — between the time periods",
+  landing: "Landing — under the wallpaper button",
+  feed: "Feed — in-feed banner",
+};
 const MULTI_FORMAT_PLACEHOLDER = String.raw`<ins class="eas6a97888e38" data-zoneid="6017110"></ins>`;
 
 type ToggleKey = {
@@ -608,6 +620,55 @@ export function MonetizationSettings({
               onChange={(next) => setText("hilltopBannerSnippet", next)}
               onSave={(v) => void persist({ ...state, hilltopBannerSnippet: v })}
             />
+
+            {/*
+              🔴 A TAG PER PAGE (owner, 2026-09-01: "i want all pages should have
+              a separate ad link slot and serving at once in different pages so
+              when it shows in landing page, it should still show in other pages
+              and doesnt disappear on navigates").
+
+              Hilltop does not batch the way ExoClick does, so two placements
+              sharing a zone do not cancel each other out — but one zone still
+              carries ONE capping rule and ONE line in their reporting. A viewer
+              capped on the landing page therefore sees a blank on the history
+              page, and "which page earned this" has no answer. A zone per
+              placement fixes both.
+
+              Each field falls back to the tag above when empty, so an operator
+              holding a single tag keeps working and can split them one at a time
+              rather than having to create four zones before anything serves.
+            */}
+            <div className="mt-3 space-y-2.5 border-t border-border/60 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Per-page tags
+              </p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Give each page its own Hilltop zone. Any left empty uses the tag above,
+                so you can split them one at a time. A zone of its own means a capping
+                rule of its own — and its own line in Hilltop&apos;s reporting.
+              </p>
+              {HILLTOP_BANNER_SLOTS.map((id) => (
+                <div key={id}>
+                  <p className="mb-1 text-[11px] font-medium">{HILLTOP_SLOT_LABELS[id]}</p>
+                  <HilltopField
+                    value={state.hilltopSnippets?.[id] ?? ""}
+                    busy={busy}
+                    onChange={(next) =>
+                      setState((s) => ({
+                        ...s,
+                        hilltopSnippets: { ...(s.hilltopSnippets ?? {}), [id]: next },
+                      }))
+                    }
+                    onSave={(v) =>
+                      void persist({
+                        ...state,
+                        hilltopSnippets: { ...(state.hilltopSnippets ?? {}), [id]: v },
+                      })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">

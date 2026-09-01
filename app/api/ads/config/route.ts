@@ -5,7 +5,11 @@ import {
   getRewardNetworks,
 } from "@/lib/monetization/reward-networks-store";
 import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
-import { parseHilltopTag, parseHilltopVastUrl } from "@/lib/monetization/hilltop";
+import {
+  HILLTOP_BANNER_SLOTS,
+  parseHilltopTag,
+  parseHilltopVastUrl,
+} from "@/lib/monetization/hilltop";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -159,6 +163,26 @@ export async function GET() {
         entry on this endpoint is untouched by it.
       */
       hilltop: settings.hilltop,
+      /*
+        🔴 A TAG PER PLACEMENT, resolved server-side into one map (owner,
+        2026-09-01: "all pages should have a separate ad link slot").
+
+        Each placement gets its OWN tag when one is configured, and falls back to
+        the shared `hilltopBannerSnippet` when it is not — so an operator holding
+        one tag today keeps working and can split them one at a time.
+
+        `hilltopBanner` stays in the payload for the same reason: it is what a
+        placement without its own tag resolves to, and removing it would blank
+        every slot the moment this shipped.
+      */
+      hilltopBanners: settings.hilltop.enabled
+        ? Object.fromEntries(
+            HILLTOP_BANNER_SLOTS.map((id) => [
+              id,
+              parseHilltopTag(settings.hilltopSnippets?.[id] || settings.hilltopBannerSnippet),
+            ]),
+          )
+        : {},
       hilltopBanner: settings.hilltop.enabled ? parseHilltopTag(settings.hilltopBannerSnippet) : null,
       hilltopVideoSlider: settings.hilltop.enabled
         ? parseHilltopTag(settings.hilltopVideoSliderSnippet)

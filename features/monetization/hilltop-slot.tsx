@@ -88,18 +88,25 @@ export function HilltopSlot({
     let alive = true;
     fetch("/api/ads/config")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { hilltopBanner?: HilltopTag | null; hilltop?: HilltopConfig }) => {
-        if (!alive) return;
-        setTag(d.hilltopBanner ?? null);
-        if (d.hilltop) setConfig(d.hilltop);
-      })
+      .then(
+        (d: {
+          hilltopBanners?: Partial<Record<string, HilltopTag | null>>;
+          hilltopBanner?: HilltopTag | null;
+          hilltop?: HilltopConfig;
+        }) => {
+          if (!alive) return;
+          // This placement's OWN tag, or the shared one it falls back to.
+          setTag(d.hilltopBanners?.[slot] ?? d.hilltopBanner ?? null);
+          if (d.hilltop) setConfig(d.hilltop);
+        },
+      )
       .catch(() => {
         /* No banner is the safe outcome. */
       });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [slot]);
 
   /*
     Viewport rule (brief §12: "Do not force desktop-sized HilltopAds banners
@@ -144,6 +151,13 @@ export function HilltopSlot({
       it is for. It just no longer treats "busy right now" as "never".
     */
     if (mounted.has(slot)) {
+      /*
+        Bounded. The claim is released by the other instance's cleanup, which
+        runs in the same commit — a handful of retries covers that comfortably,
+        and an unbounded loop would spin for the life of the page if a claim
+        ever leaked.
+      */
+      if (attempt > 8) return;
       const retry = setTimeout(() => setAttempt((n) => n + 1), 250);
       return () => clearTimeout(retry);
     }

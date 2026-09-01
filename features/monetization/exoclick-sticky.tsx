@@ -154,6 +154,37 @@ const providerPromises = new Map<string, Promise<boolean>>();
 const pendingServe = new Set<string>();
 let serveFrame = 0;
 
+/**
+ * Zone ids with a live placeholder on the page right now.
+ *
+ * 🔴 ONE `<ins>` PER ZONE PER PAGE. THE SAME ZONE TWICE SERVES NOTHING (owner,
+ * 2026-09-01: "the exoclick banner and multi format is not showing", with only
+ * Adsterra rendering).
+ *
+ * Measured on production, the live config had one zone id in THREE fields:
+ *
+ *     exoclickHistory     -> 6017110
+ *     exoclickMultiFormat -> 6017110
+ *     exoclickHistoryFeed -> 6017110
+ *
+ * which on /history is three placeholders for one zone: the slot above the grid
+ * and both in-feed slots. Their loader batches placements into a single request
+ * ("Multi-zones Batch Size: 3" in its own log) and will not serve one zone
+ * several times in one call — the API answers `{"zones":[null,null]}`, which is
+ * precisely the empty response I kept reading as "no demand" and reporting as a
+ * network problem. Adsterra was unaffected because it has one placement and no
+ * duplication, which is why it looked like an ExoClick outage.
+ *
+ * This is my own doing: I added the multi-format and in-feed fields without
+ * anything stopping one zone filling all of them, and nothing warned the
+ * operator. So the FIRST placeholder to mount claims the zone and the rest
+ * render nothing at all — better one working ad than three that cancel out.
+ * The admin now flags the duplication too, because the real fix is a second
+ * zone id, and only the operator can create one.
+ */
+const claimedZones = new Map<string, number>();
+let claimSeq = 0;
+
 function requestServe(src: string): void {
   pendingServe.add(src);
   if (serveFrame) return;
@@ -537,6 +568,27 @@ export function ExoClickSticky({
     if (!el) return;
 
     /*
+      🔴 CLAIM THE ZONE, OR STAND DOWN. See `claimedZones`.
+
+      A second placeholder for a zone that already has one does not get its own
+      ad — it makes the batched request ask for the same zone twice and come back
+      `{"zones":[null,null]}`, so BOTH end up empty. Standing down is therefore
+      strictly better than competing: one ad instead of none.
+
+      The claim is keyed by an id, not a boolean, so this instance only ever
+      releases its OWN claim on cleanup — otherwise a slot unmounting during a
+      navigation would free a zone another slot is currently showing, and the
+      next mount would double up again.
+    */
+    const claimId = ++claimSeq;
+    const holder = claimedZones.get(tag.zoneId);
+    if (holder !== undefined) return;
+    claimedZones.set(tag.zoneId, claimId);
+    const releaseClaim = () => {
+      if (claimedZones.get(tag.zoneId) === claimId) claimedZones.delete(tag.zoneId);
+    };
+
+    /*
       A FRESH placeholder every time. The loader stamps `data-processed="true"`
       on whatever it has seen and its selector excludes those forever, so
       re-using an element is the same as not having one. Building it here rather
@@ -806,6 +858,8 @@ export function ExoClickSticky({
         mo.disconnect();
         clearTimeout(emptyTimer);
         clearTimeout(retryTimer);
+        // Nothing was ever asked for, so hand the zone back to any other slot.
+        releaseClaim();
         fillCb.current?.(false);
         beacon(slot, false);
         return;
@@ -830,6 +884,8 @@ export function ExoClickSticky({
       // A queued check must not run against a host this cleanup is about to empty.
       if (frame) cancelAnimationFrame(frame);
       io.disconnect();
+      // Free the zone for whichever slot mounts next.
+      releaseClaim();
       el.removeEventListener("pointerdown", onClick, { capture: true });
       clearTimeout(emptyTimer);
       clearTimeout(retryTimer);

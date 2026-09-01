@@ -531,6 +531,18 @@ export function MonetizationSettings({
         differs. The guidance says which behaves how; the choice is the
         operator's.
       */}
+      <DuplicateZoneWarning
+        fields={[
+          { label: "Sticky banner", snippet: state.exoclickStickySnippet ?? "" },
+          { label: "Bottom banner", snippet: state.exoclickBottomNavSnippet ?? "" },
+          { label: "Multi-format (above the History grid)", snippet: state.exoclickMultiFormatSnippet ?? "" },
+          { label: "History outstream", snippet: state.exoclickHistorySnippet ?? "" },
+          { label: "History in-feed", snippet: state.exoclickHistoryFeedSnippet ?? "" },
+          { label: "Landing page", snippet: state.exoclickLandingSnippet ?? "" },
+          { label: "Full-page interstitial", snippet: state.exoclickInterstitialSnippet ?? "" },
+        ]}
+      />
+
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
         <p className="text-sm font-semibold">History — between time periods</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
@@ -1696,6 +1708,57 @@ function SnippetField({
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Warn when two ExoClick fields point at the SAME zone id.
+ *
+ * 🔴 THE SAME ZONE TWICE ON ONE PAGE SERVES NOTHING (owner, 2026-09-01: "the
+ * exoclick banner and multi format is not showing", with only Adsterra
+ * rendering).
+ *
+ * The live config had one zone in three fields — History, Multi-format and
+ * History in-feed all set to 6017110 — which on /history is three placeholders
+ * for one zone. Their loader batches placements into a single request and will
+ * not serve one zone several times in it; the API answers `{"zones":[null,
+ * null]}` and every copy comes back empty. Adsterra was unaffected, which is
+ * what made it look like an ExoClick outage.
+ *
+ * The app now stands one duplicate down so at least one ad shows, but that is
+ * damage control: two placements genuinely need two zones, and only the operator
+ * can create the second one. So it is said here, where it can be acted on.
+ */
+function DuplicateZoneWarning({ fields }: { fields: { label: string; snippet: string }[] }) {
+  const byZone = new Map<string, string[]>();
+  for (const f of fields) {
+    const tag = parseExoClickSticky(f.snippet ?? "");
+    if (!tag) continue;
+    byZone.set(tag.zoneId, [...(byZone.get(tag.zoneId) ?? []), f.label]);
+  }
+  const clashes = [...byZone.entries()].filter(([, names]) => names.length > 1);
+  if (clashes.length === 0) return null;
+
+  return (
+    <div className="mt-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-300">
+        <AlertTriangle className="h-4 w-4 shrink-0" /> The same zone is used in more than one place
+      </p>
+      <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-amber-700/90 dark:text-amber-300/90">
+        {clashes.map(([zone, names]) => (
+          <li key={zone}>
+            Zone <strong>{zone}</strong> — {names.join(", ")}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs leading-relaxed text-amber-700/90 dark:text-amber-300/90">
+        ExoClick asks for every placement on a page in one request and will not serve the same
+        zone twice in it, so duplicated slots come back empty — <strong>all of them</strong>, not
+        just the extra one. Only the first placement on the page is used; the others are switched
+        off so at least one ad shows. Create a separate zone in ExoClick for each placement to run
+        them all.
+      </p>
+    </div>
   );
 }
 

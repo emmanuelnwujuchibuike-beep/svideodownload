@@ -94,13 +94,52 @@ That last row is the one worth knowing. On 2026-09-01 the landing slot had
 It was not a fill problem: the unit had been placed 7,698px down an 11,315px
 page and no reader ever reached it. It now sits at y≈700.
 
+## 🔴 ONE BAD ZONE TAKES THE WHOLE PAGE DOWN WITH IT
+
+This is the rule that cost the most to learn, on 2026-09-01.
+
+Because ExoClick asks for every placeholder on a page in **one** request, a zone
+that cannot serve does not just fail on its own — it appears to take the rest of
+that request with it. Measured on /history:
+
+| the outstream above the grid (`6015606`) | filled | empty | clicks | fill rate |
+|---|---|---|---|---|
+| before `6017110` joined the page | 15 | 20 | 8 | **43%** |
+| after | 2 | 15 | 0 | **12%** |
+
+And the two slots on that page returned the **same outcome in 10 out of 10**
+same-second pairs — they filled together or they failed together, never one
+without the other. Zone `6017110` filled once in six hours; the healthy
+outstream beside it dropped to almost nothing.
+
+So the symptom of a bad zone is **not** "that one slot is blank". It is **"that
+whole page went quiet"**, which reads exactly like a network outage and sends you
+looking in the wrong place.
+
+**What to do:** when a page stops filling, take the newest zone OFF that page
+first and see whether the others recover. A zone earns its place on a page by
+filling on its own; it does not get to sit there costing the ones that work.
+
+⚠️ The corollary: **do not add a placement to a page that is already earning.**
+Add it, watch the whole page's fill rate in the activity feed for an hour, and
+take it out again if the page got worse. `6017110` was added to a page filling
+at 43% with regular clicks, and the page ended at 12% with none.
+
 ## If nothing serves anywhere
 
-Check the account before the code. On 2026-09-01 every **type-38** zone answered
-null for hours while the type-37 outstream and the type-17 sticky served in the
-same minutes, with a provably correct request. That is a zone status / approval /
-attached-formats question in the ExoClick dashboard, and no change on this side
-fixes it.
+Check the zone before the account, and the account before the code.
+
+⚠️ "All my multi-format zones are dead" was believed for most of 2026-09-01 and
+was **wrong**. Zone `6017148` — type 38, the landing slot — filled and was
+clicked within minutes of being moved somewhere readers actually reach. It was
+never the zone TYPE. It was one specific zone (`6017110`) that would not serve,
+plus a placement nobody could see.
+
+A probe from this machine cannot settle it either: the same run that reported
+`6017110` and `6017148` null also reported the **sticky** null, while the
+activity feed showed that sticky filling and being clicked in the same minutes.
+Repeated asks from one IP get frequency-capped, so a blank in a probe means
+nothing. **The activity feed is the evidence. A probe is a hint.**
 
 `scripts/exoclick-type-compare.mjs` judges zone type against fill.
 `scripts/exoclick-try-tag.mjs <class> <zone>` judges a single new tag before you

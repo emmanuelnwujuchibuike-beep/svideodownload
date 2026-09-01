@@ -242,11 +242,19 @@ declare global {
  * `sticky` pins itself to the viewport; `history` is an outstream video that
  * sits in the page; `bottomnav` is the banner docked above the bottom nav,
  * configured separately from the `bottom_banner` AD ZONE so ExoClick and
- * Adsterra can both run rather than competing for one slot. All three are the
+ * Adsterra can both run rather than competing for one slot. `historyfeed` and
+ * `historyfeedlastweek` are the two in-feed positions on /history, which need
+ * separate zone ids and therefore separate slots. Every one of them is the
  * same ExoClick DISPLAY mechanism — an <ins> their loader fills — so they share
  * one component rather than three that drift apart.
  */
-export type ExoClickInsSlot = "sticky" | "history" | "historyfeed" | "landing" | "bottomnav";
+export type ExoClickInsSlot =
+  | "sticky"
+  | "history"
+  | "historyfeed"
+  | "historyfeedlastweek"
+  | "landing"
+  | "bottomnav";
 
 /**
  * Report this slot's state to the operator feed (owner, 2026-08-31: "wire the
@@ -478,11 +486,13 @@ export function ExoClickSticky({
             ? d.exoclickHistory
             : slot === "historyfeed"
               ? d.exoclickHistoryFeed
-              : slot === "landing"
-                ? d.exoclickLanding
-                : slot === "bottomnav"
-                  ? d.exoclickBottomNav
-                  : d.exoclickSticky;
+              : slot === "historyfeedlastweek"
+                ? d.exoclickHistoryFeedLastWeek
+                : slot === "landing"
+                  ? d.exoclickLanding
+                  : slot === "bottomnav"
+                    ? d.exoclickBottomNav
+                    : d.exoclickSticky;
         setTag(bySlot ?? null);
       })
       .catch(() => {

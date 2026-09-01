@@ -73,17 +73,36 @@ export async function GET() {
         return settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
       })(),
       /*
-        The RAW multi-format tag, for the interstitial FALLBACK (owner,
-        2026-09-01: "can i use multiformat is fallback interstilla so when it
-        doesnt show the multi format shows as interstilla").
+        The multi-format unit shown on our own overlay when the fullpage
+        interstitial does not appear (owner, 2026-09-01: "put a slot in the admin
+        dashboard for main exoclick interclick and fall back multi format used as
+        interstilla").
 
-        Deliberately separate from `exoclickHistory` above, which is the RESOLVED
-        answer to "what fills the one slot above the history grid". Two
-        consumers, two questions: the history slot needs a decision, and the
-        interstitial needs the tag itself regardless of that switch.
+        🔴 ITS OWN FIELD, NOT `exoclickMultiFormatSnippet`. This used to hand the
+        fallback the same tag that serves above the History grid, which is one
+        zone in two placements as soon as the fallback opens on /history — and
+        the fallback builds its `<ins>` by hand rather than through
+        `ExoClickSticky`, so the zone-claim never saw the clash. The payload key
+        `exoclickMultiFormat` is gone with it: nothing else read it.
       */
-      exoclickMultiFormat: parseExoClickSticky(settings.exoclickMultiFormatSnippet),
+      exoclickInterstitialFallback: parseExoClickSticky(settings.exoclickInterstitialFallbackSnippet),
+      /*
+        🔴 TWO IN-FEED PLACEMENTS, TWO TAGS, NO FALLBACK BETWEEN THEM.
+
+        /history renders an in-feed slot after Yesterday and another after Last
+        week. ExoClick batches every placement on a page into ONE request and
+        will not serve the same zone twice in it — the API answers
+        `{"zones":[null,null]}` — so these two MUST resolve to different zone
+        ids, and the way to make that possible is to read two different fields.
+
+        Note what is missing: `?? exoclickHistoryFeed` on the second one. The
+        pairs elsewhere in this file (`exoclickHistory`) fall back to each other
+        because they are two candidates for ONE slot, where duplication is
+        impossible. Falling back here would put one zone in both placements and
+        blank them both, which is the bug this split exists to fix.
+      */
       exoclickHistoryFeed: parseExoClickSticky(settings.exoclickHistoryFeedSnippet),
+      exoclickHistoryFeedLastWeek: parseExoClickSticky(settings.exoclickHistoryFeedLastWeekSnippet),
       exoclickLanding: parseExoClickSticky(settings.exoclickLandingSnippet),
       exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
       exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),

@@ -122,8 +122,10 @@ const schema = z.object({
   exoclickMultiFormatSnippet: z.string().max(4000).default(""),
   exoclickHistoryUseMultiFormat: z.boolean().default(true),
   exoclickHistoryFeedSnippet: z.string().max(4000).default(""),
+  exoclickHistoryFeedLastWeekSnippet: z.string().max(4000).default(""),
   exoclickLandingSnippet: z.string().max(4000).default(""),
   exoclickInterstitialSnippet: z.string().max(4000).default(""),
+  exoclickInterstitialFallbackSnippet: z.string().max(4000).default(""),
   exoclickSharedZoneId: z
     .string()
     .trim()

@@ -35,7 +35,15 @@ export const dynamic = "force-dynamic";
  */
 const bannerSchema = z.object({
   kind: z.literal("banner"),
-  slot: z.enum(["sticky", "history", "historyfeed", "landing", "bottomnav", "interstitial"]),
+  slot: z.enum([
+    "sticky",
+    "history",
+    "historyfeed",
+    "historyfeedlastweek",
+    "landing",
+    "bottomnav",
+    "interstitial",
+  ]),
   /** Did a creative actually arrive in the placeholder? */
   filled: z.boolean(),
   /**

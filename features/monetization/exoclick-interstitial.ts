@@ -157,9 +157,19 @@ let armedHost: HTMLElement | null = null;
 async function showMultiFormatFallback(): Promise<boolean> {
   const tag = await fetch("/api/ads/config")
     .then((r) => (r.ok ? r.json() : {}))
-    .then((d: { exoclickMultiFormat?: ExoClickStickyTag | null; interstitialSkipSeconds?: number }) => d)
+    .then(
+      (d: { exoclickInterstitialFallback?: ExoClickStickyTag | null; interstitialSkipSeconds?: number }) => d,
+    )
     .catch(() => null);
-  const unit = tag?.exoclickMultiFormat;
+  /*
+    Its OWN zone, configured in its own admin field — never the tag that serves
+    above the History grid. This overlay can open on any page, /history
+    included, and one zone in two placements on one page serves nothing in
+    either. The `<ins>` below is built by hand rather than through
+    `ExoClickSticky`, so the zone-claim that catches that elsewhere does not
+    cover this one; the separation is the only thing preventing it.
+  */
+  const unit = tag?.exoclickInterstitialFallback;
   if (!unit) return false;
 
   const host = document.createElement("div");
@@ -297,7 +307,22 @@ export async function showExoClickInterstitial(): Promise<boolean> {
   if (typeof document === "undefined") return false;
 
   const tag = await loadTag();
-  if (!tag) return false;
+  /*
+    🔴 NO FULLPAGE ZONE STILL MEANS THE FALLBACK GETS THE MOMENT (owner,
+    2026-09-01: "put a slot in the admin dashboard for main exoclick interclick
+    and fall back multi format used as interstilla").
+
+    This was a bare `return false`, which made the multi-format fallback
+    reachable ONLY through a configured fullpage zone that then failed to paint.
+    That was invisible while both fields were one setting; now that the fallback
+    has its own slot, it would mean pasting a tag into that slot and getting
+    nothing — the fallback would be armed and unreachable.
+
+    So an operator can run the multi-format overlay ALONE: fill the fallback
+    field, leave the fullpage one empty. Nothing else changes — the frequency,
+    cooldown and per-moment switches all still live in the caller.
+  */
+  if (!tag) return showMultiFormatFallback();
 
   /*
     Already showing from an earlier arming — their script picked this moment.

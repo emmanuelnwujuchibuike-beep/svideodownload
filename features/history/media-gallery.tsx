@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 import { AdSurface } from "@/features/monetization/ad-surface";
-import { ExoClickSticky } from "@/features/monetization/exoclick-sticky";
+import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/exoclick-sticky";
 import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
@@ -47,7 +47,8 @@ import type { DownloadRecord, MediaKind } from "@/types";
 const HISTORY_STORY_AD_EVERY = 3;
 
 /**
- * Which time-period sections are followed by an in-feed ad.
+ * Which time-period sections are followed by an in-feed ad, and WHICH SLOT each
+ * one is.
  *
  * Owner, 2026-09-01: "in between the time period in history page, the yesterday
  * ending that divides the week … and add a new time zone of last week and add a
@@ -57,8 +58,20 @@ const HISTORY_STORY_AD_EVERY = 3;
  * the week, and where Last week gives way to Earlier. Named by BUCKET KEY rather
  * than by index so a section that is empty (and therefore filtered out) cannot
  * shift an ad onto a different boundary than the one asked for.
+ *
+ * 🔴 A MAP, NOT A SET, AND THAT IS THE WHOLE FIX (owner, 2026-09-01: "exoclick
+ * requires each link, each page"). This was `new Set(["yesterday","lastweek"])`
+ * feeding `slot="historyfeed"` to both, so both placements resolved to the same
+ * configured zone id. ExoClick batches every placement on a page into ONE
+ * request and refuses to serve a zone twice in it — the API answers
+ * `{"zones":[null,null]}` — so the second slot could never fill, and before the
+ * zone claim shipped it took the first one down with it. Two placements, two
+ * slots, two admin fields, two zones.
  */
-const AD_AFTER_GROUP = new Set(["yesterday", "lastweek"]);
+const AD_AFTER_GROUP = new Map<string, ExoClickInsSlot>([
+  ["yesterday", "historyfeed"],
+  ["lastweek", "historyfeedlastweek"],
+]);
 
 
 /**
@@ -499,12 +512,18 @@ export function MediaGallery({
                 An outstream tag is a GOOD fit here, unlike above the grid: their
                 viewability rule wants the slot scrolled into view, and a reader
                 moving between time periods is doing exactly that.
+
+                Each boundary renders ITS OWN slot id, which resolves to its own
+                admin field and therefore its own ExoClick zone — see the map.
               */}
-              {AD_AFTER_GROUP.has(g.key) ? (
-                <div className="-mx-2 px-1.5 sm:-mx-4">
-                  <ExoClickSticky slot="historyfeed" />
-                </div>
-              ) : null}
+              {(() => {
+                const adSlot = AD_AFTER_GROUP.get(g.key);
+                return adSlot ? (
+                  <div className="-mx-2 px-1.5 sm:-mx-4">
+                    <ExoClickSticky slot={adSlot} />
+                  </div>
+                ) : null;
+              })()}
             </Fragment>
           ))}
         </div>

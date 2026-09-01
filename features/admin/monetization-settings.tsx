@@ -141,8 +141,10 @@ export function MonetizationSettings({
       | "exoclickHistorySnippet"
       | "exoclickMultiFormatSnippet"
       | "exoclickHistoryFeedSnippet"
+      | "exoclickHistoryFeedLastWeekSnippet"
       | "exoclickLandingSnippet"
-      | "exoclickInterstitialSnippet",
+      | "exoclickInterstitialSnippet"
+      | "exoclickInterstitialFallbackSnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
 
@@ -237,10 +239,6 @@ export function MonetizationSettings({
      the way out, so this can never be the thing that decides what renders. */
   const stickyTag = parseExoClickSticky(state.exoclickStickySnippet ?? "");
   const bottomNavTag = parseExoClickSticky(state.exoclickBottomNavSnippet ?? "");
-  const historyTag = parseExoClickSticky(state.exoclickHistorySnippet ?? "");
-  const multiFormatTag = parseExoClickSticky(state.exoclickMultiFormatSnippet ?? "");
-  const historyFeedTag = parseExoClickSticky(state.exoclickHistoryFeedSnippet ?? "");
-  const landingTag = parseExoClickSticky(state.exoclickLandingSnippet ?? "");
   const interstitialTag = parseExoClickSticky(state.exoclickInterstitialSnippet ?? "");
   const vast: VastInterstitialConfig = state.vastInterstitial ?? DEFAULT_VAST_INTERSTITIAL;
   const setVast = async (patch: Partial<VastInterstitialConfig>) => {
@@ -537,25 +535,55 @@ export function MonetizationSettings({
           { label: "Bottom banner", snippet: state.exoclickBottomNavSnippet ?? "" },
           { label: "Multi-format (above the History grid)", snippet: state.exoclickMultiFormatSnippet ?? "" },
           { label: "History outstream", snippet: state.exoclickHistorySnippet ?? "" },
-          { label: "History in-feed", snippet: state.exoclickHistoryFeedSnippet ?? "" },
+          { label: "History in-feed (Yesterday)", snippet: state.exoclickHistoryFeedSnippet ?? "" },
+          { label: "History in-feed (Last week)", snippet: state.exoclickHistoryFeedLastWeekSnippet ?? "" },
           { label: "Landing page", snippet: state.exoclickLandingSnippet ?? "" },
           { label: "Full-page interstitial", snippet: state.exoclickInterstitialSnippet ?? "" },
+          { label: "Interstitial fallback (multi-format)", snippet: state.exoclickInterstitialFallbackSnippet ?? "" },
         ]}
       />
 
+      {/*
+        🔴 TWO FIELDS FOR THE TWO IN-FEED POSITIONS, AND THEY NEED TWO DIFFERENT
+        ZONE IDS (owner, 2026-09-01: "exoclick requires each link, each page").
+
+        One field used to feed both. ExoClick batches every placement on a page
+        into one request and will not serve a zone twice in it, so the second
+        slot could never fill whatever was pasted. Pasting the SAME snippet in
+        both of these is therefore not a shortcut — it is the original bug, and
+        the duplicate-zone warning above will say so.
+      */}
       <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
-        <p className="text-sm font-semibold">History — between time periods</p>
+        <p className="text-sm font-semibold">History in-feed — after Yesterday</p>
         <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
-          Shown twice inside the History feed: after <strong>Yesterday</strong>, and
-          after <strong>Last week</strong>. Multi-format, display banner or outstream
-          video all work here — an outstream is a good fit, because the reader is
-          scrolling past it by definition. Gated by the <strong>ExoClick</strong> switch.
+          Inside the History feed, where <strong>Yesterday</strong> gives way to the
+          week. Multi-format, display banner or outstream video all work here — an
+          outstream is a good fit, because the reader is scrolling past it by
+          definition. Needs its <strong>own zone id</strong>, different from every
+          other field on this page. Gated by the <strong>ExoClick</strong> switch.
         </p>
         <SnippetField
           value={state.exoclickHistoryFeedSnippet ?? ""}
           busy={busy}
           placeholder={MULTI_FORMAT_PLACEHOLDER}
           onChange={(next) => setText("exoclickHistoryFeedSnippet", next)}
+          onSave={() => void persist(state)}
+        />
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">History in-feed — after Last week</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          The second in-feed position, where <strong>Last week</strong> gives way to
+          Earlier. A <strong>separate ExoClick zone</strong> from the one above:
+          the same zone in both serves nothing in either. Left empty, this
+          position simply shows no ad. Gated by the <strong>ExoClick</strong> switch.
+        </p>
+        <SnippetField
+          value={state.exoclickHistoryFeedLastWeekSnippet ?? ""}
+          busy={busy}
+          placeholder={MULTI_FORMAT_PLACEHOLDER}
+          onChange={(next) => setText("exoclickHistoryFeedLastWeekSnippet", next)}
           onSave={() => void persist(state)}
         />
       </div>
@@ -707,9 +735,46 @@ export function MonetizationSettings({
           ) : state.exoclickInterstitialSnippet?.trim() ? (
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"><AlertTriangle className="h-3.5 w-3.5" /> Could not read a zone id and an eas… class — it will not show.</span>
           ) : (
-            <span className="text-[11px] text-muted-foreground">Off — the VAST interstitial is used instead.</span>
+            <span className="text-[11px] text-muted-foreground">Off — the multi-format fallback below runs on its own, or the VAST interstitial.</span>
           )}
         </div>
+      </div>
+
+      {/*
+        🔴 THE FALLBACK IS A SECOND PLACEMENT, SO IT IS A SECOND SLOT HERE
+        (owner, 2026-09-01: "put a slot in the admin dashboard for main exoclick
+        interclick and fall back multi format used as interstilla").
+
+        It used to borrow the multi-format tag from the History block, which is
+        one zone in two placements the moment this overlay opens on /history —
+        and because the fallback builds its `<ins>` by hand rather than through
+        `ExoClickSticky`, the runtime zone-claim never saw that clash. The
+        duplicate warning above is the only thing that can catch it, which is
+        why the field is listed there.
+      */}
+      <div className="mt-2.5 rounded-2xl bg-secondary/40 p-4 ring-1 ring-inset ring-border/60">
+        <p className="text-sm font-semibold">Interstitial fallback — multi-format</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Shown on <strong>our own</strong> full-screen overlay — the backdrop, the
+          countdown and the close button are ours, so a unit that only knows how to
+          sit in a page can still take an interstitial moment. It runs when the
+          fullpage zone above does not appear within six seconds, and also when that
+          field is <strong>empty</strong>, so this can be the only ExoClick
+          interstitial you set. Paste a <strong>Multi-format</strong> zone (class ending
+          <code className="mx-1 rounded bg-background px-1 py-0.5 font-mono text-[10px]">38</code>)
+          — it renders without waiting for a scroll, which an interstitial moment needs.
+          Give it a <strong>separate zone</strong> from every other field on this page:
+          this overlay can open on the History page, and one zone in two places on one
+          page serves nothing in either. Empty means the VAST interstitial takes the
+          moment instead.
+        </p>
+        <SnippetField
+          value={state.exoclickInterstitialFallbackSnippet ?? ""}
+          busy={busy}
+          placeholder={MULTI_FORMAT_PLACEHOLDER}
+          onChange={(next) => setText("exoclickInterstitialFallbackSnippet", next)}
+          onSave={() => void persist(state)}
+        />
       </div>
 
       {/*

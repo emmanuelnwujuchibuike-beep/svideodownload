@@ -430,11 +430,18 @@ export interface MonetizationSettings {
    * fills. Only the zone type differs, and that is the operator's choice, not
    * something this field should constrain.
    *
-   * ONE field serving BOTH in-feed positions (after Yesterday, and in Last
-   * week). Their loader is explicitly happy with several placements of one zone
-   * — its own log reports "Zones Batch Size: 10, Multi-zones Batch Size: 3" —
-   * and a second admin field for what is the same in-feed placement, twice, is
-   * a second thing to keep in step for no gain.
+   * 🔴 THIS FIELD IS THE FIRST IN-FEED POSITION ONLY — after Yesterday. The
+   * second one, after Last week, has its OWN field and its own zone:
+   * `exoclickHistoryFeedLastWeekSnippet`.
+   *
+   * It used to feed both, on the reasoning that their loader reports "Zones
+   * Batch Size: 10, Multi-zones Batch Size: 3" and is therefore happy with
+   * several placements of one zone. It is not. That batch will not serve one
+   * zone TWICE — it answers `{"zones":[null,null]}` and BOTH copies come back
+   * empty — so one field here meant the after-Last-week slot could never show,
+   * and (before the zone claim landed) took the after-Yesterday one down with
+   * it. One placement, one field, one zone id. See the claim note in
+   * features/monetization/exoclick-sticky.tsx.
    *
    * ⚠️ An outstream tag here only opens once the reader scrolls it into view
    * (ExoClick's own viewability rule). In a FEED that is close to ideal — the
@@ -442,6 +449,26 @@ export interface MonetizationSettings {
    * above-the-grid slot, where it made the unit invisible on landing.
    */
   exoclickHistoryFeedSnippet: string;
+  /**
+   * ExoClick tag for the SECOND in-feed slot on the History page — the one
+   * after the **Last week** period (owner, 2026-09-01: "exoclick requires each
+   * link, each page").
+   *
+   * 🔴 ITS OWN FIELD BECAUSE IT NEEDS ITS OWN ZONE ID, NOT FOR CONFIGURABILITY.
+   * /history renders two in-feed placements, and ExoClick will not serve one
+   * zone twice in the single batched request their loader makes per page. Both
+   * placements reading `exoclickHistoryFeedSnippet` therefore produced one
+   * working ad and one that could never fill, whatever was pasted.
+   *
+   * ⚠️ DELIBERATELY NO FALLBACK to the field above. Every other ExoClick pair
+   * in this file falls back to its sibling when empty, because there the two
+   * candidates compete for ONE placement and a fallback cannot duplicate
+   * anything. Here they are two placements on one page, so a fallback would put
+   * the same zone in both and blank them both — reinstating the exact bug this
+   * field exists to fix. Empty means this slot renders nothing, which is the
+   * correct and visible outcome.
+   */
+  exoclickHistoryFeedLastWeekSnippet: string;
   /**
    * ExoClick tag for the LANDING page, between the feature cards and the
    * storage card (owner, 2026-09-01: "put a multi format slot in the landing
@@ -469,6 +496,28 @@ export interface MonetizationSettings {
    * be running — the two are different products from the same network.
    */
   exoclickInterstitialSnippet: string;
+  /**
+   * The MULTI-FORMAT tag used as the interstitial FALLBACK — the unit shown on
+   * OUR own overlay when the fullpage zone above is armed but their script does
+   * not put it on screen (owner, 2026-09-01: "can i use multiformat is fallback
+   * interstilla so when it doesnt show the multi format shows as interstilla",
+   * and then: "put a slot in the admin dashboard for main exoclick interclick
+   * and fall back multi format used as interstilla").
+   *
+   * 🔴 ITS OWN FIELD AND ITS OWN ZONE. This used to read
+   * `exoclickMultiFormatSnippet` — the tag that also serves above the History
+   * grid — which is one zone in two placements the moment the fallback opens on
+   * /history with that switch on. ExoClick will not serve a zone twice in the
+   * single batched request it makes per page, so BOTH would have come back
+   * empty. Worse, the fallback builds its `<ins>` directly instead of through
+   * `ExoClickSticky`, so the zone-claim that stands duplicates down elsewhere
+   * never saw it: the duplication would have been silent.
+   *
+   * ⚠️ NO FALLBACK to the multi-format field, for exactly that reason. Empty
+   * means no ExoClick fallback and the VAST interstitial takes the moment,
+   * which is the behaviour that existed before this fallback was added.
+   */
+  exoclickInterstitialFallbackSnippet: string;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -562,8 +611,10 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickMultiFormatSnippet: "",
   exoclickHistoryUseMultiFormat: true,
   exoclickHistoryFeedSnippet: "",
+  exoclickHistoryFeedLastWeekSnippet: "",
   exoclickLandingSnippet: "",
   exoclickInterstitialSnippet: "",
+  exoclickInterstitialFallbackSnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,

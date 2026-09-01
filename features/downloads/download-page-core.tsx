@@ -196,7 +196,7 @@ export function DownloadPageCore({
             collapse to nothing when unconfigured, which is their default.
           */}
           <LazyAdSurface zone="landing_under_wallpaper" />
-          <HilltopSlot slot="landing" />
+          <HilltopSlot slot="landing" lazy />
           <LazyExoClickSlot slot="landing" />
         </div>
       ) : null}

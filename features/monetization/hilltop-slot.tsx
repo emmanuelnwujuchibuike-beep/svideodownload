@@ -61,6 +61,73 @@ const mounted = new Set<string>();
  * narrates itself in the console on a visitor's phone is a performance cost and
  * an information leak, and this one runs on every route change.
  */
+/**
+ * Window flags their loader sets to mean "this zone has already rendered".
+ *
+ * 🔴 THE REASON AN AD SHOWED ONCE AND THEN NEVER AGAIN (owner, 2026-09-01: "it
+ * still show once, it doesnt show in history page if it first showed in landing
+ * page, and always needs in a refresh"). Straight out of their loader:
+ *
+ *     init: function (e) {
+ *       if (this.checkOther(e.globalNameLoaded)) return;
+ *       this.setGlobalVar(e.globalNameLoaded);
+ *       …
+ *     }
+ *     checkOther:   function (e) { return window[e] }
+ *     setGlobalVar: function (e) { window[e] = true }
+ *
+ * `init` returns immediately when the flag is set, and the flag lives on
+ * `window`. That is a once-per-PAGE-LOAD guard, and their assumption is a
+ * document that is thrown away on every navigation. In an SPA the document is
+ * never thrown away, so the first render of a zone is the only one: navigating
+ * to another page, or mounting a second slot on the same zone, hits the guard
+ * and returns. A hard refresh clears `window`, which is exactly why a refresh
+ * "fixed" it.
+ *
+ * So the flags this integration caused are cleared before each injection. That
+ * is not subverting their rule — it restores the semantics their rule was
+ * written for. Once per page VIEW is what they mean, and in an SPA a route
+ * change is a page view.
+ *
+ * ⚠️ Only keys OBSERVED APPEARING around one of our own script loads are ever
+ * touched, and only when their value is boolean `true` (the shape
+ * `setGlobalVar` writes). Nothing pre-existing is deleted, so no other
+ * network's globals — and none of the app's — can be caught by this.
+ */
+const guardKeys = new Set<string>();
+
+/** Snapshot of `window`'s own keys, taken immediately before a script runs. */
+function windowKeys(): Set<string> {
+  try {
+    return new Set(Object.keys(window));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Record any boolean-true key that appeared while our script was loading. */
+function captureGuards(before: Set<string>): void {
+  try {
+    for (const k of Object.keys(window)) {
+      if (before.has(k)) continue;
+      if ((window as unknown as Record<string, unknown>)[k] === true) guardKeys.add(k);
+    }
+  } catch {
+    /* A cross-origin or exotic key must never break the ad it describes. */
+  }
+}
+
+/** Clear the recorded flags so their `init` will run again. */
+function releaseGuards(): void {
+  for (const k of guardKeys) {
+    try {
+      delete (window as unknown as Record<string, unknown>)[k];
+    } catch {
+      /* Non-configurable — nothing to do, and nothing to break. */
+    }
+  }
+}
+
 function log(event: string, id: string): void {
   if (process.env.NODE_ENV === "production") return;
   // eslint-disable-next-line no-console
@@ -70,6 +137,7 @@ function log(event: string, id: string): void {
 export function HilltopSlot({
   slot,
   instanceKey,
+  lazy = false,
   className,
 }: {
   /** Which position this is, for the admin activity feed. */
@@ -90,6 +158,21 @@ export function HilltopSlot({
    * containers and re-request every ad below.
    */
   instanceKey?: string;
+  /**
+   * Hold the script until the slot is within a screen of the viewport.
+   *
+   * 🔴 ON FOR ANY SLOT ABOVE OR NEAR THE FOLD OF A BUDGETED PAGE (owner,
+   * 2026-09-01: "seems like all this is breaking the lcp and landing
+   * performance"). Fair, and it was mine: the landing unit mounts inside the
+   * hero card stack, so its third-party script was being fetched and executed
+   * while the browser was still laying out the page it is judged on. The 1.6s
+   * budget on `/` is the owner's first rule.
+   *
+   * Off by default so a slot deep in a page — history, the in-feed units, which
+   * are already inside their own lazy wrappers — pays nothing for an observer
+   * it does not need.
+   */
+  lazy?: boolean;
   className?: string;
 }) {
   const { showAds, ready } = useShowAds();
@@ -157,11 +240,37 @@ export function HilltopSlot({
    * happened to render first.
    */
   const domId = instanceKey ? `hilltop-${slot}-${instanceKey}` : `hilltop-${slot}`;
+
+  /*
+    One-way latch: false → true, never back. Scrolling away and returning must
+    not tear the unit down and re-ask — the same rule every other lazy slot in
+    this codebase follows.
+  */
+  const [near, setNear] = useState(!lazy);
+  useEffect(() => {
+    if (near) return;
+    const el = host.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return;
+    }
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        setNear(true);
+        obs.disconnect();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [near]);
   const viewportAllowed = isMobile ? config.mobile : config.desktop;
   const placementOn = isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed;
 
   useEffect(() => {
-    if (!ready || !showAds || !tag || !placementOn) return;
+    if (!ready || !showAds || !tag || !placementOn || !near) return;
     const el = host.current;
     if (!el) return;
 
@@ -251,6 +360,12 @@ export function HilltopSlot({
       stops mattering entirely.
     */
     el.id = domId;
+    /*
+      Clear the once-per-page flags BEFORE injecting, so their `init` proceeds
+      rather than returning at its first line. See `guardKeys`.
+    */
+    releaseGuards();
+    const seen = windowKeys();
     const script = document.createElement("script");
     script.src = tag.src;
     script.async = true;
@@ -261,6 +376,12 @@ export function HilltopSlot({
       makes the placement deterministic.
     */
     (script as HTMLScriptElement & { settings?: unknown }).settings = { appendTo: `#${domId}` };
+    /*
+      Learn which flag this zone sets, so the next mount can clear it. `load`
+      fires after their `init` has run, which is when the flag exists.
+    */
+    script.addEventListener("load", () => captureGuards(seen), { once: true });
+    script.addEventListener("error", () => log("slot initialization failed", domId), { once: true });
     el.appendChild(script);
     // Per-slot initialisation state, readable from the DOM as the brief asks.
     el.setAttribute("data-ad-initialized", "true");
@@ -300,7 +421,7 @@ export function HilltopSlot({
       el.replaceChildren();
       log("slot torn down", domId);
     };
-  }, [ready, showAds, tag, slot, domId, placementOn, config.timeoutMs, pathname, attempt]);
+  }, [ready, showAds, tag, slot, domId, placementOn, near, config.timeoutMs, pathname, attempt]);
 
   // Premium visitors, an unresolved plan, or nothing configured: no element at
   // all, so the slot costs an unconfigured page nothing.

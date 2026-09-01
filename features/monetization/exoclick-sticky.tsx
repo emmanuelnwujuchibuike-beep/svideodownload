@@ -252,6 +252,7 @@ export type ExoClickInsSlot =
   | "sticky"
   | "history"
   | "historyfeed"
+  | "historyfallback"
   | "historyfeedlastweek"
   | "landing"
   | "bottomnav";
@@ -484,7 +485,9 @@ export function ExoClickSticky({
         const bySlot =
           slot === "history"
             ? d.exoclickHistory
-            : slot === "historyfeed"
+            : slot === "historyfallback"
+              ? d.exoclickHistoryFallback
+              : slot === "historyfeed"
               ? d.exoclickHistoryFeed
               : slot === "historyfeedlastweek"
                 ? d.exoclickHistoryFeedLastWeek

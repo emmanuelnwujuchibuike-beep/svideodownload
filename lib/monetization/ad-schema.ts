@@ -57,6 +57,11 @@ export const AD_ZONES = [
   "history_story_ad",
   // Rewarded gate on a wallpaper download (2026-08-30).
   "wallpaper_reward",
+  /* Between the History time periods, and under the landing wallpaper button
+     (2026-09-01). Any network rather than an ExoClick snippet -- see the note
+     on both entries in ZONE_META. Appended last, same reason as above. */
+  "history_between_periods",
+  "landing_under_wallpaper",
 ] as const;
 
 export type AdZoneId = (typeof AD_ZONES)[number];
@@ -613,6 +618,24 @@ export const AD_ZONE_META: Record<AdZoneId, AdZoneMeta> = {
     // Above the fold on a page people open deliberately, so the zone lookup
     // is warmed with the rest of the page rather than on mount.
     prefetch: true,
+  },
+  history_between_periods: {
+    label: "History — between the time periods",
+    description:
+      "In the History feed, where Yesterday gives way to the week and where Last week gives way to Earlier. Takes any network — an AdSense unit, an Adsterra banner iframe, a social-link or a native row — because it is an ordinary ad zone, not an ExoClick snippet slot. Renders at both boundaries, exactly as the landing section-break zone renders at several. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+    // Below the fold on both surfaces, so the zone resolves on mount rather
+    // than being warmed with the page.
+    prefetch: false,
+  },
+  landing_under_wallpaper: {
+    label: "Landing — under the wallpaper button",
+    description:
+      "On the landing page, directly below the Explore Features and Wallpaper cards and above the Cloud storage card. Takes any network — AdSense, an Adsterra banner iframe, a social-link or a native row. Lazily mounted and code-split, so it stays off the landing page's first-load budget. Collapses when empty.",
+    persistent: true,
+    supportsSkip: false,
+    prefetch: false,
   },
   history_story_ad: {
     label: "History — story ad between media",

@@ -39,6 +39,7 @@ const bannerSchema = z.object({
     "sticky",
     "history",
     "historyfeed",
+    "historyfallback",
     "historyfeedlastweek",
     "landing",
     "bottomnav",

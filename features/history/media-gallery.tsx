@@ -21,6 +21,7 @@ import {
 
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/exoclick-sticky";
+import { HistoryGridAd } from "./history-grid-ad";
 import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { SmartThumb } from "@/components/ui/smart-thumb";
@@ -410,7 +411,7 @@ export function MediaGallery({
         container above: if that padding changes, this has to change with it.
       */}
       <div className="-mx-2 mb-4 px-1.5 sm:-mx-4">
-        <ExoClickSticky slot="history" />
+        <HistoryGridAd />
       </div>
       {/*
         🔴 NO VAST SLOT HERE (owner, 2026-08-30: "the history above grid
@@ -520,6 +521,27 @@ export function MediaGallery({
                 const adSlot = AD_AFTER_GROUP.get(g.key);
                 return adSlot ? (
                   <div className="-mx-2 px-1.5 sm:-mx-4">
+                    {/*
+                      🔴 ANY NETWORK HERE, NOT ONLY EXOCLICK (owner, 2026-09-01:
+                      "make the in feed slot, history period separator ... to be
+                      able to use adsense and adsterra banner iframe and social
+                      link and native ad").
+
+                      `history_between_periods` is an ordinary AD ZONE, so it is
+                      configured as a ROW in the ads table and can carry an
+                      AdSense unit, an Adsterra banner iframe, a social-link or a
+                      native row — all the formats the registry already supports.
+                      One zone at both boundaries is fine for these networks and
+                      is what `landing_section_break` already does eight times on
+                      the landing page. The ExoClick one-zone-per-request rule is
+                      an ExoClick rule, and it applies to the snippet slot below,
+                      which keeps its own per-boundary field.
+
+                      Both render: an operator may run one, the other, or
+                      neither, and each collapses to nothing when it has no ad.
+                      Filling both is a deliberate choice, not an accident.
+                    */}
+                    <AdSurface zone="history_between_periods" maxWidth="max-w-3xl" />
                     <ExoClickSticky slot={adSlot} />
                   </div>
                 ) : null;

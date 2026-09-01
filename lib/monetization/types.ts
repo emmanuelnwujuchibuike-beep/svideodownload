@@ -102,6 +102,23 @@ export type AdZone =
     ⚠️ Same rule as every note in this union: no semicolon and no
     double-quoted lowercase word inside a comment here.
   */
+  /*
+    Between the History time periods (2026-09-01) — an ordinary ad zone rather
+    than an ExoClick snippet slot, so it takes AdSense, an Adsterra banner
+    iframe, a social-link row or a native unit.
+
+    ⚠️ Same rule as every note in this union: no semicolon and no
+    double-quoted lowercase word inside a comment here.
+  */
+  | "history_between_periods"
+  /*
+    Under the landing wallpaper button (2026-09-01) — same reasoning, on the
+    landing page, below the Explore and Wallpaper cards.
+
+    ⚠️ Same rule as every note in this union: no semicolon and no
+    double-quoted lowercase word inside a comment here.
+  */
+  | "landing_under_wallpaper"
   | "history_above_grid"
   /*
     A full-screen story ad between history media (2026-08-30) — vertical,

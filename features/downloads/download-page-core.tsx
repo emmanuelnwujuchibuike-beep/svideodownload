@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
+import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 import { DownloadBox } from "@/features/downloads/download-box";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
@@ -181,6 +182,19 @@ export function DownloadPageCore({
       */}
       {multiFormatSlot ? (
         <div className="mt-3">
+          {/*
+            🔴 ANY NETWORK HERE TOO (owner, 2026-09-01: "... and below the
+            wallpaper button to be able to use adsense and adsterra banner
+            iframe and social link and native ad").
+
+            `landing_under_wallpaper` is an ordinary AD ZONE — a row in the ads
+            table — so this position takes AdSense, an Adsterra banner iframe, a
+            social-link or a native unit without needing an ExoClick snippet.
+            `LazyAdSurface`, not `AdSurface`: this is the 1.6s route, and the
+            zone must not be requested until the reader is near it. Both units
+            collapse to nothing when unconfigured, which is their default.
+          */}
+          <LazyAdSurface zone="landing_under_wallpaper" />
           <LazyExoClickSlot slot="landing" />
         </div>
       ) : null}

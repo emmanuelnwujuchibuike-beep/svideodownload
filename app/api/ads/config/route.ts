@@ -73,6 +73,33 @@ export async function GET() {
         return settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
       })(),
       /*
+        🔴 THE LOSER OF THE SWITCH, KEPT AS A SEQUENTIAL FALLBACK (owner,
+        2026-09-01: "make the history above the grid to be able to use multi
+        format when video outstream is not avalaible, when video outstream is
+        available it should win and show, when it cap and want refresh the multi
+        format should show, both shouldnt show at once cause now i dont see
+        any").
+
+        `exoclickHistory` above is still the ONE tag that slot starts with. This
+        is the other one, and the client only asks for it after the first has
+        had its chance and painted nothing — see `HistoryGridAd` in
+        features/history/history-grid-ad.tsx. Sequential, never simultaneous:
+        one `<ins>` is mounted at a time, so the two can never both show and can
+        never collide in one batched request.
+
+        Null when both sides resolve to the SAME zone id. Falling back from a
+        zone to itself is a second ask for something that just declined, and a
+        capped zone answers a re-ask exactly as it answered the first.
+      */
+      exoclickHistoryFallback: (() => {
+        const multi = parseExoClickSticky(settings.exoclickMultiFormatSnippet);
+        const outstream = parseExoClickSticky(settings.exoclickHistorySnippet);
+        const primary = settings.exoclickHistoryUseMultiFormat ? (multi ?? outstream) : (outstream ?? multi);
+        const other = settings.exoclickHistoryUseMultiFormat ? outstream : multi;
+        if (!other || !primary) return null;
+        return other.zoneId === primary.zoneId ? null : other;
+      })(),
+      /*
         The multi-format unit shown on our own overlay when the fullpage
         interstitial does not appear (owner, 2026-09-01: "put a slot in the admin
         dashboard for main exoclick interclick and fall back multi format used as

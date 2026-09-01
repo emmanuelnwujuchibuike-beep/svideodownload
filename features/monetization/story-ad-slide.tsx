@@ -72,7 +72,24 @@ export function StoryAdSlide({
         dismissible={false}
         fullBleed
         onResolved={onResolved}
-        className="pointer-events-none flex h-full w-full items-center justify-center"
+        /*
+          🔴 THE CREATIVE IS CLICKABLE (owner, 2026-09-01: "the video ad in
+          history view doesnt support click because of the implemented right
+          click for nexting ... users should be able to click").
+
+          This was `pointer-events-none`, which made the ad unclickable
+          everywhere, and the centre tap zone that was supposed to compensate
+          carried a `data-story-ad-click` attribute that NOTHING has ever read
+          and no `onClick` at all. So "centre tap opens the advertiser" was
+          documented in the zone metadata, in the comment below, and implemented
+          nowhere: every tap either skipped the ad or did nothing.
+
+          It cannot be fixed by handling the centre tap ourselves either — the
+          creative is usually a cross-origin iframe, and a click cannot be
+          synthesised into one. The tap has to reach it natively, so the layer
+          above has to have a HOLE in it rather than a button.
+        */
+        className="flex h-full w-full items-center justify-center"
       />
 
       {/*
@@ -91,13 +108,14 @@ export function StoryAdSlide({
           Centre — the advertiser. Narrower than the side zones on purpose: a
           mis-tap should cost the visitor an ad they were skipping anyway, not
           an unexpected trip to a third-party site.
+
+          🔴 A HOLE, NOT A BUTTON. `pointer-events-none` on this one element is
+          what lets a centre tap fall THROUGH the navigation layer and land on
+          the creative underneath, which is the only way a cross-origin ad
+          iframe can ever be clicked. It was a `<button>` with no handler, which
+          is the most effective way to swallow a tap that there is.
         */}
-        <button
-          type="button"
-          aria-label="Visit advertiser"
-          data-story-ad-click
-          className="h-full flex-[0_0_30%] cursor-pointer bg-transparent"
-        />
+        <div aria-hidden className="pointer-events-none h-full flex-[0_0_30%]" />
         <button
           type="button"
           aria-label="Next"

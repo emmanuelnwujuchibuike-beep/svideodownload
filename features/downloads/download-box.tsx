@@ -61,6 +61,34 @@ const DownloadCompleteAd = dynamic(
   { ssr: false },
 );
 const FetchedAd = dynamic(() => import("@/features/monetization/fetched-ad").then((m) => m.FetchedAd), { ssr: false });
+/**
+ * The ExoClick STICKY banner — the zone that demonstrably renders.
+ *
+ * 🔴 IT WAS ONLY EVER IN THE OTHER RESULT CARD (owner, 2026-08-30 "sticky banner
+ * is not showing", and every "no ads are showing" since).
+ *
+ * There are TWO result-card implementations. `features/downloader/downloader.tsx`
+ * has carried `<ExoClickSticky />` since 2026-08-30 — and this file is the one
+ * the landing page and `/downloads` actually render. Every fix to the sticky
+ * placement therefore landed on a surface the owner never sees.
+ *
+ * Measured on production: the fetch succeeds, the card paints, and the only
+ * `ins[data-zoneid]` in the whole document is the bottom-nav zone. There is no
+ * `div.mb-3` anywhere, which is the wrapper the other file puts the unit in — so
+ * the unit was not hidden, or unfilled, or deleted. It was never mounted.
+ *
+ * That matters because zone 6016708 is the one unit proven to PAINT: the
+ * creative dump caught it rendering a real `IMG 300x250` at `position: fixed;
+ * z-index: 999999`, while the bottom-nav zone answers `{"zones":[null]}`, the
+ * outstream holds itself shut behind its own `exo_wrapper_show` class, and the
+ * fullpage interstitial arms but never displays.
+ *
+ * Code-split like every other ad here, so it stays off the landing's first load.
+ */
+const ExoClickSticky = dynamic(
+  () => import("@/features/monetization/exoclick-sticky").then((m) => m.ExoClickSticky),
+  { ssr: false },
+);
 const ResultOffer = dynamic(() => import("@/features/monetization/result-offer").then((m) => m.ResultOffer), { ssr: false });
 
 // Renders only after a download completes, and pulls in the Learning Academy
@@ -449,6 +477,18 @@ export function DownloadBox({
         /* `scroll-mt-24` clears the sticky app bar — without it `block: "start"`
            parks the top of the result underneath it. */
         <div ref={resultRef} className="scroll-mt-24 text-foreground">
+          {/*
+            The ExoClick sticky banner, matching features/downloader/downloader.tsx
+            — which is where it has been living alone, on a surface this one
+            replaced. See the note on the import above.
+
+            No containing box of its own: the unit is `position: fixed` and pins
+            itself to the viewport. Wrapping it in a zero-height box is what made
+            it invisible on the other surface in the first place (2026-08-30),
+            and asserting a size here is the mistake this integration keeps
+            repeating.
+          */}
+          <ExoClickSticky />
           {/* The download-result ad, above the result — same placement as the
               landing flow. Renders nothing until the zone is filled. */}
           <FetchedAd key={`ad-${metadata.id}`} />

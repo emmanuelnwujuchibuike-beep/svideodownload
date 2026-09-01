@@ -719,6 +719,40 @@ describe("Ad slots — no decorated empty boxes", () => {
     ).toBe(true);
   });
 
+  /**
+   * 🔴 TWO RESULT CARDS, ONE OF THEM THE ONE THE OWNER ACTUALLY USES.
+   *
+   * `features/downloader/downloader.tsx` and `features/downloads/download-box.tsx`
+   * both render a fetch RESULT (FetchedAd + PreviewCard + ResultOffer). The
+   * sticky ExoClick unit was added to the first on 2026-08-30 and the landing
+   * page and /downloads render the SECOND — so every fix to that placement
+   * landed where the owner would never see it, through weeks of "the sticky
+   * banner is not showing" and "no ads are showing".
+   *
+   * Measured on production: the fetch succeeds, the card paints, and the only
+   * `ins[data-zoneid]` in the document is the bottom-nav zone. Not hidden, not
+   * unfilled, not deleted — never mounted.
+   *
+   * Zone 6016708 is also the ONLY unit proven to paint (a real IMG 300x250 at
+   * `position: fixed`), so the surface that omitted it was the surface with no
+   * working ad on it at all.
+   */
+  it("mounts the ExoClick sticky on BOTH result-card surfaces", () => {
+    const surfaces = [
+      "features/downloader/downloader.tsx",
+      "features/downloads/download-box.tsx",
+    ];
+    const missing = surfaces.filter((f) => {
+      const src = stripComments(readFileSync(path.join(ROOT, f), "utf8"));
+      // Rendered, not merely imported — an unused import is the drift itself.
+      return !/<ExoClickSticky\s*\/>/.test(src);
+    });
+    expect(
+      missing,
+      `These render a download RESULT but mount no ExoClick sticky unit, so the placement exists on one surface and not the other:\n  ${missing.join("\n  ")}`,
+    ).toHaveLength(0);
+  });
+
   it("gives the ExoClick host a width, and still never asserts a height", () => {
     const src = readFileSync(path.join(ROOT, "features/monetization/exoclick-sticky.tsx"), "utf8");
     const code = stripComments(src);

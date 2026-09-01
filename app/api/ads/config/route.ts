@@ -5,6 +5,7 @@ import {
   getRewardNetworks,
 } from "@/lib/monetization/reward-networks-store";
 import { parseExoClickSticky } from "@/lib/monetization/exoclick-sticky";
+import { parseHilltopTag } from "@/lib/monetization/hilltop";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
 
 export const runtime = "nodejs";
@@ -133,6 +134,19 @@ export async function GET() {
       exoclickLanding: parseExoClickSticky(settings.exoclickLandingSnippet),
       exoclickInterstitial: parseExoClickSticky(settings.exoclickInterstitialSnippet),
       exoclickBottomNav: parseExoClickSticky(settings.exoclickBottomNavSnippet),
+      /*
+        HILLTOPADS, parsed to a bare `https` loader URL and never as markup —
+        the same rule as every other pasted snippet on this endpoint.
+
+        `hilltopBanner` is a PLACED unit and may appear in several positions:
+        their loader inserts the creative where its own script tag sits, so each
+        placement is its own request. There is no batch and no placeholder, so
+        none of the one-zone-per-placement machinery above applies to it.
+
+        `hilltopVideoSlider` places ITSELF and is loaded once per page.
+      */
+      hilltopBanner: parseHilltopTag(settings.hilltopBannerSnippet),
+      hilltopVideoSlider: parseHilltopTag(settings.hilltopVideoSliderSnippet),
       /*
         Which network pays for which reward moment (owner, 2026-08-25), plus the
         one runtime fact the client cannot work out for itself.

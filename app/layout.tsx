@@ -13,6 +13,7 @@ import { A11yBootScript, A11yColorFilters } from "@/components/a11y/a11y-boot-sc
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
 import { AdSenseSiteScript, VerificationTags } from "@/features/monetization/adsense-site-script";
 import { GoogleTag } from "@/features/monetization/google-tag";
+import { HilltopVideoSlider } from "@/features/monetization/hilltop-video-slider";
 import { MonetagScript } from "@/features/monetization/monetag-script";
 import { DEFAULT_LOCALE, getLocale, isRtl } from "@/lib/i18n/locales";
 import { jsonLd } from "@/lib/seo/json-ld";
@@ -411,6 +412,10 @@ export default function RootLayout({
             ad-free without un-static-ing the marketing pages. Lives in <body>
             because it renders no server markup — it injects into <head> itself. */}
         <MonetagScript />
+        {/* HilltopAds video slider — site-wide and self-placing, like the Monetag
+            site tag above. Renders nothing until an operator pastes its snippet,
+            and never for a Pro/Business visitor. */}
+        <HilltopVideoSlider />
         {/* Branded boot loader baked into the first HTML so cold entries never
             flash an empty page; it fades itself out once the document is ready. */}
         <BootSplash />

@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
+import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
 import { DownloadBox } from "@/features/downloads/download-box";
@@ -195,6 +196,7 @@ export function DownloadPageCore({
             collapse to nothing when unconfigured, which is their default.
           */}
           <LazyAdSurface zone="landing_under_wallpaper" />
+          <HilltopSlot slot="landing" />
           <LazyExoClickSlot slot="landing" />
         </div>
       ) : null}

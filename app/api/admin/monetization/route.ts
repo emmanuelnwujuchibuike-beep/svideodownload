@@ -126,6 +126,8 @@ const schema = z.object({
   exoclickLandingSnippet: z.string().max(4000).default(""),
   exoclickInterstitialSnippet: z.string().max(4000).default(""),
   exoclickInterstitialFallbackSnippet: z.string().max(4000).default(""),
+  hilltopBannerSnippet: z.string().max(4000).default(""),
+  hilltopVideoSliderSnippet: z.string().max(4000).default(""),
   exoclickSharedZoneId: z
     .string()
     .trim()

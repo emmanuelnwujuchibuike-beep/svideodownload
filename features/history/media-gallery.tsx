@@ -21,6 +21,7 @@ import {
 
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/exoclick-sticky";
+import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { HistoryGridAd } from "./history-grid-ad";
 import { Fragment, type ComponentType, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
@@ -411,6 +412,16 @@ export function MediaGallery({
         container above: if that padding changes, this has to change with it.
       */}
       <div className="-mx-2 mb-4 px-1.5 sm:-mx-4">
+        {/*
+          🔴 HILLTOP SITS BESIDE EXOCLICK, IT DOES NOT REPLACE IT (owner,
+          2026-09-01: "set up the ad to be used in those places where exoclick
+          are used"). Both render, and each collapses to nothing when its own
+          field is empty — so an operator switches networks by clearing one and
+          filling the other, with no deploy and no window where the page has no
+          ad at all. Unlike two ExoClick units, these cannot cost each other a
+          fill: Hilltop makes its own request where its script sits.
+        */}
+        <HilltopSlot slot="history" />
         <HistoryGridAd />
       </div>
       {/*
@@ -542,6 +553,7 @@ export function MediaGallery({
                       Filling both is a deliberate choice, not an accident.
                     */}
                     <AdSurface zone="history_between_periods" maxWidth="max-w-3xl" />
+                    <HilltopSlot slot="historyfeed" />
                     <ExoClickSticky slot={adSlot} />
                   </div>
                 ) : null;

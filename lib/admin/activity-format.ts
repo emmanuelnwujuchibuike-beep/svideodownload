@@ -52,6 +52,9 @@ export const NOTABLE = new Set([
 const SLOT_LABELS: Record<string, string> = {
   bottomnav: "Bottom banner",
   history: "History banner",
+  hilltop_history: "Hilltop — History above grid",
+  hilltop_historyfeed: "Hilltop — History in-feed",
+  hilltop_landing: "Hilltop — Landing",
   historyfallback: "History above grid (fallback)",
   historyfeed: "History in-feed (Yesterday)",
   historyfeedlastweek: "History in-feed (Last week)",

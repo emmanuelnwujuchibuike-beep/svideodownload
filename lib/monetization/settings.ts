@@ -518,6 +518,34 @@ export interface MonetizationSettings {
    * which is the behaviour that existed before this fallback was added.
    */
   exoclickInterstitialFallbackSnippet: string;
+  /**
+   * HILLTOPADS — MultiTag Banner 300x250 (owner, 2026-09-01: "exoclick is
+   * complicated, we will switch to hiltop ad … set up the ad to be used in
+   * those places where exoclick are used").
+   *
+   * ONE field for every banner position, and that is safe here in a way it
+   * never was for ExoClick. Hilltop has no `<ins>` placeholder and no batched
+   * multi-zone request: its loader inserts the creative wherever its own script
+   * tag sits, so each placement is an independent request and the same tag may
+   * stand in several positions. The one-zone-per-placement rule that governs
+   * every ExoClick field above is an ExoClick rule about its batch — see
+   * lib/monetization/hilltop.ts.
+   *
+   * Their dashboard calls this "MultiTag: Banner 300x250 (support desktop and
+   * mobile)" — an amplified banner that serves several formats through one tag.
+   */
+  hilltopBannerSnippet: string;
+  /**
+   * HILLTOPADS — MultiTag Video Slider (owner, 2026-09-01: "we will also use
+   * hiltop vast video and video slider too").
+   *
+   * SITE-LEVEL, not a slot. The slider places ITSELF — it slides into a corner
+   * of the viewport on the network's own schedule — so it is loaded once per
+   * page like the Monetag site tag and the AdSense script, and it has no
+   * position for an operator to choose. Giving it a slot would be an admin
+   * control whose output renders nowhere.
+   */
+  hilltopVideoSliderSnippet: string;
   /** Full-screen VAST interstitial behaviour. See lib/monetization/vast-interstitial.ts. */
   vastInterstitial: VastInterstitialConfig;
   /**
@@ -615,6 +643,8 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   exoclickLandingSnippet: "",
   exoclickInterstitialSnippet: "",
   exoclickInterstitialFallbackSnippet: "",
+  hilltopBannerSnippet: "",
+  hilltopVideoSliderSnippet: "",
   vastInterstitial: DEFAULT_VAST_INTERSTITIAL,
   rewardDownloadHdEnabled: true,
   rewardDownloadBatchEnabled: true,

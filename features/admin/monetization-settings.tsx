@@ -36,6 +36,7 @@ import { MonetagUnitsEditor } from "./monetag-units-editor";
   typing this as `keyof` would let one of them be dropped into the toggle grid,
   where `!s[key]` would turn a publisher id into `false`.
 */
+const HILLTOP_PLACEHOLDER = String.raw`<script>(function(x){ … s.src = "//massivesalad.com/…"; … })({})</script>`;
 const MULTI_FORMAT_PLACEHOLDER = String.raw`<ins class="eas6a97888e38" data-zoneid="6017110"></ins>`;
 
 type ToggleKey = {
@@ -144,7 +145,9 @@ export function MonetizationSettings({
       | "exoclickHistoryFeedLastWeekSnippet"
       | "exoclickLandingSnippet"
       | "exoclickInterstitialSnippet"
-      | "exoclickInterstitialFallbackSnippet",
+      | "exoclickInterstitialFallbackSnippet"
+      | "hilltopBannerSnippet"
+      | "hilltopVideoSliderSnippet",
     value: string,
   ) => setState((s) => ({ ...s, [key]: value }));
 
@@ -529,6 +532,71 @@ export function MonetizationSettings({
         differs. The guidance says which behaves how; the choice is the
         operator's.
       */}
+      {/*
+        🔴 HILLTOPADS (owner, 2026-09-01: "exoclick is complicated, we will
+        switch to hiltop ad").
+
+        Placed ABOVE the ExoClick fields deliberately: this is the network being
+        moved to, and the panel should read in the order an operator now thinks.
+        The ExoClick fields stay below and keep working, so the switch is done by
+        filling these and clearing those — no deploy, and no window where the
+        page carries no ad at all.
+
+        No duplicate-zone warning here, and that is not an omission. Hilltop
+        inserts its creative where its own script tag sits, so every placement is
+        an independent request; the same tag in three positions is three ads. The
+        one-zone-per-placement rule below is an ExoClick rule about its single
+        batched multi-zone request.
+      */}
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">HilltopAds — MultiTag Banner 300x250</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Paste the <strong>MultiTag: Banner 300x250</strong> snippet from the Hilltop
+          dashboard. It runs in <strong>all three</strong> of the positions the ExoClick
+          units use — above the History grid, between the History time periods, and on
+          the landing page under the wallpaper button — and one tag in all three is
+          fine, because Hilltop makes a separate request at each. Each position
+          reports separately in the activity feed, so you can see which one earns.
+        </p>
+        <SnippetField
+          value={state.hilltopBannerSnippet ?? ""}
+          busy={busy}
+          placeholder={HILLTOP_PLACEHOLDER}
+          onChange={(next) => setText("hilltopBannerSnippet", next)}
+          onSave={() => void persist(state)}
+        />
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">HilltopAds — MultiTag Video Slider</p>
+        <p className="mt-0.5 mb-2 text-xs leading-relaxed text-muted-foreground">
+          Site-wide, on every page. The slider <strong>places itself</strong> — it
+          slides a small player into a corner of the viewport on Hilltop&apos;s own
+          schedule — so there is no position to choose and no slot to put it in.
+          Loaded once per page, and never for a Pro or Business visitor.
+        </p>
+        <SnippetField
+          value={state.hilltopVideoSliderSnippet ?? ""}
+          busy={busy}
+          placeholder={HILLTOP_PLACEHOLDER}
+          onChange={(next) => setText("hilltopVideoSliderSnippet", next)}
+          onSave={() => void persist(state)}
+        />
+      </div>
+
+      <div className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
+        <p className="text-sm font-semibold">HilltopAds — Video: VAST 3.0</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+          There is no field here on purpose. A VAST tag is a <strong>URL</strong>, and
+          this site already plays VAST through the <strong>ads table</strong> — add a
+          row, set its format to <strong>video</strong>, pick the zone you want it in,
+          and paste the Hilltop VAST 3.0 URL as the row&apos;s code. That way it reaches
+          the reward videos, the interstitial and the story ad through the same
+          machinery every other video zone uses, instead of a second pipeline that
+          would have to be kept in step with it.
+        </p>
+      </div>
+
       <DuplicateZoneWarning
         fields={[
           { label: "Sticky banner", snippet: state.exoclickStickySnippet ?? "" },

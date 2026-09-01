@@ -107,14 +107,41 @@ export function TopBannerAd() {
   const askLegacy = hasPrimary === false;
 
   /*
-    Tell the bottom NAV whether there is a real bar for it to step aside for.
-    Without this the nav hid on a pathname alone and left nothing behind it —
-    see `lib/dom/bottom-ad-bar.ts`.
+    Tell the bottom NAV that a bar is MOUNTED here — not that it is filled.
+
+    🔴 THIS IS A REVERT OF MY OWN REGRESSION (owner, 2026-08-31: "the bottom nav
+    and banner is destroyed and all", "the bottom nav and banner was working
+    perfectly before the adtxt and exoclick work").
+
+    At 3af5db6 — the state the owner is describing — the nav hid on the PATHNAME:
+
+        const scrollAwaySurface = pathname === "/" || pathname.startsWith("/downloads");
+        const hideForScroll = scrollAwaySurface && scrollDir === "down";
+
+    I replaced that with this bar's `filled`, reasoning that the nav must only
+    step aside for something real. The reasoning was fine; the signal was not.
+    `filled` needs an ad, and on production `/api/ads?zone=bottom_banner` returns
+    `{"ad":null}` and ExoClick's zone 6016480 returns `{"zones":[null]}` — so it
+    is false essentially always, and the nav simply stopped moving anywhere.
+
+    Note what that means about the old behaviour: at 3af5db6 the bar was
+    `visible = hasPrimary || hasLegacy`, which was ALSO false. So "working
+    perfectly" was never the two bars trading places — it was the nav hiding on
+    scroll, full stop. I broke a scroll-away nav while trying to perfect a
+    choreography that had never actually run.
+
+    So the nav follows MOUNTING, which restores exactly that behaviour, and
+    generalises it the way the owner asked ("other pages still doesnt hide the
+    bottom nav"): every surface `AppBottomAd` mounts a bar on gets it, and the
+    excluded surfaces unmount this component and publish `false`. No route names.
+
+    The bar's CHROME stays gated on `filled` — that is the separate rule that
+    kills the white line above the nav, and it is not in tension with this one.
   */
   useEffect(() => {
-    setBottomAdBarPresent(filled);
+    setBottomAdBarPresent(configured);
     return () => setBottomAdBarPresent(false);
-  }, [filled]);
+  }, [configured]);
 
   // Publish the bar's height so the marketing layout can RESERVE that much space at
   // the bottom and the page content clears the ad instead of hiding under it. 0 when

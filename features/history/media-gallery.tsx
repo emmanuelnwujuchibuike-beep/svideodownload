@@ -595,7 +595,7 @@ export function MediaGallery({
                       Filling both is a deliberate choice, not an accident.
                     */}
                     <AdSurface zone="history_between_periods" maxWidth="max-w-3xl" />
-                    <HilltopSlot slot="historyfeed" />
+                    <HilltopSlot slot="historyfeed" instanceKey={g.key} />
                     <ExoClickSticky slot={adSlot} />
                   </div>
                 ) : null;

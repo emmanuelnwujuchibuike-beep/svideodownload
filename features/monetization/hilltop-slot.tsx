@@ -54,12 +54,42 @@ import { useShowAds } from "./use-show-ads";
  */
 const mounted = new Set<string>();
 
+/**
+ * Development-only diagnostics, as the brief asks for.
+ *
+ * Compiled out of production by the `NODE_ENV` check — an ad integration that
+ * narrates itself in the console on a visitor's phone is a performance cost and
+ * an information leak, and this one runs on every route change.
+ */
+function log(event: string, id: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  // eslint-disable-next-line no-console
+  console.debug(`[AdManager] ${event}`, id);
+}
+
 export function HilltopSlot({
   slot,
+  instanceKey,
   className,
 }: {
   /** Which position this is, for the admin activity feed. */
   slot: HilltopBannerSlot;
+  /**
+   * Distinguishes SEVERAL live instances of one placement.
+   *
+   * 🔴 REQUIRED WHEREVER A PLACEMENT CAN RENDER MORE THAN ONCE, and the feed is
+   * exactly that: one unit every N posts, several on screen at a time. Without
+   * it every one of them would carry the id `hilltop-feed`, and since
+   * `appendTo` is resolved with `document.querySelector` — first match wins —
+   * every creative in the feed would be appended into the topmost container.
+   * The duplicate-instance registry would compound it by letting only the first
+   * one inject at all.
+   *
+   * Pass something STABLE for the position, not an index: the feed passes the id
+   * of the post the unit follows, so removing a post above does not renumber the
+   * containers and re-request every ad below.
+   */
+  instanceKey?: string;
   className?: string;
 }) {
   const { showAds, ready } = useShowAds();
@@ -117,6 +147,16 @@ export function HilltopSlot({
   const [isMobile] = useState(() =>
     typeof window === "undefined" ? false : window.matchMedia("(max-width: 767px)").matches,
   );
+  /**
+   * The container's stable, unique DOM id — `hilltop-landing`, `hilltop-feed`,
+   * and so on, exactly as the brief specifies.
+   *
+   * STABLE across navigations on purpose: it is the selector handed to their
+   * loader as `appendTo`, so it has to name this placement and nothing else. A
+   * generated or index-based id would point the loader at whichever slot
+   * happened to render first.
+   */
+  const domId = instanceKey ? `hilltop-${slot}-${instanceKey}` : `hilltop-${slot}`;
   const viewportAllowed = isMobile ? config.mobile : config.desktop;
   const placementOn = isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed;
 
@@ -150,7 +190,14 @@ export function HilltopSlot({
       The guard still prevents two live scripts for one placement, which is what
       it is for. It just no longer treats "busy right now" as "never".
     */
-    if (mounted.has(slot)) {
+    if (el.getAttribute("data-ad-initialized") === "true") {
+      log("slot already initialized", domId);
+      return;
+    }
+    log("slot detected", domId);
+
+    if (mounted.has(domId)) {
+      log("provider busy, queued", domId);
       /*
         Bounded. The claim is released by the other instance's cleanup, which
         runs in the same commit — a handful of retries covers that comfortably,
@@ -161,20 +208,63 @@ export function HilltopSlot({
       const retry = setTimeout(() => setAttempt((n) => n + 1), 250);
       return () => clearTimeout(retry);
     }
-    mounted.add(slot);
+    mounted.add(domId);
 
+    /*
+      🔴 `appendTo` — THE FIX, AND IT IS THEIR OWN API (owner, 2026-09-01: "think
+      this caching and nav issue not ad network", which is exactly right).
+
+      Read out of their minified loader rather than guessed at:
+
+          saveScriptTag: function (e) {
+            for (var n = document.querySelectorAll('script[src*="' + e + '"]'), t = 0; t < n.length; t++)
+              if (!n[t].used) { this.settings.script = n[t]; n[t].used = true; break }
+          }
+
+          _injectDOM: function () {
+            var n = document.querySelector(this.settings.appendTo), e = this.settings.script;
+            n ? n.appendChild(this.adElement)
+              : e && !e.closest("head") ? e.insertBefore(…)
+          }
+
+          copyUserSettings: … typeof e.appendTo !== "undefined" && (this.settings.appendTo = e.appendTo)
+
+      So by default the loader FINDS ITSELF by scanning the document for a script
+      whose src matches, taking the first one not already flagged `used`, and
+      then places the creative next to THAT element. Three consequences, and they
+      are the three symptoms reported:
+
+        • Several slots on one page all match the same selector, so the ads are
+          handed out in document order to whichever script the scan reaches
+          first — "only the first ad slot initializes".
+        • After an SPA navigation the scan runs against a document that still
+          holds scripts from the page just left, so a fresh slot can be matched
+          to a stale element and the creative is appended somewhere the reader is
+          no longer looking — "empty until a full refresh".
+        • None of it is deterministic, which is why it worked on the landing page
+          and not after navigating.
+
+      `copyUserSettings` reads `appendTo` off the script element — that is the
+      supported way to say WHERE, and it takes precedence over the whole scan.
+      Given an explicit container selector the loader calls
+      `document.querySelector(appendTo).appendChild(...)` and script position
+      stops mattering entirely.
+    */
+    el.id = domId;
     const script = document.createElement("script");
     script.src = tag.src;
     script.async = true;
     script.referrerPolicy = tag.referrerPolicy;
     /*
-      Their snippet sets `s.settings = {}` before insertion. It is the object
-      their loader reads its per-tag options from, and an absent one has been
-      observed to throw inside minified loaders that assume it. Empty is what
-      the pasted snippet passes.
+      Their snippet sets `s.settings = {}` before insertion — the object their
+      loader reads its per-tag options from. Ours carries the one option that
+      makes the placement deterministic.
     */
-    (script as HTMLScriptElement & { settings?: unknown }).settings = {};
+    (script as HTMLScriptElement & { settings?: unknown }).settings = { appendTo: `#${domId}` };
     el.appendChild(script);
+    // Per-slot initialisation state, readable from the DOM as the brief asks.
+    el.setAttribute("data-ad-initialized", "true");
+    log("slot initialized", domId);
 
     /*
       Report what actually happened, on the same 10s window the ExoClick unit
@@ -199,11 +289,18 @@ export function HilltopSlot({
 
     return () => {
       clearTimeout(timer);
-      mounted.delete(slot);
-      // Take the loader's own nodes down with us — see the header.
+      mounted.delete(domId);
+      /*
+        Take the loader's own nodes down with us, and clear the initialisation
+        flag so THIS placement can be built again when the route is revisited —
+        the brief's "an ad container that is removed during navigation can be
+        safely re-created and initialized when that page is visited again".
+      */
+      el.removeAttribute("data-ad-initialized");
       el.replaceChildren();
+      log("slot torn down", domId);
     };
-  }, [ready, showAds, tag, slot, placementOn, config.timeoutMs, pathname, attempt]);
+  }, [ready, showAds, tag, slot, domId, placementOn, config.timeoutMs, pathname, attempt]);
 
   // Premium visitors, an unresolved plan, or nothing configured: no element at
   // all, so the slot costs an unconfigured page nothing.
@@ -234,6 +331,7 @@ export function HilltopSlot({
   return (
     <div
       ref={host}
+      id={domId}
       className={className}
       style={{
         width: "100%",

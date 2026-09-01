@@ -1000,7 +1000,7 @@ export function SmartFeed({
                         React would unmount it and the loader would re-request
                         an ad the reader is already looking at.
                       */
-                      <HilltopFeedAd key={`hilltop-${slot.anchorId}`} />
+                      <HilltopFeedAd key={`hilltop-${slot.anchorId}`} anchorId={slot.anchorId} />
                     ) : slot.type === "post" ? (
                       <FeedPostCard
                         key={slot.item.id}

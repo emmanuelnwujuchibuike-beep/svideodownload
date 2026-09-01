@@ -33,7 +33,12 @@ import { HilltopSlot } from "@/features/monetization/hilltop-slot";
  * timeline. The label renders only once the slot has decided to mount, so an
  * unconfigured or switched-off Hilltop leaves the feed byte-for-byte as it was.
  */
-export function HilltopFeedAd() {
+export function HilltopFeedAd({
+  /** The id of the post this unit follows — see `instanceKey` on HilltopSlot. */
+  anchorId,
+}: {
+  anchorId: string;
+}) {
   const host = useRef<HTMLDivElement | null>(null);
   const [eligible, setEligible] = useState(false);
 
@@ -65,7 +70,7 @@ export function HilltopFeedAd() {
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
             Sponsored
           </p>
-          <HilltopSlot slot="feed" />
+          <HilltopSlot slot="feed" instanceKey={anchorId} />
         </>
       ) : (
         // Inert and effectively zero-height, but a real node so the box can be

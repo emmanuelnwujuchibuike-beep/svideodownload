@@ -484,6 +484,27 @@ export function AdSlot({
 
     Gated server-side by the `popunder` switch, which is off by default.
   */
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 A CLICK-HIJACKING UNIT NEVER RUNS ON A PAGE THAT CARRIES GOOGLE'S ADS.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    The `popunder` switch is off by default and gated server-side, so nothing
+    reaches here today. This is the guard for the day somebody turns it on.
+
+    A pop-under opens a window the visitor did not ask for. Running one on the
+    same page as AdSense is a direct policy conflict — Google's own rules cover
+    what else may run alongside its ads, and "it is a different network" is not
+    a defence when the two are on one page. So the two are kept apart
+    structurally rather than by remembering not to configure it that way:
+    AD_SAFE_CONTENT pages are Google's, and this format is refused on them.
+
+    Off an AdSense page it still honours the admin's switch, which is the point
+    of isolating rather than deleting — the owner asked for this format back
+    once already, and this does not take it away.
+  */
+  if (ad.format === "pop" && allowsGoogleAds(pathname)) return null;
+
   if (ad.format === "pop" && ad.scriptCode) {
     return <PopHost code={ad.scriptCode} className={className} />;
   }

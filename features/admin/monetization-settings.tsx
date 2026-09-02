@@ -1014,7 +1014,7 @@ export function MonetizationSettings({
             onCommit={(n) => void setVast({ cooldownMs: n * 1000 })}
           />
           <HilltopNumber
-            label="Batch / HD — skip after (s)"
+            label="Batch / HD / top-quality — skip after (s)"
             value={state.batchGateSeconds ?? 30}
             min={0}
             max={60}
@@ -1022,7 +1022,7 @@ export function MonetizationSettings({
             onCommit={(n) => void persist({ ...state, batchGateSeconds: n })}
           />
           <HilltopNumber
-            label="Batch / HD complete — skip after (s)"
+            label="Batch / HD / top-quality complete — skip after (s)"
             value={state.batchCompleteSeconds ?? 5}
             min={0}
             max={30}

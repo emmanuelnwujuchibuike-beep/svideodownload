@@ -1024,6 +1024,33 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           const g = gate;
           setGate(null);
           if (g) onDownload(g.formatId, g.kind);
+          /*
+            🔴 THE TOP-QUALITY COMPLETION AD (owner, 2026-09-01: "check the top
+            quality hiltop vast video for download started and download
+            completed").
+
+            ON COMPLETION ONLY, and deliberately. The ad the visitor already
+            watched IS the download-started ad, and it is the one that GRANTS the
+            unlock through the server-verified reward session — Hilltop has no
+            rewarded product, so it must not be what releases a file. Playing a
+            second ad at the tap as well would be three full-screen ads for one
+            HD download.
+
+            It rides the `batch-complete` trigger rather than a new one, because
+            the owner grouped these: "batch download and hd and top quality
+            should use a different timer in download complete". So they share
+            `batchCompleteSeconds`, and the moment picker's
+            `batch_download_complete` row is its on/off switch.
+
+            Fire-and-forget, AFTER `onDownload`: the file is already being
+            delivered, so nothing about this ad can delay or block it, and a
+            failure to load one is not the visitor's problem.
+          */
+          void import("@/features/monetization/vast-interstitial/request")
+            .then((m) => m.requestVastInterstitial("batch-complete"))
+            .catch(() => {
+              /* An ad that cannot load is never worth a failed download. */
+            });
         }
       }}
       onCancel={() => {

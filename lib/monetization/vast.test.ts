@@ -95,6 +95,83 @@ describe("parseVast — media selection", () => {
     expect(ad.mediaUrl).toBe("https://x/prog.mp4");
   });
 
+  it("🔴🔴 prefers MP4 over WebM at EQUAL height — this bug zeroed the VAST revenue", () => {
+    /*
+      HilltopAds ships webm / mp4 / flv of the same creative at the SAME
+      dimensions. The comparator used to sort by delivery then HEIGHT only, so
+      equal heights compared equal, `sort` is stable, and the winner was
+      whichever came first in the XML — Hilltop lists WebM first.
+
+      Every visitor was therefore handed a WebM. WebKit (so every iOS browser)
+      cannot decode VP8/VP9 in a bare `<video src>`, the element never reached
+      `playing`, and `overlay.ts` fires the `<Impression>` pixel from `playing`.
+      No playback, no impression, no error the network could see: the Hilltop
+      dashboard read 0 impressions on the VAST zone while the banner and slider
+      zones were serving normally.
+
+      The order below is Hilltop's own — WebM first — which is exactly what a
+      height-only sort gets wrong.
+    */
+    const ad = parseVast(
+      build(
+        `<MediaFile delivery="progressive" type="video/webm" width="1280" height="720"><![CDATA[https://x/a.webm]]></MediaFile>
+         <MediaFile delivery="progressive" type="video/mp4" width="1280" height="720"><![CDATA[https://x/a.mp4]]></MediaFile>
+         <MediaFile delivery="progressive" type="video/flv" width="1280" height="720"><![CDATA[https://x/a.flv]]></MediaFile>`,
+      ),
+    )!;
+    expect(ad.mediaUrl).toBe("https://x/a.mp4");
+    expect(ad.mediaType).toBe("video/mp4");
+  });
+
+  it("🔴 keeps the other renditions as fallbacks, and never offers FLV", () => {
+    /*
+      The impression depends on something decoding, so a codec this device
+      refuses must be retryable rather than fatal. FLV is Flash video — no
+      browser has decoded it in years — so it must not be in the list at all.
+    */
+    const ad = parseVast(
+      build(
+        `<MediaFile delivery="progressive" type="video/webm" width="1280" height="720"><![CDATA[https://x/a.webm]]></MediaFile>
+         <MediaFile delivery="progressive" type="video/mp4" width="1280" height="720"><![CDATA[https://x/a.mp4]]></MediaFile>
+         <MediaFile delivery="progressive" type="video/flv" width="1280" height="720"><![CDATA[https://x/a.flv]]></MediaFile>`,
+      ),
+    )!;
+    expect(ad.fallbacks).toEqual([{ url: "https://x/a.webm", type: "video/webm" }]);
+    expect(JSON.stringify(ad)).not.toContain(".flv");
+  });
+
+  it("🔴 still prefers a TALLER MP4 over a shorter one — height breaks ties within a format", () => {
+    // The 9:16 rule survives the format rule; it is now the second key, not the first.
+    const ad = parseVast(
+      build(
+        `<MediaFile delivery="progressive" type="video/mp4" width="1280" height="720"><![CDATA[https://x/land.mp4]]></MediaFile>
+         <MediaFile delivery="progressive" type="video/mp4" width="720" height="1280"><![CDATA[https://x/vert.mp4]]></MediaFile>`,
+      ),
+    )!;
+    expect(ad.mediaUrl).toBe("https://x/vert.mp4");
+  });
+
+  it("falls back to WebM when that is genuinely all there is", () => {
+    // Better a rendition most Android browsers can play than no ad at all.
+    const ad = parseVast(
+      build(
+        `<MediaFile delivery="progressive" type="video/webm" width="720" height="1280"><![CDATA[https://x/only.webm]]></MediaFile>`,
+      ),
+    )!;
+    expect(ad.mediaUrl).toBe("https://x/only.webm");
+    expect(ad.fallbacks).toEqual([]);
+  });
+
+  it("returns no ad when every rendition is unplayable", () => {
+    expect(
+      parseVast(
+        build(
+          `<MediaFile delivery="progressive" type="video/flv" width="1280" height="720"><![CDATA[https://x/a.flv]]></MediaFile>`,
+        ),
+      ),
+    ).toBeNull();
+  });
+
   it("🔴 refuses a javascript: URL anywhere it would be executed", () => {
     /*
      * Every URL here comes from a third party and is handed to `new Image().src`

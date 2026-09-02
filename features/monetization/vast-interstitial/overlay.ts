@@ -293,7 +293,39 @@ export function showInterstitial({
       track("vast_completed", {});
       finish("completed");
     });
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       🔴 A DEAD CODEC MUST NOT COST THE IMPRESSION
+      ═══════════════════════════════════════════════════════════════════════
+
+      The impression and `start` pixels fire from `playing`, which is correct —
+      a pixel sent before the first frame is a lie the network can charge back.
+      The consequence is that a rendition this device cannot DECODE loses the
+      whole ad silently: no impression, no start, no error the network sees,
+      and a dashboard reading exactly zero.
+
+      That was not hypothetical. HilltopAds ships webm/mp4/flv of every creative
+      at identical dimensions, `pickMedia` was picking by height alone, and with
+      all three the same height the first in document order won — the WebM.
+      Every WebKit browser (so every iOS browser) refuses it. `pickMedia` now
+      ranks MP4 first, and this is the second line of defence: whatever the
+      server chose, if the element cannot play it, walk the remaining
+      renditions before giving up.
+
+      Only ONE `error` pixel is ever sent, on the last rendition, because the
+      ad has only failed once no rendition is left.
+    */
+    let nextMedia = 0;
     video.addEventListener("error", () => {
+      const fallback = creative.fallbacks?.[nextMedia];
+      if (fallback && !started) {
+        nextMedia++;
+        track("vast_media_fallback", { to: fallback.type, index: nextMedia });
+        video.src = fallback.url;
+        video.load();
+        void video.play().catch(() => {});
+        return;
+      }
       pixel(creative.tracking.error);
       track("vast_error", { reason: "media" });
       finish("error");

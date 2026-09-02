@@ -32,6 +32,17 @@ export type AnalyticsEventType =
   | "vast_closed"
   | "vast_timeout"
   | "vast_error"
+  /**
+   * A rendition failed to decode and the player moved to the next one.
+   *
+   * Worth its own event rather than folding into `vast_error`: this is a
+   * RECOVERED failure, and the two must be countable apart. A rise here means
+   * the server is picking a codec this audience cannot play (which is exactly
+   * how the WebM-over-MP4 selection bug hid — every iOS visitor silently lost
+   * the impression and nothing was recorded at all), while `vast_error` still
+   * means the ad was genuinely lost.
+   */
+  | "vast_media_fallback"
   | "ad_impression"
   | "ad_click"
   /**

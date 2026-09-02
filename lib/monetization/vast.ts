@@ -36,6 +36,19 @@ export interface VastCreative {
   mediaType: string;
   width: number | null;
   height: number | null;
+  /**
+   * The other renditions of this same creative, best-first.
+   *
+   * 🔴 THE IMPRESSION DEPENDS ON SOMETHING DECODING. `overlay.ts` fires
+   * `<Impression>` from the video's `playing` event — correct, because a pixel
+   * sent before the first frame is a lie the network can charge back — which
+   * means a rendition this device cannot decode costs the impression entirely,
+   * silently. Hilltop ships webm/mp4/flv of every creative, and WebKit refuses
+   * the WebM, so "the media did not decode" is a routine event, not an edge
+   * case. Carrying the alternatives lets the player try the next one instead of
+   * giving up on the ad.
+   */
+  fallbacks: { url: string; type: string }[];
   /** Seconds, from `<Duration>`. Null when absent or unparseable. */
   durationSeconds: number | null;
   /** Fired once, when playback actually begins. */
@@ -151,7 +164,13 @@ export function parseVastOffset(
  * TALLEST is chosen, because these placements are 9:16 and a landscape
  * rendition letterboxes into a thin band inside them.
  */
-function pickMedia(xml: string): { url: string; type: string; w: number | null; h: number | null } | null {
+function pickMedia(xml: string): {
+  url: string;
+  type: string;
+  w: number | null;
+  h: number | null;
+  fallbacks: { url: string; type: string }[];
+} | null {
   const candidates: { url: string; type: string; w: number | null; h: number | null; delivery: string }[] = [];
 
   for (const m of xml.matchAll(/<MediaFile\b([^>]*)>([\s\S]*?)<\/MediaFile>/gi)) {
@@ -174,20 +193,74 @@ function pickMedia(xml: string): { url: string; type: string; w: number | null; 
 
   if (candidates.length === 0) return null;
 
+  /*
+    🔴 FLV IS NOT PLAYABLE ANYWHERE. It is Flash video; no browser has decoded it
+    for years, and HilltopAds still offers one in every pod. Leaving it in the
+    pool meant it could be selected as a last resort and guarantee a dead frame.
+  */
   const playable = candidates.filter(
     (c) => c.type === "video/mp4" || c.type === "video/webm" || c.type === "",
   );
-  const pool = playable.length > 0 ? playable : candidates;
+  if (playable.length === 0) return null;
 
-  pool.sort((a, b) => {
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 MP4 FIRST — AND UNTIL 2026-09-02 THIS FUNCTION DID NOT DO IT
+    ═══════════════════════════════════════════════════════════════════════════
+
+    The comment above has always claimed it "prefers a progressive MP4 — the only
+    combination every browser can play from a plain `<video src>`". The sort did
+    not implement that. It ordered by delivery, then by HEIGHT, and nothing else.
+
+    Hilltop's pods offer webm/mp4/flv renditions of the SAME creative at the SAME
+    dimensions — 1280x720 across all three. Equal height means the comparator
+    returns 0, `Array.prototype.sort` is stable, and the winner is therefore
+    whichever appeared first in the XML. Hilltop lists WebM first. So every
+    visitor was handed a WebM.
+
+    ── Why that reads as "the VAST records no impressions at all" ──────────────
+
+    `overlay.ts` fires `<Impression>` and `<Tracking event="start">` from the
+    video element's `playing` event — correctly, because an impression that fires
+    before the first frame is a lie the network can charge back. But Safari and
+    every iOS browser (all of which are WebKit) cannot decode VP8/VP9 in a
+    `<video src>`. The element never reaches `playing`, so no pixel is ever sent:
+    not the impression, not the start, nothing. On a mobile downloader the iOS
+    share is large enough that the dashboard reads as a flat zero.
+
+    MP4/H.264 is the one container-codec pair that plays on every browser this
+    site supports, so it is now an explicit FIRST-CLASS sort key rather than an
+    aspiration in a comment. Height only breaks ties within a format.
+  */
+  const rank = (c: (typeof playable)[number]) => {
+    if (c.type === "video/mp4") return 0;
+    // An untyped MediaFile is usually MP4 in practice, and is worth trying
+    // before a WebM that WebKit is known to refuse.
+    if (c.type === "") return 1;
+    return 2; // webm
+  };
+
+  playable.sort((a, b) => {
     // Progressive first — a streaming delivery needs a library we do not ship.
     const prog = (c: typeof a) => (c.delivery === "progressive" ? 0 : 1);
     if (prog(a) !== prog(b)) return prog(a) - prog(b);
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
     return (b.h ?? 0) - (a.h ?? 0);
   });
 
-  const best = pool[0]!;
-  return { url: best.url, type: best.type || "video/mp4", w: best.w, h: best.h };
+  const best = playable[0]!;
+  return {
+    url: best.url,
+    type: best.type || "video/mp4",
+    w: best.w,
+    h: best.h,
+    /*
+      The rest of the pool, best-first, so a rendition that fails to decode on
+      this particular device can be retried instead of costing the impression.
+      One dead codec must not end the ad.
+    */
+    fallbacks: playable.slice(1).map((c) => ({ url: c.url, type: c.type || "video/mp4" })),
+  };
 }
 
 /**
@@ -240,6 +313,7 @@ export function parseVast(xml: string): VastCreative | null {
     mediaType: media.type,
     width: media.w,
     height: media.h,
+    fallbacks: media.fallbacks,
     durationSeconds,
     impressions: safeUrls(allTags(xml, "Impression")),
     tracking,

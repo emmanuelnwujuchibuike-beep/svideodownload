@@ -802,6 +802,9 @@ export async function requestVastInterstitial(
       lastShownAt.set(trigger, Date.now());
       lastAnyShownAt = Date.now();
       phase = "idle";
+      // Same rule as every other exit: freeing the stage means a completion
+      // parked while this ran now gets its turn.
+      drainPendingCompletion();
       return { shown: true, reason: "shown" };
     }
   } catch {
@@ -839,6 +842,34 @@ export async function requestVastInterstitial(
     if (!creative?.mediaUrl) {
       clearTimeout(budget);
       phase = "idle";
+      /*
+        ═════════════════════════════════════════════════════════════════════
+         🔴 A NO-FILL MUST STILL HAND THE STAGE TO A WAITING COMPLETION.
+        ═════════════════════════════════════════════════════════════════════
+
+        Owner, 2026-09-02: "download complete only triggers well on wallpaper
+        download but not link download."
+
+        That asymmetry is this line. `drainPendingCompletion()` was called on
+        the success path and the catch path — but NOT here, so a completion
+        parked while this request was in flight was stranded permanently.
+
+        Latent until the gate zones were switched off, then guaranteed:
+
+          1. Tap download -> the START request runs against `download_preparing`,
+             which is now "off", so it ALWAYS reaches this branch.
+          2. The file lands while `phase` is still "loading" -> the completion is
+             refused as busy and parked in `pendingCompletion`.
+          3. This return resets `phase` and drops it on the floor.
+
+        The wallpaper path fires no start request any more, which is precisely
+        why it kept working while link downloads lost their ad every time.
+
+        Resetting `phase` without draining is the bug in one sentence: the two
+        belong together, because every reason the stage frees up is a reason the
+        waiting completion may now run.
+      */
+      drainPendingCompletion();
       /*
         🔴 "NO FILL" AND "COULD NOT ASK" ARE DIFFERENT FACTS, and collapsing
         them is what makes a blocked integration look like an empty one. An

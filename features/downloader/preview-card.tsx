@@ -476,6 +476,13 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     hdNetwork.gptAdUnitPath,
   );
   const startDownload = (formatId: string, kind: MediaKind) => {
+    /*
+      Every branch below ends in a download, and every download ends in the
+      completion ad — so this is the one place that covers all of them, and it
+      fires exactly once per real download.
+    */
+    warmCompletionCreative();
+
     const fmt = formats.find((f) => f.formatId === formatId && f.kind === kind);
     const ads = rewardAdsFor({
       filesize: fmt?.filesize ?? null,
@@ -643,23 +650,45 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     `gatedAdCount` and the network check are deliberately GONE: neither has
     anything to say about an ad that plays after the file is saved.
   */
+  /*
+    The MODULE warm only — no ad request. Parsing the player chunk early is free
+    and helps whatever runs next; asking Hilltop for a creative is not free and
+    is deliberately left to the tap below.
+  */
   const warmedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!adsReady || !showAds) return;
     if (warmedFor.current === metadata.id) return;
     warmedFor.current = metadata.id;
     void import("@/features/monetization/vast-interstitial/request")
-      .then((m) => {
-        // The module and the player chunk, so the completion pays for neither.
-        m.warmVastInterstitial();
-        // The creative AND its media, so playback starts almost immediately
-        // once the file lands.
-        m.warmCreativeFor("download-complete");
-      })
+      .then((m) => m.warmVastInterstitial())
       .catch(() => {
         /* A warm that fails costs nothing — the moment still fetches normally. */
       });
   }, [adsReady, showAds, metadata.id]);
+
+  /*
+    🔴 THE CREATIVE IS REQUESTED ON THE TAP, NOT ON MOUNT.
+
+    My first attempt warmed the creative when the preview card appeared, which
+    is one real VAST request per EXTRACTION — including every visitor who looks
+    at the qualities and never downloads. The original code's warning about that
+    is right and worth preserving: a request with no impression behind it is
+    what makes a publisher's fill rate look broken to the network, and fill rate
+    is the number the owner reads.
+
+    The tap is the honest moment. It is 1:1 with a completion ad, and the
+    seconds a real download takes are exactly the lead time the media needs —
+    which is what stops the completion ad starting cold at ~10.9s to first frame.
+  */
+  const warmCompletionCreative = useCallback(() => {
+    if (!adsReady || !showAds) return;
+    void import("@/features/monetization/vast-interstitial/request")
+      .then((m) => m.warmCreativeFor("download-complete"))
+      .catch(() => {
+        /* The completion still fetches normally — this is only a head start. */
+      });
+  }, [adsReady, showAds]);
 
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];
@@ -1039,8 +1068,14 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                 kind={tab}
                 active={f.formatId === activeId}
                 /* The SAME call the gate makes, with this row's own rank — so
-                   the tag and the gate can never disagree about what costs an ad. */
+                   the tag and the gate can never disagree about what costs an ad.
+                   🔴 AND the surface must actually still run a gate: `hd_download`
+                   is routed to `none`, so nothing costs an ad and no row may say
+                   it does (owner: "remove the ad text on the top quality button").
+                   This is a SECOND call site — fixing `gatedAdCount` alone left
+                   this badge showing, which is what the owner saw. */
                 gated={
+                  hdNetwork.network !== "none" &&
                   rewardAdsFor({
                     filesize: f.filesize ?? null,
                     showAds,

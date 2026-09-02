@@ -531,17 +531,64 @@ export function showInterstitial({
     let nextMedia = 0;
     video.addEventListener("error", () => {
       const fallback = creative.fallbacks?.[nextMedia];
-      if (fallback && !started) {
+      /*
+        ═══════════════════════════════════════════════════════════════════════
+         🔴 A MID-PLAYBACK FAILURE IS NOT THE END OF THE AD.
+        ═══════════════════════════════════════════════════════════════════════
+
+        Owner, 2026-09-02: "the download completed vast doesnt play, it just
+        show the vast image for seconds and play for few seconds before going
+        out."
+
+        That is this handler. The fallback branch used to be guarded by
+        `!started`, so renditions were only ever tried BEFORE the first frame —
+        once playback had begun, any media error tore the whole overlay down.
+
+        And a mid-stream error is exactly what this creative's delivery invites:
+        the media 302s from silent-basis.pro to an IP-addressed CDN and is
+        served as 206 partial content, so the stream can die several seconds in,
+        after the poster and the opening have already been shown. The visitor
+        sees a picture, a few seconds of video, and then the ad vanishes.
+
+        Continuing from the current position is the right response: the
+        impression has already been counted, the visitor is already watching,
+        and the remaining renditions are the same ad in another container.
+      */
+      if (fallback) {
         nextMedia++;
-        track("vast_media_fallback", { to: fallback.type, index: nextMedia });
+        // Resume where the failure happened rather than restarting the ad.
+        const resumeAt = started ? video.currentTime : 0;
+        track("vast_media_fallback", { to: fallback.type, index: nextMedia, resumedAt: Math.round(resumeAt) });
         video.src = fallback.url;
         video.load();
+        if (resumeAt > 0) {
+          // `loadedmetadata` is the earliest point a seek is honoured; once
+          // only, so a second failure cannot stack handlers.
+          video.addEventListener(
+            "loadedmetadata",
+            () => {
+              try {
+                if (Number.isFinite(video.duration) && resumeAt < video.duration) video.currentTime = resumeAt;
+              } catch {
+                /* seeking is an optimisation — restarting the rendition is still better than closing */
+              }
+            },
+            { once: true },
+          );
+        }
         void video.play().catch(() => {});
         return;
       }
+
       pixel(creative.tracking.error);
-      track("vast_error", { reason: "media" });
-      finish("error");
+      track("vast_error", { reason: "media", started });
+      /*
+        Out of renditions. If playback had already begun, the impression is
+        counted and the visitor genuinely saw the ad — so this is a truncated
+        view, not a no-fill, and `finish` is told which. Closing is right either
+        way: there is nothing left to show.
+      */
+      finish(started ? "completed" : "error");
     });
 
     if (creative.clickThrough) {

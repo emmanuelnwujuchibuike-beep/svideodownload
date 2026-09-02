@@ -37,7 +37,7 @@ describe("defaults describe what the product ACTUALLY does today", () => {
       and granting the unlock ourselves — and because the SAME creative also
       runs at download-complete, the visitor paid for it twice in one download.
     */
-    expect(DEFAULT_REWARD_NETWORKS.hd_download.network).toBe("rewarded_video");
+    expect(DEFAULT_REWARD_NETWORKS.hd_download.network).toBe("none");
     // Preview is a different moment and was never part of the ask — unchanged.
     expect(DEFAULT_REWARD_NETWORKS.video_preview.network).toBe("rewarded_video");
   });
@@ -47,10 +47,30 @@ describe("defaults describe what the product ACTUALLY does today", () => {
     expect(DEFAULT_REWARD_NETWORKS.wallpaper.network).toBe("none");
   });
 
-  it("routes every batch moment to the full-screen interstitial", () => {
-    expect(DEFAULT_REWARD_NETWORKS.multilink_batch.network).toBe("interstitial");
-    expect(DEFAULT_REWARD_NETWORKS.batch_download.network).toBe("interstitial");
+  it("🔴 fires NO ad when a download button is clicked — only on completion", () => {
+    /*
+      Owner, 2026-09-02: "i told you remove hiltop vast from top quality and
+      batch reward, it should only show on download completed not when the
+      download button is clicked."
+
+      Turning the VAST off for the gate ZONES was only half of it: these
+      surfaces still resolved to `interstitial`, so the gate kept running and
+      rendered a different ad through AdSlot. Both halves are needed, and this
+      is the guard for the second one.
+    */
+    for (const id of ["multilink_batch", "batch_download", "hd_download", "wallpaper"] as const) {
+      expect(DEFAULT_REWARD_NETWORKS[id].network, id).toBe("none");
+    }
+    // The completion moments are the ones allowed to carry an ad.
     expect(DEFAULT_REWARD_NETWORKS.batch_complete.network).toBe("interstitial");
+    expect(DEFAULT_REWARD_NETWORKS.multilink_fetch.network).toBe("interstitial");
+  });
+
+  it("🔴 falls back to no-ad on a gate, never back to the interstitial", () => {
+    // A stored value that is unsupported must not resurrect a click-time ad.
+    for (const id of ["multilink_batch", "batch_download", "hd_download", "wallpaper"] as const) {
+      expect(REWARD_SURFACES.find((s) => s.id === id)!.fallback, id).toBe("none");
+    }
   });
 
   it("has a default for every declared surface, and no extras", () => {
@@ -105,7 +125,8 @@ describe("resolution falls back rather than dead-ending", () => {
       map({ wallpaper: { network: "gpt_rewarded", gptAdUnitPath: "" } }),
       CAPS,
     );
-    expect(r.network).toBe("interstitial");
+    // The wallpaper gate's fallback is now no-ad, not a different ad.
+    expect(r.network).toBe("none");
     expect(r.fellBackFrom).toBe("gpt_rewarded");
     expect(r.reason).toMatch(/isn't supported/);
   });
@@ -116,7 +137,7 @@ describe("resolution falls back rather than dead-ending", () => {
       map({ batch_download: { network: "offerium", gptAdUnitPath: "" } }),
       CAPS,
     );
-    expect(r.network).toBe("interstitial");
+    expect(r.network).toBe("none");
     expect(r.reason).toMatch(/configured/);
   });
 
@@ -131,14 +152,14 @@ describe("resolution falls back rather than dead-ending", () => {
       map({ batch_download: { network: "offerium", gptAdUnitPath: "" } }),
       CONFIGURED,
     );
-    expect(r.network).toBe("interstitial");
+    expect(r.network).toBe("none");
     expect(r.fellBackFrom).toBe("offerium");
     expect(r.reason).toMatch(/not built/);
   });
 
   it("uses the surface default when nothing is stored at all", () => {
-    expect(resolveRewardNetwork("hd_download", null, CAPS).network).toBe("rewarded_video");
-    expect(resolveRewardNetwork("multilink_batch", undefined, CAPS).network).toBe("interstitial");
+    expect(resolveRewardNetwork("hd_download", null, CAPS).network).toBe("none");
+    expect(resolveRewardNetwork("multilink_batch", undefined, CAPS).network).toBe("none");
   });
 
   it("marks Offerium unavailable with a reason, so the admin isn't left guessing", () => {
@@ -156,7 +177,7 @@ describe("merging a stored map", () => {
   it("fills gaps from the defaults", () => {
     const merged = mergeRewardNetworks({ multilink_batch: { network: "none", gptAdUnitPath: "" } });
     expect(merged.multilink_batch.network).toBe("none");
-    expect(merged.hd_download.network).toBe("rewarded_video");
+    expect(merged.hd_download.network).toBe("none");
   });
 
   it("discards a value the surface doesn't support instead of storing it", () => {

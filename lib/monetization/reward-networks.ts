@@ -77,7 +77,7 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     label: "Multi-Link batch download",
     description: "Before a multi-source batch starts downloading.",
     supports: BATCH_NETWORKS,
-    fallback: "interstitial",
+    fallback: "none", // gate moment: an unsupported pick must not resurrect a click-time ad
   },
   {
     id: "multilink_fetch",
@@ -98,7 +98,7 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     label: "Batch download (single link)",
     description: "Before a story's snaps or a slideshow's photos download together.",
     supports: BATCH_NETWORKS,
-    fallback: "interstitial",
+    fallback: "none", // gate moment: an unsupported pick must not resurrect a click-time ad
   },
   {
     id: "batch_complete",
@@ -138,9 +138,10 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     */
     supports: UNLOCK_NETWORKS,
     // Matches the default below — a fallback that disagreed with the default
-    // would send an unsupported pick somewhere the owner did not choose.
-    fallback: "rewarded_video",
-    note: "Hilltop's VAST is not offered here: it has no rewarded product, and it already runs as the download-COMPLETE ad. Offerium becomes selectable once its postback is implemented.",
+    // would send an unsupported pick somewhere the owner did not choose. `none`
+    // because no ad may fire on a download CLICK at all.
+    fallback: "none",
+    note: "No ad fires when the download button is clicked — the completion ad is the only one. Hilltop's VAST is not offered here either: it has no rewarded product, and it already runs at download-complete. Offerium becomes selectable once its postback is implemented.",
   },
   {
     id: "video_preview",
@@ -172,7 +173,7 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     label: "Wallpaper download",
     description: "The ad after every 2nd completed wallpaper download.",
     supports: ["interstitial", "none"],
-    fallback: "interstitial",
+    fallback: "none", // gate moment: an unsupported pick must not resurrect a click-time ad
     note: "Runs AFTER the wallpaper has already saved, so there is nothing left to unlock — rewarded formats don't apply. Making it a watch-first gate is a separate change (it needs its own reward-session type).",
   },
   {
@@ -260,24 +261,47 @@ export const REWARD_NETWORK_DEFS: readonly RewardNetworkDef[] = [
 ];
 
 export const DEFAULT_REWARD_NETWORKS: RewardNetworkMap = {
-  // Defaults reproduce EXACTLY what each surface did before this table existed,
-  // so an unconfigured site behaves identically to how it did yesterday.
-  multilink_batch: { network: "interstitial", gptAdUnitPath: "" },
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 NO AD FIRES WHEN A DOWNLOAD BUTTON IS CLICKED. ONLY ON COMPLETION.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-02: "i told you remove hiltop vast from top quality and batch
+    reward, it should only show on download completed not when the download
+    button is clicked."
+
+    Turning the VAST off for the gate ZONES (DEFAULT_HILLTOP_ZONE_SOURCE) was
+    only half of it: these surfaces still resolved to `interstitial`, so the
+    gate kept running and simply rendered a different ad through AdSlot. The ad
+    the owner is still seeing on a batch click is that one.
+
+    The gates are now `none` — the download starts immediately — and the single
+    ad the visitor sees is the completion one. `batch_complete` and
+    `multilink_fetch` keep theirs: both run AFTER the thing they follow, which
+    is exactly the moment that is allowed to carry an ad.
+  */
+  multilink_batch: { network: "none", gptAdUnitPath: "" },
   multilink_fetch: { network: "interstitial", gptAdUnitPath: "" },
-  batch_download: { network: "interstitial", gptAdUnitPath: "" },
+  batch_download: { network: "none", gptAdUnitPath: "" },
   batch_complete: { network: "interstitial", gptAdUnitPath: "" },
   // NOT gpt_rewarded: the real GPT flow is paused on these surfaces until a
   // Google Ad Manager account exists (see `rewarded_video` above). Defaulting
   // them to GPT would make this table describe a flow that isn't running.
   /*
-    🔴 BACK TO `rewarded_video`, REVERTED 2026-09-02 — see the surface note.
+    🔴 `none` — the top-quality click must not show an ad either.
 
-    It was flipped to `interstitial` that morning to make the Hilltop VAST act
-    as the reward. The owner withdrew that the same day: "remove all the reward
-    hiltop vast, only offerium or a real reward network should be used as
-    reward." This is the gate that worked before, and it works today.
+    Flipped to `interstitial` that morning to make the Hilltop VAST the reward,
+    then withdrawn ("remove all the reward hiltop vast"), and then withdrawn
+    further the same evening: "remove hiltop vast from top quality and batch
+    reward, it should only show on download completed not when the download
+    button is clicked."
+
+    So it does not go back to `rewarded_video` either — that is still a gate in
+    front of a click. The top-quality download now starts immediately and the
+    completion ad is the only one. When a real rewarded network exists this is
+    the row that gets it.
   */
-  hd_download: { network: "rewarded_video", gptAdUnitPath: "" },
+  hd_download: { network: "none", gptAdUnitPath: "" },
   video_preview: { network: "rewarded_video", gptAdUnitPath: "" },
   /*
     🔴 `none` — THE WALLPAPER GATE IS REMOVED, NOT RE-POINTED.

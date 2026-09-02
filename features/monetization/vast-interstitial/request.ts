@@ -626,7 +626,41 @@ export function warmVastInterstitial(): void {
  * new one, so a re-arm cannot leave two videos buffering.
  */
 export function warmAmbientCreative(): void {
-  prefetchCreative("ambient");
+  warmCreativeFor("ambient");
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  WARM A MOMENT'S CREATIVE BEFORE THE MOMENT ARRIVES
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-02: "some high quality vast video reward ad doesnt trigger on
+ * time, and they make the download button to respond late … the ad download
+ * button should always preftch as soon as the link finished extracting so the
+ * ad download button respond instant and the reward ad respond instantly so
+ * there can be time for the download complete vast video too."
+ *
+ * The completion moments were already warmed by `PREFETCHES_ON_START`, because
+ * a download START predicts them. The GATE had nothing in front of it: the
+ * creative and its media were both fetched on the tap, so the first thing a
+ * Download press did was wait on the network — which is the late button.
+ *
+ * Extraction finishing IS the predictor. By the time the preview card is on
+ * screen with a gated quality selected, a Download tap is the primary action of
+ * that screen, so warming then is a genuine prediction rather than a guess.
+ *
+ * 🔴 ONLY WHERE AN AD IS ACTUALLY GOING TO BE ASKED FOR. Every warm is a real
+ * VAST request, and one with no impression behind it is precisely what makes a
+ * publisher's fill rate look broken to the network — the thing the owner is
+ * watching the dashboard for. Callers must gate this on the visitor being
+ * ad-eligible AND the moment being reachable; see preview-card.tsx.
+ *
+ * Idempotent: `prefetchCreative` overwrites the cache entry and `warmMedia`
+ * tears down the previous warmer before starting another, so calling twice
+ * cannot leave two videos buffering.
+ */
+export function warmCreativeFor(trigger: InterstitialTrigger): void {
+  prefetchCreative(trigger);
 }
 
 export async function requestVastInterstitial(

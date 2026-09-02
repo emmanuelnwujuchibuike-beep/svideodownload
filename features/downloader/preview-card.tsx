@@ -20,7 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
@@ -557,6 +557,64 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
       },
     }).length;
   }, [formats, activeId, tab, showAds, rewardTopTierCount, rewardVideoTopTierSeconds, rewardImageAudioTopTierSeconds, rewardImageAudioSkipAfterSeconds]);
+
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 WARM THE GATE AD WHILE THE VISITOR IS STILL CHOOSING A QUALITY
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-02: "some high quality vast video reward ad doesnt trigger on
+    time, and they make the download button to respond late … the ad download
+    button should always preftch as soon as the link finished extracting so the
+    ad download button respond instant and the reward ad respond instantly so
+    there can be time for the download complete vast video too."
+
+    The COMPLETION moments were already warmed — a download start predicts them
+    (`PREFETCHES_ON_START`). The GATE had nothing in front of it: its creative
+    and its media were both fetched on the tap, so the first thing a Download
+    press did was wait on the network. That is the late button, and it also eats
+    the head start the download-complete ad needs afterwards.
+
+    Extraction finishing is the honest predictor — by the time this card is on
+    screen with a gated quality selected, tapping Download is the primary action
+    of the screen.
+
+    ── The three gates on this, and why each is load-bearing ─────────────────
+
+    Every warm is a REAL VAST request, and a request with no impression behind
+    it is exactly what makes a publisher's fill rate look broken to the network
+    — the number the owner is watching. So it only fires when an ad is genuinely
+    going to be asked for:
+
+      • `showAds`      — Pro and Business never reach a gate at all.
+      • `gatedAdCount` — the CURRENT selection actually costs an ad. Warming for
+                         an ungated pick would be a request for a moment that
+                         will not happen.
+      • `interstitial` — the admin has this surface routed to the VAST. Any
+                         other network plays something else entirely.
+
+    Once per card, guarded by a ref rather than by the dependency array: the
+    deps change as the visitor tries different qualities, and re-warming on
+    every tab switch would be several ad requests for one download.
+  */
+  const warmedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!adsReady || !showAds) return;
+    if (gatedAdCount <= 0) return;
+    if (hdNetwork.network !== "interstitial") return;
+    if (warmedFor.current === metadata.id) return;
+    warmedFor.current = metadata.id;
+    void import("@/features/monetization/vast-interstitial/request")
+      .then((m) => {
+        // The module and the player chunk, so the tap pays for neither.
+        m.warmVastInterstitial();
+        // The creative and its media, so playback starts almost immediately.
+        m.warmCreativeFor("batch");
+      })
+      .catch(() => {
+        /* A warm that fails costs nothing — the tap still fetches normally. */
+      });
+  }, [adsReady, showAds, gatedAdCount, hdNetwork.network, metadata.id]);
 
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];

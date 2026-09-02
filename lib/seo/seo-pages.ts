@@ -1,4 +1,9 @@
 import { CLUSTERS, type SeoCluster, type SeoModifier } from "@/config/seoPages";
+import {
+  platformContentFor,
+  type PlatformFeature,
+  type PlatformStep,
+} from "@/lib/seo/platform-content";
 import type { PlatformId } from "@/types";
 
 /** A fully-resolved, render-ready SEO page (generated from cluster × modifier). */
@@ -23,6 +28,17 @@ export interface SeoPage {
   about: string[];
   benefits: { title: string; text: string }[];
   faqs: { q: string; a: string }[];
+  /**
+   * Step-by-step instructions for this PLATFORM's own apps, when written.
+   *
+   * Split by surface because the two genuinely differ — the mobile route goes
+   * through a share sheet, the desktop one through the address bar — and a
+   * single merged list would have to hedge, which is how the old shared copy
+   * ended up saying nothing specific to anywhere.
+   */
+  steps?: { mobile: PlatformStep[]; desktop: PlatformStep[] };
+  /** Feature cards, platform-specific where written. */
+  features?: PlatformFeature[];
   /** True for the first (canonical) page in each cluster. */
   isPrimary: boolean;
 }
@@ -71,7 +87,10 @@ function buildPage(
 
   const f = (s: string) => fill(s, brand, thing);
 
-  const title = f(modifier.title);
+  const platformTitle = platformContentFor(cluster.platformId);
+  /* The canonical page per platform gets the hand-written title; modifier pages
+     keep their own, which are already intent-distinct (HD / MP3 / iPhone). */
+  const title = index === 0 && platformTitle ? platformTitle.title : f(modifier.title);
   const keyword = f(modifier.keyword);
 
   const secondaryKeywords = [
@@ -98,26 +117,123 @@ function buildPage(
     this padding lived on pages (iphone/android/pc aside) that were themselves
     near-duplicates of the platform's primary page.
   */
-  const intro = f(cluster.intros[seed % cluster.intros.length]!);
-  const facts = rotate(cluster.facts, seed, 2).map(f);
-  const about = [intro, f(modifier.angle), ...facts];
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 PLATFORM-SPECIFIC CONTENT REPLACES THE SHARED POOLS
+    ═══════════════════════════════════════════════════════════════════════════
 
-  const benefits = [
-    { title: f(modifier.benefit.title), text: f(modifier.benefit.text) },
-    ...cluster.baseBenefits,
-  ];
+    Owner, 2026-09-02, after a THIRD AdSense "low value content" rejection.
+    Measured across the 82 generated pages, with brand names masked so "the same
+    sentence with a different brand" counts as shared — which is what a crawler
+    sees:
 
-  const faqs = [
-    ...modifier.faqs.map((q) => ({ q: f(q.q), a: f(q.a) })),
-    ...rotate(cluster.baseFaqs, seed, 3),
-  ];
+        faqs 90% · benefits 87% · descriptions 87% · about 82% · titles 74%
 
-  const description = truncate(
-    f(
-      `Free ${keyword}. Download ${brand} ${thing} in HD or MP3 — no app, no login, works on iPhone, Android & PC.`,
-    ),
-    158,
-  );
+    One FAQ appeared on 29 of 82 pages. The cause is structural, not editorial:
+    `cluster.baseFaqs`, `cluster.baseBenefits` and the shared `{brand}`
+    modifiers were designed to be reused across platforms, so scale multiplied
+    the same paragraphs instead of adding information.
+
+    `lib/seo/platform-content.ts` is hand-written per platform and takes
+    precedence over every shared pool below. The modifier's OWN angle, benefit
+    and FAQs survive — those are genuinely intent-specific (HD vs MP3 vs
+    iPhone) and were never the duplication — but the generic filler around them
+    is gone.
+
+    The `cluster.intros`/`facts`/`baseFaqs` fallback is kept for any platform
+    that has no hand-written entry yet, so adding a cluster never produces a
+    blank page. A guard test fails the build if duplication climbs back.
+  */
+  const pc = platformContentFor(cluster.platformId);
+
+  /*
+    🔴 A SHARED MODIFIER'S PROSE IS SUPPRESSED ENTIRELY.
+
+    `mHd`/`mMp3`/`mIphone`/`mAndroid`/`mPc` are single objects spread onto 9-11
+    clusters, so their angle, benefit and FAQs appeared verbatim on 9-11 pages
+    with only the brand swapped — measured as the ENTIRE remaining duplication
+    after the platform rewrite. Their slug, title, keyword and tagline stay,
+    because those carry real search intent and do vary; the prose is replaced by
+    the platform's own, which differs genuinely (a TikTok share sheet and a
+    Reddit comments page are not the same three taps).
+  */
+  const sharedProse = modifier.generic === true && !!pc;
+
+  const about = pc
+    ? index === 0
+      ? [...pc.intro, f(modifier.angle)]
+      : sharedProse
+        ? rotate(pc.intro, seed, 2)
+        : /* A platform-specific variant leads with its OWN intent and takes one
+             platform paragraph for grounding, rather than repeating the full
+             platform essay the canonical page already carries. */
+          [f(modifier.angle), ...rotate(pc.intro, seed, 1)]
+    : [
+        f(cluster.intros[seed % cluster.intros.length]!),
+        f(modifier.angle),
+        ...rotate(cluster.facts, seed, 2).map(f),
+      ];
+
+  /*
+    🔴 THE CANONICAL PAGE GETS EVERYTHING; THE VARIANTS GET A SLICE.
+
+    Measured after the first pass of this fix: cross-PLATFORM duplication
+    collapsed (descriptions 87% -> 0%), but FAQs and benefits went UP, to 92%.
+    The reason is worth writing down, because it is counter-intuitive and it is
+    the trap in "just add unique content": the platform's five FAQs were being
+    printed on all twelve of that platform's pages, so the duplication simply
+    moved from between-platforms to within-platform.
+
+    So the primary page — the one that should rank, and the 301 target for the
+    rest — carries the full set, and each variant takes a rotated slice seeded
+    by its own slug. Two variants of the same platform therefore show different
+    questions, while every page still answers something real.
+
+    ⚠️ This narrows the gap; it does not close it. Eleven platforms cannot
+    honestly support eighty-two substantially different pages, and the device
+    variants (-for-iphone/-android/-pc, 33 of the 82) remain the same tool with
+    a device word swapped. That is a page-count decision, not a copy decision —
+    see the note in the guard test.
+  */
+  const benefits = pc
+    ? sharedProse
+      ? rotate(pc.features, seed, 4)
+      : [
+          { title: f(modifier.benefit.title), text: f(modifier.benefit.text) },
+          ...(index === 0 ? pc.features : rotate(pc.features, seed, 3)),
+        ]
+    : [
+        { title: f(modifier.benefit.title), text: f(modifier.benefit.text) },
+        ...cluster.baseBenefits,
+      ];
+
+  const faqs = pc
+    ? sharedProse
+      ? rotate(pc.faqs, seed, 3)
+      : [
+          ...modifier.faqs.map((q) => ({ q: f(q.q), a: f(q.a) })),
+          ...(index === 0 ? pc.faqs : rotate(pc.faqs, seed, 2)),
+        ]
+    : [
+        ...modifier.faqs.map((q) => ({ q: f(q.q), a: f(q.a) })),
+        ...rotate(cluster.baseFaqs, seed, 3),
+      ];
+
+  /*
+    🔴 THE DESCRIPTION WAS THE WORST OFFENDER AFTER THE FAQs (87% shared): one
+    sentence with the brand swapped, on every page. The primary page now takes
+    the platform's own written description; the modifier pages combine their own
+    title with that platform's subtitle, so the pair varies on BOTH axes rather
+    than neither.
+  */
+  const description = pc
+    ? truncate(index === 0 ? pc.description : `${title} — ${pc.subtitle}`, 158)
+    : truncate(
+        f(
+          `Free ${keyword}. Download ${brand} ${thing} in HD or MP3 — no app, no login, works on iPhone, Android & PC.`,
+        ),
+        158,
+      );
 
   return {
     slug,
@@ -134,6 +250,8 @@ function buildPage(
     about,
     benefits,
     faqs,
+    steps: pc ? { mobile: pc.mobileSteps, desktop: pc.desktopSteps } : undefined,
+    features: pc?.features,
     isPrimary: index === 0,
   };
 }

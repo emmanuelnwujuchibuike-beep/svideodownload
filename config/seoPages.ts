@@ -28,6 +28,22 @@ export interface SeoModifier {
   faqs: { q: string; a: string }[];
   /** Extra secondary keyword fragments. */
   secondary?: string[];
+  /**
+   * 🔴 THIS MODIFIER IS SHARED ACROSS PLATFORMS — its prose must not be printed.
+   *
+   * `mHd`, `mMp3`, `mIphone`, `mAndroid` and `mPc` are single objects spread
+   * onto 9-11 clusters each, so every sentence in them appears on 9-11 pages
+   * with only the brand swapped. Measured 2026-09-02, they were the ENTIRE
+   * remaining duplication after the platform rewrite: "Downloading {brand} on
+   * iPhone used to mean installing shady apps" on 11 pages, "Made for iOS" on
+   * 11, "How do I save {brand} on iPhone?" on 11.
+   *
+   * The slug, title, keyword and tagline stay — those carry the search intent
+   * and do vary by brand. The angle/benefit/faqs are suppressed by
+   * `buildPage` in favour of that platform's own written content, so an
+   * iPhone page for TikTok and one for Reddit no longer say the same thing.
+   */
+  generic?: boolean;
 }
 
 export interface SeoCluster {
@@ -55,6 +71,7 @@ export interface SeoCluster {
  * ------------------------------------------------------------------ */
 
 const mHd: SeoModifier = {
+  generic: true,
   slug: "hd-downloader",
   title: "{brand} HD Video Downloader (1080p)",
   keyword: "{brand} HD downloader",
@@ -69,6 +86,7 @@ const mHd: SeoModifier = {
 };
 
 const mMp3: SeoModifier = {
+  generic: true,
   slug: "mp3-downloader",
   title: "{brand} to MP3 — Audio Downloader",
   keyword: "{brand} to MP3",
@@ -85,6 +103,7 @@ const mMp3: SeoModifier = {
 };
 
 const mIphone: SeoModifier = {
+  generic: true,
   slug: "downloader-for-iphone",
   title: "{brand} Downloader for iPhone (iOS)",
   keyword: "{brand} downloader for iPhone",
@@ -100,6 +119,7 @@ const mIphone: SeoModifier = {
 };
 
 const mAndroid: SeoModifier = {
+  generic: true,
   slug: "downloader-for-android",
   title: "{brand} Downloader for Android",
   keyword: "{brand} downloader for Android",
@@ -115,6 +135,7 @@ const mAndroid: SeoModifier = {
 };
 
 const mPc: SeoModifier = {
+  generic: true,
   slug: "downloader-for-pc",
   title: "{brand} Downloader for PC & Mac",
   keyword: "{brand} downloader for PC",

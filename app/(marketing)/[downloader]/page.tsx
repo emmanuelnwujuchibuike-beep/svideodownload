@@ -23,6 +23,7 @@ import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/mul
 import { categoryHubMetadata, CategoryHubView } from "@/features/social/category-hub-view";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import { PLATFORMS } from "@/lib/platforms";
+import { platformContentFor } from "@/lib/seo/platform-content";
 import { getSeoPage, howToSteps, SEO_SLUGS } from "@/lib/seo/seo-pages";
 import { SITE_URL as siteUrl } from "@/lib/site";
 import { CATEGORIES, isCategory } from "@/lib/social/categories";
@@ -160,11 +161,28 @@ export default async function DownloaderPage({
       { "@type": "ListItem", position: 2, name: page.brand, item: url },
     ],
   };
+  /*
+    The platform's OWN written walkthrough, where one exists (11 platforms in
+    lib/seo/platform-content.ts). Undefined for the rest, which keep the
+    templated three steps below.
+  */
+  const pc = platformContentFor(page.platformId);
+
+  /*
+    🔴 STRUCTURED DATA MUST DESCRIBE WHAT IS ON THE PAGE.
+
+    When the platform has real mobile steps they are what the visitor reads, so
+    they are what HowTo markup has to describe. Emitting the generic template
+    here while rendering the specific steps below would be markup that does not
+    match its page — the exact thing Google's structured-data policy prohibits,
+    and the same standard that got the fabricated `aggregateRating` removed.
+  */
+  const howToSource = pc?.mobileSteps?.length ? pc.mobileSteps : steps;
   const howToLd = {
     "@context": "https://schema.org",
     "@type": "HowTo",
     name: `How to download ${page.brand} ${page.thing}`,
-    step: steps.map((s, i) => ({
+    step: howToSource.map((s, i) => ({
       "@type": "HowToStep",
       position: i + 1,
       name: s.title,
@@ -288,7 +306,96 @@ export default async function DownloaderPage({
           </div>
         </section>
 
-        {/* How it works */}
+        {/*
+          ═══════════════════════════════════════════════════════════════════
+           THE PLATFORM'S OWN WALKTHROUGH — PHONE AND DESKTOP SEPARATELY.
+          ═══════════════════════════════════════════════════════════════════
+
+          `lib/seo/platform-content.ts` has carried real, hand-written
+          `mobileSteps` and `desktopSteps` for eleven platforms and NOTHING
+          rendered them — the page showed a generic three-step template
+          instead. That was the single largest pool of genuinely original,
+          already-written content on the site sitting unused.
+
+          It also closes the loop on the device-variant merge (2026-09-02): the
+          case for removing `-for-iphone` / `-for-android` / `-for-pc` was that
+          per-device guidance "belongs ON the platform page rather than being
+          the entire justification for three more URLs". This is where it now
+          lives, which is what makes that argument true rather than merely
+          stated.
+
+          Falls back to the templated steps for platforms without written
+          content, so no page loses a section.
+        */}
+        {pc ? (
+          <section className="border-t border-border/60 py-16 sm:py-20">
+            <div className="container max-w-5xl">
+              <h2 className="mb-3 text-center text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
+                How to download {page.brand} {page.thing}
+              </h2>
+              <p className="mx-auto mb-10 max-w-2xl text-center text-sm text-muted-foreground">
+                The steps differ slightly between the {page.brand} app on a phone and the website on a
+                computer, so both are below.
+              </p>
+
+              <div className="grid gap-8 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Smartphone className="h-4 w-4" aria-hidden /> On iPhone or Android
+                  </h3>
+                  <ol className="space-y-3">
+                    {pc.mobileSteps.map((s, i) => (
+                      <li key={s.title} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                          {i + 1}
+                        </span>
+                        <h4 className="mt-3 font-semibold">{s.title}</h4>
+                        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                <div>
+                  <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Monitor className="h-4 w-4" aria-hidden /> On a computer
+                  </h3>
+                  <ol className="space-y-3">
+                    {pc.desktopSteps.map((s, i) => (
+                      <li key={s.title} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm font-bold text-muted-foreground">
+                          {i + 1}
+                        </span>
+                        <h4 className="mt-3 font-semibold">{s.title}</h4>
+                        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.text}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+
+              {/* What this tool actually does for THIS platform — resolutions,
+                  formats, what it will and will not attempt. */}
+              {pc.features.length > 0 ? (
+                <div className="mt-12">
+                  <h3 className="mb-5 text-center text-lg font-semibold">
+                    What the {page.brand} downloader handles
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {pc.features.map((ft) => (
+                      <div key={ft.title} className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+                        <h4 className="text-sm font-semibold">{ft.title}</h4>
+                        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{ft.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : (
+        /* How it works — the templated fallback, for platforms without their
+           own written walkthrough. */
         <section className="border-t border-border/60 py-16 sm:py-20">
           <div className="container max-w-5xl">
             <h2 className="mb-10 text-center text-2xl font-semibold tracking-[-0.02em] sm:text-3xl">
@@ -312,6 +419,7 @@ export default async function DownloaderPage({
             </ol>
           </div>
         </section>
+        )}
 
         {/* SEO content + benefits */}
         <section className="border-t border-border/60 py-16 sm:py-20">

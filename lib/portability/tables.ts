@@ -247,6 +247,24 @@ export const OWNER_COLUMN: Record<string, string> = {
   user_interest_profile: "user_id",
   user_presence_status: "user_id",
   user_stickers: "user_id",
+
+  /* Creator Studio™ (Feature 15 Part 9, migration 0140) */
+  // The dashboard layout they arranged — entirely their own choices.
+  creator_studio_prefs: "user_id",
+  // Their calendar: ideas, campaigns and launches they wrote down. As personal
+  // as a note, and nobody else's data appears in it.
+  content_plan: "user_id",
+  /*
+    Collaborations they were invited INTO, keyed by the invitee.
+
+    `user_id` rather than `invited_by`: this is the row that says "you worked on
+    this post", which is the collaborator's own record of their own work. It
+    names whoever invited them, and that is the same shape as `follows` — a
+    deliberate, mutually-known approach from another member, not an observation
+    about them. The mirror side (people YOU invited) is reachable from the posts
+    you own, which are already exported.
+  */
+  post_collaborators: "user_id",
 };
 
 /**

@@ -97,6 +97,17 @@ export const DATA_DOMAINS: DataDomain[] = [
       // FrenzDNA™ — per-category interest weights, self-owned (Feature 15
       // Part 8, migration 0133).
       "user_interest_profile",
+      // ── Creator Studio™ (Feature 15 Part 9, migration 0140) ──────────────
+      // The dashboard a creator arranged for themselves.
+      "creator_studio_prefs",
+      // Content-calendar entries that are NOT posts: ideas, campaigns, events,
+      // launches. Deliberately its own table — a plan has no media, no source
+      // URL and no publisher semantics, and putting it in `posts` would place
+      // non-content rows behind every feed query in the product.
+      "content_plan",
+      // Permission-based co-creation. An invite is pending until accepted, and
+      // only an accepted collaborator is credited or may open the analytics.
+      "post_collaborators",
       "user_presence_status",
       "user_restrictions",
     ],

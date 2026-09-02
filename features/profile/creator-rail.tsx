@@ -144,7 +144,11 @@ function Card({
 
 const TOOLS: { title: string; sub: string; icon: LucideIcon; tile: string; href?: string; feature: string }[] = [
   { title: "Settings", sub: "Account, privacy & appearance", icon: Settings, tile: "from-slate-500 to-slate-700", href: "/account", feature: "Settings" },
-  { title: "Creator Dashboard", sub: "Manage your profile", icon: LayoutDashboard, tile: "from-violet-500 to-purple-600", href: "/account/identity", feature: "Creator Dashboard" },
+  /* 🔴 Now a real destination (Feature 15 Part 9). This tile said "Creator
+     Dashboard" and pointed at /account/identity — the profile EDITOR, which is
+     not a dashboard and is not what anyone tapping this expects. Creator Studio
+     is the screen it always described. */
+  { title: "Creator Studio", sub: "Content, audience & goals", icon: LayoutDashboard, tile: "from-violet-500 to-purple-600", href: "/studio", feature: "Creator Studio" },
   { title: "Analytics", sub: "Track performance", icon: BarChart3, tile: "from-sky-500 to-blue-600", href: "/account/analytics", feature: "Analytics" },
   { title: "Monetization", sub: "Earn from your content", icon: DollarSign, tile: "from-emerald-500 to-teal-600", feature: "Monetization" },
   { title: "Ad Center", sub: "Create and manage ads", icon: Megaphone, tile: "from-amber-500 to-orange-600", feature: "Ad Center" },

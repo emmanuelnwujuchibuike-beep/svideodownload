@@ -280,24 +280,27 @@ describe("the real repository — no phantom drift", () => {
 
   it("🔴 reports ZERO factual-breaks — the 23 were phantoms", () => {
     /*
-      The real answer, from a readable repo: three dead basePaths, all of them
-      unbuilt products (/studio, /cloud, /smart) that contribute no nav links.
+      The real answer, from a readable repo: a small number of dead basePaths,
+      all of them unbuilt products that contribute no nav links.
       `detectDeadBasePaths` grades those "stale", not "factual-break" — which
       is exactly the "3 stale" chip beside the 23 in the screenshot. So the
       stale count was right all along and every factual-break was invented by
       the empty snapshot.
+
+      It was three (/studio, /cloud, /smart); /studio was built in Feature 15
+      Part 9, so it is two now.
     */
     const dead = detectDeadBasePaths(real);
     const breaks = dead.filter((f) => f.severity === "factual-break").map((f) => f.summary);
     expect(breaks, `phantom findings: ${breaks.join(" | ")}`).toEqual([]);
 
-    // The genuinely-unbuilt three. Listed rather than counted, so building one
-    // fails here and prompts removing it from this list.
-    expect(dead.map((f) => f.nodeId).sort()).toEqual([
-      "product:cloud",
-      "product:smart",
-      "product:studio",
-    ]);
+    /*
+      The genuinely-unbuilt ones. Listed rather than counted, so building one
+      fails here and prompts removing it from this list — which is exactly what
+      happened: `product:studio` came off when Creator Studio shipped (Feature
+      15 Part 9). /studio is a real route now, so it is no longer dead.
+    */
+    expect(dead.map((f) => f.nodeId).sort()).toEqual(["product:cloud", "product:smart"]);
   });
 
   it("does not block publishing", () => {

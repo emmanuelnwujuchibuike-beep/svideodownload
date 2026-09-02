@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { sweepDueScheduledPosts } from "@/lib/creator/schedule";
 import { cronAuthorized } from "@/lib/cron/auth";
 import { recomputeHotScores, recomputeTrustScores } from "@/lib/social/feed";
 import { recomputeMomentumScores } from "@/lib/social/momentum";
@@ -24,13 +25,21 @@ async function run(request: Request) {
   }
   // Maintenance: refresh trust scores first (feeds into discovery), then
   // recompute trending with the latest counters.
-  const [trust, updated, soundsUpdated, momentumUpdated] = await Promise.all([
+  const [trust, updated, soundsUpdated, momentumUpdated, publishedOnSchedule] = await Promise.all([
     recomputeTrustScores(),
     recomputeHotScores(),
     recomputeSoundTrendScores(),
     recomputeMomentumScores(),
+    /*
+      Scheduled publishing's guaranteed floor (Feature 15 Part 9). The sweep
+      normally runs off real traffic, within about a minute of a post's time;
+      this is what publishes a due post on a site nobody visited overnight.
+      Same "ride an existing cron rather than claim a scarce slot" call the
+      Momentum Engine made above.
+    */
+    sweepDueScheduledPosts(),
   ]);
-  return NextResponse.json({ ok: true, updated, trust, soundsUpdated, momentumUpdated });
+  return NextResponse.json({ ok: true, updated, trust, soundsUpdated, momentumUpdated, publishedOnSchedule });
 }
 
 export const GET = run; // Vercel cron uses GET

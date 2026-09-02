@@ -109,6 +109,30 @@ export const SETTINGS: readonly SettingEntry[] = [
   { id: "profile.business", category: "profile", label: "Business profile", description: "Overview, contact details, opening hours and catalogue.", keywords: ["business", "shop", "hours", "contact", "catalogue", "company"], href: "/account/business", status: "live" },
   { id: "profile.professional", category: "profile", label: "Professional profile", description: "Portfolio, experience and credentials.", keywords: ["portfolio", "cv", "resume", "experience", "work", "credentials"], href: "/account/professional", status: "live" },
   { id: "profile.analytics", category: "profile", label: "Your analytics", description: "How your profile and posts are performing.", keywords: ["stats", "insights", "views", "performance", "reach"], href: "/account/analytics", status: "live" },
+
+  /* ── Creator Studio (Feature 15 Part 9) ────────────────────────────────
+     Listed under `creator`, the category this Part flipped from planned to
+     live. Each row is a real screen; a member searching "schedule a post" or
+     "when should I post" now gets an answer instead of an empty result. */
+  { id: "creator.studio", category: "creator", label: "Creator Studio", description: "Your dashboard: today's performance, goals and what to make next.", keywords: ["studio", "creator", "dashboard", "performance", "today", "goal"], href: "/studio", status: "live" },
+  { id: "creator.content", category: "creator", label: "Manage your content", description: "Edit captions and hashtags, pin, schedule, archive or delete your posts.", keywords: ["edit post", "caption", "hashtags", "pin", "archive", "delete post", "schedule", "draft", "manage"], href: "/studio/content", status: "live" },
+  { id: "creator.audience", category: "creator", label: "Audience", description: "Growth, when your audience watches, returning viewers and top supporters.", keywords: ["audience", "followers", "growth", "when to post", "returning", "supporters", "retention"], href: "/studio/audience", status: "live" },
+  { id: "creator.calendar", category: "creator", label: "Content calendar", description: "Scheduled posts and everything you plan to make.", keywords: ["calendar", "schedule", "plan", "campaign", "upcoming", "publish later"], href: "/studio/calendar", status: "live" },
+  { id: "creator.journey", category: "creator", label: "Journey & health", description: "Your milestones, achievements, Creator Health and Creator Universe.", keywords: ["journey", "milestones", "achievements", "health", "burnout", "consistency", "universe"], href: "/studio/journey", status: "live" },
+  {
+    id: "creator.monetisation",
+    category: "creator",
+    label: "Creator earnings",
+    description: "Payouts, revenue share and tips.",
+    keywords: ["earnings", "revenue", "payout", "money", "monetisation", "monetization", "tips"],
+    // null, enforced by the suite: a planned setting that links somewhere sends
+    // a member to a screen that cannot answer them.
+    href: null,
+    status: "planned",
+    /* Honest, not hidden — the same discipline every other `planned` row here
+       keeps. Naming what is missing is what makes this registry worth reading. */
+    note: "No payout rails exist: lib/platform/commerce-platform.ts lists the Creator Payout Service as planned, and there is no earnings ledger to report from.",
+  },
   { id: "profile.creator-lounge", category: "profile", label: "Creator Lounge", description: "Unanswered questions, active discussions, and top-reacted comments on your posts.", keywords: ["comments", "questions", "discussions", "engagement", "creator lounge", "moderation"], href: "/account/creator-lounge", status: "live" },
   { id: "profile.versions", category: "profile", label: "Layout history", description: "Restore a previous profile layout.", keywords: ["history", "undo", "restore", "previous", "version", "revert"], href: "/account/layout-studio", status: "backend-only", note: "Part 20 built version history (migration 0114); it has no screen of its own yet and 0114 is unapplied." },
 

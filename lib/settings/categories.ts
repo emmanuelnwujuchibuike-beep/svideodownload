@@ -78,7 +78,20 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
   { id: "live", label: "Live streaming", blurb: "Stream quality, moderation and replays.", icon: "Radio", tint: "rose", status: "planned", note: "No live product yet." },
   { id: "communities", label: "Communities", blurb: "Membership, roles and community alerts.", icon: "Users", tint: "blue", status: "planned", note: "No communities product yet." },
   { id: "marketplace", label: "Marketplace", blurb: "Listings, orders and payouts.", icon: "Store", tint: "emerald", status: "planned", note: "Marketplace was REMOVED in the AdSense content cleanup (2026-08-02) and has not returned." },
-  { id: "creator", label: "Creator platform", blurb: "Monetisation, analytics and creator tools.", icon: "Sparkles", tint: "amber", status: "planned", note: "Creator analytics exist under Profile; there is no separate creator platform." },
+  /*
+    🔴 `live` as of Feature 15 Part 9. The note it used to carry — "Creator
+    analytics exist under Profile; there is no separate creator platform" — was
+    an accurate description of the gap, and Creator Studio (`/studio`) is what
+    closed it: content management, audience, calendar, journey and health in one
+    place, composing the analytics that already existed rather than forking them.
+
+    MONETISATION is still absent from it, and that is not an oversight: this
+    platform has no creator payout rails at all (see
+    lib/platform/commerce-platform.ts, where the Creator Payout Service has
+    always been `planned`). The blurb says "tools" rather than "monetisation"
+    because a category label should not promise a screen that cannot exist yet.
+  */
+  { id: "creator", label: "Creator platform", blurb: "Your Studio: content, audience, calendar and analytics.", icon: "Sparkles", tint: "amber", status: "live" },
   { id: "business", label: "Business platform", blurb: "Business profile, hours and catalogue.", icon: "Briefcase", tint: "emerald", status: "live" },
   { id: "ai", label: "AI Studio", blurb: "Assistants, generation and AI privacy.", icon: "Sparkles", tint: "purple", status: "planned", note: "No AI Studio product yet. The settings assistant itself is designed but unbuilt — see docs/FEATURE_18_PART_21_SETTINGS_CENTER.md." },
   { id: "automation", label: "Automation", blurb: "Rules that change settings for you.", icon: "Workflow", tint: "cyan", status: "planned", note: "Needs a scheduler: a PWA is not running at 10pm, so time-based rules require server-side evaluation. Designed in the Part 21 doc." },

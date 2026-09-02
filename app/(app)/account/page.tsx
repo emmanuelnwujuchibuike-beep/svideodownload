@@ -209,6 +209,11 @@ export default async function AccountPage() {
       items: [
         { href: "/downloads", Icon: Download, title: "Downloads", sub: "Your saved library", tint: "blue" },
         { href: "/saved", Icon: Bookmark, title: "Saved", sub: "Posts you bookmarked", tint: "violet" },
+        /* Creator Studio (Feature 15 Part 9) sits ABOVE Analytics deliberately:
+           it is the front door, and the analytics screen is one of the things
+           it links to. Analytics keeps its own row — it is Business-gated and
+           people already know where it is. */
+        { href: "/studio", Icon: Sparkles, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
         { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
         {
           href: "/account/personalization",

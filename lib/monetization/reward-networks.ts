@@ -137,7 +137,9 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
       timer, so the two "download started" gates behave alike.
     */
     supports: [...UNLOCK_NETWORKS, "interstitial"],
-    fallback: "rewarded_video",
+    // Matches the default below — a fallback that disagreed with the default
+    // would send an unsupported pick somewhere the owner did not choose.
+    fallback: "interstitial",
     note: "“Full-screen interstitial” plays the Hilltop VAST and unlocks when it finishes — the stand-in while Offerium is pending.",
   },
   {
@@ -264,10 +266,29 @@ export const DEFAULT_REWARD_NETWORKS: RewardNetworkMap = {
   multilink_fetch: { network: "interstitial", gptAdUnitPath: "" },
   batch_download: { network: "interstitial", gptAdUnitPath: "" },
   batch_complete: { network: "interstitial", gptAdUnitPath: "" },
-  // NOT gpt_rewarded: the real GPT flow is paused on these two surfaces until a
+  // NOT gpt_rewarded: the real GPT flow is paused on these surfaces until a
   // Google Ad Manager account exists (see `rewarded_video` above). Defaulting
   // them to GPT would make this table describe a flow that isn't running.
-  hd_download: { network: "rewarded_video", gptAdUnitPath: "" },
+  /*
+    🔴 `interstitial`, CHANGED 2026-09-02 — and the default is what matters here.
+
+    Owner: "i want hiltop vast to be the acting reward ad in place of offerium
+    untill offerium approved, so the batch download, top 2 quality download
+    started should show hiltop ad", then: "the reward ad still only shows for
+    download complete on top qualities and batch downloads".
+
+    Adding `interstitial` to this surface's `supports` made it SELECTABLE; it did
+    not make it ACTIVE. There is no `reward_networks` row in the database at all
+    (verified against the live settings table), so every surface runs on the
+    default — and this one still said `rewarded_video`, the old slot-based gate.
+    The top-quality gate therefore never reached the Hilltop VAST branch.
+
+    Changing the default is what turns it on, and because nothing is stored it
+    takes effect with no admin action. `batch_download` and `multilink_batch`
+    already defaulted to `interstitial`, so this brings the third "download
+    started" gate in line with the two that were already right.
+  */
+  hd_download: { network: "interstitial", gptAdUnitPath: "" },
   video_preview: { network: "rewarded_video", gptAdUnitPath: "" },
   wallpaper: { network: "interstitial", gptAdUnitPath: "" },
   history_video: { network: "interstitial", gptAdUnitPath: "" },

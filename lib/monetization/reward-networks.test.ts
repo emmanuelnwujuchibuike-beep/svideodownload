@@ -25,9 +25,31 @@ describe("defaults describe what the product ACTUALLY does today", () => {
     is deliberately paused (no Google Ad Manager account — Google's public TEST
     unit doesn't fill in production, so every top-quality download dead-ended).
   */
-  it("routes HD and preview unlocks to the reward_video gate, not GPT", () => {
-    expect(DEFAULT_REWARD_NETWORKS.hd_download.network).toBe("rewarded_video");
+  it("🔴 routes the TOP-QUALITY gate to the Hilltop VAST (owner, 2026-09-02)", () => {
+    /*
+      "the reward ad still only shows for download complete on top qualities and
+      batch downloads."
+
+      Adding `interstitial` to this surface's `supports` made it SELECTABLE and
+      not ACTIVE — and there is no `reward_networks` row in the database at all,
+      so every surface runs on the DEFAULT. This one still said
+      `rewarded_video`, so the gate never reached the VAST branch.
+
+      The default is the switch. Changing it is what turned the feature on, and
+      nothing is stored, so it applied with no admin action.
+    */
+    expect(DEFAULT_REWARD_NETWORKS.hd_download.network).toBe("interstitial");
+    // Preview is a different moment and was not part of the ask — unchanged.
     expect(DEFAULT_REWARD_NETWORKS.video_preview.network).toBe("rewarded_video");
+  });
+
+  it("🔴 gives all three 'download started' gates the SAME network", () => {
+    // batch, multi-link batch and top-quality are one moment class. They
+    // disagreed for a day and that was the bug.
+    const started = ["batch_download", "multilink_batch", "hd_download"] as const;
+    for (const id of started) {
+      expect(DEFAULT_REWARD_NETWORKS[id].network, id).toBe("interstitial");
+    }
   });
 
   it("routes every batch moment to the full-screen interstitial", () => {
@@ -120,7 +142,7 @@ describe("resolution falls back rather than dead-ending", () => {
   });
 
   it("uses the surface default when nothing is stored at all", () => {
-    expect(resolveRewardNetwork("hd_download", null, CAPS).network).toBe("rewarded_video");
+    expect(resolveRewardNetwork("hd_download", null, CAPS).network).toBe("interstitial");
     expect(resolveRewardNetwork("multilink_batch", undefined, CAPS).network).toBe("interstitial");
   });
 
@@ -139,7 +161,7 @@ describe("merging a stored map", () => {
   it("fills gaps from the defaults", () => {
     const merged = mergeRewardNetworks({ multilink_batch: { network: "none", gptAdUnitPath: "" } });
     expect(merged.multilink_batch.network).toBe("none");
-    expect(merged.hd_download.network).toBe("rewarded_video");
+    expect(merged.hd_download.network).toBe("interstitial");
   });
 
   it("discards a value the surface doesn't support instead of storing it", () => {

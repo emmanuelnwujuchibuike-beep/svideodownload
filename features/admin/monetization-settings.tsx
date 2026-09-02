@@ -998,22 +998,6 @@ export function MonetizationSettings({
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <HilltopNumber
-            label="Download complete — skip after (s)"
-            value={vast.skipAfterSeconds}
-            min={0}
-            max={60}
-            busy={busy}
-            onCommit={(n) => void setVast({ skipAfterSeconds: n })}
-          />
-          <HilltopNumber
-            label="Shared cooldown between ads (s)"
-            value={Math.round((vast.cooldownMs ?? 0) / 1000)}
-            min={0}
-            max={3600}
-            busy={busy}
-            onCommit={(n) => void setVast({ cooldownMs: n * 1000 })}
-          />
-          <HilltopNumber
             label="Batch / HD / top-quality — skip after (s)"
             value={state.batchGateSeconds ?? 30}
             min={0}
@@ -1046,6 +1030,12 @@ export function MonetizationSettings({
             onCommit={(n) => void persist({ ...state, ambientCooldownSeconds: n })}
           />
         </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          The normal <strong>download-complete</strong> skip and the shared{" "}
+          <strong>cooldown</strong> are set in the full-screen video block under
+          <strong> Interstitials and rewards</strong> — one control each, deliberately not
+          repeated here.
+        </p>
         <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
           The gesture moment keeps its own skip and cooldown so it can be gentler than the
           download ones: a download ad is the price of a file the visitor asked for, and an
@@ -1857,57 +1847,28 @@ export function MonetizationSettings({
             sharing the interstitial skip delay above — 30 seconds on an idle ad
             would be intolerable, and 5 seconds before a batch would not pay for it.
           */}
+          {/*
+            🔴 THE BATCH TIMERS MOVED, THEY DID NOT VANISH (owner, 2026-09-01: "i
+            set the batch download and download completed as 15 secs … but all
+            are now 5 secs").
+
+            Two controls were editing each of these values — a free number in the
+            HilltopAds timer panel and a fixed `<select>` here — and the select
+            could not express what the owner set. "After a batch" offered only 0,
+            5 and 10 seconds, so 15 was not representable and the stored value
+            came back 10; "Before a batch" offered no 15 either and stored 5.
+
+            Two editors for one value, with different ranges, and the restrictive
+            one wins. That is my duplication, introduced when the timer panel was
+            added, and the fix is one editor per value rather than a wider
+            dropdown.
+          */}
           {state.interstitialBatchDownload ? (
-            <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">Before a batch</span>
-                  <span className="block truncate text-xs text-muted-foreground">Skippable after…</span>
-                </span>
-                <select
-                  value={state.batchGateSeconds}
-                  disabled={busy}
-                  onChange={async (e) => {
-                    const v = Number(e.target.value);
-                    const prev = state.batchGateSeconds;
-                    const next = { ...state, batchGateSeconds: v };
-                    setState(next);
-                    const ok = await persist(next);
-                    if (!ok) setState((x) => ({ ...x, batchGateSeconds: prev }));
-                  }}
-                  className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
-                >
-                  <option value={0}>Immediately</option>
-                  <option value={5}>5 seconds</option>
-                  <option value={15}>15 seconds</option>
-                  <option value={30}>30 seconds</option>
-                  <option value={45}>45 seconds</option>
-                </select>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-secondary/20 p-3.5">
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">After a batch</span>
-                  <span className="block truncate text-xs text-muted-foreground">Files are already saved.</span>
-                </span>
-                <select
-                  value={state.batchCompleteSeconds}
-                  disabled={busy}
-                  onChange={async (e) => {
-                    const v = Number(e.target.value);
-                    const prev = state.batchCompleteSeconds;
-                    const next = { ...state, batchCompleteSeconds: v };
-                    setState(next);
-                    const ok = await persist(next);
-                    if (!ok) setState((x) => ({ ...x, batchCompleteSeconds: prev }));
-                  }}
-                  className="h-9 shrink-0 rounded-lg bg-background px-2.5 text-sm font-medium text-foreground outline-none ring-1 ring-inset ring-border focus:ring-primary"
-                >
-                  <option value={0}>Immediately</option>
-                  <option value={5}>5 seconds</option>
-                  <option value={10}>10 seconds</option>
-                </select>
-              </div>
-            </div>
+            <p className="mt-2.5 rounded-2xl border border-border/70 bg-secondary/20 p-3.5 text-xs leading-relaxed text-muted-foreground">
+              The <strong>before</strong> and <strong>after a batch</strong> timers are set
+              in <strong>HilltopAds → Timers</strong>, where they take any number of
+              seconds rather than a fixed list.
+            </p>
           ) : null}
 
           {/*

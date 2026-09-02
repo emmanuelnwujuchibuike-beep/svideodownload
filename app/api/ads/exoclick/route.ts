@@ -42,18 +42,91 @@ const FETCH_TIMEOUT_MS = 5000;
 
 const ZONES: ReadonlySet<string> = new Set<string>(AD_ZONES);
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  WHICH ADS THIS VISITOR MAY SEE, BY PLAN
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-02: "note all this ads should never show on pro and business
+ * users, only a 5secs download completes on batch and high quality download
+ * should show on pro user alone, no other ad apart from the 5secs download
+ * complete hiltop vast video."
+ *
+ *   business → nothing, ever. Unchanged.
+ *   pro      → the download-COMPLETION video only, and only for 5 seconds.
+ *   free     → everything.
+ *
+ * ── 🔴 WHY THE DECISION IS MADE HERE AND NOT ON THE CLIENT ───────────────────
+ *
+ * `/api/ads/config` — the only other thing the interstitial reads — is served
+ * `Cache-Control: public, max-age=60`, i.e. a SHARED cache. Putting a per-plan
+ * value in it would hand one visitor's entitlement to the next, which for an
+ * ads decision means either showing a paying member ads or silently switching
+ * them off for everyone. This endpoint is `private, no-store` and already
+ * resolves the session, so it is the only correct place for the rule.
+ *
+ * The client needs no copy of this policy: a refused zone answers `{ad: null}`,
+ * which every caller already treats as "no fill" and fails open on.
+ */
+type AdPolicy = {
+  allowed: (zone: string) => boolean;
+  skipOverride: number | null;
+  /**
+   * May this visitor be offered an upgrade on the ad overlay?
+   *
+   * 🔴 FALSE FOR ANYONE WHO ALREADY PAYS. A Pro member does still see one ad —
+   * the 5s completion video — and telling the person who bought Pro to "upgrade
+   * to Pro" inside it would be the worst copy on the site. Decided here, with
+   * the plan, rather than by the overlay guessing from the skip length.
+   */
+  offerUpgrade: boolean;
+};
+
+/**
+ * The two moments that run AFTER the file is already saved.
+ *
+ * A Pro member is paying not to be interrupted; a short ad once the thing they
+ * asked for is already in hand is the one placement that does not stand between
+ * them and it. That is the whole reason this is the exception the owner carved.
+ */
+const COMPLETION_ZONES: ReadonlySet<string> = new Set(["download_complete", "batch_download_complete"]);
+
+/** The owner's number for the Pro exception, and the only ad they ever see. */
+const PRO_COMPLETION_SKIP_SECONDS = 5;
+
+const ALLOW_ALL: AdPolicy = { allowed: () => true, skipOverride: null, offerUpgrade: true };
+const ALLOW_NONE: AdPolicy = { allowed: () => false, skipOverride: null, offerUpgrade: false };
+
 /** Same fast path as /api/ads: no auth cookie means no session, means free. */
-async function isPremium(request: Request): Promise<boolean> {
+async function adPolicyFor(request: Request): Promise<AdPolicy> {
   const cookies = request.headers.get("cookie") ?? "";
-  if (!/(^|;\s*)sb-[^=]*-auth-token/.test(cookies)) return false;
+  if (!/(^|;\s*)sb-[^=]*-auth-token/.test(cookies)) return ALLOW_ALL;
   try {
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    return (await getUserPlan(user?.id)) !== "free";
+    const plan = await getUserPlan(user?.id);
+    if (plan === "business") return ALLOW_NONE;
+    if (plan === "pro") {
+      return {
+        allowed: (zone) => COMPLETION_ZONES.has(zone),
+        skipOverride: PRO_COMPLETION_SKIP_SECONDS,
+        // They already upgraded. Never sell Pro to a Pro member.
+        offerUpgrade: false,
+      };
+    }
+    return ALLOW_ALL;
   } catch {
-    return false;
+    /*
+      🔴 A FAILED PLAN LOOKUP MUST NOT BILL A SUBSCRIBER WITH AN AD. Showing an
+      ad to someone who paid not to see one is the worst outcome available here,
+      and it is worse than losing one free visitor's impression — so an unknown
+      session is treated as free ONLY when there was no auth cookie at all
+      (handled above). Reaching this catch means there WAS a session we could
+      not resolve, so refuse.
+    */
+    return ALLOW_NONE;
   }
 }
 
@@ -104,7 +177,8 @@ export async function GET(request: Request) {
   const zone = new URL(request.url).searchParams.get("zone") ?? "";
   if (!ZONES.has(zone)) return NextResponse.json({ ad: null }, { status: 400 });
 
-  if (await isPremium(request)) return NextResponse.json({ ad: null });
+  const policy = await adPolicyFor(request);
+  if (!policy.allowed(zone)) return NextResponse.json({ ad: null });
 
   const settings = await getMonetizationSettings();
 
@@ -160,7 +234,21 @@ export async function GET(request: Request) {
     const creative = parseVast(xml);
     if (creative) {
       return NextResponse.json(
-        { ad: { ...creative, adId, zone } },
+        {
+          ad: {
+            ...creative,
+            adId,
+            zone,
+            /*
+              A plan-imposed hold, when there is one. Only Pro sets it, and it
+              is the SHORTER 5s the owner specified — sent with the creative
+              because this is the only per-visitor response in the chain (the
+              shared public config cannot carry an entitlement).
+            */
+            ...(policy.skipOverride !== null ? { skipAfterSeconds: policy.skipOverride } : {}),
+            offerUpgrade: policy.offerUpgrade,
+          },
+        },
         // Never shared between visitors: the creative is targeted to this one,
         // and a cached VAST would also mean a reused impression pixel.
         { headers: { "Cache-Control": "private, no-store" } },

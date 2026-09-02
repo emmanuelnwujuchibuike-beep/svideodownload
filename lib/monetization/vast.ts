@@ -83,6 +83,28 @@ export interface VastCreative {
    * for shared-mode slots, which have no row.
    */
   adId?: string;
+  /**
+   * A hold imposed by the VISITOR'S PLAN, overriding the admin's number.
+   *
+   * Set only by `/api/ads/exoclick`, and today only for Pro — the owner's
+   * "5secs download complete" exception, which is the single ad a Pro member
+   * ever sees. Not part of the VAST; `parseVast` never sets it.
+   *
+   * 🔴 IT TRAVELS WITH THE CREATIVE BECAUSE IT IS PER-VISITOR. The public ad
+   * config is served `Cache-Control: public, max-age=60` — a shared cache — so
+   * an entitlement placed there would be handed to whoever asked next. This
+   * response is `private, no-store`, which makes it the only correct carrier.
+   */
+  skipAfterSeconds?: number;
+  /**
+   * Whether to show the "Tired of ads? Go Pro" link on the overlay.
+   *
+   * Set by `/api/ads/exoclick` from the visitor's plan, never inferred on the
+   * client: a Pro member DOES still see one ad (the 5s completion video), and
+   * selling them the plan they already bought inside it would be the worst copy
+   * on the site. Absent is treated as false, so a stale client cannot show it.
+   */
+  offerUpgrade?: boolean;
 }
 
 /** Pull the text out of an element, whether it is CDATA-wrapped or bare. */

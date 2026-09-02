@@ -935,6 +935,22 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
                 index={i}
                 kind={tab}
                 active={f.formatId === activeId}
+                /* The SAME call the gate makes, with this row's own rank — so
+                   the tag and the gate can never disagree about what costs an ad. */
+                gated={
+                  rewardAdsFor({
+                    filesize: f.filesize ?? null,
+                    showAds,
+                    kind: tab,
+                    qualityRank: i,
+                    tierConfig: {
+                      topTierCount: rewardTopTierCount,
+                      videoTopTierSeconds: rewardVideoTopTierSeconds,
+                      imageAudioTopTierSeconds: rewardImageAudioTopTierSeconds,
+                      imageAudioSkipAfterSeconds: rewardImageAudioSkipAfterSeconds,
+                    },
+                  }).length > 0
+                }
                 onSelect={() => setActiveId(f.formatId)}
               />
             ))}
@@ -1245,12 +1261,27 @@ function FormatRow({
   index,
   kind,
   active,
+  gated,
   onSelect,
 }: {
   format: MediaFormat;
   index: number;
   kind: MediaKind;
   active: boolean;
+  /**
+   * This option costs an ad to unlock (owner, 2026-09-02: "put a small ad tag
+   * on the highest quality").
+   *
+   * 🔴 IT IS A PROMISE, SO IT IS DERIVED FROM THE SAME RULE THE GATE USES.
+   * `rewardAdsFor` decides both this badge and whether an ad actually plays, so
+   * the tag cannot say "ad" on a format that downloads straight through, or
+   * stay silent on one that stops you. A badge that lies about a cost is worse
+   * than no badge — it teaches people to distrust the whole row.
+   *
+   * Already false for Pro and Business: `rewardAdsFor` returns [] when
+   * `showAds` is false, so a paying member never sees an ad tag either.
+   */
+  gated: boolean;
   onSelect: () => void;
 }) {
   const label =
@@ -1299,6 +1330,16 @@ function FormatRow({
         {format.fps && format.fps >= 50 ? (
           <span className="rounded bg-primary/15 px-1 py-0.5 text-[9px] font-bold text-primary">
             {format.fps}
+          </span>
+        ) : null}
+        {gated ? (
+          /* Amber, matching the download button's own gated treatment, so the
+             row and the button tell the same story before the tap. */
+          <span
+            className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400"
+            title="Watch a short ad to unlock this quality"
+          >
+            Ad
           </span>
         ) : null}
       </span>

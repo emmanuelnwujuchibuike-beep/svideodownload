@@ -182,8 +182,19 @@ export function showInterstitial({
       first paint already shows the right number, then re-derived on
       `loadedmetadata` once the real file's length is known.
     */
+    /*
+      🔴 THE VISITOR'S PLAN OUTRANKS THE ADMIN'S NUMBER.
+
+      A Pro member's one permitted ad is the owner's 5-second completion video,
+      and `/api/ads/exoclick` sends that hold on the creative itself because it
+      is the only per-visitor response in this chain — the public ad config is a
+      SHARED cache and cannot carry an entitlement. Absent (every free visitor)
+      this is exactly the configured number, unchanged.
+    */
+    const configuredSeconds = creative.skipAfterSeconds ?? config.skipAfterSeconds;
+
     let skipAt = effectiveSkipSeconds({
-      configuredSeconds: config.skipAfterSeconds,
+      configuredSeconds,
       vastDurationSeconds: creative.durationSeconds,
     });
     let startedAtMs = 0;
@@ -344,7 +355,7 @@ export function showInterstitial({
     */
     video.addEventListener("loadedmetadata", () => {
       skipAt = effectiveSkipSeconds({
-        configuredSeconds: config.skipAfterSeconds,
+        configuredSeconds,
         vastDurationSeconds: creative.durationSeconds,
         mediaDurationSeconds: video.duration,
       });
@@ -431,6 +442,60 @@ export function showInterstitial({
       root.appendChild(click);
     } else {
       root.appendChild(video);
+    }
+
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       "TIRED OF ADS?" — the upgrade offer, at the bottom of the ad
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-02: "put an tired of ad upgrade to pro button at the bottom
+      of the reward vast video."
+
+      This is the one moment the pitch is genuinely earned: the visitor is
+      looking at the thing Pro removes. Same destination and the same promise as
+      the `TiredOfAds` banner elsewhere (/pricing), so the offer is one message
+      wherever it appears.
+
+      🔴 ONLY WHEN THE SERVER SAYS SO. `offerUpgrade` is decided from the plan in
+      `/api/ads/exoclick`, never inferred here — a Pro member DOES still see one
+      ad (the 5s completion video), and selling them the plan they already bought
+      inside it would be the worst copy on the site. Absent is treated as false,
+      so a stale client cannot show it either.
+
+      An <a>, not a button with `window.open`: a real link is what a WebView, a
+      long-press and a middle-click all understand, and it needs no popup
+      permission. `pointer-events:auto` because the chrome layer around it is
+      deliberately transparent to taps, and it is appended AFTER the click-through
+      layer so the advertiser's own click target cannot sit on top of it.
+    */
+    if (creative.offerUpgrade) {
+      const upgrade = document.createElement("a");
+      upgrade.href = "/pricing";
+      upgrade.textContent = "Tired of ads? Go Pro";
+      upgrade.style.cssText = [
+        "position:absolute",
+        "left:50%",
+        "transform:translateX(-50%)",
+        "bottom:calc(env(safe-area-inset-bottom,0px) + 18px)",
+        "pointer-events:auto",
+        "display:inline-flex",
+        "align-items:center",
+        "gap:6px",
+        "padding:10px 16px",
+        "border-radius:999px",
+        "background:linear-gradient(90deg,#2563eb,#7c3aed)",
+        "color:#fff",
+        "font:600 12.5px/1 system-ui,sans-serif",
+        "letter-spacing:.01em",
+        "text-decoration:none",
+        "box-shadow:0 8px 24px -10px rgba(124,58,237,.9)",
+        "white-space:nowrap",
+      ].join(";");
+      upgrade.addEventListener("click", () => {
+        track("ad_upgrade_click", { zone: creative.adId ?? null });
+      });
+      root.appendChild(upgrade);
     }
 
     chrome.appendChild(badge);

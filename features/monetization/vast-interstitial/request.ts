@@ -309,11 +309,22 @@ export interface InterstitialResult {
 const CREATIVE_TTL_MS = 120_000;
 const creativeCache = new Map<string, { creative: unknown; at: number }>();
 
-/** Which START moment implies which COMPLETION moment is seconds away. */
-const PREFETCHES_ON_START: Partial<Record<InterstitialTrigger, InterstitialTrigger>> = {
-  download: "download-complete",
-  wallpaper: "download-complete",
-  batch: "batch-complete",
+/**
+ * Which START moment implies which COMPLETION moment(s) are seconds away.
+ *
+ * 🔴 `batch` WARMS BOTH, and that is not belt-and-braces — it is a correctness
+ * fix. The top-quality gate reuses the `batch` trigger (one zone, one admin
+ * timer), but a single-file HD download finishes through
+ * `DOWNLOAD_COMPLETED_EVENT`, which fires `download-complete` — NOT
+ * `batch-complete`. Warming only the batch completion left the HD path's
+ * completion ad cold, which is the ~10.9s "late" all over again for exactly the
+ * moment the owner asked to be instant. Whichever one actually fires is now
+ * already in hand.
+ */
+const PREFETCHES_ON_START: Partial<Record<InterstitialTrigger, InterstitialTrigger[]>> = {
+  download: ["download-complete"],
+  wallpaper: ["download-complete"],
+  batch: ["batch-complete", "download-complete"],
 };
 
 /**
@@ -496,8 +507,7 @@ export async function requestVastInterstitial(
     to display anything, and its entire purpose is to make the NEXT moment
     instant. Gating it on the current moment's eligibility was the bug.
   */
-  const follows = PREFETCHES_ON_START[trigger];
-  if (follows) prefetchCreative(follows);
+  for (const follows of PREFETCHES_ON_START[trigger] ?? []) prefetchCreative(follows);
 
   if (!isEnabledFor(config, trigger)) return { shown: false, reason: "disabled" };
   /*

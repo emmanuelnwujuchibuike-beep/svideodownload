@@ -43,6 +43,8 @@ export type AnalyticsEventType =
    * means the ad was genuinely lost.
    */
   | "vast_media_fallback"
+  /** The "Tired of ads? Go Pro" link on the ad overlay was tapped. */
+  | "ad_upgrade_click"
   | "ad_impression"
   | "ad_click"
   /**

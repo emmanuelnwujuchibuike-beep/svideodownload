@@ -324,18 +324,102 @@ function prefetchCreative(trigger: InterstitialTrigger): void {
     .then((r) => (r.ok ? r.json() : null))
     .then((d) => {
       const creative = d?.ad ?? null;
-      if (creative) creativeCache.set(zone, { creative, at: Date.now() });
+      if (!creative) return;
+      creativeCache.set(zone, { creative, at: Date.now() });
+      warmMedia(creative.mediaUrl);
     })
     .catch(() => {
       /* The real path re-requests — this is only a head start. */
     });
 }
 
+/** The warmer currently buffering a creative, so it can be torn down. */
+let warmer: HTMLVideoElement | null = null;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 PREFETCHING THE VAST XML WAS NEVER THE SLOW PART
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `prefetchCreative` has always fetched the VAST DOCUMENT at download start,
+ * and its own comment calls that "the slowest step by a distance". Measured, it
+ * is not: the document is a few kB from our own origin. The MEDIA is the slow
+ * part, and it was never warmed — so at completion the player still started a
+ * cold multi-megabyte fetch that 302s to an IP-addressed CDN and comes back as
+ * a 206. That is the ~10.9s cold start behind the zero-impression report.
+ *
+ * A hidden `preload="auto"` video is the warm that actually matches: it is the
+ * SAME request the player will make (same URL, same mode, same range
+ * behaviour), so the bytes land in the HTTP cache under the key the overlay's
+ * own element will look up. A `fetch()` would not — it negotiates differently
+ * and would risk a second, uncached download.
+ *
+ * The service worker passes cross-origin media straight to the network
+ * (public/sw/routes.js: "Everything else — untouched"), so nothing here can
+ * poison a cache entry.
+ *
+ * 🔴 BOUNDED, because this is also the Android memory path. Exactly ONE warmer
+ * exists at a time, it is muted and never displayed, and it is torn down when
+ * the creative is taken, when a new one replaces it, or after 60s if the
+ * download never completes. An abandoned buffering video is precisely the kind
+ * of retained media that hurts a low-RAM device.
+ */
+function warmMedia(url: string | undefined): void {
+  if (!url || typeof document === "undefined") return;
+  /* Saver mode means the visitor has asked us not to spend their data on
+     speculative bytes. An ad is the definition of speculative. */
+  const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (conn?.saveData) return;
+
+  dropWarmer();
+  try {
+    const v = document.createElement("video");
+    v.src = url;
+    v.muted = true;
+    v.preload = "auto";
+    v.playsInline = true;
+    // Never rendered, never audible, never a layout participant.
+    v.style.cssText = "position:absolute;width:1px;height:1px;opacity:0;pointer-events:none";
+    v.setAttribute("aria-hidden", "true");
+    document.body.appendChild(v);
+    warmer = v;
+    window.setTimeout(() => {
+      if (warmer === v) dropWarmer();
+    }, WARM_TTL_MS);
+  } catch {
+    /* Warming is an optimisation; it must never break the download path. */
+  }
+}
+
+/** Release the warmer's buffer and its element. */
+function dropWarmer(): void {
+  const v = warmer;
+  warmer = null;
+  if (!v) return;
+  try {
+    // `removeAttribute("src")` + `load()` is what actually frees the buffered
+    // media; removing the element alone can leave the decoder holding it.
+    v.pause();
+    v.removeAttribute("src");
+    v.load();
+    v.remove();
+  } catch {
+    /* nothing to do */
+  }
+}
+
+/** How long a warmed creative may sit buffered before it is released. */
+const WARM_TTL_MS = 60_000;
+
 /** A cached creative for this zone, if one is in hand and still fresh. */
 function takeCachedCreative(zone: string): unknown | null {
   const hit = creativeCache.get(zone);
   if (!hit) return null;
   creativeCache.delete(zone);
+  /* The player is about to own this media, so the warmer's copy is now pure
+     retained memory. Released here rather than on a timer so the handover has
+     no window where two elements hold the same buffer. */
+  dropWarmer();
   return Date.now() - hit.at < CREATIVE_TTL_MS ? hit.creative : null;
 }
 
@@ -465,6 +549,24 @@ export async function requestVastInterstitial(
     }
     track("vast_loaded", { zone: ZONE });
 
+    /*
+      🔴 THE RESOLVE BUDGET IS DONE; PLAYBACK GETS ITS OWN.
+
+      These two waits are different promises and sharing one timer is what made
+      this zone report exactly zero impressions. Before a creative exists the
+      visitor may be waiting for nothing, so a short fail-open budget is right.
+      Now that one is in hand they are going to see an ad, the overlay is about
+      to be on screen, and abandoning it at 3s throws away both the seconds
+      already spent AND the impression — while the measured cold start for a
+      Hilltop creative is ~10.9s (scripts/vast-playback-probe.mjs).
+
+      A fresh controller, because the old one's abort has already been armed
+      against the resolve deadline and cannot be un-armed.
+    */
+    clearTimeout(budget);
+    const playController = new AbortController();
+    const playBudget = setTimeout(() => playController.abort(), config.startTimeoutMs);
+
     // The heavy half — React overlay + player — loads ONLY now, with a creative
     // already in hand. An empty zone never costs this bundle.
     const { showInterstitial } = await import("./overlay");
@@ -483,10 +585,11 @@ export async function requestVastInterstitial(
     const outcome = await showInterstitial({
       creative,
       config: effectiveConfig,
-      startSignal: controller.signal,
-      onStarted: () => clearTimeout(budget),
+      startSignal: playController.signal,
+      onStarted: () => clearTimeout(playBudget),
     });
 
+    clearTimeout(playBudget);
     clearTimeout(budget);
     lastShownAt.set(trigger, Date.now());
     lastAnyShownAt = Date.now();

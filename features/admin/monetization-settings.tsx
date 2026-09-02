@@ -1759,11 +1759,11 @@ export function MonetizationSettings({
                   />
                 ) : null}
                 <VastRow
-                  label="Startup timeout"
+                  label="Ad lookup timeout"
                   /* 🔴 Named as a DIFFERENT thing from the skip timer on purpose —
                      conflating them is how a slow network turns into a visitor
                      staring at a blank overlay for the length of the skip timer. */
-                  hint="How long we wait for the ad to START before giving up and letting the download run. NOT the skip timer."
+                  hint="How long we wait to FIND an ad before giving up and letting the download run. Not the skip timer, and no longer the playback wait."
                   control={
                     <select
                       value={vast.timeoutMs}
@@ -1772,6 +1772,28 @@ export function MonetizationSettings({
                       className={selectCls}
                     >
                       {[1000, 2000, 3000, 4000, 5000].map((n) => (
+                        <option key={n} value={n}>{`${n / 1000}s`}</option>
+                      ))}
+                    </select>
+                  }
+                />
+                <VastRow
+                  label="Playback timeout"
+                  /* 🔴 THE SETTING THAT WAS COSTING EVERY VIDEO IMPRESSION.
+                     It used to share the lookup timer above, capped at 5s, while
+                     a Hilltop creative measures ~10.9s to first frame — so the
+                     overlay aborted before `playing` and the impression pixel,
+                     which fires from that event, never went out. Its own control
+                     now, because they are genuinely different waits. */
+                  hint="Once an ad is FOUND, how long to wait for it to start playing. Below ~10s most video ads never register an impression."
+                  control={
+                    <select
+                      value={vast.startTimeoutMs}
+                      disabled={busy}
+                      onChange={(e) => void setVast({ startTimeoutMs: Number(e.target.value) })}
+                      className={selectCls}
+                    >
+                      {[3000, 6000, 9000, 12_000, 15_000, 20_000].map((n) => (
                         <option key={n} value={n}>{`${n / 1000}s`}</option>
                       ))}
                     </select>

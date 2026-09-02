@@ -39,8 +39,47 @@ export interface VastInterstitialConfig {
   skipEnabled: boolean;
   /** Seconds of playback before the skip control appears. */
   skipAfterSeconds: number;
-  /** Milliseconds to wait for the ad to START before failing open. */
+  /**
+   * Milliseconds to wait for a CREATIVE TO RESOLVE before failing open.
+   *
+   * 🔴 THIS NO LONGER COVERS PLAYBACK. See `startTimeoutMs`.
+   */
   timeoutMs: number;
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   *  🔴🔴 THE BUDGET THAT WAS SILENTLY EATING EVERY VIDEO IMPRESSION
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Owner, twice: the Hilltop VAST zone reads 0 impressions while the banner
+   * and slider zones serve normally.
+   *
+   * `timeoutMs` used to cover BOTH halves — resolving the VAST document AND
+   * getting the first frame on screen — with a default of 3000ms and a hard
+   * cap of 5000ms. Measured on production (scripts/vast-playback-probe.mjs),
+   * on an unthrottled connection, the creative reaches `playing` at:
+   *
+   *     loadstart 5476ms  →  loadedmetadata 10836ms  →  playing 10910ms
+   *
+   * The media 302s from `silent-basis.pro` to an IP-addressed CDN and is only
+   * then served as a 206. Ten seconds is the FAST case. The budget aborted at
+   * three, `overlay.ts` fires `<Impression>` from the video's `playing` event,
+   * and so the pixel never fired once. Not a low number — a structural zero.
+   *
+   * ── Why splitting the timer is the correct fix, not just raising it ─────
+   *
+   * The two halves are different promises. Before a creative exists, the
+   * visitor may be waiting for nothing, and failing open fast is right. Once a
+   * creative IS in hand the visitor is going to see an ad, the overlay is
+   * already on screen, and giving up merely wastes the seconds already spent
+   * AND the impression. So resolution stays on the short fail-open budget and
+   * playback gets its own, realistic one.
+   *
+   * Kept bounded, because "the ad is an optional enhancement" is still the
+   * rule — this is not permission for an unbounded wait. The real answer to
+   * the latency is warming the media at prefetch (see `warmMedia`), which is
+   * what lets playback start well inside this budget.
+   */
+  startTimeoutMs: number;
   /** Minimum gap between two interstitials, per browser. 0 = every time. */
   cooldownMs: number;
 }
@@ -62,6 +101,10 @@ export const DEFAULT_VAST_INTERSTITIAL: VastInterstitialConfig = {
   skipEnabled: true,
   skipAfterSeconds: 5,
   timeoutMs: 3000,
+  /* Measured: a cold Hilltop creative reaches `playing` at ~10.9s on an
+     unthrottled connection. 12s clears that with a little room; warming the
+     media at prefetch is what should make it land far sooner in practice. */
+  startTimeoutMs: 12_000,
   cooldownMs: 90_000,
 };
 
@@ -69,12 +112,20 @@ export const DEFAULT_VAST_INTERSTITIAL: VastInterstitialConfig = {
 export const VAST_LIMITS = {
   skipAfterSeconds: { min: 0, max: 30 },
   /*
-    The startup budget is capped at 5s on purpose. This runs while someone is
-    waiting for a file they asked for, and the whole design rule is that the ad
-    is an optional enhancement — a longer budget would make ExoClick's latency
-    the visitor's problem, which is precisely what fail-open exists to prevent.
+    The RESOLVE budget stays short and stays capped at 5s, for the original
+    reason: this runs while someone is waiting for a file they asked for, and
+    before a creative exists they may be waiting for nothing at all.
   */
   timeoutMs: { min: 500, max: 5000 },
+  /*
+    🔴 The PLAYBACK budget. Larger by design — once a creative is in hand the
+    visitor is going to see an ad and the overlay is already up, so abandoning
+    it throws away both the seconds already spent and the impression. The old
+    shared 5s ceiling was below the measured ~10.9s cold start, which is why
+    the VAST zone reported exactly zero. Still bounded: an ad may be slow, it
+    may not be indefinite.
+  */
+  startTimeoutMs: { min: 3000, max: 20_000 },
   cooldownMs: { min: 0, max: 24 * 60 * 60 * 1000 },
 } as const;
 
@@ -118,6 +169,12 @@ export function normalizeVastInterstitial(raw: unknown): VastInterstitialConfig 
       DEFAULT_VAST_INTERSTITIAL.timeoutMs,
       VAST_LIMITS.timeoutMs.min,
       VAST_LIMITS.timeoutMs.max,
+    ),
+    startTimeoutMs: clampInt(
+      v.startTimeoutMs,
+      DEFAULT_VAST_INTERSTITIAL.startTimeoutMs,
+      VAST_LIMITS.startTimeoutMs.min,
+      VAST_LIMITS.startTimeoutMs.max,
     ),
     cooldownMs: clampInt(
       v.cooldownMs,

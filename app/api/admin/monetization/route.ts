@@ -117,6 +117,12 @@ const schema = z.object({
       skipEnabled: z.boolean().default(true),
       skipAfterSeconds: z.number().int().min(0).max(30).default(5),
       timeoutMs: z.number().int().min(500).max(5000).default(3000),
+      /* 🔴 The PLAYBACK budget, separate from the resolve budget above. Sharing
+         one 5s ceiling for both is what made the VAST zone report zero
+         impressions: the measured cold start for a Hilltop creative is ~10.9s,
+         so the overlay aborted before `playing` and the impression pixel — which
+         fires from that event — never went out. Bounds mirror VAST_LIMITS. */
+      startTimeoutMs: z.number().int().min(3000).max(20000).default(12000),
       cooldownMs: z.number().int().min(0).max(86400000).default(90000),
     })
     .default(DEFAULT_VAST_INTERSTITIAL),

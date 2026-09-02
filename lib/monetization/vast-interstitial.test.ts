@@ -6,6 +6,7 @@ import {
   normalizeVastInterstitial,
   SKIP_STALL_GRACE_SECONDS,
   skipRemainingSeconds,
+  VAST_LIMITS,
 } from "./vast-interstitial";
 
 /**
@@ -121,5 +122,49 @@ describe("the two download moments", () => {
     expect(wild.skipAfterSeconds).toBe(30);
     expect(wild.timeoutMs).toBe(500);
     expect(wild.cooldownMs).toBe(DEFAULT_VAST_INTERSTITIAL.cooldownMs);
+  });
+});
+
+describe("🔴🔴 the two budgets — the split that fixed a zero-impression VAST zone", () => {
+  /*
+    The zone reported 0 impressions while banner and slider zones served
+    normally. `timeoutMs` covered BOTH resolving the VAST and reaching the
+    video's `playing` event, defaulted to 3000ms and was hard-capped at
+    5000ms. Measured on production (scripts/vast-playback-probe.mjs), an
+    unthrottled cold start reaches `playing` at ~10.9s — so the overlay always
+    aborted first, and `overlay.ts` fires <Impression> from that very event.
+  */
+  it("🔴 gives PLAYBACK a budget that clears the measured ~10.9s cold start", () => {
+    expect(DEFAULT_VAST_INTERSTITIAL.startTimeoutMs).toBeGreaterThan(10_900);
+    expect(VAST_LIMITS.startTimeoutMs.max).toBeGreaterThan(10_900);
+  });
+
+  it("🔴 keeps the LOOKUP budget short — a visitor must not wait for nothing", () => {
+    // Before a creative exists there may be no ad at all, so failing open
+    // fast is still right. This half deliberately did NOT change.
+    expect(VAST_LIMITS.timeoutMs.max).toBeLessThanOrEqual(5000);
+    expect(DEFAULT_VAST_INTERSTITIAL.timeoutMs).toBeLessThanOrEqual(5000);
+  });
+
+  it("🔴 keeps them SEPARATE fields — one timer for two waits is the bug", () => {
+    expect(DEFAULT_VAST_INTERSTITIAL.startTimeoutMs).not.toBe(
+      DEFAULT_VAST_INTERSTITIAL.timeoutMs,
+    );
+    expect(DEFAULT_VAST_INTERSTITIAL.startTimeoutMs).toBeGreaterThan(
+      DEFAULT_VAST_INTERSTITIAL.timeoutMs,
+    );
+  });
+
+  it("clamps a stored playback budget rather than honouring it", () => {
+    expect(normalizeVastInterstitial({ startTimeoutMs: 1 }).startTimeoutMs).toBe(
+      VAST_LIMITS.startTimeoutMs.min,
+    );
+    expect(normalizeVastInterstitial({ startTimeoutMs: 999_999 }).startTimeoutMs).toBe(
+      VAST_LIMITS.startTimeoutMs.max,
+    );
+    // A blob written before this field existed must still normalise.
+    expect(normalizeVastInterstitial({}).startTimeoutMs).toBe(
+      DEFAULT_VAST_INTERSTITIAL.startTimeoutMs,
+    );
   });
 });

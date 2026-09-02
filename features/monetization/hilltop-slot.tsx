@@ -377,8 +377,34 @@ export function HilltopSlot({
     creative cannot navigate the whole page out from under the reader, while
     `allow-popups` lets a real click open the advertiser.
   */
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 THE CREATIVE FILLS THE SLOT (owner, 2026-09-02: "make the video slider
+        poccupy the full ad slot").
+    ═══════════════════════════════════════════════════════════════════════════
+
+    The frame used to be a fixed 300x250 with the body centring whatever arrived
+    inside it. A vertical video creative in that box is letterboxed — a small
+    player marooned in a large pale card, which is what the owner photographed.
+
+    The body now stretches its child to the full frame and the media inside is
+    told to cover it. `!important` throughout: these rules are competing with
+    inline styles the network's own script writes, and a plain declaration
+    loses to those every time.
+
+    ⚠️ `object-fit: contain` on the video, not `cover`. Filling the box by
+    CROPPING an advert would cut the advertiser's own framing — and on a VAST
+    creative that often means losing the logo or the call to action, which is
+    the sort of thing that gets a publisher's inventory reviewed. It fills the
+    slot; it does not crop the ad.
+  */
   const srcDoc = tag
-    ? `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;display:flex;align-items:center;justify-content:center}</style></head><body><script async referrerpolicy="no-referrer-when-downgrade" src="${tag.src}"></script></body></html>`
+    ? `<!doctype html><html><head><meta charset="utf-8"><style>` +
+      `html,body{margin:0;padding:0;overflow:hidden;width:100%;height:100%;background:transparent}` +
+      `body{display:flex;align-items:center;justify-content:center}` +
+      `body>*{width:100%!important;height:100%!important;max-width:100%!important}` +
+      `video,img,iframe{width:100%!important;height:100%!important;object-fit:contain!important;display:block}` +
+      `</style></head><body><script async referrerpolicy="no-referrer-when-downgrade" src="${tag.src}"></script></body></html>`
     : "";
 
   /*
@@ -516,8 +542,40 @@ export function HilltopSlot({
           height={250}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
-          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-          style={{ border: 0, display: "block", maxWidth: "100%" }}
+          /*
+            🔴 `allow-popups-to-escape-sandbox` REMOVED (owner, 2026-09-02:
+            "disable hiltop popunder … the click direct should be block").
+
+            `allow-popups` STAYS, so a real click on the advert still opens the
+            advertiser and still earns its click — the owner asked to keep
+            "intentional clicl ctr and cpm", and blocking that would just be
+            throwing away revenue.
+
+            What goes is the ESCAPE. That flag is what lets a window opened from
+            inside this frame run with none of the frame's restrictions, which
+            is precisely what a pop-under needs to be worth serving. Without it
+            any window this creative opens inherits the sandbox, so the
+            behaviour stops being profitable to the network rather than merely
+            being blocked by us.
+
+            ⚠️ The trade-off, stated: an advertiser's landing page opened from a
+            genuine click also inherits the sandbox and may render with reduced
+            functionality. That is a real cost to legitimate clicks and it is
+            the owner's call — it is here because they asked for click-direct to
+            be blocked, and this is the browser-level way to do it. Restoring
+            the flag is a one-word change.
+
+            `allow-top-navigation-by-user-activation` remains absent, so a
+            creative still cannot navigate the whole page out from under the
+            reader.
+          */
+          sandbox="allow-scripts allow-same-origin allow-popups"
+          /*
+            Fills the slot rather than sitting as a 300x250 island in it. The
+            width/height attributes stay as the network's declared size so the
+            frame has sensible intrinsic proportions before CSS applies.
+          */
+          style={{ border: 0, display: "block", width: "100%", maxWidth: "100%", aspectRatio: "6 / 5" }}
         />
       ) : null}
     </div>

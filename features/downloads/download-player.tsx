@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Share2, Trash2, X } from "lucide-react";
+import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
@@ -332,6 +333,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   };
   const openOriginal = () => {
     setMoreOpen(false);
+    allowWindowOpen();
     window.open(rec.url, "_blank", "noopener");
   };
   // Re-opens the downloader on this same source with the full quality picker,

@@ -1,6 +1,7 @@
 "use client";
 
 import { track } from "@/lib/analytics/client";
+import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import type { VastCreative } from "@/lib/monetization/vast";
 import {
   effectiveSkipSeconds,
@@ -601,6 +602,9 @@ export function showInterstitial({
         // Our own click counter, beside the network's. See `adBeacon`.
         adBeacon("click", zone, creative.adId);
         track("vast_click", { zone });
+        /* An intentional click on an ad is a real click the network should be
+           paid for — the guard blocks pop-unders, not advertising. */
+        allowWindowOpen();
         window.open(creative.clickThrough!, "_blank", "noopener,noreferrer");
       });
       root.appendChild(video);

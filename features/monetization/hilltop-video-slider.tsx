@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { HilltopTag } from "@/lib/monetization/hilltop";
 
 import { afterLoadIdle } from "@/lib/monetization/after-load";
+import { installPopunderGuard } from "@/lib/monetization/popunder-guard";
 
 import { useShowAds } from "./use-show-ads";
 
@@ -80,6 +81,16 @@ export function HilltopVideoSlider() {
     return afterLoadIdle(() => {
       if (sliderLoaded) return;
       sliderLoaded = true;
+      /*
+        🔴 BEFORE the network script, never after (owner, 2026-09-02: "disable
+        hiltop popunder that is included in video slider … i dont want hiltop
+        popunder to cause harm to my adsense newly application").
+
+        The MultiTag bundle can carry a pop-under alongside the player, and it
+        binds its handler as soon as it runs. Installing the guard after that
+        point would leave the first click through.
+      */
+      installPopunderGuard();
       const script = document.createElement("script");
       script.src = tag.src;
       script.async = true;

@@ -1,6 +1,7 @@
 "use client";
 
 import { Volume2, VolumeX } from "lucide-react";
+import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AD_ZONE_META } from "@/lib/monetization/ad-schema";
@@ -573,6 +574,9 @@ export function ExoClickUnit({
             } catch {
               /* A dropped beacon must never cost the visitor the click-through. */
             }
+            /* An intentional click on an ad is a real click the network should be
+               paid for — the guard blocks pop-unders, not advertising. */
+            allowWindowOpen();
             window.open(ad.clickThrough!, "_blank", "noopener,noreferrer");
           }}
           className="absolute inset-0 h-full w-full cursor-pointer"

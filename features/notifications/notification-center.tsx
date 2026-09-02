@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence } from "framer-motion";
+import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { BellRing, CheckCheck, Download, MoreHorizontal, Search, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -139,6 +140,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
   // destructive actions, e.g. comments.tsx/collections-tab.tsx).
   const exportData = () => {
     setMoreOpen(false);
+    allowWindowOpen();
     window.open("/api/notifications/export", "_blank");
   };
 

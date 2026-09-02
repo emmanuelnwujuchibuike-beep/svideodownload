@@ -153,6 +153,7 @@ import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import type { CommentPreview } from "@/lib/social/reel-extras";
 import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
+import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -1519,6 +1520,7 @@ function ReelCard({
   };
   const openInBrowser = () => {
     setMoreOpen(false);
+    allowWindowOpen();
     window.open(postUrl(), "_blank", "noopener");
   };
   const viewDetails = () => {

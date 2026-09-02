@@ -10,11 +10,13 @@ import {
   localHour,
   mergeRecords,
   restorableStreak,
+  restoreExpiresAt,
+  restoreRemainingMs,
   safeZone,
   shouldCelebrate,
 } from "./calc";
 import type { StreakIdentity } from "./identity";
-import type { StreakRecord, StreakState } from "./types";
+import { MAX_RESTORES, type StreakRecord, type StreakState } from "./types";
 
 /**
  * The streak engine — the ONE place that reads or writes streak state.
@@ -162,12 +164,26 @@ async function loadWeek(streakId: string, today: string): Promise<{ date: string
 function toState(record: StreakRecord, now: Date, week: { date: string; active: boolean }[]): StreakState {
   const zone = safeZone(record.timezone);
   const today = localDay(now, zone);
+  /*
+    🔴 TWO GATES, AND BOTH MUST PASS.
+
+    `restorableStreak` is the calendar bound stored in the database;
+    `restoreRemainingMs` is the 48-hour rule the product states (§7). The
+    tighter one always wins, which is always the second — so a window that has
+    run out mid-day closes immediately rather than at local midnight, which is
+    what a countdown reaching 0h 00m has to mean if it is to be believed.
+  */
+  const withinWindow = restoreRemainingMs(record, now, zone) > 0;
+  const restorable = withinWindow ? restorableStreak(record, today) : 0;
+  const expiry = restoreExpiresAt(record, zone);
   return {
     ...record,
     status: deriveStatus(record, today, localHour(now, zone)),
     shouldCelebrate: shouldCelebrate(record, today),
-    canRestore: restorableStreak(record, today) > 0,
-    restorableStreak: restorableStreak(record, today),
+    canRestore: restorable > 0,
+    restorableStreak: restorable,
+    restoreExpiresAt: restorable > 0 && expiry ? expiry.toISOString() : null,
+    restoresRemaining: Math.max(0, MAX_RESTORES - record.restoresUsed),
     today,
     week,
   };
@@ -183,6 +199,8 @@ export function neutralState(now: Date = new Date(), timezone: string | null = n
     shouldCelebrate: false,
     canRestore: false,
     restorableStreak: 0,
+    restoreExpiresAt: null,
+    restoresRemaining: MAX_RESTORES,
     today,
     week: lastDays(today, 7).map((date) => ({ date, active: false })),
   };

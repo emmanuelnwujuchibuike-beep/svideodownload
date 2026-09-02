@@ -290,7 +290,20 @@ export function StreakHeroIndicator({ className = "" }: { className?: string }) 
         ancestor rather than the viewport, and the hero card carries exactly
         those -- the standing law this project has now hit five times.
       */}
-      {open ? <StreakTiersSheet streak={streak} onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        <StreakTiersSheet
+          streak={streak}
+          /*
+            The fetched state, when there is one. It carries `longestStreak` —
+            which is what makes an unlocked flame PERMANENT in the gallery
+            rather than something a broken streak silently revokes — and the
+            recovery window. An anonymous visitor painting from the display
+            cache passes null and still gets the full ladder.
+          */
+          state={data ?? null}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </span>
   );
 }

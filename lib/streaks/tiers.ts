@@ -28,7 +28,7 @@
 
 export interface StreakTier {
   /** Stable id, for tests and analytics. */
-  id: "spark" | "blue" | "green" | "purple" | "gold" | "black";
+  id: "spark" | "blue" | "green" | "purple" | "gold" | "silver";
   /** Minimum streak, inclusive. */
   minDays: number;
   /** Shown in the reveal popover when a tier is reached. */
@@ -44,8 +44,50 @@ export interface StreakTier {
    * Written in the second person and about the ACHIEVEMENT, never about the
    * artwork — "a full week without missing a day" is a reason to come back,
    * "a blue flame" is not.
+   *
+   * 🔴 IT IS ABOUT DOWNLOADING, NOT ABOUT LOGGING IN.
+   *
+   * Owner, 2026-09-01: "The flame progression should communicate DOWNLOAD
+   * CONSISTENCY. Do NOT describe the flames as simply 'login streaks.'" The
+   * backend rule is unchanged — one credit per local day, from the same
+   * `streak_daily_activity` ledger — but what that day MEANS in the product is
+   * a day you came and saved something, and the copy now says so.
    */
   blurb: string;
+  /**
+   * The one line the unlock ceremony says, in the owner's own words (§4).
+   *
+   * 🔴 A SEPARATE FIELD FROM `blurb`, DELIBERATELY.
+   *
+   * The ceremony used to print the blurb, which made every rank's celebration
+   * the same sentence the gallery already showed — and the owner's §4 is
+   * explicit that "Do not make every milestone celebration identical", with a
+   * different line specified for each rank. The gallery describes a flame you
+   * might earn; this congratulates you for earning it. Different jobs, and
+   * collapsing them is what made 100 days read like 7.
+   */
+  unlockLine: string;
+  /**
+   * A rare second line, for the ranks where one sentence undersells it.
+   *
+   * Only 365 has one ("Very few make it this far.") because only 365 earns it.
+   * Giving every tier a second line is how escalation gets flattened.
+   */
+  unlockNote?: string;
+  /**
+   * How loud the unlock ceremony is, 1 (quietest) to 6.
+   *
+   * Owner, §4: "The visual intensity should increase with the rarity of the
+   * flame. Do not simply add more particles. Instead, make the flame itself
+   * progressively more refined."
+   *
+   * So this drives ONE CSS custom property (`--ms-intensity`) that scales the
+   * light — ring spread, halo strength, sweep length, emblem size — rather than
+   * a particle count. Day 1 is a small welcome; 365 is the whole screen
+   * changing character. The mote count moves barely at all between them, which
+   * is the point: it is the same ceremony, lit progressively harder.
+   */
+  ceremony: 1 | 2 | 3 | 4 | 5 | 6;
   /**
    * How this flame behaves, beyond its colour.
    *
@@ -91,26 +133,51 @@ export interface StreakTier {
  */
 export const STREAK_TIERS: readonly StreakTier[] = [
   {
-    id: "black",
+    /*
+      🔴 SILVER/WHITE, NOT BLACK — the flame gallery is the source of truth.
+
+      Owner, 2026-09-01, enumerating the flames to preserve: "One Year — 365
+      days — silver/white flame", and again in §9 as "⚪ ONE YEAR". This tier
+      shipped as near-black on 2026-08-30 from an earlier instruction ("blue,
+      green, Purple, dark gold and black"); the gallery the owner is now
+      pointing at shows silver. The gallery wins — it is the artwork people have
+      actually seen.
+
+      The id moved with it. `black` naming a silver flame is the kind of lie
+      that survives for a year and then costs someone an afternoon; the LABEL
+      ("One year") is what the owner asked not to rename, and it has not
+      changed.
+    */
+    id: "silver",
     minDays: 365,
     label: "One year",
-    blurb: "365 days without a single miss. Almost nobody gets here.",
+    blurb: "365 days of downloading without a single gap. Almost nobody gets here.",
+    unlockLine: "One year of consistency.",
+    unlockNote: "Very few make it this far.",
+    ceremony: 6,
     motion: "storm",
-    // Not pure black: a flat #000 flame reads as a rendering failure, and it
-    // disappears entirely in dark mode. Near-black with a graphite highlight
-    // keeps the silhouette legible on both grounds.
-    flame: ["#0B1020", "#4B5563"],
-    text: "text-slate-900 dark:text-slate-100",
-    ring: "ring-slate-900/30 dark:ring-slate-300/30",
-    fill: "bg-gradient-to-r from-slate-900/10 to-slate-600/10 dark:from-slate-100/10 dark:to-slate-400/10",
-    spark: "bg-slate-900 dark:bg-slate-200",
-    glow: "rgb(15 23 42 / 0.42)",
+    /*
+      Not pure white: a #FFF flame is invisible on the gallery's warm off-white
+      panel, which is exactly the failure the old note here warned about in
+      reverse (a flat #000 vanished in dark mode). A slate silhouette rising to
+      near-white keeps the shape readable on BOTH grounds, and reads as
+      polished metal rather than as a missing asset.
+    */
+    flame: ["#64748B", "#F1F5F9"],
+    text: "text-slate-600 dark:text-slate-200",
+    ring: "ring-slate-400/40 dark:ring-slate-300/30",
+    fill: "bg-gradient-to-r from-slate-400/12 to-slate-200/14 dark:from-slate-100/10 dark:to-slate-400/10",
+    spark: "bg-slate-400 dark:bg-slate-100",
+    // Slate, not white — a white halo on the light panel would not exist.
+    glow: "rgb(148 163 184 / 0.55)",
   },
   {
     id: "gold",
     minDays: 100,
     label: "Legendary",
-    blurb: "100 days running. Gold, lit by its own storm.",
+    blurb: "100 days without a gap. Gold, lit by its own storm.",
+    unlockLine: "100 days. That's legendary.",
+    ceremony: 5,
     motion: "storm",
     flame: ["#8A6100", "#E3B341"],
     text: "text-amber-700 dark:text-amber-300",
@@ -123,7 +190,9 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "purple",
     minDays: 30,
     label: "Elite",
-    blurb: "A full month. The flame burns violet and starts to smoke.",
+    blurb: "A full month of downloading. The flame burns violet and starts to smoke.",
+    unlockLine: "One month of consistency.",
+    ceremony: 4,
     motion: "smoke",
     flame: ["#6D28D9", "#C084FC"],
     text: "text-violet-600 dark:text-violet-300",
@@ -136,7 +205,9 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "green",
     minDays: 14,
     label: "Committed",
-    blurb: "Two weeks straight. The habit has taken hold.",
+    blurb: "Two weeks straight. Downloading here has become a habit.",
+    unlockLine: "Consistency is becoming a habit.",
+    ceremony: 3,
     motion: "steady",
     flame: ["#047857", "#4ADE80"],
     text: "text-emerald-600 dark:text-emerald-300",
@@ -149,7 +220,9 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "blue",
     minDays: 7,
     label: "On a roll",
-    blurb: "Seven days in a row. The fire burns hotter, and turns blue.",
+    blurb: "Seven days of downloading in a row. The fire burns hotter, and turns blue.",
+    unlockLine: "You're on a roll.",
+    ceremony: 2,
     motion: "ascend",
     flame: ["#1D4ED8", "#60A5FA"],
     text: "text-blue-600 dark:text-blue-300",
@@ -176,7 +249,9 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     id: "spark",
     minDays: MIN_STREAK_DAYS(),
     label: "Streak started",
-    blurb: "Day one. Come back tomorrow and it grows.",
+    blurb: "Day one. Download again tomorrow and the flame grows.",
+    unlockLine: "Your streak has started.",
+    ceremony: 1,
     motion: "steady",
     flame: ["#F97316", "#FBBF24"],
     text: "text-orange-600 dark:text-orange-300",
@@ -256,13 +331,40 @@ export function crossedTier(before: number, after: number): StreakTier | null {
  * Add the tier to `STREAK_TIERS` and it is a milestone automatically — there is
  * no second list to keep in sync, which is the whole reason this reads off the
  * tier table rather than a `MILESTONES = [7, 14, 30]` array sitting beside it.
- * Day 1 is excluded because arriving is not an achievement (§28: day 1 never
- * celebrates), and it is the one threshold every visitor trips on their first
- * page view.
+ *
+ * ── 🔴 DAY 1 NOW COUNTS. THIS REVERSES THE 2026-08-24 RULE ───────────────────
+ *
+ * It used to be excluded: "arriving is not an achievement (§28: day 1 never
+ * celebrates)". Owner, 2026-09-01, lists it explicitly as the first rung of the
+ * ceremony ladder — "DAY 1: Small, welcoming celebration. 'Your streak has
+ * started.'" — and, in the same message, "there shoudnlt be a celebration
+ * everyday, only on flame upgrade". Day 1 IS a flame upgrade: it is the moment
+ * the orange flame is acquired.
+ *
+ * The reason for the old exclusion has not gone away, though — an anonymous
+ * first-time visitor trips this on their first landing-page view, and a
+ * full-screen takeover there would be hostile. That concern is answered by
+ * `tier.ceremony`, not by suppression: rank 1 renders as a small anchored card,
+ * and only the rare ranks take the screen. See streak-unlock-celebration.tsx.
  */
 export function milestoneFor(days: number): StreakTier | null {
-  if (!Number.isFinite(days) || days <= STREAK_BADGE_MIN_DAYS) return null;
+  if (!Number.isFinite(days) || days < STREAK_BADGE_MIN_DAYS) return null;
   return STREAK_TIERS.find((t) => t.minDays === days) ?? null;
+}
+
+/**
+ * The rank immediately BELOW this one, or null at the bottom.
+ *
+ * The unlock ceremony needs it to show the transformation the owner asked for
+ * (§3: "Current flame → New flame … The existing flame should glow, brighten
+ * and transition into the newly unlocked flame"). Derived from the table's
+ * order rather than stored as a `previous` pointer on each row, so inserting a
+ * 60-day tier cannot leave a stale link behind it.
+ */
+export function previousTier(tier: StreakTier): StreakTier | null {
+  const i = STREAK_TIERS.findIndex((t) => t.id === tier.id);
+  // The table is longest-first, so "one rung down" is the NEXT index.
+  return i < 0 ? null : (STREAK_TIERS[i + 1] ?? null);
 }
 
 /** Days remaining until the next tier, and which one. Null at the top tier. */

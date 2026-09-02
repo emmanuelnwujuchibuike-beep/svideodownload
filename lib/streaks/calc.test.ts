@@ -13,10 +13,12 @@ import {
   mergeRecords,
   reminderEligible,
   restorableStreak,
+  restoreExpiresAt,
+  restoreRemainingMs,
   safeZone,
   shouldCelebrate,
 } from "./calc";
-import { MAX_RESTORES, type StreakRecord } from "./types";
+import { MAX_RESTORES, RESTORE_WINDOW_HOURS, type StreakRecord } from "./types";
 
 /**
  * The brief's test list (§31) is almost entirely date-boundary behaviour, which
@@ -187,10 +189,18 @@ describe("streaks · restoration", () => {
 describe("streaks · status machine", () => {
   it("names each state", () => {
     expect(deriveStatus(emptyRecord(), "2026-03-01", 9)).toBe("NEW");
-    // Day 1 completes but does not celebrate.
-    expect(deriveStatus(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("COMPLETED_TODAY");
-    expect(deriveStatus(day({ currentStreak: 3, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATION_PENDING");
-    expect(deriveStatus(day({ currentStreak: 3, lastActivityDate: "2026-03-01", lastCelebrationDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATED_TODAY");
+    /*
+      🔴 PENDING TRACKS A FLAME UPGRADE, NOT A DAY (owner, 2026-09-01: "there
+      shoudnlt be a celebration everyday, only on flame upgrade").
+
+      Day 3 is an ordinary day inside the spark tier and now completes without
+      pending anything — it used to report CELEBRATION_PENDING until midnight
+      for an overlay that would never mount. Day 1 and day 7 ARE rungs.
+    */
+    expect(deriveStatus(day({ currentStreak: 3, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("COMPLETED_TODAY");
+    expect(deriveStatus(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATION_PENDING");
+    expect(deriveStatus(day({ currentStreak: 7, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATION_PENDING");
+    expect(deriveStatus(day({ currentStreak: 7, lastActivityDate: "2026-03-01", lastCelebrationDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATED_TODAY");
     // Yesterday's activity, before and after the 2pm line.
     expect(deriveStatus(day({ currentStreak: 3, lastActivityDate: "2026-03-01" }), "2026-03-02", 9)).toBe("ACTIVE");
     expect(deriveStatus(day({ currentStreak: 3, lastActivityDate: "2026-03-01" }), "2026-03-02", 14)).toBe("AT_RISK");
@@ -199,21 +209,55 @@ describe("streaks · status machine", () => {
   });
 });
 
-describe("streaks · celebration fires once per calendar day", () => {
-  it("celebrates a 2+ day streak once, then never again that day", () => {
-    const record = day({ currentStreak: 2, lastActivityDate: "2026-03-02" });
+describe("streaks · celebration fires once, and only on a flame upgrade", () => {
+  it("celebrates a rung once, then never again that day", () => {
+    const record = day({ currentStreak: 7, lastActivityDate: "2026-03-02" });
     expect(shouldCelebrate(record, "2026-03-02")).toBe(true);
     const celebrated = { ...record, lastCelebrationDate: "2026-03-02" };
     // Refresh, route change, PWA reopen, opening Profile — all of these.
     for (let i = 0; i < 10; i += 1) {
       expect(shouldCelebrate(celebrated, "2026-03-02")).toBe(false);
     }
-    // …and it comes back the next day, once.
-    expect(shouldCelebrate({ ...celebrated, currentStreak: 3, lastActivityDate: "2026-03-03" }, "2026-03-03")).toBe(true);
+    // …and it comes back at the NEXT rung, not the next day.
+    expect(shouldCelebrate({ ...celebrated, currentStreak: 8, lastActivityDate: "2026-03-03" }, "2026-03-03")).toBe(false);
+    expect(shouldCelebrate({ ...celebrated, currentStreak: 14, lastActivityDate: "2026-03-09" }, "2026-03-09")).toBe(true);
   });
 
-  it("never celebrates day 1 (§28: don't overwhelm a first-time visitor)", () => {
-    expect(shouldCelebrate(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01")).toBe(false);
+  it("🔴 does NOT celebrate an ordinary day (owner, 2026-09-01)", () => {
+    /*
+      "there shoudnlt be a celebration everyday, only on flame upgrade."
+
+      This is the whole behavioural change of 2026-09-01 and it is the thing
+      most likely to be undone by accident, because every one of these days
+      used to return true. Days 2–6, 8–13, 15–29 and 31 are all banked
+      activity on a live streak, and none of them is a rung.
+    */
+    for (const streak of [2, 3, 4, 5, 6, 8, 13, 15, 29, 31, 99, 101, 364, 366]) {
+      expect(
+        shouldCelebrate(day({ currentStreak: streak, lastActivityDate: "2026-03-01" }), "2026-03-01"),
+        `day ${streak} is not a flame upgrade`,
+      ).toBe(false);
+    }
+  });
+
+  it("🔴 DOES celebrate day 1 — acquiring the orange flame is an upgrade", () => {
+    /*
+      This reverses the 2026-08-24 rule ("§28: day 1 never celebrates"). Owner,
+      2026-09-01, lists it as the first rung: "DAY 1: Small, welcoming
+      celebration. 'Your streak has started.'" How LOUD it is belongs to
+      `tier.ceremony` (rank 1 renders as a compact card, not a takeover), not
+      to this gate.
+    */
+    expect(shouldCelebrate(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01")).toBe(true);
+  });
+
+  it("celebrates every rung on the ladder, and nothing between them", () => {
+    for (const streak of [1, 7, 14, 30, 100, 365]) {
+      expect(
+        shouldCelebrate(day({ currentStreak: streak, lastActivityDate: "2026-03-01" }), "2026-03-01"),
+        `day ${streak} is a rung`,
+      ).toBe(true);
+    }
   });
 
   it("never celebrates a day whose activity is not banked", () => {
@@ -276,5 +320,76 @@ describe("streaks · anonymous → signed-in merge", () => {
 
   it("carries the higher restore count so merging cannot refill the allowance", () => {
     expect(mergeRecords(day({ restoresUsed: 0 }), day({ restoresUsed: 3 })).restoresUsed).toBe(3);
+  });
+});
+
+describe("streaks · the 48-hour recovery window (§7)", () => {
+  /* Last download Tuesday; the streak breaks at Wednesday 00:00 local. */
+  const broken = day({
+    currentStreak: 1, longestStreak: 12, lastActivityDate: "2026-03-03",
+    totalActiveDays: 13, restoreDeadline: "2026-03-06", timezone: "UTC",
+  });
+
+  it("🔴 counts from the BREAK, not from the last download", () => {
+    /*
+      The streak was alive all of the 3rd — it only broke when the 4th began.
+      Measuring from the activity instead would silently cost every member up
+      to a whole day of the window they were promised.
+    */
+    expect(restoreExpiresAt(broken, "UTC")?.toISOString()).toBe("2026-03-06T00:00:00.000Z");
+  });
+
+  it("is open before 48 hours and closed at exactly 48", () => {
+    const open = new Date("2026-03-05T23:59:00Z");
+    const shut = new Date("2026-03-06T00:00:00Z");
+    expect(restoreRemainingMs(broken, open, "UTC")).toBeGreaterThan(0);
+    // ≥48 HOURS: RESTORE STREAK UNAVAILABLE. Exactly 48 is already closed.
+    expect(restoreRemainingMs(broken, shut, "UTC")).toBe(0);
+    expect(restoreRemainingMs(broken, new Date("2026-03-07T00:00:00Z"), "UTC")).toBe(0);
+  });
+
+  it("reports the remaining time the countdown renders", () => {
+    const ms = restoreRemainingMs(broken, new Date("2026-03-04T00:13:00Z"), "UTC");
+    expect(Math.round(ms / 60000)).toBe(47 * 60 + 47); // "23h 47m" is 47h47m out
+  });
+
+  it("🔴 is anchored in the MEMBER-S zone, not UTC", () => {
+    /*
+      Midnight in Auckland is 11:00 the previous day in UTC. A window anchored
+      at UTC midnight would open and close 13 hours off for them — half a day
+      of a two-day window.
+    */
+    const nz = { ...broken, timezone: "Pacific/Auckland" };
+    expect(restoreExpiresAt(nz, "Pacific/Auckland")?.toISOString()).toBe("2026-03-05T11:00:00.000Z");
+    const la = { ...broken, timezone: "America/Los_Angeles" };
+    expect(restoreExpiresAt(la, "America/Los_Angeles")?.toISOString()).toBe("2026-03-06T08:00:00.000Z");
+  });
+
+  it("survives a DST cutover inside the window", () => {
+    // US spring-forward is 2026-03-08; the local day is 23 hours long.
+    const dst = day({
+      currentStreak: 1, longestStreak: 9, lastActivityDate: "2026-03-07",
+      restoreDeadline: "2026-03-10", timezone: "America/New_York",
+    });
+    const expiry = restoreExpiresAt(dst, "America/New_York");
+    // Breaks at 2026-03-08 00:00 EST (05:00Z); +48h lands at 05:00Z on the 10th.
+    expect(expiry?.toISOString()).toBe("2026-03-10T05:00:00.000Z");
+  });
+
+  it("has nothing to expire when nothing broke", () => {
+    expect(restoreExpiresAt(day({ currentStreak: 5, lastActivityDate: "2026-03-03" }), "UTC")).toBeNull();
+    expect(restoreRemainingMs(day(), new Date(), "UTC")).toBe(0);
+  });
+
+  it("is strictly tighter than the stored calendar deadline", () => {
+    /*
+      Both gates are applied in engine.ts and this is why the order does not
+      matter: 48 hours can never outlast a 3-calendar-day deadline, so the
+      hour rule is always the binding one.
+    */
+    expect(RESTORE_WINDOW_HOURS).toBe(48);
+    const stillCalendarValid = restorableStreak(broken, "2026-03-06");
+    expect(stillCalendarValid).toBe(12); // the DATE gate would still allow it
+    expect(restoreRemainingMs(broken, new Date("2026-03-06T09:00:00Z"), "UTC")).toBe(0);
   });
 });

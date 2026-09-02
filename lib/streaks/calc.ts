@@ -1,7 +1,9 @@
+import { milestoneFor } from "./tiers";
 import {
   MAX_RESTORES,
   REMINDER_HOUR,
   RESTORE_WINDOW_DAYS,
+  RESTORE_WINDOW_HOURS,
   type StreakRecord,
   type StreakStatus,
 } from "./types";
@@ -217,6 +219,98 @@ export function restoreDeadlineFor(lastActivityDate: string): string {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE RECOVERY WINDOW, AS AN INSTANT (§7)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-01: "If the streak has been lost for LESS THAN 48 HOURS …
+ * TIME REMAINING 23h 47m … <48 HOURS: RESTORE STREAK AVAILABLE. ≥48 HOURS:
+ * RESTORE STREAK UNAVAILABLE."
+ *
+ * ── Why this is an instant and `restoreDeadline` stays a DATE ────────────────
+ *
+ * A countdown cannot be rendered from a calendar day: "2026-03-04" does not say
+ * whether four minutes or twenty hours are left. But the stored column is a
+ * `date` (migration 0130) and the conditional UPDATE that makes a restore
+ * happen exactly once under concurrency keys on it (`.eq("restore_deadline",…)`
+ * in engine.ts). Migrating that column to a timestamp to add a countdown would
+ * put the idempotency guarantee at risk for a piece of copy.
+ *
+ * So the two coexist and the tighter one wins, which is always this one:
+ *
+ *   • `restoreDeadline` (date, +3 days) stays exactly as it was — the coarse
+ *     bound that lives in the database and gates `applyRestore`.
+ *   • this function is the REAL rule the product states, derived on the fly
+ *     from a value already stored.
+ *
+ * 48 hours is measured from the moment the streak actually broke — local
+ * midnight at the END of the last active day — not from the last activity
+ * itself. Someone who downloaded at 9am Monday has not "lost their streak for
+ * 48 hours" at 9am Wednesday; their streak was intact all of Monday and only
+ * broke when Tuesday ended without them. Measuring from the activity would
+ * quietly cost every user most of a day of their recovery window.
+ */
+export function restoreExpiresAt(record: StreakRecord, timeZone: string | null): Date | null {
+  if (!record.restoreDeadline || !record.lastActivityDate) return null;
+  const brokeAt = startOfLocalDay(addDays(record.lastActivityDate, 1), timeZone);
+  if (!brokeAt) return null;
+  return new Date(brokeAt.getTime() + RESTORE_WINDOW_HOURS * 3_600_000);
+}
+
+/** Milliseconds left in the recovery window; 0 once it has closed. */
+export function restoreRemainingMs(
+  record: StreakRecord,
+  now: Date,
+  timeZone: string | null,
+): number {
+  const expiry = restoreExpiresAt(record, timeZone);
+  if (!expiry) return 0;
+  return Math.max(0, expiry.getTime() - now.getTime());
+}
+
+/**
+ * The UTC instant at which `day` begins in `timeZone`.
+ *
+ * 🔴 The zone's offset is discovered by ASKING `Intl` what that zone called a
+ * probe instant, not by assuming one — an offset table would be wrong twice a
+ * year in every DST zone, and the whole reason this file exists is that streaks
+ * are a date-boundary feature. Two passes because the offset at UTC midnight
+ * can differ from the offset at local midnight (that is exactly a DST cutover),
+ * and the second pass re-reads it from the answer the first one produced.
+ */
+function startOfLocalDay(day: string, timeZone: string | null): Date | null {
+  const base = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(base)) return null;
+  const zone = safeZone(timeZone);
+  let guess = base;
+  for (let i = 0; i < 2; i++) {
+    const offset = zoneOffsetMs(new Date(guess), zone);
+    const next = base - offset;
+    if (next === guess) break;
+    guess = next;
+  }
+  return new Date(guess);
+}
+
+/** How far ahead of UTC `zone` is at `instant`, in ms. */
+function zoneOffsetMs(instant: Date, zone: string): number {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(instant);
+  const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
+  // `hour` comes back as 24 at midnight in some ICU versions; 24 % 24 = 0.
+  const asUtc = Date.UTC(at("year"), at("month") - 1, at("day"), at("hour") % 24, at("minute"), at("second"));
+  return asUtc - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/**
  * The streak that a restore would bring back, or 0 if none is offerable.
  *
  * Deliberately derived rather than stored: a stored "restorable amount" would
@@ -284,8 +378,14 @@ export function deriveStatus(record: StreakRecord, today: string, hour: number):
 
   if (last === today) {
     if (record.lastCelebrationDate === today) return "CELEBRATED_TODAY";
-    // Day 1 is deliberately not a celebration (§28) — see `shouldCelebrate`.
-    return record.currentStreak > 1 ? "CELEBRATION_PENDING" : "COMPLETED_TODAY";
+    /*
+      🔴 PENDING means "an unlock is waiting to be shown", not "they were here".
+      Read off `shouldCelebrate` rather than re-deriving `currentStreak > 1`,
+      which is how the two used to drift: on an ordinary day the status claimed
+      a celebration was pending that nothing would ever mount, so the state
+      machine reported CELEBRATION_PENDING until midnight, every day.
+    */
+    return shouldCelebrate(record, today) ? "CELEBRATION_PENDING" : "COMPLETED_TODAY";
   }
 
   const gap = last ? daysBetween(last, today) : Infinity;
@@ -295,18 +395,33 @@ export function deriveStatus(record: StreakRecord, today: string, hour: number):
 }
 
 /**
- * Should the big animation play?
+ * Should a celebration play right now?
  *
- * Three conditions, all required: today's activity is banked, today has not
- * already been celebrated, and the streak is at least 2. The last one is the
- * brief's "do not overwhelm a first-time user" (§28) — a Day 1 visitor gets the
- * app, not a takeover.
+ * ── 🔴 ONLY ON A FLAME UPGRADE. NOT EVERY DAY. ──────────────────────────────
+ *
+ * Owner, 2026-09-01: "there shoudnlt be a celebration everyday, only on flame
+ * upgrade."
+ *
+ * This used to be "the streak went up and today is not yet claimed", which
+ * fired on all 365 days of a year and made the 7-day moment structurally
+ * identical to the 6-day one. `milestoneFor` is the flame-upgrade test — it
+ * returns a tier only when the streak landed EXACTLY on a rung — so adding it
+ * here is the whole change, and it is made SERVER-SIDE on purpose: the client
+ * used to fork on the same question, which meant two places could disagree
+ * about what day it was.
+ *
+ * A useful side effect: `/api/streak/celebrated` is now written only on days
+ * that actually showed something, so `lastCelebrationDate` finally means "the
+ * day of their last unlock" rather than "the last day they opened the app".
+ *
+ * Day 1 is included (the orange flame IS acquired that day). How LOUD that is
+ * belongs to the ceremony, not to this gate — see `tier.ceremony`.
  */
 export function shouldCelebrate(record: StreakRecord, today: string): boolean {
   return (
     record.lastActivityDate === today &&
     record.lastCelebrationDate !== today &&
-    record.currentStreak >= 2
+    milestoneFor(record.currentStreak) !== null
   );
 }
 

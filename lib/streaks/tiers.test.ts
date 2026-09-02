@@ -1,13 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { STREAK_BADGE_MIN_DAYS, STREAK_TIERS, crossedTier, milestoneFor, nextTier, tierFor } from "./tiers";
+import {
+  STREAK_BADGE_MIN_DAYS,
+  STREAK_TIERS,
+  crossedTier,
+  milestoneFor,
+  nextTier,
+  previousTier,
+  tierFor,
+} from "./tiers";
 
 /**
  * The tier boundaries, asserted because they are invisible in review and very
  * visible to the person who hit 100 days and got the wrong flame.
  *
  * Owner, 2026-08-30: badge starts at 2 days; the fire changes colour at 7, 14,
- * 30 and 100 days, plus a one-year black tier.
+ * 30 and 100 days, plus a one-year tier — silver/white since 2026-09-01, when
+ * the owner named the flame gallery as the source of truth for the palette.
  */
 
 describe("tierFor", () => {
@@ -31,7 +40,7 @@ describe("tierFor", () => {
     expect(tierFor(14)?.id).toBe("green");
     expect(tierFor(30)?.id).toBe("purple");
     expect(tierFor(100)?.id).toBe("gold");
-    expect(tierFor(365)?.id).toBe("black");
+    expect(tierFor(365)?.id).toBe("silver");
   });
 
   it("holds the tier for the day BEFORE the next one", () => {
@@ -40,14 +49,14 @@ describe("tierFor", () => {
     expect(tierFor(29)?.id).toBe("green");
     expect(tierFor(99)?.id).toBe("purple");
     expect(tierFor(364)?.id).toBe("gold");
-    expect(tierFor(10_000)?.id).toBe("black");
+    expect(tierFor(10_000)?.id).toBe("silver");
   });
 
   it("never throws on a broken number", () => {
     expect(tierFor(NaN)).toBeNull();
     expect(tierFor(-5)).toBeNull();
     // Infinity is not a streak anyone has. Refusing it (rather than awarding
-    // the top flame) keeps a corrupt cached value from minting a black tier.
+    // the top flame) keeps a corrupt cached value from minting a one-year tier.
     expect(tierFor(Infinity)).toBeNull();
   });
 });
@@ -78,7 +87,7 @@ describe("nextTier", () => {
   it("points at the next milestone up, not the top one", () => {
     expect(nextTier(2)).toEqual({ tier: expect.objectContaining({ id: "blue" }), inDays: 5 });
     expect(nextTier(14)).toEqual({ tier: expect.objectContaining({ id: "purple" }), inDays: 16 });
-    expect(nextTier(100)).toEqual({ tier: expect.objectContaining({ id: "black" }), inDays: 265 });
+    expect(nextTier(100)).toEqual({ tier: expect.objectContaining({ id: "silver" }), inDays: 265 });
   });
 
   it("is null at the top", () => {
@@ -125,7 +134,7 @@ describe("milestoneFor — the 6→7 transition, not 'currently 7'", () => {
     expect(milestoneFor(14)?.id).toBe("green");
     expect(milestoneFor(30)?.id).toBe("purple");
     expect(milestoneFor(100)?.id).toBe("gold");
-    expect(milestoneFor(365)?.id).toBe("black");
+    expect(milestoneFor(365)?.id).toBe("silver");
   });
 
   it("🔴 does NOT fire on the days either side of a threshold", () => {
@@ -135,11 +144,23 @@ describe("milestoneFor — the 6→7 transition, not 'currently 7'", () => {
   });
 
   /*
-    Day 1 is the one threshold every visitor trips on their first page view, and
-    arriving is not an achievement (§28 — day 1 never celebrates).
+    🔴 REVERSED 2026-09-01. Day 1 used to be excluded ("arriving is not an
+    achievement"); the owner now lists it as the first rung — "DAY 1: Small,
+    welcoming celebration." Acquiring the orange flame IS a flame upgrade, and
+    "only on flame upgrade" is the rule the whole system now runs on.
+
+    The old concern (a takeover on an anonymous visitor's first landing view)
+    is answered by `ceremony: 1`, which renders a compact card rather than
+    taking the screen — not by refusing the milestone.
   */
-  it("🔴 never treats day 1 as a milestone", () => {
-    expect(milestoneFor(1)).toBeNull();
+  it("🔴 treats day 1 as the first rung, at the lowest ceremony rank", () => {
+    expect(milestoneFor(1)?.id).toBe("spark");
+    expect(milestoneFor(1)?.ceremony).toBe(1);
+  });
+
+  it("🔴 never treats a streak below the badge threshold as a milestone", () => {
+    expect(milestoneFor(0)).toBeNull();
+    expect(milestoneFor(-1)).toBeNull();
   });
 
   it("never throws on a broken number", () => {
@@ -174,6 +195,66 @@ describe("the gallery metadata", () => {
     expect(byId.blue).toBe("ascend");
     expect(byId.purple).toBe("smoke");
     expect(byId.gold).toBe("storm");
-    expect(byId.black).toBe("storm");
+    expect(byId.silver).toBe("storm");
+  });
+
+  it("🔴 gives every tier its own unlock line — no two ranks say the same thing", () => {
+    /*
+      Owner, 2026-09-01 §4: "Do not make every milestone celebration
+      identical." The ceremony reads `unlockLine`, so two tiers sharing one
+      would make two ranks literally indistinguishable in the only sentence
+      the member reads at the moment it matters.
+    */
+    const lines = STREAK_TIERS.map((t) => t.unlockLine);
+    expect(new Set(lines).size).toBe(STREAK_TIERS.length);
+    for (const t of STREAK_TIERS) {
+      expect(t.unlockLine.trim(), `${t.id}.unlockLine`).toBe(t.unlockLine);
+      expect(t.unlockLine.length, `${t.id}.unlockLine is empty`).toBeGreaterThan(8);
+    }
+  });
+
+  it("🔴 escalates ceremony intensity strictly with rarity", () => {
+    /*
+      §4: "The visual intensity should increase with the rarity of the flame."
+      The table is longest-first, so ceremony must DESCEND through it — a flat
+      or non-monotonic run is how 100 days ends up feeling like 7.
+    */
+    const levels = STREAK_TIERS.map((t) => t.ceremony);
+    expect(levels).toEqual([...levels].sort((a, b) => b - a));
+    expect(new Set(levels).size).toBe(STREAK_TIERS.length);
+    // Rank 1 is what keeps Day 1 a card rather than a takeover.
+    expect(STREAK_TIERS[STREAK_TIERS.length - 1]!.ceremony).toBe(1);
+  });
+
+  it("🔴 says DOWNLOADS, not logins", () => {
+    /*
+      §2: "Do NOT describe the flames as simply 'login streaks.'" Asserted on
+      the resolved data rather than the file's bytes, so the sentence
+      explaining the rule cannot fail its own test.
+    */
+    for (const t of STREAK_TIERS) {
+      expect(t.blurb.toLowerCase(), `${t.id}.blurb`).not.toMatch(/log ?in|sign ?in|open the app/);
+    }
+    const corpus = STREAK_TIERS.map((t) => t.blurb.toLowerCase()).join(" ");
+    expect(corpus).toMatch(/download/);
+  });
+});
+
+describe("previousTier — the flame you are transforming FROM (§3)", () => {
+  it("walks one rung down the ladder", () => {
+    const byId = Object.fromEntries(STREAK_TIERS.map((t) => [t.id, t]));
+    expect(previousTier(byId.silver!)?.id).toBe("gold");
+    expect(previousTier(byId.gold!)?.id).toBe("purple");
+    expect(previousTier(byId.purple!)?.id).toBe("green");
+    expect(previousTier(byId.green!)?.id).toBe("blue");
+    expect(previousTier(byId.blue!)?.id).toBe("spark");
+  });
+
+  it("🔴 is null at the bottom, which is what makes Day 1 an ignition", () => {
+    // There is no flame to transform FROM on day one, and the ceremony relies
+    // on this to skip the crossover rather than fading in from nothing.
+    const spark = STREAK_TIERS[STREAK_TIERS.length - 1]!;
+    expect(spark.id).toBe("spark");
+    expect(previousTier(spark)).toBeNull();
   });
 });

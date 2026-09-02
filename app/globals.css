@@ -2179,54 +2179,13 @@ body:has(.frenz-canvas-page) {
   will-change: transform;
 }
 
-/* ── The once-a-day celebration ──────────────────────────────────────────────
-   Three staggered entrances on three elements. No confetti and no particle
-   system (§29): the premium reading comes from timing and easing, not volume. */
-@keyframes frenz-streak-in {
-  from { opacity: 0; transform: scale(0.86) translateY(12px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-@keyframes frenz-streak-flare {
-  0%   { opacity: 0; transform: scale(0.6); }
-  45%  { opacity: 0.55; transform: scale(1.05); }
-  100% { opacity: 0.3; transform: scale(1); }
-}
+/* ── `frenz-streak-fade`, still used by the sheet and the chip ────────────
+   The once-a-day celebration that owned the rest of this block is DELETED
+   (owner, 2026-09-01: "there shoudnlt be a celebration everyday, only on flame
+   upgrade"). Only the shared fade survives it. */
 @keyframes frenz-streak-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-
-.streak-celebration-scrim { animation: frenz-streak-fade 220ms var(--ease-out) both; }
-.streak-celebration-flare { animation: frenz-streak-flare 900ms var(--ease-out) both; }
-.streak-celebration-mark  { animation: frenz-streak-in 520ms var(--ease-spring) 80ms both; }
-.streak-celebration-count { animation: frenz-streak-in 560ms var(--ease-spring) 170ms both; }
-.streak-celebration-sub   { animation: frenz-streak-in 420ms var(--ease-out) 330ms both; }
-
-/*
-  ── The "luxurious" pass (owner, 2026-08-24) ───────────────────────────────
-  Two expanding rings and one gold sweep across the numeral. Both are pure
-  `transform` / `opacity` / `background-position`, so they stay on the
-  compositor — no animated blur, no box-shadow animation, no particle system,
-  which are the three things that turn a celebration into a stutter on a
-  low-end Android. The premium feel comes from the STAGGER (flame, then count,
-  then rings, then label) rather than from more effects running at once.
-*/
-@keyframes frenz-streak-ring {
-  from { transform: scale(0.55); opacity: 0.85; }
-  to   { transform: scale(2.15); opacity: 0; }
-}
-.streak-celebration-ring   { animation: frenz-streak-ring 1150ms var(--ease-out) 160ms both; }
-.streak-celebration-ring-2 { animation-delay: 420ms; animation-duration: 1350ms; }
-
-/* The sweep needs a background wider than the text to travel across, and the
-   text is already `bg-clip-text`, so this only moves the gradient's position. */
-@keyframes frenz-streak-shine {
-  from { background-position: 0% 50%; }
-  to   { background-position: 220% 50%; }
-}
-.streak-celebration-shine {
-  background-size: 220% 100%;
-  animation: frenz-streak-shine 1500ms var(--ease-out) 380ms both;
 }
 
 /* ── The chip's own celebration, on every increment (owner, 2026-08-25) ──────
@@ -2445,23 +2404,6 @@ html.dark .streak-chip-3d {
     animation: none;
     will-change: auto;
   }
-  .streak-celebration-flare,
-  .streak-celebration-mark,
-  .streak-celebration-count,
-  .streak-celebration-sub {
-    animation: frenz-streak-fade 200ms linear both;
-  }
-  /* The rings are decoration with no text of their own, so reduced motion
-     removes them outright rather than fading them in and leaving two static
-     circles floating behind the number. The shine simply stops travelling. */
-  .streak-celebration-ring {
-    display: none;
-  }
-  .streak-celebration-shine {
-    animation: none;
-    background-size: 100% 100%;
-  }
-
   /*
     The chip's increment celebration: the MOVEMENT goes, the MEANING stays. The
     new number is already rendered as text and the sound still plays, so the
@@ -3000,4 +2942,678 @@ html.dark .streak-ms-rank {
     transform: none;
   }
   .streak-ms-emblem { filter: drop-shadow(0 10px 24px var(--ms-glow)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEW FLAME UNLOCKED — intensity, transformation, actions (2026-09-01)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner, 2026-09-01, §4: "The visual intensity should increase with the rarity
+   of the flame. Do not simply add more particles. Instead, make the flame
+   itself progressively more refined."
+
+   🔴 SO EVERYTHING BELOW SCALES OFF ONE NUMBER, `--ms-i` (1–6, the tier's
+   `ceremony` rank), and what it scales is LIGHT — ring spread, halo radius,
+   sweep length, emblem lift. The mote count is untouched across the whole
+   ladder. `--ms-lift` is that number normalised to 0–1 so each rule can read
+   it without repeating the arithmetic; every use is a plain `calc()` on a
+   custom property, which costs nothing at runtime because it resolves once. */
+
+.streak-ms {
+  --ms-lift: calc((var(--ms-i, 4) - 1) / 5);
+}
+
+/* ── Rank 1: a small welcome, not a takeover (§4) ───────────────────────────
+   A first-time anonymous visitor meets Day 1 on their first landing-page view,
+   and a full-screen ceremony there would be hostile. The panel becomes a card
+   on a soft scrim: same components, same copy, a fraction of the presence.
+   This is the escalation §4 asks for, expressed at the bottom rung rather than
+   by suppressing it. */
+.streak-ms-compact .streak-ms-env {
+  background: rgba(248, 246, 242, 0.86);
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+}
+
+:root[data-theme="dark"] .streak-ms-compact .streak-ms-env,
+html.dark .streak-ms-compact .streak-ms-env {
+  background: rgba(6, 9, 20, 0.86);
+}
+
+.streak-ms-panel {
+  width: 100%;
+  max-width: 24rem;
+  text-align: center;
+}
+
+.streak-ms-compact .streak-ms-panel {
+  border-radius: 1.75rem;
+  padding: 1.5rem 1.25rem 1.25rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.76)),
+    linear-gradient(135deg, color-mix(in srgb, var(--ms-accent) 14%, transparent), transparent 46%),
+    #fdfcfa;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 30px 80px -24px rgba(15, 23, 42, 0.5);
+  animation: frenz-ms-card 420ms var(--ease-spring) both;
+}
+
+:root[data-theme="dark"] .streak-ms-compact .streak-ms-panel,
+html.dark .streak-ms-compact .streak-ms-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)),
+    linear-gradient(135deg, color-mix(in srgb, var(--ms-accent) 12%, transparent), transparent 44%),
+    #0b1020;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+@keyframes frenz-ms-card {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── "NEW FLAME UNLOCKED" (§3) ─────────────────────────────────────────────
+   It leads, because the member has to know WHAT happened before they can read
+   which rank it was. Small, wide-tracked, and in the accent rather than the
+   body colour so it reads as a label on the moment, not as a heading. */
+.streak-ms-eyebrow {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.34em;
+  /* The last letter's tracking would otherwise push the word off-centre. */
+  text-indent: 0.34em;
+  color: color-mix(in srgb, var(--ms-accent) 72%, black);
+  animation: frenz-ms-rise 460ms var(--ease-out) 120ms both;
+}
+
+:root[data-theme="dark"] .streak-ms-eyebrow,
+html.dark .streak-ms-eyebrow {
+  color: color-mix(in srgb, var(--ms-accent) 84%, white);
+}
+
+/* ── The stage, scaled by rank ─────────────────────────────────────────────
+   9rem at Day 1, 11.5rem at one year. Large enough to matter, never so large
+   that the flame stops being an object on a screen and becomes a wallpaper. */
+.streak-ms-stage {
+  width: calc(9rem + var(--ms-lift) * 2.5rem);
+  height: calc(9rem + var(--ms-lift) * 2.5rem);
+  margin-top: 0.75rem;
+}
+
+.streak-ms-ring {
+  width: calc(9rem + var(--ms-lift) * 2.5rem);
+  height: calc(9rem + var(--ms-lift) * 2.5rem);
+  /* The ring gains presence with rank: a hairline at Day 1, a lit band at 365. */
+  border-color: color-mix(
+    in srgb,
+    var(--ms-accent) calc(42% + var(--ms-lift) * 34%),
+    transparent
+  );
+  box-shadow:
+    0 0 calc(24px + var(--ms-lift) * 34px) -8px var(--ms-glow),
+    inset 0 0 calc(18px + var(--ms-lift) * 22px) -10px var(--ms-glow);
+}
+
+.streak-ms-halo {
+  width: calc(11rem + var(--ms-lift) * 5rem);
+  height: calc(11rem + var(--ms-lift) * 5rem);
+}
+
+/* ── 🔴 THE TRANSFORMATION (§3, §8) ────────────────────────────────────────
+   "The existing flame should glow, brighten and transition into the newly
+   unlocked flame."
+
+   The rank they arrived with brightens as it dissolves — `brightness` on a
+   ~96px element for one 620ms pass, which is a single filter on a single small
+   layer and not an animated blur; and the new flame ignites through it. Both
+   are transform/opacity apart from that one brightness ramp, so the crossover
+   stays on the compositor.
+
+   `.is-waiting` is what stops the two being visible at once before the turn:
+   the new flame is held at zero until JavaScript flips it, so the sequence
+   reads as one flame becoming another rather than as two flames fading. */
+.streak-ms-prev {
+  opacity: 1;
+  animation: frenz-ms-prev-in 420ms var(--ease-out) both;
+}
+
+.streak-ms-prev.is-out {
+  animation: frenz-ms-prev-out 620ms var(--ease-out) both;
+}
+
+@keyframes frenz-ms-prev-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes frenz-ms-prev-out {
+  0%   { opacity: 1; transform: scale(1);    filter: brightness(1); }
+  38%  { opacity: 1; transform: scale(1.07); filter: brightness(1.85); }
+  100% { opacity: 0; transform: scale(1.22); filter: brightness(2.4); }
+}
+
+/* Held dark until the turn. Without this the new rank is on screen from the
+   first frame and there is no transformation to see. */
+.streak-ms-emblem.is-waiting {
+  opacity: 0;
+  animation: none;
+}
+
+/* One pass, at the crossover. The "light sweep" §3 asks for — not a loop. */
+.streak-ms-sweep {
+  width: calc(11rem + var(--ms-lift) * 4rem);
+  height: calc(11rem + var(--ms-lift) * 4rem);
+  border-radius: 999px;
+  background: linear-gradient(
+    100deg,
+    transparent 32%,
+    color-mix(in srgb, var(--ms-accent) calc(30% + var(--ms-lift) * 40%), transparent) 50%,
+    transparent 68%
+  );
+  opacity: 0;
+  animation: frenz-ms-sweep 900ms var(--ease-out) 700ms both;
+}
+
+@keyframes frenz-ms-sweep {
+  0%   { opacity: 0;   transform: translateX(-55%) rotate(-8deg); }
+  45%  { opacity: 0.9; }
+  100% { opacity: 0;   transform: translateX(55%) rotate(8deg); }
+}
+
+/* ── The words (§3) ────────────────────────────────────────────────────────
+   The RANK is the headline and the number supports it — the inverse of the old
+   ceremony, which led with a giant numeral. At an unlock the news is which
+   flame you now own, and "7" alone does not say that. */
+.streak-ms-rank {
+  margin-top: 1.1rem;
+  font-size: calc(1.6rem + var(--ms-lift) * 0.7rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: color-mix(in srgb, var(--ms-accent) 76%, black);
+  animation: frenz-ms-rise 520ms var(--ease-out) 1300ms both;
+}
+
+:root[data-theme="dark"] .streak-ms-rank,
+html.dark .streak-ms-rank {
+  color: color-mix(in srgb, var(--ms-accent) 84%, white);
+}
+
+.streak-ms-days {
+  margin-top: 0.3rem;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: hsl(var(--muted-foreground));
+  animation: frenz-ms-rise 520ms var(--ease-out) 1420ms both;
+}
+
+.streak-ms-line {
+  margin-top: 0.85rem;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+  animation: frenz-ms-rise 560ms var(--ease-out) 1560ms both;
+}
+
+.streak-ms-sub {
+  margin-top: 0.3rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  animation: frenz-ms-rise 560ms var(--ease-out) 1680ms both;
+}
+
+/* ── The two CTAs (§3) ─────────────────────────────────────────────────────
+   Primary "VIEW FLAME GALLERY", secondary "CONTINUE". They arrive LAST, which
+   is also what makes it safe for this overlay to no longer dismiss itself:
+   nothing is tappable until the sequence has resolved. */
+.streak-ms-actions {
+  margin-top: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: 17rem;
+  margin-inline: auto;
+  animation: frenz-ms-rise 520ms var(--ease-out) 1820ms both;
+}
+
+.streak-ms-cta {
+  height: 2.85rem;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: #1a1206;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--ms-accent) 60%, white),
+    var(--ms-accent)
+  );
+  box-shadow:
+    0 10px 26px -12px var(--ms-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: transform 140ms var(--ease-out);
+}
+
+.streak-ms-cta:active { transform: scale(0.975); }
+
+.streak-ms-continue {
+  height: 2.6rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: hsl(var(--muted-foreground));
+  transition: background-color 140ms var(--ease-out);
+}
+
+.streak-ms-continue:hover { background-color: rgba(120, 113, 108, 0.1); }
+
+/* Low-end devices: the sweep is the one added layer worth dropping. The ring,
+   halo, emblem and the transformation itself all stay — they carry the meaning.
+   Keyed off the same `.streak-fx-lite` the flame mark sets, so there is ONE
+   capability decision in the codebase. */
+.streak-fx-lite .streak-ms-sweep { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The transformation becomes a state change rather than a movement: the old
+     flame is simply not there, the new one is. The achievement is never
+     communicated by animation alone. */
+  .streak-ms-sweep,
+  .streak-ms-prev {
+    display: none;
+  }
+  .streak-ms-emblem.is-waiting {
+    opacity: 1;
+    animation: frenz-ms-in 260ms var(--ease-out) both;
+  }
+  .streak-ms-eyebrow,
+  .streak-ms-rank,
+  .streak-ms-days,
+  .streak-ms-line,
+  .streak-ms-sub,
+  .streak-ms-actions,
+  .streak-ms-panel {
+    animation: frenz-ms-in 260ms var(--ease-out) both;
+    transform: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE FLAME GALLERY — rows, states, and the locked treatment (§1, §5)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner, 2026-09-01: "refined typography · better spacing · subtle depth ·
+   premium glass/blur surfaces · elegant borders · subtle flame glow · better
+   locked/unlocked states … Do not make the cards oversized. The Flame Gallery
+   should still feel like a native mobile app panel."
+
+   🔴 THE DEPTH IS BORROWED FROM THE PANEL, NOT ADDED PER ROW. Every row is a
+   flat surface with one hairline border and one inset highlight; the glass is
+   on the panel behind them. This project has a standing rule against
+   `backdrop-filter` on repeated list rows — six blurred rows is six full-screen
+   compositing passes on a phone, for an effect one element can provide. */
+
+.streak-sheet-panel {
+  box-shadow:
+    0 30px 80px -20px rgba(15, 23, 42, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="dark"] .streak-sheet-panel,
+html.dark .streak-sheet-panel {
+  box-shadow:
+    0 30px 80px -20px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.streak-sheet-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.022em;
+  color: hsl(var(--foreground));
+}
+
+.streak-sheet-sub {
+  margin-top: 0.15rem;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+.streak-sheet-close {
+  margin: -0.25rem -0.25rem 0 0;
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.6);
+  transition: background-color 140ms var(--ease-out);
+}
+
+.streak-sheet-close:hover { background-color: hsl(var(--foreground) / 0.05); }
+
+.streak-sheet-list {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.streak-sheet-foot {
+  margin-top: 0.9rem;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── A rank row ────────────────────────────────────────────────────────────
+   Compact on purpose — "Do not make the cards oversized." 34px mark, two lines
+   of text, one state chip, and the whole row still under 60px so all six fit a
+   phone without scrolling. */
+.streak-rank {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 1rem;
+  padding: 0.5rem 0.6rem;
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.45);
+  transition:
+    opacity 260ms var(--ease-out),
+    filter 260ms var(--ease-out),
+    box-shadow 260ms var(--ease-out);
+}
+
+:root[data-theme="dark"] .streak-rank,
+html.dark .streak-rank {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+/* 🔴 LOCKED IS VISIBLE (§5). "Locked flames should remain visible. This is
+   important because it gives users something to work toward … The flame can
+   appear muted, desaturated, slightly blurred, low opacity. But it should
+   still be recognizable." So: desaturated and dimmed, and NOT blurred — a
+   blurred flame at 26px stops being recognisable, which is the one thing §5
+   says must not happen. */
+.streak-rank[data-state="locked"] .streak-rank-mark {
+  opacity: 0.4;
+  filter: saturate(0.35) contrast(0.92);
+}
+
+.streak-rank[data-state="locked"] .streak-rank-name,
+.streak-rank[data-state="locked"] .streak-rank-blurb {
+  opacity: 0.72;
+}
+
+/* Unlocked: brighter, sharper, subtly luminous (§5). The glow is on the MARK
+   only — a lit row would compete with the current one. */
+.streak-rank[data-state="unlocked"] .streak-rank-mark,
+.streak-rank[data-state="current"] .streak-rank-mark {
+  filter: drop-shadow(0 3px 10px rgba(15, 23, 42, 0.14));
+}
+
+/* The current rank. §11: "When the user opens Flame Gallery: the current flame
+   gently illuminates." One 900ms bloom on open, then still — an infinite pulse
+   in a list is the thing that makes a panel feel cheap. */
+.streak-rank[data-state="current"] {
+  box-shadow:
+    inset 0 0 0 1px transparent,
+    0 0 22px -8px var(--rank-glow, transparent);
+  animation: frenz-rank-wake 900ms var(--ease-out) 120ms both;
+}
+
+@keyframes frenz-rank-wake {
+  0%   { box-shadow: inset 0 0 0 1px transparent, 0 0 0 0 transparent; }
+  55%  { box-shadow: inset 0 0 0 1px transparent, 0 0 30px -4px var(--rank-glow, transparent); }
+  100% { box-shadow: inset 0 0 0 1px transparent, 0 0 22px -8px var(--rank-glow, transparent); }
+}
+
+.streak-rank-mark {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.streak-rank-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.streak-rank-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.streak-rank-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: hsl(var(--foreground) / 0.72);
+}
+
+.streak-rank-days {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+}
+
+.streak-rank-blurb {
+  margin-top: 0.1rem;
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: hsl(var(--muted-foreground));
+}
+
+.streak-rank-chip {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.streak-rank-chip-locked {
+  color: hsl(var(--muted-foreground) / 0.6);
+}
+
+/* "Owned, but not lit right now" — the state that only exists after a break,
+   and the visible proof that a flame is never taken back (§6). */
+.streak-rank-chip-owned {
+  color: hsl(var(--muted-foreground) / 0.85);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streak-rank[data-state="current"] { animation: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STREAK BROKEN · RESTORE · START AGAIN (§6, §7)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Owner, 2026-09-01: "DO NOT show a generic error modal. Create a premium
+   'Streak Broken' state that uses the user's CURRENT FLAME."
+
+   🔴 IT IS NOT RED. A broken streak is a disappointment, not an error, and
+   painting it in the failure colour would make a missed day read as something
+   having gone wrong with the app. The card is a warm neutral with the flame's
+   own light gone out of it — "disappointing but recoverable", exactly as §13
+   asks. */
+
+.streak-recover {
+  border-radius: 1.25rem;
+  padding: 0.85rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.25)),
+    hsl(var(--secondary) / 0.55);
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.55);
+}
+
+:root[data-theme="dark"] .streak-recover,
+html.dark .streak-recover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Restored: the one state that is allowed to be warm and lit. */
+.streak-recover-ok {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.3)),
+    linear-gradient(135deg, rgba(251, 191, 36, 0.16), transparent 55%),
+    hsl(var(--secondary) / 0.5);
+  animation: frenz-ms-rise 460ms var(--ease-spring) both;
+}
+
+.streak-recover-flame {
+  display: flex;
+  height: 2.6rem;
+  width: 2.6rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.6);
+}
+
+/* 🔴 THE FLAME, GONE OUT — not a warning icon (§6). Desaturated and dimmed so
+   it is visibly the same flame without its light. Its rank MOTION is switched
+   off in the component rather than here, because a storming flame at 40%
+   opacity still reads as alive. */
+.streak-recover-flame-out {
+  opacity: 0.55;
+  filter: saturate(0.3) contrast(0.9);
+}
+
+.streak-recover-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: hsl(var(--muted-foreground));
+}
+
+.streak-recover-head {
+  margin-top: 0.15rem;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  color: hsl(var(--foreground));
+}
+
+.streak-recover-well {
+  margin-top: 0.75rem;
+  border-radius: 0.9rem;
+  padding: 0.7rem 0.75rem;
+  background: hsl(var(--background) / 0.6);
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.5);
+}
+
+.streak-recover-lede {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.streak-recover-body {
+  margin-top: 0.15rem;
+  font-size: 12px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+}
+
+.streak-recover-keep {
+  margin-top: 0.7rem;
+}
+
+/* The countdown. Tabular figures so the minutes changing cannot shift the
+   layout of the row it sits in — a number that reflows every 20 seconds is
+   the kind of small wrongness that undoes "premium". */
+.streak-recover-clock {
+  margin-top: 0.6rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.streak-recover-clock-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: hsl(var(--muted-foreground));
+}
+
+.streak-recover-clock-value {
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+}
+
+.streak-recover-cta {
+  margin-top: 0.75rem;
+  display: flex;
+  height: 2.5rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: #fff;
+  background: linear-gradient(180deg, #fbbf24, #f97316);
+  box-shadow:
+    0 10px 24px -14px rgba(249, 115, 22, 0.9),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition: transform 140ms var(--ease-out);
+}
+
+.streak-recover-cta:active { transform: scale(0.98); }
+.streak-recover-cta:disabled { opacity: 0.6; }
+
+/* The expired state's button starts nothing and promises nothing, so it is not
+   dressed as the primary action the restore button is. */
+.streak-recover-cta-quiet {
+  color: hsl(var(--foreground));
+  background: hsl(var(--secondary));
+  box-shadow: inset 0 0 0 1px hsl(var(--border) / 0.7);
+}
+
+.streak-recover-credits {
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.streak-recover-failed {
+  margin-top: 0.7rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
 }

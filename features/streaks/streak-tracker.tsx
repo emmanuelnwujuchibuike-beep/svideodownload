@@ -3,12 +3,12 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
-import { recordStreakActivity } from "@/features/streaks/use-streak";
-import { milestoneFor } from "@/lib/streaks/tiers";
+import { recordStreakActivity, useStreak } from "@/features/streaks/use-streak";
+import { milestoneFor, type StreakTier } from "@/lib/streaks/tiers";
 
 /**
  * The single place a day's activity is recorded, and the only thing that can
- * raise the celebration. Renders nothing of its own.
+ * raise a celebration. Renders nothing of its own.
  *
  * ── 🔴 ONE CALL PER PAGE OPEN, FROM ONE COMPONENT ────────────────────────
  * Mounted once from `DeferredShell`, which lives in the ROOT layout — so
@@ -24,35 +24,41 @@ import { milestoneFor } from "@/lib/streaks/tiers";
  *
  * ── 🔴 IT CANNOT DELAY ANYTHING ──────────────────────────────────────────
  * DeferredShell mounts two frames after first paint, so this never competes
- * with LCP, hero rendering or PWA startup. The celebration chunk is
- * code-split and only requested when the server has actually said to celebrate
- * — so on 364 days out of 365 its bytes are never fetched at all.
+ * with LCP, hero rendering or PWA startup. The ceremony chunk is code-split and
+ * only requested when the server has actually said to celebrate — so on the
+ * ~359 days a year that are not a flame upgrade its bytes are never fetched.
  */
 
-const StreakCelebration = dynamic(
-  () => import("@/features/streaks/streak-celebration").then((m) => m.StreakCelebration),
+/*
+  🔴 ONE OVERLAY, WHERE THERE USED TO BE TWO.
+
+  Owner, 2026-09-01: "there shoudnlt be a celebration everyday, only on flame
+  upgrade." The daily `StreakCelebration` — a 2.6s full-screen flash that fired
+  on every increment — is deleted, not merely suppressed: leaving it in the tree
+  behind a condition is how it comes back. What remains is the unlock ceremony,
+  which by construction can only play on a rung.
+*/
+const StreakUnlockCelebration = dynamic(
+  () =>
+    import("@/features/streaks/streak-unlock-celebration").then((m) => m.StreakUnlockCelebration),
   { ssr: false },
 );
 
 /*
-  🔴 A SECOND, SEPARATE CHUNK — not a prop on the daily celebration.
-
-  The ceremony carries its own environment, emblem staging and metallic
-  typography, and it plays on FIVE days of a member-s life (7, 14, 30, 100,
-  365). Bundling it with the daily overlay would mean every ordinary
-  celebration downloaded a milestone it will almost never show; splitting it
-  means the ceremony-s bytes are fetched on exactly the days it runs.
+  The gallery is the ceremony's primary CTA ("VIEW FLAME GALLERY", §3), so the
+  tracker owns the handoff between them. It is the same chunk the hero chip
+  opens — a second copy would be a second gallery to keep in sync, and the
+  member would notice the day the two disagreed.
 */
-const StreakMilestoneCelebration = dynamic(
-  () =>
-    import("@/features/streaks/streak-milestone-celebration").then(
-      (m) => m.StreakMilestoneCelebration,
-    ),
+const StreakTiersSheet = dynamic(
+  () => import("@/features/streaks/streak-tiers-sheet").then((m) => m.StreakTiersSheet),
   { ssr: false },
 );
 
 export function StreakTracker() {
-  const [celebrate, setCelebrate] = useState<number | null>(null);
+  const [unlock, setUnlock] = useState<{ streak: number; tier: StreakTier } | null>(null);
+  const [gallery, setGallery] = useState<number | null>(null);
+  const { data } = useStreak();
   const ran = useRef(false);
 
   useEffect(() => {
@@ -64,38 +70,41 @@ export function StreakTracker() {
 
     let cancelled = false;
     void recordStreakActivity().then((state) => {
-      if (cancelled || !state) return;
-      // The SERVER decides. This never inspects dates of its own.
-      if (state.shouldCelebrate && state.currentStreak >= 2) setCelebrate(state.currentStreak);
+      if (cancelled || !state || !state.shouldCelebrate) return;
+      /*
+        🔴 THE SERVER ALREADY DECIDED. `shouldCelebrate` is now gated on
+        `milestoneFor()` server-side, so this no longer forks on the number —
+        it only needs the TIER in order to render, and asking the same pure
+        function for it cannot disagree with the server that used it.
+
+        The null guard is not dead code: it is what keeps a future server that
+        loosens the gate from rendering a ceremony with no rank attached.
+      */
+      const tier = milestoneFor(state.currentStreak);
+      if (tier) setUnlock({ streak: state.currentStreak, tier });
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (celebrate === null) return null;
-
-  /*
-    🔴 THE MILESTONE FORK, and why it is safe to decide from the number alone.
-
-    `milestoneFor` returns a tier only when the streak landed EXACTLY on a
-    threshold, and a streak moves one day at a time (a reset goes to 1, never to
-    7) — so landing on 7 can only mean the 6 -> 7 transition. Paired with
-    `shouldCelebrate`, which the server sets false for the rest of the day the
-    moment it is claimed, the two together are exactly "the increment that
-    crossed this threshold, once" (§12).
-
-    A refresh, a second tab, a route change, a remount, a PWA relaunch or a
-    sign-in all return `shouldCelebrate: false` and mount neither overlay.
-  */
-  const milestone = milestoneFor(celebrate);
-  return milestone ? (
-    <StreakMilestoneCelebration
-      streak={celebrate}
-      tier={milestone}
-      onDone={() => setCelebrate(null)}
-    />
-  ) : (
-    <StreakCelebration streak={celebrate} onDone={() => setCelebrate(null)} />
+  return (
+    <>
+      {unlock ? (
+        <StreakUnlockCelebration
+          streak={unlock.streak}
+          tier={unlock.tier}
+          onViewGallery={() => setGallery(unlock.streak)}
+          onDone={() => setUnlock(null)}
+        />
+      ) : null}
+      {gallery !== null ? (
+        <StreakTiersSheet
+          streak={data?.currentStreak ?? gallery}
+          state={data ?? null}
+          onClose={() => setGallery(null)}
+        />
+      ) : null}
+    </>
   );
 }

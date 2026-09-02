@@ -92,7 +92,9 @@ async function run(streak) {
   */
   await page.mouse.click(5, 5);
 
-  await page.waitForSelector(".streak-ms, .streak-celebration-scrim", { timeout: 30_000 });
+  // The daily celebration is deleted (2026-09-01); the unlock ceremony is the
+  // only overlay that can make a noise, and it only mounts on a flame upgrade.
+  await page.waitForSelector(".streak-ms", { timeout: 30_000 });
   await page.waitForTimeout(2500);
 
   const osc = await page.evaluate(() => window.__osc.filter((o) => o.freq !== null));

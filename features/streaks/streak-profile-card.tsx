@@ -1,11 +1,11 @@
 "use client";
 
 import { Trophy } from "lucide-react";
-import { useState } from "react";
 
 import { StreakFlame } from "@/features/streaks/streak-flame";
 import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
-import { restoreStreak, useStreak } from "@/features/streaks/use-streak";
+import { StreakRecovery } from "@/features/streaks/streak-recovery";
+import { useStreak } from "@/features/streaks/use-streak";
 import { tierFor } from "@/lib/streaks/tiers";
 import type { StreakState } from "@/lib/streaks/types";
 import { cn } from "@/lib/utils";
@@ -90,7 +90,14 @@ function StreakCard({ state, className }: { state: StreakState; className?: stri
         </div>
       </div>
 
-      {state.canRestore ? <RestoreRow state={state} /> : null}
+      {/*
+        🔴 ONE recovery experience, shared with the flame gallery. This used to
+        be a local `RestoreRow` that only knew how to say "restore" — it had no
+        broken state, no countdown and nothing to show once the window closed,
+        so a member past 48 hours simply saw nothing at all where §7 wants
+        "YOUR NEXT STREAK STARTS HERE". See streak-recovery.tsx.
+      */}
+      <StreakRecovery state={state} className="mt-3.5" />
 
       <dl className="mt-4 grid grid-cols-3 gap-2">
         {/* Effects off at 14px: licks and smoke on a glyph this small are noise,
@@ -160,48 +167,6 @@ export function StreakCalendar({ week, today }: { week: StreakState["week"]; tod
         );
       })}
     </ul>
-  );
-}
-
-/**
- * The restore offer (§16). Shown ONLY while the server says a restore is
- * genuinely available — never beside a healthy streak, and never after the
- * window or the lifetime cap has closed it.
- */
-function RestoreRow({ state }: { state: StreakState }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  return (
-    <div className="mt-3.5 rounded-2xl border border-orange-500/25 bg-orange-500/[0.06] p-3">
-      <p className="text-[13.5px] font-semibold">
-        Restore your {state.restorableStreak}-day streak
-      </p>
-      <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-        {failed
-          ? "That streak can no longer be restored."
-          : "Your streak was interrupted. Restore it and keep going."}
-      </p>
-      {!failed ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={async () => {
-            if (busy) return;
-            setBusy(true);
-            // The server is the only thing that can approve this; a `false`
-            // here means the window closed or the allowance is spent, and the
-            // honest answer is to say so rather than retry.
-            const ok = await restoreStreak();
-            setFailed(!ok);
-            setBusy(false);
-          }}
-          className="mt-2.5 inline-flex h-9 items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-4 text-[13px] font-semibold text-white transition-transform duration-150 active:scale-[0.97] disabled:opacity-60"
-        >
-          {busy ? "Restoring…" : "Restore Streak"}
-        </button>
-      ) : null}
-    </div>
   );
 }
 

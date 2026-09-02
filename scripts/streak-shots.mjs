@@ -17,28 +17,39 @@ const BASE = process.argv[2] ?? "http://localhost:3123/";
 const OUT = process.argv[3] ?? "C:/Users/u/AppData/Local/Temp/navshots";
 mkdirSync(OUT, { recursive: true });
 
+/** The rungs. Kept in step with STREAK_TIERS by hand — the shots are a tool,
+ *  not shipped code, so a duplicated list here costs nothing to correct. */
+const MILESTONES = [1, 7, 14, 30, 100, 365];
+
 /**
  * A COMPLETE `StreakState`. Every field of StreakRecord as well — an earlier
  * version stubbed only the handful the chip reads, and the chip then rendered
  * nothing at all, so the shots silently fell back to the real day-1 streak.
  */
-function state(currentStreak, shouldCelebrate) {
+function state(currentStreak, shouldCelebrate, { longest, broken } = {}) {
   const today = "2026-08-31";
+  /* A broken streak has a live recovery window: `restoreDeadline` set, a
+     `restorableStreak` to offer back, and an expiry to count down to. This is
+     the state §6/§7 describe and the only way to photograph it. */
+  const lost = broken ? (longest ?? 12) : 0;
   return {
     currentStreak,
-    longestStreak: Math.max(currentStreak, 12),
+    longestStreak: Math.max(currentStreak, longest ?? 12),
     lastActivityDate: today,
     streakStartedAt: today,
     totalActiveDays: currentStreak,
     timezone: "Africa/Lagos",
-    restoreDeadline: null,
+    restoreDeadline: broken ? "2026-09-02" : null,
     lastCelebrationDate: null,
     lastReminderDate: null,
-    restoresUsed: 0,
-    status: "ACTIVE",
+    restoresUsed: broken ? 2 : 0,
+    status: broken ? "RESTORABLE" : "ACTIVE",
     shouldCelebrate,
-    canRestore: false,
-    restorableStreak: 0,
+    canRestore: !!broken,
+    restorableStreak: lost,
+    /* ~23h47m out, so the countdown in the shot reads like the owner's copy. */
+    restoreExpiresAt: broken ? new Date(Date.now() + 85_620_000).toISOString() : null,
+    restoresRemaining: broken ? 1 : 3,
     today,
     week: Array.from({ length: 7 }, (_, i) => ({
       date: `2026-08-${25 + i}`,
@@ -47,7 +58,7 @@ function state(currentStreak, shouldCelebrate) {
   };
 }
 
-async function shoot({ theme, streak, celebrate, tapChip, name }) {
+async function shoot({ theme, streak, celebrate, tapChip, name, longest, broken }) {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
     ...devices["Pixel 7"],
@@ -83,7 +94,7 @@ async function shoot({ theme, streak, celebrate, tapChip, name }) {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(state(streak, celebrate)),
+      body: JSON.stringify(state(streak, celebrate, { longest, broken })),
     }),
   );
 
@@ -107,20 +118,25 @@ async function shoot({ theme, streak, celebrate, tapChip, name }) {
     /* Wait for the LAST beat to arrive rather than guessing a delay. The
        ceremony starts when recordStreakActivity() resolves — some hundreds of
        ms after load — so a fixed 2200ms landed between the title and the
-       caption and photographed a ceremony with its sentence missing. */
-    /* The MILESTONE ceremony and the DAILY celebration are different
-       components with different markup — waiting for the ceremony-s caption on
-       an ordinary day waits for something that correctly never renders, which
-       is what the day-4 shot did until this was split. */
-    const milestone = [7, 14, 30, 100, 365].includes(streak);
-    await page.waitForSelector(milestone ? ".streak-ms-caption" : ".streak-celebration-scrim", {
-      timeout: 20_000,
-    });
-    /* The caption ELEMENT exists from the first frame (its animation has
+       caption and photographed a ceremony with its sentence missing.
+
+       🔴 THERE IS ONLY ONE CELEBRATION NOW (owner, 2026-09-01: "there shoudnlt
+       be a celebration everyday, only on flame upgrade"). The daily overlay is
+       DELETED, so an ordinary day correctly renders nothing at all — asking for
+       it would hang for the full timeout and then report a bug that is the
+       intended behaviour. Only a rung has a ceremony. */
+    if (!MILESTONES.includes(streak)) {
+      console.log(`skip: day ${streak} is not a flame upgrade — no ceremony by design`);
+      await browser.close();
+      return;
+    }
+    await page.waitForSelector(".streak-ms-line", { timeout: 20_000 });
+    /* The line ELEMENT exists from the first frame (its animation has
        fill-mode both), so waiting for the selector only proves it mounted, not
-       that it has painted. Its beat is 1500ms + 560ms, so land in the HOLD
-       phase (1750-3100ms) to photograph the ceremony at rest. */
-    await page.waitForTimeout(milestone ? 2400 : 400);
+       that it has painted. The words land at 1560ms + 560ms and the CTAs at
+       1820ms, and the ceremony no longer dismisses itself — so anything past
+       ~2500ms photographs it at rest. */
+    await page.waitForTimeout(2600);
   } else {
     await page.waitForTimeout(1500);
   }
@@ -134,8 +150,13 @@ async function shoot({ theme, streak, celebrate, tapChip, name }) {
 for (const theme of ["light", "dark"]) {
   // The gallery: all six flames, their descriptions, the premium ground.
   await shoot({ theme, streak: 3, celebrate: false, tapChip: true, name: "gallery" });
-  // The 7-day ceremony, mid-sequence.
-  await shoot({ theme, streak: 7, celebrate: true, tapChip: false, name: "milestone7" });
-  // An ordinary day, for the contrast the whole brief is about.
-  await shoot({ theme, streak: 4, celebrate: true, tapChip: false, name: "daily4" });
+  /* The gallery AFTER A BREAK — the state §6 is about. A 100-day member on a
+     1-day streak must still see gold, purple, green and blue as UNLOCKED. */
+  await shoot({ theme, streak: 1, celebrate: false, tapChip: true, name: "gallery-broken", longest: 100, broken: true });
+  // Day 1: the smallest rung, which must be a card and not a takeover.
+  await shoot({ theme, streak: 1, celebrate: true, tapChip: false, name: "unlock1" });
+  // The 7-day unlock, at rest.
+  await shoot({ theme, streak: 7, celebrate: true, tapChip: false, name: "unlock7" });
+  // The rarest, to check the intensity ladder actually escalates.
+  await shoot({ theme, streak: 365, celebrate: true, tapChip: false, name: "unlock365" });
 }

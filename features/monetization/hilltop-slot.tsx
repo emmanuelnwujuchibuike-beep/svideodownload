@@ -11,6 +11,8 @@ import {
   type HilltopPlacementId,
 } from "@/lib/monetization/hilltop-config";
 
+import { afterLoadIdle } from "@/lib/monetization/after-load";
+
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -306,10 +308,16 @@ export function HilltopSlot({
       anyway. Worst case the script loads 2.5s after paint, which is the whole
       benefit; best case the observer fires first and this never runs.
     */
-    const fallback = setTimeout(() => setNear(true), 2500);
+    /*
+      ⚠️ The fallback is scheduled AFTER `load` now, not 2.5s from mount. On a
+      slow phone 2.5s from mount lands inside the load itself, so this safety net
+      was injecting a third-party script into the window that decides LCP — the
+      very thing `lazy` exists to prevent.
+    */
+    const cancelFallback = afterLoadIdle(() => setNear(true));
     return () => {
       obs.disconnect();
-      clearTimeout(fallback);
+      cancelFallback();
     };
   }, [near]);
   const viewportAllowed = isMobile ? config.mobile : config.desktop;

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { HilltopTag } from "@/lib/monetization/hilltop";
 
+import { afterLoadIdle } from "@/lib/monetization/after-load";
+
 import { useShowAds } from "./use-show-ads";
 
 /**
@@ -57,15 +59,34 @@ export function HilltopVideoSlider() {
     };
   }, []);
 
+  /*
+    🔴 AFTER `load`, NEVER BEFORE IT (owner, 2026-09-01: "i think we have broken
+    the lcp" — and the measurement agreed: FCP 5432ms, LCP 8112ms, with five
+    massivesalad.com requests made WHILE THE PAGE WAS STILL LOADING).
+
+    This is site-wide, so it runs on the landing page — the one route held to a
+    1.6s budget — and it was injecting its script the moment its config arrived.
+    Third-party JavaScript parsing and executing on the main thread inside the
+    window that decides LCP.
+
+    The standing law in this codebase is that ad creatives wait for `load`,
+    recorded after the same mistake cost ~340ms of LCP on 2026-08-30. This unit
+    was written without it. `afterLoadIdle` also waits for the first idle moment
+    after that, because `load` alone lands the work exactly when the main thread
+    is catching up on everything it deferred.
+  */
   useEffect(() => {
     if (!ready || !showAds || !tag || sliderLoaded) return;
-    sliderLoaded = true;
-    const script = document.createElement("script");
-    script.src = tag.src;
-    script.async = true;
-    script.referrerPolicy = tag.referrerPolicy;
-    (script as HTMLScriptElement & { settings?: unknown }).settings = {};
-    document.body.appendChild(script);
+    return afterLoadIdle(() => {
+      if (sliderLoaded) return;
+      sliderLoaded = true;
+      const script = document.createElement("script");
+      script.src = tag.src;
+      script.async = true;
+      script.referrerPolicy = tag.referrerPolicy;
+      (script as HTMLScriptElement & { settings?: unknown }).settings = {};
+      document.body.appendChild(script);
+    });
   }, [ready, showAds, tag]);
 
   return null;

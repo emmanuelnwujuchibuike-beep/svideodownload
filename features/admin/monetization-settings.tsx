@@ -1013,6 +1013,25 @@ export function MonetizationSettings({
             busy={busy}
             onCommit={(n) => void persist({ ...state, batchCompleteSeconds: n })}
           />
+          {/*
+            🔴 The DISCOUNTED completion hold (owner, 2026-09-02: "when a
+            download started reward video is shown, the download completed video
+            vast should [be] in a different lesser timer from normal download
+            completed 15secs timer").
+
+            Its own control because it is a different bargain, not a different
+            moment: someone who already sat through a gate video to unlock this
+            download has paid once, and charging the full hold again turns one
+            file into ~45 seconds of advertising.
+          */}
+          <HilltopNumber
+            label="Download complete AFTER a gate ad — skip after (s)"
+            value={state.completeAfterRewardSeconds ?? 7}
+            min={0}
+            max={30}
+            busy={busy}
+            onCommit={(n) => void persist({ ...state, completeAfterRewardSeconds: n })}
+          />
           <HilltopNumber
             label="Idle / back-swipe — skip after (s)"
             value={state.ambientSkipSeconds ?? 5}

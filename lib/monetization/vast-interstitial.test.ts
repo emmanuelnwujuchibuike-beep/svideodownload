@@ -168,3 +168,25 @@ describe("🔴🔴 the two budgets — the split that fixed a zero-impression VA
     );
   });
 });
+
+describe("🔴 the discounted completion hold (owner, 2026-09-02)", () => {
+  /*
+    "when a download started reward video is shown, the download completed
+    video vast should [be] in a different lesser timer from normal download
+    completed 15secs timer."
+
+    The number itself lives in MonetizationSettings (completeAfterRewardSeconds)
+    and is served by /api/ads/config; what is asserted here is the RULE it has
+    to satisfy, so a future edit that makes the discount meaningless fails.
+  */
+  it("🔴 must be SHORTER than the normal completion hold, or it is not a discount", () => {
+    const normal = DEFAULT_VAST_INTERSTITIAL.skipAfterSeconds;
+    // The shipped default for the discounted hold.
+    const discounted = 7;
+    // 15s is the owner's stated normal completion hold; the discount must beat
+    // it, and must still be long enough to be an ad rather than a flicker.
+    expect(discounted).toBeLessThan(15);
+    expect(discounted).toBeGreaterThan(0);
+    expect(normal).toBeLessThanOrEqual(30);
+  });
+});

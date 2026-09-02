@@ -82,6 +82,10 @@ const schema = z.object({
   // stops being a price and becomes a reason to leave.
   batchGateSeconds: z.number().int().min(0).max(60).default(30),
   batchCompleteSeconds: z.number().int().min(0).max(30).default(5),
+  /* The discounted completion hold, used only when a reward video already
+     played at the START of the same download. See settings.ts for why it is a
+     separate number rather than a reuse of batchCompleteSeconds. */
+  completeAfterRewardSeconds: z.number().int().min(0).max(30).default(7),
   // How many of the leading (best-first) format options per kind count as
   // "top tier" for the reward-ad gate below.
   rewardTopTierCount: z.number().int().min(0).max(10).default(2),

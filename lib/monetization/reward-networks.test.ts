@@ -223,3 +223,49 @@ describe("premium always wins over any routing choice", () => {
     expect(showAdsAt).toBeLessThan(networkAt);
   });
 });
+
+describe("🔴 the Hilltop VAST as the stand-in reward gate (owner, 2026-09-02)", () => {
+  /*
+    "i want hiltop vast to be the acting reward ad in place of offerium untill
+    offerium approved, so the batch download, top 2 quality download started
+    should show hiltop ad."
+
+    Hilltop genuinely has no REWARDED product, and that fact is why this list
+    was not simply widened. The gate is OURS: an ordinary VAST plays and our
+    own code grants the unlock when it finishes. Nothing is claimed to the
+    network as a rewarded impression.
+  */
+  it("offers the interstitial on the top-quality unlock", () => {
+    const hd = REWARD_SURFACES.find((s) => s.id === "hd_download")!;
+    expect(hd.supports).toContain("interstitial");
+  });
+
+  it("keeps the batch gates on it too, so both download-started moments match", () => {
+    for (const id of ["batch_download", "multilink_batch"] as const) {
+      const surface = REWARD_SURFACES.find((s) => s.id === id)!;
+      expect(surface.supports, id).toContain("interstitial");
+    }
+  });
+
+  it("🔴 does NOT offer it where there is nothing left to unlock", () => {
+    /*
+      A gate must front a locked thing. `batch_complete` runs AFTER the files
+      are saved, so a reward there would be granting something already given —
+      the same reasoning that keeps rewarded formats off that row.
+    */
+    const done = REWARD_SURFACES.find((s) => s.id === "batch_complete")!;
+    expect(done.supports).not.toContain("gpt_rewarded");
+    expect(done.supports).not.toContain("rewarded_video");
+  });
+
+  it("🔴 leaves Offerium available everywhere it already was", () => {
+    // This is a STAND-IN, not a replacement. Switching back when Offerium is
+    // approved must be one dropdown, not a deploy.
+    // Only the surfaces that ever offered it — `wallpaper` and the post-event
+    // rows are interstitial-or-nothing by design and always were.
+    for (const id of ["hd_download", "batch_download", "multilink_batch", "video_preview"] as const) {
+      const surface = REWARD_SURFACES.find((s) => s.id === id)!;
+      expect(surface.supports, id).toContain("offerium");
+    }
+  });
+});

@@ -193,7 +193,39 @@ const ZONE_BY_TRIGGER: Record<InterstitialTrigger, string> = {
  * `batchGateSeconds` and `batchCompleteSeconds` — and were being ignored by this
  * path, because the overlay reads one field for every moment.
  */
-type SkipField = "batchGateSeconds" | "batchCompleteSeconds" | "ambientSkipSeconds";
+type SkipField =
+  | "batchGateSeconds"
+  | "batchCompleteSeconds"
+  | "ambientSkipSeconds"
+  | "completeAfterRewardSeconds";
+
+/**
+ * When a REWARD-style gate last actually played, if it has this page load.
+ *
+ * Owner, 2026-09-02: "when a download started reward video is shown, the
+ * download completed video vast should [be] in a different lesser timer from
+ * normal download completed 15secs timer."
+ *
+ * The completion ad has no idea what happened before it, and there is no
+ * download id threaded through this module to ask with. What it does have is
+ * time: a gate plays at the START of a download and the completion fires when
+ * that same download lands, so a gate within the last few minutes is the same
+ * download in every realistic case. Recording the instant is enough, and it
+ * needs no new plumbing through six call sites.
+ */
+let rewardShownAt = 0;
+
+/**
+ * How long a played gate keeps discounting the completion ad.
+ *
+ * Long enough to cover a slow batch or a large file on a poor connection, short
+ * enough that a gate watched half an hour ago is not still paying for an
+ * unrelated download later in the session.
+ */
+const REWARD_DISCOUNT_WINDOW_MS = 10 * 60 * 1000;
+
+/** Triggers that ARE the reward gate — the ones that unlock something. */
+const REWARD_TRIGGERS = new Set<InterstitialTrigger>(["batch", "download"]);
 
 const SKIP_FIELD_BY_TRIGGER: Partial<Record<InterstitialTrigger, SkipField>> = {
   batch: "batchGateSeconds",
@@ -445,8 +477,41 @@ export async function requestVastInterstitial(
     return { shown: false, reason: "error" };
   }
 
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 THE PREFETCH HAPPENS BEFORE EVERY GUARD, ON PURPOSE
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-02: "download complete still trigger late."
+
+    It was here — this warm-up used to sit BELOW the three returns underneath,
+    so it only ran when the START moment itself went ahead. Any of `disabled`,
+    the back-to-back window, or this trigger's own cooldown returned early and
+    the COMPLETION creative was never requested and never warmed. The completion
+    ad then started completely cold, and a cold Hilltop creative measures ~10.9s
+    to first frame — which is exactly the "late" the owner is describing.
+
+    Prefetching is not the same act as showing. It costs one request for a
+    creative that is seconds away regardless of whether THIS moment is allowed
+    to display anything, and its entire purpose is to make the NEXT moment
+    instant. Gating it on the current moment's eligibility was the bug.
+  */
+  const follows = PREFETCHES_ON_START[trigger];
+  if (follows) prefetchCreative(follows);
+
   if (!isEnabledFor(config, trigger)) return { shown: false, reason: "disabled" };
-  if (Date.now() - lastAnyShownAt < BACK_TO_BACK_MS) {
+  /*
+    🔴 A COMPLETION IS EXEMPT FROM THE BACK-TO-BACK WINDOW.
+
+    The owner wants the start gate AND the completion ad for the same download,
+    and those are seconds apart by definition — so a blanket 3s "nothing may
+    follow anything" silently ate the completion ad on every fast download. The
+    `phase` guard at the top already prevents two overlays existing at once,
+    which is the only thing this window was ever really protecting against; its
+    own comment calls it "a belt to that braces".
+  */
+  const isCompletion = trigger === "download-complete" || trigger === "batch-complete";
+  if (!isCompletion && Date.now() - lastAnyShownAt < BACK_TO_BACK_MS) {
     return { shown: false, reason: "cooldown" };
   }
   /*
@@ -488,14 +553,6 @@ export async function requestVastInterstitial(
     from opening eight takeovers, and an `await` with `phase` still "idle" is a
     hole straight through it.
   */
-  /*
-    The completion creative, requested now rather than when the file lands. This
-    runs before the current moment's own ad is even resolved, so the two requests
-    overlap instead of queueing.
-  */
-  const follows = PREFETCHES_ON_START[trigger];
-  if (follows) prefetchCreative(follows);
-
   phase = "loading";
   try {
     const { showExoClickInterstitial } = await import("../exoclick-interstitial");
@@ -577,7 +634,20 @@ export async function requestVastInterstitial(
       applied to the config it is handed rather than to its signature — which
       also means every other guard in this function still sees the real config.
     */
-    const skipField = SKIP_FIELD_BY_TRIGGER[trigger];
+    /*
+      🔴 THE COMPLETION AD IS DISCOUNTED WHEN A GATE ALREADY PLAYED.
+
+      A visitor who sat through a batch or top-quality gate to START this
+      download has already paid once; charging them the full 15s again turns one
+      download into ~45 seconds of advertising. `completeAfterRewardSeconds` is
+      the discounted hold, and it applies ONLY to `download-complete` —
+      `batch-complete` already has its own shorter number and is left alone.
+    */
+    const discounted =
+      trigger === "download-complete" && Date.now() - rewardShownAt < REWARD_DISCOUNT_WINDOW_MS;
+    const skipField = discounted
+      ? ("completeAfterRewardSeconds" as SkipField)
+      : SKIP_FIELD_BY_TRIGGER[trigger];
     const effectiveConfig = skipField
       ? { ...config, skipAfterSeconds: (await loadSkipSeconds(skipField)) ?? config.skipAfterSeconds }
       : config;
@@ -593,6 +663,12 @@ export async function requestVastInterstitial(
     clearTimeout(budget);
     lastShownAt.set(trigger, Date.now());
     lastAnyShownAt = Date.now();
+    /*
+      Recorded only when the gate genuinely PLAYED. A gate that was refused,
+      timed out or found no fill cost the visitor nothing, so it must not buy
+      them a discount on the completion ad.
+    */
+    if (REWARD_TRIGGERS.has(trigger)) rewardShownAt = Date.now();
     phase = "idle";
     return { shown: outcome === "completed" || outcome === "skipped", reason: "shown" };
   } catch (err) {

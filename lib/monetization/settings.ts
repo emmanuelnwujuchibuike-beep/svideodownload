@@ -249,6 +249,25 @@ export interface MonetizationSettings {
   /** Seconds before the POST-batch ad can be skipped (owner: 5). */
   batchCompleteSeconds: number;
   /**
+   * Seconds before the download-COMPLETE ad can be skipped WHEN A REWARD VIDEO
+   * ALREADY PLAYED AT THE START of that same download.
+   *
+   * Owner, 2026-09-02: "when a download started reward video is shown, the
+   * download completed video vast should [be] in a different lesser timer from
+   * normal download completed 15secs timer."
+   *
+   * 🔴 IT IS A SEPARATE NUMBER BECAUSE IT IS A DIFFERENT BARGAIN. The normal
+   * completion ad is the only thing that visitor watched, so 15s is a fair
+   * price for the file. If they have ALREADY sat through a gate video to unlock
+   * a batch or a top-quality format, charging them the full 15s again turns one
+   * download into ~45 seconds of advertising and is how people learn to close
+   * the tab. This is the discount for having already paid once.
+   *
+   * Applies only to `download-complete`. `batchCompleteSeconds` is untouched —
+   * the batch's own closing ad already had its own shorter number.
+   */
+  completeAfterRewardSeconds: number;
+  /**
    * How many of a download's highest-quality format options (per media kind)
    * count as "top tier" for the reward-ad gate below — owner, 2026-08-16:
    * "the top 2 highest quality". Formats are already sorted best-first per
@@ -708,6 +727,9 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   interstitialBatchDownload: false,
   batchGateSeconds: 30,
   batchCompleteSeconds: 5,
+  /* Half the normal 15s completion hold: enough to still be an ad, short
+     enough that a gated download does not become a minute of advertising. */
+  completeAfterRewardSeconds: 7,
   rewardTopTierCount: 2,
   rewardVideoTopTierSeconds: 30,
   rewardImageAudioTopTierSeconds: 5,

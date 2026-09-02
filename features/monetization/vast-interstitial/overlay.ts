@@ -218,6 +218,16 @@ export function showInterstitial({
       }
       document.removeEventListener("keydown", onKey);
       startSignal.removeEventListener("abort", onAbort);
+      /*
+        🔴 `close` / `closeLinear`, but ONLY for an ad that was actually seen and
+        did not run to its end. A `complete` already reported the good ending, and
+        an overlay that never revealed was never a viewable ad — reporting a close
+        for either would put events in the network's stats that never happened.
+      */
+      if (started && outcome !== "completed") {
+        pixel(creative.tracking.close);
+        pixel(creative.tracking.closeLinear);
+      }
       root.remove();
       document.documentElement.style.overflow = prevOverflow;
       /*
@@ -252,6 +262,12 @@ export function showInterstitial({
       mute.textContent = video.muted ? "🔇" : "🔊";
       mute.setAttribute("aria-label", video.muted ? "Unmute ad" : "Mute ad");
       if (!video.muted) void video.play().catch(() => {});
+      /*
+        Both directions reported. An UNMUTE is the single strongest engagement
+        signal a video ad has — the visitor chose to hear it — and several
+        networks price on it, so leaving it unsent is leaving money uncounted.
+      */
+      pixel(video.muted ? creative.tracking.mute : creative.tracking.unmute);
     });
 
     /**
@@ -263,6 +279,23 @@ export function showInterstitial({
       root.style.pointerEvents = "auto";
       document.documentElement.style.overflow = "hidden";
       skipBtn.focus?.();
+      /*
+        🔴 THE REST OF THE VAST EVENT SET (owner, 2026-09-02: "make the all vast
+        events count of hiltop impression and clicks stat").
+
+        `creativeView` is the "the creative was displayed" beacon and it is
+        distinct from `<Impression>` — some networks reconcile billable views
+        against it, and firing only the impression leaves that column empty.
+        `fullscreen`/`playerExpand` are literally true here: this player is a
+        full-screen takeover, so reporting anything else would be the lie.
+
+        Fired from `reveal()` rather than from `playing` so they cannot go out
+        while the overlay is still invisible — the same rule the impression
+        follows, for the same reason.
+      */
+      pixel(creative.tracking.creativeView);
+      pixel(creative.tracking.fullscreen);
+      pixel(creative.tracking.playerExpand);
     };
 
     video.addEventListener("playing", () => {

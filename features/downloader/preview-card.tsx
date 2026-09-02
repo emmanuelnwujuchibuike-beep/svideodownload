@@ -496,6 +496,37 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         ]);
         return;
       }
+      /*
+        ── The Hilltop VAST as the top-quality gate (owner, 2026-09-02) ────────
+
+        "i want hiltop vast to be the acting reward ad in place of offerium
+        untill offerium approved, so the batch download, top 2 quality download
+        started should show hiltop ad for a particular time set in the admin
+        dashboard."
+
+        The `batch` trigger, deliberately, and not a new one: it already resolves
+        the `batch_download_gate` zone and already reads `batchGateSeconds`, so
+        the two "download started" gates share ONE zone and ONE admin timer —
+        which is exactly what "a particular time set in the admin dashboard"
+        asks for, and it avoids a second number that can drift from the first.
+        A trigger must also already exist in EXOCLICK_ZONES, and this one does.
+
+        🔴 IT GRANTS ON FINISH, WHATEVER THE FINISH IS. `requestVastInterstitial`
+        resolves for every outcome — shown, skipped, no fill, timed out, blocked
+        — and the download proceeds in all of them. A visitor must never lose a
+        file they asked for because an ad network had nothing to serve; that is
+        the standing fail-open rule for this whole subsystem, and the reward
+        session is not what is being protected here.
+      */
+      if (hdNetwork.network === "interstitial") {
+        void import("@/features/monetization/vast-interstitial/request")
+          .then((m) => m.requestVastInterstitial("batch"))
+          .catch(() => {
+            /* A gate that cannot load its own ad must still release the file. */
+          })
+          .finally(() => onDownload(formatId, kind));
+        return;
+      }
       setQueue(ads);
       setTotalAds(ads.length);
       setGate({ formatId, kind });

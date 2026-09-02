@@ -118,8 +118,27 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     id: "hd_download",
     label: "HD / top-quality download unlock",
     description: "Gating the best-quality options and large files.",
-    supports: UNLOCK_NETWORKS,
+    /*
+      🔴 `interstitial` IS OFFERED HERE NOW (owner, 2026-09-02: "i want hiltop
+      vast to be the acting reward ad in place of offerium until offerium
+      approved, so the batch download, top 2 quality download started should
+      show hiltop ad").
+
+      It used to be `UNLOCK_NETWORKS`, which excluded the interstitial on the
+      reasoning that Hilltop has no REWARDED product — true, and it is why this
+      list is not simply widened. What changed is the reading: the gate is OURS.
+      We play an ordinary VAST and OUR code grants the unlock when it finishes.
+      Nothing is claimed to the network as a rewarded impression, no rewarded
+      callback is faked, and the honesty note that kept this off the list is
+      preserved by that distinction rather than by the omission.
+
+      Batch already worked this way (`batch_download_gate` is `vast` by default);
+      this is the same arrangement for the top-quality moment, on the same admin
+      timer, so the two "download started" gates behave alike.
+    */
+    supports: [...UNLOCK_NETWORKS, "interstitial"],
     fallback: "rewarded_video",
+    note: "“Full-screen interstitial” plays the Hilltop VAST and unlocks when it finishes — the stand-in while Offerium is pending.",
   },
   {
     id: "video_preview",

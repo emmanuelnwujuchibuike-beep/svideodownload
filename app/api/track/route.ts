@@ -141,6 +141,41 @@ export async function POST(request: Request) {
       userId,
       metadata: { slot, path: path ?? null },
     });
+
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       🔴 HILLTOP SLOTS ALSO COUNT AS REVENUE, NOT ONLY AS ACTIVITY
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-02: "i want all vast information … and video slider to be
+      reported in revenue and live activity."
+
+      The banner beacon above writes the `events` feed and stops, which is why a
+      Hilltop unit appeared in live activity and contributed nothing to the
+      impression and click totals. `AdSlot` posts the OTHER shape (`kind:
+      "impression"`), which is what makes those placements the only ones the
+      revenue screen has ever counted.
+
+      ⚠️ ONLY THE `hilltop_*` SLOTS. The ExoClick sticky / bottom-nav / history
+      banners post this same shape and are deliberately left alone: they were
+      never in the impression total, the owner did not ask for them, and
+      silently folding them in would move a number they read daily for reasons
+      that would not be visible anywhere. Adding them later is one line — and it
+      should be a decision, not a side effect of this one.
+
+      A `hilltop_*` slot carries no ads-table row (the tag comes from settings,
+      not from `ads`), so `adId` is null and the zone string is the whole
+      attribution — which is exactly how shared-mode ExoClick zones already
+      record.
+    */
+    if (slot.startsWith("hilltop_")) {
+      if (click) recordAdClick(slot, null, userId);
+      // An EMPTY placement is not an impression. `filled` is the frame's own
+      // painted height, so a no-fill records activity and no revenue — which is
+      // the difference an operator is looking for when a zone under-earns.
+      else if (filled) recordAdImpression(slot, null, userId);
+    }
+
     return NextResponse.json({ ok: true });
   }
 

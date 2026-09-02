@@ -28,6 +28,22 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * and says so, rather than quietly counting those subscribers as free.
  */
 
+/**
+ * Human labels for the Hilltop slot rows `/api/track` now records.
+ *
+ * They are not AD_ZONES — no ads-table row, no `AD_ZONE_META` entry — so
+ * without this the table would print `hilltop_historyfeed` at an operator and
+ * make them work out where on the site that is. The wording matches the
+ * placement switches in the monetization panel, so a row here and the switch
+ * that controls it read as the same thing.
+ */
+const HILLTOP_SLOT_LABELS: Record<string, string> = {
+  hilltop_history: "HilltopAds — History, above the grid",
+  hilltop_historyfeed: "HilltopAds — History, between time periods",
+  hilltop_landing: "HilltopAds — Landing, under the wallpaper button",
+  hilltop_feed: "HilltopAds — in-feed",
+};
+
 function Metric({
   icon: Icon,
   label,
@@ -161,7 +177,7 @@ export function RevenueOverview({
                         an operator should not have to map `result_top` to a
                         position on the page in their head. */}
                     <td className="px-4 py-3 font-medium">
-                      {AD_ZONE_META[z.zone as AdZoneId]?.label ?? z.zone}
+                      {AD_ZONE_META[z.zone as AdZoneId]?.label ?? HILLTOP_SLOT_LABELS[z.zone] ?? z.zone}
                     </td>
                     <td className="px-4 py-3 tabular-nums">{formatCompactNumber(z.impressions)}</td>
                     <td className="px-4 py-3 tabular-nums">{formatCompactNumber(z.clicks)}</td>

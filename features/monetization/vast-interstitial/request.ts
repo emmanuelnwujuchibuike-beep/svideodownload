@@ -905,6 +905,13 @@ export async function requestVastInterstitial(
     const outcome = await showInterstitial({
       creative,
       config: effectiveConfig,
+      /*
+        The zone this moment serves, so the overlay's impression and click land
+        in the right row of the revenue table (owner, 2026-09-02: "the hiltop
+        vast video ad activity doesnt show in ad impression in revenue and in
+        life activity, only the banners show").
+      */
+      zone: ZONE,
       startSignal: playController.signal,
       onStarted: () => clearTimeout(playBudget),
       /*

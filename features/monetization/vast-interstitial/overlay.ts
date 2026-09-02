@@ -46,15 +46,71 @@ function pixel(urls: string[] | undefined) {
   }
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 REPORT THE VIDEO TO OUR OWN DASHBOARD, NOT ONLY TO THE NETWORK
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-02: "the hiltop vast video ad activity doesnt show in ad
+ * impression in revenue and in life activity, only the banners show."
+ *
+ * Two analytics systems exist here and this player was in the wrong one.
+ *
+ *   • `/api/analytics/collect` → `analytics_events`. Product analytics: funnels,
+ *     sessions, dwell. This is where `track("vast_started")` and its siblings go,
+ *     and NOTHING on the revenue screen reads that table.
+ *   • `/api/track` → `ad_impressions` / `ad_clicks` + the `events` feed. This is
+ *     what `revenue-overview.tsx` counts and what the live activity feed lists.
+ *
+ * `AdSlot` posts to the second one, which is precisely why "only the banners
+ * show". The VAST player posted only to the first, so every download-complete,
+ * reward-gate, idle and batch video it has ever played was absent from the two
+ * screens the owner reads — while being present in the funnel nobody was
+ * looking at. Not a lost event: a filed-in-the-wrong-drawer one.
+ *
+ * The product `track()` calls stay exactly as they are. This is an ADDITION, so
+ * the funnel keeps working and the revenue numbers start existing.
+ *
+ * ⚠️ IT MUST NEVER BE ABLE TO AFFECT PLAYBACK. `sendBeacon` is fire-and-forget
+ * with no response to await and no promise to reject, and the whole call is
+ * wrapped — an analytics failure taking down an ad that is mid-impression would
+ * cost the exact revenue this exists to measure.
+ */
+function adBeacon(kind: "impression" | "click", zone: string, adId: string | undefined) {
+  if (!zone) return;
+  try {
+    navigator.sendBeacon?.(
+      "/api/track",
+      new Blob([JSON.stringify({ kind, zone, adId: adId ?? null })], {
+        type: "application/json",
+      }),
+    );
+  } catch {
+    /* Diagnostics must never break the thing they describe. */
+  }
+}
+
 export function showInterstitial({
   creative,
   config,
+  zone,
   startSignal,
   onStarted,
   showImmediately = false,
 }: {
   creative: VastCreative;
   config: VastInterstitialConfig;
+  /**
+   * The AD ZONE this moment serves — `download_complete`, `idle_interstitial`,
+   * `batch_download_gate` and so on.
+   *
+   * Passed in rather than read off the creative because the CALLER is the thing
+   * that knows: `request.ts` resolves it from the trigger, and a creative that
+   * arrived from a cache or a wrapper chain may not carry it. It is what makes
+   * the impression land in the right row of the per-zone revenue table instead
+   * of an untraceable total.
+   */
+  zone: string;
   /** Aborts if the startup budget expires before the first frame plays. */
   startSignal: AbortSignal;
   onStarted: () => void;
@@ -370,6 +426,17 @@ export function showInterstitial({
       pixel(creative.impressions);
       pixel(creative.tracking.start);
       track("vast_started", {});
+      /*
+        🔴 THE SAME MOMENT AS THE NETWORK'S PIXEL, DELIBERATELY.
+
+        Our impression count has to mean what Hilltop's means or the two numbers
+        can never be reconciled — and reconciling them is the whole reason the
+        owner reads both screens. So it fires here, after `reveal()`, on the
+        first frame that is actually on screen: not on request, not on load, and
+        not on `canplay`. Counting any earlier would inflate our side against
+        theirs and make the gap look like their under-reporting.
+      */
+      adBeacon("impression", zone, creative.adId);
       if (maySkip) {
         startedAtMs = Date.now();
         paintSkip();
@@ -484,6 +551,9 @@ export function showInterstitial({
       click.style.cssText = "position:absolute;inset:0;background:transparent;border:0;cursor:pointer";
       click.addEventListener("click", () => {
         pixel(creative.clickTracking);
+        // Our own click counter, beside the network's. See `adBeacon`.
+        adBeacon("click", zone, creative.adId);
+        track("vast_click", { zone });
         window.open(creative.clickThrough!, "_blank", "noopener,noreferrer");
       });
       root.appendChild(video);

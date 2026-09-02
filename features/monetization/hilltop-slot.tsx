@@ -214,6 +214,16 @@ export function HilltopSlot({
    * instead, once, when it is scrolled to.
    */
   const [mode, setMode] = useState<"unit" | "interstitial">("unit");
+  /**
+   * The resolved source for this slot — `banner`, `slider` or `interstitial`.
+   *
+   * Kept alongside `mode` (which only asks "unit or trigger?") because the
+   * site-wide "Video slider" placement switch has to be able to reach a slot
+   * that is CURRENTLY set to slider, and `mode` collapses banner and slider into
+   * the same value. Without it that switch was the fourth dead control in this
+   * panel — see `HILLTOP_PLACEMENT_BY_ZONE`.
+   */
+  const [slotSource, setSlotSource] = useState<string>("banner");
   const firedInterstitial = useRef(false);
 
   useEffect(() => {
@@ -231,6 +241,7 @@ export function HilltopSlot({
           // This placement's OWN tag, or the shared one it falls back to.
           setTag(d.hilltopBanners?.[slot] ?? d.hilltopBanner ?? null);
           setMode(d.hilltopSlotSource?.[slot] === "interstitial" ? "interstitial" : "unit");
+          setSlotSource(d.hilltopSlotSource?.[slot] ?? "banner");
           if (d.hilltop) setConfig(d.hilltop);
         },
       )
@@ -321,7 +332,20 @@ export function HilltopSlot({
     };
   }, [near]);
   const viewportAllowed = isMobile ? config.mobile : config.desktop;
-  const placementOn = isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed;
+  /*
+    🔴 THE SITE-WIDE SLIDER SWITCH REACHES THE SLOTS SHOWING A SLIDER.
+
+    "Video slider (site-wide)" had no consumer anywhere — the placement id was
+    rendered as a toggle, written to the settings row, and read by nothing. A
+    slot set to `slider` IS the site-wide slider product in a position, so this
+    is the switch that describes it, and it now turns it off.
+
+    Its own slot switch still applies on top: turning `landing` off stops that
+    position whatever product it is showing.
+  */
+  const sliderOff = slotSource === "slider" && !isHilltopPlacementOn(config, "slider");
+  const placementOn =
+    isHilltopPlacementOn(config, slot as HilltopPlacementId) && viewportAllowed && !sliderOff;
 
   /*
     🔴 EACH SLOT GETS ITS OWN WINDOW (owner, 2026-09-01: "it only show banner in

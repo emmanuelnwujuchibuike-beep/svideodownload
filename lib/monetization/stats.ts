@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { AD_ZONES } from "./ad-schema";
+import { HILLTOP_BANNER_SLOTS } from "./hilltop";
 import { getPricing } from "./pricing";
 
 const hasSupabase =
@@ -133,8 +134,27 @@ export async function fetchMonetizationAnalytics(): Promise<MonetizationAnalytic
     const headCount = (table: string) => s.from(table).select("*", { count: "exact", head: true });
 
     // Per-zone ad impressions + clicks (7d).
+    /*
+      🔴 THE HILLTOP SLOTS ARE REPORTED HERE TOO (owner, 2026-09-02: "i want all
+      vast information … and video slider to be reported in revenue and live
+      activity").
+
+      They are not AD_ZONES and must not become any — an AD_ZONE is a placement
+      an operator configures a ROW for, and these are settings-driven tags with
+      no row. But `/api/track` now records their impressions and clicks under a
+      `hilltop_<slot>` label, and the note above this file is explicit about what
+      happens to a live placement missing from THIS list: it is not shown as
+      zero, it is simply absent, with nothing to tell the operator it exists.
+
+      Derived from `HILLTOP_BANNER_SLOTS` rather than retyped, so a slot added
+      there reports here without anyone remembering to come back.
+    */
+    const zonesToReport = [
+      ...AD_ZONES,
+      ...HILLTOP_BANNER_SLOTS.map((s) => `hilltop_${s}`),
+    ];
     const adZonesRaw = await Promise.all(
-      AD_ZONES.map(async (zone) => {
+      zonesToReport.map(async (zone) => {
         const [impr, clk] = await Promise.all([
           headCount("ad_impressions").eq("zone", zone).gte("created_at", week),
           headCount("ad_clicks").eq("zone", zone).gte("created_at", week),

@@ -38,6 +38,49 @@ export type HilltopPlacementId = (typeof HILLTOP_PLACEMENTS)[number]["id"];
 const PLACEMENT_IDS = HILLTOP_PLACEMENTS.map((p) => p.id) as HilltopPlacementId[];
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 WHICH PLACEMENT SWITCH OWNS WHICH AD ZONE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-02: "hiltop settings switch dont take effect, when i turn off
+ * idle interstilla it didnt turn off."
+ *
+ * Exactly right, and it was structural rather than a stale cache. Nine
+ * placement switches are rendered in the admin panel and `isHilltopPlacementOn`
+ * was consulted by only three consumers — the in-page slot renderer, the feed
+ * anchor list and the history cadence. `idle`, `download`, `wallpaper` and
+ * `slider` were WRITTEN correctly (production read back
+ * `placements: { idle: false }`) and then read by nothing at all, so the four
+ * moments those switches name carried on serving.
+ *
+ * Probed on production 2026-09-02, with `idle: false` already saved:
+ *
+ *     GET /api/ads/exoclick?zone=idle_interstitial
+ *       → {"ad":{"mediaUrl":"https://www.silent-basis.pro/…mp4", …}}
+ *
+ * A switched-off placement was still filling. This map closes it in the one
+ * place every path already goes through: `hilltopZoneSource`. The four VAST /
+ * overlay moments are ZONES, not slots, so they were invisible to the only
+ * function that read the switches.
+ *
+ * ⚠️ DELIBERATELY NOT EXHAUSTIVE. Only the zones a switch's own LABEL claims are
+ * listed. `download` says "Download complete — VAST video", so it owns
+ * `download_complete` and NOT `batch_download_complete` — the batch moments have
+ * their own controls and their own timers, and quietly folding them under a
+ * switch that does not name them is how a fix becomes the next report of a
+ * control that does something nobody asked for.
+ *
+ * `history`, `historyfeed`, `landing` and `feed` are absent because they are
+ * in-page SLOTS: `hilltop-slot.tsx` gates those directly and always has.
+ */
+export const HILLTOP_PLACEMENT_BY_ZONE: Readonly<Record<string, HilltopPlacementId>> = {
+  idle_interstitial: "idle",
+  download_complete: "download",
+  wallpaper_reward: "wallpaper",
+  history_story_ad: "historyvideo",
+};
+
+/**
  * Which HilltopAds product fills a given AD ZONE.
  *
  * Owner, 2026-09-01: "the exoclick preparing and result video ad should be
@@ -322,9 +365,54 @@ export function normalizeHilltop(value: unknown): HilltopConfig {
  */
 export function hilltopZoneSource(config: HilltopConfig, zone: string): HilltopZoneSource {
   if (!config.enabled) return "off";
+
+  /*
+    🔴 THE PLACEMENT SWITCH, BEFORE ANYTHING ELSE (owner, 2026-09-02: "when i
+    turn off idle interstilla it didnt turn off").
+
+    See `HILLTOP_PLACEMENT_BY_ZONE` above for why this was missing. It is first
+    because an operator switching a placement off has made the most specific
+    statement available to them, and a per-zone SOURCE picker set to `vast` must
+    not quietly outrank "do not run this placement".
+  */
+  const placement = HILLTOP_PLACEMENT_BY_ZONE[zone];
+  if (placement && config.placements?.[placement] === false) return "off";
+
+  /*
+    🔴 `banner` WAS MISSING FROM THIS TEST, AND SO WAS DISCARDED.
+
+    The old line listed "off", "slider" and "vast" and fell through to the
+    defaults for anything else — which meant the one remaining option in the
+    admin's four-button picker did nothing. Setting a zone whose default is
+    `vast` to `banner` read back as `vast` for ever, and the picker showed
+    `banner` as selected because the UI reads the stored value, not the resolved
+    one. A control that displays your choice and then ignores it.
+
+    `normalizeHilltop` has already narrowed the stored value to the four
+    literals, so a truthy value here is a real source and needs no re-listing —
+    which is also what stops this drifting again the next time one is added.
+  */
   const override = config.zoneSource?.[zone];
-  if (override === "off" || override === "slider" || override === "vast") return override;
+  if (override) return override;
+
   return DEFAULT_HILLTOP_ZONE_SOURCE[zone] ?? "off";
+}
+
+/**
+ * Has an operator EXPLICITLY switched this zone's placement off?
+ *
+ * Distinct from `hilltopZoneSource(...) === "off"`, which is also what a zone
+ * Hilltop simply does not serve looks like. The difference matters exactly once,
+ * on the idle moment: `IdleInterstitial` stands down when the VAST player owns
+ * the moment and otherwise renders a BANNER interstitial — so without this it
+ * would read a switched-off placement as "the video is not serving, my turn",
+ * and turning the idle interstitial off would have replaced a video with a
+ * banner instead of removing it.
+ */
+export function isHilltopPlacementOffForZone(config: HilltopConfig, zone: string): boolean {
+  const placement = HILLTOP_PLACEMENT_BY_ZONE[zone];
+  if (!placement) return false;
+  return config.placements?.[placement] === false;
 }
 
 /** May this placement run at all? The master switch and its own, in one place. */

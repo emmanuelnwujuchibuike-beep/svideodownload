@@ -27,6 +27,16 @@ export type AnalyticsEventType =
   | "vast_requested"
   | "vast_loaded"
   | "vast_started"
+  /**
+   * The visitor clicked THROUGH to the advertiser.
+   *
+   * The funnel's counterpart to the `/api/track` click beacon fired beside it:
+   * that one feeds the revenue screen's click count, this one keeps the video's
+   * own funnel complete — requested → loaded → started → clicked — so a zone
+   * with a high click rate and a low completion rate is legible as such rather
+   * than looking like an abandonment.
+   */
+  | "vast_click"
   | "vast_completed"
   | "vast_skipped"
   | "vast_closed"

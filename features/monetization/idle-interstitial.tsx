@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
+import {
+  hilltopZoneSource,
+  isHilltopPlacementOffForZone,
+  type HilltopConfig,
+} from "@/lib/monetization/hilltop-config";
 
 import { isPlayerOpen } from "@/features/downloads/player-store";
 
@@ -207,6 +211,19 @@ export function IdleInterstitial() {
     is a rounding error, a silently dead idle placement is not.
   */
   const [videoOwnsMoment, setVideoOwnsMoment] = useState(false);
+  /*
+    🔴 OFF MEANS OFF, NOT "SHOW THE BANNER INSTEAD" (owner, 2026-09-02: "when i
+    turn off idle interstilla it didnt turn off").
+
+    The switch above only decides who OWNS the moment, and standing down on
+    `vast` alone was one of the two reasons the switch looked dead. Once the
+    placement gate landed, a switched-off `idle` resolved to `off` — which this
+    component read as "the video is not taking it, so I will" and put the BANNER
+    interstitial back. The operator would have turned a video ad into a banner
+    ad and seen the moment still firing, which is the same complaint from one
+    step further along.
+  */
+  const [placementOff, setPlacementOff] = useState(false);
   useEffect(() => {
     let alive = true;
     fetch("/api/ads/config")
@@ -214,6 +231,7 @@ export function IdleInterstitial() {
       .then((d: { hilltop?: HilltopConfig }) => {
         if (alive && d.hilltop) {
           setVideoOwnsMoment(hilltopZoneSource(d.hilltop, "idle_interstitial") === "vast");
+          setPlacementOff(isHilltopPlacementOffForZone(d.hilltop, "idle_interstitial"));
         }
       })
       .catch(() => {
@@ -225,7 +243,7 @@ export function IdleInterstitial() {
   }, []);
 
   // Nothing for premium visitors, and nothing until the plan is known.
-  if (!ready || !showAds || videoOwnsMoment) return null;
+  if (!ready || !showAds || videoOwnsMoment || placementOff) return null;
 
   /*
     Always rendered so the ad PRELOADS, but only interactive once open AND

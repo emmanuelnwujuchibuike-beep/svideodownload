@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { allowsGoogleAds } from "@/lib/monetization/ad-policy";
+import { allowsGoogleAds, allowsGoogleAdsInZone } from "@/lib/monetization/ad-policy";
 import { isPersistentZone, sizeFromScript } from "@/lib/monetization/ad-schema";
 import type { AdTiming } from "@/lib/monetization/ad-timing";
 import { cn } from "@/lib/utils";
@@ -396,7 +396,7 @@ export function AdSlot({
     Returning null rather than falling through to another network: a page that
     may not carry Google's ad has not thereby asked for somebody else's.
   */
-  if (ad.format === "adsense" && !allowsGoogleAds(pathname)) return null;
+  if (ad.format === "adsense" && !allowsGoogleAdsInZone(pathname, zone)) return null;
 
   // AdSense — must run in the top-level document, never in the display iframe.
   if (ad.format === "adsense" && ad.adClient && ad.adSlotId) {

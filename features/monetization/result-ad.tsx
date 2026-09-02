@@ -42,6 +42,9 @@ export function ResultAd({ className }: { className?: string }) {
     that silently applies in some and not others.
   */
   const [remaining, setRemaining] = useState<number | null>(null);
+  /* Three-state: undefined = the slot has not answered yet, false = it answered
+     empty. Only `true` earns the frame. */
+  const [filled, setFilled] = useState<boolean | undefined>(undefined);
   const started = useRef(false);
 
   useEffect(() => {
@@ -100,11 +103,23 @@ export function ResultAd({ className }: { className?: string }) {
         chrome's sake. `skippable` is still honoured by the interstitial
         placements, where a visitor genuinely is being held.
       */}
-      <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/60">
-        <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
+      {/*
+        🔴 THE FRAME ONLY EXISTS IF THERE IS AN AD IN IT.
 
-        <div className="px-3 pb-3 pt-1.5">
-          {isVideo ? (
+        A configured zone is not a filled one. `AdSlot` renders nothing when the
+        network has no demand, and my first pass at this card drew the border
+        and the "Ad" label around that nothing — a tall empty box with one grey
+        word in the corner, which is what the owner photographed.
+
+        This is a failure this codebase already had a name and a mechanism for:
+        `onResolved` exists precisely so a parent can avoid decorating an empty
+        slot. The chrome rewrite dropped it. Restored, with the frame collapsed
+        to nothing until the slot says it actually has something to show.
+      */}
+      {isVideo ? (
+        <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/60">
+          <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
+          <div className="px-3 pb-3 pt-1.5">
             <video
               src={ad.scriptCode!}
               poster={ad.imageUrl ?? undefined}
@@ -114,17 +129,26 @@ export function ResultAd({ className }: { className?: string }) {
               controls
               className="aspect-video w-full rounded-xl bg-black"
             />
-          ) : (
-            /*
-              Everything else — AdSense, display, native — goes through the
-              normal slot. It re-requests the zone, which the 30-second cache on
-              /api/ads absorbs, and in exchange this component does not
-              reimplement three renderers that already exist and are tested.
-            */
-            <AdSlot zone="download_result_page" dismissible={false} />
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        /*
+          Everything else — AdSense, display, native — goes through the normal
+          slot. It re-requests the zone, which the 30-second cache on /api/ads
+          absorbs, and in exchange this component does not reimplement three
+          renderers that already exist and are tested.
+
+          `hidden` rather than unmounting on the empty case: the slot has to stay
+          mounted to be able to answer, and unmounting it would restart the
+          request it is in the middle of.
+        */
+        <div className={cn("overflow-hidden rounded-2xl border border-border/40 bg-card/60", filled !== true && "hidden")}>
+          <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
+          <div className="px-3 pb-3 pt-1.5">
+            <AdSlot zone="download_result_page" dismissible={false} onResolved={setFilled} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

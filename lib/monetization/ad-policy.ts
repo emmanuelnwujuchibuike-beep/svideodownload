@@ -214,3 +214,39 @@ function isPublisherContent(path: string): boolean {
 export function allowsGoogleAds(pathname: string): boolean {
   return adPolicyFor(pathname) === "AD_SAFE_CONTENT";
 }
+
+/**
+ * Zones that sit NEXT TO the thing the visitor came to do.
+ *
+ * A page can be perfectly good publisher content and still have one spot on it
+ * where an ad must not go. `download_result_page` renders inside the download
+ * card, a few pixels from the Download button — the owner asked for it there
+ * (2026-09-02: "tak the download result ad slot up where users can see when the
+ * download is preparing"), and for a house or network banner that is a
+ * reasonable place to wait.
+ *
+ * It is not a reasonable place for GOOGLE's inventory. "Never place an ad
+ * immediately beside the primary action, where it could be taken for the
+ * control" is the clearest placement rule AdSense has, and proximity to a
+ * Download button is the textbook case of it.
+ *
+ * So the restriction is attached to the ZONE rather than to the page. Position
+ * is a property of the placement, not of the URL, and expressing it here means
+ * moving the slot around the card later cannot quietly re-open the problem.
+ */
+const ACTION_ADJACENT_ZONES = new Set<string>([
+  "download_result_page",
+  "under_download",
+  "result_top",
+]);
+
+/**
+ * May Google's inventory fill this specific zone on this page?
+ *
+ * Both must pass: the page has to be publisher content AND the zone must not be
+ * one that sits beside the primary action.
+ */
+export function allowsGoogleAdsInZone(pathname: string, zone: string): boolean {
+  if (ACTION_ADJACENT_ZONES.has(zone)) return false;
+  return allowsGoogleAds(pathname);
+}

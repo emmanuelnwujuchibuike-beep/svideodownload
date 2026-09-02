@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { adPolicyFor, allowsGoogleAds } from "@/lib/monetization/ad-policy";
+import { adPolicyFor, allowsGoogleAds, allowsGoogleAdsInZone } from "@/lib/monetization/ad-policy";
 
 describe("adPolicyFor — pages that must NEVER carry Google ads", () => {
   /*
@@ -126,5 +126,37 @@ describe("the matcher itself", () => {
         expect(allowsGoogleAds(`${root}${suffix}`), `${root}${suffix}`).toBe(false);
       }
     }
+  });
+});
+
+describe("🔴 action-adjacent zones never carry Google's inventory", () => {
+  /*
+    Owner, 2026-09-02: "tak the download result ad slot up where users can see
+    when the download is preparing." That is a good placement for a house or
+    network banner — the visitor is waiting, not acting — and the wrong one for
+    AdSense, which must never sit where it could be taken for the Download
+    button.
+
+    Attached to the ZONE rather than the page: position is a property of the
+    placement, not of the URL, so moving the slot around the card later cannot
+    quietly re-open it.
+  */
+  it.each(["download_result_page", "under_download", "result_top"])(
+    "%s refuses Google even on a publisher-content page",
+    (zone) => {
+      // `/` is AD_SAFE_CONTENT — the page is fine, the position is not.
+      expect(allowsGoogleAds("/")).toBe(true);
+      expect(allowsGoogleAdsInZone("/", zone)).toBe(false);
+    },
+  );
+
+  it("still allows Google in an ordinary zone on a content page", () => {
+    expect(allowsGoogleAdsInZone("/", "landing_section_break")).toBe(true);
+    expect(allowsGoogleAdsInZone("/blog/post", "history")).toBe(true);
+  });
+
+  it("still refuses every zone on a private page", () => {
+    expect(allowsGoogleAdsInZone("/account/security", "landing_section_break")).toBe(false);
+    expect(allowsGoogleAdsInZone("/studio", "history")).toBe(false);
   });
 });

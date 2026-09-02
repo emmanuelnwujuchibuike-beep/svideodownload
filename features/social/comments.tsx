@@ -248,8 +248,42 @@ export function Comments({
       timer = setTimeout(() => void refresh(), 400);
     };
     const supabase = createClient();
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       🔴 THE TOPIC MUST BE UNIQUE PER SUBSCRIPTION, NOT PER POST
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-01: opening comments on a reel showed "something went
+      wrong, try again". Reproduced on production while signed in; the thrown
+      error was, verbatim:
+
+          cannot add `postgres_changes` callbacks for
+          realtime:comments:9aa701ab-… after `subscribe()`
+
+      This topic used to be the fixed string `comments:${postId}`, and
+      realtime-js DE-DUPLICATES BY TOPIC: asking for a topic it already holds
+      hands back the existing channel rather than a new one. `removeChannel()`
+      is asynchronous and was not awaited (it cannot be — a cleanup function is
+      synchronous), so on any re-run of this effect the teardown was still in
+      flight when the new run asked for the same topic, got the OLD channel back
+      in its already-subscribed state, and called `.on()` on it. realtime-js
+      throws there by design: callbacks cannot be added after `subscribe()`.
+
+      That throw escaped the effect, the nearest boundary caught it, and both
+      feed and reels fall through to the same `app/(app)/error.tsx` — which is
+      why one bug produced identical wording in two unrelated features and got
+      mis-attributed to a stale-chunk `ChunkLoadError` in an earlier pass.
+
+      It reproduces whenever the effect runs twice for one post: React
+      StrictMode's double-invoke, and — the case the owner hits — closing the
+      comment sheet and opening it again on the same reel.
+
+      A unique suffix makes the collision impossible rather than unlikely. The
+      old channel is still removed below; it simply no longer matters whether
+      that has finished, because nothing will ever ask for its topic again.
+    */
     const channel = supabase
-      .channel(`comments:${postId}`)
+      .channel(`comments:${postId}:${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "post_comments", filter: `post_id=eq.${postId}` }, scheduleRefresh)
       .subscribe();
     return () => {

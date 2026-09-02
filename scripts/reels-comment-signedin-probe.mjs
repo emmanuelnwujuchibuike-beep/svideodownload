@@ -36,15 +36,35 @@ console.log("1. logging in…");
 await page.goto(`${BASE}/login`, { waitUntil: "load", timeout: 90_000 });
 await page.waitForTimeout(2500);
 
-/* The panel offers OTP first; the password field may be behind a toggle. */
-for (const label of [/password/i, /use password/i, /sign in with password/i]) {
-  const t = page.getByRole("button", { name: label }).first();
-  if ((await t.count()) > 0) {
-    await t.click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(600);
-    break;
-  }
+/*
+  🔴 DISMISS THE STREAK CEREMONY FIRST.
+
+  A clean context is a day-1 anonymous visitor, and (before the day-2 fix) the
+  unlock ceremony opened over the login page as `fixed inset-0 z-[130]` — so it
+  swallowed every click aimed at the form beneath it. The first run of this
+  probe reported "no password field" for exactly that reason, which is itself
+  the finding: the overlay was covering the login screen for every new arrival.
+*/
+const ceremony = page.locator(".streak-ms").first();
+if ((await ceremony.count()) > 0) {
+  console.log("   (streak ceremony was covering the page — dismissing it)");
+  await page.getByRole("button", { name: /^continue$/i }).first().click({ timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(1200);
 }
+
+/*
+  The panel is a two-step doorway: "Continue with Email" / "I already have an
+  account", and only the second reveals a password field. Clicking blindly at
+  an email input on the first screen is why the first run found nothing.
+*/
+for (const name of [/i already have an account/i, /continue with email/i, /sign in/i, /use password/i]) {
+  const b = page.getByRole("button", { name }).first();
+  if ((await b.count()) === 0) continue;
+  await b.click({ timeout: 5000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  if ((await page.locator('input[type="password"]').count()) > 0) break;
+}
+
 await page.locator('input[type="email"], input[name="email"]').first().fill(EMAIL).catch(() => {});
 const pw = page.locator('input[type="password"]').first();
 if ((await pw.count()) === 0) {

@@ -126,11 +126,32 @@ export async function AdSenseSiteScript() {
         stylesheet or image request has been made. So the branch costs nothing
         and happens as early as a server-rendered tag would have.
 
-        ── Every other route is UNCHANGED ───────────────────────────────────────
-        `load()` runs immediately on any path that is not the landing, appending
-        exactly the same async script this used to emit directly. The only
-        difference for those pages is that the tag is created microseconds later
-        by a parser-blocking inline script that is ~400 bytes.
+        ── 🔴 2026-09-02: THE DEFER NOW APPLIES TO EVERY ROUTE ──────────────────
+        This used to read `if (location.pathname !== "/") { l() }` — the landing
+        was deferred and the ENTIRE APP loaded AdSense immediately, during HTML
+        parsing, before a line of React had run.
+
+        That is where the "the APK feels laggy" report actually lived. Measured
+        on production, Pixel 7, fast-4G + 4x CPU (scripts/app-startup-audit.mjs):
+
+            arm                  FCP    TBT   bottom nav TAPPABLE
+            APK (/launch.html)   740    527          4131ms
+            PWA (/home)          904    625          3338ms
+
+        The shell PAINTS in under a second and then cannot be touched for
+        another three. Profiling that window (scripts/lcp-profile.mjs) named the
+        occupants: ~870ms of third-party self-time, of which adsbygoogle.js
+        (146ms) plus the show_ads_impl chain it pulls (236ms) is the largest
+        removable block — competing with React for the main thread at exactly
+        the moment hydration decides when the bottom nav starts responding.
+
+        The original reasoning was never landing-specific; only its application
+        was. An app route has no LCP budget but it does have a user waiting to
+        tap something, and that is the same argument. So the branch is gone and
+        every route takes the load-then-idle path.
+
+        Nothing about monetization changes: the same script, the same client id,
+        the same Auto-ads behaviour, appended by the same `l()`. Only WHEN.
 
         ── On the landing, "after LCP" means after `load` THEN idle ─────────────
         Not a fixed timer. `load` guarantees the LCP image and the rest of the
@@ -139,8 +160,16 @@ export async function AdSenseSiteScript() {
         hydration. The 1500ms setTimeout is the fallback for Safari, which only
         shipped `requestIdleCallback` in 17 — without it, older iOS would never
         load ads at all, which is a revenue bug disguised as a performance win.
-        The 3000ms `timeout` option is the other side of that: on a page that
-        never goes idle, ads must still eventually load.
+        The `timeout` option is the other side of that: on a page that never
+        goes idle, ads must still eventually load.
+
+        🔴 It is 4000ms, not 3000ms, and the extra second is measured rather
+        than guessed. The bottom nav becomes tappable at ~3.3-4.1s on a
+        mid-range phone, so a 3000ms forced fire landed the ad chain in the
+        middle of hydration — the precise thing this gate exists to avoid.
+        `requestIdleCallback` still fires the moment the thread is genuinely
+        free, so on a fast device ads load no later than before; the timeout
+        only moves the WORST case past the point the app became usable.
 
         ── Verification is not affected ─────────────────────────────────────────
         AdSense accepts three methods and this site emits all three
@@ -163,10 +192,8 @@ export async function AdSenseSiteScript() {
             `function l(){if(window.__frenzAdsLoaded)return;window.__frenzAdsLoaded=1;` +
             `var e=document.createElement("script");e.async=true;e.crossOrigin="anonymous";e.src=s;` +
             `(document.head||document.documentElement).appendChild(e)}` +
-            `try{if(location.pathname!=="/"){l()}else{` +
-            `var i=function(){(window.requestIdleCallback||function(f){setTimeout(f,1500)})(l,{timeout:3000})};` +
-            `if(document.readyState==="complete"){i()}else{addEventListener("load",i,{once:true})}` +
-            `}}catch(err){l()}})();`,
+            `var i=function(){(window.requestIdleCallback||function(f){setTimeout(f,1500)})(l,{timeout:4000})};` +
+            `try{if(document.readyState==="complete"){i()}else{addEventListener("load",i,{once:true})}}catch(err){l()}})();`,
         }}
       />
     </>

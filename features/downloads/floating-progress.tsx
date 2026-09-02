@@ -43,6 +43,7 @@ import { RewardedAdGate } from "@/features/monetization/rewarded-ad";
 import { RewardConsentSheet } from "@/features/monetization/reward-consent-sheet";
 import { useRewardFlow } from "@/features/monetization/use-reward-flow";
 import type { DownloadRecord } from "@/types";
+import { ReportFailureButton } from "@/features/downloads/report-failure-button";
 import { cn } from "@/lib/utils";
 
 /* `taskToRecord` lived here to build a one-off record for an isolated player.
@@ -706,13 +707,32 @@ export function FloatingDownloadProgress({
                   </button>
                 ) : null}
                 {task.status === "failed" ? (
-                  <button
-                    type="button"
-                    onClick={() => retryDownload(task.id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-95 active:scale-95"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" /> Retry
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => retryDownload(task.id)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 py-2 text-xs font-semibold text-white transition hover:opacity-95 active:scale-95"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Retry
+                    </button>
+                    {/*
+                      Beside Retry, quieter than it. Retry is what the person
+                      actually wants; a report does nothing for them today, so
+                      giving the two equal weight would be asking a favour at the
+                      moment they are least inclined to grant one. It carries the
+                      LINK, which is the thing that makes a failure reproducible
+                      — see app/api/report/download-failure/route.ts.
+                    */}
+                    <ReportFailureButton
+                      url={task.url}
+                      platform={task.platform}
+                      formatId={task.formatId}
+                      kind={task.kind}
+                      title={task.title}
+                      errorMessage={task.error}
+                      surface="floating-progress"
+                    />
+                  </>
                 ) : null}
               </div>
 

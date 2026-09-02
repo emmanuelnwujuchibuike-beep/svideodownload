@@ -48,6 +48,22 @@ import { useScrollToResult } from "./use-result-scroll";
 // bundle instead of shipping it to every visitor who never converts.
 const PreviewCard = dynamic(() => import("./preview-card").then((m) => m.PreviewCard), { ssr: false });
 
+/*
+  🔴 LAZY, AND THE BUDGET TEST IS WHY (2026-09-02).
+
+  Importing this statically put an ERROR-ONLY control — plus its three lucide
+  icons — into the landing page-s cold-entry bundle and took it from 217,102 to
+  228,970 B against a 223,232 B ceiling. The 1.6s landing budget is the owner-s
+  first rule, and a button that only ever renders after a failed fetch has no
+  business being paid for by every visitor who never sees one.
+
+  `ssr: false` because it is behind an error state that only exists client-side.
+*/
+const ReportFailureButton = dynamic(
+  () => import("@/features/downloads/report-failure-button").then((m) => m.ReportFailureButton),
+  { ssr: false },
+);
+
 // Singleton progress card. Mounted post-hydration (see `chromeReady` below)
 // rather than unconditionally: `dynamic(ssr:false)` alone does not keep a
 // component's chunk out of the route's build manifest when the JSX reaches it
@@ -630,6 +646,7 @@ export function Downloader({
         <ErrorCard
           message={validationError ?? error ?? "Something went wrong."}
           isValidation={!!validationError}
+          sourceUrl={url}
           onRetry={validationError ? undefined : startFetch}
           onDismiss={handleClear}
         />
@@ -744,11 +761,14 @@ export function Downloader({
 function ErrorCard({
   message,
   isValidation,
+  sourceUrl,
   onRetry,
   onDismiss,
 }: {
   message: string;
   isValidation: boolean;
+  /** The link the visitor pasted, so a report can carry the thing that failed. */
+  sourceUrl?: string;
   onRetry?: () => void;
   onDismiss: () => void;
 }) {
@@ -793,6 +813,18 @@ function ErrorCard({
             >
               Dismiss
             </button>
+            {/* 🔴 NEVER on a validation error. A mistyped link is the visitor-s
+                own typo — inviting them to report it would send the owner a
+                mailbox of malformed URLs and teach people the button means
+                nothing. Only a genuine fetch failure is worth an email. */}
+            {!isValidation && sourceUrl ? (
+              <ReportFailureButton
+                url={sourceUrl}
+                errorMessage={message}
+                surface="downloader"
+                className="px-3 py-1.5"
+              />
+            ) : null}
           </div>
         </div>
       </div>

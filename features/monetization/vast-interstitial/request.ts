@@ -76,6 +76,29 @@ const lastShownAt = new Map<InterstitialTrigger, number>();
  */
 const BACK_TO_BACK_MS = 3_000;
 let lastAnyShownAt = 0;
+
+/**
+ * A completion moment that arrived while another interstitial was on screen.
+ *
+ * Held so it can run once the stage is free — see the "busy" branch in
+ * `requestVastInterstitial`. One slot, never a queue.
+ */
+let pendingCompletion: InterstitialTrigger | null = null;
+
+/** Run a completion that was refused while the stage was busy. */
+function drainPendingCompletion(): void {
+  const next = pendingCompletion;
+  pendingCompletion = null;
+  if (!next) return;
+  /*
+    A beat, so the previous overlay's teardown has finished and the two do not
+    visibly collide. `requestVastInterstitial` re-checks every guard, so this
+    is a request like any other — it cannot bypass a cooldown or a plan.
+  */
+  window.setTimeout(() => {
+    void requestVastInterstitial(next);
+  }, 600);
+}
 /** Memoised public config — fetched at most once per page load. */
 let configPromise: Promise<VastInterstitialConfig> | null = null;
 
@@ -668,7 +691,27 @@ export async function requestVastInterstitial(
 ): Promise<InterstitialResult> {
   // Duplicate guard: two Download taps, a batch finishing eight files at once,
   // or a double-fire must not open two overlays or make two VAST requests.
-  if (phase !== "idle") return { shown: false, reason: "busy" };
+  if (phase !== "idle") {
+    /*
+      🔴 A COMPLETION REFUSED AS "BUSY" IS REMEMBERED, NOT DROPPED.
+
+      Owner, 2026-09-02: "the reward and download complete ad doesnt trigger
+      since recent changes." This is why. Routing top-quality through the gate
+      means an interstitial is often still on screen when the file lands — the
+      gate can hold the thread for up to twelve seconds — so the completion
+      event arrived while `phase !== "idle"` and was thrown away. The busier the
+      gate, the more reliably the completion ad vanished.
+
+      ONE slot, and only for a completion. It is not a queue: a second
+      completion while one is already pending overwrites it, so a batch
+      finishing eight files still yields one ad. Gates are never deferred —
+      a gate whose moment has passed is just an ad with no reason.
+    */
+    if (trigger === "download-complete" || trigger === "batch-complete") {
+      pendingCompletion = trigger;
+    }
+    return { shown: false, reason: "busy" };
+  }
 
   let config: VastInterstitialConfig;
   try {
@@ -864,6 +907,16 @@ export async function requestVastInterstitial(
       config: effectiveConfig,
       startSignal: playController.signal,
       onStarted: () => clearTimeout(playBudget),
+      /*
+        🔴 A GATE SHOWS AT ONCE; EVERYTHING ELSE WAITS FOR THE FIRST FRAME.
+
+        The gate moments hold a file the visitor just asked for, so the overlay
+        has to acknowledge the tap immediately or the button reads as dead —
+        which is exactly what was reported. Ambient, in-page and the completion
+        ads are unrequested, the app is usable underneath them, and showing
+        early there is the blank screen reported the same day.
+      */
+      showImmediately: REWARD_TRIGGERS.has(trigger),
     });
 
     clearTimeout(playBudget);
@@ -877,10 +930,13 @@ export async function requestVastInterstitial(
     */
     if (REWARD_TRIGGERS.has(trigger)) rewardShownAt = Date.now();
     phase = "idle";
+    // A completion that arrived while this was on screen now gets its turn.
+    drainPendingCompletion();
     return { shown: outcome === "completed" || outcome === "skipped", reason: "shown" };
   } catch (err) {
     clearTimeout(budget);
     phase = "idle";
+    drainPendingCompletion();
     const aborted = err instanceof DOMException && err.name === "AbortError";
     track(aborted ? "vast_timeout" : "vast_error", { zone: ZONE });
     return { shown: false, reason: aborted ? "timeout" : "error" };

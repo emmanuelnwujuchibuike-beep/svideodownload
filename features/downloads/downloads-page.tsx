@@ -11,6 +11,7 @@ import { DownloadPageCore } from "@/features/downloads/download-page-core";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import { DownloadQuickActions, DownloadTrustStrip } from "@/features/downloads/downloads-sections";
 import { HubWarmup } from "@/features/downloads/hub-warmup";
+import { ReportFailureButton } from "@/features/downloads/report-failure-button";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
 import { MediaGallery } from "@/features/history/media-gallery";
@@ -247,7 +248,20 @@ export function DownloadsPage({
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {t.status === "failed" ? (
-                          <IconBtn label="Retry" onClick={() => retryDownload(t.id)}><RotateCw className="h-4 w-4" /></IconBtn>
+                          <>
+                            <IconBtn label="Retry" onClick={() => retryDownload(t.id)}><RotateCw className="h-4 w-4" /></IconBtn>
+                            {/* Carries the LINK, which is what makes a failure
+                                reproducible without the owner relaying it. */}
+                            <ReportFailureButton
+                              url={t.url}
+                              platform={t.platform}
+                              formatId={t.formatId}
+                              kind={t.kind}
+                              title={t.title}
+                              errorMessage={t.error}
+                              surface="downloads-page"
+                            />
+                          </>
                         ) : t.status === "paused" ? (
                           <IconBtn label="Resume" onClick={() => resumeDownload(t.id)}><Play className="h-4 w-4" /></IconBtn>
                         ) : (

@@ -51,12 +51,34 @@ export function showInterstitial({
   config,
   startSignal,
   onStarted,
+  showImmediately = false,
 }: {
   creative: VastCreative;
   config: VastInterstitialConfig;
   /** Aborts if the startup budget expires before the first frame plays. */
   startSignal: AbortSignal;
   onStarted: () => void;
+  /**
+   * Put the stage on screen NOW, with a loading state, instead of waiting for
+   * the first frame.
+   *
+   * 🔴 THE DIFFERENCE IS WHETHER THE VISITOR ASKED FOR THIS.
+   *
+   * Owner, 2026-09-02: "the top quality download button still respond late."
+   * Correct, and it was this. A GATE runs because someone tapped Download and
+   * is holding their file behind it — so an invisible overlay means a button
+   * that visibly does nothing for up to twelve seconds, which reads as broken.
+   * They need to see that their tap registered.
+   *
+   * The AMBIENT and COMPLETION moments are the opposite case: nobody asked, the
+   * app is usable underneath, and appearing before there is anything to show
+   * would be the blank screen that was reported the same day. Those stay
+   * invisible until `playing`.
+   *
+   * So the rule is not "show early" or "show late" — it is: show as soon as the
+   * visitor is waiting on you, and not one moment before otherwise.
+   */
+  showImmediately?: boolean;
 }): Promise<Outcome> {
   return new Promise<Outcome>((resolve) => {
     if (typeof document === "undefined") {
@@ -128,6 +150,31 @@ export function showInterstitial({
     video.setAttribute("webkit-playsinline", "");
     video.preload = "auto";
     video.style.cssText = "max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain";
+
+    /*
+      The loading state for a GATE. Only ever seen when `showImmediately` is
+      set — i.e. when someone tapped Download and is waiting on us. It is a
+      plain CSS ring rather than an asset or a library: this chunk is on the
+      path between a tap and a file, and a spinner is not worth a request.
+      Removed by `reveal()` the moment the first frame is up.
+    */
+    const spinner = document.createElement("div");
+    spinner.setAttribute("aria-hidden", "true");
+    spinner.style.cssText = [
+      "position:absolute",
+      "width:34px",
+      "height:34px",
+      "border-radius:999px",
+      "border:3px solid rgba(255,255,255,.22)",
+      "border-top-color:rgba(255,255,255,.9)",
+      "animation:frenz-vast-spin 900ms linear infinite",
+    ].join(";");
+    if (!document.getElementById("frenz-vast-spin-kf")) {
+      const kf = document.createElement("style");
+      kf.id = "frenz-vast-spin-kf";
+      kf.textContent = "@keyframes frenz-vast-spin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(kf);
+    }
 
     const chrome = document.createElement("div");
     chrome.style.cssText = [
@@ -288,6 +335,7 @@ export function showInterstitial({
     const reveal = () => {
       root.style.opacity = "1";
       root.style.pointerEvents = "auto";
+      spinner.remove();
       document.documentElement.style.overflow = "hidden";
       skipBtn.focus?.();
       /*
@@ -506,6 +554,24 @@ export function showInterstitial({
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const prevOverflow = document.documentElement.style.overflow;
     document.body.appendChild(root);
+    /*
+      🔴 A GATE APPEARS THE INSTANT IT IS ASKED FOR.
+
+      Owner: "the top quality download button still respond late." The download
+      is held behind this promise, so an invisible overlay meant a button that
+      did nothing visible for up to twelve seconds. The stage goes up now, with
+      the spinner, and the video fades in over it when it starts.
+
+      The scroll lock comes with it — this one IS blocking the visitor, so the
+      page underneath genuinely should not scroll. Focus still waits for
+      `reveal()`: there is nothing to skip yet.
+    */
+    if (showImmediately) {
+      root.appendChild(spinner);
+      root.style.opacity = "1";
+      root.style.pointerEvents = "auto";
+      document.documentElement.style.overflow = "hidden";
+    }
     document.addEventListener("keydown", onKey);
     startSignal.addEventListener("abort", onAbort);
     if (maySkip) paintSkip();

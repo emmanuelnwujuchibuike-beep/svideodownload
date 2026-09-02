@@ -22,7 +22,7 @@ import { PLATFORMS } from "@/lib/platforms";
 import { signOutClient } from "@/lib/auth/sign-out";
 import { useTranslator } from "@/lib/i18n/use-translator";
 import type { MessageKey } from "@/lib/i18n/messages/en";
-import { getPrimaryPages } from "@/lib/seo/seo-pages";
+import { PRIMARY_LINKS } from "@/lib/seo/primary-links";
 import { cn } from "@/lib/utils";
 
 /**
@@ -97,7 +97,10 @@ const MENU_GROUPS: { title: string; ids: string[] }[] = [
   { title: "Help & trust", ids: ["help", "trust", "contact", "developers", "pricing"] },
 ];
 
-const DOWNLOADERS = getPrimaryPages();
+/* The tiny client catalogue, NOT seo-pages — see lib/seo/primary-links.ts:
+   importing the generator here shipped the whole SEO content graph to every
+   client bundle and put the landing over its cold-entry ceiling. */
+const DOWNLOADERS = PRIMARY_LINKS;
 
 /**
  * `social` hides the mobile hamburger + drawer: on in-app social surfaces

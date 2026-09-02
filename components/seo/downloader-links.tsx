@@ -17,6 +17,8 @@ export function DownloaderLinks({
   currentSlug?: string;
   heading?: string;
 }) {
+  /* A SERVER component, so importing the generator here costs the client
+     nothing — unlike site-header.tsx, which is "use client". */
   const items = getPrimaryPages().filter((d) => d.slug !== currentSlug);
 
   return (

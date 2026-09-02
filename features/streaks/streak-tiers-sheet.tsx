@@ -138,7 +138,20 @@ export function StreakTiersSheet({
             The safe-area padding keeps the close button clear of the notch and
             the last row clear of the home indicator in standalone PWA mode.
           */
-          className="streak-sheet-panel relative w-full max-w-[26rem] rounded-[1.75rem] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5"
+          /*
+            🔴 THE PANEL SCROLLS, NOT THE SCRIM.
+
+            With the recovery card open above six ranks this is taller than a
+            phone, and the scrim is `items-end` — so the overflow went off the
+            TOP and the "Flame gallery" heading was cut off in the very state
+            that most needs to be readable (photographed before this fix).
+
+            Capping the panel at the viewport and letting IT scroll keeps the
+            header and the close button pinned where they can always be reached,
+            which is what a native sheet does. `100dvh` rather than `100vh`
+            because mobile browser chrome moves.
+          */
+          className="streak-sheet-panel relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[26rem] flex-col overflow-y-auto overscroll-contain rounded-[1.75rem] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

@@ -3224,6 +3224,30 @@ html.dark .streak-ms-rank {
    capability decision in the codebase. */
 .streak-fx-lite .streak-ms-sweep { display: none; }
 
+/* 🔴 THE STORM'S RIM WAS BEING CLIPPED INTO A GREY SQUARE.
+
+   `.streak-mark` carries `contain: layout paint` so the chip's effect layers can
+   never reflow or overpaint the pill they sit in — correct there, and the reason
+   this went unnoticed: at 20px the clipped area is a few invisible pixels.
+
+   The ceremony emblem is 112px, and the storm rim measures ~181px once its
+   rotate/scale is applied. `contain: paint` clips to the PADDING BOX, so the
+   rim's soft circular glow was being cut into a hard-edged rectangle sitting
+   behind the flame — clearly visible in the 365 ceremony (photographed before
+   this fix).
+
+   `contain: layout` keeps the containment that matters (nothing here can push
+   the emblem's neighbours around) and drops the paint clip, which the ceremony
+   does not need: the emblem sits alone on its own stage with room to bleed.
+
+   Deliberately NOT relaxed in the gallery, where the marks are 34px and stacked
+   in a list — there the clip is what stops one rank's rim bleeding into the row
+   above it. */
+.streak-ms-emblem .streak-mark,
+.streak-ms-prev .streak-mark {
+  contain: layout;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* The transformation becomes a state change rather than a movement: the old
      flame is simply not there, the new one is. The achievement is never

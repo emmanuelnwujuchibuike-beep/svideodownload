@@ -1,5 +1,6 @@
 import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ReelsWarmup } from "@/components/landing/reels-warmup";
+import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
 import { getFeed } from "@/lib/social/feed";
@@ -55,6 +56,33 @@ export default async function MarketingLayout({ children }: { children: React.Re
   const reelUrls = await firstReelUrls();
   return (
     <>
+      {/*
+        ═══════════════════════════════════════════════════════════════════════
+         🔴 THE ADSENSE LOADER LIVES HERE, NOT IN THE ROOT LAYOUT.
+        ═══════════════════════════════════════════════════════════════════════
+
+        Moved out of `app/layout.tsx` during the AdSense-readiness audit. There
+        it was on EVERY route, and because Auto ads place themselves from the
+        loader alone, Google's inventory could serve on `/login`, `/admin`, the
+        27 `/account` settings screens, `/studio`, `/messages`, `/create/*` and
+        the download screens — pages with no publisher content, which is among
+        the first things a policy reviewer checks.
+
+        This route group IS the publisher-content surface: the landing page, the
+        platform downloader pages and their dated articles, blog, learn,
+        academy, help, glossary, topics, trust and the legal pages. Scoping the
+        loader to the layout that owns those routes is a boundary a later edit
+        cannot silently widen — unlike a conditional, which is one `||` away
+        from being wrong.
+
+        Still server-rendered and still in the first byte of these documents, so
+        Google's verification crawler sees it exactly as before. React hoists the
+        <meta> and the <script> it returns into <head>.
+
+        `lib/monetization/ad-policy.ts` states the same rule in a form that can
+        be read and tested; this is where it is enforced for Google.
+      */}
+      <AdSenseSiteScript />
       {/* Reserve room for the fixed TOP bars: the GLOBAL announcement bar
           (--frenz-announce-h) plus the content-page top ad stacked below it
           (--frenz-topbanner-h). Each is 0 when absent, so an unbannered page keeps

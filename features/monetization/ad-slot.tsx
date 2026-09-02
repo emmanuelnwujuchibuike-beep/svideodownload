@@ -1,8 +1,10 @@
 "use client";
 
 import { X } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { allowsGoogleAds } from "@/lib/monetization/ad-policy";
 import { isPersistentZone, sizeFromScript } from "@/lib/monetization/ad-schema";
 import type { AdTiming } from "@/lib/monetization/ad-timing";
 import { cn } from "@/lib/utils";
@@ -146,6 +148,7 @@ export function AdSlot({
    */
   onAdTiming?: (timing: AdTiming) => void;
 }) {
+  const pathname = usePathname();
   const [ad, setAd] = useState<AdSlotData | null>(null);
   const [closed, setClosed] = useState(false);
   const tracked = useRef(false);
@@ -374,6 +377,26 @@ export function AdSlot({
       </div>
     );
   }
+
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 GOOGLE'S INVENTORY ONLY RUNS ON PUBLISHER-CONTENT PAGES.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Scoping the AdSense LOADER to the marketing layout stops Auto ads placing
+    themselves elsewhere, but it does not stop this: an admin can set any ad
+    row's format to `adsense`, and `AdSlot` is mounted on app routes too — the
+    bottom bar, history, reels. That row would render a real AdSense unit on a
+    private screen.
+
+    So the policy is enforced here as well, at the last point before the unit
+    exists. `ad-policy.ts` is the one table both checks read, and it fails
+    CLOSED on an unknown path.
+
+    Returning null rather than falling through to another network: a page that
+    may not carry Google's ad has not thereby asked for somebody else's.
+  */
+  if (ad.format === "adsense" && !allowsGoogleAds(pathname)) return null;
 
   // AdSense — must run in the top-level document, never in the display iframe.
   if (ad.format === "adsense" && ad.adClient && ad.adSlotId) {

@@ -11,7 +11,7 @@ import { PendingTapScript } from "@/features/app-shell/pending-tap";
 import { LocaleBootScript } from "@/components/i18n/locale-boot-script";
 import { A11yBootScript, A11yColorFilters } from "@/components/a11y/a11y-boot-script";
 // import { AssistantWidget } from "@/features/assistant/assistant-widget"; // temporarily removed — re-add later
-import { AdSenseSiteScript, VerificationTags } from "@/features/monetization/adsense-site-script";
+import { VerificationTags } from "@/features/monetization/adsense-site-script";
 import { GoogleTag } from "@/features/monetization/google-tag";
 import { HilltopVideoSlider } from "@/features/monetization/hilltop-video-slider";
 import { MonetagScript } from "@/features/monetization/monetag-script";
@@ -383,21 +383,37 @@ export default function RootLayout({
           )),
         )}
         {/*
-          The AdSense SITE-LEVEL script.
+          ═══════════════════════════════════════════════════════════════════
+           🔴 THE ADSENSE LOADER IS NOT HERE ANY MORE. IT MOVED TO
+              `app/(marketing)/layout.tsx`, ON PURPOSE.
+          ═══════════════════════════════════════════════════════════════════
 
-          This is the snippet AdSense hands you to verify a site and to run Auto
-          ads — publisher id, no slot, renders nothing on its own. It is distinct
-          from an ad UNIT (which also carries a slot id and renders in a
-          placement), and it must be here in `<head>` on every page: Google's
-          verification crawler reads the server-rendered HTML, so injecting it
-          later from the client would leave the site unverifiable.
+          It used to sit in this <head>, which put it on EVERY route in the
+          product — and Auto ads place themselves from the loader alone, so
+          "we never mounted an ad component there" was never the question.
+          That meant Google's inventory could serve on `/login`, `/admin`, all
+          27 `/account` settings screens, `/studio`, `/messages`, `/create/*`
+          and the download screens: pages with no publisher content, which is
+          one of the clearest things an AdSense reviewer looks for.
 
-          Server-rendered rather than `next/script` for the same reason — it has
-          to be in the first byte of the document, not added after hydration.
-          Emitted only when a publisher id is configured, so a site that has not
-          set one up ships no third-party script at all.
+          The marketing layout is exactly the publisher-content surface — the
+          landing page, the platform downloader pages and their articles, blog,
+          learn, academy, help, glossary, topics, trust and the legal pages.
+          Putting the loader there scopes Google to those routes and nothing
+          else.
+
+          ── Why not gate it here on the pathname ───────────────────────────
+          Because reading `headers()` in the ROOT layout makes the whole tree
+          dynamic, and `/` is a static page whose LCP budget is the owner's #1
+          rule. A route-group boundary costs nothing at runtime and cannot be
+          got wrong by a later edit the way a conditional can.
+
+          Verification still works: Google's crawler reads the landing page and
+          every content page, all of which are inside that layout.
+
+          `lib/monetization/ad-policy.ts` is the readable, tested statement of
+          which pages are which.
         */}
-        <AdSenseSiteScript />
         {/* Ownership verification for any network that offers a meta-tag method —
             which is the method this site supports, because the FILE method
             collides with the PWA service worker at /sw.js. */}

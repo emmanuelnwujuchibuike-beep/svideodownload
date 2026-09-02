@@ -91,24 +91,42 @@ export default function PrivacyPage() {
         approval lands, without needing a rewrite either way:
          • The Service is ad-supported (it is — see lib/monetization/settings).
          • Google's AdSense code IS present on the site. That part matters and
-           must NOT be softened away: the site-level script in app/layout.tsx
-           loads on every page whenever a publisher id is configured, whether
-           or not ads are approved to serve, so it can set cookies TODAY. A
-           policy claiming "no ad providers are active" would be its own,
-           opposite inaccuracy.
+           must NOT be softened away: it loads whenever a publisher id is
+           configured, whether or not ads are approved to serve, so it can set
+           cookies TODAY. A policy claiming "no ad providers are active" would
+           be its own, opposite inaccuracy.
          • Providers can change, and the accurate framing is "may", not a fixed
            roster that goes stale the moment a switch is flipped.
 
-        Deliberately does NOT name Monetag or Adsterra. Both default to `false`
-        and neither ships a script in that state. If either is ever switched
-        back on, name it here — do not rely on the vague "partners" line to
-        cover it.
+        ── Updated 2026-09-02, twice over ──────────────────────────────────
+        1. WHERE AdSense loads changed. It was in app/layout.tsx, i.e. every
+           page; the AdSense-readiness audit moved it to
+           app/(marketing)/layout.tsx so Google's inventory is confined to the
+           publisher-content pages and never reaches account, studio, admin,
+           messages or the download screens. The policy text says "on the site",
+           which stays true — but this note said "every page", which no longer
+           is, and a comment that has quietly gone stale is how the next person
+           reasons from a false premise.
+
+        2. HilltopAds is NAMED, because it is genuinely serving. This file's own
+           rule — written directly below — is that a provider which is switched
+           on gets named rather than hidden behind "partners". Hilltop's master
+           switch is on and its banner and video-slider zones are recording real
+           impressions, so leaving it unnamed would be exactly the mismatch
+           between document and observable behaviour that this rewrite existed
+           to remove.
+
+        Still deliberately does NOT name Monetag or Adsterra. Both default to
+        `false` and neither ships a script in that state. If either is ever
+        switched back on, name it here — do not rely on the vague "partners"
+        line to cover it.
       */}
       <h2>3. Advertising</h2>
       <p>
         FrenzSave is supported by advertising. Google AdSense code is present on
-        the site, and we may work with other advertising partners over time; the
-        providers we use can change as monetisation partners are enabled or
+        the site, and HilltopAds currently serves display and video advertising
+        on some pages. We may work with other advertising partners over time;
+        the providers we use can change as monetisation partners are enabled or
         retired. Advertising providers may use cookies, device identifiers, or
         similar technologies to serve ads, measure their performance, and limit
         how often you see the same ad. Google&apos;s use of advertising cookies

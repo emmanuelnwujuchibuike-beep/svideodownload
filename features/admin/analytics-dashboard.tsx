@@ -280,6 +280,52 @@ export function AnalyticsDashboard() {
         <GeoMap rows={data?.byCountry ?? []} />
       </div>
 
+      {/*
+        Engagement, as its own headline row (owner, 2026-09-02: "put a page
+        viiew stat and chart in the revenue and engagement in admin dashboard
+        along with other stats").
+
+        Page views and a page-views chart already existed — a "Page views"
+        metric card in the Audience row above, and a Page views toggle on the
+        trend chart. Both default out of sight, which is presumably why they
+        read as missing. Repeating the same number a fourth time would not have
+        helped anybody find it.
+
+        What genuinely was NOT here is the engagement framing of it: how many
+        pages a session actually covers. Views alone cannot distinguish 10,000
+        people reading one page from 1,000 reading ten, and those are different
+        products. Every number below is derived from counts already on the
+        summary — nothing new is queried, and nothing is modelled.
+      */}
+      {data ? (
+        <>
+          <SectionLabel icon={Eye}>Engagement</SectionLabel>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat icon={Eye} label="Page views" value={formatCompactNumber(data.pageViews)} accent="sky" raw />
+            <Stat
+              icon={TrendingUp}
+              label="Pages per session"
+              /*
+                Sessions can legitimately be 0 on a quiet window, and dividing by
+                it would print Infinity or NaN on the dashboard. An em-dash says
+                "not measurable yet", which is the truth.
+              */
+              value={data.sessions > 0 ? (data.pageViews / data.sessions).toFixed(1) : "—"}
+              accent="indigo"
+              raw
+            />
+            <Stat icon={Users} label="Bounce rate" value={`${data.bounceRatePct}%`} accent="amber" raw />
+            <Stat
+              icon={TrendingUp}
+              label="Avg. time on page"
+              value={data.avgTimeOnPageSec > 0 ? `${Math.round(data.avgTimeOnPageSec)}s` : "—"}
+              accent="emerald"
+              raw
+            />
+          </div>
+        </>
+      ) : null}
+
       {/* Engagement + breakdowns */}
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="grid gap-3 sm:grid-cols-2">

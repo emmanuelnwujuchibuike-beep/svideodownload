@@ -1,4 +1,6 @@
-import { AlertTriangle, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, DollarSign, Layers, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
+
+import { AdminAreaChart } from "./area-chart";
 
 import { AD_ZONE_META, type AdZoneId } from "@/lib/monetization/ad-schema";
 import type { MonetizationAnalytics, RevenueStats } from "@/lib/monetization/stats";
@@ -86,9 +88,34 @@ function Metric({
 export function RevenueOverview({
   revenue,
   analytics,
+  traffic,
 }: {
   revenue: RevenueStats | null;
   analytics: MonetizationAnalytics | null;
+  /**
+   * Page views and the ad aggregate over the dashboard's window.
+   *
+   * Owner, 2026-09-02: "put a page viiew stat and chart in the revenue and
+   * engagement in admin dashboard along with other stats."
+   *
+   * Revenue needed this more than engagement did: every number on this screen
+   * is either subscription income or ad income, and ad income is a function of
+   * page views × fill × CPM. Without views on the same screen, an impression
+   * count has nothing to be read against — "42,000 impressions" means something
+   * different at 50,000 views than at 500,000, and the difference is the whole
+   * question of whether the placements are working.
+   *
+   * Null when the analytics tables could not be read; the cards then say so
+   * rather than rendering a confident zero.
+   */
+  traffic: {
+    pageViews: number;
+    uniqueVisitors: number;
+    cpmUsd: number;
+    adRevenueUsd: number;
+    /** Daily page views over the window, oldest first. */
+    series: { date: string; pageViews: number }[];
+  } | null;
 }) {
   if (!revenue) {
     return (
@@ -136,6 +163,71 @@ export function RevenueOverview({
           sub={`${ads.ctr}% CTR · ${formatCompactNumber(ads.clicksToday)} today`}
         />
       </div>
+
+      {/*
+        Traffic, on the revenue screen, because ad income is a function of it.
+        An impression count with no view count beside it cannot be judged.
+      */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Metric
+          icon={Eye}
+          label="Page views"
+          value={traffic ? formatCompactNumber(traffic.pageViews) : "—"}
+          sub={traffic ? `${formatCompactNumber(traffic.uniqueVisitors)} unique visitors` : "Analytics unavailable"}
+        />
+        <Metric
+          icon={Layers}
+          label="Impressions per 100 views"
+          /*
+            The ratio that says whether the placements are actually filling.
+            Deliberately per-100 rather than a percentage: a page carries several
+            slots, so the number is routinely above 100 and a "%" label on it
+            would read as broken.
+          */
+          value={
+            traffic && traffic.pageViews > 0
+              ? Math.round((ads.impr7d / traffic.pageViews) * 100).toLocaleString()
+              : "—"
+          }
+          sub={traffic && traffic.pageViews > 0 ? "Ad impressions ÷ page views" : "Needs both numbers"}
+        />
+        <Metric
+          icon={DollarSign}
+          label="Estimated ad revenue"
+          value={traffic ? `$${traffic.adRevenueUsd.toFixed(2)}` : "—"}
+          /*
+            🔴 Labelled ESTIMATED, and the CPM it used is printed beside it.
+            The networks do not report revenue to us — this is impressions ÷
+            1000 × the CPM an admin typed in. Showing it without the input
+            visible would turn a projection into a figure somebody plans
+            against.
+          */
+          sub={traffic ? `At $${traffic.cpmUsd.toFixed(2)} CPM — your estimate, not network-reported` : "Analytics unavailable"}
+        />
+        <Metric
+          icon={MousePointerClick}
+          label="Click-through rate"
+          value={`${ads.ctr}%`}
+          sub={`${formatCompactNumber(ads.clicks7d)} clicks ÷ ${formatCompactNumber(ads.impr7d)} impressions`}
+        />
+      </div>
+
+      {traffic && traffic.series.length > 1 ? (
+        <AdminAreaChart
+          title="Page views"
+          subtitle="What the ad numbers above are earned against"
+          slot={3}
+          points={traffic.series.map((d) => ({
+            label: `${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8, 10))}`,
+            value: d.pageViews,
+            fullLabel: new Date(d.date).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }),
+          }))}
+        />
+      ) : null}
 
       {!revenue.mrrComplete ? (
         <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">

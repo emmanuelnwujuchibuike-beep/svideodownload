@@ -342,7 +342,29 @@ export default async function AdminPage() {
             own internal tab bar over the six chart groups.
           */}
           <AdminPanel id="monetization">
-            <RevenueOverview revenue={revenue} analytics={analytics} />
+            <RevenueOverview
+              revenue={revenue}
+              analytics={analytics}
+              /*
+                Page views beside the ad numbers they are earned against
+                (owner, 2026-09-02). Reuses the 90d summary already fetched for
+                the visitor charts below — no extra query.
+              */
+              traffic={
+                visitorSummary
+                  ? {
+                      pageViews: visitorSummary.pageViews,
+                      uniqueVisitors: visitorSummary.uniqueVisitors,
+                      cpmUsd: visitorSummary.ads.cpmUsd,
+                      adRevenueUsd: visitorSummary.ads.revenueUsd,
+                      series: visitorSummary.timeseries.buckets.map((b) => ({
+                        date: b.t.slice(0, 10),
+                        pageViews: b.pageViews,
+                      })),
+                    }
+                  : null
+              }
+            />
             <RevenueCharts
               series={revenueSeries}
               mrr={revenue?.mrr ?? 0}

@@ -113,8 +113,29 @@ export function ResultAd({ className }: { className?: string }) {
 
         This is a failure this codebase already had a name and a mechanism for:
         `onResolved` exists precisely so a parent can avoid decorating an empty
-        slot. The chrome rewrite dropped it. Restored, with the frame collapsed
-        to nothing until the slot says it actually has something to show.
+        slot. The chrome rewrite dropped it, and restoring it is what the
+        conditional below does.
+
+        ═══════════════════════════════════════════════════════════════════════
+         🔴 BUT THE FIRST ATTEMPT AT RESTORING IT BROKE THE VIDEO SLIDER.
+        ═══════════════════════════════════════════════════════════════════════
+
+        Owner, minutes later: "video slider doesnt show anymore."
+
+        I hid the whole container with `hidden` until the slot reported filled.
+        That is a DEADLOCK, and it is a documented hard law on this project:
+        an ad unit inside a `display:none` container is never filled by the
+        network, so it can never report filled, so it is never shown.
+
+        `onResolved` fires TWICE for the late-answering formats — exoclick,
+        video and adsense report `false` immediately (only the unit itself can
+        know) and the truth arrives later through `onFill`. Hiding the container
+        meant that second call never came.
+
+        The rule is: SPLIT MOUNTING FROM CHROME. The slot below is always
+        mounted and always visible; only the border, the padding and the label
+        are conditional. An unfilled slot then collapses to its own zero height
+        without ever having been prevented from filling.
       */}
       {isVideo ? (
         <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/60">
@@ -142,9 +163,17 @@ export function ResultAd({ className }: { className?: string }) {
           mounted to be able to answer, and unmounting it would restart the
           request it is in the middle of.
         */
-        <div className={cn("overflow-hidden rounded-2xl border border-border/40 bg-card/60", filled !== true && "hidden")}>
-          <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
-          <div className="px-3 pb-3 pt-1.5">
+        <div
+          className={cn(
+            "overflow-hidden rounded-2xl transition-colors",
+            // CHROME only. The slot inside is mounted and visible either way.
+            filled === true ? "border border-border/40 bg-card/60" : "border-0 bg-transparent",
+          )}
+        >
+          {filled === true ? (
+            <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
+          ) : null}
+          <div className={filled === true ? "px-3 pb-3 pt-1.5" : ""}>
             <AdSlot zone="download_result_page" dismissible={false} onResolved={setFilled} />
           </div>
         </div>

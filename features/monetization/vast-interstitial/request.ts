@@ -474,6 +474,28 @@ export function warmVastInterstitial(): void {
   void import("../exoclick-interstitial").catch(() => {});
 }
 
+/**
+ * Fetch and warm the IDLE creative, shortly before the idle moment fires.
+ *
+ * Owner, 2026-09-02: "make sure the 5secs interstills fires before 5secs
+ * finishes." Measured, the idle interstitial took ~9-12s to reach `playing`,
+ * because it is the one moment with no START event to predict it — every other
+ * placement is warmed by `PREFETCHES_ON_START`, and idle simply has no
+ * predecessor to hang that off.
+ *
+ * `triggers.tsx` calls this at 60% of the idle threshold, so the creative and
+ * its media are downloading during the last stretch of inactivity and are in
+ * the HTTP cache by the time the ad is actually wanted. A five-second ad that
+ * takes twelve seconds to appear is not a five-second ad.
+ *
+ * 🔴 Idempotent and cheap to call twice: `prefetchCreative` overwrites the
+ * cache entry and `warmMedia` tears down the previous warmer before starting a
+ * new one, so a re-arm cannot leave two videos buffering.
+ */
+export function warmAmbientCreative(): void {
+  prefetchCreative("ambient");
+}
+
 export async function requestVastInterstitial(
   trigger: InterstitialTrigger = "download",
 ): Promise<InterstitialResult> {

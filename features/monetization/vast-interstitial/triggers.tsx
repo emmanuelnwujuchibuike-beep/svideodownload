@@ -83,9 +83,49 @@ export function VastInterstitialTriggers() {
       hostile possible version of this placement.
     */
     let timer: number | undefined;
+    let warmTimer: number | undefined;
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       🔴 WARM THE CREATIVE BEFORE THE MOMENT, NOT AT IT
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-02: "make sure the 5secs interstills fires before 5secs
+      finishes."
+
+      Measured on production: the idle interstitial mounts and then takes
+      ~9-12s to reach `playing`, because unlike the download moments this one
+      was never prefetched — `PREFETCHES_ON_START` only covers download,
+      wallpaper and batch, since those have a START event that predicts a
+      completion. Idle has no such predecessor, so the creative and its media
+      were both fetched cold at the instant the ad was wanted.
+
+      A five-second ad that takes twelve seconds to appear is not a
+      five-second ad. So the idle timer is split: at 60% of the threshold the
+      creative is fetched and its media warmed, and the remaining 40% is spent
+      downloading it. By the time the moment actually arrives the bytes are in
+      the HTTP cache and playback starts almost immediately.
+
+      🔴 60%, NOT ON ARM. Warming the instant a page loads would fetch an ad
+      for every visitor who never goes idle at all — a VAST request with no
+      impression behind it, which is exactly what makes a network's fill rate
+      look broken. Waiting until someone is most of the way to idle means we
+      only ask for ads we are probably about to show.
+    */
+    const WARM_AT = 0.6;
     const arm = () => {
       window.clearTimeout(timer);
+      window.clearTimeout(warmTimer);
       if (document.visibilityState !== "visible") return;
+      warmTimer = window.setTimeout(
+        () => {
+          void import("./request")
+            .then((m) => m.warmAmbientCreative())
+            .catch(() => {
+              /* The real path still fetches — this is only a head start. */
+            });
+        },
+        Math.max(1000, Math.round(idleMs * WARM_AT)),
+      );
       timer = window.setTimeout(fire, idleMs);
     };
     const ACTIVITY = [
@@ -114,6 +154,9 @@ export function VastInterstitialTriggers() {
     arm();
     return () => {
       window.clearTimeout(timer);
+      // The warm timer too — a route change must not leave a pending fetch for
+      // a moment that can no longer happen.
+      window.clearTimeout(warmTimer);
       for (const e of ACTIVITY) window.removeEventListener(e, arm);
       document.removeEventListener("visibilitychange", arm);
       window.removeEventListener("popstate", onPop);

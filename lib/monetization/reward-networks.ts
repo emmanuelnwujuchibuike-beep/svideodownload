@@ -119,28 +119,28 @@ export const REWARD_SURFACES: readonly RewardSurfaceDef[] = [
     label: "HD / top-quality download unlock",
     description: "Gating the best-quality options and large files.",
     /*
-      🔴 `interstitial` IS OFFERED HERE NOW (owner, 2026-09-02: "i want hiltop
-      vast to be the acting reward ad in place of offerium until offerium
-      approved, so the batch download, top 2 quality download started should
-      show hiltop ad").
+      🔴 `interstitial` IS GONE AGAIN — REVERTED 2026-09-02, later the same day.
 
-      It used to be `UNLOCK_NETWORKS`, which excluded the interstitial on the
-      reasoning that Hilltop has no REWARDED product — true, and it is why this
-      list is not simply widened. What changed is the reading: the gate is OURS.
-      We play an ordinary VAST and OUR code grants the unlock when it finishes.
-      Nothing is claimed to the network as a rewarded impression, no rewarded
-      callback is faked, and the honesty note that kept this off the list is
-      preserved by that distinction rather than by the omission.
+      It was added that morning ("i want hiltop vast to be the acting reward ad
+      in place of offerium until offerium approved"). The owner then saw what it
+      actually produced and withdrew it: "the vast shouldnt be as reward, only
+      as download complete on all download, remove all the reward hiltop vast,
+      only offerium or a real reward network should be used as reward."
 
-      Batch already worked this way (`batch_download_gate` is `vast` by default);
-      this is the same arrangement for the top-quality moment, on the same admin
-      timer, so the two "download started" gates behave alike.
+      So the ORIGINAL reasoning stands after all, and it is worth keeping
+      written down because it was right the first time: Hilltop has no rewarded
+      product. Playing an ordinary VAST and granting the unlock ourselves is a
+      gate wearing a reward's clothes — the network never knows it was a reward,
+      never pays it as one, and the visitor pays the same 15 seconds twice
+      because the same creative also runs at completion.
+
+      A reward surface now offers only genuinely rewarded mechanisms.
     */
-    supports: [...UNLOCK_NETWORKS, "interstitial"],
+    supports: UNLOCK_NETWORKS,
     // Matches the default below — a fallback that disagreed with the default
     // would send an unsupported pick somewhere the owner did not choose.
-    fallback: "interstitial",
-    note: "“Full-screen interstitial” plays the Hilltop VAST and unlocks when it finishes — the stand-in while Offerium is pending.",
+    fallback: "rewarded_video",
+    note: "Hilltop's VAST is not offered here: it has no rewarded product, and it already runs as the download-COMPLETE ad. Offerium becomes selectable once its postback is implemented.",
   },
   {
     id: "video_preview",
@@ -270,27 +270,29 @@ export const DEFAULT_REWARD_NETWORKS: RewardNetworkMap = {
   // Google Ad Manager account exists (see `rewarded_video` above). Defaulting
   // them to GPT would make this table describe a flow that isn't running.
   /*
-    🔴 `interstitial`, CHANGED 2026-09-02 — and the default is what matters here.
+    🔴 BACK TO `rewarded_video`, REVERTED 2026-09-02 — see the surface note.
 
-    Owner: "i want hiltop vast to be the acting reward ad in place of offerium
-    untill offerium approved, so the batch download, top 2 quality download
-    started should show hiltop ad", then: "the reward ad still only shows for
-    download complete on top qualities and batch downloads".
-
-    Adding `interstitial` to this surface's `supports` made it SELECTABLE; it did
-    not make it ACTIVE. There is no `reward_networks` row in the database at all
-    (verified against the live settings table), so every surface runs on the
-    default — and this one still said `rewarded_video`, the old slot-based gate.
-    The top-quality gate therefore never reached the Hilltop VAST branch.
-
-    Changing the default is what turns it on, and because nothing is stored it
-    takes effect with no admin action. `batch_download` and `multilink_batch`
-    already defaulted to `interstitial`, so this brings the third "download
-    started" gate in line with the two that were already right.
+    It was flipped to `interstitial` that morning to make the Hilltop VAST act
+    as the reward. The owner withdrew that the same day: "remove all the reward
+    hiltop vast, only offerium or a real reward network should be used as
+    reward." This is the gate that worked before, and it works today.
   */
-  hd_download: { network: "interstitial", gptAdUnitPath: "" },
+  hd_download: { network: "rewarded_video", gptAdUnitPath: "" },
   video_preview: { network: "rewarded_video", gptAdUnitPath: "" },
-  wallpaper: { network: "interstitial", gptAdUnitPath: "" },
+  /*
+    🔴 `none` — THE WALLPAPER GATE IS REMOVED, NOT RE-POINTED.
+
+    Owner: "after wallpaper download the vast shows for 15 secs and not a
+    duplicate". A wallpaper tap used to play a gate ad AND a completion ad. The
+    completion ad is the one being kept, so the gate goes — and it goes to
+    `none` rather than to a banner, because the ask was one ad, not a different
+    second one.
+
+    `wallpaper_reward` is switched off in DEFAULT_HILLTOP_ZONE_SOURCE too. Both
+    are needed: this stops the reward FLOW, that stops the VAST ZONE, and the
+    gate component reads them independently.
+  */
+  wallpaper: { network: "none", gptAdUnitPath: "" },
   history_video: { network: "interstitial", gptAdUnitPath: "" },
 };
 

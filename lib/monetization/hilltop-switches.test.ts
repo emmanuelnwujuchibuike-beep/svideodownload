@@ -89,8 +89,25 @@ describe("hilltop placement switches actually gate their zones", () => {
 
   it("leaves everything serving when no placement is switched off", () => {
     expect(hilltopZoneSource(on, "download_complete")).toBe("vast");
-    expect(hilltopZoneSource(on, "wallpaper_reward")).toBe("vast");
     expect(hilltopZoneSource(on, "history_story_ad")).toBe("vast");
+  });
+
+  it("🔴 serves the VAST on COMPLETION moments and never on a gate", () => {
+    /*
+      Owner, 2026-09-02: "the vast shouldnt be as reward, only as download
+      complete on all download, remove all the reward hiltop vast."
+
+      A wallpaper tap used to play this creative twice — once as the reward gate
+      (`wallpaper_reward`) and again on completion. The gate moments are `off`
+      now, and this is the guard that keeps them that way: pointing any of them
+      back at `vast` re-creates the duplicate ad.
+    */
+    for (const zone of ["download_complete", "batch_download_complete"]) {
+      expect(hilltopZoneSource(on, zone), zone).toBe("vast");
+    }
+    for (const zone of ["wallpaper_reward", "batch_download_gate", "download_preparing"]) {
+      expect(hilltopZoneSource(on, zone), zone).toBe("off");
+    }
   });
 
   it("the master switch still wins over everything", () => {

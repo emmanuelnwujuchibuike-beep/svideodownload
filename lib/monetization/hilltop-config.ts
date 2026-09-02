@@ -150,10 +150,38 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
     `requestVastInterstitial` — and therefore `/api/ads/exoclick` — owns exactly
     these two:
   */
-  download_preparing: "vast",
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 THE VAST IS A COMPLETION AD. IT IS NEVER A REWARD GATE.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-02: "Wallpaper download, Download twice… when I click on
+    download it… shows a reward ad and after 15 seconds and the Download
+    complete it shows another reward ad… the vast shouldnt be as reward, only
+    as download complete on all download, remove all the reward hiltop vast,
+    only offerium or a real reward network should be used as reward."
+
+    That double ad was not a bug in one component — it was this table. Every
+    "download STARTED" moment below was `vast`, and so was every "download
+    FINISHED" moment, so a single wallpaper tap played the VAST twice: once
+    from `wallpaper-reward-gate.tsx` calling requestVastInterstitial("wallpaper"),
+    and again seconds later from the completion trigger listening on
+    DOWNLOAD_COMPLETED_EVENT. Same creative, same visitor, one download.
+
+    The split is now по moment, and it is the whole fix:
+
+      · STARTED / GATE moments → "off". No VAST, ever. These are REWARD
+        moments, and a reward belongs to a real rewarded network (Offerium
+        when it is integrated), not to a video we play ourselves and grant
+        against.
+      · COMPLETED moments      → "vast". One ad, after the file is saved, on
+        every kind of download — plain, batch and wallpaper alike.
+  */
+  download_preparing: "off",
   download_complete: "vast",
-  // The batch / HD / top-quality gate and its completion, each on its own timer.
-  batch_download_gate: "vast",
+  // The batch / HD / top-quality GATE is a reward moment: no VAST. Its
+  // completion keeps one, on its own timer.
+  batch_download_gate: "off",
   batch_download_complete: "vast",
 
   /*
@@ -189,13 +217,21 @@ export const DEFAULT_HILLTOP_ZONE_SOURCE: Record<string, HilltopZoneSource> = {
   */
   idle_interstitial: "vast",
   /*
-    ⚠️ The reward gate too, and for the same mechanical reason rather than a
-    change of intent: it renders through `FullscreenInterstitial` → `AdSlot`, so
-    a `vast` row here shows nothing and the gate fails open — the download is
-    released with no ad seen at all. A banner held for the configured 15 seconds
-    is an ad the visitor actually watches, which is what the gate is for.
+    🔴 "off" — THE SECOND HALF OF THE DUPLICATE WALLPAPER AD.
+
+    This zone is what `wallpaper-reward-gate.tsx` reads to decide whether to
+    fire requestVastInterstitial("wallpaper"). While it said `vast`, tapping
+    download on a wallpaper played the interstitial as a REWARD, and then the
+    completion trigger played it again once the file saved — the "Download
+    twice" the owner reported.
+
+    It is a reward moment, so per the rule at the top of this table it gets no
+    VAST at all. The wallpaper now downloads, and the ONE ad the visitor sees
+    is the completion VAST, held for the configured seconds. When a real
+    rewarded network (Offerium) is integrated, THAT is what goes here — via
+    the reward-network table, not via a Hilltop zone.
   */
-  wallpaper_reward: "vast",
+  wallpaper_reward: "off",
 };
 
 export interface HilltopConfig {

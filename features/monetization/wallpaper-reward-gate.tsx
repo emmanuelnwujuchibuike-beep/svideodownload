@@ -167,17 +167,41 @@ export function WallpaperRewardGate({
   });
 
   /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 `none` MEANS NO GATE — AND IT USED TO MEAN NOTHING AT ALL.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-02: "Wallpaper download, Download twice… after wallpaper
+    download the vast shows for 15 secs and not a duplicate."
+
+    `network` was read here and then used for exactly one thing: a
+    `data-reward-network` attribute on the overlay. It never gated anything. So
+    routing the `wallpaper` moment to "no ad" in the admin — or in the defaults —
+    changed a debug attribute and left the gate running, which is the second
+    half of the duplicate: a gate ad here, then the completion VAST seconds
+    later, for one tap.
+
+    Honouring it is the fix. The wallpaper saves immediately and the ONE ad the
+    visitor sees is the completion VAST.
+  */
+  const noGate = network === "none";
+
+  useEffect(() => {
+    if (open && noGate) onDone();
+  }, [open, noGate, onDone]);
+
+  /*
     FAIL OPEN. No creative, or a slot that never answers, releases the download
     rather than holding it. The short delay on the unresolved case gives a slow
     network a moment to arrive without the visitor noticing a pause.
   */
   useEffect(() => {
-    if (!open) return;
+    if (!open || noGate) return;
     const id = setTimeout(() => {
       if (hasAd !== true) onDone();
     }, hasAd === false ? 0 : 2500);
     return () => clearTimeout(id);
-  }, [open, hasAd, onDone]);
+  }, [open, noGate, hasAd, onDone]);
 
   /*
     🔴 MOUNTED ALWAYS, REVEALED ON TAP (owner: "the download button should load
@@ -196,6 +220,9 @@ export function WallpaperRewardGate({
   */
   // The video path owns this moment — the gate renders nothing there.
   if (videoMode === "vast") return null;
+  // Routed to "no ad": nothing to show, and the effect above has already
+  // released the download.
+  if (noGate) return null;
 
   return (
     <FullscreenInterstitial

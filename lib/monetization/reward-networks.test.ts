@@ -25,31 +25,26 @@ describe("defaults describe what the product ACTUALLY does today", () => {
     is deliberately paused (no Google Ad Manager account — Google's public TEST
     unit doesn't fill in production, so every top-quality download dead-ended).
   */
-  it("🔴 routes the TOP-QUALITY gate to the Hilltop VAST (owner, 2026-09-02)", () => {
+  it("🔴 keeps the TOP-QUALITY gate OFF the Hilltop VAST (owner, 2026-09-02)", () => {
     /*
-      "the reward ad still only shows for download complete on top qualities and
-      batch downloads."
+      Flipped to "interstitial" that morning, withdrawn the same day:
+      "the vast shouldnt be as reward, only as download complete on all
+      download, remove all the reward hiltop vast, only offerium or a real
+      reward network should be used as reward."
 
-      Adding `interstitial` to this surface's `supports` made it SELECTABLE and
-      not ACTIVE — and there is no `reward_networks` row in the database at all,
-      so every surface runs on the DEFAULT. This one still said
-      `rewarded_video`, so the gate never reached the VAST branch.
-
-      The default is the switch. Changing it is what turned the feature on, and
-      nothing is stored, so it applied with no admin action.
+      The reason the first attempt failed is worth keeping: Hilltop has no
+      rewarded product, so "interstitial" here meant playing an ordinary VAST
+      and granting the unlock ourselves — and because the SAME creative also
+      runs at download-complete, the visitor paid for it twice in one download.
     */
-    expect(DEFAULT_REWARD_NETWORKS.hd_download.network).toBe("interstitial");
-    // Preview is a different moment and was not part of the ask — unchanged.
+    expect(DEFAULT_REWARD_NETWORKS.hd_download.network).toBe("rewarded_video");
+    // Preview is a different moment and was never part of the ask — unchanged.
     expect(DEFAULT_REWARD_NETWORKS.video_preview.network).toBe("rewarded_video");
   });
 
-  it("🔴 gives all three 'download started' gates the SAME network", () => {
-    // batch, multi-link batch and top-quality are one moment class. They
-    // disagreed for a day and that was the bug.
-    const started = ["batch_download", "multilink_batch", "hd_download"] as const;
-    for (const id of started) {
-      expect(DEFAULT_REWARD_NETWORKS[id].network, id).toBe("interstitial");
-    }
+  it("🔴 gives the wallpaper NO reward gate, so its only ad is the completion one", () => {
+    // "after wallpaper download the vast shows for 15 secs and not a duplicate".
+    expect(DEFAULT_REWARD_NETWORKS.wallpaper.network).toBe("none");
   });
 
   it("routes every batch moment to the full-screen interstitial", () => {
@@ -142,7 +137,7 @@ describe("resolution falls back rather than dead-ending", () => {
   });
 
   it("uses the surface default when nothing is stored at all", () => {
-    expect(resolveRewardNetwork("hd_download", null, CAPS).network).toBe("interstitial");
+    expect(resolveRewardNetwork("hd_download", null, CAPS).network).toBe("rewarded_video");
     expect(resolveRewardNetwork("multilink_batch", undefined, CAPS).network).toBe("interstitial");
   });
 
@@ -161,12 +156,14 @@ describe("merging a stored map", () => {
   it("fills gaps from the defaults", () => {
     const merged = mergeRewardNetworks({ multilink_batch: { network: "none", gptAdUnitPath: "" } });
     expect(merged.multilink_batch.network).toBe("none");
-    expect(merged.hd_download.network).toBe("interstitial");
+    expect(merged.hd_download.network).toBe("rewarded_video");
   });
 
   it("discards a value the surface doesn't support instead of storing it", () => {
+    // The wallpaper surface supports only interstitial/none, so a rewarded pick
+    // falls back to ITS OWN DEFAULT — which is now `none`, the no-gate state.
     const merged = mergeRewardNetworks({ wallpaper: { network: "gpt_rewarded", gptAdUnitPath: "" } });
-    expect(merged.wallpaper.network).toBe("interstitial");
+    expect(merged.wallpaper.network).toBe("none");
   });
 
   it("survives junk without throwing", () => {
@@ -246,26 +243,33 @@ describe("premium always wins over any routing choice", () => {
   });
 });
 
-describe("🔴 the Hilltop VAST as the stand-in reward gate (owner, 2026-09-02)", () => {
+describe("🔴 the Hilltop VAST is a COMPLETION ad, never a reward (owner, 2026-09-02)", () => {
   /*
-    "i want hiltop vast to be the acting reward ad in place of offerium untill
-    offerium approved, so the batch download, top 2 quality download started
-    should show hiltop ad."
+    Tried and withdrawn inside one day.
 
-    Hilltop genuinely has no REWARDED product, and that fact is why this list
-    was not simply widened. The gate is OURS: an ordinary VAST plays and our
-    own code grants the unlock when it finishes. Nothing is claimed to the
-    network as a rewarded impression.
+    Morning: "i want hiltop vast to be the acting reward ad in place of offerium
+    untill offerium approved."
+    Evening, after seeing it: "Wallpaper download, Download twice… the vast
+    shouldnt be as reward, only as download complete on all download, remove all
+    the reward hiltop vast, only offerium or a real reward network should be
+    used as reward."
+
+    The mechanism behind the duplicate: the VAST already runs at
+    download-COMPLETE. Pointing a download-STARTED gate at the same creative
+    meant one wallpaper tap played it twice — once as the gate, once on
+    completion. Hilltop has no rewarded product, which is exactly why it could
+    never be the right thing to put in front of a locked download.
   */
-  it("offers the interstitial on the top-quality unlock", () => {
+  it("does NOT offer the interstitial on the top-quality unlock", () => {
     const hd = REWARD_SURFACES.find((s) => s.id === "hd_download")!;
-    expect(hd.supports).toContain("interstitial");
+    expect(hd.supports).not.toContain("interstitial");
   });
 
-  it("keeps the batch gates on it too, so both download-started moments match", () => {
-    for (const id of ["batch_download", "multilink_batch"] as const) {
-      const surface = REWARD_SURFACES.find((s) => s.id === id)!;
-      expect(surface.supports, id).toContain("interstitial");
+  it("🔴 never lets a reward surface DEFAULT to the interstitial", () => {
+    // The regression guard for the duplicate ad: whatever else changes, a
+    // moment that gates something must not resolve to the completion VAST.
+    for (const id of ["hd_download", "video_preview", "wallpaper"] as const) {
+      expect(DEFAULT_REWARD_NETWORKS[id].network, id).not.toBe("interstitial");
     }
   });
 

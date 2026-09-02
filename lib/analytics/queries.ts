@@ -1,4 +1,11 @@
 import { matchPage, PAGES } from "@/lib/analytics/pages";
+import {
+  bucketStartMs,
+  buildBuckets,
+  priorWindow,
+  sinceIso,
+  type Range,
+} from "@/lib/analytics/windows";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
 
@@ -54,7 +61,7 @@ function emptyPageStats(): PageStat[] {
  * would have made a "90d" request silently return 30 days of data — the exact
  * class of quiet wrongness this dashboard has been bitten by before.
  */
-export type Range = "24h" | "7d" | "30d" | "90d";
+export type { Range } from "./windows";
 
 export interface Breakdown {
   key: string;
@@ -228,43 +235,6 @@ export interface AnalyticsSummary {
 
 const SAMPLE_CAP = 20_000;
 const DEFAULT_CPM_USD = 2.5;
-
-const RANGE_DAYS: Record<Range, number> = { "24h": 1, "7d": 7, "30d": 30, "90d": 90 };
-
-function rangeDays(range: Range): number {
-  return RANGE_DAYS[range];
-}
-
-function sinceIso(range: Range): string {
-  return new Date(Date.now() - rangeDays(range) * 86_400_000).toISOString();
-}
-
-/** The window immediately before the current one, same length. */
-function priorWindow(range: Range): { from: string; to: string } {
-  const ms = rangeDays(range) * 86_400_000;
-  const now = Date.now();
-  return { from: new Date(now - 2 * ms).toISOString(), to: new Date(now - ms).toISOString() };
-}
-
-/** Ordered, gap-free bucket keys from the start of the range to now. */
-function buildBuckets(range: Range): { granularity: "hour" | "day"; keys: string[]; step: number } {
-  const granularity: "hour" | "day" = range === "24h" ? "hour" : "day";
-  const count = range === "24h" ? 24 : rangeDays(range);
-  const step = granularity === "hour" ? 3_600_000 : 86_400_000;
-  const base = new Date();
-  if (granularity === "hour") base.setMinutes(0, 0, 0);
-  else base.setHours(0, 0, 0, 0);
-  const keys: string[] = [];
-  for (let i = count - 1; i >= 0; i--) keys.push(new Date(base.getTime() - i * step).toISOString());
-  return { granularity, keys, step };
-}
-
-function bucketStartMs(iso: string, granularity: "hour" | "day"): number {
-  const d = new Date(iso);
-  if (granularity === "hour") d.setMinutes(0, 0, 0);
-  else d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
 
 type CountBuild = PromiseLike<{ count: number | null }>;
 

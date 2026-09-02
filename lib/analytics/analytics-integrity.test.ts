@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { isBotUA, parseUA } from "./enrich";
 import { AD_METRICS, changePct, DOWNLOAD_METRICS, TRAFFIC_METRICS } from "./metric-catalogue";
+import { analyticsWindows } from "./windows";
 
 /**
  * The analytics audit (owner, 2026-08-09), pinned.
@@ -218,5 +219,50 @@ describe("the pipeline fixes are still in place", () => {
   it("does not re-count a page view for the same path", () => {
     const client = read("lib/analytics/client.ts");
     expect(client).toMatch(/if \(dwellPath === path\) return/);
+  });
+});
+
+/* ─────────────────── the headline, the chart and the change ──────────────── */
+
+describe("🔴 the cards and the chart measure the SAME window", () => {
+  /*
+    Owner, 2026-09-02: "the stats in admin dashboard percentage drop doesnt
+    match with the actual daily figure."
+
+    It could not have matched. The cards used a ROLLING window (now minus N
+    days) while `buildBuckets` drew CALENDAR-ALIGNED bars, so the first bar
+    covered a day the headline only partly counted and the bars could never sum
+    to the number above them.
+
+    Invisible in the UI — both numbers look plausible on their own — so it needs
+    a property test rather than an eyeball.
+  */
+  const RANGES = ["24h", "7d", "30d", "90d"] as const;
+
+  it.each(RANGES)("%s: the headline window starts exactly at the first chart bucket", (range) => {
+    const w = analyticsWindows(range);
+    expect(w.since).toBe(w.firstBucket);
+  });
+
+  it.each(RANGES)("%s: the previous window is the same DURATION as the current one", (range) => {
+    // Like-for-like, or the percentage is comparing different amounts of time.
+    const w = analyticsWindows(range);
+    const current = Date.now() - new Date(w.since).getTime();
+    const prior = new Date(w.prior.to).getTime() - new Date(w.prior.from).getTime();
+    // Within a second, to tolerate the clock moving between the two reads.
+    expect(Math.abs(current - prior)).toBeLessThan(1000);
+  });
+
+  it.each(RANGES)("%s: the previous window ends where the current one begins, or earlier", (range) => {
+    // They must not overlap, or a visitor would be counted in both halves of
+    // the comparison.
+    const w = analyticsWindows(range);
+    expect(new Date(w.prior.to).getTime()).toBeLessThanOrEqual(new Date(w.since).getTime() + 1000);
+  });
+
+  it("7d: the previous window is shifted back by exactly seven days", () => {
+    const w = analyticsWindows("7d");
+    const shift = new Date(w.since).getTime() - new Date(w.prior.from).getTime();
+    expect(shift).toBe(7 * 86_400_000);
   });
 });

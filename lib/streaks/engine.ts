@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import {
+  addDays,
   applyActivity,
   applyRestore,
   deriveStatus,
@@ -9,11 +10,13 @@ import {
   localDay,
   localHour,
   mergeRecords,
+  reconcile,
   restorableStreak,
   restoreExpiresAt,
   restoreRemainingMs,
   safeZone,
   shouldCelebrate,
+  streakLooksLost,
 } from "./calc";
 import type { StreakIdentity } from "./identity";
 import { MAX_RESTORES, type StreakRecord, type StreakState } from "./types";
@@ -43,6 +46,15 @@ const hasSupabase =
 
 /** Postgres unique-violation. The signal that another tab won the race. */
 const DUPLICATE = "23505";
+
+/**
+ * How far back a reconciliation will read.
+ *
+ * Longer than any streak anyone has, and short enough that the repair can never
+ * become a full scan of one member's history on a path that runs on every page
+ * open. A run longer than this repairs to this and grows normally after.
+ */
+const MAX_RECONCILE_DAYS = 400;
 
 interface Row {
   id: string;
@@ -142,6 +154,74 @@ async function ensureRow(identity: StreakIdentity, timezone: string | null): Pro
   // A lost race still leaves a row — read back rather than failing.
   if (error) return await loadRow(identity);
   return (data as Row | null) ?? null;
+}
+
+/**
+ * Rebuild a drifted counter from the ledger, and persist the correction.
+ *
+ * ── Bounded on purpose ──────────────────────────────────────────────────────
+ *
+ * It reads back only as far as `streak_started_at`, which is the furthest the
+ * current run can possibly reach, plus a hard cap. An unbounded read here would
+ * be a full table scan of one member's entire history on a path that runs on
+ * every page open.
+ *
+ * ── It can only ever RAISE the streak ───────────────────────────────────────
+ *
+ * `reconcile` returns null unless the ledger proves a LONGER run than the row
+ * claims. A repair that could lower a streak would turn a transient read
+ * failure into lost progress — the exact harm this exists to undo.
+ *
+ * The write is guarded on `current_streak` still being the value we read, so
+ * two concurrent repairs cannot both apply and a normal increment landing at
+ * the same moment wins instead of being clobbered.
+ */
+async function reconcileFromLedger(
+  db: ReturnType<typeof createAdminClient>,
+  streakId: string,
+  record: StreakRecord,
+  today: string,
+): Promise<StreakRecord | null> {
+  try {
+    const from = record.streakStartedAt ?? addDays(today, -MAX_RECONCILE_DAYS);
+    const floor = addDays(today, -MAX_RECONCILE_DAYS);
+    const { data, error } = await db
+      .from("streak_daily_activity")
+      .select("activity_date")
+      .eq("streak_id", streakId)
+      .gte("activity_date", from < floor ? floor : from)
+      .lte("activity_date", today)
+      .order("activity_date", { ascending: true })
+      .limit(MAX_RECONCILE_DAYS);
+    if (error || !data) return null;
+
+    const dates = (data as { activity_date: string }[]).map((r) => r.activity_date);
+    const repaired = reconcile(record, dates, today);
+    if (!repaired) return null;
+
+    const { error: writeError } = await db
+      .from("streaks")
+      .update(toColumns(repaired))
+      .eq("id", streakId)
+      .eq("current_streak", record.currentStreak);
+    if (writeError) {
+      console.error("[streaks] reconcile write rejected", {
+        streakId,
+        code: writeError.code,
+        message: writeError.message,
+      });
+      return null;
+    }
+    console.warn("[streaks] repaired a counter that had drifted from the ledger", {
+      streakId,
+      was: record.currentStreak,
+      now: repaired.currentStreak,
+    });
+    return repaired;
+  } catch {
+    // A failed repair must never cost the member the day they just earned.
+    return null;
+  }
 }
 
 /** Which of the last 7 local days this identity was active, for the calendar. */
@@ -288,7 +368,12 @@ export async function recordActivity(
           void logStreakEvent(db, row.id, "lost", record.currentStreak, today);
         }
         record = outcome.record;
-        await db
+        /*
+          🔴 THE RESULT IS CHECKED NOW. Discarding it is what let this fail
+          silently for weeks: a rejected or no-op UPDATE left the ledger holding
+          a day the counter never got, and nothing anywhere said so.
+        */
+        const { error: updateError } = await db
           .from("streaks")
           .update({
             ...toColumns(record),
@@ -297,6 +382,14 @@ export async function recordActivity(
           .eq("id", row.id)
           // No-op if a concurrent repair already landed today.
           .or(`last_activity_date.is.null,last_activity_date.neq.${today}`);
+        if (updateError) {
+          console.error("[streaks] activity update rejected", {
+            streakId: row.id,
+            today,
+            code: updateError.code,
+            message: updateError.message,
+          });
+        }
       } else if (record.timezone !== row.timezone) {
         await db.from("streaks").update({ timezone: zone }).eq("id", row.id);
       }
@@ -304,7 +397,36 @@ export async function recordActivity(
       await db.from("streaks").update({ timezone: zone }).eq("id", row.id);
     }
 
-    return toState(record, now, await loadWeek(row.id, today));
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       🔴 RECONCILE AGAINST THE LEDGER — the counter has drifted in production
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-01: "the streak gets stuck in a day something or it resets
+      by its self."
+
+      Confirmed in live data: two of forty sampled rows had a complete, gap-free
+      ledger and a frozen counter (streak e37b1759 — ten consecutive ledger days
+      against `current_streak` 4). The ledger write always landed; the streaks
+      UPDATE behind it sometimes did not, and once `last_activity_date` had
+      caught up the old repair path — which only compares DATES — could never
+      see that the COUNT was wrong. Every following day then added one to an
+      already-wrong number, so the damage was permanent and compounding.
+
+      `streakLooksLost` is free (it checks an invariant every transition in
+      `applyActivity` maintains, using two fields already on the row), so the
+      common healthy case pays nothing. Only a row that contradicts itself pays
+      for the deeper read, and the LEDGER — never the invariant — decides the
+      value, because the span could contain a genuine gap.
+    */
+    let week = await loadWeek(row.id, today);
+    if (streakLooksLost(record)) {
+      const repaired = await reconcileFromLedger(db, row.id, record, today);
+      if (repaired) record = repaired;
+      week = await loadWeek(row.id, today);
+    }
+
+    return toState(record, now, week);
   } catch {
     // §24: the streak must never break the page. A failed credit is a missing
     // celebration, not an error screen — and never a falsely incremented streak.

@@ -11,12 +11,15 @@ import {
   localDay,
   localHour,
   mergeRecords,
+  reconcile,
   reminderEligible,
   restorableStreak,
   restoreExpiresAt,
   restoreRemainingMs,
   safeZone,
   shouldCelebrate,
+  streakLooksLost,
+  trailingRun,
 } from "./calc";
 import { MAX_RESTORES, RESTORE_WINDOW_HOURS, type StreakRecord } from "./types";
 
@@ -391,5 +394,94 @@ describe("streaks · the 48-hour recovery window (§7)", () => {
     const stillCalendarValid = restorableStreak(broken, "2026-03-06");
     expect(stillCalendarValid).toBe(12); // the DATE gate would still allow it
     expect(restoreRemainingMs(broken, new Date("2026-03-06T09:00:00Z"), "UTC")).toBe(0);
+  });
+});
+
+describe("🔴 reconciliation — the counter drifted from the ledger in production", () => {
+  /*
+    Real rows, found on 2026-09-02. The ledger was complete and gap-free while
+    the counter sat frozen — the streaks UPDATE behind the ledger insert had
+    not landed, and because the old repair path only compared DATES it could
+    never notice a wrong COUNT once last_activity_date had caught up.
+  */
+  const stuck = day({
+    currentStreak: 4,
+    longestStreak: 4,
+    totalActiveDays: 4,
+    streakStartedAt: "2026-08-24",
+    lastActivityDate: "2026-09-02",
+  });
+
+  it("🔴 spots a lost update for free, from two fields already on the row", () => {
+    // 2026-08-24 -> 2026-09-02 is a ten-day span; the counter says four.
+    expect(streakLooksLost(stuck)).toBe(true);
+  });
+
+  it("🔴 says nothing about a healthy record — the common case pays nothing", () => {
+    for (const n of [1, 2, 7, 30, 365]) {
+      const healthy = day({
+        currentStreak: n,
+        streakStartedAt: "2026-01-01",
+        lastActivityDate: addDays("2026-01-01", n - 1),
+      });
+      expect(streakLooksLost(healthy), `${n}-day streak`).toBe(false);
+    }
+  });
+
+  it("🔴 never flags a counter that is too HIGH — that is a different fault", () => {
+    // Repairing upward is safe; repairing downward would destroy progress on a
+    // transient read failure, so this path must not even see it.
+    expect(
+      streakLooksLost(day({ currentStreak: 40, streakStartedAt: "2026-08-24", lastActivityDate: "2026-09-02" })),
+    ).toBe(false);
+  });
+
+  it("counts the trailing run, and only when it reaches today", () => {
+    const run = ["2026-08-31", "2026-09-01", "2026-09-02"];
+    expect(trailingRun(run, "2026-09-02")).toBe(3);
+    // A run that stopped yesterday is not a live streak.
+    expect(trailingRun(run, "2026-09-03")).toBe(0);
+    expect(trailingRun([], "2026-09-02")).toBe(0);
+  });
+
+  it("is not fooled by unsorted or duplicated ledger rows", () => {
+    const messy = ["2026-09-02", "2026-08-31", "2026-09-01", "2026-09-02", "2026-08-31"];
+    expect(trailingRun(messy, "2026-09-02")).toBe(3);
+  });
+
+  it("stops at a real gap rather than counting through it", () => {
+    // 08-28 is missing: the live run is only the three days after it.
+    const gapped = ["2026-08-26", "2026-08-27", "2026-08-31", "2026-09-01", "2026-09-02"];
+    expect(trailingRun(gapped, "2026-09-02")).toBe(3);
+  });
+
+  it("🔴 repairs the real stuck row to what the ledger proves", () => {
+    const ledger = [
+      "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28",
+      "2026-08-29", "2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02",
+    ];
+    const fixed = reconcile(stuck, ledger, "2026-09-02")!;
+    expect(fixed.currentStreak).toBe(10);
+    expect(fixed.longestStreak).toBe(10);
+    expect(fixed.totalActiveDays).toBe(10);
+    expect(fixed.streakStartedAt).toBe("2026-08-24");
+    // …and the repaired record no longer contradicts itself.
+    expect(streakLooksLost(fixed)).toBe(false);
+  });
+
+  it("🔴 refuses to LOWER a streak, whatever the ledger is missing", () => {
+    /*
+      A partial ledger read must cost nobody their progress. `reconcile`
+      returns null unless it can prove a LONGER run than the row claims.
+    */
+    expect(reconcile(stuck, ["2026-09-01", "2026-09-02"], "2026-09-02")).toBeNull();
+    expect(reconcile(stuck, [], "2026-09-02")).toBeNull();
+  });
+
+  it("repairs only up to the real gap, not the whole ledger", () => {
+    const gapped = ["2026-08-24", "2026-08-25", "2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02"];
+    const fixed = reconcile(day({ currentStreak: 2, streakStartedAt: "2026-08-24", lastActivityDate: "2026-09-02" }), gapped, "2026-09-02")!;
+    expect(fixed.currentStreak).toBe(4);
+    expect(fixed.streakStartedAt).toBe("2026-08-30");
   });
 });

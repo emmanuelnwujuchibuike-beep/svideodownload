@@ -350,6 +350,99 @@ export function applyRestore(record: StreakRecord, today: string): StreakRecord 
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
+   🔴 RECONCILIATION — the counter drifted from the ledger in production
+   ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Does this record contradict itself?
+ *
+ * ── The bug this exists to catch (owner: "the streak gets stuck") ────────────
+ *
+ * Found in live data on 2026-09-02. Two of forty sampled rows had a COMPLETE,
+ * gap-free ledger and a frozen counter:
+ *
+ *   streak e37b1759 — ledger 2026-08-24 … 2026-09-02 (10 consecutive days)
+ *                     current_streak 4, total_active_days 4,
+ *                     last_activity_date 2026-09-02, streak_started_at 08-24
+ *   streak 32293dd1 — ledger 8 consecutive days, current_streak 5
+ *
+ * `streak_daily_activity` is the source of truth for "did today happen" — its
+ * composite primary key is what makes the credit idempotent — and it was
+ * perfect. What failed is the SECOND write: `recordActivity` inserts the ledger
+ * row, then updates `streaks` behind a conditional
+ * `last_activity_date <> today` guard, and that update's result was never
+ * checked. When it did not land, the day was gone: the ledger had it, the
+ * counter did not, and `last_activity_date` still advanced.
+ *
+ * It could never self-heal, either. The repair path only fires when
+ * `lastActivityDate !== today`, so once the DATES agreed, a wrong COUNT was
+ * invisible forever — every following day computed `+1` from an already-wrong
+ * number. That is precisely "stuck on a day, or it resets by itself".
+ *
+ * ── Why this check is free ───────────────────────────────────────────────────
+ *
+ * Every transition in `applyActivity` maintains one invariant:
+ *
+ *     currentStreak === daysBetween(streakStartedAt, lastActivityDate) + 1
+ *
+ *   • `started` and `reset` set both ends together (1 === 0 + 1);
+ *   • `continued` moves `lastActivityDate` forward one day and adds one.
+ *
+ * So a violation is proof that an update was lost, and it needs no extra query
+ * — both fields are already on the row. It is a detector, not a repair: the
+ * span might contain a genuine gap, so the ledger still has the final say.
+ */
+export function streakLooksLost(record: StreakRecord): boolean {
+  if (!record.streakStartedAt || !record.lastActivityDate) return false;
+  if (record.currentStreak <= 0) return false;
+  const span = daysBetween(record.streakStartedAt, record.lastActivityDate);
+  if (span < 0) return false;
+  // Only ever flags a counter that is too LOW. A counter that is too high is a
+  // different fault and must never be "repaired" upward by this path.
+  return record.currentStreak < span + 1;
+}
+
+/**
+ * The trailing run of consecutive days ending at `today`, from ledger dates.
+ *
+ * The ledger is the authority, so this — not the invariant above — decides what
+ * the streak actually is. Dates may arrive in any order and may contain
+ * duplicates; both are normalised here rather than relied upon at the call site.
+ */
+export function trailingRun(dates: string[], today: string): number {
+  const unique = [...new Set(dates)].sort();
+  if (unique.length === 0) return 0;
+  // The run must END at today, or there is no live streak to count.
+  if (unique[unique.length - 1] !== today) return 0;
+  let run = 1;
+  for (let i = unique.length - 1; i > 0; i--) {
+    if (daysBetween(unique[i - 1]!, unique[i]!) !== 1) break;
+    run++;
+  }
+  return run;
+}
+
+/**
+ * Rebuild a record from what the ledger actually says.
+ *
+ * Only ever RAISES the streak, and only to a number the ledger can prove. A
+ * repair that could lower a streak would turn a transient read failure into
+ * lost progress, which is the opposite of the point.
+ */
+export function reconcile(record: StreakRecord, dates: string[], today: string): StreakRecord | null {
+  const run = trailingRun(dates, today);
+  if (run <= record.currentStreak) return null;
+  return {
+    ...record,
+    currentStreak: run,
+    longestStreak: Math.max(record.longestStreak, run),
+    streakStartedAt: addDays(today, -(run - 1)),
+    // The ledger row count is the honest total — it is one row per active day.
+    totalActiveDays: Math.max(record.totalActiveDays, new Set(dates).size),
+  };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
    Status
    ──────────────────────────────────────────────────────────────────────── */
 

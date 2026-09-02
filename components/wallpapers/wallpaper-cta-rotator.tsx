@@ -3,6 +3,7 @@
 import NextImage from "next/image";
 import { useEffect, useState } from "react";
 
+import { BACKDROP_QUALITY } from "@/components/wallpapers/backdrop-quality";
 import { cn } from "@/lib/utils";
 
 /**
@@ -101,6 +102,21 @@ export function RotatingWallpaperLayers({ urls, sizes }: { urls: string[]; sizes
             sizes={sizes}
             priority={i === 0}
             loading={i === 0 ? undefined : "lazy"}
+            /*
+              🔴 Index 0 IS the landing page's LCP element — this component's
+              whole design is that its first frame is byte-identical to the
+              static `WallpaperBackdrop` it replaces. That guarantee now
+              includes the quality: leaving it at the default here would have
+              left the LCP path on the 186 kB variant while the non-rotating
+              caller got the 42 kB one, which is the "you fixed the branch the
+              owner does not hit" failure. Measurement and reasoning live on
+              `BACKDROP_QUALITY` in backdrop-quality.ts; the value is imported
+              rather than repeated so the two cannot drift apart.
+
+              It applies to all ten frames, not just the first. Nine of them are
+              decode work on a phone every 2 seconds, and none is ever the LCP.
+            */
+            quality={BACKDROP_QUALITY}
             className={cn(
               "pointer-events-none select-none object-cover transition-opacity duration-700 ease-out motion-reduce:transition-none",
               i === active ? "opacity-100" : "opacity-0",

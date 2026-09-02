@@ -2,6 +2,7 @@ import { ArrowRight, Image as ImageIcon, Microscope } from "lucide-react";
 import NextImage from "next/image";
 import Link from "next/link";
 
+import { BACKDROP_QUALITY } from "@/components/wallpapers/backdrop-quality";
 import { RotatingWallpaperLayers } from "@/components/wallpapers/wallpaper-cta-rotator";
 import { cn } from "@/lib/utils";
 
@@ -90,10 +91,12 @@ function WallpaperBackdrop({ url, sizes }: { url: string; sizes: string }) {
       fill
       sizes={sizes}
       priority
+      quality={BACKDROP_QUALITY}
       className="pointer-events-none select-none object-cover"
     />
   );
 }
+
 
 /**
  * The "Wallpaper Gallery" entry tile — landing hero and the signed-in downloads

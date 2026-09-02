@@ -187,7 +187,33 @@ const mPc: SeoModifier = {
   warning against replacing genuine content with generic filler to chase a
   word count).
 */
-const GENERIC: SeoModifier[] = [mHd, mMp3, mIphone, mAndroid, mPc];
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   🔴 DEVICE VARIANTS REMOVED 2026-09-02 (AdSense readiness, round 3).
+  ═══════════════════════════════════════════════════════════════════════════
+
+  Was `[mHd, mMp3, mIphone, mAndroid, mPc]`. The three device modifiers are gone
+  and each of the 32 pages they generated now 301s to its platform's primary
+  page — see `lib/seo/removed-seo-pages.ts`.
+
+  The note in `lib/seo/seo-pages.ts` had already identified these precisely and
+  left the call to the owner: after round 1, within-platform duplication measured
+  92%, and the device variants "remain the same tool with a device word swapped.
+  That is a page-count decision, not a copy decision."
+
+  It is. A downloader does not behave differently on an iPhone than on a PC — same
+  paste box, same extraction, same file. The genuinely per-device information is a
+  short "how saving works on iOS vs Android" explanation, which is real and useful
+  and belongs ON the platform page, not spread across three more URLs whose only
+  difference is a swapped noun.
+
+  `mHd` and `mMp3` STAY. Those are different OUTPUTS a visitor chooses between — a
+  1080p video file versus an audio file — not the same output on a different
+  screen. The modifier definitions for the removed three are kept below so the
+  device guidance can be reused as page SECTIONS; deleting them would throw away
+  copy that is still wanted, just not as standalone pages.
+*/
+const GENERIC: SeoModifier[] = [mHd, mMp3];
 
 /* ------------------------------------------------------------------ *
  * Clusters
@@ -959,7 +985,10 @@ const GENERIC_BY_CLUSTER: Record<string, SeoModifier[]> = {
   // Trimmed alongside the GENERIC removal above (2026-08-23) — was
   // [mMp4, mIphone, mAndroid, mOnline, mFree, mSave, mWithoutApp]; the five
   // merged-away modifiers are gone with it.
-  snapchat: [mIphone, mAndroid],
+  // Was [mIphone, mAndroid]; both are device variants, merged away 2026-09-02.
+  // Snapchat therefore takes no generics at all now — its own specific pages
+  // (story/spotlight/etc.) are the whole cluster, which is the honest shape.
+  snapchat: [],
   reddit: GENERIC,
   vimeo: GENERIC,
   linkedin: GENERIC,

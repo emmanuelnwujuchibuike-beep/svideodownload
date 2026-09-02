@@ -84,7 +84,50 @@ const YOUTUBE_CLUSTER_REMOVED: RemovedSeoPage[] = [
   "youtube-1080p-downloader",
 ].map((from) => ({ from, to: "linkedin-video-downloader" }));
 
+/**
+ * Round 3 (2026-09-02): the 32 DEVICE-VARIANT pages — `-downloader-for-iphone`,
+ * `-for-android`, `-for-pc` — merged into their platform's primary page.
+ *
+ * ── Why these and not the others ─────────────────────────────────────────
+ * `lib/seo/seo-pages.ts` already said it, in a note left for exactly this
+ * decision: after round 1, within-platform duplication was measured at 92%, and
+ * the device variants "remain the same tool with a device word swapped. That is
+ * a page-count decision, not a copy decision."
+ *
+ * It is the right call. A downloader does not behave differently on an iPhone
+ * than on a PC — it is the same paste box, the same extraction, the same file.
+ * The only honest per-device content is a short "how saving works on iOS vs
+ * Android" section, and that belongs ON the platform page (where it now lives)
+ * rather than being the entire justification for three more URLs.
+ *
+ * `hd-downloader` and `mp3-downloader` are deliberately KEPT: those are
+ * different OUTPUTS a visitor is actually choosing between (a 1080p video file
+ * versus an audio file), not the same output on a different screen.
+ *
+ * ── Snapchat has two, not three ─────────────────────────────────────────
+ * Its generic set was already trimmed in round 1 to `[iphone, android]`. Listed
+ * from the real config rather than assumed, because a redirect for a URL that
+ * never existed is harmless but a missing one is a 404 on an indexed page.
+ */
+const DEVICE_VARIANT_SLUGS = ["downloader-for-iphone", "downloader-for-android", "downloader-for-pc"] as const;
+
+const DEVICE_MERGED: { stem: string; primary: string; had: readonly string[] }[] = [
+  { stem: "tiktok", primary: "tiktok-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "instagram", primary: "instagram-reels-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "twitter", primary: "twitter-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "facebook", primary: "facebook-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "pinterest", primary: "pinterest-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  // Round 1 left snapchat with only these two generics.
+  { stem: "snapchat", primary: "snapchat-story-downloader", had: ["downloader-for-iphone", "downloader-for-android"] },
+  { stem: "reddit", primary: "reddit-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "vimeo", primary: "vimeo-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "linkedin", primary: "linkedin-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "threads", primary: "threads-video-downloader", had: DEVICE_VARIANT_SLUGS },
+  { stem: "telegram", primary: "telegram-video-downloader", had: DEVICE_VARIANT_SLUGS },
+];
+
 export const REMOVED_SEO_PAGES: RemovedSeoPage[] = [
   ...CLUSTERS.flatMap(({ stem, primary, had }) => had.map((modifierSlug) => ({ from: `${stem}-${modifierSlug}`, to: primary }))),
   ...YOUTUBE_CLUSTER_REMOVED,
+  ...DEVICE_MERGED.flatMap(({ stem, primary, had }) => had.map((modifierSlug) => ({ from: `${stem}-${modifierSlug}`, to: primary }))),
 ];

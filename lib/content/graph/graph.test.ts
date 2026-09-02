@@ -44,7 +44,14 @@ describe("Experience Graph — construction", () => {
 
   it("files every SEO page under its platform topic", () => {
     const pages = [...GRAPH.nodes.values()].filter((n) => n.kind === "seoPage");
-    expect(pages.length).toBeGreaterThan(50);
+    /*
+      Floor, not an exact count. The corpus was 82 and is 50: the 32 device
+      variants (-for-iphone/-android/-pc) were merged into their platform's
+      primary page on 2026-09-02 and 301'd, because they were the same tool with
+      a device word swapped. This guard exists to catch an accidental COLLAPSE of
+      the corpus, so it sits well below the real number rather than tracking it.
+    */
+    expect(pages.length).toBeGreaterThanOrEqual(40);
 
     for (const page of pages.slice(0, 25)) {
       const parents = neighbours(page.id, ["partOf"]).map((n) => n.node.kind);
@@ -184,7 +191,14 @@ describe("Experience Graph — recommendations", () => {
   it("covers the whole SEO corpus", () => {
     const stats = graphStats();
     const pageNodes = stats.byNodeKind.seoPage ?? 0;
-    expect(pageNodes).toBeGreaterThan(50);
+    /*
+      Floor, not an exact count. The corpus was 82 and is 50: the 32 device
+      variants (-for-iphone/-android/-pc) were merged into their platform's
+      primary page on 2026-09-02 and 301'd, because they were the same tool with
+      a device word swapped. This guard exists to catch an accidental COLLAPSE of
+      the corpus, so it sits well below the real number rather than tracking it.
+    */
+    expect(pageNodes).toBeGreaterThanOrEqual(40);
     expect(GRAPH.nodes.has(seoPageId("tiktok-video-downloader"))).toBe(true);
   });
 

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
+import { AdminSearch } from "./admin-search";
 import { AdminLogoutButton } from "@/features/admin/admin-logout-button";
 import {
   ADMIN_CATEGORIES,
@@ -213,6 +214,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="mb-4 flex items-center justify-end px-3 sm:px-0">
         <AdminLogoutButton />
       </div>
+      {/*
+        Search every SETTING, not just the 32 section names (owner: "i cant find
+        it" — the control was there and unfindable). Sits directly under the
+        top row so it is the first thing on the page after log out.
+      */}
+      <AdminSearch onSelect={select} />
       {/*
         Pinned shortcuts — up to 5, chosen via the pin toggle on each nav
         item below. Sits at the very top of the dashboard shell (above the

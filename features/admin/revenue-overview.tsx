@@ -1,6 +1,6 @@
-import { AlertTriangle, DollarSign, Layers, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, ChevronDown, DollarSign, Layers, MousePointerClick, Eye, TrendingUp, Users } from "lucide-react";
 
-import { AdminAreaChart } from "./area-chart";
+import { PageViewsChart } from "./page-views-chart";
 
 import { AD_ZONE_META, type AdZoneId } from "@/lib/monetization/ad-schema";
 import type { MonetizationAnalytics, RevenueStats } from "@/lib/monetization/stats";
@@ -213,20 +213,7 @@ export function RevenueOverview({
       </div>
 
       {traffic && traffic.series.length > 1 ? (
-        <AdminAreaChart
-          title="Page views"
-          subtitle="What the ad numbers above are earned against"
-          slot={3}
-          points={traffic.series.map((d) => ({
-            label: `${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8, 10))}`,
-            value: d.pageViews,
-            fullLabel: new Date(d.date).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }),
-          }))}
-        />
+        <PageViewsChart series={traffic.series.map((d) => ({ date: d.date, value: d.pageViews }))} />
       ) : null}
 
       {!revenue.mrrComplete ? (
@@ -241,11 +228,32 @@ export function RevenueOverview({
         </p>
       ) : null}
 
-      {/* Per-placement engagement — counted, and only for placements that have
-          actually been seen. A row of zeroes for every declared zone would bury
-          the ones carrying the site. */}
-      <div>
-        <h3 className="mb-3 text-sm font-semibold">Placement performance · last 7 days</h3>
+      {/*
+        Per-placement engagement, BEHIND A DISCLOSURE (owner, 2026-09-02: "remove
+        this ad details from the revenue section, and put them inisde a button
+        that displays them in the revenue so they load when is clicks to reduce
+        admin budget, and to reduce cluster in the admin revenue").
+
+        The rows themselves cost nothing extra to fetch — they arrive on the
+        same monetization payload the cards above already use, so this is not a
+        saved query. What it saves is the RENDER: a table of every served
+        placement, on a screen whose job is four headline numbers, is most of
+        the scroll and most of the clutter.
+
+        Counted, and only for placements actually seen — a row of zeroes for
+        every declared zone would bury the ones carrying the site.
+      */}
+      <details className="group rounded-2xl border border-border/70 bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-semibold">
+          <span>Placement performance · last 7 days</span>
+          <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            {zones.length > 0
+              ? `${zones.length} ${zones.length === 1 ? "placement" : "placements"}`
+              : "none yet"}
+            <ChevronDown aria-hidden className="h-4 w-4 transition-transform group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="border-t border-border/60 p-4">
         {zones.length === 0 ? (
           <p className="rounded-2xl border border-border/70 bg-card p-4 text-sm leading-relaxed text-muted-foreground">
             No impressions recorded yet. Placements appear here once they have been served — seed
@@ -280,7 +288,8 @@ export function RevenueOverview({
             </table>
           </div>
         )}
-      </div>
+        </div>
+      </details>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Metric

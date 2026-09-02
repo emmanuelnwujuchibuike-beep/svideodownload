@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useAdminPanelVisible } from "./panel-visibility";
+
 import { subscribe, type Tier } from "./scheduler";
 
 /**
@@ -37,7 +39,21 @@ export function useAdminLive<T>({
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
+  /*
+    🔴 A HIDDEN PANEL DOES NOT POLL.
+
+    AdminPanel hides its section with CSS and leaves the children MOUNTED, so
+    without this every live widget on the dashboard kept refreshing while the
+    operator was looking at a different section — a request a minute each,
+    billed, for numbers nobody could see. Same class of waste the SSE removal
+    was about.
+
+    Defaults to visible, so a widget used outside a panel is unaffected.
+  */
+  const visible = useAdminPanelVisible();
+
   useEffect(() => {
+    if (!visible) return;
     return subscribe(
       key,
       tier,
@@ -54,7 +70,7 @@ export function useAdminLive<T>({
         setData(value as T);
       },
     );
-  }, [key, tier]);
+  }, [key, tier, visible]);
 
   return { data, error, stale: error !== null && data !== null };
 }

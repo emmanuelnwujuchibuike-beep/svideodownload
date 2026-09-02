@@ -39,6 +39,7 @@ import {
 import { createContext, useContext, useEffect, useState } from "react";
 
 import { AdminSearch } from "./admin-search";
+import { PanelVisibleProvider } from "./live/panel-visibility";
 import { AdminLogoutButton } from "@/features/admin/admin-logout-button";
 import {
   ADMIN_CATEGORIES,
@@ -377,6 +378,7 @@ export function AdminPanel({ id, children }: { id: string; children: React.React
       */
       className={cn(!shown && "hidden", shown && "motion-safe:animate-fade-up")}
     >
+      <PanelVisibleProvider value={shown}>
       <div id={topId} className="scroll-mt-28" />
       {section ? (
         <header className="mb-6 flex flex-wrap items-start justify-between gap-3 px-3 sm:px-0">
@@ -409,6 +411,7 @@ export function AdminPanel({ id, children }: { id: string; children: React.React
         </button>
       </div>
       <div id={bottomId} aria-hidden className="scroll-mt-28" />
+      </PanelVisibleProvider>
     </section>
   );
 }

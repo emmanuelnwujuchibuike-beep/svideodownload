@@ -85,6 +85,37 @@ export function showInterstitial({
       // 100dvh so mobile browser chrome cannot crop the stage.
       "height:100dvh",
       "width:100vw",
+      /*
+        ═══════════════════════════════════════════════════════════════════
+         🔴 MOUNTED INVISIBLE, REVEALED ON `playing`
+        ═══════════════════════════════════════════════════════════════════
+
+        Owner, 2026-09-02: "when vast triggers it shows blank for 5 secs
+        before playing the video."
+
+        Correct, and it is the cost of the budget split that fixed the
+        zero-impression bug. Playback now gets up to 12s to start instead of
+        being killed at 3s — which is what lets the impression fire at all —
+        but the overlay used to appear the instant it was built, so that
+        extra patience was spent showing the visitor a black rectangle.
+
+        So the stage is built, laid out and loading from the first frame, and
+        only made VISIBLE once the video actually reports `playing`. The
+        member sees the app until there is a real ad to show, then the ad.
+        Nobody watches a blank.
+
+        ⛔ `opacity`, NEVER `display:none`. A `display:none` <video> is not
+        laid out and browsers do not load it — a standing law in this
+        codebase — so hiding it that way would guarantee the ad never starts
+        and put the impression back at zero. `visibility:hidden` has the same
+        risk on some engines. Opacity keeps the element live and decoding.
+
+        `pointer-events:none` while invisible so an unrevealed overlay can
+        never swallow a tap meant for the page underneath it.
+      */
+      "opacity:0",
+      "pointer-events:none",
+      "transition:opacity 180ms ease-out",
     ].join(";");
 
     const video = document.createElement("video");
@@ -189,7 +220,13 @@ export function showInterstitial({
       startSignal.removeEventListener("abort", onAbort);
       root.remove();
       document.documentElement.style.overflow = prevOverflow;
-      previouslyFocused?.focus?.();
+      /*
+        🔴 ONLY GIVE FOCUS BACK IF WE EVER TOOK IT. An overlay that was never
+        revealed never moved focus, and yanking it to whatever happened to be
+        active when the ad was requested would interrupt someone who has been
+        using the page normally for the whole (invisible) attempt.
+      */
+      if (started) previouslyFocused?.focus?.();
       resolve(outcome);
     };
 
@@ -217,9 +254,26 @@ export function showInterstitial({
       if (!video.muted) void video.play().catch(() => {});
     });
 
+    /**
+     * Show the stage. Idempotent, and the ONLY thing that makes this overlay
+     * visible, lock the page or take focus — see the note at the mount.
+     */
+    const reveal = () => {
+      root.style.opacity = "1";
+      root.style.pointerEvents = "auto";
+      document.documentElement.style.overflow = "hidden";
+      skipBtn.focus?.();
+    };
+
     video.addEventListener("playing", () => {
       if (started) return;
       started = true;
+      /*
+        🔴 REVEAL FIRST, THEN COUNT THE IMPRESSION. The pixel means "a human
+        saw a frame of this ad", so it must not go out before the frame is on
+        screen. One statement apart, and in this order for that reason.
+      */
+      reveal();
       onStarted();
       pixel(creative.impressions);
       pixel(creative.tracking.start);
@@ -353,12 +407,22 @@ export function showInterstitial({
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const prevOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = "hidden";
     document.body.appendChild(root);
     document.addEventListener("keydown", onKey);
     startSignal.addEventListener("abort", onAbort);
     if (maySkip) paintSkip();
-    skipBtn.focus?.();
+
+    /*
+      🔴 THE SCROLL LOCK AND THE FOCUS MOVE WAIT FOR THE REVEAL TOO.
+
+      Both are things the visitor can FEEL. Locking the page the moment an
+      invisible overlay mounts would freeze scrolling for up to 12 seconds
+      while nothing is on screen — a worse bug than the blank it replaced —
+      and stealing focus to a skip button nobody can see would strand a
+      keyboard or screen-reader user in a dialog that is not there yet.
+
+      Both are applied by `reveal()`, which runs from the `playing` handler.
+    */
 
     /*
       Autoplay can still be refused. That is not an error the visitor should pay

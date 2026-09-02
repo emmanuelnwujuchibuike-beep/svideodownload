@@ -3,6 +3,12 @@
 import { track } from "@/lib/analytics/client";
 import type { VastCreative } from "@/lib/monetization/vast";
 import {
+  RETRY_DELAY_MS,
+  isBlockedOrUnavailable,
+  shouldRetryVast,
+  type ResolveOutcome,
+} from "@/lib/monetization/vast-reliability";
+import {
   DEFAULT_VAST_INTERSTITIAL,
   normalizeVastInterstitial,
   type VastInterstitialConfig,
@@ -260,7 +266,20 @@ function isEnabledFor(config: VastInterstitialConfig, trigger: InterstitialTrigg
 
 export interface InterstitialResult {
   shown: boolean;
-  reason: "shown" | "disabled" | "cooldown" | "busy" | "no-ad" | "timeout" | "error";
+  reason:
+    | "shown"
+    | "disabled"
+    | "cooldown"
+    | "busy"
+    | "no-ad"
+    /**
+     * The request never got an answer — a content blocker, a dead edge node or
+     * a network fault. Distinct from `no-ad`, which is the network answering
+     * that it has nothing to serve. See `resolveCreative`.
+     */
+    | "blocked"
+    | "timeout"
+    | "error";
 }
 
 /**
@@ -466,6 +485,120 @@ function takeCachedCreative(zone: string): unknown | null {
   return Date.now() - hit.at < CREATIVE_TTL_MS ? hit.creative : null;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   RELIABILITY: what happened to the ad request, and one controlled retry
+   ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Development-only tracing. Silent in production by design (§11): these lines
+ * are for someone debugging a zone, not for a visitor's console, and they must
+ * never carry the tag URL — that is the publisher's own inventory identifier.
+ */
+function vastLog(event: string, zone: string, detail?: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  // eslint-disable-next-line no-console
+  console.info(`[VAST] ${event}`, detail ? { zone, detail } : { zone });
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  FETCH A CREATIVE, WITH ONE CONTROLLED RETRY
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ── 🔴 IT RETRIES THE LOOKUP, NEVER THE PLAYER ──────────────────────────────
+ *
+ * This runs BEFORE any overlay exists — the player is a second dynamic import
+ * that only happens once a creative is in hand. So a retry here cannot create a
+ * duplicate player, cannot duplicate an impression, and cannot interact with
+ * the teardown path at all. That is deliberate: the existing player lifecycle
+ * is a protected system and the reliability layer is kept strictly upstream of
+ * it.
+ *
+ * ── What is and is not retried ──────────────────────────────────────────────
+ *
+ *   network_error / http_error / malformed → retried ONCE. These are the
+ *     shapes a blocked request, a flapping edge node or a truncated response
+ *     take, and a second ask genuinely resolves them.
+ *   empty → NEVER retried. The network answered and said it has no ad. Asking
+ *     again is how one impression opportunity becomes two ad requests with no
+ *     impression behind them, which is precisely what makes a publisher's fill
+ *     rate look broken to the network.
+ *   aborted → NEVER retried. The caller's budget expired or the attempt was
+ *     cancelled; retrying would be ignoring the cancellation.
+ *
+ * ── The retry cannot double the visitor's wait ──────────────────────────────
+ *
+ * It only runs if the resolve budget still has room for it — measured, not
+ * assumed. A request that failed FAST (the blocked case: a blocked fetch
+ * rejects almost immediately) leaves plenty; one that failed by TIMING OUT has
+ * already spent the budget and gets no second try, so a slow network is never
+ * made slower. The caller's AbortSignal remains the hard ceiling either way.
+ */
+async function resolveCreative(
+  zone: string,
+  signal: AbortSignal,
+  budgetMs: number,
+): Promise<{ creative: VastCreative | null; outcome: ResolveOutcome }> {
+  const startedAt = Date.now();
+  vastLog("request started", zone);
+
+  const attempt = async (): Promise<{ creative: VastCreative | null; outcome: ResolveOutcome }> => {
+    try {
+      const res = await fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`, { signal });
+      if (!res.ok) return { creative: null, outcome: "http_error" };
+      let body: { ad?: VastCreative | null };
+      try {
+        body = (await res.json()) as { ad?: VastCreative | null };
+      } catch {
+        return { creative: null, outcome: "malformed" };
+      }
+      const ad = body.ad ?? null;
+      // A 200 with no ad is a real answer: the zone has no fill right now.
+      return ad?.mediaUrl ? { creative: ad, outcome: "ok" } : { creative: null, outcome: "empty" };
+    } catch (err) {
+      if (signal.aborted || (err instanceof DOMException && err.name === "AbortError")) {
+        return { creative: null, outcome: "aborted" };
+      }
+      /*
+        A rejected fetch to our OWN origin, while the app is otherwise working,
+        is the signal §4 asks for. Named for what is observable — the request
+        did not complete — rather than asserting an extension we cannot see.
+      */
+      return { creative: null, outcome: "blocked_or_unavailable" };
+    }
+  };
+
+  const first = await attempt();
+  if (first.outcome === "ok") return first;
+
+  /* The retry RULES are pure and live in lib/monetization/vast-reliability.ts —
+     which failures deserve a second ask, and whether the budget still allows
+     one. Decided there so they can be tested without a DOM. */
+  const decision = shouldRetryVast({
+    outcome: first.outcome,
+    spentMs: Date.now() - startedAt,
+    budgetMs,
+    aborted: signal.aborted,
+  });
+  if (!decision.retry) {
+    if (isBlockedOrUnavailable(first.outcome)) {
+      vastLog("possible blocked/unavailable", zone, `${first.outcome} (${decision.reason})`);
+    }
+    return first;
+  }
+
+  vastLog("retry", zone, first.outcome);
+  await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  // Cancelled during the delay — respect it rather than firing a stray request.
+  if (signal.aborted) return { creative: null, outcome: "aborted" };
+
+  const second = await attempt();
+  if (second.outcome !== "ok") {
+    vastLog("possible blocked/unavailable", zone, `${first.outcome} then ${second.outcome}`);
+  }
+  return second;
+}
+
 export function warmVastInterstitial(): void {
   void loadConfig().catch(() => {
     /* Warming must never surface an error — the real path re-tries. */
@@ -621,21 +754,29 @@ export async function requestVastInterstitial(
       it. Falls straight through to the live fetch when there is none.
     */
     const cached = takeCachedCreative(ZONE) as VastCreative | null;
-    const creative: VastCreative | null =
-      cached ??
-      (await (async () => {
-        const res = await fetch(`/api/ads/exoclick?zone=${encodeURIComponent(ZONE)}`, {
-          signal: controller.signal,
-        });
-        return res.ok ? ((await res.json()).ad ?? null) : null;
-      })());
+    const resolved = cached
+      ? { creative: cached, outcome: "ok" as ResolveOutcome }
+      : await resolveCreative(ZONE, controller.signal, config.timeoutMs);
+    const creative = resolved.creative;
 
     if (!creative?.mediaUrl) {
       clearTimeout(budget);
       phase = "idle";
-      track("vast_error", { zone: ZONE, reason: "no-ad" });
-      return { shown: false, reason: "no-ad" };
+      /*
+        🔴 "NO FILL" AND "COULD NOT ASK" ARE DIFFERENT FACTS, and collapsing
+        them is what makes a blocked integration look like an empty one. An
+        `empty` response is the network legitimately saying it has no ad;
+        `blocked_or_unavailable` means the request never got an answer at all.
+        Reported apart so the admin funnel can tell a dead zone from a blocked
+        one — and deliberately NOT called "ad blocker detected", because a
+        failed request is not proof of an extension.
+      */
+      const blocked = isBlockedOrUnavailable(resolved.outcome);
+      vastLog(blocked ? "possible blocked/unavailable" : "no ad", ZONE, resolved.outcome);
+      track(blocked ? "vast_blocked" : "vast_error", { zone: ZONE, reason: resolved.outcome });
+      return { shown: false, reason: blocked ? "blocked" : "no-ad" };
     }
+    vastLog("response received", ZONE, resolved.outcome);
     track("vast_loaded", { zone: ZONE });
 
     /*

@@ -43,6 +43,19 @@ export type AnalyticsEventType =
    * means the ad was genuinely lost.
    */
   | "vast_media_fallback"
+  /**
+   * The ad request never got an answer — blocked, unreachable, or malformed
+   * twice over.
+   *
+   * 🔴 Deliberately NOT "ad blocker detected". A failed request is not proof of
+   * an extension, and a metric that overclaims is one nobody can act on.
+   *
+   * Separated from `vast_error` because "no fill" and "could not ask" are
+   * different facts: one is the network having nothing to serve, the other is
+   * us never reaching it. A zone that reads empty for weeks is usually the
+   * second, and with both collapsed into one event there is no way to tell.
+   */
+  | "vast_blocked"
   /** The "Tired of ads? Go Pro" link on the ad overlay was tapped. */
   | "ad_upgrade_click"
   | "ad_impression"

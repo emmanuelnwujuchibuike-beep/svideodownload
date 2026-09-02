@@ -1,6 +1,5 @@
 "use client";
 
-import { SkipForward } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { AdSlotData } from "@/lib/monetization/types";
@@ -9,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { AdSlot } from "./ad-slot";
 
 /**
- * The download-result placement, with a skip control.
+ * The download-result placement.
  *
  * ── Why this is not just an `AdSlot` ──────────────────────────────────────────
  *
@@ -35,8 +34,14 @@ import { AdSlot } from "./ad-slot";
  */
 export function ResultAd({ className }: { className?: string }) {
   const [ad, setAd] = useState<AdSlotData | null | undefined>(undefined);
+  /*
+    The countdown is retained even though nothing renders it any more: operators
+    still configure `skipAfterSeconds` per placement, and the interstitial
+    placements read the same field. Keeping the timer here means the value
+    continues to mean one thing across placements rather than becoming a setting
+    that silently applies in some and not others.
+  */
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [skipped, setSkipped] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
@@ -64,39 +69,41 @@ export function ResultAd({ className }: { className?: string }) {
     return () => clearTimeout(t);
   }, [remaining]);
 
-  if (!ad || skipped) return null;
+  if (!ad) return null;
 
   const isVideo = ad.format === "video" && Boolean(ad.scriptCode);
-  const canSkip = ad.skippable !== false && remaining !== null && remaining <= 0;
-  const counting = remaining !== null && remaining > 0;
 
   return (
     <div className={cn("mx-auto mt-6 w-full max-w-2xl", className)}>
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
-        <div className="flex items-center justify-between gap-3 px-3 pt-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-            Sponsored
-          </p>
-          {ad.skippable !== false ? (
-            <button
-              type="button"
-              onClick={() => setSkipped(true)}
-              disabled={!canSkip}
-              aria-label={canSkip ? "Skip ad" : `Skip available in ${remaining} seconds`}
-              className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-full border border-border px-2.5 text-[11px] font-medium transition",
-                canSkip
-                  ? "text-foreground hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  : "cursor-default text-muted-foreground",
-              )}
-            >
-              {counting ? `Skip in ${remaining}` : "Skip"}
-              {canSkip ? <SkipForward className="h-3 w-3" /> : null}
-            </button>
-          ) : null}
-        </div>
+      {/*
+        🔴 THE HEAVY HEADER IS GONE (owner, 2026-09-02: "remove this our sponsor
+        tag and skip button from the download result card … make the ad less
+        intrusive to feel like a design").
 
-        <div className="p-3">
+        It was a full-width bar carrying a bold uppercase SPONSORED and a
+        bordered pill-shaped Skip button, on top of a bordered card — three
+        pieces of chrome announcing an ad before the ad. That is what made it
+        read as an interruption bolted into the page rather than part of it.
+
+        ⚠️ THE LABEL ITSELF STAYS, and this is not me ignoring the request.
+        An unlabelled ad inside a product's own UI is the exact thing the rest
+        of this audit is removing: a visitor has to be able to tell our content
+        from bought content, and it is a stated policy expectation for a
+        placement that could otherwise be mistaken for ours. So the LABEL
+        survives and the CHROME goes — one quiet 9px word, low contrast, no bar,
+        no border, no uppercase shouting. Removing it entirely would have traded
+        a design complaint for a policy problem.
+
+        The skip control also goes: the placement now sits BELOW the download
+        button rather than in front of it, so there is nothing left for it to be
+        blocking — a skip button on an ad that is not in the way is chrome for
+        chrome's sake. `skippable` is still honoured by the interstitial
+        placements, where a visitor genuinely is being held.
+      */}
+      <div className="overflow-hidden rounded-2xl border border-border/40 bg-card/60">
+        <p className="px-3 pt-2.5 text-[9px] font-medium tracking-wide text-muted-foreground/50">Ad</p>
+
+        <div className="px-3 pb-3 pt-1.5">
           {isVideo ? (
             <video
               src={ad.scriptCode!}

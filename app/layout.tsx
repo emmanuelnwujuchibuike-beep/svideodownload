@@ -87,21 +87,37 @@ export const revalidate = 60;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  /*
+    🔴 REFRAMED 2026-09-02 (owner: "minimis the word downloader in the landing
+    page, instead use save and reuse, so they dont flag it as a pure
+    downloader").
+
+    The title keeps "Save Videos" — that is the search intent people actually
+    have, and throwing it away would cost real traffic for no policy gain — but
+    it now leads with what the product IS rather than with its category. That is
+    not a softening exercise: Frenzsave genuinely has a feed, Reels, Sounds,
+    Collections and a Creator Studio, so "save, organise and reuse" describes it
+    more completely than "downloader" ever did.
+
+    ── The keywords list is GONE, and that costs nothing ────────────────────
+    Google has ignored the keywords meta for ranking since 2009. What it still
+    does is sit in the HTML where a human policy reviewer reads it — and
+    "tiktok downloader, no watermark, video downloader, instagram downloader,
+    linkedin downloader, mp4 download, mp3 download" is a keyword-stuffed list
+    that reads as exactly the thing we are trying not to look like. Removing it
+    loses no ranking signal and removes a bad one.
+
+    ⚠️ TRADE-OFF, stated rather than buried: the old title led with "Download
+    Videos Online Free", which is a high-intent phrase. This wording is a
+    deliberate exchange of some of that directness for a broader, more accurate
+    description of the product. Worth watching in Search Console.
+  */
   title: {
-    default: "Download Videos Online Free | Frenzsave",
+    default: "Frenzsave — Save, Organise and Reuse Videos, Photos & Sounds",
     template: "%s · FrenzSave",
   },
   description:
-    "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
-  keywords: [
-    "tiktok downloader",
-    "no watermark",
-    "video downloader",
-    "instagram downloader",
-    "linkedin downloader",
-    "mp4 download",
-    "mp3 download",
-  ],
+    "Save public videos, photos and sounds you have the right to keep, then reuse them — organise them into collections, publish to your feed, watch reels and connect with friends. All in one place.",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",

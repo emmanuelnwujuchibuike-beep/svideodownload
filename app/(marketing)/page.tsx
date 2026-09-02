@@ -288,8 +288,13 @@ export default function HomePage() {
 
         <SectionAd />
 
-        {/* SEO link surface */}
-        <DownloaderLinks heading="Popular video downloaders" />
+        {/* SEO link surface.
+            Heading reworded 2026-09-02 (owner: "minimis the word downloader in
+            the landing page, instead use save and reuse"). The links themselves
+            are unchanged — this is how the platform pages are discovered, and
+            removing them would cost real navigation. Only the framing moved
+            from the tool's category to what a visitor actually does with it. */}
+        <DownloaderLinks heading="Save and reuse from your favourite platforms" />
 
         <SectionAd />
 

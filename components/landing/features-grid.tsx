@@ -47,9 +47,28 @@ export function FeaturesGrid() {
             All in one place.
           </span>
         </h2>
+        {/*
+          🔴 REWRITTEN 2026-09-02, for two separate reasons.
+
+          1. POSITIONING (owner): "minimis the word downloader in the landing
+             page, instead use save and reuse, so they dont flag it as a pure
+             downloader." Frenzsave genuinely is more than a downloader — it has
+             a feed, Reels, Sounds, Collections and a Creator Studio — so
+             leading with saving and reusing describes the product more
+             accurately than "a downloader" did, without claiming anything untrue.
+
+          2. "no limits" WAS FALSE. Free accounts have a hard batch cap of 20
+             items (FREE_BATCH_SELECT_LIMIT in preview-card.tsx) and plan-based
+             quality gates. An unsupported superlative on the landing page is
+             both a policy risk and the kind of claim this project has removed
+             before — the fabricated 4.9/18420 rating went for the same reason.
+             "no sign-up to start" replaces it and is true: the paste box works
+             signed out.
+        */}
         <p className="mx-auto mt-5 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground">
-          A downloader built to feel effortless — no watermarks, no sign-up, no limits.
-          Fast servers, clean files and the quality you choose, on every device you own.
+          Save the posts you want to keep, then reuse them — organise them into collections,
+          publish them to your feed, or pull the audio out. No sign-up to start, and the
+          quality is yours to choose on every device you own.
         </p>
       </div>
 

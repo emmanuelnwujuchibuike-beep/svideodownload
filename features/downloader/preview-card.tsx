@@ -914,7 +914,21 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           Renders nothing at all when the zone is unseeded or, for AdSense, when
           the unit comes back unfilled.
         */}
-        <ResultAd className="mt-4" />
+        {/*
+          🔴 THE AD MOVED OUT OF THE MIDDLE OF THE CONTROLS (2026-09-02).
+
+          It used to render here — directly between the "Choose quality" tabs
+          and the quality options — so a visitor picking a format had an advert
+          sitting inside the control group they were reading. A screenshot made
+          that obvious in a way the code did not: the card read tabs, ad,
+          options, button.
+
+          That is the placement rule this whole audit is about. An ad must not
+          sit between someone and the action they came to take, and one wedged
+          among a tool's own controls is the case Google's policy describes
+          most directly. It is now below the download button and its caption,
+          where the interaction is already finished.
+        */}
 
         {isBatchable ? (
           /*
@@ -1147,6 +1161,9 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               ? `Total size: ~${formatBytes(batchBytes)}`
               : "Fast, private & free — no app, no sign-up."}
         </p>
+
+        {/* The result placement, now AFTER the action rather than inside it. */}
+        <ResultAd className="mt-6" />
 
         {/*
           Feature strip — what every download gets.

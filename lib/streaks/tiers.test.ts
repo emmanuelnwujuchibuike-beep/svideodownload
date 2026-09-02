@@ -144,18 +144,28 @@ describe("milestoneFor — the 6→7 transition, not 'currently 7'", () => {
   });
 
   /*
-    🔴 REVERSED 2026-09-01. Day 1 used to be excluded ("arriving is not an
-    achievement"); the owner now lists it as the first rung — "DAY 1: Small,
-    welcoming celebration." Acquiring the orange flame IS a flame upgrade, and
-    "only on flame upgrade" is the rule the whole system now runs on.
+    🔴🔴 DAY 1 OWNS THE FLAME AND DAY 2 CELEBRATES IT.
 
-    The old concern (a takeover on an anonymous visitor's first landing view)
-    is answered by `ceremony: 1`, which renders a compact card rather than
-    taking the screen — not by refusing the milestone.
+    Owner, 2026-09-01: "the new flame unlock celebration card should only show on
+    the second day not on the first day and first time a user is entrying the
+    site."
+
+    Two rules that both have to hold, and one number could not express both:
+      • the CHIP appears on day 1 (raising STREAK_BADGE_MIN_DAYS once removed it
+        from every anonymous landing visitor and was reported within the hour);
+      • the CEREMONY does not, because a first-time visitor has done nothing yet
+        and it would open on the landing page they just arrived at.
   */
-  it("🔴 treats day 1 as the first rung, at the lowest ceremony rank", () => {
-    expect(milestoneFor(1)?.id).toBe("spark");
-    expect(milestoneFor(1)?.ceremony).toBe(1);
+  it("🔴🔴 never celebrates day 1 — a first-time visitor is not congratulated", () => {
+    expect(milestoneFor(1)).toBeNull();
+    // …but the flame is still theirs, and the chip still renders.
+    expect(tierFor(1)?.id).toBe("spark");
+  });
+
+  it("🔴 celebrates 'Streak started' on DAY 2, at the lowest ceremony rank", () => {
+    expect(milestoneFor(2)?.id).toBe("spark");
+    expect(milestoneFor(2)?.ceremony).toBe(1);
+    expect(milestoneFor(2)?.unlockLine).toBe("Your streak has started.");
   });
 
   it("🔴 never treats a streak below the badge threshold as a milestone", () => {

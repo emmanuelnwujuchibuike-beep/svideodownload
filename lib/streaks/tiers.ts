@@ -89,6 +89,34 @@ export interface StreakTier {
    */
   ceremony: 1 | 2 | 3 | 4 | 5 | 6;
   /**
+   * The day this tier's ceremony PLAYS, when that is not the day it is reached.
+   *
+   * ── 🔴 THE ONE TIER WHERE THESE DIFFER, AND WHY ──────────────────────────────
+   *
+   * Owner, 2026-09-01: "the new flame unlock celebration card should only show on
+   * the second day not on the first day and first time a user is entrying the
+   * site."
+   *
+   * Two rules collide on day 1 and both are real:
+   *
+   *   • The BADGE must appear on day 1. `STREAK_BADGE_MIN_DAYS` is 1 and raising
+   *     it once already removed the chip from essentially every anonymous
+   *     landing visitor — it was reported within the hour. So `tierFor(1)` has
+   *     to keep returning `spark`.
+   *   • The CEREMONY must not. A first-time visitor has not done anything yet;
+   *     a celebration on the page they arrived at is an ambush, and it lands on
+   *     the landing page, which is the owner's most protected surface.
+   *
+   * A single `minDays` cannot express both, which is exactly how this went wrong
+   * the first time. So they are separated: `minDays` is when you OWN the flame,
+   * this is when it is CELEBRATED. Only `spark` sets it, and only because day 1
+   * is the one threshold every visitor trips before doing anything.
+   *
+   * Day 2 is also the honest moment — it is the first day the streak is a
+   * streak, rather than a visit.
+   */
+  celebrateAtDays?: number;
+  /**
    * How this flame behaves, beyond its colour.
    *
    * Owner, 2026-08-31: "the streaks flames … are the same, only different is
@@ -252,6 +280,9 @@ export const STREAK_TIERS: readonly StreakTier[] = [
     blurb: "Day one. Download again tomorrow and the flame grows.",
     unlockLine: "Your streak has started.",
     ceremony: 1,
+    /* 🔴 Owned on day 1, celebrated on day 2 — see `celebrateAtDays`. Never
+       congratulate someone for arriving; the chip already appears. */
+    celebrateAtDays: 2,
     motion: "steady",
     flame: ["#F97316", "#FBBF24"],
     text: "text-orange-600 dark:text-orange-300",
@@ -332,24 +363,21 @@ export function crossedTier(before: number, after: number): StreakTier | null {
  * no second list to keep in sync, which is the whole reason this reads off the
  * tier table rather than a `MILESTONES = [7, 14, 30]` array sitting beside it.
  *
- * ── 🔴 DAY 1 NOW COUNTS. THIS REVERSES THE 2026-08-24 RULE ───────────────────
+ * ── 🔴 IT MATCHES `celebrateAtDays`, NOT `minDays` ───────────────────────────
  *
- * It used to be excluded: "arriving is not an achievement (§28: day 1 never
- * celebrates)". Owner, 2026-09-01, lists it explicitly as the first rung of the
- * ceremony ladder — "DAY 1: Small, welcoming celebration. 'Your streak has
- * started.'" — and, in the same message, "there shoudnlt be a celebration
- * everyday, only on flame upgrade". Day 1 IS a flame upgrade: it is the moment
- * the orange flame is acquired.
+ * For five of the six tiers those are the same number. `spark` is the exception:
+ * the flame is OWNED on day 1 (the chip must appear then — see
+ * `STREAK_BADGE_MIN_DAYS`) but CELEBRATED on day 2, because the owner is
+ * explicit that the card "should only show on the second day not on the first
+ * day and first time a user is entrying the site".
  *
- * The reason for the old exclusion has not gone away, though — an anonymous
- * first-time visitor trips this on their first landing-page view, and a
- * full-screen takeover there would be hostile. That concern is answered by
- * `tier.ceremony`, not by suppression: rank 1 renders as a small anchored card,
- * and only the rare ranks take the screen. See streak-unlock-celebration.tsx.
+ * Reading `minDays` here is what made a brand-new visitor's very first landing
+ * view open a celebration. That is the bug this line fixes, and it is why the
+ * two concepts are separate fields rather than one.
  */
 export function milestoneFor(days: number): StreakTier | null {
   if (!Number.isFinite(days) || days < STREAK_BADGE_MIN_DAYS) return null;
-  return STREAK_TIERS.find((t) => t.minDays === days) ?? null;
+  return STREAK_TIERS.find((t) => (t.celebrateAtDays ?? t.minDays) === days) ?? null;
 }
 
 /**

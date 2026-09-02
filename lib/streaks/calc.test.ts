@@ -198,7 +198,8 @@ describe("streaks · status machine", () => {
       for an overlay that would never mount. Day 1 and day 7 ARE rungs.
     */
     expect(deriveStatus(day({ currentStreak: 3, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("COMPLETED_TODAY");
-    expect(deriveStatus(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATION_PENDING");
+    expect(deriveStatus(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("COMPLETED_TODAY");
+    expect(deriveStatus(day({ currentStreak: 2, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATION_PENDING");
     expect(deriveStatus(day({ currentStreak: 7, lastActivityDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATION_PENDING");
     expect(deriveStatus(day({ currentStreak: 7, lastActivityDate: "2026-03-01", lastCelebrationDate: "2026-03-01" }), "2026-03-01", 9)).toBe("CELEBRATED_TODAY");
     // Yesterday's activity, before and after the 2pm line.
@@ -232,7 +233,7 @@ describe("streaks · celebration fires once, and only on a flame upgrade", () =>
       used to return true. Days 2–6, 8–13, 15–29 and 31 are all banked
       activity on a live streak, and none of them is a rung.
     */
-    for (const streak of [2, 3, 4, 5, 6, 8, 13, 15, 29, 31, 99, 101, 364, 366]) {
+    for (const streak of [1, 3, 4, 5, 6, 8, 13, 15, 29, 31, 99, 101, 364, 366]) {
       expect(
         shouldCelebrate(day({ currentStreak: streak, lastActivityDate: "2026-03-01" }), "2026-03-01"),
         `day ${streak} is not a flame upgrade`,
@@ -240,19 +241,18 @@ describe("streaks · celebration fires once, and only on a flame upgrade", () =>
     }
   });
 
-  it("🔴 DOES celebrate day 1 — acquiring the orange flame is an upgrade", () => {
+  it("🔴🔴 does NOT celebrate day 1 — the celebration lands on day 2", () => {
     /*
-      This reverses the 2026-08-24 rule ("§28: day 1 never celebrates"). Owner,
-      2026-09-01, lists it as the first rung: "DAY 1: Small, welcoming
-      celebration. 'Your streak has started.'" How LOUD it is belongs to
-      `tier.ceremony` (rank 1 renders as a compact card, not a takeover), not
-      to this gate.
+      Owner, 2026-09-01: "the new flame unlock celebration card should only
+      show on the second day not on the first day and first time a user is
+      entrying the site." The chip still appears on day 1; only the ceremony
+      moves. See `celebrateAtDays` in tiers.ts for why these are two fields.
     */
-    expect(shouldCelebrate(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01")).toBe(true);
+    expect(shouldCelebrate(day({ currentStreak: 1, lastActivityDate: "2026-03-01" }), "2026-03-01")).toBe(false);
+    expect(shouldCelebrate(day({ currentStreak: 2, lastActivityDate: "2026-03-01" }), "2026-03-01")).toBe(true);
   });
-
   it("celebrates every rung on the ladder, and nothing between them", () => {
-    for (const streak of [1, 7, 14, 30, 100, 365]) {
+    for (const streak of [2, 7, 14, 30, 100, 365]) {
       expect(
         shouldCelebrate(day({ currentStreak: streak, lastActivityDate: "2026-03-01" }), "2026-03-01"),
         `day ${streak} is a rung`,

@@ -19,7 +19,7 @@ mkdirSync(OUT, { recursive: true });
 
 /** The rungs. Kept in step with STREAK_TIERS by hand — the shots are a tool,
  *  not shipped code, so a duplicated list here costs nothing to correct. */
-const MILESTONES = [1, 7, 14, 30, 100, 365];
+const MILESTONES = [2, 7, 14, 30, 100, 365];
 
 /**
  * A COMPLETE `StreakState`. Every field of StreakRecord as well — an earlier
@@ -153,8 +153,8 @@ for (const theme of ["light", "dark"]) {
   /* The gallery AFTER A BREAK — the state §6 is about. A 100-day member on a
      1-day streak must still see gold, purple, green and blue as UNLOCKED. */
   await shoot({ theme, streak: 1, celebrate: false, tapChip: true, name: "gallery-broken", longest: 100, broken: true });
-  // Day 1: the smallest rung, which must be a card and not a takeover.
-  await shoot({ theme, streak: 1, celebrate: true, tapChip: false, name: "unlock1" });
+  // Day 2: the smallest rung — a card, never a takeover, and never day 1.
+  await shoot({ theme, streak: 2, celebrate: true, tapChip: false, name: "unlock2" });
   // The 7-day unlock, at rest.
   await shoot({ theme, streak: 7, celebrate: true, tapChip: false, name: "unlock7" });
   // The rarest, to check the intensity ladder actually escalates.

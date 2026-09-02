@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
 
 import { useRewardNetwork } from "@/features/monetization/use-interstitial-skip";
+import { useShowAds } from "@/features/monetization/use-show-ads";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useAdGateCountdown } from "./use-ad-gate-countdown";
@@ -184,11 +185,43 @@ export function WallpaperRewardGate({
     Honouring it is the fix. The wallpaper saves immediately and the ONE ad the
     visitor sees is the completion VAST.
   */
+  // A paying member sees no ad at all, so warming for one would be a VAST
+  // request with no impression behind it.
+  const { showAds } = useShowAds();
+
   const noGate = network === "none";
 
   useEffect(() => {
     if (open && noGate) onDone();
   }, [open, noGate, onDone]);
+
+  /*
+    🔴 WARM THE COMPLETION CREATIVE ON MOUNT.
+
+    Removing this gate also removed the only thing that pre-warmed the wallpaper
+    flow's completion ad: `requestVastInterstitial("wallpaper")` used to run
+    here, and `PREFETCHES_ON_START` warms `download-complete` off the back of it.
+    With the gate gone, nothing warms, the completion creative starts cold, and
+    a cold Hilltop creative is ~10.9s to first frame — the "triggers too late"
+    the owner reported on the downloader is the same bug here.
+
+    Mount, not tap: this component is mounted when the wallpaper viewer opens
+    (see the note below on why), which gives the media real lead time. Tapping
+    download and warming then would be too late to help.
+  */
+  const warmed = useRef(false);
+  useEffect(() => {
+    if (warmed.current || !showAds) return;
+    warmed.current = true;
+    void import("./vast-interstitial/request")
+      .then((m) => {
+        m.warmVastInterstitial();
+        m.warmCreativeFor("download-complete");
+      })
+      .catch(() => {
+        /* A warm that fails costs nothing — the moment still fetches normally. */
+      });
+  }, [showAds]);
 
   /*
     FAIL OPEN. No creative, or a slot that never answers, releases the download

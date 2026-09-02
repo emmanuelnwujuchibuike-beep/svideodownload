@@ -542,6 +542,23 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     and so lit up for the wrong formats in both directions.
   */
   const gatedAdCount = useMemo(() => {
+    /*
+      🔴 NOTHING IS GATED WHEN THE SURFACE PLAYS NO AD (owner, 2026-09-02:
+      "remove the ad text on the top quality button").
+
+      `rewardAdsFor` answers "does this format sit in the paid tier", which is
+      only half the question. The other half is whether the surface still runs a
+      gate at all — and `hd_download` is routed to `none` now, so a top-quality
+      download starts immediately.
+
+      Without this the badge said "Ad" and the button turned amber for a
+      download that costs nothing, which is exactly the failure the badge's own
+      note warns about: a tag that lies about a cost teaches people to distrust
+      the whole row. One check here fixes the badge AND the button styling,
+      because both read this number.
+    */
+    if (hdNetwork.network === "none") return 0;
+
     const rank = formats.findIndex((f) => f.formatId === activeId && f.kind === tab);
     const fmt = rank >= 0 ? formats[rank] : undefined;
     return rewardAdsFor({
@@ -556,7 +573,7 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
         imageAudioSkipAfterSeconds: rewardImageAudioSkipAfterSeconds,
       },
     }).length;
-  }, [formats, activeId, tab, showAds, rewardTopTierCount, rewardVideoTopTierSeconds, rewardImageAudioTopTierSeconds, rewardImageAudioSkipAfterSeconds]);
+  }, [formats, activeId, tab, showAds, hdNetwork.network, rewardTopTierCount, rewardVideoTopTierSeconds, rewardImageAudioTopTierSeconds, rewardImageAudioSkipAfterSeconds]);
 
   /*
     ═══════════════════════════════════════════════════════════════════════════
@@ -597,24 +614,52 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     deps change as the visitor tries different qualities, and re-warming on
     every tab switch would be several ad requests for one download.
   */
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 WARM THE COMPLETION AD — NOT THE GATE THAT NO LONGER EXISTS.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-02: "download complete vast trigger too late."
+
+    That is a regression from removing the click-time gates, and this effect is
+    where it happened. The three guards above described the GATE: warm only when
+    a quality costs an ad (`gatedAdCount > 0`) and the surface is routed to the
+    VAST (`network === "interstitial"`). Both are now permanently false —
+    `hd_download` is `none` — so this stopped running, and with it went the only
+    thing that pre-warmed the completion creative. A cold Hilltop creative
+    measures ~10.9s to first frame, which is precisely the "late" being reported.
+
+    The moment worth warming was never the gate; it was the COMPLETION, which
+    still happens on every single download. So the guards now describe that:
+
+      • `showAds` — a Pro or Business member sees no ad at all, so warming for
+        one would be a VAST request with no impression behind it, which is what
+        makes a publisher's fill rate look broken. That reasoning was right and
+        is kept.
+      • Once per card, by ref — the deps change as the visitor tries qualities,
+        and re-warming on every tab switch would be several requests for one
+        download.
+
+    `gatedAdCount` and the network check are deliberately GONE: neither has
+    anything to say about an ad that plays after the file is saved.
+  */
   const warmedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!adsReady || !showAds) return;
-    if (gatedAdCount <= 0) return;
-    if (hdNetwork.network !== "interstitial") return;
     if (warmedFor.current === metadata.id) return;
     warmedFor.current = metadata.id;
     void import("@/features/monetization/vast-interstitial/request")
       .then((m) => {
-        // The module and the player chunk, so the tap pays for neither.
+        // The module and the player chunk, so the completion pays for neither.
         m.warmVastInterstitial();
-        // The creative and its media, so playback starts almost immediately.
-        m.warmCreativeFor("batch");
+        // The creative AND its media, so playback starts almost immediately
+        // once the file lands.
+        m.warmCreativeFor("download-complete");
       })
       .catch(() => {
-        /* A warm that fails costs nothing — the tap still fetches normally. */
+        /* A warm that fails costs nothing — the moment still fetches normally. */
       });
-  }, [adsReady, showAds, gatedAdCount, hdNetwork.network, metadata.id]);
+  }, [adsReady, showAds, metadata.id]);
 
   const platform = PLATFORMS[metadata.platform];
   const BrandIcon = BRAND_ICONS[metadata.platform];

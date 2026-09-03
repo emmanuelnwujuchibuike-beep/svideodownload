@@ -71,6 +71,26 @@
 /** Below this, a node is a pixel or a container, not a push card. */
 const MIN_W = 80;
 const MIN_H = 30;
+/*
+  🔴 THE Z-INDEX FLOOR IS WHAT MAKES THIS SAFE, AND IT WAS MISSING.
+
+  Owner, 2026-09-03: Monetag impressions "stopped at 29 impression since hours
+  ago", right after this shipped.
+
+  Time attribution alone — "any top-level node added after we injected the tag"
+  — matches OUR OWN React portals. The VAST overlay, toasts, sheets and the
+  interstitial all mount and unmount top-level constantly, every one of them
+  larger than MIN_W x MIN_H. So this fired `onDismissed` within seconds on
+  virtually every page, which the In-Page Push cooldown read as a skip and used
+  to suppress the tag, and it fired `onShown` for our own chrome, which reported
+  impressions that never happened.
+
+  Measured on production: Monetag's own container (#adex) carries z-index 9999,
+  and the highest z-index anywhere in this app's own chrome is 60. A floor of
+  1000 separates the two cleanly with three orders of magnitude to spare, and it
+  is a fact about the page rather than a guess about their markup.
+*/
+const MIN_Z_INDEX = 1000;
 /** Ceiling on tracked nodes, so a chatty page cannot grow this without bound. */
 const MAX_CANDIDATES = 40;
 /** Never adopt these — they have no box and can never be the widget. */
@@ -152,6 +172,20 @@ export function watchNetworkAd(handlers: NetworkAdWatchHandlers): () => void {
     const el = node as Element;
     if (IGNORED.test(el.tagName)) return;
     if (candidates.size >= MAX_CANDIDATES) return;
+    /*
+      Only a node stacked above everything this app draws. Without this the
+      watcher adopts our own portals — see the note on MIN_Z_INDEX. Fails
+      CLOSED: a node we cannot read a numeric z-index for is not adopted, so
+      the worst case is no cooldown and no reporting, never a suppressed ad or
+      an invented impression.
+    */
+    let z: number;
+    try {
+      z = Number.parseInt(getComputedStyle(el).zIndex, 10);
+    } catch {
+      return;
+    }
+    if (!Number.isFinite(z) || z < MIN_Z_INDEX) return;
     candidates.add(el);
     // Measure once immediately: a widget inserted at full size never resizes,
     // so waiting for a ResizeObserver callback alone could miss it.

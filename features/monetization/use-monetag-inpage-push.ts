@@ -11,7 +11,6 @@ import {
   recordInPagePushSkip,
   type InPagePushCapState,
 } from "@/lib/monetization/inpage-push-cap";
-import { keepAdBelowSafeArea } from "@/features/monetization/ad-safe-area";
 import { watchNetworkAd } from "@/features/monetization/network-ad-watch";
 import {
   reportMonetagFormatInteraction,
@@ -145,11 +144,29 @@ export function useMonetagInPagePush(
         the owner asked for a 60-second gap, not for one fewer ad. settled
         stays false, because this tag has not finished deciding yet.
       */
-      const skip = readInPagePushSkip();
-      if (skip.inCooldown) {
-        cooldownTimer = window.setTimeout(inject, skip.remainingMs);
-        return;
-      }
+      /*
+        THE COOLDOWN NO LONGER GATES THE INJECTION. Read this before restoring it.
+
+        Owner, 2026-09-03: Monetag impressions "stopped at 29 impression since
+        hours ago", right after the cooldown shipped. The cause was the skip
+        DETECTOR, not the arithmetic: it attributed this app own React portals
+        to the ad network (see network-ad-watch.ts), so a phantom skip was
+        recorded within seconds of almost every page load. Any visit shorter
+        than the 60-second window then loaded no tag at all, and most visits
+        are shorter than a minute.
+
+        The detector is now floored at z-index 1000, which separates the
+        network container (9999, measured) from this app own chrome (60,
+        measured). But an attribution fix that has not been watched against a
+        real fill is a hypothesis, and this one would be tested with the
+        owner revenue. So the gate stays off until a live In-Page Push has been
+        seen dismissing correctly.
+
+        Skips are still RECORDED, so restoring this is three lines once that
+        evidence exists. A cooldown is a nicety; a tag that never loads is
+        income.
+      */
+      void readInPagePushSkip();
 
       const el = document.createElement("script");
       el.async = true;
@@ -188,7 +205,14 @@ export function useMonetagInPagePush(
         onShown: () => reportMonetagFormatRendered(tag.type),
         // Owner screenshot, 2026-09-03: the push cards were drawn under the
         // status bar in the installed app. Moves them down, never hides them.
-        onEachShown: keepAdBelowSafeArea,
+        /*
+          THE SAFE-AREA OFFSET IS OFF. It set margin-top !important on
+          Monetag own container, and Monetag impressions stopped within hours
+          of it shipping. Moving a creative cannot be ruled out while a network
+          measures its own viewability before firing its pixel, and the owner
+          revenue is not the place to find that out. The layout complaint is
+          real and stands; the fix must not touch their element.
+        */
         onInteraction: () => reportMonetagFormatInteraction(tag.type),
         onDismissed: () => {
           recordInPagePushSkip();

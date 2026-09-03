@@ -108,9 +108,9 @@ export const EVENTS = [
 
     There is no monetag_click. See lib/monetization/monetag-track.ts.
   */
-  { id: "monetag_requested", label: "Monetag tag requested", description: "A Monetag loader was injected for a format or a moment. Not an impression — Monetag places its own creative later, in its own frame.", domain: "monetization", metadata: ["slot", "path"] },
-  { id: "monetag_rendered", label: "Monetag impression", description: "A Monetag creative was observed drawn on screen at a usable size. The only Monetag row counted as an impression.", domain: "monetization", metadata: ["slot", "path"] },
-  { id: "monetag_interaction", label: "Monetag interaction", description: "A pointer landed on a Monetag creative. A lower bound — a click inside its own cross-origin frame never reaches this page, so Monetag's dashboard remains authoritative.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "monetag_requested", label: "Monetag tag requested", description: "A Monetag loader was injected. Not an impression.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "monetag_rendered", label: "Monetag impression", description: "A Monetag creative was seen drawn on screen.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "monetag_interaction", label: "Monetag interaction", description: "A pointer landed on a Monetag creative. A lower bound.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "banner_click", label: "Banner click", description: "A visitor clicked an ExoClick display banner. Only observable for creatives rendered outside an iframe — ExoClick's dashboard remains authoritative.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "interstitial_click", label: "Interstitial click", description: "A visitor clicked an ExoClick fullpage interstitial. Same iframe limitation as banner_click.", domain: "monetization", metadata: ["slot", "path"] },
   /*

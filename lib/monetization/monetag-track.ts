@@ -65,11 +65,51 @@ export function isMonetagSlot(slot: string): boolean {
 }
 
 /**
- * Operator-facing labels, so the admin table never prints
- * `monetag_moment_download_complete` at somebody and make them decode it.
- * Wording matches the admin's own format and moment pickers.
+ * Operator-facing labels — SHORT.
+ *
+ * Owner, 2026-09-03: "the monetag ad stat description in the admin dashboard is
+ * too long and not neccesary, just a monetag download complete or result or
+ * ilde is enought, no need for . or / or , or any long description."
+ *
+ * These were built from the registry's own labels ("After a download
+ * completes", "Rewarded (unlock HD / standard)") joined with an em dash. That
+ * wording is right for a settings picker, where an operator is choosing, and
+ * wrong for a dense table of counts, where the label is an identifier read at a
+ * glance beside a number. Two or three words, no punctuation.
+ *
+ * Written out rather than derived: the registry's wording is a SENTENCE by
+ * design, and any mechanical shortening of it — first clause, split on a
+ * bracket — breaks the day somebody rephrases one.
  */
+const SHORT_FORMAT: Record<string, string> = {
+  multitag: "multitag",
+  in_page_push: "in-page push",
+  push_notification: "push",
+  vignette_banner: "vignette",
+  onclick_popunder: "popunder",
+};
+
+const SHORT_MOMENT: Record<string, string> = {
+  download_complete: "download complete",
+  fetch_result: "result",
+  rewarded: "rewarded",
+  interstitial: "interstitial",
+  idle: "idle",
+  return: "return",
+  backswipe: "back swipe",
+};
+
 export const MONETAG_SLOT_LABELS: Record<string, string> = {
-  ...Object.fromEntries(MONETAG_AD_TYPES.map((t) => [monetagFormatSlot(t.id), `Monetag — ${t.label}`])),
-  ...Object.fromEntries(MONETAG_PLACEMENTS.map((p) => [monetagMomentSlot(p.id), `Monetag — ${p.label}`])),
+  ...Object.fromEntries(
+    MONETAG_AD_TYPES.map((t) => [
+      monetagFormatSlot(t.id),
+      `Monetag ${SHORT_FORMAT[t.id] ?? t.id.replace(/_/g, " ")}`,
+    ]),
+  ),
+  ...Object.fromEntries(
+    MONETAG_PLACEMENTS.map((p) => [
+      monetagMomentSlot(p.id),
+      `Monetag ${SHORT_MOMENT[p.id] ?? p.id.replace(/_/g, " ")}`,
+    ]),
+  ),
 };

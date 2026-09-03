@@ -49,8 +49,12 @@ describe("Monetag track slots", () => {
   it("labels every slot — an unlabelled row prints its raw id at an operator", () => {
     for (const slot of MONETAG_TRACK_SLOTS) {
       expect(MONETAG_SLOT_LABELS[slot]).toBeTruthy();
-      expect(MONETAG_SLOT_LABELS[slot]).toMatch(/^Monetag — /);
+      // Short, and free of punctuation: this is read as an identifier in a
+      // dense table of counts, not as prose (owner, 2026-09-03).
+      expect(MONETAG_SLOT_LABELS[slot]).toMatch(/^Monetag [a-z]/);
       expect(MONETAG_SLOT_LABELS[slot]).not.toContain("_");
+      expect(MONETAG_SLOT_LABELS[slot]).not.toMatch(/[.,/()—]/);
+      expect(MONETAG_SLOT_LABELS[slot]!.split(" ").length).toBeLessThanOrEqual(4);
     }
   });
 });

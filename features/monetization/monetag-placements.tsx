@@ -138,6 +138,22 @@ export function MonetagPlacements({
     interstitial (VAST / ExoClick), not Monetag's vignette.
   */
   useEffect(() => {
+    /*
+      PRE-ARM DISABLED, 2026-09-03. Owner: "two vignette stack ontop each other
+      once when i want to fetch."
+
+      That is this, and it was predictable. Every moment here is configured to
+      the SAME tag, so loading it once at page load AND again when a moment
+      fires puts two instances of one loader on the page, and two vignettes
+      stack. Monetag impressions also flatlined in the same window, and a zone
+      whose loader is injected several times per page is exactly the shape
+      anti-fraud is built to notice.
+
+      The per-moment injection below is the behaviour that shipped originally
+      and is left exactly as it was.
+    */
+    const PREARM_ENABLED = false;
+    if (!PREARM_ENABLED) return;
     if (typeof window === "undefined") return;
     const g = gate.current;
     if (!g.ready || !g.showAds) return;

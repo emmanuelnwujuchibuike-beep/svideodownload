@@ -482,7 +482,29 @@ export function HilltopSlot({
 
   // Premium visitors, an unresolved plan, or nothing configured: no element at
   // all, so the slot costs an unconfigured page nothing.
+  /*
+    Retire the placement on a timer when the call site asked for it.
+
+    🔴 DECLARED ABOVE THE EARLY RETURN BELOW, and that is the whole point.
+
+    These two hooks were first written just before the JSX — which sits AFTER
+    the "not ready / no ads / no tag" guard below. So an unfilled slot ran four
+    hooks and a filled one ran six, React threw #310 ("rendered more hooks than
+    during the previous render"), and the error boundary took down the landing
+    page. Hooks run unconditionally or they do not run at all.
+
+    The CONDITION moved into the effect body instead, where a condition
+    belongs.
+  */
+  const [retired, setRetired] = useState(false);
+  useEffect(() => {
+    if (!autoHideAfterMs || !tag || retired) return;
+    const id = window.setTimeout(() => setRetired(true), autoHideAfterMs);
+    return () => window.clearTimeout(id);
+  }, [autoHideAfterMs, tag, retired]);
+
   if (!ready || !showAds || !tag || !placementOn) return null;
+  if (retired) return null;
 
   /*
     A 300x250 unit in a box that may be narrower on a small phone. `maxWidth`
@@ -506,21 +528,6 @@ export function HilltopSlot({
     squeezed, and no `alignItems`, so nothing here asserts a height. Width is
     still offered in full — the fence is `maxWidth`/`overflow`, as before.
   */
-  /*
-    Retire the placement on a timer when the call site asked for it.
-
-    Starts only once there is a tag to render — a countdown against an unfilled
-    slot would "expire" a placement that never appeared.
-  */
-  const [retired, setRetired] = useState(false);
-  useEffect(() => {
-    if (!autoHideAfterMs || !tag || retired) return;
-    const id = window.setTimeout(() => setRetired(true), autoHideAfterMs);
-    return () => window.clearTimeout(id);
-  }, [autoHideAfterMs, tag, retired]);
-
-  if (retired) return null;
-
   return (
     <div
       ref={host}

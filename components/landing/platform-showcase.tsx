@@ -36,10 +36,26 @@ export function PlatformShowcase() {
           same fact rendered twice and cannot disagree again.
         */}
         <h2 className="text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
-          Download from {SHOWCASE_PLATFORMS.length} Platforms
+          Save from {SHOWCASE_PLATFORMS.length} Platforms
         </h2>
+        {/*
+          🔴 "Plus any other public video link our universal extractor can
+          handle." is GONE (owner, 2026-09-03: it "looks false and could flag
+          adsense").
+
+          They are right on both counts. "Any other public video link" is an
+          absolute capability claim that cannot be true of any extractor, and
+          "our universal extractor" oversells an unmapped-host fallback into a
+          product. On a site already under review for thin/downloader content,
+          an unverifiable capability claim is exactly the kind of sentence a
+          reviewer reads as a promise the page cannot keep.
+
+          What replaces it is a statement about BEHAVIOUR, not capability: we
+          will tell you. That is true whatever the extractor manages, so it
+          cannot drift out of date or be read as a guarantee.
+        */}
         <p className="mt-2 text-sm text-muted-foreground">
-          Plus any other public video link our universal extractor can handle.
+          Not listed? Paste the link anyway and we&rsquo;ll tell you if we can save it.
         </p>
       </div>
 
@@ -71,8 +87,9 @@ export function PlatformShowcase() {
           on screen it pointed at nothing further — it linked back to the same
           paste box every other tile links to, so it implied a thirteenth
           destination that does not exist. The sentence under the heading
-          already makes the honest version of that promise ("plus any other
-          public video link our universal extractor can handle").
+          already makes the honest version of that promise — see the note on
+          it above, which replaced an absolute capability claim with one about
+          what the page will do.
         */}
       </div>
     </section>

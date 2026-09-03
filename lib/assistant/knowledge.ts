@@ -80,4 +80,4 @@ export const ASSISTANT_SUGGESTIONS = [
 
 /** Friendly first message the assistant shows before the user types. */
 export const ASSISTANT_GREETING =
-  "Hey! 👋 I'm Frenz Assistant. Ask me anything — how to download from any platform, why something's slow, or why a link isn't working.";
+  "Hey! 👋 I'm Frenz Assistant. Ask me anything — how to save from a platform, why something's slow, or why a link isn't working.";

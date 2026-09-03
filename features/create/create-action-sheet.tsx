@@ -50,7 +50,7 @@ interface Action {
 }
 
 const ACTIONS: Action[] = [
-  { id: "download", icon: Download, label: "Download Video", hint: "Download from any social platform" },
+  { id: "download", icon: Download, label: "Save Video", hint: "Save from a social platform link" },
   { id: "post", icon: SquarePen, label: "Create Post", hint: "Share a post with your friends" },
   { id: "reel", icon: Clapperboard, label: "Create Reel", hint: "Record or upload a short video" },
   { id: "story", icon: Circle, label: "Story", hint: "Share a moment that disappears" },

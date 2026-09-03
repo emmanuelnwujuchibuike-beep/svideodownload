@@ -52,6 +52,12 @@ import {
  * script element — never markup — so nothing here can inject anything.
  */
 
+/**
+ * Tags already ARMED this page load, keyed by src — see `prearm` below.
+ * Module-level so an SPA remount does not load the same loader twice.
+ */
+const armed = new Set<string>();
+
 const IDLE_MS = 4_000;
 const AWAY_MS = 5_000;
 /** A given moment won't reload its tag more than once per this window. */
@@ -101,6 +107,82 @@ export function MonetagPlacements({
     if (p.cfAsync) el.setAttribute("data-cfasync", "false");
     document.head.appendChild(el);
   });
+
+  /*
+    ── ARM THE TAG AT PAGE LOAD, NOT AT THE MOMENT ───────────────────────────
+
+    Owner, 2026-09-03, for the third time: "the download completed doesnt
+    trigger the monetag vignette instantly."
+
+    Measured on production (scripts/monetag-vignette-moments-probe.mjs): the
+    moments all fire — each requested its tag and left a
+    <script data-monetag-moment> in the DOM — and nothing rendered. The loader
+    is 167 kB with 38 internal references to navigation: Monetag's vignette ARMS
+    on load and shows on a LATER page transition. Injecting it AT the moment is
+    therefore one transition too late by construction, every time.
+
+    So the tag is now also loaded once per page, early, which is the only change
+    that can make the moment land: by the time a download completes, the vignette
+    is already armed and can fire on the next transition instead of starting to
+    arm itself then.
+
+    🔴 STRICTLY ADDITIVE. The per-moment injection below is untouched, so nothing
+    that fires today stops firing. This only loads tags the owner has ALREADY
+    configured as placements — it never introduces a tag, a moment or a surface,
+    and it obeys the same plan and page-scope gates as everything else here.
+
+    It cannot be instant, and no arrangement of this code can make it instant.
+    That is the format. An ad that must appear AT a moment is the app's own
+    interstitial (VAST / ExoClick), not Monetag's vignette.
+  */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const g = gate.current;
+    if (!g.ready || !g.showAds) return;
+    if (!monetagAllowedOnPath(g.pathname ?? "/", { monetagAllPages: g.allPages, monetagSurfaces: g.surfaces })) return;
+    if (g.placements.length === 0) return;
+
+    let cancelled = false;
+    const prearm = () => {
+      if (cancelled || typeof document === "undefined") return;
+      for (const p of gate.current.placements) {
+        if (armed.has(p.src)) continue;
+        armed.add(p.src);
+        const el = document.createElement("script");
+        el.async = true;
+        // Server-validated https URL; a raw snippet never reaches the client.
+        el.src = p.src;
+        el.setAttribute("data-monetag-prearm", p.moment);
+        if (p.zone) el.setAttribute("data-zone", p.zone);
+        if (p.cfAsync) el.setAttribute("data-cfasync", "false");
+        document.head.appendChild(el);
+      }
+    };
+
+    /*
+      After load, then an idle tick. The landing's 1.6s budget pays nothing for
+      this: nothing here touches the DOM until the page is interactive, which is
+      the same discipline useMonetagInPagePush follows.
+    */
+    let idle: number | null = null;
+    const armIdle = () => {
+      const ric = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+      if (typeof ric === "function") idle = ric(prearm) as unknown as number;
+      else idle = window.setTimeout(prearm, 1);
+    };
+    if (document.readyState === "complete") armIdle();
+    else window.addEventListener("load", armIdle, { once: true });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("load", armIdle);
+      if (idle !== null) {
+        const cic = (window as Window & { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+        if (typeof cic === "function") cic(idle);
+        else window.clearTimeout(idle);
+      }
+    };
+  }, [ready, showAds, pathname, allPages, surfaces, placements]);
 
   const has = (moment: MonetagPlacementId) => placements.some((p) => p.moment === moment);
   const hasIdle = has("idle");

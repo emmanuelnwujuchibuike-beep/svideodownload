@@ -4,11 +4,27 @@ import { ArrowRight, Check, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
+import { SHOWCASE_PLATFORMS } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 
-// "20+ platforms" claimed nearly double the real 11 — see the note on the Download
-// module's tagline in lib/platform/modules.ts, which the same error reached.
-const PERKS = ["Download from 12 social platforms", "Post, follow & chat with friends", "Trending reels & latest news"];
+/*
+  🔴 THE NUMBER IS DERIVED, because it has now been wrong TWICE.
+
+  It read "20+ platforms" (nearly double), was corrected to a hard-coded 12,
+  and 12 was also wrong — youtube was unpromoted after the AdSense "low value
+  content" rejections, leaving ELEVEN. A comment two lines up said "the real
+  11" while the string beside it said 12, which is what a hand-maintained
+  count always ends up doing.
+
+  SHOWCASE_PLATFORMS is the same array the landing's platform grid renders, so
+  the claim and the tiles are one fact shown twice and cannot disagree again.
+  See lib/platform/modules.ts, whose tagline the same error reached.
+*/
+const PERKS = [
+  `Save video & audio from ${SHOWCASE_PLATFORMS.length} social platforms`,
+  "Post, follow & chat with friends",
+  "Trending reels & latest news",
+];
 
 /** First-run onboarding — a user must claim a username before using the app. */
 export function WelcomeSetup({

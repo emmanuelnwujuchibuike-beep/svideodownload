@@ -114,7 +114,7 @@ export function RelatedLinks({ slug, brand }: { slug: string; brand: string }) {
         {crossCluster.length > 0 ? (
           <>
             <h3 className="mb-4 mt-10 text-lg font-semibold">
-              Download from other platforms
+              Save from other platforms
             </h3>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {crossCluster.map((p) => (

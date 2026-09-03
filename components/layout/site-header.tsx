@@ -646,7 +646,7 @@ export function SiteHeader({
               {/* Platforms as a compact grid instead of eleven full-width rows. */}
               <div className="mt-6">
                 <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/70">
-                  Download from
+                  Save from
                 </p>
                 <div className="mt-2 grid grid-cols-4 gap-2">
                   {DOWNLOADERS.slice(0, 12).map((d) => {

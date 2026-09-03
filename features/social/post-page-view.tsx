@@ -73,7 +73,7 @@ export function postPageMetadata(post: PublicPost, canonicalPath: string): Metad
   const title = titleFromCaption(post.title) || post.title;
   return {
     title,
-    description: post.description ?? `Watch & download from ${post.platform} on FrenzSave.`,
+    description: post.description ?? `Watch & save from ${post.platform} on FrenzSave.`,
     alternates: { canonical: canonicalPath },
     robots: { index: post.indexable, follow: post.indexable },
     openGraph: {

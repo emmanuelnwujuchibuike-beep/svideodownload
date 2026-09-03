@@ -480,7 +480,7 @@ export function MediaGallery({
           ad at all. Unlike two ExoClick units, these cannot cost each other a
           fill: Hilltop makes its own request where its script sits.
         */}
-        <HilltopSlot slot="history" />
+        <HilltopSlot slot="history" autoHideAfterMs={45_000} />
         <HistoryGridAd />
       </div>
       {/*

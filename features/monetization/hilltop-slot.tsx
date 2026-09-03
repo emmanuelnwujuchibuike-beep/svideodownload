@@ -141,7 +141,27 @@ export function HilltopSlot({
   instanceKey,
   lazy = false,
   className,
+  autoHideAfterMs,
 }: {
+  /**
+   * Retire the whole placement this long after it appears.
+   *
+   * Owner, 2026-09-02: "remove the close(x button embeded on the video slider in
+   * history and landing so they dispper by themselves on time out".
+   *
+   * The X itself is NOT ours and cannot be reached — see the note on the
+   * iframe below. What IS ours is the frame, so instead of trying to hide their
+   * button we retire the placement on a timer, which is the outcome that was
+   * actually asked for.
+   *
+   * 🔴 GENEROUS BY DESIGN. Pulling a creative early destroys the impression it
+   * was about to count, and this project has a standing note about exactly that
+   * on the slider. The default at the call sites is well past any viewability
+   * threshold, so the ad is paid for and then leaves.
+   *
+   * Undefined = never auto-hide, which is what every other placement does.
+   */
+  autoHideAfterMs?: number;
   /** Which position this is, for the admin activity feed. */
   slot: HilltopBannerSlot;
   /**
@@ -486,6 +506,21 @@ export function HilltopSlot({
     squeezed, and no `alignItems`, so nothing here asserts a height. Width is
     still offered in full — the fence is `maxWidth`/`overflow`, as before.
   */
+  /*
+    Retire the placement on a timer when the call site asked for it.
+
+    Starts only once there is a tag to render — a countdown against an unfilled
+    slot would "expire" a placement that never appeared.
+  */
+  const [retired, setRetired] = useState(false);
+  useEffect(() => {
+    if (!autoHideAfterMs || !tag || retired) return;
+    const id = window.setTimeout(() => setRetired(true), autoHideAfterMs);
+    return () => window.clearTimeout(id);
+  }, [autoHideAfterMs, tag, retired]);
+
+  if (retired) return null;
+
   return (
     <div
       ref={host}

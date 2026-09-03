@@ -50,7 +50,7 @@ const CSS = `
 html.dark #frenz-boot{background:#050816}
 html.frenz-boot-out #frenz-boot{opacity:0;pointer-events:none}
 html.frenz-boot-off #frenz-boot{display:none}
-.frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:152px;height:152px;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
+.frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:104px;height:104px;max-width:26vw;max-height:26vw;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
 .frenz-boot__mark img{display:block;width:100%;height:100%}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.65) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
 @keyframes frenz-boot-breathe{0%,100%{opacity:.95}50%{opacity:.65}}
@@ -176,7 +176,7 @@ html.frenz-boot-off #frenz-boot{display:none}
 // forever. Caught only by a real-browser test. Keep every new `var` name
 // distinct from the ones already in scope, and re-run the boot verification
 // after any edit.
-const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;var standalone=false;try{standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}catch(e){}try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var show=false;if(standalone){show=justSignedIn;if(!show&&coldStart){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
+const JS = `(function(){var COLD_GAP_MS=1800000;var d=document.documentElement;function dismiss(instant){if(instant){d.classList.add('frenz-boot-off');return}d.classList.add('frenz-boot-out');setTimeout(function(){d.classList.add('frenz-boot-off')},440)}var mark=function(){try{localStorage.setItem('frenz-last-active',String(Date.now()))}catch(e){}};document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')mark()});window.addEventListener('pagehide',mark);var instant=false;var standalone=false;try{standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}catch(e){}try{var justSignedIn=document.cookie.indexOf('frenz_just_signed_in=1')!==-1;if(justSignedIn){document.cookie='frenz_just_signed_in=; Max-Age=0; path=/'}var navType='navigate';try{var nav=performance.getEntriesByType('navigation')[0];if(nav&&nav.type){navType=nav.type}else if(performance.navigation){var t=performance.navigation.type;navType=t===1?'reload':(t===2?'back_forward':'navigate')}}catch(e){}var coldStart=navType==='navigate';var fromLaunch=false;try{fromLaunch=document.referrer.indexOf('/launch.html')!==-1}catch(e){}var show=false;if(standalone){show=justSignedIn||fromLaunch;if(!show&&coldStart){var last=0;try{var lraw=localStorage.getItem('frenz-last-active');if(lraw)last=parseInt(lraw,10)||0}catch(e){}if(!last||Date.now()-last>COLD_GAP_MS)show=true}}if(!show){instant=true}else if(location.pathname==='/home'&&document.cookie.indexOf('frenz_welcomed=')===-1){instant=true}}catch(e){}if(instant){dismiss(true)}else{var start=Date.now();var faded=false;var fade=function(){if(faded)return;faded=true;var w=Math.max(0,300-(Date.now()-start));setTimeout(function(){dismiss(false)},w)};var shellReady=function(){return !!document.querySelector('main')};if(shellReady()){fade()}else{try{var mo=new MutationObserver(function(){if(shellReady()){mo.disconnect();fade()}});mo.observe(document.documentElement,{childList:true,subtree:true})}catch(e){}document.addEventListener('DOMContentLoaded',fade)}}setTimeout(function(){dismiss(true)},6000);window.addEventListener('pageshow',function(e){if(e.persisted)dismiss(true)})})();`;
 
 // Must run BEFORE the <style> below is evaluated, AND before next-themes'
 // own injected script (rendered later, wherever <ThemeProvider> sits) so the
@@ -304,12 +304,49 @@ export function BootHead() {
 }
 
 export function BootSplash() {
-  // The F loader is REMOVED from the website entirely (owner, 2026-08-02: "remove
-  // the F loader entirely from both the pwa and browser … it will be in native app
-  // in the future but not in the website"). Rendering nothing means no `#frenz-boot`
-  // node ever exists, so the boot dismiss script has nothing to show and the F never
-  // appears — on a cold entry, a reload, a mode switch, a sign-out, or a sign-in.
-  // Kept as a component (not deleted) so app/layout's import stays stable; a future
-  // native app shell can bring its own splash without touching the web build.
-  return null;
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 RESTORED FOR THE INSTALLED PWA ONLY (owner, 2026-09-02).
+    ═══════════════════════════════════════════════════════════════════════════
+
+    This returned `null` from 2026-08-02 — "remove the F loader entirely from
+    both the pwa and browser". That is exactly the white screen now being
+    reported, and the sequence is worth writing down because the fix is only
+    obvious once you can see all four steps:
+
+      1. iOS launch image        — covered by apple-touch-startup-image
+      2. /launch.html            — covered, paints an F instantly (base64, no
+                                   network, it is the precached start_url)
+      3. location.replace() to /downloads or /home   ← THE WHITE SCREEN
+      4. app shell
+
+    Step 3 is a whole new document: TTFB, render-blocking CSS, then hydration.
+    `#frenz-boot` is the only thing that ever covered it, and it had been
+    rendering nothing. The loader in launch.html cannot help — it dies with its
+    own document the moment the redirect commits.
+
+    ── Why this does NOT bring the F back to the browser ────────────────────
+    The dismiss script in <head> (see JS above) decides. It is gated on
+    `standalone`, so in a plain browser tab it takes the `instant` branch and
+    adds `frenz-boot-off` to <html> BEFORE the parser reaches this markup —
+    the node is parsed already `display:none` and is never painted. The 2026-08-02
+    requirement (no F in the browser, ever) is preserved by that gate, not by
+    rendering nothing.
+
+    ── 104px, matching launch.html exactly ─────────────────────────────────
+    Was 152px. launch.html draws its F at 104, so the two documents now hand off
+    at the same size and the mark does not visibly jump mid-boot. It is also the
+    size the owner asked for — a small elegant mark, roughly TikTok's cold-launch
+    logo, not a huge centred one.
+  */
+  return (
+    <div id="frenz-boot" aria-hidden="true">
+      <span className="frenz-boot__mark">
+        {/* eslint-disable-next-line @next/next/no-img-element -- must render
+            before the JS bundle (next/image) is available */}
+        <img src="/brand/frenz-logo-splash.png" width={104} height={104} alt="" />
+        <span className="frenz-boot__shine" />
+      </span>
+    </div>
+  );
 }

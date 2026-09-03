@@ -498,7 +498,33 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   };
 
   return (
-    <div className="fixed inset-0 z-[92] flex flex-col bg-black/95" role="dialog" aria-modal="true" aria-label={rec.title}>
+    /*
+      🔴 z-index 2147483646, not 92 (owner, 2026-09-03: "the in page push should
+      not show when a user is watching a media un history").
+
+      Monetag's In-Page Push draws itself at the top of the viewport on a
+      z-index far above anything this app uses — its own container measures
+      9999, and self-placing widgets commonly go to the 2147483647 ceiling. At
+      92 this player rendered UNDERNEATH it, so the ad sat over the video.
+
+      COVERING is the fix, not hiding. A fullscreen viewer legitimately occludes
+      the page beneath it, exactly as it does every other ad and every piece of
+      chrome; nothing is removed, nothing is restyled, and the creative the
+      network served stays served and counted. Actively hiding it would suppress
+      an impression the network had already billed — the line this codebase does
+      not cross, and the reason three ad changes were backed out this week.
+
+      One below the maximum on purpose: it leaves a single step for anything
+      that genuinely must sit on top of a fullscreen player (an OS-level prompt,
+      a future critical alert) without another z-index war.
+    */
+    <div
+      className="fixed inset-0 flex flex-col bg-black/95"
+      style={{ zIndex: 2147483646 }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={rec.title}
+    >
       {/* Status — segmented, like Stories/WhatsApp: one bar per queued item, the
           current one fills with real playback progress (a non-video item reads as
           complete). Always shown — a single segment for a lone clip — so even one

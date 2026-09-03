@@ -1,8 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { useBodyScrollLocked } from "@/lib/dom/use-body-scroll-locked";
 import { logError } from "@/lib/observability/log-error";
 import {
   DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT,
@@ -72,7 +72,37 @@ import type { MonetagTag } from "@/lib/monetization/monetag";
 /** Tags already injected THIS PAGE LOAD, keyed by `src|zone` — survives a
  *  component remount within the same SPA session; resets only on a full
  *  reload, exactly like `monetag-tags.tsx`'s own guard. */
-const injectedThisSession = new Set<string>();
+const injectedThisSession = new Map<string, number>();
+
+/**
+ * The shortest gap between two loads of the same tag.
+ *
+ * Owner, 2026-09-03: "users who keeps the pwa open does not regenerate only
+ * once."
+ *
+ * They are describing a real architectural loss. `MonetagScript` lives in the
+ * root layout, so it mounts once and never unmounts, and the injection guard
+ * used to be an absolute "never twice per document". On a classic site a
+ * ten-page visit is ten ad opportunities; in an installed PWA — which never
+ * does a full page load after launch — ten screens was ONE, and a visitor who
+ * kept the app open all day generated a single opportunity.
+ *
+ * A genuine route change IS a new page view, and treating it as a new ad
+ * opportunity is the same thing a full page load does on any ordinary site. The
+ * gap is what keeps that honest:
+ *
+ *   - it is driven by NAVIGATION, never by a timer. Nothing here loads a tag
+ *     because time passed; a person has to move between screens.
+ *   - a minute is longer than any real reading of a screen is short. Rapid
+ *     back-and-forth taps, a redirect chain, or a route that bounces cannot
+ *     manufacture loads.
+ *   - the admin daily cap still applies on top and is the hard ceiling.
+ *
+ * ⛔ This must never become an interval. An impression the visitor did not
+ * navigate to is a fabricated one, and it would put the account at risk for a
+ * number nobody could defend.
+ */
+const SPA_REARM_MIN_MS = 60_000;
 
 export interface UseMonetagInPagePushOptions {
   /** Whether this visitor + page qualifies at all (plan is ad-eligible AND the
@@ -100,33 +130,38 @@ export function useMonetagInPagePush(
   const [settled, setSettled] = useState(false);
 
   /*
-    NOT WHILE SOMEONE IS WATCHING SOMETHING.
-
-    Owner, 2026-09-03: "the in page push should not show when a user is watching
-    a media un history but can show on history page outside the media."
-
-    Every fullscreen viewer and sheet in this app already sets
-    document.body.style.overflowY = hidden while open, and
-    lib/dom/scroll-lock.ts documents that convention as this codebase own
-    meaning of "the page beneath is covered". So the signal exists and is
-    reactive; nothing new has to be plumbed through the history page.
-
-    This DEFERS the injection rather than removing anything: when the viewer
-    closes, the effect re-runs and the tag loads then. It never touches a
-    creative that is already on screen, which is the line this file does not
-    cross.
+    The navigation signal. A pathname change is the only thing that re-opens the
+    injection path above — see SPA_REARM_MIN_MS for why it is navigation and
+    never a timer.
   */
-  const viewerOpen = useBodyScrollLocked();
+  const pathname = usePathname();
+
+  /*
+    🔴 THE BODY-SCROLL-LOCK GATE IS GONE. DO NOT PUT IT BACK.
+
+    Owner, 2026-09-03: "before impression was showing but since today is not."
+    This was why.
+
+    It gated injection on `useBodyScrollLocked()`, meaning to hold the push back
+    while somebody was watching media. But TWENTY-PLUS components in this app
+    set `document.body.style.overflowY = "hidden"` — every sheet, every modal,
+    the quota gate, the install modal, the reward consent sheet — and, fatally,
+    `features/app-shell/brand-splash.tsx`. The brand splash is on screen during
+    precisely the load + idle window in which this hook injects, so the gate was
+    true at the only moment it was ever read, and the tag stopped loading at
+    all. A feature meant to skip one context silenced every one of them.
+
+    It could not have worked anyway: the tag loads once, early, and a viewer is
+    opened long afterwards, so the creative is already live by then. "Do not
+    show over the media" is a LAYERING problem and is solved where layering
+    lives — the fullscreen viewer now sits above the ad networks
+    (features/downloads/download-player.tsx). Nothing hides a served creative.
+  */
 
   // The injection effect. Deliberately does nothing (not even a cap check)
   // until the page is interactive and this visitor/page actually qualifies.
   useEffect(() => {
     if (typeof window === "undefined" || !tag || !enabled) return;
-    /*
-      A fullscreen viewer is covering the page. Wait — this effect re-runs the
-      moment it closes, and injectedThisSession keeps that from double-loading.
-    */
-    if (viewerOpen) return;
 
     let cancelled = false;
     let idleHandle: number | null = null;
@@ -142,14 +177,14 @@ export function useMonetagInPagePush(
     const inject = () => {
       if (cancelled) return;
 
-      // Guard #1 — already injected this session (handles SPA remounts).
-      if (injectedThisSession.has(key)) {
-        setSettled(true);
-        return;
-      }
-      // Guard #2 — defensive: the tag is already in the DOM via some other path.
-      if (document.querySelector(`script[data-monetag-inpage-push-key="${escapeAttr(key)}"]`)) {
-        injectedThisSession.add(key);
+      /*
+        Guard #1 — loaded too recently. Was "loaded at all, ever, in this
+        document", which is what limited a whole PWA session to one load. It is
+        now a minimum GAP, so a later navigation earns a new opportunity while
+        rapid movement earns nothing.
+      */
+      const last = injectedThisSession.get(key);
+      if (last !== undefined && Date.now() - last < SPA_REARM_MIN_MS) {
         setSettled(true);
         return;
       }
@@ -208,7 +243,7 @@ export function useMonetagInPagePush(
       el.onerror = () => logError("monetag_inpage_push_script_error", { src: tag.src, zone: tag.zone });
       document.head.appendChild(el);
 
-      injectedThisSession.add(key);
+      injectedThisSession.set(key, Date.now());
       const next = recordInPagePushImpression(dailyLimit);
 
       /*
@@ -286,7 +321,7 @@ export function useMonetagInPagePush(
       // not-yet-fired work is cancelled here — this is what keeps the hook
       // memory-safe without fighting the ad network's own lifecycle.
     };
-  }, [tag, enabled, dailyLimit, viewerOpen]);
+  }, [tag, enabled, dailyLimit, pathname]);
 
   // A lightweight live-tick so `cap` visibly reflects the local-midnight reset
   // even with zero interaction. Purely a UX nicety for any consumer that shows

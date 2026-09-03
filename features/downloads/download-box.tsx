@@ -388,7 +388,7 @@ export function DownloadBox({
             disabled={isBusy}
             className="inline-flex h-14 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 px-7 text-base font-semibold text-white shadow-lg transition hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
           >
-            {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Download
+            {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Save
           </button>
         </div>
       </form>

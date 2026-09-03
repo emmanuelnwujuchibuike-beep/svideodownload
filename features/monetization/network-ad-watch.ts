@@ -83,6 +83,12 @@ const IGNORED = /^(SCRIPT|LINK|STYLE|META|TITLE|TEMPLATE|NOSCRIPT)$/;
 export interface NetworkAdWatchHandlers {
   /** The network drew something big enough to have been seen. Fires ONCE. */
   onShown?: () => void;
+  /**
+   * Every node that reaches a usable size, as it does. Unlike `onShown` this
+   * fires per element, because a caller that has to LAY OUT what the network
+   * drew needs each box, not just the news that one exists.
+   */
+  onEachShown?: (el: Element) => void;
   /** A pointer landed on something the network drew. May fire more than once. */
   onInteraction?: () => void;
   /** Something it had drawn was removed or collapsed. Fires ONCE, then stops. */
@@ -94,7 +100,7 @@ export interface NetworkAdWatchHandlers {
  * to call. `onDismissed` ends the watch; `onShown` and `onInteraction` do not.
  */
 export function watchNetworkAd(handlers: NetworkAdWatchHandlers): () => void {
-  const { onShown, onInteraction, onDismissed } = handlers;
+  const { onShown, onEachShown, onInteraction, onDismissed } = handlers;
   if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
     return () => {};
   }
@@ -110,6 +116,7 @@ export function watchNetworkAd(handlers: NetworkAdWatchHandlers): () => void {
   const markShown = (el: Element) => {
     if (shown.has(el)) return;
     shown.add(el);
+    onEachShown?.(el);
     if (announcedShown) return;
     announcedShown = true;
     onShown?.();

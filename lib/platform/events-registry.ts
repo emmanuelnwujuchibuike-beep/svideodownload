@@ -89,6 +89,28 @@ export const EVENTS = [
     remains the authority on click counts and revenue. This makes the feed show
     real engagement as it happens, not replace their reporting.
   */
+  /*
+    MONETAG lifecycle — its OWN three events, not the banner ones.
+
+    Owner, 2026-09-03: "i see no fill in admin live activity, in monetag fetch
+    and download complete." They were reading it correctly and the feed was
+    wrong. Monetag rows were reusing `banner_empty`, whose label is "Banner
+    no-fill" — the record of a loader being ASKED and answering with NOTHING.
+    For Monetag that beacon means something completely different: we injected
+    the tag. Whether a creative followed is invisible to us at that instant,
+    because these formats place themselves in their own frame on their own
+    schedule. So the feed was announcing a failure that had not happened.
+
+    Three events, because the questions are genuinely different:
+      requested   — we asked. The denominator.
+      rendered    — the network DREW something, observed on screen.
+      interaction — a pointer landed on what it drew.
+
+    There is no monetag_click. See lib/monetization/monetag-track.ts.
+  */
+  { id: "monetag_requested", label: "Monetag tag requested", description: "A Monetag loader was injected for a format or a moment. Not an impression — Monetag places its own creative later, in its own frame.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "monetag_rendered", label: "Monetag impression", description: "A Monetag creative was observed drawn on screen at a usable size. The only Monetag row counted as an impression.", domain: "monetization", metadata: ["slot", "path"] },
+  { id: "monetag_interaction", label: "Monetag interaction", description: "A pointer landed on a Monetag creative. A lower bound — a click inside its own cross-origin frame never reaches this page, so Monetag's dashboard remains authoritative.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "banner_click", label: "Banner click", description: "A visitor clicked an ExoClick display banner. Only observable for creatives rendered outside an iframe — ExoClick's dashboard remains authoritative.", domain: "monetization", metadata: ["slot", "path"] },
   { id: "interstitial_click", label: "Interstitial click", description: "A visitor clicked an ExoClick fullpage interstitial. Same iframe limitation as banner_click.", domain: "monetization", metadata: ["slot", "path"] },
   /*

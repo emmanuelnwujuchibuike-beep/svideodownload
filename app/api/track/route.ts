@@ -143,11 +143,21 @@ export async function POST(request: Request) {
       that is not there, so a click beacon is reported as a click rather than as
       a second impression for the same placement.
     */
-    const type = click
-      ? (isInterstitial ? "interstitial_click" : "banner_click")
-      : isInterstitial
-        ? (filled ? "interstitial_filled" : "interstitial_empty")
-        : (filled ? "banner_filled" : "banner_empty");
+    /*
+      A Monetag row must not borrow the banner vocabulary. "banner_empty" reads
+      as "Banner no-fill" in the feed, and for a Monetag beacon that is simply
+      untrue — filled:false there means "we injected the loader", not "the
+      network declined". The owner read the feed and concluded the ads were
+      failing. See events-registry.ts.
+    */
+    const monetag = isMonetagSlot(slot);
+    const type = monetag
+      ? (click ? "monetag_interaction" : filled ? "monetag_rendered" : "monetag_requested")
+      : click
+        ? (isInterstitial ? "interstitial_click" : "banner_click")
+        : isInterstitial
+          ? (filled ? "interstitial_filled" : "interstitial_empty")
+          : (filled ? "banner_filled" : "banner_empty");
     trackEvent(type, {
       userId,
       metadata: { slot, path: path ?? null },
@@ -219,7 +229,7 @@ export async function POST(request: Request) {
       settings-driven tag, so `adId` is null and the slot string is the whole
       attribution.
     */
-    if (isMonetagSlot(slot)) {
+    if (monetag) {
       if (click) recordAdClick(slot, null, userId);
       else if (filled) recordAdImpression(slot, null, userId);
     }

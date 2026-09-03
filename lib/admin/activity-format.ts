@@ -36,6 +36,10 @@ export const NOTABLE = new Set([
   "banner_filled",
   "banner_empty",
   "banner_click",
+  // Monetag's own three — deliberately NOT the banner events; see events-registry.
+  "monetag_requested",
+  "monetag_rendered",
+  "monetag_interaction",
   "interstitial_filled",
   "interstitial_empty",
   "interstitial_click",
@@ -99,6 +103,9 @@ export function eventDetail(type: string, metadata: Record<string, unknown> | nu
       also what it is called in the admin. A feed that reads back the source
       code makes the operator translate it.
     */
+    case "monetag_requested":
+    case "monetag_rendered":
+    case "monetag_interaction":
     case "banner_filled":
     case "banner_empty":
     case "banner_click":

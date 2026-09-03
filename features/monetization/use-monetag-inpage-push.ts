@@ -11,6 +11,7 @@ import {
   recordInPagePushSkip,
   type InPagePushCapState,
 } from "@/lib/monetization/inpage-push-cap";
+import { keepAdBelowSafeArea } from "@/features/monetization/ad-safe-area";
 import { watchNetworkAd } from "@/features/monetization/network-ad-watch";
 import {
   reportMonetagFormatInteraction,
@@ -185,6 +186,9 @@ export function useMonetagInPagePush(
       */
       stopSkipWatch = watchNetworkAd({
         onShown: () => reportMonetagFormatRendered(tag.type),
+        // Owner screenshot, 2026-09-03: the push cards were drawn under the
+        // status bar in the installed app. Moves them down, never hides them.
+        onEachShown: keepAdBelowSafeArea,
         onInteraction: () => reportMonetagFormatInteraction(tag.type),
         onDismissed: () => {
           recordInPagePushSkip();

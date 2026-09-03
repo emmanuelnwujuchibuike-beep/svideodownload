@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useBodyScrollLocked } from "@/lib/dom/use-body-scroll-locked";
 import { logError } from "@/lib/observability/log-error";
 import {
   DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT,
@@ -98,10 +99,34 @@ export function useMonetagInPagePush(
   const [cap, setCap] = useState<InPagePushCapState>(() => readInPagePushCap(dailyLimit));
   const [settled, setSettled] = useState(false);
 
+  /*
+    NOT WHILE SOMEONE IS WATCHING SOMETHING.
+
+    Owner, 2026-09-03: "the in page push should not show when a user is watching
+    a media un history but can show on history page outside the media."
+
+    Every fullscreen viewer and sheet in this app already sets
+    document.body.style.overflowY = hidden while open, and
+    lib/dom/scroll-lock.ts documents that convention as this codebase own
+    meaning of "the page beneath is covered". So the signal exists and is
+    reactive; nothing new has to be plumbed through the history page.
+
+    This DEFERS the injection rather than removing anything: when the viewer
+    closes, the effect re-runs and the tag loads then. It never touches a
+    creative that is already on screen, which is the line this file does not
+    cross.
+  */
+  const viewerOpen = useBodyScrollLocked();
+
   // The injection effect. Deliberately does nothing (not even a cap check)
   // until the page is interactive and this visitor/page actually qualifies.
   useEffect(() => {
     if (typeof window === "undefined" || !tag || !enabled) return;
+    /*
+      A fullscreen viewer is covering the page. Wait — this effect re-runs the
+      moment it closes, and injectedThisSession keeps that from double-loading.
+    */
+    if (viewerOpen) return;
 
     let cancelled = false;
     let idleHandle: number | null = null;
@@ -261,7 +286,7 @@ export function useMonetagInPagePush(
       // not-yet-fired work is cancelled here — this is what keeps the hook
       // memory-safe without fighting the ad network's own lifecycle.
     };
-  }, [tag, enabled, dailyLimit]);
+  }, [tag, enabled, dailyLimit, viewerOpen]);
 
   // A lightweight live-tick so `cap` visibly reflects the local-midnight reset
   // even with zero interaction. Purely a UX nicety for any consumer that shows

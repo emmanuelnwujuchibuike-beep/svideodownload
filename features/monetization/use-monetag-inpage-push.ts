@@ -12,6 +12,7 @@ import {
   recordInPagePushSkip,
   type InPagePushCapState,
 } from "@/lib/monetization/inpage-push-cap";
+import { keepAdBelowSafeArea } from "@/features/monetization/ad-safe-area";
 import { watchNetworkAd } from "@/features/monetization/network-ad-watch";
 import {
   reportMonetagFormatInteraction,
@@ -266,13 +267,28 @@ export function useMonetagInPagePush(
         // Owner screenshot, 2026-09-03: the push cards were drawn under the
         // status bar in the installed app. Moves them down, never hides them.
         /*
-          THE SAFE-AREA OFFSET IS OFF. It set margin-top !important on
-          Monetag own container, and Monetag impressions stopped within hours
-          of it shipping. Moving a creative cannot be ruled out while a network
-          measures its own viewability before firing its pixel, and the owner
-          revenue is not the place to find that out. The layout complaint is
-          real and stands; the fix must not touch their element.
+          The push cards were drawn under the status bar in the installed app
+          (owner screenshot, 2026-09-03). This moves them DOWN by the app own
+          top inset. It never hides, removes, resizes or wraps anything.
+
+          ── Why this is back, having been pulled once ──────────────────────
+
+          It was reverted alongside two other changes when impressions stopped.
+          The actual culprit was found afterwards and was none of them: a
+          body-scroll-lock gate in this file that was true during the brand
+          splash, so the tag stopped injecting at all. That is fixed, and the
+          owner has confirmed impressions recovered.
+
+          So this is being re-tried ALONE, in its own commit, and it is the
+          only ad change in it. If impressions move, this is the one thing to
+          revert; if they do not, it was never implicated. That is the whole
+          reason it ships by itself.
+
+          It also runs the right way for viewability: a creative half-hidden
+          under a notch is one the network has already counted and the reader
+          cannot fully see. Moving it into view can only help that number.
         */
+        onEachShown: keepAdBelowSafeArea,
         onInteraction: () => reportMonetagFormatInteraction(tag.type),
         onDismissed: () => {
           recordInPagePushSkip();

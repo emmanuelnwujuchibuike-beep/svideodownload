@@ -155,7 +155,7 @@ export function PublishSoundSheet({ open, onClose, item }: { open: boolean; onCl
             ) : (
               <div className="space-y-3 p-4">
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  This audio came from {item.platformName || "an external source"} — it will be credited on the sound's page and everywhere it's used, never presented as original.
+                  This audio came from {item.platformName || "an external source"} — it will be credited on the sound’s page and everywhere it’s used, never presented as original.
                 </p>
                 <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-muted-foreground">Title</span>

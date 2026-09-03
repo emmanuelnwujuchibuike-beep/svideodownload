@@ -144,6 +144,35 @@ export function buildCsp(mode: "enforce" | "report"): string {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 LINT `features` AND `server`. THEY WERE NOT LINTED AT ALL.
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Next lints a FIXED default set of directories during a build — app, pages,
+    components, lib, src — and nothing else. This codebase keeps most of its
+    code in `features/` and `server/`, so the majority of it was never linted
+    by anything: not locally, not on Vercel. Builds were green because the
+    linter was never pointed at the files.
+
+    That is not theoretical. A React #310 took the landing page down in
+    production — a hook placed after an early return in
+    features/monetization/hilltop-slot.tsx. `react-hooks/rules-of-hooks` catches
+    that exact mistake, was installed and working the whole time, and never ran
+    on the file. Verified by planting the same violation in features/ and
+    watching a full `next build` pass it.
+
+    Eleven real errors were sitting in these directories when this was turned
+    on, including a hook-rule report. They are fixed; this is what stops the
+    next eleven.
+
+    ⚠️ Adding a directory here can FAIL A BUILD that used to pass, which is the
+    entire point — but it means a new lint error blocks a deploy. Fix the error;
+    do not delete the directory from this list.
+  */
+  eslint: {
+    dirs: ["app", "components", "lib", "features", "server", "config", "types"],
+  },
   poweredByHeader: false,
   /*
     A self-contained server bundle for the Docker runtime image (the download

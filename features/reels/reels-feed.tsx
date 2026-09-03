@@ -500,7 +500,7 @@ export function ReelsFeed({
             <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
               <Clapperboard className="h-6 w-6" />
             </span>
-            <p className="font-semibold">You don't follow any creators</p>
+            <p className="font-semibold">You don’t follow any creators</p>
             <p className="mt-1 max-w-xs text-sm text-muted-foreground">Sign in to follow creators and see their reels here.</p>
             <Link
               href={`/login?next=${encodeURIComponent("/reels")}`}

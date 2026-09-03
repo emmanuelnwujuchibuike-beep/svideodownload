@@ -61,7 +61,7 @@ export function TrustCenter({ reports }: { reports: OwnReport[] }) {
           <Flag className="h-4 w-4 text-muted-foreground" /> Your reports
         </h2>
         {reports.length === 0 ? (
-          <p className="text-xs text-muted-foreground">You haven't reported anything.</p>
+          <p className="text-xs text-muted-foreground">You haven’t reported anything.</p>
         ) : (
           <ul className="space-y-2">
             {reports.map((r, i) => (

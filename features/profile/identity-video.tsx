@@ -29,7 +29,7 @@ export function IdentityVideo({ src, poster, className }: { src: string; poster:
   useEffect(() => {
     let cancelled = false;
 
-    const useBlob = (blob: Blob) => {
+    const applyBlob = (blob: Blob) => {
       const u = URL.createObjectURL(blob);
       objectUrl.current = u;
       if (!cancelled) setVideoSrc(u);
@@ -40,7 +40,7 @@ export function IdentityVideo({ src, poster, className }: { src: string; poster:
       const cached = await getMedia(keyFor(src));
       if (cancelled) return;
       if (cached) {
-        useBlob(cached);
+        applyBlob(cached);
         return;
       }
 

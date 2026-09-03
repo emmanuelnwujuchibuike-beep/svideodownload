@@ -472,6 +472,54 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   // Clear the glyph timer on unmount so it never fires late.
   useEffect(() => () => { if (controlsTimer.current) window.clearTimeout(controlsTimer.current); }, []);
 
+  /*
+    ═══════════════════════════════════════════════════════════════════════
+     THE PLAYER LIVES IN THE BROWSER'S TOP LAYER, NOT AT A HIGH z-index
+    ═══════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-03, twice: "the in page push still shows on the video
+    player" / "the monetag in page push still shows on the media".
+
+    z-index could not win this. Raising the player to 2147483646 was not
+    enough, which means the widget is at the 2147483647 ceiling — and even
+    MATCHING it loses, because ties break on DOM order and a self-placing ad
+    appends itself to <body> long after our React tree. There is no number
+    above the maximum.
+
+    A modal <dialog> is rendered in the TOP LAYER, which sits above every
+    stacking context in the document regardless of z-index or document order.
+    It is the only mechanism that reliably wins, and it is the standard one.
+
+    🔴 It COVERS the ad, it does not hide it. The creative stays exactly as
+    Monetag rendered it, still on the page, still counted — a fullscreen viewer
+    occluding the page beneath it is ordinary publisher layout, and the same
+    thing that happens to every other ad on the page. Removing or hiding a
+    served creative would suppress an impression the network had already
+    billed, which is the line this codebase does not cross.
+
+    The fallback matters: if `showModal` is unavailable, a <dialog> with no
+    `open` attribute is `display: none` — the player would vanish entirely.
+    So a failure sets `open` directly, which renders it in the normal flow at
+    the z-index below. Worse layering, never an invisible player.
+  */
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    try {
+      if (!el.open) el.showModal();
+    } catch {
+      el.open = true;
+    }
+    return () => {
+      try {
+        if (el.open) el.close();
+      } catch {
+        /* already detached */
+      }
+    };
+  }, []);
+
   // Keyboard mirror: Esc / ↓ close; Space toggles; ← / → previous / next.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -518,11 +566,26 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       that genuinely must sit on top of a fullscreen player (an OS-level prompt,
       a future critical alert) without another z-index war.
     */
-    <div
-      className="fixed inset-0 flex flex-col bg-black/95"
+    <dialog
+      ref={dialogRef}
+      /*
+        Escape is handled by this component's own keydown listener, which also
+        owns ArrowDown/Space/Arrows. Letting the dialog close ITSELF would tear
+        the element down without `closePlayer()` running, leaving the queue
+        state saying a player is open when none is.
+      */
+      onCancel={(e) => {
+        e.preventDefault();
+        closePlayer();
+      }}
+      /*
+        The UA gives a modal dialog a centred box with its own width, margin,
+        padding and border. All four are reset so this fills the viewport
+        exactly as the div it replaced did. The z-index is kept only for the
+        `showModal` fallback path above — in the top layer it is ignored.
+      */
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-black/95 p-0 backdrop:bg-black/95"
       style={{ zIndex: 2147483646 }}
-      role="dialog"
-      aria-modal="true"
       aria-label={rec.title}
     >
       {/* Status — segmented, like Stories/WhatsApp: one bar per queued item, the
@@ -824,7 +887,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         thumbnailUrl={rec.thumbnail ?? null}
         prefetchedPlan={planRef.current}
       />
-    </div>
+    </dialog>
   );
 }
 

@@ -169,7 +169,7 @@ export function useMonetagInPagePush(
     let rafHandle: number | null = null;
     let loadListenerAttached = false;
     /** Re-arm for the tail of a skip cooldown that was still running on arrival. */
-    let cooldownTimer: number | null = null;
+    const cooldownTimer: number | null = null;
     /** Teardown for the passive skip watcher, once a tag is actually on the page. */
     let stopSkipWatch: (() => void) | null = null;
 

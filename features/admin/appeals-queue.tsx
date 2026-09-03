@@ -37,8 +37,8 @@ export function AppealsQueue({ appeals }: { appeals: PendingAppeal[] }) {
         ) : null}
       </h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Users appealing a moderation action against their own post, comment, or account. "Overturn" restores the
-        content/account; "Uphold" just closes the appeal.
+        Users appealing a moderation action against their own post, comment, or account. “Overturn” restores the
+        content/account; “Uphold” just closes the appeal.
       </p>
 
       {appeals.length === 0 ? (

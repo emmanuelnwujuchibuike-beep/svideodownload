@@ -115,7 +115,7 @@ export function DataControls() {
         </div>
       ) : confirmOpen ? (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/[0.04] p-4">
-          <p className="text-sm font-semibold text-red-500">This can't be undone after the grace period</p>
+          <p className="text-sm font-semibold text-red-500">This can’t be undone after the grace period</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Your account and content will be deleted in 30 days unless you cancel first. Type <span className="font-mono font-semibold">delete</span> to confirm.
           </p>

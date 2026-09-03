@@ -189,7 +189,42 @@ html,body{height:100%;background:#fff;color:#0f172a}
       var m = document.cookie.match(/(?:^|;\s*)frenz_mode=([^;]+)/);
       next = m && decodeURIComponent(m[1]) === "full" ? "/home" : "/downloads";
     }
-    location.replace(next);
+    /*
+      🔴 NAVIGATE AFTER THE LOADER HAS PAINTED, NOT BEFORE IT.
+
+      Owner, 2026-09-03: "the pwa still shows white for long before showing
+      the F loader."
+
+      This script is inline at the end of <body>, so it ran in the SAME task as
+      the parse that produced the markup above it — before the browser had
+      painted a single frame of it. location.replace() in that task means this
+      document is NEVER painted: the sequence was iOS splash, then BLANK for as
+      long as /downloads takes over the network, then the app own boot loader.
+      The loader on this page, which exists precisely to cover that gap, was
+      never on screen for it.
+
+      A double rAF puts the navigation in the frame AFTER the first paint. The
+      browser then holds that painted frame through the navigation, so the F
+      mark stays continuously visible instead of blanking. It costs one frame
+      (~16ms), against a blank screen that lasted as long as a cold dynamic
+      route fetch.
+
+      The setTimeout is the belt: if rAF never fires — a backgrounded launch,
+      an OS that throttles the first frame — the hand-off still happens. It is
+      cancelled by whichever path runs first, so this can never navigate twice.
+    */
+    var went = false;
+    var go = function () {
+      if (went) return;
+      went = true;
+      location.replace(next);
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(function () {
+        requestAnimationFrame(go);
+      });
+    }
+    setTimeout(go, 250);
   } catch (e) {
     location.replace("/downloads");
   }

@@ -38,6 +38,15 @@ var SWX = (self.SWX = self.SWX || {});
 // device that already has v15 keeps running the code with the bug, which is
 // every device reporting it.
 //
+// v19 (2026-09-03): `/launch.html` now defers its hand-off past the first paint
+// (owner: "the pwa still shows white for long before showing the F loader"). Its
+// inline script ran in the same task as the parse, so location.replace() fired
+// before the browser had painted a single frame — the loader that exists to cover
+// the cold-boot gap was never on screen for it. Same reasoning as v15: the
+// CONTENTS of a precached document changed, so without a new bucket every
+// installed PWA keeps booting the old copy and the fix reaches nobody who
+// already has the app.
+//
 // v15 (2026-08-23): `/launch.html` gained the twelve `apple-touch-startup-image`
 // links that stop iOS painting its own plain-white splash before the loader
 // (owner: "it still shows white on cold load entry in the pwa"). The document is
@@ -55,7 +64,7 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v18";
+SWX.VERSION = "v19";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

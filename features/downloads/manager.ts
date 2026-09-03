@@ -1,6 +1,7 @@
 "use client";
 
 import { trackDownload } from "@/lib/analytics/client";
+import { canPlayHevc } from "@/lib/media/hevc-support";
 import { isRetryable, MAX_ATTEMPTS, RETRY_DELAY_MS } from "@/features/downloads/retry-policy";
 import { addDownload } from "@/features/history/store";
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
@@ -386,6 +387,16 @@ function buildUrl(t: Pick<DownloadTask, "url" | "formatId" | "kind" | "title" | 
     up failing (owner, 2026-08-09).
   */
   sp.set("t", t.id);
+  /*
+    Whether this device can decode HEVC. When it can, the server streams
+    TikTok's top tier through untouched instead of re-encoding it to H.264 —
+    instant, and byte-for-byte the original quality. See lib/media/hevc-support
+    and download-service's needsCodecCheck branch.
+
+    Sent per request rather than probed on the server because only the client
+    knows: the server sees a user agent, and a user agent is not a decoder.
+  */
+  if (canPlayHevc()) sp.set("hevc", "1");
   return `/api/download?${sp.toString()}`;
 }
 

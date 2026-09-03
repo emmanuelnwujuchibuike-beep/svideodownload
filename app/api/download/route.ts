@@ -59,6 +59,13 @@ async function enforceDailyCap(
 async function processDownload(
   data: DownloadRequest,
   clientIp: string,
+  /*
+    Whether the CLIENT can decode HEVC (lib/media/hevc-support.ts). Threaded
+    through as a plain flag rather than read from the Request here, because both
+    entry points below already have the request and this function does not.
+    Only ever WIDENS what may be streamed raw, and only for HEVC.
+  */
+  clientPlaysHevc = false,
 ): Promise<Response> {
   const { success, reset } = await downloadLimiter.limit(clientIp);
   if (!success) {
@@ -88,6 +95,7 @@ async function processDownload(
       formatId,
       kind,
       providedTitle || "video",
+      { clientPlaysHevc },
     );
     const filename = slugifyFilename(title, ext);
 
@@ -139,7 +147,7 @@ export async function POST(request: Request) {
   const capped = await enforceDailyCap(request, clientIp);
   if (capped) return capped;
 
-  return processDownload(parsed.data, clientIp);
+  return processDownload(parsed.data, clientIp, new URL(request.url).searchParams.get("hevc") === "1");
 }
 
 /**
@@ -227,5 +235,5 @@ export async function GET(request: Request) {
   const capped = await enforceDailyCap(request, clientIp, downloadId, batchId);
   if (capped) return capped;
 
-  return processDownload(data, clientIp);
+  return processDownload(data, clientIp, sp.get("hevc") === "1");
 }

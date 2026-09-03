@@ -578,11 +578,18 @@ export interface ResolvedDownload extends DownloadResult {
  * present so the common path (user just previewed the video) involves no extra
  * extraction. Returns a proxy stream for direct-URL formats, else yt-dlp.
  */
+/** What the CLIENT can decode, which the server cannot work out for itself. */
+export interface DownloadClientCapabilities {
+  /** The browser positively claims HEVC/H.265 playback (lib/media/hevc-support). */
+  clientPlaysHevc?: boolean;
+}
+
 export async function resolveDownload(
   url: string,
   formatId: string,
   kind: MediaKind,
   fallbackTitle: string,
+  caps: DownloadClientCapabilities = {},
 ): Promise<ResolvedDownload> {
   const meta = (await getCachedMetadata(url)) ?? (await getMetadata(url));
   const title = meta.title || fallbackTitle;
@@ -656,6 +663,43 @@ export async function resolveDownload(
       } catch {
         // The direct URL died between the probe and the fetch — fall through to
         // the validated path rather than failing the download.
+      }
+    }
+
+    /*
+      ── HEVC STRAIGHT THROUGH, WHEN THE DEVICE ASKED FOR IT ─────────────────
+
+      Owner, 2026-09-03: "make sure no quality is lost in best quality and also
+      the preparing doesnt take time."
+
+      Those only conflict because of the re-encode. TikTok's top tier IS
+      bytevc1/H.265; turning it into H.264 costs a full server-side download
+      plus a full encode before the browser sees a byte, and 9-25% of the source
+      bitrate at CRF 20 (transcodeToH264's own measurements). The original bytes
+      are already the best quality that exists, so when the device can decode
+      them there is nothing to trade: raw is both faster and better.
+
+      🔴 THREE THINGS MAKE THIS SAFE, and removing any one reintroduces the
+      audio-only bug the note above is about:
+
+        1. The CLIENT asked. `clientPlaysHevc` is the browser's own
+           `canPlayType` answer, not a user-agent guess, and it is a
+           conservative proxy for the gallery app that will really open the
+           file. Absent ⇒ re-encode, exactly as today.
+        2. The PROBE confirmed a real HEVC video stream. `probed` comes from
+           ffmpeg's own "Video: <codec>" line, so this is positive proof of a
+           decodable picture — the same assurance that makes the h264 fast path
+           above safe. A null probe (no video track at all) never reaches here.
+        3. It is HEVC ONLY. VP9, bytevc1 with no readable codec, and everything
+           else still take the long, validated road.
+    */
+    const HEVC = new Set(["hevc", "h265", "hvc1", "hev1"]);
+    if (caps.clientPlaysHevc && probed && HEVC.has(probed)) {
+      try {
+        return { ...(await proxyDownload(format!)), title };
+      } catch {
+        // Died between probe and fetch — fall through and re-encode rather
+        // than fail the download.
       }
     }
 

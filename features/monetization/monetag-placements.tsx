@@ -28,8 +28,18 @@ import {
  *   idle         → a few seconds with no interaction, tab visible
  *   return       → the tab/app becomes visible again after ≥ AWAY_MS away
  *   backswipe    → a back navigation (popstate)
- *   download_complete / rewarded → a window event dispatched by the existing
- *     download-complete / rewarded overlays (the app owns those moments already)
+ *   download_complete / rewarded / fetch_result → a window event dispatched by
+ *     the existing download-complete and rewarded overlays and by the result
+ *     card (the app owns those moments already)
+ *
+ * 🔴 A MOMENT FIRING IS NOT AN AD APPEARING. Verified on production with
+ * scripts/monetag-vignette-moments-probe.mjs: idle, download_complete, rewarded
+ * and the navigation interstitial each requested their tag and left a
+ * <script data-monetag-moment> in the DOM, and NOTHING rendered. Monetag's
+ * vignette loader is navigation-triggered (167 kB, 38 internal references to
+ * navigation) — it arms on load and shows on a LATER page transition, so it can
+ * never appear at the instant a moment fires. That is the network's design, not
+ * a bug here; do not go looking for a missing listener.
  *
  * ── Same gates as every ad ────────────────────────────────────────────────────
  *
@@ -50,6 +60,7 @@ const lastFired = new Map<string, number>();
 
 const DOWNLOAD_COMPLETE_EVENT = MONETAG_MOMENT_EVENTS.download_complete;
 const REWARDED_EVENT = MONETAG_MOMENT_EVENTS.rewarded;
+const FETCH_RESULT_EVENT = MONETAG_MOMENT_EVENTS.fetch_result;
 
 export function MonetagPlacements({
   placements,
@@ -97,6 +108,7 @@ export function MonetagPlacements({
   const hasBackswipe = has("backswipe");
   const hasDownload = has("download_complete");
   const hasRewarded = has("rewarded");
+  const hasFetchResult = has("fetch_result");
 
   /* Event/timer-based moments. Re-bound only when the SET of moments changes. */
   useEffect(() => {
@@ -152,8 +164,14 @@ export function MonetagPlacements({
       cleanups.push(() => window.removeEventListener(REWARDED_EVENT, onReward));
     }
 
+    if (hasFetchResult) {
+      const onFetched = () => run("fetch_result");
+      window.addEventListener(FETCH_RESULT_EVENT, onFetched);
+      cleanups.push(() => window.removeEventListener(FETCH_RESULT_EVENT, onFetched));
+    }
+
     return () => cleanups.forEach((fn) => fn());
-  }, [hasIdle, hasReturn, hasBackswipe, hasDownload, hasRewarded]);
+  }, [hasIdle, hasReturn, hasBackswipe, hasDownload, hasRewarded, hasFetchResult]);
 
   /* The interstitial moment: a client navigation. Skips the first render so it
      doesn't fire on the initial page load. */

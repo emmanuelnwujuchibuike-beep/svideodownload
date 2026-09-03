@@ -70,7 +70,7 @@ export function UsageDashboard({ onClearHistory }: { onClearHistory?: () => void
   };
 
   return (
-    <section aria-label="Download usage" className="space-y-4">
+    <section aria-label="Save usage" className="space-y-4">
       {/* Storage meter — the headline. */}
       <div className="overflow-hidden rounded-3xl border border-border/60 bg-card p-5 shadow-soft sm:p-6">
         <div className="flex items-start justify-between gap-4">

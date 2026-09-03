@@ -23,8 +23,8 @@ import { GuestLibrary } from "@/features/downloads/guest-library";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Your downloads",
-  description: "Track your saved downloads, storage usage and history — no account needed.",
+  title: "Your saved library",
+  description: "Track everything you've saved, your storage usage and history — no account needed.",
   // Per-device, private to the visitor; nothing to index.
   robots: { index: false, follow: false },
 };

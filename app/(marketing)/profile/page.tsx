@@ -16,7 +16,7 @@ export const dynamic = "force-static";
 */
 export const metadata: Metadata = {
   title: "Profile",
-  description: "Sign in to Frenz to personalize your experience — save downloads, track history and more.",
+  description: "Sign in to Frenz to personalize your experience — save what you find, track history and more.",
   alternates: { canonical: "/profile" },
   robots: { index: false, follow: false },
 };

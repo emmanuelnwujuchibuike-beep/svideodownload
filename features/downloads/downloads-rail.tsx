@@ -176,7 +176,7 @@ export function DownloadsRail() {
       <Panel delay={60}>
         <h3 className="mb-3 text-sm font-bold">Quick Actions</h3>
         <div className="space-y-1">
-          <QuickAction icon={Download} title="Download from Link" sub="Paste video link" href="#download" />
+          <QuickAction icon={Download} title="Save from Link" sub="Paste video link" href="#download" />
           <QuickAction icon={Cloud} title="Import from Cloud" sub="Google Drive, Dropbox" soon />
           <AutoDownloadToggle />
           <QualityPreference />

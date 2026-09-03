@@ -22,6 +22,8 @@ import {
 import Link from "next/link";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
+
 import { BatchAdGate, type BatchAuthorization } from "@/features/downloader/batch-ad-gate";
 import { startDownload as enqueueDownload } from "@/features/downloads/manager";
 import { ResultAd } from "@/features/monetization/result-ad";
@@ -469,6 +471,15 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
     with no deploy. That is precisely the "one-line swap back" the note
     anticipated, turned into configuration.
   */
+  /*
+    Signal the "a pasted link resolved" moment, once per result card. No-op
+    unless the owner assigned a Monetag placement to it and the visitor should
+    see ads — MonetagPlacements gates both, and applies the per-moment cooldown.
+  */
+  useEffect(() => {
+    window.dispatchEvent(new Event(MONETAG_MOMENT_EVENTS.fetch_result));
+  }, []);
+
   const hdNetwork = useRewardNetwork("hd_download");
   const downloadUnlock = useRewardFlow(
     "DOWNLOAD_UNLOCK",
@@ -1142,31 +1153,31 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
             </>
           ) : phase === "done" ? (
             <>
-              <CheckCircle2 className="h-5 w-5" /> Download started — check your files
+              <CheckCircle2 className="h-5 w-5" /> Saved — check your files
             </>
           ) : isBatchable && selected.size === 0 ? (
             <>
               <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
-              Download all {batchItems.length} {batchItems.every((f) => f.kind === "video") ? "videos" : "items"}
+              Save all {batchItems.length} {batchItems.every((f) => f.kind === "video") ? "videos" : "items"}
             </>
           ) : isBatchable && selected.size > 1 ? (
             <>
               <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
-              Download {selected.size} Items
+              Save {selected.size} Items
             </>
           ) : (
             <>
               <Download className="h-5 w-5 transition-transform group-hover:translate-y-0.5" />
               {isImageTab
-                ? `Download Photo${imageFormats.length > 1 ? ` ${photoIndex + 1}` : ""}`
-                : `Download ${activeFormat?.label ?? (tab === "audio" ? "Audio" : "Video")}`}
+                ? `Save Photo${imageFormats.length > 1 ? ` ${photoIndex + 1}` : ""}`
+                : `Save ${activeFormat?.label ?? (tab === "audio" ? "Audio" : "Video")}`}
             </>
           )}
         </button>
 
         <p className="mt-3 text-center text-xs text-muted-foreground">
           {phase === "done"
-            ? "Saving to your device — check your browser downloads or Files app."
+            ? "Saving to your device — check your browser's files or Files app."
             : isBatchable && selected.size > 1 && batchBytes > 0
               ? `Total size: ~${formatBytes(batchBytes)}`
               : "Fast, private & free — no app, no sign-up."}

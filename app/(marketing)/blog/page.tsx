@@ -17,13 +17,13 @@ import { BLOG_POSTS } from "@/lib/seo/blog";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "Blog — Video Downloading Guides & Tips",
+  title: "Blog — Video Saving Guides & Tips",
   description:
     "Guides on downloading videos from TikTok, Instagram, LinkedIn and more — safely, in HD, on any device.",
   alternates: { canonical: "/blog" },
   openGraph: {
     type: "website",
-    title: "FrenzSave Blog — Downloading Guides",
+    title: "FrenzSave Blog — Saving Guides",
     description:
       "How-to guides for downloading videos from TikTok, Instagram, LinkedIn and more.",
   },
@@ -94,7 +94,7 @@ export default function BlogIndex() {
           </div>
         </section>
 
-        <DownloaderLinks heading="Free downloader tools" />
+        <DownloaderLinks heading="Save from every platform" />
       </main>
       <SiteFooter />
     </>

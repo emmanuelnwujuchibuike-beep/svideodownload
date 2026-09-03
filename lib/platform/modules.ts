@@ -21,8 +21,8 @@ import {
 export const MODULES: PlatformModule[] = [
   {
     id: "download",
-    name: "Frenz Download",
-    shortName: "Download",
+    name: "Frenz Save",
+    shortName: "Save",
     /*
      * "20+ platforms" was wrong — there are 11 ADVERTISED platforms in
      * lib/platforms.ts's SHOWCASE_PLATFORMS (13 entries minus `generic`

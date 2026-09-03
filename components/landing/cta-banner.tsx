@@ -35,7 +35,7 @@ export function CtaBanner() {
               href="/#download"
               className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-semibold text-slate-900 shadow-lg transition hover:bg-white/90 active:scale-[0.99]"
             >
-              Start Downloading Now <ArrowDown className="h-4 w-4" />
+              Start Saving Now <ArrowDown className="h-4 w-4" />
             </Link>
             <span className="text-xs text-white/70">It&rsquo;s free forever. No credit card needed.</span>
           </div>

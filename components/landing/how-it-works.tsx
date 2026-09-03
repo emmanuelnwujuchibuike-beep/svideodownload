@@ -12,14 +12,14 @@ import type { PlatformId } from "@/types";
 
 const STEPS = [
   { n: 1, title: "Paste your link", desc: "Copy and paste the link from any platform you want to download." },
-  { n: 2, title: "Click Download", desc: "We process the link and prepare your download." },
+  { n: 2, title: "Click Save", desc: "We process the link and prepare your file." },
   { n: 3, title: "Save & Enjoy", desc: "Download in the quality you want and enjoy offline." },
 ];
 
 const NOTES = [
   { icon: Wand2, title: "Clean & Easy Interface", desc: "Designed for everyone." },
   { icon: Zap, title: "Real-time Progress", desc: "Track your downloads." },
-  { icon: FolderClock, title: "Download History", desc: "Access anytime, anywhere." },
+  { icon: FolderClock, title: "Save History", desc: "Access anytime, anywhere." },
 ];
 
 const GRID_PLATFORMS: PlatformId[] = [
@@ -73,7 +73,7 @@ export function HowItWorks() {
                   <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-2.5 py-2 shadow-sm">
                     <span className="flex-1 truncate text-[10px] text-neutral-400">Paste your link here…</span>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-r from-blue-500 to-violet-600 py-2 text-center text-[11px] font-semibold text-white">Download</div>
+                  <div className="rounded-xl bg-gradient-to-r from-blue-500 to-violet-600 py-2 text-center text-[11px] font-semibold text-white">Save</div>
                   <span className="text-[10px] font-bold">Supported Platforms</span>
                   <div className="grid grid-cols-4 gap-2">
                     {GRID_PLATFORMS.map((id) => {
@@ -98,7 +98,7 @@ export function HowItWorks() {
                   <Download className="h-3.5 w-3.5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[10px] font-bold">Downloading</span>
+                  <span className="block text-[10px] font-bold">Saving</span>
                   <span className="block truncate text-[9px] text-muted-foreground">Video.mp4</span>
                 </span>
                 <span className="text-[10px] font-bold text-blue-600">85%</span>

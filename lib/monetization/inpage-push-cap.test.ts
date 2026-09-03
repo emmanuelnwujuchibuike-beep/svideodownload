@@ -88,3 +88,116 @@ describe("readInPagePushCap / recordInPagePushImpression", () => {
     expect(readInPagePushCap(5).count).toBe(1);
   });
 });
+
+describe("skip cooldown (owner: 60 seconds after a skip)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is not in cooldown before anything has been skipped", async () => {
+    const { readInPagePushSkip } = await freshModule();
+    expect(readInPagePushSkip(1_000)).toEqual({
+      skippedAt: null,
+      cooldownMs: 60_000,
+      remainingMs: 0,
+      inCooldown: false,
+    });
+  });
+
+  it("blocks for exactly 60 seconds and reports the remainder while it runs", async () => {
+    const t0 = new Date(2026, 8, 3, 12, 0, 0).getTime();
+    const { readInPagePushSkip, recordInPagePushSkip } = await freshModule();
+
+    expect(recordInPagePushSkip(t0)).toEqual({
+      skippedAt: t0,
+      cooldownMs: 60_000,
+      remainingMs: 60_000,
+      inCooldown: true,
+    });
+
+    expect(readInPagePushSkip(t0 + 25_000).remainingMs).toBe(35_000);
+    // The last millisecond still counts as inside the window...
+    expect(readInPagePushSkip(t0 + 59_999).inCooldown).toBe(true);
+    // ...and the boundary itself releases it, rather than a tick later.
+    expect(readInPagePushSkip(t0 + 60_000)).toEqual({
+      skippedAt: t0,
+      cooldownMs: 60_000,
+      remainingMs: 0,
+      inCooldown: false,
+    });
+  });
+
+  it("does NOT hand back a fresh daily allowance — a skip must not reset the cap", async () => {
+    vi.setSystemTime(new Date(2026, 8, 3, 12, 0, 0));
+    const { readInPagePushCap, recordInPagePushImpression, recordInPagePushSkip } = await freshModule();
+
+    recordInPagePushImpression(5);
+    recordInPagePushImpression(5);
+    recordInPagePushSkip(Date.now());
+
+    expect(readInPagePushCap(5).count).toBe(2);
+  });
+
+  it("holds its 60 seconds ACROSS local midnight, where the daily counter resets", async () => {
+    // The counter is date-keyed and resets at midnight; the cooldown is an
+    // absolute timestamp and must not be cut short by the day boundary.
+    const skipAt = new Date(2026, 8, 3, 23, 59, 30).getTime();
+    vi.setSystemTime(skipAt);
+    const { readInPagePushCap, readInPagePushSkip, recordInPagePushImpression, recordInPagePushSkip } =
+      await freshModule();
+
+    recordInPagePushImpression(5);
+    recordInPagePushSkip(skipAt);
+
+    // 40 seconds later it is 00:00:10 — a new calendar day, mid-cooldown.
+    const nextDay = skipAt + 40_000;
+    vi.setSystemTime(nextDay);
+    expect(readInPagePushCap(5).count).toBe(0); // the day rolled over, as designed
+    expect(readInPagePushSkip(nextDay)).toEqual({
+      skippedAt: skipAt,
+      cooldownMs: 60_000,
+      remainingMs: 20_000,
+      inCooldown: true,
+    });
+  });
+
+  it("survives an impression recorded on the NEW day without losing the running cooldown", async () => {
+    const skipAt = new Date(2026, 8, 3, 23, 59, 30).getTime();
+    vi.setSystemTime(skipAt);
+    const { readInPagePushSkip, recordInPagePushImpression, recordInPagePushSkip } = await freshModule();
+    recordInPagePushSkip(skipAt);
+
+    const nextDay = skipAt + 45_000; // 00:00:15 — genuinely tomorrow
+    vi.setSystemTime(nextDay);
+    recordInPagePushImpression(5); // rewrites the record under tomorrow's date key
+
+    expect(readInPagePushSkip(nextDay).inCooldown).toBe(true);
+    expect(readInPagePushSkip(nextDay).remainingMs).toBe(15_000);
+  });
+
+  it("FAILS OPEN when the clock moves backwards — a stuck cooldown would cost revenue", async () => {
+    const { readInPagePushSkip, recordInPagePushSkip } = await freshModule();
+    const future = new Date(2027, 0, 1).getTime();
+    recordInPagePushSkip(future);
+
+    // "Now" is a year before the stored skip: serve the ad rather than block
+    // forever on a clock we cannot trust.
+    const now = new Date(2026, 0, 1).getTime();
+    expect(readInPagePushSkip(now)).toEqual({
+      skippedAt: future,
+      cooldownMs: 60_000,
+      remainingMs: 0,
+      inCooldown: false,
+    });
+  });
+
+  it("respects a custom cooldown window rather than hardcoding 60s", async () => {
+    const { readInPagePushSkip, recordInPagePushSkip } = await freshModule();
+    recordInPagePushSkip(1_000, 5_000);
+    expect(readInPagePushSkip(4_000, 5_000).inCooldown).toBe(true);
+    expect(readInPagePushSkip(6_000, 5_000).inCooldown).toBe(false);
+  });
+});

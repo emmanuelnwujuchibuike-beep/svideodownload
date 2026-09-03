@@ -19,7 +19,7 @@ export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Your history",
-  description: "Everything you've downloaded, in one place.",
+  description: "Everything you've saved, in one place.",
   robots: { index: false, follow: false },
 };
 

@@ -100,7 +100,7 @@ export function sendOtpEmail(to: string, code: string): Promise<boolean> {
         <tr><td style="padding:28px 40px 32px;font-family:${FONT};">
           <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">
             Need help? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color:#6C4DFF;text-decoration:none;">${SUPPORT_EMAIL}</a><br>
-            Frenz · Download. Discover. Meet.
+            Frenz · Save. Discover. Meet.
           </p>
           <p style="margin:10px 0 0;font-size:11px;line-height:1.6;color:#b6b6c0;">
             You're receiving this email because a sign-in code was requested for ${to} on Frenz.

@@ -83,7 +83,7 @@ centered; `{{ .Token }}` is Supabase's placeholder for the 6-digit code):
         <p style="margin:0;font-size:13px;line-height:1.6;color:#8a8a94;">If you didn't request this code, you can safely ignore this email. Never share this code with anyone; Frenz will never ask you for it.</p>
       </td></tr>
       <tr><td style="padding:28px 36px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-        <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">Frenz · Download. Discover. Meet.</p>
+        <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">Frenz · Save. Discover. Meet.</p>
       </td></tr>
     </table>
   </td></tr>

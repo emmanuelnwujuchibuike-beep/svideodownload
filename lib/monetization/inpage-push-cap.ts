@@ -37,6 +37,8 @@ export const DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT = 5;
 interface StoredState {
   date: string;
   count: number;
+  /** Epoch ms of the last skip. Absent on records written before the cooldown existed. */
+  skippedAt?: number;
 }
 
 /** In-memory fallback, used only when localStorage itself is unavailable/throws. */
@@ -49,7 +51,13 @@ function safeGet(): StoredState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredState>;
     if (typeof parsed?.date !== "string" || typeof parsed?.count !== "number") return null;
-    return { date: parsed.date, count: parsed.count };
+    return {
+      date: parsed.date,
+      count: parsed.count,
+      // Absent on records written before the skip cooldown shipped — an old
+      // record must still read as a valid count, never as corrupt.
+      ...(typeof parsed.skippedAt === "number" ? { skippedAt: parsed.skippedAt } : {}),
+    };
   } catch {
     return memoryState;
   }
@@ -113,6 +121,92 @@ export function recordInPagePushImpression(limit: number = DEFAULT_IN_PAGE_PUSH_
   const stored = safeGet();
   const current = stored && stored.date === today ? stored.count : 0;
   const next = current + 1;
-  safeSet({ date: today, count: next });
+  // Carry the skip timestamp through: an impression recorded on a NEW day must
+  // not reset a cooldown that is still running across the midnight boundary.
+  safeSet({ date: today, count: next, ...(typeof stored?.skippedAt === "number" ? { skippedAt: stored.skippedAt } : {}) });
   return toState(next, limit);
+}
+
+/* ─────────────────────── skip cooldown (owner, 2026-09-03) ───────────────────
+ *
+ * "make the monetag in page push have a cooldown of 60 secs when is skipped"
+ *
+ * ── What this gates, and what it must never touch ─────────────────────────────
+ *
+ * 🔴 The owner's guardrail, same day: "it must not block monetag data from
+ * reading accurately and showing impression, clicks and revenue."
+ *
+ * So the cooldown gates exactly ONE thing: whether WE inject a fresh copy of the
+ * In-Page Push tag. It never removes, hides, wraps, sandboxes or intercepts
+ * anything Monetag renders, and never touches a request Monetag makes. A widget
+ * that is already on screen keeps running and keeps reporting; its impression,
+ * its click and the revenue behind them are counted by Monetag exactly as they
+ * are today. Suppressing a creative that has already been served would corrupt
+ * the very numbers this must protect — an impression billed but never seen, or a
+ * skip counted as a click — which is why the cooldown lives on the injection
+ * side and nowhere else.
+ *
+ * ── Why the timestamp is NOT date-keyed like the counter above ────────────────
+ *
+ * `count` resets by calendar day, so it is read only when the stored date is
+ * today. `skippedAt` deliberately is not: it is an absolute epoch ms, and a skip
+ * at 23:59:30 must still hold its 60 seconds after local midnight. Gating it on
+ * the date would silently cut that cooldown short at the day boundary.
+ *
+ * ── It fails OPEN ─────────────────────────────────────────────────────────────
+ *
+ * A `skippedAt` in the FUTURE (the visitor's clock moved backwards, a timezone
+ * change, a tampered value) reads as "not in cooldown" rather than as a very long
+ * one. The daily cap above fails closed because over-showing is the harm there;
+ * here the harm runs the other way — a stuck cooldown would silently stop serving
+ * the tag at all, which costs the owner revenue for as long as the clock is wrong.
+ */
+
+/** The owner's number: a skipped In-Page Push holds off the next tag load this long. */
+export const IN_PAGE_PUSH_SKIP_COOLDOWN_MS = 60_000;
+
+export interface InPagePushSkipState {
+  /** When the last skip was recorded, epoch ms, or null if there has never been one. */
+  skippedAt: number | null;
+  /** The window this state was evaluated against. */
+  cooldownMs: number;
+  /** Milliseconds still to wait, 0 once the window has passed. */
+  remainingMs: number;
+  /** True while the tag must not be injected again. */
+  inCooldown: boolean;
+}
+
+function toSkipState(skippedAt: number | null, now: number, cooldownMs: number): InPagePushSkipState {
+  if (skippedAt === null) return { skippedAt: null, cooldownMs, remainingMs: 0, inCooldown: false };
+  const elapsed = now - skippedAt;
+  // Negative elapsed = the clock went backwards. Fail open (see the note above).
+  const remainingMs = elapsed < 0 ? 0 : Math.max(0, cooldownMs - elapsed);
+  return { skippedAt, cooldownMs, remainingMs, inCooldown: remainingMs > 0 };
+}
+
+/** Read the skip cooldown without mutating anything. */
+export function readInPagePushSkip(
+  now: number = Date.now(),
+  cooldownMs: number = IN_PAGE_PUSH_SKIP_COOLDOWN_MS,
+): InPagePushSkipState {
+  const stored = safeGet();
+  const skippedAt = typeof stored?.skippedAt === "number" ? stored.skippedAt : null;
+  return toSkipState(skippedAt, now, cooldownMs);
+}
+
+/**
+ * Record that the visitor skipped an In-Page Push, starting the cooldown.
+ *
+ * Preserves today's impression count rather than rewriting the record from
+ * scratch — a skip must not hand the visitor a fresh daily allowance.
+ */
+export function recordInPagePushSkip(
+  now: number = Date.now(),
+  cooldownMs: number = IN_PAGE_PUSH_SKIP_COOLDOWN_MS,
+): InPagePushSkipState {
+  const today = localDateKey(new Date(now));
+  const stored = safeGet();
+  const count = stored && stored.date === today ? stored.count : 0;
+  safeSet({ date: today, count, skippedAt: now });
+  return toSkipState(now, now, cooldownMs);
 }

@@ -252,7 +252,7 @@ function notifyComplete(title: string): void {
   try {
     if (typeof document === "undefined" || !document.hidden) return;
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    new Notification("Download complete", {
+    new Notification("Save complete", {
       body: title || "Your file is ready to save.",
       icon: "/icon-192.png",
       tag: "frenz-download-complete",
@@ -559,11 +559,11 @@ export function FloatingDownloadProgress({
                     ? awaitingCount > 1
                       ? `${awaitingCount} files ready to save`
                       : "Ready — save it to your device"
-                    : "Download complete"
+                    : "Save complete"
                   : task.status === "failed"
                     ? failedTasks.length > 1
                       ? `${failedTasks.length} downloads failed`
-                      : "Download failed"
+                      : "Save failed"
                     : activeCount > 1
                       ? `Downloading ${activeCount} items…`
                       : task.status === "preparing"

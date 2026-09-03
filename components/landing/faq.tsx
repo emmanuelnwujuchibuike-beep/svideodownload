@@ -7,10 +7,10 @@ import { jsonLd } from "@/lib/seo/json-ld";
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is FrenzSave free?",
-    a: "Yes — completely free and unlimited, with no account or login required. Just paste a link and download.",
+    a: "Yes — completely free and unlimited, with no account or login required. Just paste a link and save.",
   },
   {
-    q: "Do downloads have a watermark?",
+    q: "Do saved files have a watermark?",
     a: "No. We fetch clean, watermark-free versions wherever the platform provides them — including TikTok — so your videos look professional.",
   },
   {
@@ -30,24 +30,24 @@ const FAQS: { q: string; a: string }[] = [
     a: "TikTok, Instagram, Telegram, X (Twitter), Facebook, Pinterest, Snapchat, Vimeo, Reddit, LinkedIn and Threads — including Stories, and, if you sign in with your own Telegram account, the channels and chats you're already a member of there.",
   },
   {
-    q: "Can I download just the audio (MP3)?",
+    q: "Can I save just the audio (MP3)?",
     a: "Yes. Choose the Audio tab in the preview to extract a clean MP3 from any supported video.",
   },
   {
-    q: "What quality can I download?",
-    a: "Up to the highest quality the source offers — including HD and 4K where available. You pick the resolution before downloading.",
+    q: "What quality can I save?",
+    a: "Up to the highest quality the source offers — including HD and 4K where available. You pick the resolution before saving.",
   },
   {
     q: "Is it safe to use?",
-    a: "Yes. There are no accounts to hack, we never store your downloaded files, and transfers are encrypted. We collect the minimum data needed to run the service.",
+    a: "Yes. There are no accounts to hack, we never store your saved files, and transfers are encrypted. We collect the minimum data needed to run the service.",
   },
   {
     q: "Do I need to install an app?",
     a: "No — it works right in your browser on any device, desktop or mobile. A native app is on our roadmap.",
   },
   {
-    q: "Is downloading videos legal?",
-    a: "The tool itself is legal. You're responsible for only downloading content you own or have permission to save, and for respecting each platform's terms and copyright law.",
+    q: "Is saving videos legal?",
+    a: "The tool itself is legal. You're responsible for only saving content you own or have permission to keep, and for respecting each platform's terms and copyright law.",
   },
 ];
 

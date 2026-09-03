@@ -6,9 +6,12 @@ import { logError } from "@/lib/observability/log-error";
 import {
   DEFAULT_IN_PAGE_PUSH_DAILY_LIMIT,
   readInPagePushCap,
+  readInPagePushSkip,
   recordInPagePushImpression,
+  recordInPagePushSkip,
   type InPagePushCapState,
 } from "@/lib/monetization/inpage-push-cap";
+import { watchInPagePushSkip } from "@/features/monetization/inpage-push-skip-watch";
 import type { MonetagTag } from "@/lib/monetization/monetag";
 
 /**
@@ -34,6 +37,21 @@ import type { MonetagTag } from "@/lib/monetization/monetag";
  * pattern `monetag-tags.tsx` already uses for its own tags. A defensive
  * `document.querySelector` check backs that up in case a different code path
  * ever appended the same tag first.
+ *
+ * ── A skip holds the tag off for 60 seconds ───────────────────────────────────
+ *
+ * Owner, 2026-09-03: "make the monetag in page push have a cooldown of 60 secs
+ * when is skipped." Dismissing the widget records a timestamp
+ * (recordInPagePushSkip); while that cooldown runs this hook simply does not
+ * inject the tag, and re-arms a timer for the remainder so the load happens the
+ * moment the window passes rather than being lost until the next page.
+ *
+ * The guardrail the owner set alongside it — "it must not block monetag data
+ * from reading accurately and showing impression, clicks and revenue" — is why
+ * the cooldown acts HERE, on our own injection, and nowhere near the ad itself.
+ * A creative already on screen is never touched, so Monetag counts its
+ * impression, its click and the revenue behind them exactly as it does today.
+ * See inpage-push-skip-watch.ts, which only ever observes.
  *
  * ── Core Web Vitals ────────────────────────────────────────────────────────────
  *
@@ -84,6 +102,10 @@ export function useMonetagInPagePush(
     let idleHandle: number | null = null;
     let rafHandle: number | null = null;
     let loadListenerAttached = false;
+    /** Re-arm for the tail of a skip cooldown that was still running on arrival. */
+    let cooldownTimer: number | null = null;
+    /** Teardown for the passive skip watcher, once a tag is actually on the page. */
+    let stopSkipWatch: (() => void) | null = null;
 
     const key = `${tag.src}|${tag.zone ?? ""}`;
 
@@ -111,6 +133,18 @@ export function useMonetagInPagePush(
         return;
       }
 
+      /*
+        A skip on a previous page (or a previous visit) may still be cooling
+        down. Wait out the REMAINDER rather than dropping the load entirely —
+        the owner asked for a 60-second gap, not for one fewer ad. settled
+        stays false, because this tag has not finished deciding yet.
+      */
+      const skip = readInPagePushSkip();
+      if (skip.inCooldown) {
+        cooldownTimer = window.setTimeout(inject, skip.remainingMs);
+        return;
+      }
+
       const el = document.createElement("script");
       el.async = true;
       // Server-validated https URL (parseMonetagSnippet) — never a raw
@@ -128,6 +162,16 @@ export function useMonetagInPagePush(
 
       injectedThisSession.add(key);
       const next = recordInPagePushImpression(dailyLimit);
+
+      /*
+        Arm the skip watcher only NOW, so it can never mistake our own
+        hydration for the network's DOM. It observes and nothing more — it
+        does not touch, hide or remove whatever Monetag renders.
+      */
+      stopSkipWatch = watchInPagePushSkip(() => {
+        recordInPagePushSkip();
+      });
+
       if (!cancelled) {
         setCap(next);
         setSettled(true);
@@ -156,6 +200,8 @@ export function useMonetagInPagePush(
 
     return () => {
       cancelled = true;
+      if (cooldownTimer !== null) window.clearTimeout(cooldownTimer);
+      stopSkipWatch?.();
       if (loadListenerAttached) window.removeEventListener("load", armIdle);
       if (idleHandle !== null) {
         const cic = (window as Window & { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;

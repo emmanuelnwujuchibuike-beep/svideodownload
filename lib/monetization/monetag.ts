@@ -245,6 +245,11 @@ export function parseMonetagSnippet(snippet: string | null | undefined): {
 
 export const MONETAG_PLACEMENTS = [
   { id: "download_complete", label: "After a download completes", hint: "When a file finishes downloading." },
+  {
+    id: "fetch_result",
+    label: "When a link's result appears",
+    hint: "The moment a pasted link resolves and the quality options are shown.",
+  },
   { id: "rewarded", label: "Rewarded (unlock HD / standard)", hint: "When the visitor unlocks a higher-quality download." },
   { id: "interstitial", label: "Full-screen interstitial", hint: "On a page change (navigation)." },
   { id: "idle", label: "When the visitor goes idle", hint: "After a few seconds with no interaction." },

@@ -37,23 +37,23 @@ const TIKTOK_URL = `https://www.tiktok.com/@${TIKTOK_HANDLE}`;
 const FAQ: { q: string; a: string }[] = [
   {
     q: "Is FrenzSave free to use?",
-    a: "Yes. The downloader is completely free and needs no account — paste a link and save it. A free account adds the social side (your profile, library, friends and messages), and an optional Pro plan removes ads and unlocks higher-quality downloads.",
+    a: "Yes. Saving is completely free and needs no account — paste a link and save it. A free account adds the social side (your profile, library, friends and messages), and an optional Pro plan removes ads and unlocks higher-quality saves.",
   },
   {
-    q: "Do I need an account to download?",
-    a: "No. Downloading works with no sign-up at all. You only need an account for the community features — posting, following people, saving to your library across devices, and this support chat.",
+    q: "Do I need an account to save something?",
+    a: "No. Saving works with no sign-up at all. You only need an account for the community features — posting, following people, keeping your library across devices, and this support chat.",
   },
   {
-    q: "Do you store the videos I download?",
-    a: "The files you download are delivered to your device, not kept on your account. See our Privacy Policy for exactly what we do and don't collect.",
+    q: "Do you store the videos I save?",
+    a: "The files you save are delivered to your device, not kept on your account. See our Privacy Policy for exactly what we do and don't collect.",
   },
   {
-    q: "A link won't download — what should I do?",
+    q: "A link won't save — what should I do?",
     a: "Make sure the post is public (private and age-restricted posts can't be fetched) and that you copied the full share link. If it still fails, send us the exact link in the chat and we'll take a look.",
   },
   {
     q: "How do I remove ads?",
-    a: "Upgrade to Pro from the Pricing page. Pro is ad-free across the whole app and adds faster, higher-quality downloads.",
+    a: "Upgrade to Pro from the Pricing page. Pro is ad-free across the whole app and adds faster, higher-quality saves.",
   },
 ];
 

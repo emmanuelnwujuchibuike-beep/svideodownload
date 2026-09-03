@@ -110,14 +110,14 @@ export function MultiLinkIntro({
             onHero ? "text-white" : "text-slate-900 dark:text-white",
           )}
         >
-          Download{" "}
+          Save{" "}
           {/*
             🔴 ONLY THE MIDDLE WORD IS COLOURED — the hero H1's exact device
             (owner, 2026-08-25: "the multi link text shouldnt carry all colored,
             only the middle text should be colored, just the Download. Discover.
             Explore Hero H1 style").
 
-            The hero sets "Download." and "Explore." in ink and gives the
+            The hero sets "Save." and "Explore." in ink and gives the
             gradient to "Discover." alone. That works BECAUSE it is one word:
             a gradient across a whole line has nothing to contrast against, so
             it stops reading as emphasis and starts reading as a coloured

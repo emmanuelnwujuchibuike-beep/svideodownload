@@ -27,7 +27,7 @@ const EARN = [
   { label: "Daily Check-in", pts: "+20" },
   { label: "Watch Ads", pts: "+10–50" },
   { label: "Invite Friends", pts: "+500" },
-  { label: "Download Content", pts: "+5–20" },
+  { label: "Save Content", pts: "+5–20" },
   { label: "Create Post", pts: "+10–100" },
 ];
 

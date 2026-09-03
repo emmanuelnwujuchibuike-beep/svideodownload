@@ -283,7 +283,7 @@ export default function FeaturesPage() {
             href="/#download"
             className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-blue-500 via-violet-600 to-fuchsia-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:opacity-95 active:scale-[0.99]"
           >
-            Download Now
+            Start Saving
           </Link>
         </div>
       </main>

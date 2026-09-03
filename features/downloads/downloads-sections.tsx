@@ -52,7 +52,7 @@ import { StreakHeroIndicator } from "@/features/streaks/streak-hero-indicator";
  *
  * • THE HEADLINE. It read "Downloads" over "All your downloaded content in one
  *   place." — a page title, which is what a web app puts at the top of a route.
- *   It is now the same "Download. Discover. Explore." line and the same
+ *   It is now the same "Save. Discover. Explore." line and the same
  *   supporting sentence the landing opens with, so a visitor who signs in lands
  *   somewhere continuous with where they came from instead of on a different
  *   product. The words are deliberately IDENTICAL to the landing's; two
@@ -88,14 +88,14 @@ export function DownloadsHero() {
           {/* The same clamp ramp as the landing H1, so the three words stay on
               one line from a 320px phone up without a single breakpoint. */}
           <h1 className="flex flex-nowrap items-baseline gap-[0.3em] text-[clamp(1.05rem,5.2vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white">
-            <span className="whitespace-nowrap">Download.</span>
+            <span className="whitespace-nowrap">Save.</span>
             <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
               Discover.
             </span>
             <span className="whitespace-nowrap">Explore.</span>
           </h1>
           <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
-            Download from the platforms you already use, then share, connect and explore — all in{" "}
+            Save from the platforms you already use, then share, connect and explore — all in{" "}
             <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>
           {/*

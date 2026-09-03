@@ -81,7 +81,7 @@ function buildTiers(pricing: {
       tagline: "Everything you need to get started.",
       icon: Sparkles,
       features: [
-        "Downloads from every supported platform",
+        "Save from every supported platform",
         "HD video, MP3 audio & photos — no watermark",
         "Batch downloads — up to 3 links, 2 a day, with a short ad",
         "150 downloads/day",
@@ -97,7 +97,7 @@ function buildTiers(pricing: {
       name: pricing.pro.name,
       price: pricing.pro.price,
       period: pricing.pro.period,
-      tagline: "For people who download a lot.",
+      tagline: "For people who save a lot.",
       icon: Crown,
       features: [
         "Everything in Free",
@@ -156,7 +156,7 @@ function buildCompareRows(pricing: {
       business: `${pricing.business.price}${pricing.business.period}`,
     },
     {
-      label: "Downloads per day",
+      label: "Saves per day",
       free: "150",
       pro: "1,000",
       business: "10,000",
@@ -167,15 +167,15 @@ function buildCompareRows(pricing: {
       pro: "50 GB",
       business: "Unlimited",
     },
-    { label: "Batch links per download", free: "3", pro: "6", business: "6" },
+    { label: "Batch links per save", free: "3", pro: "6", business: "6" },
     {
-      label: "Batch downloads per day",
+      label: "Batch saves per day",
       free: "2",
       pro: "Unlimited",
       business: "Unlimited",
     },
     {
-      label: "Ad before large/top-quality downloads",
+      label: "Ad before large/top-quality saves",
       free: true,
       pro: false,
       business: false,

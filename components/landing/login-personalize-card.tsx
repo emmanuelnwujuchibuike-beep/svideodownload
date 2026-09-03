@@ -17,7 +17,7 @@ export function LoginPersonalizeCard() {
           Login to personalize your experience
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Save downloads, track history and more.
+          Save what you find, track history and more.
         </p>
         <Link
           href="/login"

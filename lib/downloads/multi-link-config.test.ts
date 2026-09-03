@@ -457,11 +457,14 @@ describe("the intro's description is hidden until asked for", () => {
     /*
       The three words are no longer one string: "multiple" is wrapped in its own
       gradient span (hero-H1 style, see the test below), so the literal
-      "Download multiple links" does not appear in the source any more. Asserted
+      "Save multiple links" does not appear in the source any more. The first
+      word became "Save" on 2026-09-03 ("replace all the word download with save
+      ... so google crawler doesnt flag it as a pure downloader"); it tracks the
+      hero H1 it was built to mirror, which moved in the same change. Asserted
       as the words in ORDER instead — which is the thing that actually matters
       and survives the next styling change to any one of them.
     */
-    expect(introCode).toMatch(/Download[\s\S]{0,600}?multiple[\s\S]{0,200}?links/);
+    expect(introCode).toMatch(/Save[\s\S]{0,600}?multiple[\s\S]{0,200}?links/);
     expect(introCode).not.toMatch(/all in one place/i);
   });
 
@@ -493,7 +496,7 @@ describe("the intro's description is hidden until asked for", () => {
   it("🔴 colours ONE word, hero-H1 style — not the whole line", () => {
     /*
       Owner, 2026-08-25: "the multi link text shouldnt carry all colored, only
-      the middle text should be colored, just the Download. Discover. Explore
+      the middle text should be colored, just the Save. Discover. Explore
       Hero H1 style."
 
       The hero gives the gradient to `Discover.` alone and sets the words either

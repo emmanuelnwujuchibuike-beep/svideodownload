@@ -62,7 +62,7 @@ export function DownloadMockup() {
 
                 {/* header — "Downloads" + light lavender download button */}
                 <div className="flex items-center justify-between px-1 pt-1">
-                  <span className="text-base font-extrabold tracking-tight">Downloads</span>
+                  <span className="text-base font-extrabold tracking-tight">Saved</span>
                   <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300">
                     <ArrowDownToLine className="h-4 w-4" />
                   </span>
@@ -102,7 +102,7 @@ export function DownloadMockup() {
                   <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">
                     <Download className="h-3.5 w-3.5 text-violet-500" />
                     <p className="mt-1.5 text-base font-extrabold leading-none">60</p>
-                    <p className="text-[9px] font-semibold text-neutral-500">Downloads</p>
+                    <p className="text-[9px] font-semibold text-neutral-500">Saved</p>
                     <p className="text-[8px] text-neutral-400">All time</p>
                   </div>
                   <div className="rounded-2xl border border-neutral-200 bg-white p-2.5 shadow-sm">

@@ -34,6 +34,13 @@ export async function GET() {
       allPages: settings.monetagAllPages,
       surfaces: settings.monetagSurfaces,
     },
-    { headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=60" } },
+    /*
+      `private` for the same reason as /api/ads/config — see the long note
+      there. Cloudflare rewrites the browser TTL of anything `public` it caches
+      to two hours, so a moment placement assigned in the admin took two hours
+      to reach a browser that had already loaded the page. Measured: this route
+      asked for max-age=15 and was served max-age=7200.
+    */
+    { headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=60" } },
   );
 }

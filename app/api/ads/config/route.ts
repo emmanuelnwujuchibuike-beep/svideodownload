@@ -263,6 +263,36 @@ export async function GET() {
       rewardDownloadHdEnabled: settings.rewardDownloadHdEnabled !== false,
       rewardDownloadBatchEnabled: settings.rewardDownloadBatchEnabled !== false,
     },
-    { headers: { "Cache-Control": "public, max-age=60" } },
+    /*
+      🔴 `private`, AND THAT IS THE WHOLE POINT — DO NOT "OPTIMISE" IT BACK.
+
+      Owner, 2026-09-03: "i turned off hiltop main switch but i still see the
+      landing video slider." The switch was off, the settings row was correct,
+      and this endpoint was already returning `hilltop.enabled:false` with every
+      tag nulled. A cold browser rendered no Hilltop at all
+      (scripts/hilltop-master-switch-probe.mjs). Their browser was reading a
+      config from before they flipped it.
+
+      Measured on production: this route asked for `public, max-age=60` and the
+      response actually served was `public, max-age=7200`. Cloudflare sits in
+      front and rewrites the browser TTL of everything it caches — /api/monetag
+      asked for 15 and was served 7200 too. Two hours is the real propagation
+      time of every ad switch in the admin panel, which is why changes here have
+      repeatedly looked like they "didn't take".
+
+      Cloudflare only caches `public`. `private` is BYPASSED and the header
+      below survives intact — verified against /api/ads, which has always sent
+      `private, max-age=10` and is the one ad endpoint that was never affected.
+      So the fix is to opt out of the CDN for the settings payload specifically.
+
+      The cost is bounded and small: a tiny JSON body, one origin hit per visitor
+      per minute at worst, off a settings read that is already cached in-process.
+      An ad switch that takes two hours to reach anyone is not worth a CDN hit.
+
+      A permanent fix at the edge exists and is better, but it is not in this
+      repo: Cloudflare → Caching → Configuration → Browser Cache TTL → "Respect
+      Existing Headers". Do that and this can go back to `public`.
+    */
+    { headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=300" } },
   );
 }

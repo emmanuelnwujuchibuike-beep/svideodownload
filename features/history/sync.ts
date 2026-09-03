@@ -130,8 +130,22 @@ export async function fetchRemote(): Promise<DownloadRecord[]> {
     // Anything unrecognised (including the empty string every pre-2026-08-23
     // row has) means completed — never trust a stored string to be one of the
     // two failure states without checking.
+    /*
+      🔴 ANY non-empty status is real — do not allowlist two of them.
+
+      Owner, 2026-09-03: "failed, canceled and abandoned all shows completed".
+      "abandoned" was the proof: this compared against exactly "failed" and
+      "cancelled", so every other real outcome fell through to "completed" and a
+      download that never finished was reported as one that did.
+
+      The encoder writes an EMPTY field for a completed download and the real
+      word for anything else, so a non-empty value here is by construction a
+      genuine non-completed outcome. Trusting it needs no list, and a status
+      added later survives this round trip instead of silently becoming a
+      success.
+    */
     const status: DownloadRecord["status"] =
-      statusStr === "failed" || statusStr === "cancelled" ? statusStr : "completed";
+      (statusStr || "completed") as DownloadRecord["status"];
     return {
       id: `remote:${r.id}`,
       url: r.source_url,

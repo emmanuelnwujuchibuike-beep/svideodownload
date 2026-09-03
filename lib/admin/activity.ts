@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
 
 import { DOWNLOAD_KIND } from "./activity-categories";
+import { resolveDownloadStatus } from "./packed-format";
 import { eventDetail, eventLabel, NOTABLE } from "./activity-format";
 
 /**
@@ -212,6 +213,21 @@ function decodePackedFormat(raw: string | null): Record<string, unknown> {
     // The headline fact for this request. Older rows have no status field, and
     // `types/index.ts` defines a missing status as "completed".
     status: status || "completed",
+    /*
+      🔴 THE SAME VALUE AGAIN, BUT UNDEFAULTED — and this is the one to trust.
+
+      Owner, 2026-09-03: live activity "shows all download status as completed,
+      even failed, canceled and abandoned".
+
+      `status` above collapses "no status was packed" and "the download
+      completed" into one string, which is right for display on its own and
+      useless for deciding which of two sources wins. The encoder
+      (features/history/sync.ts) writes an EMPTY field for a completed download
+      and the real word for anything else — so a non-empty value here is always
+      an explicit, real, non-completed outcome, and must outrank a database
+      column sitting at its default. See the caller.
+    */
+    statusExplicit: status || null,
     failureReason: failureReason || null,
   };
 }
@@ -370,7 +386,27 @@ export async function fetchRecentActivity(
             `format`. Falling through to "completed" matches types/index.ts,
             where an absent status has always meant a finished download.
           */
-          status: d.status || decodePackedFormat(d.format).status || "completed",
+          /*
+            🔴 THE PACKED STATUS OUTRANKS THE COLUMN. DO NOT SWAP THESE BACK.
+
+            Owner, 2026-09-03: every row read "completed", including failed,
+            cancelled and abandoned ones.
+
+            `downloads.status` is `not null default 'completed'` (0001_init),
+            so the column is NEVER falsy — which meant `d.status || …` always
+            short-circuited on the default and the real outcome, packed into
+            `format` by the client that actually watched the transfer, was
+            never read. Every failure in the feed was reported as a success.
+
+            The packed value is only ever written when the outcome was NOT
+            completed, so its presence is positive evidence and a defaulted
+            column is not evidence at all. Explicit beats default; the column
+            still answers for server-side rows, which carry no packed status.
+          */
+          status: resolveDownloadStatus(
+            decodePackedFormat(d.format).statusExplicit as string | null,
+            d.status,
+          ),
         },
       }),
     );

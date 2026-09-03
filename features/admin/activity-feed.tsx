@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Repeat, UserPlus } from "lucide-react";
 
+import { ACTIVITY_CATEGORIES, type ActivityCategoryId } from "@/lib/admin/activity-categories";
 import type { ActivityItem, ActivityTotals, MetricTotals } from "@/lib/admin/activity";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -125,6 +126,21 @@ const KIND: Record<string, KindMeta> = {
  * column.
  */
 function displayAdMeta(kind: string): KindMeta | null {
+  /*
+    Monetag reuses the same three tones rather than three KIND rows of its own:
+    an impression is worth what an ExoClick or AdSense one is and should scan as
+    one column, and six more literal Tailwind strings is what pushed /admin past
+    its gzipped ceiling last time.
+
+    "Tag requested" is deliberately QUIET. It is the loader being injected, not
+    a creative arriving — the distinction the owner had to ask about when these
+    rows were briefly labelled "Banner no-fill".
+  */
+  if (kind.startsWith("monetag_")) {
+    if (kind === "monetag_interaction") return { label: "Interaction", ...CLICK };
+    if (kind === "monetag_rendered") return { label: "Impression", ...IMPRESSION };
+    return { label: "Tag requested", ...QUIET };
+  }
   if (!kind.startsWith("banner_") && !kind.startsWith("interstitial_")) return null;
   if (kind.endsWith("_click")) return { label: "Click", ...CLICK };
   // No-fills stay muted ON PURPOSE — a slot that came back empty is a
@@ -176,6 +192,32 @@ export function ActivityFeed({
   initial: ActivityItem[];
   totals?: ActivityTotals | null;
 }) {
+  /*
+    ── THE CATEGORY NAV ──────────────────────────────────────────────────────
+
+    Owner, 2026-09-03: "separate the ad stat from download, and separate other
+    stats like install, and all to be all separated in a top nav that when click
+    on install shows all recent install in the last 24hrs and when clicks on ad
+    it shows all ad stats in the last 24hs and same for other stats."
+
+    One mixed stream answers "what is happening right now" and cannot answer
+    "how did installs do today" — a single install sits screens down behind two
+    hundred ad impressions, and the feed only holds a hundred rows, so often it
+    is not there to find at all.
+
+    🔴 ONLY "All" IS LIVE. A category tab fetches ONCE when it is opened and the
+    result is kept for the session; it is not wired to the polling scheduler. A
+    24-hour window does not change meaningfully in fifteen seconds, and this
+    dashboard has already cost the owner real money twice — the SSE route, then
+    the 2.5s poll that ate $15 of a $20 monthly credit. Re-opening a tab that
+    has already been looked at costs nothing.
+  */
+  const [category, setCategory] = useState<ActivityCategoryId>("all");
+  /** One-shot results per category, kept so re-selecting a tab is free. */
+  const [byCategory, setByCategory] = useState<Partial<Record<ActivityCategoryId, ActivityItem[]>>>({});
+  const [loadingCategory, setLoadingCategory] = useState<ActivityCategoryId | null>(null);
+  const [categoryError, setCategoryError] = useState(false);
+
   const [items, setItems] = useState<ActivityItem[]>(() => dedupe(initial));
   /** The row whose full payload is open, if any. */
   const [detail, setDetail] = useState<ActivityItem | null>(null);
@@ -215,21 +257,90 @@ export function ActivityFeed({
 
   const live = error === null;
 
-  // Live breakdown of what's currently in view, by kind — the "clear stats".
+  /*
+    Fetch a category once, on first open. `byCategory` is both the cache and the
+    guard — a tab already in it never re-requests, which is what stops a nav
+    that invites clicking from becoming a request per click.
+  */
+  useEffect(() => {
+    if (category === "all" || byCategory[category]) return;
+    let alive = true;
+    setLoadingCategory(category);
+    setCategoryError(false);
+    adminJson<{ items: ActivityItem[] }>("/api/admin/activity?category=" + encodeURIComponent(category))
+      .then((d) => {
+        if (!alive) return;
+        setByCategory((prev) => ({ ...prev, [category]: dedupe(d.items ?? []) }));
+      })
+      .catch(() => {
+        // Say so rather than showing an empty tab, which reads as "none today"
+        // — the single most misleading thing this panel could do.
+        if (alive) setCategoryError(true);
+      })
+      .finally(() => {
+        if (alive) setLoadingCategory(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [category, byCategory]);
+
+  /** What the list and the chips below are describing right now. */
+  const visible = category === "all" ? items : byCategory[category] ?? [];
+  const busy = loadingCategory === category;
+
+  // Breakdown of what's currently in view, by kind — the "clear stats".
   const breakdown = useMemo(() => {
     const m = new Map<string, number>();
-    for (const i of items) m.set(i.kind, (m.get(i.kind) ?? 0) + 1);
+    for (const i of visible) m.set(i.kind, (m.get(i.kind) ?? 0) + 1);
     return [...m.entries()].map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count);
-  }, [items]);
+  }, [visible]);
 
   return (
     <section className="rounded-3xl border border-border bg-card p-4 shadow-card sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="font-semibold">Live activity</h3>
+        {/*
+          The pulse means "this list is updating". On a category tab it is not,
+          and saying "live" there would be a small lie an operator acts on.
+        */}
         <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary/60 px-2.5 py-1 text-xs text-muted-foreground">
-          <span className={cn("h-2 w-2 rounded-full", live ? "animate-pulse bg-green-500" : "bg-muted-foreground/40")} />
-          {live ? "live" : "paused"}
+          {category === "all" ? (
+            <>
+              <span className={cn("h-2 w-2 rounded-full", live ? "animate-pulse bg-green-500" : "bg-muted-foreground/40")} />
+              {live ? "live" : "paused"}
+            </>
+          ) : (
+            <>
+              <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+              last 24 hours
+            </>
+          )}
         </span>
+      </div>
+
+      {/*
+        The top nav. Horizontally scrollable rather than wrapped: on a phone a
+        wrapped tab row reflows as labels change and moves a tab out from under
+        the operator's thumb mid-tap.
+      */}
+      <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {ACTIVITY_CATEGORIES.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => setCategory(c.id)}
+            aria-pressed={category === c.id}
+            className={cn(
+              "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+              category === c.id
+                ? "bg-foreground text-background shadow-sm"
+                : "bg-secondary/60 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
 
       {/* Real period totals — a Postgres count per cell, never an estimate. */}
@@ -252,14 +363,24 @@ export function ActivityFeed({
         </div>
       ) : null}
 
-      {items.length === 0 ? (
+      {busy ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">Loading the last 24 hours…</p>
+      ) : categoryError && category !== "all" ? (
+        <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+          That view could not be loaded — try the tab again. An empty list here would read as
+          &ldquo;none today&rdquo;, which is why it is not shown instead.
+        </p>
+      ) : visible.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No activity yet. Downloads, ad clicks, subscriptions and installs appear here as they
-          happen — including from signed-out visitors.
+          {category === "all"
+            ? "No activity yet. Downloads, ad clicks, subscriptions and installs appear here as they happen — including from signed-out visitors."
+            : "No " +
+              (ACTIVITY_CATEGORIES.find((c) => c.id === category)?.label.toLowerCase() ?? "") +
+              " activity in the last 24 hours."}
         </p>
       ) : (
         <ul className="-mx-1 divide-y divide-border/50">
-          {items.map((item) => {
+          {visible.map((item) => {
             const meta = metaFor(item.kind);
             return (
               <li key={item.id}>

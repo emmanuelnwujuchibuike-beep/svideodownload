@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
 
+import { DOWNLOAD_KIND } from "./activity-categories";
 import { eventDetail, eventLabel, NOTABLE } from "./activity-format";
 
 /**
@@ -228,7 +229,23 @@ function formatBytes(n: number): string {
   return `${v.toFixed(v >= 10 ? 0 : 1)} ${units[i]}`;
 }
 
-export async function fetchRecentActivity(limit = 40, since?: string): Promise<ActivityItem[]> {
+/**
+ * Recent activity, optionally narrowed to one category's event kinds.
+ *
+ * Owner, 2026-09-03: a top nav where "when clicks on ad it shows all ad stats
+ * in the last 24hs". `kinds` is how a tab asks for only its own rows, and it
+ * makes the request CHEAPER, not dearer: a category that contains no downloads
+ * skips the downloads query entirely, and the row limit is then spent on rows
+ * the operator will actually see instead of on two hundred ad impressions
+ * standing in front of one install.
+ *
+ * Pass `kinds` as null/undefined for the unfiltered live feed.
+ */
+export async function fetchRecentActivity(
+  limit = 40,
+  since?: string,
+  kinds?: string[] | null,
+): Promise<ActivityItem[]> {
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
@@ -247,6 +264,16 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
     */
     const take = since ? Math.max(limit, 500) : limit;
 
+    /*
+      A category's kinds, split by which SOURCE can serve them. `download` is a
+      row in the `downloads` table and never an `events` type, so asking the
+      events query for it would return nothing and asking the downloads query
+      for an events type is meaningless.
+    */
+    const wanted = kinds && kinds.length > 0 ? kinds : null;
+    const wantedEventTypes = wanted ? wanted.filter((k) => k !== DOWNLOAD_KIND) : null;
+    const wantsDownloads = !wanted || wanted.includes(DOWNLOAD_KIND);
+
     let eventsQ = db
       .from("events")
       .select("id, user_id, type, metadata, created_at")
@@ -262,7 +289,12 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
         The set is the same one; it is simply applied where the rows are
         selected rather than after they have been counted.
       */
-      .in("type", [...NOTABLE])
+      /*
+        The category narrows the SAME set the feed already filters on, never
+        widens it — kindsInCategory derives from NOTABLE, so a tab cannot ask
+        for a type the feed does not carry.
+      */
+      .in("type", wantedEventTypes ?? [...NOTABLE])
       .order("created_at", { ascending: false })
       .limit(take);
     let dlQ = db
@@ -277,7 +309,18 @@ export async function fetchRecentActivity(limit = 40, since?: string): Promise<A
       eventsQ = eventsQ.gte("created_at", since);
       dlQ = dlQ.gte("created_at", since);
     }
-    const [{ data: events }, { data: downloads }] = await Promise.all([eventsQ, dlQ]);
+    /*
+      An ads or installs tab does not touch the downloads table at all. That is
+      one fewer query per request on a dashboard the owner has already asked
+      twice to make cheaper.
+    */
+    const [{ data: events }, downloadsRes] = await Promise.all([
+      wantedEventTypes && wantedEventTypes.length === 0
+        ? Promise.resolve({ data: [] as EventRow[] })
+        : eventsQ,
+      wantsDownloads ? dlQ : Promise.resolve({ data: [] }),
+    ]);
+    const downloads = downloadsRes.data;
 
     const eventItems: (ActivityItem & { userId: string | null })[] = ((events ?? []) as EventRow[])
       /* Kept as a belt to the query's braces: a type that reaches here despite

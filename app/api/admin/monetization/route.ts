@@ -52,6 +52,12 @@ const schema = z.object({
     .default([]),
   // Page scope: show Monetag everywhere (default) or only on selected surfaces.
   monetagAllPages: z.boolean().default(true),
+  /*
+    In-Page Push tag loads per visitor per local day. OUR ceiling, not
+    Monetag's — see lib/monetization/settings.ts for why it is a revenue dial
+    and why it is no longer hard-coded at 5. 0 disables the cap.
+  */
+  monetagInPagePushDailyLimit: z.number().int().min(0).max(500).default(20),
   monetagSurfaces: z.array(z.enum(MONETAG_SURFACE_IDS)).max(20).default([]),
   // Moment placements: one Monetag tag per moment, parsed (not injected) client-side.
   monetagPlacements: z

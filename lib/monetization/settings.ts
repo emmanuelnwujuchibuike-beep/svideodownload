@@ -143,6 +143,21 @@ export interface MonetizationSettings {
    * See lib/monetization/monetag.ts and features/monetization/monetag-placements.tsx.
    */
   monetagPlacements: MonetagPlacement[];
+  /**
+   * How many times the In-Page Push TAG may load per visitor per local day.
+   *
+   * 🔴 THIS IS OUR CEILING, NOT MONETAG'S, AND IT IS A REVENUE DIAL.
+   *
+   * It was added as a fixed 5 to stop the push showing too often, and then went
+   * looking like a Monetag problem: with the tag loading once per DOCUMENT
+   * (features/monetization/use-monetag-inpage-push.ts), an installed PWA that a
+   * visitor keeps open all day produces ONE load, and five is a hard stop for
+   * anyone who relaunches more than that. Neither number is visible anywhere,
+   * so a low impression count reads as the network's fault.
+   *
+   * Configurable so the owner owns it. 0 disables the cap entirely.
+   */
+  monetagInPagePushDailyLimit: number;
   /* ── Offerium (rewarded / offerwall) ──────────────────────────────────────
      Owner, 2026-08-23: "put a slot in admin dashboard where I can set up all
      Offerium API, SDK, and all."
@@ -711,6 +726,12 @@ export const DEFAULT_MONETIZATION: MonetizationSettings = {
   monetagAllPages: true,
   monetagSurfaces: [],
   monetagPlacements: [],
+  /*
+    Raised from the original hard-coded 5. Five was chosen when the concern was
+    the push appearing too often; the measured problem since is the opposite,
+    and the architecture already limits a whole PWA session to a single load.
+  */
+  monetagInPagePushDailyLimit: 20,
   /* Offerium ships OFF and unconfigured. It stays off until an admin pastes
      real values AND the server-side secrets exist — see `offeriumConfigured`. */
   offerium: false,
@@ -992,6 +1013,17 @@ export async function readMonetizationSettings(): Promise<MonetizationRead> {
       ? merged.monetagSurfaces.filter(isMonetagSurfaceId)
       : [];
     merged.monetagPlacements = normalizeMonetagPlacements(merged.monetagPlacements);
+    /*
+      A stored blob can carry a string, a negative, or nonsense. Clamped rather
+      than rejected: an out-of-range value must not silently become "no ads".
+      0 is meaningful (no cap) and is preserved.
+    */
+    {
+      const raw = Number(merged.monetagInPagePushDailyLimit);
+      merged.monetagInPagePushDailyLimit = Number.isFinite(raw)
+        ? Math.min(500, Math.max(0, Math.round(raw)))
+        : DEFAULT_MONETIZATION.monetagInPagePushDailyLimit;
+    }
     // Same reasoning as the three above: a stored blob can carry a removed zone
     // or a non-boolean, and a truthy `"false"` would turn a switched-off
     // placement back on.

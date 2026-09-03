@@ -33,6 +33,12 @@ export async function GET() {
       placements: resolveMonetagPlacements(settings),
       allPages: settings.monetagAllPages,
       surfaces: settings.monetagSurfaces,
+      /*
+        The In-Page Push daily tag-load ceiling. Ours, not Monetag's, and the
+        one number in this payload that directly bounds how many ad
+        opportunities a visitor can generate — see settings.ts.
+      */
+      inPagePushDailyLimit: settings.monetagInPagePushDailyLimit,
     },
     /*
       `private` for the same reason as /api/ads/config — see the long note

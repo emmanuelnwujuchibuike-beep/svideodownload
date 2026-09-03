@@ -37,6 +37,8 @@ interface MonetagConfig {
   placements: MonetagPlacementTag[];
   allPages: boolean;
   surfaces: string[];
+  /** In-Page Push tag loads allowed per visitor per local day. 0 = uncapped. */
+  inPagePushDailyLimit?: number;
 }
 
 export function MonetagClient() {
@@ -67,12 +69,19 @@ export function MonetagClient() {
   }, []);
 
   if (!config) return null;
-  const { tags, placements, allPages, surfaces } = config;
+  const { tags, placements, allPages, surfaces, inPagePushDailyLimit } = config;
   if (tags.length === 0 && placements.length === 0) return null;
 
   return (
     <>
-      {tags.length > 0 ? <MonetagTags tags={tags} allPages={allPages} surfaces={surfaces} /> : null}
+      {tags.length > 0 ? (
+        <MonetagTags
+          tags={tags}
+          allPages={allPages}
+          surfaces={surfaces}
+          inPagePushDailyLimit={inPagePushDailyLimit}
+        />
+      ) : null}
       {placements.length > 0 ? (
         <MonetagPlacements placements={placements} allPages={allPages} surfaces={surfaces} />
       ) : null}

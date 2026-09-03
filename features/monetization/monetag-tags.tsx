@@ -58,10 +58,13 @@ export function MonetagTags({
   tags,
   allPages,
   surfaces,
+  inPagePushDailyLimit,
 }: {
   tags: MonetagTag[];
   allPages: boolean;
   surfaces: string[];
+  /** Admin-set ceiling on In-Page Push tag loads per local day. */
+  inPagePushDailyLimit?: number;
 }) {
   const { showAds, ready } = useEntitlements();
   const pathname = usePathname();
@@ -104,7 +107,12 @@ export function MonetagTags({
   return (
     <>
       {inPagePushTags.map((tag) => (
-        <InPagePushGate key={`${tag.src}|${tag.zone ?? ""}`} tag={tag} enabled={allowed} />
+        <InPagePushGate
+          key={`${tag.src}|${tag.zone ?? ""}`}
+          tag={tag}
+          enabled={allowed}
+          dailyLimit={inPagePushDailyLimit}
+        />
       ))}
     </>
   );
@@ -116,7 +124,25 @@ export function MonetagTags({
  * inline in `MonetagTags`) so the number of tags can vary at runtime without
  * ever violating the rules of hooks — each tag gets its own hook instance.
  */
-function InPagePushGate({ tag, enabled }: { tag: MonetagTag; enabled: boolean }) {
-  useMonetagInPagePush(tag, { enabled });
+function InPagePushGate({
+  tag,
+  enabled,
+  dailyLimit,
+}: {
+  tag: MonetagTag;
+  enabled: boolean;
+  dailyLimit?: number;
+}) {
+  /*
+    A limit of 0 means "no cap" in the admin, which the hook expresses as a very
+    large number rather than a special case — every comparison in the cap module
+    stays a plain `count >= limit`.
+  */
+  useMonetagInPagePush(tag, {
+    enabled,
+    ...(typeof dailyLimit === "number"
+      ? { dailyLimit: dailyLimit === 0 ? Number.MAX_SAFE_INTEGER : dailyLimit }
+      : {}),
+  });
   return null;
 }

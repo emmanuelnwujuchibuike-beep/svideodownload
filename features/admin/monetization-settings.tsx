@@ -1527,6 +1527,49 @@ export function MonetizationSettings({
               />
             </div>
 
+            {/*
+              HOW OFTEN the In-Page Push tag may load, per visitor per local day.
+
+              🔴 THIS IS OUR CEILING, NOT MONETAG'S, and it is the one number on
+              this screen that directly bounds how many ad opportunities a
+              visitor can generate. It was a hard-coded 5 with no control and no
+              label anywhere, which is how a low impression count came to look
+              like a Monetag problem.
+
+              The note under it says the thing an operator cannot otherwise
+              know: the tag loads once per DOCUMENT, so an installed PWA that
+              somebody keeps open all day produces ONE load however many screens
+              they visit. Raising this only helps visitors who relaunch or
+              hard-refresh.
+            */}
+            <div className="mt-4 space-y-2 border-t border-border/50 pt-4">
+              <label htmlFor="monetag-ipp-cap" className="block text-sm font-semibold">
+                In-Page Push loads per visitor per day
+              </label>
+              <input
+                id="monetag-ipp-cap"
+                type="number"
+                min={0}
+                max={500}
+                inputMode="numeric"
+                disabled={busy}
+                value={state.monetagInPagePushDailyLimit}
+                onChange={(e) =>
+                  setState((s) => ({
+                    ...s,
+                    monetagInPagePushDailyLimit: Math.min(500, Math.max(0, Math.round(Number(e.target.value) || 0))),
+                  }))
+                }
+                className="w-32 rounded-xl border border-border/70 bg-background px-3 py-2 text-sm tabular-nums disabled:opacity-70"
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground">0 removes the cap.</span> The tag loads at most
+                once per page load, so this only bites for visitors who relaunch or refresh more than this
+                many times in a day. It does <em>not</em> add loads inside one session — an installed PWA
+                kept open all day produces one load however many screens are visited.
+              </p>
+            </div>
+
             {/* WHERE Monetag shows. Pro/Business are ad-free regardless; this narrows
                 it further by page. Controlled by the parent state (one save path). */}
             <div className="mt-4 space-y-3 border-t border-border/50 pt-4">

@@ -1,3 +1,4 @@
+import { MONETAG_SLOT_LABELS } from "@/lib/monetization/monetag-track";
 import { getEvents } from "@/lib/platform/events-registry";
 
 /**
@@ -48,8 +49,16 @@ export const NOTABLE = new Set([
   "pwa_installed",
 ]);
 
-/** What each ExoClick display placement is called in the admin. */
+/**
+ * What each display placement is called in the admin.
+ *
+ * The Monetag entries are SPREAD IN from the format and moment registries
+ * rather than typed out, so a format or moment added there is legible here the
+ * same day — the same discipline /api/track's slot list follows, and for the
+ * same reason: a row nobody labelled prints its raw id at an operator.
+ */
 const SLOT_LABELS: Record<string, string> = {
+  ...MONETAG_SLOT_LABELS,
   bottomnav: "Bottom banner",
   history: "History banner",
   hilltop_history: "Hilltop — History above grid",

@@ -3,6 +3,7 @@ import { AlertTriangle, ChevronDown, DollarSign, Layers, MousePointerClick, Eye,
 import { PageViewsChart } from "./page-views-chart";
 
 import { AD_ZONE_META, type AdZoneId } from "@/lib/monetization/ad-schema";
+import { MONETAG_SLOT_LABELS } from "@/lib/monetization/monetag-track";
 import type { MonetizationAnalytics, RevenueStats } from "@/lib/monetization/stats";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -40,6 +41,13 @@ import { cn, formatCompactNumber } from "@/lib/utils";
  * that controls it read as the same thing.
  */
 const HILLTOP_SLOT_LABELS: Record<string, string> = {
+  /*
+    Monetag's formats and moments, spread in from the registries. Every one of
+    them now reports (features/monetization/monetag-report.ts), so without a
+    label this table would print `monetag_moment_download_complete` at an
+    operator and make them decode it.
+  */
+  ...MONETAG_SLOT_LABELS,
   hilltop_history: "HilltopAds — History, above the grid",
   hilltop_historyfeed: "HilltopAds — History, between time periods",
   hilltop_landing: "HilltopAds — Landing, under the wallpaper button",
@@ -254,6 +262,27 @@ export function RevenueOverview({
           </span>
         </summary>
         <div className="border-t border-border/60 p-4">
+        {/*
+          🔴 SAY WHAT A MONETAG ROW'S NUMBERS ARE, because they are not the same
+          kind of number as the rows above them.
+
+          Owner, 2026-09-03: "make all monetag ad slot and format shows the
+          impression, click and interaction sections in the admin dashboard."
+          They do now — but Monetag's formats place themselves inside their own
+          cross-origin frames, so what this app can witness is what it drew and
+          what was pointed at, never what the network billed. An operator
+          reading a Monetag CTR beside an ExoClick CTR would otherwise compare
+          two different measurements and conclude the wrong thing.
+        */}
+        {zones.some((z) => z.zone.startsWith("monetag_")) ? (
+          <p className="mb-4 rounded-xl border border-border/60 bg-secondary/40 p-3 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">Monetag rows are measured here, not reported by Monetag.</span>{" "}
+            An impression means this site saw the creative drawn; a click means a pointer landed on it.
+            Clicks inside Monetag&rsquo;s own frame never reach us, so Monetag clicks and CTR are a{" "}
+            <span className="font-medium">lower bound</span> — Monetag&rsquo;s dashboard is the authority on
+            what was billed. A row with requests and no impressions is a placement that loads and never draws.
+          </p>
+        ) : null}
         {zones.length === 0 ? (
           <p className="rounded-2xl border border-border/70 bg-card p-4 text-sm leading-relaxed text-muted-foreground">
             No impressions recorded yet. Placements appear here once they have been served — seed

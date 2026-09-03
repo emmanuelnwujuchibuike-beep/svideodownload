@@ -11,7 +11,12 @@ import {
   recordInPagePushSkip,
   type InPagePushCapState,
 } from "@/lib/monetization/inpage-push-cap";
-import { watchInPagePushSkip } from "@/features/monetization/inpage-push-skip-watch";
+import { watchNetworkAd } from "@/features/monetization/network-ad-watch";
+import {
+  reportMonetagFormatInteraction,
+  reportMonetagFormatRendered,
+  reportMonetagFormatRequested,
+} from "@/features/monetization/monetag-report";
 import type { MonetagTag } from "@/lib/monetization/monetag";
 
 /**
@@ -168,8 +173,22 @@ export function useMonetagInPagePush(
         hydration for the network's DOM. It observes and nothing more — it
         does not touch, hide or remove whatever Monetag renders.
       */
-      stopSkipWatch = watchInPagePushSkip(() => {
-        recordInPagePushSkip();
+      reportMonetagFormatRequested(tag.type);
+
+      /*
+        In-Page Push is the ONE Monetag format whose drawn nodes can be
+        attributed with confidence: it is injected on its own, by this hook, and
+        nothing else here is loading at that instant. The other formats and the
+        moment tags report their REQUEST only — a document-wide watcher cannot
+        say which of several self-placing loaders drew a given node, and a
+        guess at attribution would be worse than an absent row.
+      */
+      stopSkipWatch = watchNetworkAd({
+        onShown: () => reportMonetagFormatRendered(tag.type),
+        onInteraction: () => reportMonetagFormatInteraction(tag.type),
+        onDismissed: () => {
+          recordInPagePushSkip();
+        },
       });
 
       if (!cancelled) {

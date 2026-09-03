@@ -1,7 +1,18 @@
 "use client";
 
 /**
- * Notices when the visitor SKIPS a Monetag In-Page Push — passively.
+ * Watches what a SELF-PLACING ad network actually does to our page — passively.
+ *
+ * Three observations, and they are the only three this app can make first-hand
+ * about a network that draws its own creative into its own frame:
+ *
+ *   onShown        it drew something real (a node it added reached MIN_W × MIN_H)
+ *   onInteraction  a pointer landed on a node it drew
+ *   onDismissed    something it had drawn was removed or collapsed
+ *
+ * `onDismissed` drives the In-Page Push skip cooldown; all three drive the admin
+ * reporting rows (lib/monetization/monetag-track.ts, which explains why there is
+ * deliberately no CLICK among them).
  *
  * Owner, 2026-09-03: "make the monetag in page push have a cooldown of 60 secs
  * when is skipped", with the guardrail "it must not block monetag data from
@@ -69,7 +80,21 @@ const IGNORED = /^(SCRIPT|LINK|STYLE|META|TITLE|TEMPLATE|NOSCRIPT)$/;
  * Watch for a skip. Calls `onSkip` at most once, then stops watching.
  * Returns a teardown that is always safe to call.
  */
-export function watchInPagePushSkip(onSkip: () => void): () => void {
+export interface NetworkAdWatchHandlers {
+  /** The network drew something big enough to have been seen. Fires ONCE. */
+  onShown?: () => void;
+  /** A pointer landed on something the network drew. May fire more than once. */
+  onInteraction?: () => void;
+  /** Something it had drawn was removed or collapsed. Fires ONCE, then stops. */
+  onDismissed?: () => void;
+}
+
+/**
+ * Watch one network's DOM from now on. Returns a teardown that is always safe
+ * to call. `onDismissed` ends the watch; `onShown` and `onInteraction` do not.
+ */
+export function watchNetworkAd(handlers: NetworkAdWatchHandlers): () => void {
+  const { onShown, onInteraction, onDismissed } = handlers;
   if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
     return () => {};
   }
@@ -79,12 +104,22 @@ export function watchInPagePushSkip(onSkip: () => void): () => void {
   /** Of those, the ones that were ever big enough to have been seen. */
   const shown = new Set<Element>();
   let done = false;
+  let announcedShown = false;
+
+  /** Report a real render exactly once, however many nodes qualify. */
+  const markShown = (el: Element) => {
+    if (shown.has(el)) return;
+    shown.add(el);
+    if (announcedShown) return;
+    announcedShown = true;
+    onShown?.();
+  };
 
   const finish = () => {
     if (done) return;
     done = true;
     stop();
-    onSkip();
+    onDismissed?.();
   };
 
   const resize =
@@ -95,7 +130,7 @@ export function watchInPagePushSkip(onSkip: () => void): () => void {
             const el = entry.target;
             const { width, height } = el.getBoundingClientRect();
             if (width >= MIN_W && height >= MIN_H) {
-              shown.add(el);
+              markShown(el);
             } else if (shown.has(el) && width === 0 && height === 0) {
               // It was on screen and has collapsed — `display:none`, or the
               // network tore its own box down. That is a dismissal.
@@ -114,7 +149,7 @@ export function watchInPagePushSkip(onSkip: () => void): () => void {
     // Measure once immediately: a widget inserted at full size never resizes,
     // so waiting for a ResizeObserver callback alone could miss it.
     const r = el.getBoundingClientRect();
-    if (r.width >= MIN_W && r.height >= MIN_H) shown.add(el);
+    if (r.width >= MIN_W && r.height >= MIN_H) markShown(el);
     resize?.observe(el);
   };
 
@@ -134,9 +169,32 @@ export function watchInPagePushSkip(onSkip: () => void): () => void {
     }
   });
 
+  /*
+    A pointer on something the network drew. Capture phase, passive, and it
+    never calls preventDefault — the ad's own handling of the event is
+    completely untouched, which is the whole point: observing a click must not
+    change whether the click works.
+
+    Note a cross-origin frame swallows its own pointer events, so this sees an
+    interaction only when the creative is in same-origin DOM. That is why the
+    reporting calls it an INTERACTION and never a click — see monetag-track.ts.
+  */
+  const onPointer = (e: Event) => {
+    if (done || !onInteraction) return;
+    const target = e.target as Node | null;
+    if (!target) return;
+    for (const el of shown) {
+      if (el === target || el.contains(target)) {
+        onInteraction();
+        return;
+      }
+    }
+  };
+
   function stop() {
     mutations.disconnect();
     resize?.disconnect();
+    document.removeEventListener("pointerdown", onPointer, true);
     candidates.clear();
     shown.clear();
   }
@@ -146,9 +204,20 @@ export function watchInPagePushSkip(onSkip: () => void): () => void {
      Monetag's own container going to <html> and an iframe to <body>). */
   mutations.observe(document.documentElement, { childList: true });
   if (document.body) mutations.observe(document.body, { childList: true });
+  if (onInteraction) document.addEventListener("pointerdown", onPointer, { capture: true, passive: true });
 
   return () => {
     done = true;
     stop();
   };
+}
+
+/**
+ * The In-Page Push skip cooldown's view of the above: a dismissal, nothing else.
+ * Kept as its own name because that is what `use-monetag-inpage-push` means by
+ * it, and because a rename at the call site would hide which behaviour the
+ * 60-second cooldown is actually keyed to.
+ */
+export function watchInPagePushSkip(onSkip: () => void): () => void {
+  return watchNetworkAd({ onDismissed: onSkip });
 }

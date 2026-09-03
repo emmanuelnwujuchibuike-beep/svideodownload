@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useMonetagInPagePush } from "@/features/monetization/use-monetag-inpage-push";
+import { reportMonetagFormatRequested } from "@/features/monetization/monetag-report";
 import { monetagAllowedOnPath, type MonetagTag } from "@/lib/monetization/monetag";
 
 /**
@@ -91,6 +92,12 @@ export function MonetagTags({
       if (tag.zone) el.setAttribute("data-zone", tag.zone);
       if (tag.cfAsync) el.setAttribute("data-cfasync", "false");
       document.head.appendChild(el);
+      /*
+        The denominator. A format requested on every page that never draws is
+        a dead zone, and that is invisible in the admin without this row. It is
+        deliberately NOT counted as an impression — see monetag-track.ts.
+      */
+      reportMonetagFormatRequested(tag.type);
     }
   }, [allowed, standardTags]);
 

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { recordAdClick, recordAdImpression, trackEvent } from "@/lib/analytics/events";
 import { emit } from "@/lib/platform/event-bus";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
+import { MONETAG_TRACK_SLOTS, isMonetagSlot } from "@/lib/monetization/monetag-track";
 import { clientId, trackLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -33,9 +34,19 @@ export const dynamic = "force-dynamic";
  * as the shared-id bug below did, or require inventing zones that no operator
  * can configure.
  */
+/*
+  Derived, for the same reason the note at the top of this file gives: a
+  hand-listed slot is silently dropped by `sendBeacon`, which surfaces no
+  response, so a rejected Monetag slot would look exactly like a recorded one.
+  MONETAG_TRACK_SLOTS comes from the format and moment registries themselves.
+*/
+const MONETAG_SLOTS = new Set<string>(MONETAG_TRACK_SLOTS);
+
 const bannerSchema = z.object({
   kind: z.literal("banner"),
-  slot: z.enum([
+  slot: z.union([
+    z.string().refine((v) => MONETAG_SLOTS.has(v)),
+    z.enum([
     "sticky",
     "history",
     "historyfeed",
@@ -48,7 +59,7 @@ const bannerSchema = z.object({
     "landing",
     "bottomnav",
     "interstitial",
-  ]),
+  ])]),
   /** Did a creative actually arrive in the placeholder? */
   filled: z.boolean(),
   /**
@@ -173,6 +184,43 @@ export async function POST(request: Request) {
       // An EMPTY placement is not an impression. `filled` is the frame's own
       // painted height, so a no-fill records activity and no revenue — which is
       // the difference an operator is looking for when a zone under-earns.
+      else if (filled) recordAdImpression(slot, null, userId);
+    }
+
+    /*
+      ═══════════════════════════════════════════════════════════════════════
+       MONETAG — every format and moment, counted only where it was OBSERVED
+      ═══════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-03: "make all monetag ad slot and format shows the
+      impression, click and interaction sections in the admin dashboard."
+
+      Monetag's formats place themselves, usually into a cross-origin frame, so
+      there is no publisher hook that reports an impression. What arrives here
+      is therefore what the page could actually SEE happen:
+
+        filled:false            we injected the loader. Activity only, and NOT
+                                an impression — the denominator that makes a
+                                format which is requested constantly and never
+                                draws visible as the dead zone it is.
+        filled:true             the network drew something real: a node it added
+                                reached a usable size on screen
+                                (features/monetization/network-ad-watch.ts).
+        filled+click:true       a pointer landed on something it drew.
+
+      ⚠️ MONETAG CLICKS ARE A LOWER BOUND, and the admin says so. A cross-origin
+      frame swallows its own pointer events, so a click inside the creative
+      never reaches this document. Undercounting is the honest direction here;
+      the alternative — inferring a click from a tab losing focus — would put an
+      invented numerator over a real denominator. Monetag's own dashboard stays
+      the authority on billed clicks and revenue.
+
+      Same shape as the hilltop_* branch above: no ads-table row exists for a
+      settings-driven tag, so `adId` is null and the slot string is the whole
+      attribution.
+    */
+    if (isMonetagSlot(slot)) {
+      if (click) recordAdClick(slot, null, userId);
       else if (filled) recordAdImpression(slot, null, userId);
     }
 

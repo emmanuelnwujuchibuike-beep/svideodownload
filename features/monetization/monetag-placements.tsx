@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { reportMonetagMomentRequested } from "@/features/monetization/monetag-report";
 import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
 import {
   monetagAllowedOnPath,
@@ -106,6 +107,7 @@ export function MonetagPlacements({
     if (p.zone) el.setAttribute("data-zone", p.zone);
     if (p.cfAsync) el.setAttribute("data-cfasync", "false");
     document.head.appendChild(el);
+    reportMonetagMomentRequested(moment);
   });
 
   /*
@@ -156,6 +158,7 @@ export function MonetagPlacements({
         if (p.zone) el.setAttribute("data-zone", p.zone);
         if (p.cfAsync) el.setAttribute("data-cfasync", "false");
         document.head.appendChild(el);
+        reportMonetagMomentRequested(p.moment);
       }
     };
 

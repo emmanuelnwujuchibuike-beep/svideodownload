@@ -124,6 +124,30 @@ export function DownloadCompleteAd({
     Fails OPEN, deliberately: if the config cannot be read, this panel behaves as
     it always did. A missed ad is a rounding error; a download that silently
     shows nothing because a fetch failed is a revenue bug.
+
+    🔴 ...AND IT ALSO HAS TO CHECK THAT THE VIDEO CAN ACTUALLY PLAY SOMETHING.
+
+    Owner, 2026-09-03: "the monetag vignette still doesnt trigger on result and
+    on download completed, seems it still going through the hiltop path."
+
+    They were right about the path. Standing down was gated on TWO BOOLEANS —
+    `enabled` and `enabledOnDownloadComplete` — and on nothing else. Turning the
+    Hilltop master switch off does not clear either of them: it empties the
+    VAST's CREATIVE instead. Measured on production with the switch off:
+
+        vastInterstitial  { enabled: true, enabledOnDownloadComplete: true }
+        hilltopVast                    null
+        exoclickInterstitial           null
+        exoclickInterstitialFallback   null
+        /api/ads/exoclick?zone=download_complete  ->  {"ad":null}
+
+    So the video claimed the moment, had nothing to play, no-filled — and this
+    panel had already stood down for it. Every completed download showed
+    NOTHING, which is the exact failure the paragraph above says it exists to
+    prevent, reached through configuration rather than through a failed fetch.
+
+    A switch that empties a network must not leave the moment locked to it. So
+    standing down now also requires a creative source to exist at all.
   */
   const [videoOwnsMoment, setVideoOwnsMoment] = useState(false);
   useEffect(() => {
@@ -131,11 +155,27 @@ export function DownloadCompleteAd({
     let alive = true;
     fetch("/api/ads/config")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { vastInterstitial?: { enabled?: boolean; enabledOnDownloadComplete?: boolean } }) => {
-        if (!alive) return;
-        const v = d.vastInterstitial;
-        setVideoOwnsMoment(v?.enabled === true && v?.enabledOnDownloadComplete === true);
-      })
+      .then(
+        (d: {
+          vastInterstitial?: { enabled?: boolean; enabledOnDownloadComplete?: boolean };
+          hilltopVast?: unknown;
+          exoclickInterstitial?: unknown;
+          exoclickInterstitialFallback?: unknown;
+        }) => {
+          if (!alive) return;
+          const v = d.vastInterstitial;
+          const armed = v?.enabled === true && v?.enabledOnDownloadComplete === true;
+          /*
+            Every source the VAST can play, and it needs exactly one of them.
+            All three null is what the Hilltop master switch produces, and it is
+            indistinguishable from "the video is off" as far as this moment is
+            concerned — so treat it that way rather than holding the slot open
+            for a player with an empty reel.
+          */
+          const hasCreative = Boolean(d.hilltopVast || d.exoclickInterstitial || d.exoclickInterstitialFallback);
+          setVideoOwnsMoment(armed && hasCreative);
+        },
+      )
       .catch(() => {
         /* Fails open — see above. */
       });

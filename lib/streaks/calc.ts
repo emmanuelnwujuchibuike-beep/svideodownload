@@ -7,6 +7,7 @@ import {
   type StreakRecord,
   type StreakStatus,
 } from "./types";
+import { outageDaysMissed } from "./outages";
 
 /**
  * The streak state machine — PURE. No I/O, no Date.now(), no database.
@@ -148,7 +149,7 @@ export function applyActivity(record: StreakRecord, today: string): ActivityOutc
     };
   }
 
-  const gap = daysBetween(last, today);
+  const calendarGap = daysBetween(last, today);
 
   /*
     A negative gap means `today` is BEFORE the recorded last activity — the
@@ -157,7 +158,29 @@ export function applyActivity(record: StreakRecord, today: string): ActivityOutc
     change nothing: the day is already banked, and the safe failure here is
     "no new credit", never "reset their streak".
   */
-  if (gap <= 0) return { kind: "already-today", record };
+  if (calendarGap <= 0) return { kind: "already-today", record };
+
+  /*
+    ── DAYS WE WERE DOWN DO NOT COUNT AGAINST ANYONE ────────────────────────
+
+    Owner, 2026-09-07, after a two-day outage: "Restore all lost streaks from
+    Friday last week."
+
+    A visitor cannot download from a service that is not answering, so a day the
+    site was unavailable is not a day they missed — it is a day WE missed. The
+    outage days are subtracted from the gap, which means someone who was active
+    the day before the outage and returns the day after keeps their streak.
+
+    🔴 It forgives, it does not award. The increment below is still ONE: they
+    were active today, and on no other day. Crediting the outage days as active
+    would be inventing activity that never happened.
+
+    Floored at 1 because `today` is by definition a new day — a gap of 0 is the
+    "already today" case handled above, and must not be reachable from here.
+    See lib/streaks/outages.ts for the window and why it is a rule rather than a
+    mass update of production rows.
+  */
+  const gap = Math.max(1, calendarGap - outageDaysMissed(last, today));
 
   if (gap === 1) {
     const currentStreak = record.currentStreak + 1;

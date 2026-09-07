@@ -8,6 +8,7 @@ import {
   AI_JOB_STATUSES,
   aiFeature,
   canTransition,
+  createJobRequestSchema,
   featureAvailability,
   isActiveStatus,
   isValidClientRequestId,
@@ -287,6 +288,68 @@ describe("pagination cursors", () => {
   it("refuses rubbish rather than throwing on it", () => {
     for (const bad of ["", "!!!!", "notbase64", Buffer.from("nopipe", "utf8").toString("base64url")]) {
       expect(decodeCursor(bad), bad).toBeNull();
+    }
+  });
+});
+
+
+describe("the create-job request schema", () => {
+  const valid = {
+    feature: "ai_clean",
+    clientRequestId: "9f2c1b8e4a7d4f0e",
+    source: { size: 1024, mimeType: "video/mp4" },
+  };
+
+  it("accepts the only body the route takes", () => {
+    expect(createJobRequestSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("accepts the optional measurements", () => {
+    const withExtras = { ...valid, source: { ...valid.source, durationSeconds: 12.5, name: "clip.mp4" } };
+    expect(createJobRequestSchema.safeParse(withExtras).success).toBe(true);
+  });
+
+  it("🔴 REFUSES every field the server owns", () => {
+    /*
+      The security test for this whole route. A permissive schema would STRIP
+      these and succeed, which is worse than failing: the request would look
+      accepted while the fields it tried to set did nothing, and nobody reading
+      the response could tell the difference.
+    */
+    for (const injected of [
+      { user_id: "00000000-0000-0000-0000-000000000000" },
+      { userId: "00000000-0000-0000-0000-000000000000" },
+      { provider: "some-other-service" },
+      { model: "expensive/model" },
+      { model_version: "abc" },
+      { status: "completed" },
+      { result_path: "someone/else/result.mp4" },
+      { source_path: "someone/else/source.mp4" },
+      { expires_at: "2099-01-01T00:00:00Z" },
+      { metadata: { admin: true } },
+    ]) {
+      const body = { ...valid, ...injected };
+      const key = Object.keys(injected)[0];
+      expect(createJobRequestSchema.safeParse(body).success, `${key} was accepted`).toBe(false);
+    }
+  });
+
+  it("refuses an unknown field inside source, too", () => {
+    const body = { ...valid, source: { ...valid.source, path: "x/y/z.mp4" } };
+    expect(createJobRequestSchema.safeParse(body).success).toBe(false);
+  });
+
+  it("refuses a body missing what it must have", () => {
+    expect(createJobRequestSchema.safeParse({}).success).toBe(false);
+    expect(createJobRequestSchema.safeParse({ feature: "ai_clean" }).success).toBe(false);
+    const { clientRequestId: _omit, ...noId } = valid;
+    expect(createJobRequestSchema.safeParse(noId).success).toBe(false);
+  });
+
+  it("refuses sizes that are not whole positive numbers of bytes", () => {
+    for (const size of [0, -1, 1.5, Number.NaN, "1024"]) {
+      const body = { ...valid, source: { ...valid.source, size } };
+      expect(createJobRequestSchema.safeParse(body).success, String(size)).toBe(false);
     }
   });
 });

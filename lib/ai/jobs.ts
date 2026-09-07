@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { AI_CLEAN_FORMATS, AI_CLEAN_MAX_BYTES } from "@/lib/ai/clean-media";
 
 /**
@@ -364,3 +366,34 @@ export function decodeCursor(cursor: string): { createdAt: string; id: string } 
     return null;
   }
 }
+
+/**
+ * The ONLY body `POST /api/ai/jobs` accepts.
+ *
+ * 🔴 `.strict()` on both objects, and that is a security property rather than a
+ * tidiness one. A permissive schema STRIPS unknown keys, so a request carrying
+ * `user_id`, `provider`, `model`, `status` or `result_path` would succeed —
+ * quietly, having ignored them — and nobody reading the response could tell
+ * whether those fields had done anything. Refusing the request says plainly that
+ * they are not the caller's to send. The identity comes from the session, the
+ * provider from the registry, the status is always `queued`, and both paths
+ * belong to the server.
+ *
+ * Lives here rather than inside the route so it can be tested for exactly that.
+ */
+export const createJobRequestSchema = z
+  .object({
+    feature: z.string().min(1).max(40),
+    clientRequestId: z.string().min(8).max(100),
+    source: z
+      .object({
+        size: z.number().int().positive(),
+        mimeType: z.string().min(1).max(120),
+        durationSeconds: z.number().positive().max(86_400).optional(),
+        name: z.string().max(200).optional(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;

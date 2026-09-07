@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
 import { getUserAIEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import {
   aiFeature,
+  createJobRequestSchema,
   featureAvailability,
   isValidClientRequestId,
   jobToView,
@@ -72,21 +72,6 @@ const CAPABILITIES: AiCapabilities = {
   ),
 };
 
-const createSchema = z
-  .object({
-    feature: z.string().min(1).max(40),
-    clientRequestId: z.string().min(8).max(100),
-    source: z
-      .object({
-        size: z.number().int().positive(),
-        mimeType: z.string().min(1).max(120),
-        durationSeconds: z.number().positive().max(86_400).optional(),
-        name: z.string().max(200).optional(),
-      })
-      .strict(),
-  })
-  .strict();
-
 /** The signed-in member, or null. Never trusts anything in the request body. */
 async function currentUserId(): Promise<string | null> {
   try {
@@ -125,7 +110,7 @@ export async function POST(request: Request) {
   } catch {
     return fail("INVALID_INPUT");
   }
-  const parsed = createSchema.safeParse(raw);
+  const parsed = createJobRequestSchema.safeParse(raw);
   if (!parsed.success) return fail("INVALID_INPUT");
   const { feature: featureId, clientRequestId, source } = parsed.data;
 

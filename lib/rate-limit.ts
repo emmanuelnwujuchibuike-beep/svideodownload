@@ -288,6 +288,48 @@ export async function consumeDaily(
 }
 
 /**
+ * The same daily bucket, charged in WEIGHTED UNITS rather than one per call.
+ *
+ * Added for Frenz AI (2026-09-07), whose tools are not equal: reading four
+ * stills off a clip is several times the work of rewriting a caption. Charging
+ * both as "one use" would let the expensive one hide inside every usage number
+ * and every bill, so the allowance is credits and each tool declares its cost
+ * (lib/ai/tools.ts).
+ *
+ * 🔴 A SIBLING OF `consumeDaily`, NOT A REWRITE OF IT. That function is what
+ * every download on the site is metered by; widening its signature to serve a
+ * new feature would put the whole download path on the same blast radius as an
+ * AI experiment. Same namespace, same 26-hour TTL, same fail-open — different
+ * increment.
+ *
+ * Fails OPEN on any backend trouble, exactly like its sibling: a counter that
+ * cannot be read must never be what refuses a member something they are
+ * entitled to.
+ */
+export async function consumeDailyUnits(
+  key: string,
+  limit: number,
+  units: number,
+): Promise<DailyResult> {
+  const cost = Math.max(1, Math.round(units));
+  if (!dailyRedis || limit <= 0) {
+    return { allowed: true, used: 0, limit, remaining: limit };
+  }
+  try {
+    const day = new Date().toISOString().slice(0, 10); // UTC day, as above
+    const rk = `svd:daily2:${day}:${key}`;
+    const used = await dailyRedis.incrby(rk, cost);
+    // Only the FIRST charge of the day arms the expiry — re-arming it on every
+    // call would slide the window forward and make the bucket immortal for a
+    // heavy user.
+    if (used === cost) await dailyRedis.expire(rk, 60 * 60 * 26);
+    return { allowed: used <= limit, used, limit, remaining: Math.max(0, limit - used) };
+  } catch {
+    return { allowed: true, used: 0, limit, remaining: limit };
+  }
+}
+
+/**
  * A generic short-lived counter, for behaviour a table cannot remember.
  *
  * Added for repost repeat-detection: a repost row is DELETED on undo, so

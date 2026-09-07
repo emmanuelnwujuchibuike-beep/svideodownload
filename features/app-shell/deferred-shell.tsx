@@ -57,6 +57,10 @@ import { StreakTracker } from "@/features/streaks/streak-tracker";
  * file that does would.
  */
 
+const StorageFullGate = dynamic(
+  () => import("@/features/downloads/storage-full-gate").then((m) => m.StorageFullGate),
+  { ssr: false },
+);
 const CommandCenterMount = dynamic(
   () => import("@/features/navigation/command-center-mount").then((m) => m.CommandCenterMount),
   { ssr: false },
@@ -141,6 +145,15 @@ export function DeferredShell() {
         dynamic import that only runs once a download actually completes.
       */}
       <VastDownloadCompleteTrigger />
+      {/*
+        The storage ceiling gate. Mounted globally because the download MANAGER
+        is what refuses now, and it refuses from every surface — the batch panel
+        and wallpaper saves included, both of which used to bypass the two
+        per-surface checks entirely. Renders null until a refusal happens, and
+        the dialog itself is dynamic, so a visitor nowhere near their limit
+        downloads none of it.
+      */}
+      <StorageFullGate />
       <CommandCenterMount />
       <RegisterServiceWorker />
       <GlobalErrorCapture />

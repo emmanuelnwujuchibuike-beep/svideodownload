@@ -23,7 +23,9 @@ const base: StreakRecord = {
   totalActiveDays: 40,
   restoreDeadline: null,
   restoresUsed: 0,
-  timeZone: "UTC",
+  timezone: "UTC",
+  lastCelebrationDate: null,
+  lastReminderDate: null,
 };
 
 const on = (lastActivityDate: string): StreakRecord => ({ ...base, lastActivityDate });

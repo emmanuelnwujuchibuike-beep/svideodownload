@@ -270,7 +270,13 @@ export function MultiLinkPanel({
               ? `/api/download?rewardToken=${encodeURIComponent(reward.auth.rewardSessionId)}&itemIndex=${rewardIndex}&t=${crypto.randomUUID()}&b=${batchId}`
               : undefined,
         });
-        dispatch({ type: "itemQueued", itemId: item.id, taskId });
+        /*
+          A null id means the manager REFUSED this file — today, only because
+          the library is at the plan ceiling. It has already raised the
+          storage-full gate; queueing an item against an id that does not exist
+          would leave a row in the batch that can never progress.
+        */
+        if (taskId) dispatch({ type: "itemQueued", itemId: item.id, taskId });
       });
     },
     [state.sources, applyCommit],

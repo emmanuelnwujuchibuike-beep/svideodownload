@@ -40,6 +40,23 @@ let cache: Omit<Entitlements, "ready"> | null = null;
 let inflight: Promise<void> | null = null;
 
 /**
+ * The resolved entitlements, for code that is not a React component.
+ *
+ * The download manager is a plain module — it has to know the plan to enforce
+ * the storage ceiling (features/downloads/manager.ts), and it cannot call a
+ * hook to find out.
+ *
+ * 🔴 Returns null until `/api/me` has answered, and callers MUST fail open on
+ * null. An unresolved plan is "we do not know yet", and treating that as "free"
+ * would gate a paying customer out of a download they have paid for — the
+ * expensive direction of a guess this module has been careful about since the
+ * signed-out fast path was added.
+ */
+export function readEntitlements(): Omit<Entitlements, "ready"> | null {
+  return cache;
+}
+
+/**
  * Whether a Supabase auth cookie is present.
  *
  * ── Why this is worth a synchronous check ─────────────────────────────────────

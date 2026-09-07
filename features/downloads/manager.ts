@@ -3,7 +3,10 @@
 import { trackDownload } from "@/lib/analytics/client";
 import { canPlayHevc } from "@/lib/media/hevc-support";
 import { isRetryable, MAX_ATTEMPTS, RETRY_DELAY_MS } from "@/features/downloads/retry-policy";
-import { addDownload } from "@/features/history/store";
+import { readEntitlements } from "@/features/auth/use-entitlements";
+import { addDownload, getSnapshot as getHistorySnapshot } from "@/features/history/store";
+import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
+import { STORAGE_FULL_EVENT, type StorageFullDetail } from "@/lib/downloads/storage-full-event";
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
@@ -813,7 +816,16 @@ export function startDownload(input: {
   batchId?: string;
   /** Which source link inside the batch — groups admin alerts. See DownloadTask. */
   linkKey?: string;
-}): string {
+  /**
+   * NULL means the download was REFUSED, not that it failed.
+   *
+   * The only refusal today is the storage ceiling (see below). It is a real
+   * return value rather than a thrown error because a full library is an
+   * ordinary state a free member reaches, not an exception — and because
+   * `null` makes every call site face the question at compile time, which is
+   * what stopped the batch and wallpaper paths quietly ignoring the limit.
+   */
+}): string | null {
   /*
     A double tap is ONE download (owner audit, 2026-08-09).
 
@@ -837,6 +849,62 @@ export function startDownload(input: {
       (t.status === "queued" || t.status === "preparing" || t.status === "downloading"),
   );
   if (inFlight) return inFlight.id;
+
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     THE STORAGE CEILING — enforced HERE because here is the only choke point
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-07: "Make sure free users who exceed their 5gb storage limit
+    will not be able to save media, any download should show storage full free
+    storage or upgrade to pro."
+
+    The check already existed — twice — in `downloader.tsx` and
+    `download-box.tsx`, on the paste-box path. It was absent from the two paths
+    that can actually fill 5 GB: the MULTI-LINK BATCH panel and WALLPAPER saves,
+    both of which call this function directly and went straight past both
+    copies. A ceiling with two doors around it is not a ceiling.
+
+    Every download in the product funnels through `startDownload`, so this is
+    the one place a new call site cannot forget. The two callers above still
+    check first — that is not redundancy worth removing: checking early is what
+    lets them show the gate BEFORE a tap starts something, while this is what
+    makes it true.
+
+    🔴 FAILS OPEN. `readEntitlements()` is null until /api/me answers, and an
+    unresolved plan means "we do not know" — gating on it would refuse a
+    download to a Pro member who has paid for the space. A missed gate costs
+    disk; a wrong gate costs a customer.
+
+    Business is uncapped (`limitForPlan` returns Infinity), so the comparison
+    below is never true for them.
+  */
+  const ent = readEntitlements();
+  if (ent) {
+    const limitBytes = limitForPlan(ent.plan);
+    if (Number.isFinite(limitBytes)) {
+      const items = getHistorySnapshot();
+      const usedBytes = totalUsedBytes(items);
+      if (usedBytes >= limitBytes) {
+        /*
+          Refused, and SAID so. The overlay in the app shell turns this into the
+          upgrade-or-clear dialog; returning null without it would look to the
+          visitor like a download that silently did nothing, which is the one
+          outcome the quota gate was written to avoid.
+        */
+        try {
+          window.dispatchEvent(
+            new CustomEvent<StorageFullDetail>(STORAGE_FULL_EVENT, {
+              detail: { usedBytes, count: items.length, limitBytes },
+            }),
+          );
+        } catch {
+          /* a listener that throws must not also swallow the refusal */
+        }
+        return null;
+      }
+    }
+  }
 
   const id = crypto.randomUUID();
   tasks = [

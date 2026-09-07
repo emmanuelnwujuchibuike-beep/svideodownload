@@ -86,6 +86,22 @@ export function monetagTypeMeta(id: string): { id: string; label: string; descri
 export interface MonetagUnit {
   type: MonetagAdType;
   snippet: string;
+  /**
+   * Whether this format is live. Absent means TRUE.
+   *
+   * Owner, 2026-09-07: "when i switch off monetag in page or vignette it doesnt
+   * go off untill i switch off general switch."
+   *
+   * There was no per-format switch at all. The only way to stop a format was
+   * the DELETE button, which also destroys the snippet — so turning one off for
+   * an afternoon meant fetching the tag from Monetag's dashboard again to turn
+   * it back on. Nobody does that; they reach for the master switch instead,
+   * which is exactly what was reported.
+   *
+   * Optional, and defaulting to on, because every unit already stored was
+   * written before this existed and must keep serving.
+   */
+  enabled?: boolean;
 }
 
 /* ─────────────────────────────── page scope ─────────────────────────────────
@@ -330,7 +346,10 @@ export function resolveMonetagTags(input: {
   const out: MonetagTag[] = [];
   const seen = new Set<string>();
 
-  const add = (type: MonetagAdType, snippet: string) => {
+  const add = (type: MonetagAdType, snippet: string, enabled = true) => {
+    // A switched-off format resolves to nothing — same outcome as an empty
+    // snippet, without losing the snippet.
+    if (!enabled) return;
     const parsed = parseMonetagSnippet(snippet);
     if (!parsed) return;
     const key = `${parsed.src}|${parsed.zone ?? ""}`;
@@ -342,7 +361,7 @@ export function resolveMonetagTags(input: {
   // The primary Multitag stays in its own field for back-compat.
   add("multitag", input.monetagSnippet ?? "");
   for (const unit of input.monetagUnits ?? []) {
-    if (isMonetagAdType(unit?.type)) add(unit.type, unit?.snippet ?? "");
+    if (isMonetagAdType(unit?.type)) add(unit.type, unit?.snippet ?? "", unit?.enabled !== false);
   }
 
   return out;

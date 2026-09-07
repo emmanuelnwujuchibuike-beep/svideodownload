@@ -38,6 +38,14 @@ var SWX = (self.SWX = self.SWX || {});
 // device that already has v15 keeps running the code with the bug, which is
 // every device reporting it.
 //
+// v20 (2026-09-07): networkFirst no longer falls back to the CACHE on a
+// TIMEOUT — only on a genuine network failure (owner: the landing rendering
+// with no CSS on first open, fixed by a refresh). A 20s first byte is
+// reachable on mobile data, and the cached document it served was from an
+// earlier DEPLOY, so its hashed asset URLs 404 and the page paints unstyled.
+// Behaviour change in an already-installed worker, so it needs a bump to
+// activate at all — the v14 note below is the same situation.
+//
 // v19 (2026-09-03): `/launch.html` now defers its hand-off past the first paint
 // (owner: "the pwa still shows white for long before showing the F loader"). Its
 // inline script ran in the same task as the parse, so location.replace() fired
@@ -64,7 +72,7 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v19";
+SWX.VERSION = "v20";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

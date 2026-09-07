@@ -46,6 +46,13 @@ const schema = z.object({
       z.object({
         type: z.enum(MONETAG_AD_TYPE_IDS),
         snippet: z.string().max(4000),
+        /*
+          Per-format on/off. Optional and defaulting to ON, so every unit saved
+          before this switch existed keeps serving — a schema that required it
+          would reject the whole payload on the first save after deploy and
+          look like the admin panel breaking.
+        */
+        enabled: z.boolean().optional(),
       }),
     )
     .max(20)

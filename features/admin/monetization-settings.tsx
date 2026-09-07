@@ -1522,6 +1522,7 @@ export function MonetizationSettings({
             <div className="mt-4 border-t border-border/50 pt-4">
               <MonetagUnitsEditor
                 units={state.monetagUnits}
+                placementCount={state.monetagPlacements.length}
                 disabled={busy}
                 onChange={(next: MonetagUnit[]) => setState((s) => ({ ...s, monetagUnits: next }))}
               />

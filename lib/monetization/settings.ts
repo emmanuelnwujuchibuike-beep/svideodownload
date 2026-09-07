@@ -892,7 +892,13 @@ export function normalizeMonetagUnits(value: unknown): MonetagUnit[] {
         !!u && isMonetagAdType((u as MonetagUnit).type) && typeof (u as MonetagUnit).snippet === "string",
     )
     .slice(0, 20)
-    .map((u) => ({ type: u.type, snippet: u.snippet.slice(0, 4000) }));
+    .map((u) => ({
+      type: u.type,
+      snippet: u.snippet.slice(0, 4000),
+      // Absent means on — every unit stored before the switch existed must keep
+      // serving. Only an explicit false turns a format off.
+      ...(u.enabled === false ? { enabled: false } : {}),
+    }));
 }
 
 /** Keep one well-formed placement per moment (known moment + string snippet). */

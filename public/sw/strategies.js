@@ -97,11 +97,58 @@ SWX.staleWhileRevalidate = async function staleWhileRevalidate(request, cacheNam
 // room to actually resolve (and show its own Retry state) before this
 // outer one ever has to step in.
 SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 20000 }) {
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 A SLOW NETWORK IS NOT AN OFFLINE NETWORK
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-07, with a screenshot of the landing rendered with NO CSS:
+    "when i open the website on broswer it first shows this like is a cache or
+    device cache and untill i refresh thats when it then shows the main page."
+
+    That is this line's doing. The race below used to reject on the timeout and
+    fall into the `catch`, which serves `caches.match(request)` — a document
+    cached on some EARLIER visit, and therefore from an earlier DEPLOY. Its
+    `<link>` tags name hashed asset URLs (`/_next/static/...?dpl=…`) that no
+    longer exist, so every stylesheet 404s and the page paints as raw text and
+    an unscaled image. Refreshing works because the connection is warm the
+    second time and the network wins the race.
+
+    20 seconds is nowhere near unreachable on mobile data, which is where this
+    was reported from.
+
+    So a TIMEOUT no longer falls back to the cache. It goes on waiting for the
+    network, and the browser shows its own loading state — slow is honest, a
+    stale document dressed as the live site is not. Only a genuine network
+    FAILURE (fetch rejects: offline, DNS, connection refused) falls back, which
+    is what the cache is actually for.
+
+    The timeout still exists, and still matters: it is what stops a hung request
+    from holding the page forever when we ARE offline and the failure has not
+    surfaced as a rejection yet.
+  */
+  const fromNetwork = (async () => (preload && (await preload)) || (await fetch(request)))();
+  /* Nothing may observe this as an unhandled rejection while we wait on the race. */
+  fromNetwork.catch(() => {});
+
   try {
-    const res = await Promise.race([
-      (async () => (preload && (await preload)) || (await fetch(request)))(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("navigation timed out")), timeoutMs)),
-    ]);
+    let res;
+    try {
+      res = await Promise.race([
+        fromNetwork,
+        new Promise((_, reject) => setTimeout(() => reject(new Error("navigation timed out")), timeoutMs)),
+      ]);
+    } catch (err) {
+      // Timed out rather than failed, and we appear to be online: keep waiting
+      // for the real response instead of serving a document from another
+      // deployment. If the network then genuinely fails, the outer catch
+      // handles it exactly as before.
+      if (err && err.message === "navigation timed out" && self.navigator?.onLine !== false) {
+        res = await fromNetwork;
+      } else {
+        throw err;
+      }
+    }
     if (!res) throw new Error("no response");
     /*
       🔴 The cache write must NOT be awaited (2026-08-11).

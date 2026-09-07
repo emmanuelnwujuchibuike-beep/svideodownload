@@ -25,10 +25,19 @@ import { cn } from "@/lib/utils";
 export function MonetagUnitsEditor({
   units,
   onChange,
+  placementCount = 0,
   disabled,
 }: {
   units: MonetagUnit[];
   onChange: (next: MonetagUnit[]) => void;
+  /**
+   * How many moment placements are configured.
+   *
+   * Only used to warn that a format switched off here may still be loaded by a
+   * moment — the trap that made the vignette look un-switchable. The editor
+   * does not own that list and never edits it.
+   */
+  placementCount?: number;
   disabled?: boolean;
 }) {
   const update = (index: number, patch: Partial<MonetagUnit>) =>
@@ -66,6 +75,23 @@ export function MonetagUnitsEditor({
           const parsed = parseMonetagSnippet(unit.snippet);
           const hasSnippet = unit.snippet.trim().length > 0;
           const isRisky = unit.type === "onclick_popunder" || unit.type === "push_notification";
+          const on = unit.enabled !== false;
+          /*
+            Is this same format ALSO wired to a moment placement?
+
+            Owner, 2026-09-07: "when i switch off monetag in page or vignette it
+            doesnt go off untill i switch off general switch."
+
+            For the vignette that was literally true, and not a bug in the
+            switch: the vignette tag was configured BOTH as this site-level unit
+            AND on six moment placements, which are a separate list with their
+            own switches. Turning the unit off left the six placements loading
+            the same tag, so it looked as though nothing had happened.
+
+            The switch cannot fix that — they really are two placements of one
+            product — but silence can, and did, cost days. So the row says so.
+          */
+          const alsoOnMoments = unit.type === "vignette_banner" && placementCount > 0;
           return (
             <div
               key={index}
@@ -84,6 +110,30 @@ export function MonetagUnitsEditor({
                     </option>
                   ))}
                 </select>
+                {/*
+                  ON/OFF, which did not exist. The only way to stop a format was
+                  the delete button beside it — which also destroys the snippet,
+                  so turning one off for an afternoon meant fetching the tag from
+                  Monetag's dashboard again to turn it back on. Nobody does that;
+                  they reach for the master switch, which is exactly what the
+                  owner reported doing.
+                */}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => update(index, { enabled: !on })}
+                  aria-pressed={on}
+                  aria-label={on ? "Switch this format off" : "Switch this format on"}
+                  className={
+                    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold ring-1 ring-inset transition disabled:opacity-60 " +
+                    (on
+                      ? "text-emerald-600 ring-emerald-500/40 dark:text-emerald-400"
+                      : "text-muted-foreground ring-border")
+                  }
+                >
+                  <span className={"h-1.5 w-1.5 rounded-full " + (on ? "bg-emerald-500" : "bg-muted-foreground/50")} />
+                  {on ? "On" : "Off"}
+                </button>
                 <button
                   type="button"
                   disabled={disabled}
@@ -98,6 +148,14 @@ export function MonetagUnitsEditor({
               <p className="text-[11px] text-muted-foreground">
                 {MONETAG_AD_TYPES.find((t) => t.id === unit.type)?.description}
               </p>
+
+              {alsoOnMoments ? (
+                <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                  This tag is <span className="font-semibold">also assigned to moment placements</span> below.
+                  Switching it off here stops the site-level one only — the moments keep loading it. Turn those
+                  off too, or the format will look as though it never switched off.
+                </p>
+              ) : null}
 
               <textarea
                 value={unit.snippet}

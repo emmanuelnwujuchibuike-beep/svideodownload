@@ -424,3 +424,55 @@ describe("Monetag is plan-gated — Pro/Business are ad-free", () => {
     );
   });
 });
+
+/**
+ * Owner, 2026-09-07: "when i switch off monetag in page or vignette it doesnt
+ * go off untill i switch off general switch."
+ *
+ * There was no per-format switch — only a delete button, which also destroys
+ * the snippet. These pin the switch that replaced it, and in particular that an
+ * ABSENT flag still means ON: every unit stored before it existed must keep
+ * serving, or this fix would silently switch the whole account off on deploy.
+ */
+describe("per-format on/off", () => {
+  const snippet = '<script src="https://a.example/tag.min.js" data-zone="11"></script>';
+
+  it("serves a unit with no flag at all — absent means ON", () => {
+    const tags = resolveMonetagTags({
+      monetag: true,
+      monetagSnippet: "",
+      monetagUnits: [{ type: "in_page_push", snippet }],
+    });
+    expect(tags.map((t) => t.type)).toEqual(["in_page_push"]);
+  });
+
+  it("serves a unit explicitly switched on", () => {
+    const tags = resolveMonetagTags({
+      monetag: true,
+      monetagSnippet: "",
+      monetagUnits: [{ type: "in_page_push", snippet, enabled: true }],
+    });
+    expect(tags).toHaveLength(1);
+  });
+
+  it("does NOT serve a unit switched off, without losing its snippet", () => {
+    const units = [{ type: "in_page_push" as const, snippet, enabled: false }];
+    expect(
+      resolveMonetagTags({ monetag: true, monetagSnippet: "", monetagUnits: units }),
+    ).toHaveLength(0);
+    // The snippet survives — that is the whole point of a switch over a delete.
+    expect(units[0]!.snippet).toBe(snippet);
+  });
+
+  it("switches ONE format off without touching the others", () => {
+    const tags = resolveMonetagTags({
+      monetag: true,
+      monetagSnippet: "",
+      monetagUnits: [
+        { type: "in_page_push", snippet, enabled: false },
+        { type: "vignette_banner", snippet: '<script src="https://b.example/v.js" data-zone="22"></script>' },
+      ],
+    });
+    expect(tags.map((t) => t.type)).toEqual(["vignette_banner"]);
+  });
+});

@@ -222,6 +222,13 @@ export const PORTABILITY: PortabilitySpec[] = [
     retention: "Kept as aggregates rather than as a record about you.",
   },
   {
+    domain: "ai",
+    dataClass: "personal",
+    holds: "The AI jobs you have run — what you asked for, when, and whether it worked.",
+    purpose: "So you can see your own history, and so a failed job can be explained.",
+    retention: "The record stays with your account; the video files themselves are deleted after three days.",
+  },
+  {
     domain: "configuration",
     dataClass: "operational",
     holds: "Feature flags, experiments and platform settings.",

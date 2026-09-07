@@ -88,6 +88,8 @@ export const NOT_EXPORTED: Record<string, string> = {
   product_waitlist: "Interest in unreleased products; exported with your profile instead.",
   batch_sessions: "One row per Multi-Link batch you ran today, used only to count your daily allowance. It holds no links, no files and nothing about what you downloaded — the downloads themselves are exported through your download history.",
   reward_sessions: "Short-lived reward-download authorizations. They expire in minutes and mean nothing once redeemed; the download itself is exported through your download history.",
+  ai_usage_daily:
+    "Counters recording how many AI jobs you ran on a given day, used only to enforce the daily allowance. It holds no videos, no filenames and nothing about what you cleaned — the jobs themselves are exported through ai_jobs.",
 
   /*
     Rows ABOUT you that were written BY someone else. Real personal data, and
@@ -124,6 +126,9 @@ export const OWNER_COLUMN: Record<string, string> = {
   account_security_settings: "user_id",
   trusted_devices: "user_id",
   privacy_settings: "user_id",
+
+  /* Frenz AI — the member own record of what they asked for and what happened. */
+  ai_jobs: "user_id",
 
   /* social */
   posts: "publisher_id",

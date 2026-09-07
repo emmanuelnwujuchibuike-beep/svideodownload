@@ -349,6 +349,15 @@ export const DATA_DOMAINS: DataDomain[] = [
     storage: ["relational"],
   },
   {
+    id: "ai",
+    name: "Frenz AI",
+    owner: "lib/ai",
+    description:
+      "AI work and what it is allowed to cost. `ai_jobs` is one row per unit of work for every feature and provider — the tool is a column, not a table, so a second AI tool needs no schema of its own. `ai_usage_daily` is the per-member, per-day, per-feature allowance, written only by the atomic reserve/consume/release functions in migration 0141; it holds counters and no content. Storage is listed as object because a job's source and result live in the two PRIVATE buckets (frenz-ai-source, frenz-ai-results) and the row holds only their keys.",
+    tables: ["ai_jobs", "ai_usage_daily"],
+    storage: ["relational", "object"],
+  },
+  {
     id: "configuration",
     name: "Configuration",
     owner: "lib/platform",

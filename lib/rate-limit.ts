@@ -178,6 +178,28 @@ export const rewardCompleteLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_REWARD_COMPLETE_PER_MIN || 20),
 );
 
+/*
+  Frenz AI jobs (2026-09-07, Part 2). Two bounds, because the two actions cost
+  wildly different things:
+
+  - CREATE spends the owner's money at a provider and is the one an abuser
+    would hammer. Tight, and tighter than the daily cap it sits in front of —
+    a member with three jobs a day has no legitimate reason to submit six in a
+    minute, and the limiter refuses the burst before Postgres is asked to.
+  - READ is a phone polling a job's status while it waits, which is normal and
+    frequent. Looser by an order of magnitude.
+
+  These sit in front of the daily allowance rather than replacing it: the
+  limiter is per minute and fails open (see above), the allowance is per day and
+  fails closed (lib/ai/usage.ts). Neither is a substitute for the other.
+*/
+export const aiJobCreateLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_AI_JOB_CREATE_PER_MIN || 6),
+);
+export const aiJobReadLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_AI_JOB_READ_PER_MIN || 60),
+);
+
 /**
  * Per-day counter for enforcing daily caps (downloads per plan). Uses a single
  * Redis INCR keyed by UTC day so the cap is shared across serverless instances.

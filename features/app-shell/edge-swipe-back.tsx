@@ -13,6 +13,19 @@ import { isStandalone } from "@/lib/pwa/platform";
  * the identical touch this component already claims for back-navigation.
  */
 export const EDGE_ZONE_PX = 24; // matches iOS's own narrow edge-gesture hit zone
+/**
+ * How long after a committed swipe every touch is ignored.
+ *
+ * iOS can touchcancel a fast edge swipe mid-drag and redeliver a fresh
+ * touchstart/touchend cycle for the SAME physical gesture once it decides not
+ * to claim it. That redelivery lands within milliseconds, so it must outlive
+ * the navigation the first commit triggers — which is why the unlock is floored
+ * on this rather than on the route change alone.
+ *
+ * 600ms: longer than COMPLETE_MS (220) plus a page transition, and far shorter
+ * than a person can lift, re-touch and swipe again deliberately.
+ */
+const REDELIVERY_GUARD_MS = 600;
 /** Past this much horizontal travel, releasing completes the navigation. */
 const SWIPE_THRESHOLD_PX = 80;
 /** Below this, a mostly-vertical drag is a scroll and the page must not move. */
@@ -101,8 +114,41 @@ export function EdgeSwipeBack() {
    * URL at all (e.g. router.back() with nowhere to go).
    */
   const committing = useRef(false);
+  /** When the last swipe committed, so the unlock below cannot arrive early. */
+  const committedAt = useRef(0);
   useEffect(() => {
-    committing.current = false;
+    /*
+      🔴 THE UNLOCK IS FLOORED IN TIME, AND THAT IS THE WHOLE FIX.
+
+      Owner, 2026-09-07, reporting this a second time: "Full backswipe goes two
+      time backwards."
+
+      The lock above was released purely by a pathname change, and that is the
+      hole. A full, fast swipe commits and navigates QUICKLY — so the route
+      changes, this effect runs, the lock opens, and only THEN does iOS redeliver
+      the touchstart/touchend cycle for the same physical gesture. It arrives to
+      an unlocked handler and commits a second `router.back()`.
+
+      The lock was doing exactly what it was written to do; it was simply let go
+      a few milliseconds too soon, which is why a half-screen swipe (slow enough
+      that iOS never redelivers) always behaved and a full one did not.
+
+      So the unlock now waits out REDELIVERY_GUARD_MS from the COMMIT, not from
+      the navigation. A redelivered gesture is an artefact of the same touch and
+      arrives within milliseconds; a deliberate second swipe cannot — the page
+      transition alone is longer than this window, and a person has to lift and
+      re-touch. The safety-net timeout at the commit still covers the case where
+      the route never changes at all.
+    */
+    const since = Date.now() - committedAt.current;
+    if (since >= REDELIVERY_GUARD_MS) {
+      committing.current = false;
+      return;
+    }
+    const id = window.setTimeout(() => {
+      committing.current = false;
+    }, REDELIVERY_GUARD_MS - since);
+    return () => window.clearTimeout(id);
   }, [pathname]);
 
   useEffect(() => {
@@ -197,6 +243,7 @@ export function EdgeSwipeBack() {
         // redelivered touch this guards against can arrive within
         // milliseconds, well before COMPLETE_MS elapses.
         committing.current = true;
+        committedAt.current = Date.now();
         // Safety net: if the route never actually changes (nothing to go
         // back to, or takeBackTarget points at the current page), the
         // pathname-driven unlock above never fires. 1500ms comfortably

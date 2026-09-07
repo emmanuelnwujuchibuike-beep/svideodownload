@@ -266,3 +266,53 @@ describe("🔴 the cards and the chart measure the SAME window", () => {
     expect(shift).toBe(7 * 86_400_000);
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE DOWNLOAD BUCKETS MUST PARTITION — no row counted twice, none lost
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-07: "Download abandoned in the last 24hrs has risen to almost
+ * the amount of total Download in the last 24hrs."
+ *
+ * The cause was a bucket that overlapped another: `abandoned` was defined as
+ * `requested + started + preparing`, which is the SAME set now called
+ * `inProgress`, while the status that actually means abandoned (`timed_out`)
+ * was counted nowhere at all. A row was simultaneously in-flight and abandoned,
+ * and a swept row was invisible.
+ *
+ * These pin the arithmetic rather than the wording, because the wording is what
+ * drifted last time.
+ */
+describe("🔴 download buckets partition the rows", () => {
+  const src = readFileSync(join(process.cwd(), "lib/analytics/queries.ts"), "utf8");
+
+  it("defines abandoned from the SWEPT statuses, never from in-flight ones", () => {
+    // The exact regression: abandoned must not be built out of the live stages.
+    expect(src).toMatch(/const abandoned = stat\("timed_out"\) \+ stat\("expired"\)/);
+    expect(src).not.toMatch(/abandoned:\s*inFlight/);
+  });
+
+  it("keeps in-flight as its own reported number rather than folding it into a verdict", () => {
+    expect(src).toMatch(/const inProgress = stat\("requested"\) \+ stat\("started"\) \+ stat\("preparing"\)/);
+    expect(src).toMatch(/inProgress,/);
+  });
+
+  it("totals every non-cancelled bucket exactly once", () => {
+    // `cancelled` is deliberately outside `total` — the visitor withdrew the
+    // request, so it was never a download we were asked to deliver.
+    expect(src).toMatch(/total: completed \+ failed \+ inProgress \+ abandoned/);
+  });
+
+  it("gives the digest a headline number that cannot be misread", () => {
+    // A subject line is a claim. "N downloads" must mean N people got a file,
+    // not N rows existed in some state — see digestEmailSubject.
+    const email = readFileSync(join(process.cwd(), "lib/analytics/digest-email.ts"), "utf8");
+    // The value it LOOKS UP, not what the prose around it mentions — the note
+    // in that function names `downloads_total` precisely to say it is wrong for
+    // a subject line, so a plain text search matches the explanation.
+    const lookups = [...email.matchAll(/m\.key === "([a-z_]+)"/g)].map((m) => m[1]);
+    expect(lookups).toContain("downloads_completed");
+    expect(lookups).not.toContain("downloads_total");
+  });
+});

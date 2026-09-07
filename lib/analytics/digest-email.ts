@@ -114,8 +114,21 @@ function topPagesHtml(pages: { label: string; views: number }[]): string {
 }
 
 export function digestEmailSubject(data: DigestData): string {
-  const total = data.metrics.find((m) => m.key === "downloads_total")?.value ?? 0;
-  return `${TITLE[data.period]} — ${fmt(total)} downloads · FrenzSave`;
+  /*
+    🔴 COMPLETED, not TOTAL.
+
+    `downloads_total` is "requested and not cancelled" — it includes failures,
+    downloads still in flight, and ones later swept as abandoned. That is a
+    legitimate figure and it stays in the body, where the breakdown beside it
+    says what it is made of.
+
+    In a SUBJECT LINE it is a claim. "142 downloads" read at a glance means 142
+    people got their file; if 40 completed, the email has misreported the day
+    before it is opened, and every one of them is filed in a mailbox saying so.
+    The headline number is the one that can only mean one thing.
+  */
+  const completed = data.metrics.find((m) => m.key === "downloads_completed")?.value ?? 0;
+  return `${TITLE[data.period]} — ${fmt(completed)} downloads · FrenzSave`;
 }
 
 export function digestEmailHtml(data: DigestData): string {

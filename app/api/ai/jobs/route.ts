@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { extensionForUpload } from "@/lib/ai/clean-media";
 import { getUserAIEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import {
@@ -12,8 +13,16 @@ import {
   type AiCapabilities,
   type AiFeature,
 } from "@/lib/ai/jobs";
-import { countActiveJobs, createJob, findJobByRequestId, listOwnJobs } from "@/lib/ai/job-store";
-import { releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
+import {
+  countActiveJobs,
+  createJob,
+  findJobByRequestId,
+  listOwnJobs,
+  reserveSourcePath,
+} from "@/lib/ai/job-store";
+import { hasProviderFor } from "@/lib/ai/providers";
+import { createSourceUploadTicket } from "@/lib/ai/storage-server";
+import { peekAiUsage } from "@/lib/ai/usage";
 import { aiJobCreateLimiter, aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,57 +31,56 @@ export const dynamic = "force-dynamic";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  POST /api/ai/jobs — create one · GET /api/ai/jobs — this member's history
+ *  POST /api/ai/jobs — open a job and hand back an upload target
+ *  GET  /api/ai/jobs — this member's history
  * ═══════════════════════════════════════════════════════════════════════════
- *
- * Owner, 2026-09-07 (Part 2). The route is deliberately dull: it validates,
- * decides, writes one row and answers. Every judgement it makes lives in a
- * module it calls, and it holds no connection open for anything.
  *
  * ── 🔴 WHAT THE CLIENT MAY SAY ───────────────────────────────────────────────
  *
- * A feature id, a description of its input, and an idempotency key. That is the
- * entire schema, and it is a closed one — `.strict()` rejects a body carrying
- * anything else rather than ignoring it, so a request trying `user_id`,
- * `provider`, `model`, `status` or `result_path` is refused outright instead of
- * quietly succeeding while a reader wonders whether those fields did anything.
+ * A feature id, a description of its input, and an idempotency key. The schema
+ * is `.strict()`, so a body carrying `user_id`, `provider`, `model`, `status` or
+ * `result_path` is REFUSED rather than quietly stripped. Identity comes from the
+ * session, the provider from the registry, the status is always `queued`, and
+ * both storage paths are the server's.
  *
- * The identity comes from the session cookie. The provider comes from the
- * registry. The status is always `queued`. The paths are null.
+ * ── The allowance is NOT charged here (changed in Part 3) ────────────────────
  *
- * ── The order of the gates, and why ──────────────────────────────────────────
+ * Part 2 reserved a slot at creation, because creation was the whole flow. Now
+ * a job is opened BEFORE the video exists — the upload needs a path, and the
+ * path needs a job id — so charging here would bill somebody for choosing a
+ * file and changing their mind, or for an upload that died on a train.
  *
- *   1. identity      — anonymous costs nothing to refuse, so it goes first
- *   2. burst limit   — before any database work
- *   3. shape         — before any lookup
- *   4. registry      — an impossible feature is refused before a charge
- *   5. idempotency   — a retry must not reach the counter at all
- *   6. entitlement   — one authority for what a plan is worth
- *   7. concurrency   — cheap count, and it protects the provider
- *   8. reserve       — the atomic charge, last, so nothing after it can waste it
+ * The reservation moved to `/start`, one line before the provider call, which
+ * is the first moment the work costs anything. What still guards this endpoint
+ * is the concurrency cap: an unstarted job is active, so nobody accumulates
+ * them.
  *
- * A failure at 8 or later gives the slot back (see the release below). A
- * failure before it never took one.
+ * ── The order of the gates ───────────────────────────────────────────────────
+ *
+ *   identity → burst → shape → registry → input rules → idempotency →
+ *   entitlement → concurrency → write → upload ticket
  */
 
-const CAPABILITIES: AiCapabilities = {
-  // Part 2 ships no adapter. This is what makes every honest refusal honest.
-  replicate: !!process.env.REPLICATE_API_TOKEN?.trim(),
-  /*
-    🔴 DEVELOPMENT ONLY, and off unless a deployment opts in. It permits a job
-    to be CREATED while nothing exists to run it, so ownership, idempotency and
-    the daily cap can be exercised end to end before Part 3. The job sits at
-    `queued` forever and never reports success — nothing in this codebase can
-    move it, because no provider is registered. Production leaves this unset,
-    which is why creating a job there answers FEATURE_UNAVAILABLE instead of
-    filling somebody's history with rows that will never finish.
-  */
-  allowUndispatched: ["1", "true", "yes"].includes(
-    (process.env.FRENZ_AI_ALLOW_UNDISPATCHED_JOBS || "").toLowerCase(),
-  ),
+const capabilities = (): AiCapabilities => {
+  const clean = aiFeature("ai_clean");
+  return {
+    // One truth: a feature is runnable when a registered adapter says it holds
+    // its credentials. `hasProviderFor` reads the same registry the start route
+    // dispatches through, so the answer here cannot differ from the answer there.
+    replicate: !!clean && hasProviderFor(clean),
+    /*
+      🔴 DEVELOPMENT ONLY. Lets a job be created while no provider is configured,
+      so the plumbing can be exercised. The job sits at `queued`, nothing
+      advances it, and the response says `dispatch.ready: false`. Production
+      leaves it unset, so creation there answers FEATURE_UNAVAILABLE rather than
+      filling a member's history with rows nothing can finish.
+    */
+    allowUndispatched: ["1", "true", "yes"].includes(
+      (process.env.FRENZ_AI_ALLOW_UNDISPATCHED_JOBS || "").toLowerCase(),
+    ),
+  };
 };
 
-/** The signed-in member, or null. Never trusts anything in the request body. */
 async function currentUserId(): Promise<string | null> {
   try {
     const supabase = await createClient();
@@ -90,11 +98,11 @@ function fail(code: Parameters<typeof aiErrorBody>[0], extra?: Record<string, un
 }
 
 export async function POST(request: Request) {
-  /* 1 · IDENTITY. */
   const userId = await currentUserId();
   if (!userId) return fail("AUTH_REQUIRED");
 
-  /* 2 · BURST. Keyed by member, not by IP: this guards a per-account spend. */
+  // Keyed by member, not by IP: this guards a per-account spend, and several
+  // people behind one office address are not one abuser.
   const burst = await aiJobCreateLimiter.limit(`ai-job:${userId}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
@@ -103,7 +111,6 @@ export async function POST(request: Request) {
     });
   }
 
-  /* 3 · SHAPE. */
   let raw: unknown;
   try {
     raw = await request.json();
@@ -116,73 +123,65 @@ export async function POST(request: Request) {
 
   if (!isValidClientRequestId(clientRequestId)) return fail("INVALID_INPUT");
 
-  /* 4 · REGISTRY. What exists, and whether anything can run it. */
   const feature = aiFeature(featureId);
   if (!feature) return fail("FEATURE_UNAVAILABLE");
 
-  const availability = featureAvailability(feature, CAPABILITIES);
-  if (!availability.available) {
-    // The registry's own sentence replaces the generic one — the member is owed
-    // the actual reason, and there is exactly one place that knows it.
-    return fail("FEATURE_UNAVAILABLE", { error: availability.reason });
-  }
+  const availability = featureAvailability(feature, capabilities());
+  if (!availability.available) return fail("FEATURE_UNAVAILABLE", { error: availability.reason });
 
   const verdict = validateJobInput(feature, source);
   if (!verdict.ok) return fail(verdict.code);
 
   try {
-    /* 5 · IDEMPOTENCY. A retry must never reach the counter. */
+    const entitlement = await getUserAIEntitlement(userId, feature);
+    if (!entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
+
+    /*
+      IDEMPOTENCY. A retry returns the job it already made — and a fresh upload
+      ticket with it, because the reason a client retries is usually that the
+      first ticket never arrived.
+    */
     const existing = await findJobByRequestId(userId, clientRequestId);
     if (existing) {
+      const upload =
+        existing.status === "queued"
+          ? await createSourceUploadTicket({
+              userId,
+              feature: feature.id,
+              jobId: existing.id,
+              extension: extensionForUpload(source.name, source.mimeType),
+            })
+          : null;
       return NextResponse.json({
         job: jobToView(existing, storedErrorMessage),
-        // `false` tells an honest client "this is the job you already had",
-        // which is the difference between a retry and a second submission.
         created: false,
+        upload,
+        usage: usageForClient(entitlement, await peekAiUsage(userId, feature.id)),
         dispatch: { ready: availability.dispatchable },
       });
     }
 
-    /* 6 · ENTITLEMENT — plan, promo and ceiling, resolved once. */
-    const entitlement = await getUserAIEntitlement(userId, feature);
-    if (!entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
-
-    /* 7 · CONCURRENCY. */
     const active = await countActiveJobs(userId, feature.id);
     if (active >= entitlement.maxConcurrent) return fail("JOB_ALREADY_PROCESSING");
 
-    /* 8 · RESERVE. Atomic, and the last thing that can refuse. */
-    const reservation = await reserveAiUsage(userId, feature.id, entitlement.dailyLimit);
-    if (!reservation.allowed) {
-      return fail("DAILY_LIMIT_REACHED", {
-        usage: usageForClient(entitlement, reservation.used),
-      });
-    }
+    const result = await createJob({ userId, feature, source, clientRequestId });
 
     /*
-      The write. If it fails the slot goes back immediately — a member must not
-      lose one of three daily runs to a database that was briefly unhappy, which
-      is exactly the case `release_ai_usage` exists for.
+      The upload target. Server-built path, signed for one exact object — the
+      browser never names a key, so it cannot write into another member's folder
+      however the request is crafted.
     */
-    let result;
-    try {
-      result = await createJob({ userId, feature, source, clientRequestId });
-    } catch (e) {
-      await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
-      throw e;
-    }
+    const upload = await createSourceUploadTicket({
+      userId,
+      feature: feature.id,
+      jobId: result.row.id,
+      extension: extensionForUpload(source.name, source.mimeType),
+    });
+    // The key is recorded now, so /start reads it back rather than guessing it
+    // from a MIME type the picker may have got wrong. See reserveSourcePath.
+    await reserveSourcePath(result.row.id, upload.path);
 
-    if (!result.created) {
-      // Two identical requests raced and the unique index resolved it. The
-      // loser's reservation is given back, so a double tap costs one slot.
-      await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
-    }
-
-    /*
-      Structured, and deliberately not carrying content: ids, the feature, the
-      provider and the outcome. Never a filename, never a path, never a token.
-    */
-    console.info("[ai/jobs] created", {
+    console.info("[ai/jobs] opened", {
       jobId: result.row.id,
       userId,
       feature: feature.id,
@@ -190,19 +189,14 @@ export async function POST(request: Request) {
       created: result.created,
       dispatchable: availability.dispatchable,
       plan: entitlement.plan,
-      used: reservation.used,
     });
 
     return NextResponse.json(
       {
         job: jobToView(result.row, storedErrorMessage),
         created: result.created,
-        usage: usageForClient(entitlement, reservation.used),
-        /*
-          🔴 The honest half. `ready: false` means the job is recorded and
-          NOTHING will run it — said out loud so no interface can present a
-          queued row as work in progress.
-        */
+        upload,
+        usage: usageForClient(entitlement, await peekAiUsage(userId, feature.id)),
         dispatch: {
           ready: availability.dispatchable,
           ...(availability.dispatchable ? {} : { reason: "The AI service isn't connected yet." }),
@@ -224,12 +218,12 @@ const DEFAULT_PAGE = 20;
 const MAX_PAGE = 50;
 
 /**
- * GET /api/ai/jobs?limit=&cursor=&feature=
+ * GET /api/ai/jobs?limit=&cursor=&feature=&active=1
  *
- * This member's own jobs, newest first, keyset-paged. There is no "all jobs"
- * mode and no way to ask about somebody else: the query runs as the member and
- * is filtered by their id, so the worst a crafted request can do is page
- * through its own history.
+ * This member's own jobs, newest first, keyset-paged. `active=1` narrows to the
+ * jobs still going to change, which is what a RETURNING member's page asks for:
+ * it is the query behind "your video is still being processed" after a refresh,
+ * a PWA relaunch, or a connection that dropped and came back.
  */
 export async function GET(request: Request) {
   const userId = await currentUserId();
@@ -245,14 +239,12 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const limitParam = Number.parseInt(url.searchParams.get("limit") ?? "", 10);
-  const limit = Number.isFinite(limitParam)
-    ? Math.max(1, Math.min(MAX_PAGE, limitParam))
-    : DEFAULT_PAGE;
+  const limit = Number.isFinite(limitParam) ? Math.max(1, Math.min(MAX_PAGE, limitParam)) : DEFAULT_PAGE;
 
   const featureParam = url.searchParams.get("feature");
-  // An unknown feature filter is refused rather than ignored: silently
-  // returning everything for a filter somebody expected to narrow things is how
-  // a history page shows rows its reader did not ask for.
+  // An unknown filter is refused rather than ignored: silently returning
+  // everything for a filter somebody expected to narrow things is how a page
+  // shows rows its reader did not ask for.
   if (featureParam && !aiFeature(featureParam)) return fail("INVALID_INPUT");
 
   try {
@@ -260,6 +252,7 @@ export async function GET(request: Request) {
       limit,
       cursor: url.searchParams.get("cursor"),
       feature: (featureParam as AiFeature | null) ?? null,
+      activeOnly: url.searchParams.get("active") === "1",
     });
 
     return NextResponse.json({

@@ -366,7 +366,17 @@ export function DownloadQuickActions() {
     { icon: ImageIcon, tint: "text-fuchsia-500 bg-fuchsia-500/12", title: "Wallpapers", sub: "Browse full screen", href: "/wallpapers?reels=1" },
     { icon: Heart, tint: "text-rose-500 bg-rose-500/12", title: "Favorites", sub: "View saved items", href: "/history?filter=favorites" },
     { icon: Bookmark, tint: "text-blue-500 bg-blue-500/12", title: "Saved posts", sub: "Your bookmarks", href: "/saved" },
-    { icon: Sparkles, tint: "text-violet-500 bg-violet-500/12", title: "AI Studio", sub: "Edit your media", soon: true },
+    /*
+      Owner, 2026-09-07: "the ai studio button in download page still shows soon
+      and the name is suppose to be frenz ai not ai studio."
+
+      Both halves were stale rather than wrong when written: the product is
+      named Frenz AI, and it now has a route (`/studio/ai`, Part 1), so the tile
+      that was honestly "Soon" while nothing existed is now a real link. A
+      signed-out visitor is sent through sign-in, which is the feature's actual
+      gate — not a dead end, and not a 404.
+    */
+    { icon: Sparkles, tint: "text-violet-500 bg-violet-500/12", title: "Frenz AI", sub: "AI tools for your videos", href: "/studio/ai" },
   ];
 
   return (

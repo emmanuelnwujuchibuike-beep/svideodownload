@@ -1,10 +1,12 @@
 "use client";
 
-import { HelpCircle } from "lucide-react";
+import { AlertTriangle, HelpCircle, RotateCcw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AICleanEmptyState } from "@/features/ai/ai-clean-empty-state";
+import { AICleanProcessing } from "@/features/ai/ai-clean-processing";
+import { AICleanResult } from "@/features/ai/ai-clean-result";
 import { AICleanErrorState } from "@/features/ai/ai-clean-error-state";
 import { AICleanHero } from "@/features/ai/ai-clean-hero";
 import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
@@ -12,6 +14,7 @@ import { AICleanReadyState } from "@/features/ai/ai-clean-ready-state";
 import { AICleanUrlInput } from "@/features/ai/ai-clean-url-input";
 import { AICleanVideoPreview } from "@/features/ai/ai-clean-video-preview";
 import { FrenzAIHeader } from "@/features/ai/frenz-ai-header";
+import { useAiCleanJob } from "@/features/ai/use-ai-clean-job";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { inspectVideoFile, type AICleanErrorCode } from "@/lib/ai/clean-media";
 import {
@@ -34,11 +37,15 @@ import {
  * until the tab closes). Created here, revoked here, in every path: replace,
  * remove, error, unmount.
  *
- * ── What is deliberately NOT here ─────────────────────────────────────────────
+ * ── Two flows, and only one of them is connected ──────────────────────────────
  *
- * No upload, no fetch, no processing, no progress, no usage counter, no ad. Part
- * 1 is the interface; the brief is explicit about each of those, and the ready
- * state says so on screen rather than miming it.
+ * A FILE is real work now (Part 3): it is uploaded straight to private storage,
+ * a job is started, and `useAiCleanJob` owns every state after that. A LINK is
+ * not — fetching arbitrary URLs is still a later part — so that path still ends
+ * at the honest "not connected yet" panel rather than pretending to run.
+ *
+ * The job machine lives in one hook, deliberately. This component decides WHICH
+ * panel to show and nothing about how a job behaves.
  *
  * ── Why the tutorial is dynamically imported ──────────────────────────────────
  *
@@ -64,6 +71,13 @@ type Stage = "choose" | "link" | "ready";
 
 export function AICleanWorkspace() {
   const { isPremium, ready: planKnown } = useEntitlements();
+  /*
+    Everything about a running job: creating it, uploading, starting, watching,
+    cancelling, and finding one that was already running when this page opened.
+    A refresh mid-clean lands back on the processing panel because of that last
+    part — the state is looked up, never remembered locally.
+  */
+  const cleanJob = useAiCleanJob();
 
   const [source, setSource] = useState<Source | null>(null);
   const [stage, setStage] = useState<Stage>("choose");
@@ -153,7 +167,61 @@ export function AICleanWorkspace() {
       />
 
       <AICleanHero>
-        {error ? (
+        {/*
+          A live job outranks whatever the picker was showing: somebody who
+          refreshes mid-clean must land on their video's real state, not on an
+          empty drop zone that invites them to start a second one.
+        */}
+        {cleanJob.job && cleanJob.job.status === "completed" ? (
+          <AICleanResult
+            job={cleanJob.job}
+            fetchResultUrl={cleanJob.fetchResultUrl}
+            onStartAnother={() => {
+              cleanJob.reset();
+              clearSource();
+            }}
+          />
+        ) : cleanJob.view.active || cleanJob.busy ? (
+          <AICleanProcessing
+            view={cleanJob.view}
+            fileName={source?.kind === "file" ? source.file.name : (cleanJob.job?.source.name ?? null)}
+            onCancel={cleanJob.job ? () => void cleanJob.cancel() : undefined}
+          />
+        ) : cleanJob.error ? (
+          <AICleanJobFailure
+            message={cleanJob.error.message}
+            onRetry={() => {
+              cleanJob.reset();
+              // The file is still in hand when the tab never went away, so a
+              // retry is one tap. After a refresh it is gone, and the empty
+              // state asks for it again — which is honest rather than silent.
+              if (source?.kind === "file") void cleanJob.submit(source.file);
+            }}
+            onChoose={() => {
+              cleanJob.reset();
+              clearSource();
+            }}
+            canRetry={source?.kind === "file"}
+          />
+        ) : cleanJob.job && (cleanJob.job.status === "failed" || cleanJob.job.status === "cancelled") ? (
+          <AICleanJobFailure
+            message={
+              cleanJob.job.error?.message ??
+              (cleanJob.job.status === "cancelled"
+                ? "You stopped this one. Nothing was used from today's allowance."
+                : "That video didn't finish.")
+            }
+            onRetry={() => {
+              cleanJob.reset();
+              if (source?.kind === "file") void cleanJob.submit(source.file);
+            }}
+            onChoose={() => {
+              cleanJob.reset();
+              clearSource();
+            }}
+            canRetry={source?.kind === "file"}
+          />
+        ) : error ? (
           <AICleanErrorState
             code={error}
             onRetry={() => {
@@ -177,7 +245,8 @@ export function AICleanWorkspace() {
             objectUrl={source.objectUrl}
             onChange={acceptFile}
             onRemove={clearSource}
-            onContinue={() => setStage("ready")}
+            // 🔴 The real thing now: upload to private storage, then start.
+            onContinue={() => void cleanJob.submit(source.file)}
             onInvalid={(code) => {
               releaseObjectUrl();
               setSource(null);
@@ -199,6 +268,53 @@ export function AICleanWorkspace() {
       </AICleanHero>
 
       {tutorialOpen ? <AICleanTutorial open onClose={closeTutorial} /> : null}
+    </div>
+  );
+}
+
+/**
+ * A job that did not finish, or one the member stopped.
+ *
+ * Separate from `AICleanErrorState`, which is about a FILE being unusable
+ * before anything ran. This one is about work that started: the sentence comes
+ * from the server, and the two ways out are different — try the same video
+ * again, or choose a different one.
+ *
+ * "Try again" is only offered while the file is still in hand. After a refresh
+ * the browser no longer holds it, and a button that silently could not do what
+ * it says is worse than one that is not there.
+ */
+function AICleanJobFailure({
+  message,
+  onRetry,
+  onChoose,
+  canRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+  onChoose: () => void;
+  canRetry: boolean;
+}) {
+  return (
+    <div className="p-4 sm:p-6">
+      <div role="alert" className="mx-auto max-w-md px-2 py-10 text-center sm:py-14">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-6 w-6" aria-hidden />
+        </span>
+        <h2 className="mt-4 text-lg font-bold tracking-[-0.01em]">That didn&apos;t finish</h2>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{message}</p>
+        <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+          {canRetry ? (
+            <button type="button" onClick={onRetry} className="btn-lux btn-lux-primary">
+              <RotateCcw className="h-4 w-4" aria-hidden />
+              Try again
+            </button>
+          ) : null}
+          <button type="button" onClick={onChoose} className="btn-lux btn-lux-secondary">
+            Choose another video
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -3,12 +3,14 @@ import "server-only";
 import { AiJobError } from "@/lib/ai/errors";
 import {
   AI_ACTIVE_STATUSES,
+  canTransition,
   decodeCursor,
   encodeCursor,
   type AiFeature,
   type AiFeatureDef,
   type AiJobRow,
   type AiJobSourceInput,
+  type AiJobStatus,
 } from "@/lib/ai/jobs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -92,7 +94,7 @@ export interface AiJobPage {
  */
 export async function listOwnJobs(
   userId: string,
-  opts: { limit: number; cursor?: string | null; feature?: AiFeature | null },
+  opts: { limit: number; cursor?: string | null; feature?: AiFeature | null; activeOnly?: boolean },
 ): Promise<AiJobPage> {
   const limit = Math.max(1, Math.min(50, Math.floor(opts.limit)));
   const supabase = await createClient();
@@ -108,6 +110,10 @@ export async function listOwnJobs(
     .limit(limit + 1);
 
   if (opts.feature) query = query.eq("feature", opts.feature);
+  // The "what was I doing?" query a returning member's page runs. Narrowing in
+  // SQL rather than fetching a page and filtering it in the browser: an active
+  // job is rare, so the alternative reads twenty rows to find none.
+  if (opts.activeOnly) query = query.in("status", [...AI_ACTIVE_STATUSES]);
 
   const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
   if (cursor) {
@@ -231,4 +237,152 @@ export async function createJob(input: CreateJobInput): Promise<CreateJobResult>
     throw new AiJobError("INTERNAL_ERROR", error.message);
   }
   return { created: true, row: data as AiJobRow };
+}
+
+
+/* ═══════════════════ Part 3 — moving a job through its life ════════════════ */
+
+/**
+ * The service-role read the WEBHOOK needs.
+ *
+ * 🔴 The one read in this file with no user in scope, because a webhook has no
+ * session — it arrives from Replicate carrying a prediction id and nothing
+ * else. That is exactly why the caller must have verified the request's
+ * signature FIRST: without that, this function is "look up any job by a value
+ * that appears in our own logs".
+ *
+ * The unique index on `replicate_prediction_id` is what makes one callback
+ * resolve to one job.
+ */
+export async function findJobByPredictionId(predictionId: string): Promise<AiJobRow | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select(JOB_COLUMNS)
+    .eq("replicate_prediction_id", predictionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[ai/jobs] prediction lookup failed", { code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return (data as AiJobRow | null) ?? null;
+}
+
+/** Fields a status change may carry with it. All server-decided. */
+export interface JobPatch {
+  source_path?: string | null;
+  source_size?: number | null;
+  source_mime_type?: string | null;
+  result_path?: string | null;
+  result_size?: number | null;
+  replicate_prediction_id?: string | null;
+  model?: string | null;
+  model_version?: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+/**
+ * Move a job to a new status, but only from a status it is allowed to leave.
+ *
+ * ── 🔴 COMPARE-AND-SET, WHICH IS WHAT MAKES THE WEBHOOK IDEMPOTENT ───────────
+ *
+ * The `.in("status", from)` filter is part of the UPDATE, not a check before
+ * it. Two deliveries of the same callback race: the first updates the row and
+ * the second matches nothing, because the status it required is no longer
+ * there. No locks, no transaction, no "have we seen this id" table — the same
+ * shape as the atomic reservation in Part 2, for the same reason.
+ *
+ * Returns the updated row, or null when the transition did not apply. Null is
+ * the ordinary case for a retry and callers treat it as success.
+ *
+ * `canTransition` is asserted as well, because a legal-looking pair that the
+ * state machine forbids (completed -> processing, say) is a bug worth refusing
+ * loudly rather than writing.
+ */
+export async function transitionJob(
+  jobId: string,
+  from: readonly AiJobStatus[],
+  to: AiJobStatus,
+  patch: JobPatch = {},
+): Promise<AiJobRow | null> {
+  for (const source of from) {
+    if (source !== to && !canTransition(source, to)) {
+      throw new AiJobError("INTERNAL_ERROR", `illegal transition ${source} -> ${to}`);
+    }
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({ status: to, ...patch })
+    .eq("id", jobId)
+    .in("status", [...from])
+    .select(JOB_COLUMNS)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[ai/jobs] transition failed", { jobId, to, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return (data as AiJobRow | null) ?? null;
+}
+
+/**
+ * Record what was really uploaded, without changing the job's status.
+ *
+ * Separate from the transition above because it happens while the job is still
+ * `queued` and may happen more than once: a member who re-uploads before
+ * starting is not a state change, it is a correction.
+ */
+export async function recordUploadedSource(
+  jobId: string,
+  source: { path: string; size: number; mimeType: string | null },
+): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("ai_jobs")
+    .update({
+      source_path: source.path,
+      source_size: source.size,
+      source_mime_type: source.mimeType,
+    })
+    .eq("id", jobId)
+    .eq("status", "queued");
+
+  if (error) {
+    console.error("[ai/jobs] source record failed", { jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+}
+
+/**
+ * Record WHERE this job's source will live, before it is uploaded.
+ *
+ * 🔴 The path is written when the upload ticket is minted, not re-derived at
+ * start time. The first version of this flow rebuilt the key from the file's
+ * MIME type when processing began — and a member whose file was named
+ * `clip.mov` but typed `video/mp4` by their picker got a ticket for
+ * `source.mov` and a lookup for `source.mp4`. The upload was fine; the
+ * server simply looked in the wrong place and reported that nothing had been
+ * uploaded. One recorded value, read back, cannot drift from itself.
+ *
+ * `source_size` and `source_mime_type` stay as the client CLAIMED them until
+ * the upload is verified, at which point `recordUploadedSource` overwrites both
+ * with what storage actually holds.
+ */
+export async function reserveSourcePath(jobId: string, path: string): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("ai_jobs")
+    .update({ source_path: path })
+    .eq("id", jobId)
+    .eq("status", "queued");
+  if (error) {
+    console.error("[ai/jobs] path reserve failed", { jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
 }

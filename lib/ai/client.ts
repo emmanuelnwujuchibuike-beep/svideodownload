@@ -13,16 +13,17 @@ import type { AiFeature, AiJobSourceInput, AiJobView } from "@/lib/ai/jobs";
  * throwing on one of them, so a caller handles a refusal the same way it
  * handles success.
  *
- * ── 🔴 NOTHING CALLS THIS YET, AND THAT IS THE DECISION ──────────────────────
+ * ── The upload never passes through our server ───────────────────────────────
  *
- * Part 2's frontend integration is deliberately this module and no wiring. The
- * AI Clean workspace does NOT create a job when someone presses Continue,
- * because no provider exists to run one: every row it made would sit at
- * `queued` in that member's history forever, and a queue with no worker is the
- * closest thing to fake progress this feature could ship. The interface already
- * says the cleanup is not connected; that stays true until it is.
+ * `createAiJob` comes back with a signed, single-object upload ticket and
+ * `uploadSource` PUTs the file straight to storage. A 100 MB video therefore
+ * costs us nothing but two small JSON round trips, instead of a serverless
+ * invocation holding 100 MB of somebody else's memory.
  *
- * What Part 3 changes is one call site, not this file.
+ * The PUT is an XMLHttpRequest rather than `fetch` for one reason: it reports
+ * upload progress. That number is the only real percentage in this feature —
+ * bytes the browser has actually sent — and it is why the progress bar can move
+ * during the upload and must not during processing.
  */
 
 export interface AiJobUsage {
@@ -98,7 +99,15 @@ export async function createAiJob(input: {
   feature: AiFeature;
   source: AiJobSourceInput;
   clientRequestId: string;
-}): Promise<AiJobResult<{ job: AiJobView; created: boolean; usage?: AiJobUsage; dispatch: AiJobDispatch }>> {
+}): Promise<
+  AiJobResult<{
+    job: AiJobView;
+    created: boolean;
+    upload: AiUploadTicket | null;
+    usage?: AiJobUsage;
+    dispatch: AiJobDispatch;
+  }>
+> {
   return request("/api/ai/jobs", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -114,11 +123,82 @@ export async function listAiJobs(opts?: {
   limit?: number;
   cursor?: string | null;
   feature?: AiFeature;
+  /** Only jobs that can still change — what a returning member asks for. */
+  active?: boolean;
 }): Promise<AiJobResult<{ jobs: AiJobView[]; nextCursor: string | null }>> {
   const params = new URLSearchParams();
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.cursor) params.set("cursor", opts.cursor);
   if (opts?.feature) params.set("feature", opts.feature);
+  if (opts?.active) params.set("active", "1");
   const query = params.toString();
   return request(`/api/ai/jobs${query ? `?${query}` : ""}`);
+}
+
+export interface AiUploadTicket {
+  path: string;
+  uploadUrl: string;
+  expiresIn: number;
+}
+
+/**
+ * Send the file to the signed target.
+ *
+ * Resolves `true` on a 2xx and `false` on anything else — including an abort,
+ * because a cancelled upload is not an error to report, it is a thing that
+ * stopped. The caller decides what to say.
+ */
+export function uploadSource(opts: {
+  ticket: AiUploadTicket;
+  file: File;
+  onProgress?: (fraction: number) => void;
+  signal?: AbortSignal;
+}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", opts.ticket.uploadUrl, true);
+    // Storage stores what it is told; without this every object would land as
+    // application/octet-stream and the server's own MIME check would refuse it.
+    xhr.setRequestHeader("content-type", opts.file.type || "video/mp4");
+    // A retry of the same job writes the same key. Without upsert the second
+    // attempt fails on a duplicate rather than replacing a half-written object.
+    xhr.setRequestHeader("x-upsert", "true");
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) opts.onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.onabort = () => resolve(false);
+
+    opts.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(opts.file);
+  });
+}
+
+/** Tell the server the upload landed and processing may begin. */
+export async function startAiJob(
+  id: string,
+): Promise<AiJobResult<{ job: AiJobView; started: boolean; usage?: AiJobUsage }>> {
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/start`, { method: "POST" });
+}
+
+/** Stop a job that is still queued or processing. */
+export async function cancelAiJob(
+  id: string,
+): Promise<AiJobResult<{ job: AiJobView; cancelled: boolean }>> {
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
+/**
+ * A short-lived link to the finished video.
+ *
+ * Fetched on demand rather than carried on the job, because the link expires in
+ * minutes: one held in component state across a long session would be dead by
+ * the time somebody pressed Download.
+ */
+export async function getAiJobResult(
+  id: string,
+): Promise<AiJobResult<{ url: string; expiresIn: number; size: number | null }>> {
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/result`);
 }

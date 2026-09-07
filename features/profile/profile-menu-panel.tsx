@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils";
  *
  * Honesty rule (the "profile doorway" memory): only items with a REAL route are
  * links; ecosystem items that aren't built yet (Trending, News, Communities,
- * Cloud Storage, AI Studio, Marketplace) are marked "Soon", never links that 404.
+ * Cloud Storage, Marketplace) are marked "Soon", never links that 404.
  */
 
 const APP_BUILD = process.env.NEXT_PUBLIC_APP_BUILD ?? "";
@@ -88,9 +88,15 @@ const NAV: NavItem[] = [
   { label: "Settings", href: "/account", icon: Settings },
 ];
 
-const SPACES = [
+/*
+  Owner, 2026-09-07: the product is named Frenz AI, not "AI Studio", and it is
+  no longer Soon — `/studio/ai` exists (Part 1). An entry with an `href`
+  renders as a real link with no pill; the two without one keep theirs, which is
+  the doorway rule working rather than being switched off.
+*/
+const SPACES: { label: string; sub: string; icon: ComponentType<{ className?: string }>; tint: string; href?: string }[] = [
+  { label: "Frenz AI", sub: "AI tools for your videos", icon: Sparkles, tint: "from-violet-500/15 to-purple-500/15 text-violet-500", href: "/studio/ai" },
   { label: "Cloud Storage", sub: "Store and access your files", icon: Cloud, tint: "from-sky-500/15 to-blue-500/15 text-sky-500" },
-  { label: "AI Studio", sub: "Create, edit and generate", icon: Sparkles, tint: "from-violet-500/15 to-purple-500/15 text-violet-500" },
   { label: "Marketplace", sub: "Buy, sell and discover", icon: ShoppingBag, tint: "from-fuchsia-500/15 to-pink-500/15 text-fuchsia-500" },
 ];
 
@@ -254,18 +260,30 @@ export function ProfileMenuPanel({
         {/* My Spaces */}
         <p className="mb-2 mt-4 px-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70">My Spaces</p>
         <div className="space-y-2">
-          {SPACES.map((s) => (
-            <div key={s.label} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-3 py-3">
-              <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ring-1 ring-inset ring-border/40", s.tint)}>
-                <s.icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold">{s.label}</span>
-                <span className="block truncate text-xs text-muted-foreground">{s.sub}</span>
-              </span>
-              <SoonPill />
-            </div>
-          ))}
+          {SPACES.map((s) => {
+            const body = (
+              <>
+                <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ring-1 ring-inset ring-border/40", s.tint)}>
+                  <s.icon className="h-5 w-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold">{s.label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{s.sub}</span>
+                </span>
+                {s.href ? null : <SoonPill />}
+              </>
+            );
+            const cls = "flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-3 py-3";
+            return s.href ? (
+              <Link key={s.label} href={s.href} prefetch onClick={onNavigate} className={cn(cls, "transition hover:border-foreground/15")}>
+                {body}
+              </Link>
+            ) : (
+              <div key={s.label} className={cls}>
+                {body}
+              </div>
+            );
+          })}
         </div>
 
         {/* Language */}

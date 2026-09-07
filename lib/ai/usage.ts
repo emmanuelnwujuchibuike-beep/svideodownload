@@ -152,3 +152,33 @@ export async function releaseAiUsage(
     return { released: false, reserved: 0 };
   }
 }
+
+/**
+ * Today's count, WITHOUT spending anything.
+ *
+ * So an interface can say "1 left today" before somebody commits to a video.
+ * Reading an allowance must never consume it — the same law `peekDaily` obeys
+ * for downloads, and the reason both exist as separate functions rather than a
+ * flag on the charging one.
+ *
+ * Fails to 0 rather than closed: this is a display value, and a counter that
+ * cannot be read is not a reason to tell somebody they have used something they
+ * have not. The CHARGE still fails closed, which is where it matters.
+ */
+export async function peekAiUsage(userId: string, feature: AiFeature): Promise<number> {
+  try {
+    const admin = createAdminClient();
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await admin
+      .from("ai_usage_daily")
+      .select("reserved_jobs")
+      .eq("user_id", userId)
+      .eq("feature", feature)
+      .eq("usage_date", today)
+      .maybeSingle();
+    if (error || !data) return 0;
+    return typeof data.reserved_jobs === "number" ? data.reserved_jobs : 0;
+  } catch {
+    return 0;
+  }
+}

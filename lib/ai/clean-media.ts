@@ -210,3 +210,25 @@ export function formatResolution(width: number | null, height: number | null): s
   if (!width || !height || width <= 0 || height <= 0) return null;
   return `${Math.round(width)} × ${Math.round(height)}`;
 }
+
+/**
+ * The file extension a stored source should carry.
+ *
+ * Filename first, because it is what the person's own device called the file
+ * and it is right far more often than a MIME type a picker guessed. The MIME
+ * type is the fallback, and `mp4` is the last resort — an object with no
+ * extension at all is one a media player refuses to open later.
+ *
+ * Only ever used to build a SERVER-CHOSEN path, and sanitised again there: this
+ * decides the suffix, it does not decide where anything is written.
+ */
+export function extensionForUpload(name: string | undefined, mimeType: string): string {
+  const fromName = name ? fileExtension(name) : "";
+  if (AI_CLEAN_FORMATS.some((f) => f.extension === fromName)) return fromName;
+
+  const mime = mimeType.trim().toLowerCase();
+  const byMime = AI_CLEAN_FORMATS.find((f) => f.mimeTypes.includes(mime));
+  if (byMime) return byMime.extension;
+
+  return "mp4";
+}

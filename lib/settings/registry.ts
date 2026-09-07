@@ -119,6 +119,13 @@ export const SETTINGS: readonly SettingEntry[] = [
   { id: "creator.audience", category: "creator", label: "Audience", description: "Growth, when your audience watches, returning viewers and top supporters.", keywords: ["audience", "followers", "growth", "when to post", "returning", "supporters", "retention"], href: "/studio/audience", status: "live" },
   { id: "creator.calendar", category: "creator", label: "Content calendar", description: "Scheduled posts and everything you plan to make.", keywords: ["calendar", "schedule", "plan", "campaign", "upcoming", "publish later"], href: "/studio/calendar", status: "live" },
   { id: "creator.journey", category: "creator", label: "Journey & health", description: "Your milestones, achievements, Creator Health and Creator Universe.", keywords: ["journey", "milestones", "achievements", "health", "burnout", "consistency", "universe"], href: "/studio/journey", status: "live" },
+  /*
+    Frenz AI (2026-09-07). One row, not one per tool: the hub is the destination,
+    and a row per tool would have to claim each tool works. `live` is about the
+    SCREEN — it exists and opens today — and the note is what keeps that honest
+    about the tool behind it, which is still interface-only.
+  */
+  { id: "creator.frenz-ai", category: "creator", label: "Frenz AI", description: "AI tools for your videos in Studio, starting with AI Clean.", keywords: ["ai", "frenz ai", "ai clean", "clean", "remove text", "captions", "subtitles", "watermark", "overlay"], href: "/studio/ai", status: "live", note: "The hub and AI Clean's interface are live; the cleanup pipeline itself is a later part — see lib/ai/studio-tools.ts for each tool's real status." },
   {
     id: "creator.monetisation",
     category: "creator",

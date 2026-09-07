@@ -103,12 +103,21 @@ export function StreakUnlockCelebration({
   tier,
   onViewGallery,
   onDone,
+  replay = false,
 }: {
   streak: number;
   tier: StreakTier;
   /** "VIEW FLAME GALLERY" — the tracker owns the handoff, not this overlay. */
   onViewGallery: () => void;
   onDone: () => void;
+  /**
+   * Replaying a flame already earned, from the gallery — not a live unlock.
+   *
+   * The ceremony is identical; what changes is that it claims nothing. See the
+   * effect below: the live path spends TODAY, and a look back at an old flame
+   * must not do that.
+   */
+  replay?: boolean;
 }) {
   const lite = useLowPowerFx();
   const [leaving, setLeaving] = useState(false);
@@ -143,17 +152,41 @@ export function StreakUnlockCelebration({
     if (!marked.current) {
       marked.current = true;
       /*
-        Claim the day on the first frame, not on dismiss: someone who navigates
-        away mid-ceremony must not be shown it again on the next page.
+        🔴 A REPLAY CLAIMS NOTHING (owner, 2026-09-07: a completed flame should
+        be replayable "and when clicked, they can see and replay their past
+        celebration").
+
+        `markStreakCelebrated()` claims TODAY, so running it from the gallery
+        would mean someone who looked back at an old flame silently lost the
+        real celebration for the milestone they hit that same day. Likewise
+        `claimStreakSound`, which is a once-per-increment claim.
+
+        The ceremony itself is identical — this only skips the two writes that
+        say "today has been spent".
       */
-      void markStreakCelebrated();
+      if (!replay) {
+        /*
+          Claim the day on the first frame, not on dismiss: someone who
+          navigates away mid-ceremony must not be shown it again on the next
+          page.
+        */
+        void markStreakCelebrated();
+        /*
+          The claim is taken so the hero chip cannot also make a noise for the
+          same increment. `playSound` still honours the master sound switch and
+          stays silent until an AudioContext has been unlocked by a real
+          gesture, so this can never be what makes a phone blurt in a quiet
+          room.
+        */
+        if (claimStreakSound(streak)) playSound("streak-milestone");
+      }
       /*
-        The claim is taken so the hero chip cannot also make a noise for the
-        same increment. `playSound` still honours the master sound switch and
-        stays silent until an AudioContext has been unlocked by a real gesture,
-        so this can never be what makes a phone blurt in a quiet room.
+        No sound on a replay, deliberately. `claimStreakSound` is a single-slot
+        claim keyed on the streak NUMBER, so replaying under any key would
+        overwrite a claim the hero chip may not have taken yet and let the same
+        milestone sound twice. The haptic carries the moment; the claim stays
+        untouched.
       */
-      if (claimStreakSound(streak)) playSound("streak-milestone");
       hapticPattern(HAPTIC[tier.ceremony] ?? HAPTIC[4]!);
     }
 
@@ -191,7 +224,7 @@ export function StreakUnlockCelebration({
     };
     // `streak` and `tier` are fixed for this overlay's whole life — the tracker
     // sets them once and unmounts on done.
-  }, [streak, tier]);
+  }, [streak, tier, replay]);
 
   return (
     <Portal>

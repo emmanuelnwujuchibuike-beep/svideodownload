@@ -142,6 +142,32 @@ export interface Monitoring {
  * it moved in the wrong direction whenever the site got busier. `attempted` is
  * the honest denominator; `abandoned` is reported separately, because it is a
  * real and interesting number, just not a failure.
+ *
+ * ── 🔴 "ABANDONED" USED TO MEAN "NOT FINISHED YET" ──────────────────────────
+ *
+ * Owner, 2026-09-07: "Download abandoned in the last 24hrs has risen to almost
+ * the amount of total Download in the last 24hrs."
+ *
+ * It was computed as `requested + started + preparing` — every row that had not
+ * yet reached a terminal status. That counts a download RUNNING RIGHT NOW as
+ * abandoned. A visitor who pressed the button ten seconds ago, and one who
+ * closed the tab last week, were the same number.
+ *
+ * It also ignored `timed_out` entirely — which is the one status that actually
+ * MEANS abandoned, written by the 30-minute sweep in
+ * app/api/cron/abandoned-downloads whose whole job is to make that judgement.
+ * The dashboard was inventing a verdict the system already had a mechanism for,
+ * and ignoring the mechanism's answer.
+ *
+ * So: `abandoned` is now what was SWEPT (timed_out / expired), and rows still
+ * moving are reported as `inProgress` — a different question, honestly labelled.
+ *
+ * ⚠️ CONSEQUENCE WORTH KNOWING: the sweep is not registered as a cron on this
+ * project (see that route's own note about the 2-cron plan limit). Until it runs
+ * on a schedule, `timed_out` stays 0 and `abandoned` reads 0 — which is
+ * "nothing has been judged abandoned", not "nothing was abandoned". That is a
+ * quieter and more honest failure than reporting every in-flight download as a
+ * loss, and `inProgress` still shows the rows sitting there.
  */
 export interface DownloadStats {
   /** Requested and not cancelled — every download we were asked to deliver. */
@@ -149,8 +175,19 @@ export interface DownloadStats {
   completed: number;
   failed: number;
   cancelled: number;
-  /** Requested, never cancelled, never reached a terminal state (tab closed, etc). */
+  /**
+   * Judged abandoned by the sweep — `timed_out` / `expired`.
+   *
+   * NOT "has not finished yet". See the note above: that older meaning counted
+   * live downloads as losses.
+   */
   abandoned: number;
+  /**
+   * Still moving, or at least not yet resolved: requested / started /
+   * preparing. Interesting, and completely different from abandoned — most of
+   * these are downloads in flight at the moment of the query.
+   */
+  inProgress: number;
   /** completed + failed — the denominator for `successRate`. */
   attempted: number;
   successRate: number;
@@ -400,6 +437,7 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
       failed: 0,
       cancelled: 0,
       abandoned: 0,
+      inProgress: 0,
       attempted: 0,
       successRate: 0,
       bytesDelivered: 0,
@@ -515,14 +553,17 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     const completed = stat("completed");
     const failed = stat("failed");
     const cancelled = stat("cancelled");
-    const inFlight = stat("requested") + stat("started") + stat("preparing");
+    const inProgress = stat("requested") + stat("started") + stat("preparing");
+    /* The sweep's verdict, and the only honest source of "abandoned". */
+    const abandoned = stat("timed_out") + stat("expired");
     const attempted = completed + failed;
     const downloads: DownloadStats = {
-      total: completed + failed + inFlight,
+      total: completed + failed + inProgress + abandoned,
       completed,
       failed,
       cancelled,
-      abandoned: inFlight,
+      abandoned,
+      inProgress,
       attempted,
       // Against ATTEMPTS, not against everything ever requested — see DownloadStats.
       successRate: attempted > 0 ? Math.round((completed / attempted) * 1000) / 10 : 0,

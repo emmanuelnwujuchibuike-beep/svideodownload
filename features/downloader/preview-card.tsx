@@ -1175,13 +1175,28 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           )}
         </button>
 
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          {phase === "done"
-            ? "Saving to your device — check your browser's files or Files app."
-            : isBatchable && selected.size > 1 && batchBytes > 0
-              ? `Total size: ~${formatBytes(batchBytes)}`
-              : "Fast, private & free — no app, no sign-up."}
-        </p>
+        {/*
+          🔴 "Fast, private & free — no app, no sign-up." is GONE (owner,
+          2026-09-07: "Remove the no app , no sign up from the Download result
+          card").
+
+          The line survives only where it says something USEFUL: the saving
+          hint, and the batch total. On the idle state it was a marketing claim
+          sitting directly under the primary action — the position AdSense
+          reads most carefully — and "no sign-up" is also the wrong thing to
+          promise on a card that sits inside an app people do sign up to.
+
+          The paragraph renders nothing at all when there is nothing to say,
+          rather than reserving an empty line: a blank row under the button
+          reads as something that failed to load.
+        */}
+        {phase === "done" || (isBatchable && selected.size > 1 && batchBytes > 0) ? (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            {phase === "done"
+              ? "Saving to your device — check your browser's files or Files app."
+              : `Total size: ~${formatBytes(batchBytes)}`}
+          </p>
+        ) : null}
 
         {/*
           Feature strip — what every download gets.

@@ -126,6 +126,7 @@ export function digestEmailHtml(data: DigestData): string {
     byKey("downloads_failed"),
     byKey("downloads_cancelled"),
     byKey("downloads_abandoned"),
+    byKey("downloads_in_progress"),
   ];
   const monetization = [byKey("rewards_watched"), byKey("idle_interstitials")];
   const usersGroup = [

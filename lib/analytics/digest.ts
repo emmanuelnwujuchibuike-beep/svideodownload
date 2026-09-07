@@ -271,7 +271,14 @@ export async function buildDigest(period: DigestPeriod): Promise<DigestData> {
       trendPct: pct(summary.downloads.failed, summary.previous?.downloadsFailed),
     },
     { key: "downloads_cancelled", label: "Downloads cancelled", value: summary.downloads.cancelled, trendPct: null },
+    /*
+      Two lines where there was one. "Abandoned" now means the sweep judged it
+      abandoned; the rows that are merely unfinished are their own line, because
+      conflating them is what made this metric read as a catastrophe (owner,
+      2026-09-07). See DownloadStats in lib/analytics/queries.ts.
+    */
     { key: "downloads_abandoned", label: "Downloads abandoned", value: summary.downloads.abandoned, trendPct: null },
+    { key: "downloads_in_progress", label: "Downloads in progress", value: summary.downloads.inProgress, trendPct: null },
     { key: "rewards_watched", label: "Reward ads watched", value: summary.rewardsWatched, trendPct: null },
     { key: "idle_interstitials", label: "Idle interstitials shown", value: idleImpressions, trendPct: null },
     {

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Portal } from "@/components/ui/portal";
 import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
 import { StreakRecovery } from "@/features/streaks/streak-recovery";
-import { STREAK_TIERS, nextTier, tierFor } from "@/lib/streaks/tiers";
+import { StreakUnlockCelebration } from "@/features/streaks/streak-unlock-celebration";
+import { STREAK_TIERS, nextTier, tierFor, type StreakTier } from "@/lib/streaks/tiers";
 import type { StreakState } from "@/lib/streaks/types";
 
 /**
@@ -75,6 +76,16 @@ export function StreakTiersSheet({
     "has ever reached" — it can only ever be too generous by the moment.
   */
   const unlockedTo = Math.max(streak, state?.longestStreak ?? 0);
+
+  /**
+   * The flame being replayed from the gallery, if any.
+   *
+   * Owner, 2026-09-07: a completed flame, "when clicked, they can see and
+   * replay their past celebration." The ceremony was previously a one-shot —
+   * seen on the day it was earned and never again — which is a strange thing to
+   * do with the reward the whole streak system is built around.
+   */
+  const [replayTier, setReplayTier] = useState<StreakTier | null>(null);
 
   useEffect(() => {
     restoreTo.current = document.activeElement;
@@ -211,11 +222,30 @@ export function StreakTiersSheet({
               /* Owned but not lit: the state that only exists after a break. */
               const dormant = unlocked && streak < tier.minDays;
               const away = tier.minDays - streak;
+              /*
+                🔴 THE FIFTH STATE, WHICH WAS MISSING (owner, 2026-09-07: "The
+                flame completed should not show locked, it should show a green
+                completed").
+
+                A tier BEHIND the live streak matched none of the four branches
+                below. At a 7-day streak, "Day 1" read: unlocked yes, current
+                no, dormant no (`7 < 1` is false), and `away` was NEGATIVE so
+                the "N more days" test failed too — so it fell through to the
+                final else and rendered LOCKED. A flame already earned, and
+                still burning, labelled locked.
+
+                "Passed" is genuinely its own thing: not where you are, not
+                owned-but-dark after a break, not a distance to walk. It is
+                done.
+              */
+              const completed = unlocked && !isCurrent && !dormant && away <= 0;
               return (
                 <li
                   key={tier.id}
                   aria-current={isCurrent ? "true" : undefined}
-                  data-state={unlocked ? (isCurrent ? "current" : "unlocked") : "locked"}
+                  data-state={
+                    unlocked ? (isCurrent ? "current" : completed ? "completed" : "unlocked") : "locked"
+                  }
                   className={`streak-rank ${isCurrent ? `${tier.fill} ${tier.ring}` : ""}`}
                   style={isCurrent ? { ["--rank-glow" as string]: tier.glow } : undefined}
                 >
@@ -264,6 +294,21 @@ export function StreakTiersSheet({
                   */}
                   {isCurrent ? (
                     <span className={`streak-rank-chip ${tier.text} ${tier.ring}`}>You</span>
+                  ) : completed ? (
+                    /*
+                      Green, and a BUTTON — the owner asked for both: "a green
+                      completed and when clicked, they can see and replay their
+                      past celebration." The ceremony is the reward, and until
+                      now it could only ever be seen once, on the day.
+                    */
+                    <button
+                      type="button"
+                      onClick={() => setReplayTier(tier)}
+                      className="streak-rank-chip streak-rank-chip-done"
+                      aria-label={`Replay the ${tier.label} celebration`}
+                    >
+                      Completed
+                    </button>
                   ) : dormant ? (
                     <span className="streak-rank-chip streak-rank-chip-owned">Unlocked</span>
                   ) : away > 0 && streak > 0 ? (
@@ -279,6 +324,26 @@ export function StreakTiersSheet({
           </ul>
 
           <p className="streak-sheet-foot">Your downloads keep the flame alive.</p>
+
+          {/*
+            The replay. `streak` is the tier's OWN threshold, not today's count,
+            because this is the moment as it happened — "Day 1" should replay as
+            day one, not as day seven.
+
+            `replay` is what stops it claiming today: the live ceremony marks the
+            day celebrated, and looking back at an old flame must not silently
+            consume the celebration for a milestone hit the same day. See
+            streak-unlock-celebration.
+          */}
+          {replayTier ? (
+            <StreakUnlockCelebration
+              streak={replayTier.minDays}
+              tier={replayTier}
+              replay
+              onViewGallery={() => setReplayTier(null)}
+              onDone={() => setReplayTier(null)}
+            />
+          ) : null}
         </div>
       </div>
     </Portal>

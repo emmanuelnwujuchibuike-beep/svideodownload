@@ -182,12 +182,23 @@ export const DOWNLOAD_METRICS: MetricSpec[] = [
   {
     id: "dl-abandoned",
     title: "Downloads abandoned",
-    description: "Started, then never finished, failed or cancelled.",
+    description: "Judged abandoned by the 30-minute sweep — never reached any outcome.",
     measurement:
-      "Almost always a closed tab or a lost connection mid-transfer — the browser stops without telling us. These are excluded from the success rate for the same reason as cancels: nothing was reported to have gone wrong. A rising number here is worth investigating as a speed problem.",
+      "Almost always a closed tab or a lost connection mid-transfer: the browser stops without telling us, so no closing event is ever sent. Counted ONLY once the sweep (app/api/cron/abandoned-downloads) has judged the row — it used to mean 'has not finished yet', which counted downloads that were running at that very moment. Excluded from the success rate for the same reason as cancels: nothing was reported to have gone wrong. NOTE: the sweep is not registered as a cron on this plan, so this reads 0 until it is scheduled — that is 'nothing judged', not 'nothing abandoned'.",
     format: "count",
     higherIsBetter: false,
     value: (s) => s.downloads.abandoned,
+    previous: () => null,
+  },
+  {
+    id: "dl-in-progress",
+    title: "Downloads in progress",
+    description: "Requested or transferring, and not yet resolved.",
+    measurement:
+      "Rows sitting at requested, started or preparing at the moment of the query. Most are downloads genuinely in flight; some are ones that will later be swept as abandoned. This number used to be reported AS 'abandoned', which made every busy moment look like a wave of failures (owner, 2026-09-07).",
+    format: "count",
+    higherIsBetter: null,
+    value: (s) => s.downloads.inProgress,
     previous: () => null,
   },
   {

@@ -3467,6 +3467,42 @@ html.dark .streak-rank {
   color: hsl(var(--muted-foreground) / 0.85);
 }
 
+/* PASSED. A rank behind the live streak — earned, still burning, and until
+   2026-09-07 mislabelled "Locked" because no branch matched it (owner: "The
+   flame completed should not show locked, it should show a green completed").
+
+   Green rather than the muted grey the other non-current chips use, because
+   this is the only one that reports a SUCCESS. It is also the only chip that
+   is a button — it replays that flame ceremony — so it carries a pointer and
+   a hover lift to say it can be pressed. */
+.streak-rank-chip-done {
+  color: hsl(142 72% 34%);
+  box-shadow: inset 0 0 0 1px hsl(142 72% 34% / 0.45);
+  background: hsl(142 72% 34% / 0.09);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.streak-rank-chip-done:hover {
+  background: hsl(142 72% 34% / 0.16);
+}
+.streak-rank-chip-done:active {
+  transform: scale(0.96);
+}
+:root.dark .streak-rank-chip-done {
+  color: hsl(142 62% 62%);
+  box-shadow: inset 0 0 0 1px hsl(142 62% 62% / 0.4);
+  background: hsl(142 62% 62% / 0.12);
+}
+:root.dark .streak-rank-chip-done:hover {
+  background: hsl(142 62% 62% / 0.2);
+}
+
+/* A completed rank is lit like an unlocked one — it must never inherit the
+   desaturation the locked rows get. */
+.streak-rank[data-state="completed"] .streak-rank-mark {
+  filter: drop-shadow(0 3px 10px rgba(15, 23, 42, 0.14));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .streak-rank[data-state="current"] { animation: none; }
 }

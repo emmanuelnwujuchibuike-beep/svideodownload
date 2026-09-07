@@ -42,7 +42,20 @@ export type AiFeature =
   | "ai_generate";
 
 /** Mirrors `ai_jobs_status_chk`. The database is the authority; this is the mirror. */
-export type AiJobStatus = "queued" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+export type AiJobStatus =
+  | "queued"
+  | "processing"
+  /**
+   * The provider is done and OUR worker is running: the cleaned video is being
+   * muxed back together with the original audio (Part 4). A real, distinct
+   * state — without it the interface would leave somebody on "removing text"
+   * for a minute after the AI had already finished.
+   */
+  | "finalizing"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "expired";
 
 /** Mirrors `ai_jobs_provider_chk`. */
 export type AiProviderId = "replicate";
@@ -50,6 +63,7 @@ export type AiProviderId = "replicate";
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",
   "processing",
+  "finalizing",
   "completed",
   "failed",
   "cancelled",
@@ -57,7 +71,7 @@ export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
 ] as const;
 
 /** A job that is still going to change. Everything else is terminal. */
-export const AI_ACTIVE_STATUSES: readonly AiJobStatus[] = ["queued", "processing"] as const;
+export const AI_ACTIVE_STATUSES: readonly AiJobStatus[] = ["queued", "processing", "finalizing"] as const;
 
 export function isActiveStatus(status: AiJobStatus): boolean {
   return AI_ACTIVE_STATUSES.includes(status);
@@ -73,7 +87,15 @@ export function isActiveStatus(status: AiJobStatus): boolean {
  */
 const TRANSITIONS: Record<AiJobStatus, readonly AiJobStatus[]> = {
   queued: ["processing", "failed", "cancelled", "expired"],
-  processing: ["completed", "failed", "cancelled", "expired"],
+  /*
+    🔴 processing may NOT go straight to completed any more. The provider
+    finishing is not the job finishing — the video has no audio on it yet. The
+    only way to completed is through finalizing, which is what makes it
+    impossible for a future webhook change to hand somebody a silent video and
+    call it done.
+  */
+  processing: ["finalizing", "failed", "cancelled", "expired"],
+  finalizing: ["completed", "failed", "cancelled", "expired"],
   completed: ["expired"],
   failed: ["expired"],
   cancelled: ["expired"],
@@ -105,6 +127,14 @@ export interface AiFeatureDef {
    * not configured is refused up front rather than queued into a void.
    */
   requires: "replicate";
+  /**
+   * Whether a finished provider output still needs OUR worker before it is
+   * deliverable. True for AI Clean: the model returns video with no audio, so
+   * a job whose mux cannot run is a job that would hand somebody a silent
+   * video — and it is far better to refuse it before spending anything than to
+   * discover that after the provider has been paid.
+   */
+  needsFinalizer: boolean;
   /** Successful-or-outstanding jobs a FREE member may have per UTC day. */
   freeDailyJobs: number;
   /** Accepted MIME types. Empty means "any of this kind" — never used yet. */
@@ -130,6 +160,7 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     label: "AI Clean",
     provider: "replicate",
     requires: "replicate",
+    needsFinalizer: true,
     // Owner's rule: 3 successful AI Clean jobs per calendar day for free members.
     freeDailyJobs: 3,
     mimeTypes: AI_CLEAN_FORMATS.flatMap((f) => f.mimeTypes),
@@ -158,8 +189,17 @@ export function aiFeature(id: string): AiFeatureDef | null {
  * how `lib/ai/tools.ts` handles the same question.
  */
 export interface AiCapabilities {
-  /** A Replicate token is configured. False for the whole of Part 2. */
+  /** A Replicate token is configured. */
   replicate: boolean;
+  /**
+   * A worker that can run ffmpeg is reachable (lib/worker.ts).
+   *
+   * 🔴 Checked at CREATION, not at the end. Without it the pipeline would run
+   * the whole expensive middle — upload, provider, the member waiting — and
+   * fail at the last step with the bill already paid. Refusing up front costs
+   * nobody anything.
+   */
+  finalizer: boolean;
   /**
    * 🔴 DEVELOPMENT ONLY. Permits a job to be created for a feature whose
    * provider is not configured, so the plumbing — idempotency, ownership,
@@ -192,6 +232,15 @@ export function featureAvailability(
     return {
       available: false,
       // Said plainly. The member is not at fault and the owner may be reading it.
+      reason: "The AI service isn't connected yet.",
+    };
+  }
+  if (feature.needsFinalizer && !caps.finalizer) {
+    if (caps.allowUndispatched) return { available: true, dispatchable: false };
+    return {
+      available: false,
+      // Same sentence: which half of our own infrastructure is missing is not
+      // the member's problem, and naming it publicly buys nothing.
       reason: "The AI service isn't connected yet.",
     };
   }
@@ -260,6 +309,9 @@ export interface AiJobRow {
   result_path: string | null;
   source_size: number | null;
   result_size: number | null;
+  result_duration: number | string | null;
+  result_mime_type: string | null;
+  audio_restored: boolean | null;
   source_duration: number | string | null;
   source_mime_type: string | null;
   replicate_prediction_id: string | null;
@@ -289,6 +341,18 @@ export interface AiJobView {
     durationSeconds: number | null;
     name: string | null;
   };
+  /**
+   * The finished file, once there is one.
+   *
+   * `audioRestored: false` on a completed job means the SOURCE had no audio —
+   * a success, not a failure — which is why it is a nullable boolean rather
+   * than something the interface has to infer from a missing field.
+   */
+  result: {
+    size: number | null;
+    durationSeconds: number | null;
+    audioRestored: boolean | null;
+  };
   /** A stable code and a written sentence. Never the provider's own words. */
   error: { code: string; message: string } | null;
 }
@@ -315,9 +379,12 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
       ? Math.max(0, completed - started)
       : null;
 
-  const rawDuration = row.source_duration;
-  const sourceDuration =
-    rawDuration === null || rawDuration === undefined ? null : Number(rawDuration);
+  const numeric = (value: number | string | null | undefined): number | null => {
+    if (value === null || value === undefined) return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  const sourceDuration = numeric(row.source_duration);
 
   return {
     id: row.id,
@@ -331,8 +398,13 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
     source: {
       size: row.source_size,
       mimeType: row.source_mime_type,
-      durationSeconds: Number.isFinite(sourceDuration as number) ? (sourceDuration as number) : null,
+      durationSeconds: sourceDuration,
       name: typeof row.metadata?.source_name === "string" ? row.metadata.source_name : null,
+    },
+    result: {
+      size: row.result_size,
+      durationSeconds: numeric(row.result_duration),
+      audioRestored: row.audio_restored,
     },
     error: row.error_code ? { code: row.error_code, message: errorMessageFor(row.error_code) } : null,
   };

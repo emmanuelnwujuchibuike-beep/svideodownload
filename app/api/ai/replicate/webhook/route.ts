@@ -1,21 +1,22 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
-import { aiFeature } from "@/lib/ai/jobs";
-import { findJobByPredictionId, transitionJob } from "@/lib/ai/job-store";
+import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
+import { findJobByPredictionId, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
 import { getUserAIEntitlement } from "@/lib/ai/entitlement";
-import { storeResultFromUrl } from "@/lib/ai/storage-server";
-import { consumeAiUsage, releaseAiUsage } from "@/lib/ai/usage";
+import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
+import { releaseAiUsage } from "@/lib/ai/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 /*
-  The success path copies the finished video out of Replicate and into our own
-  private bucket, which is a real transfer of real megabytes. 300s matches the
-  ceiling `app/api/internal/store-media` already uses for the same kind of work.
+  ⚠️ Was 300s in Part 3, when this route copied the finished video itself. It no
+  longer moves a single byte of video: it records where the output is and hands
+  the job to the ffmpeg worker (lib/ai/finalize-dispatch.ts). Two small database
+  writes and a fire-and-forget POST.
 */
-export const maxDuration = 300;
+export const maxDuration = 30;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -106,57 +107,58 @@ export async function POST(request: Request) {
 
     /* ── finished, one way or another ─────────────────────────────────────── */
     if (state.status === "completed") {
+      /*
+        ── 🔴 THE PROVIDER FINISHING IS NOT THE JOB FINISHING ──────────────────
+
+        The model returns video with NO AUDIO. Marking this completed would hand
+        the member a silent video, which is why the state machine no longer
+        allows processing -> completed at all (lib/ai/jobs.ts).
+
+        So this route does the two cheap, durable things — record where the
+        output is, and ask the worker to finish — and nothing else. It moves no
+        video: a 100 MB transfer inside a webhook is memory this platform bills
+        by the millisecond, and a webhook that runs long is a webhook Replicate
+        gives up on and redelivers.
+      */
       const outputUrl = state.resultUrl;
       if (!outputUrl) {
-        // Replicate says it succeeded and we cannot find a video in the output.
-        // Treated as a provider failure and refunded, because the member has
-        // nothing either way and the fault is not theirs.
+        // Replicate says it succeeded and there is no video in the output.
+        // Treated as a provider failure and refunded — the member has nothing
+        // either way, and the fault is not theirs.
         return await failJob(job.id, job.user_id, feature.id, "PROVIDER_ERROR", "succeeded with no usable output");
       }
 
-      let stored: { path: string; size: number };
       try {
-        stored = await storeResultFromUrl({
-          userId: job.user_id,
-          feature: feature.id,
-          jobId: job.id,
-          sourceUrl: outputUrl,
-        });
+        // Written BEFORE the response, so a dispatch that never lands leaves a
+        // job that can still be finalized later rather than one that has lost
+        // the only link to its own output.
+        await recordProviderOutput(job.id, outputUrl);
       } catch (e) {
-        /*
-          The AI worked; our copy of the result did not. 500 so Replicate
-          retries — its output URL is still valid for a while, so a retry has a
-          real chance, and the compare-and-set means a later success still
-          lands exactly once. The job is deliberately NOT failed here.
-        */
-        console.error("[ai/webhook] result transfer failed", { jobId: job.id, error: String(e) });
+        // Our database, our problem — 500 asks for the redelivery that fixes it.
+        console.error("[ai/webhook] could not record provider output", { jobId: job.id, error: String(e) });
         return NextResponse.json({ ok: false }, { status: 500 });
       }
 
-      const updated = await transitionJob(job.id, ["queued", "processing"], "completed", {
-        result_path: stored.path,
-        result_size: stored.size,
-        model_version: state.modelVersion ?? job.model_version,
-        completed_at: new Date().toISOString(),
-        error_code: null,
-        error_message: null,
-      });
-
-      if (updated) {
-        // Only on a transition that actually happened — a retried delivery must
-        // not count a second successful job against the allowance.
-        await consumeAiUsage(job.user_id, feature.id);
-        console.info("[ai/webhook] completed", {
+      /*
+        Fired AFTER the response. `after()` is how this platform allows work to
+        continue past a returned response — without it the function is frozen
+        the moment we answer and the worker is never called. The job stays
+        `processing` until the worker CLAIMS it with a compare-and-set, which
+        is what makes two deliveries of this callback safe.
+      */
+      after(async () => {
+        const dispatch = await dispatchFinalization(job.id);
+        console.info("[ai/webhook] finalization dispatched", {
           jobId: job.id,
           userId: job.user_id,
           feature: feature.id,
-          provider: "replicate",
-          modelVersion: state.modelVersion,
           predictionId: state.reference,
-          resultSize: stored.size,
-          transition: `${job.status} -> completed`,
+          modelVersion: state.modelVersion,
+          dispatched: dispatch.dispatched,
+          ...(dispatch.dispatched ? {} : { reason: dispatch.reason }),
         });
-      }
+      });
+
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -188,7 +190,7 @@ export async function POST(request: Request) {
 async function failJob(
   jobId: string,
   userId: string,
-  feature: Parameters<typeof consumeAiUsage>[1],
+  feature: AiFeature,
   code: string,
   detail: string | null | undefined,
 ) {
@@ -221,7 +223,7 @@ async function failJob(
  * daily allowance, and a webhook has no session to read it from. `getUserPlan`
  * is a single indexed read and this path runs at most once per job.
  */
-async function refund(userId: string, feature: Parameters<typeof consumeAiUsage>[1]) {
+async function refund(userId: string, feature: AiFeature) {
   const def = aiFeature(feature);
   if (!def) return;
   const entitlement = await getUserAIEntitlement(userId, def);

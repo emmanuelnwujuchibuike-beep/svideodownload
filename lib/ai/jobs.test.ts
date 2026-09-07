@@ -54,26 +54,47 @@ describe("the feature registry", () => {
 });
 
 describe("featureAvailability", () => {
-  it("🔴 refuses when no provider is configured — which is all of Part 2", () => {
-    const verdict = featureAvailability(feature, { replicate: false, allowUndispatched: false });
+  const ready = { replicate: true, finalizer: true, allowUndispatched: false };
+
+  it("🔴 refuses when no provider is configured", () => {
+    const verdict = featureAvailability(feature, { ...ready, replicate: false });
     expect(verdict.available).toBe(false);
     if (!verdict.available) expect(verdict.reason.length).toBeGreaterThan(10);
   });
 
-  it("is available and dispatchable once a provider is configured", () => {
-    expect(featureAvailability(feature, { replicate: true, allowUndispatched: false })).toEqual({
-      available: true,
-      dispatchable: true,
-    });
+  it("🔴 Part 4: refuses when the ffmpeg worker is missing, BEFORE anything is spent", () => {
+    /*
+      The model returns video with no audio, so a job that cannot be muxed is a
+      job that would hand somebody a silent video. Checking at creation means
+      that costs nothing; checking at the end would mean discovering it after
+      the upload, the provider bill and the member's wait.
+    */
+    const verdict = featureAvailability(feature, { ...ready, finalizer: false });
+    expect(verdict.available).toBe(false);
+  });
+
+  it("says the same thing whichever half is missing", () => {
+    // Which piece of OUR infrastructure is down is not the member's problem,
+    // and naming it publicly buys nothing.
+    const noProvider = featureAvailability(feature, { ...ready, replicate: false });
+    const noWorker = featureAvailability(feature, { ...ready, finalizer: false });
+    if (!noProvider.available && !noWorker.available) {
+      expect(noProvider.reason).toBe(noWorker.reason);
+    } else {
+      throw new Error("both should have been unavailable");
+    }
+  });
+
+  it("is available and dispatchable once everything is configured", () => {
+    expect(featureAvailability(feature, ready)).toEqual({ available: true, dispatchable: true });
   });
 
   it("the development flag opens creation but never claims dispatch", () => {
-    // The whole point: a job may be created for testing, and the response still
-    // says out loud that nothing will run it.
-    expect(featureAvailability(feature, { replicate: false, allowUndispatched: true })).toEqual({
-      available: true,
-      dispatchable: false,
-    });
+    // A job may be created for testing, and the response still says out loud
+    // that nothing will run it.
+    expect(
+      featureAvailability(feature, { replicate: false, finalizer: false, allowUndispatched: true }),
+    ).toEqual({ available: true, dispatchable: false });
   });
 });
 
@@ -126,9 +147,10 @@ describe("validateJobInput", () => {
 });
 
 describe("status transitions", () => {
-  it("declares the same six statuses the database allows", () => {
+  it("declares the same seven statuses the database allows", () => {
+    // Mirrors ai_jobs_status_chk after migration 0142 added `finalizing`.
     expect([...AI_JOB_STATUSES].sort()).toEqual(
-      ["cancelled", "completed", "expired", "failed", "processing", "queued"].sort(),
+      ["cancelled", "completed", "expired", "failed", "finalizing", "processing", "queued"].sort(),
     );
   });
 
@@ -151,10 +173,30 @@ describe("status transitions", () => {
 
   it("allows the real lifecycle", () => {
     expect(canTransition("queued", "processing")).toBe(true);
-    expect(canTransition("processing", "completed")).toBe(true);
+    expect(canTransition("processing", "finalizing")).toBe(true);
+    expect(canTransition("finalizing", "completed")).toBe(true);
     expect(canTransition("queued", "cancelled")).toBe(true);
     // Anything may age out, including a job that finished.
     expect(canTransition("completed", "expired")).toBe(true);
+  });
+
+  it("🔴 Part 4: the AI finishing is NOT the job finishing", () => {
+    /*
+      The model returns video with no audio on it. Letting `processing` go
+      straight to `completed` is what would hand somebody a silent video and
+      call it ready — so the only route to completed is through finalizing,
+      enforced here rather than left to whichever webhook writes the row.
+    */
+    expect(canTransition("processing", "completed")).toBe(false);
+    expect(canTransition("queued", "completed")).toBe(false);
+  });
+
+  it("lets finalization fail or be cancelled like any other work", () => {
+    expect(canTransition("finalizing", "failed")).toBe(true);
+    expect(canTransition("finalizing", "cancelled")).toBe(true);
+    // But never backwards: a retry is a new run, not a rewound one.
+    expect(canTransition("finalizing", "processing")).toBe(false);
+    expect(canTransition("completed", "finalizing")).toBe(false);
   });
 });
 
@@ -188,6 +230,9 @@ describe("jobToView", () => {
     result_path: "user/ai_clean/job/result.mp4",
     source_size: 1024,
     result_size: 2048,
+    result_duration: "12.400",
+    result_mime_type: "video/mp4",
+    audio_restored: true,
     source_duration: "12.500",
     source_mime_type: "video/mp4",
     replicate_prediction_id: "pred_secret_123",

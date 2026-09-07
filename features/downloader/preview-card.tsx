@@ -15,7 +15,6 @@ import {
   Music,
   Play,
   ShieldCheck,
-  UserX,
   Video,
   Zap,
 } from "lucide-react";
@@ -1202,12 +1201,23 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
           Feature strip — what every download gets.
 
           One quiet inline row, as in the reference (public/mulitpleselection
-          modal.jpg), rather than the bordered four-cell table it was. Same four
-          claims, none dropped: they are reassurance you read once, and giving
-          them a box, dividers and a background made them compete with the
-          download button directly above for the same attention.
+          modal.jpg), rather than the bordered four-cell table it was: they are
+          reassurance you read once, and giving them a box, dividers and a
+          background made them compete with the download button directly above
+          for the same attention.
 
-          Every one is a checkable product fact — no counts, no ratings.
+          🔴 "No app, no sign-up" is GONE from here too (owner, 2026-09-07,
+          reporting it a second time: "result card in landing page still shows
+          no sign up, no app"). The earlier pass removed the SENTENCE under the
+          button and left this CHIP saying the same thing four lines below —
+          which is why it looked like nothing had changed. Both are gone now.
+
+          It is also the one claim here that had stopped being true: this card
+          renders inside an app people do sign up to, so promising the opposite
+          under the primary action was selling against our own product.
+
+          The three that remain are checkable product facts — no counts, no
+          ratings.
         */}
         <div className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-muted-foreground">
           {(
@@ -1215,7 +1225,6 @@ export function PreviewCard({ metadata, phase, onDownload }: PreviewCardProps) {
               { icon: Zap, label: "Lightning fast" },
               { icon: ShieldCheck, label: "Private & secure" },
               { icon: Ban, label: "No watermark" },
-              { icon: UserX, label: "No app, no sign-up" },
             ] as const
           ).map(({ icon: Icon, label }) => (
             <span key={label} className="inline-flex items-center gap-1.5 text-[11px] font-medium">

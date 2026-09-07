@@ -46,7 +46,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /** The columns a job read ever needs. `error_message` is deliberately absent. */
 const JOB_COLUMNS =
-  "id, user_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, source_size, result_size, source_duration, source_mime_type, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
+  "id, user_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
 
 /** Postgres unique-violation. The idempotency race lands here. */
 const UNIQUE_VIOLATION = "23505";
@@ -272,6 +272,15 @@ export async function findJobByPredictionId(predictionId: string): Promise<AiJob
 /** Fields a status change may carry with it. All server-decided. */
 export interface JobPatch {
   source_path?: string | null;
+  /**
+   * Replaced wholesale, never merged. The only writer is the finalizer,
+   * clearing the provider URL it has finished with — a partial update here
+   * would need a read-modify-write and a race to go with it.
+   */
+  metadata?: Record<string, unknown>;
+  result_duration?: number | null;
+  result_mime_type?: string | null;
+  audio_restored?: boolean | null;
   source_size?: number | null;
   source_mime_type?: string | null;
   result_path?: string | null;
@@ -383,6 +392,67 @@ export async function reserveSourcePath(jobId: string, path: string): Promise<vo
     .eq("status", "queued");
   if (error) {
     console.error("[ai/jobs] path reserve failed", { jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+}
+
+/**
+ * One job, read WITHOUT a session.
+ *
+ * 🔴 The service-role read the WORKER needs, and the second one in this file
+ * with no user in scope. The finalizer runs on a different machine, invoked by
+ * a webhook, with no cookie anywhere in the chain — so ownership cannot be
+ * enforced by RLS here and is enforced by what the caller is allowed to be
+ * instead: the route in front of this requires the shared worker secret, and
+ * the job id it passes came from a signature-verified provider callback.
+ *
+ * Every path this returns is then re-checked against `job.user_id` before it
+ * becomes a signed URL (see pathBelongsTo), so a wrong id cannot become access
+ * to somebody else's file.
+ */
+export async function getJobAsService(jobId: string): Promise<AiJobRow | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("ai_jobs").select(JOB_COLUMNS).eq("id", jobId).maybeSingle();
+
+  if (error) {
+    console.error("[ai/jobs] service read failed", { jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return (data as AiJobRow | null) ?? null;
+}
+
+/**
+ * Record the provider's output URL so the finalizer can fetch it.
+ *
+ * ⚠️ Deliberately transient. It is a link on the PROVIDER's infrastructure that
+ * expires on their schedule, it is stored only between the webhook and the mux,
+ * and the finalizer clears it on success. It never reaches a client:
+ * `jobToView` reads exactly one key out of `metadata` and this is not it.
+ *
+ * Not a column, because a column implies something worth keeping. This is a
+ * baton being passed between two machines.
+ */
+export async function recordProviderOutput(jobId: string, url: string): Promise<void> {
+  const admin = createAdminClient();
+  const { data, error: readError } = await admin
+    .from("ai_jobs")
+    .select("metadata")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (readError) {
+    console.error("[ai/jobs] provider output read failed", { jobId, code: readError.code });
+    throw new AiJobError("INTERNAL_ERROR", readError.message);
+  }
+
+  const existing = (data?.metadata ?? {}) as Record<string, unknown>;
+  const { error } = await admin
+    .from("ai_jobs")
+    .update({ metadata: { ...existing, provider_output_url: url } })
+    .eq("id", jobId)
+    .eq("status", "processing");
+
+  if (error) {
+    console.error("[ai/jobs] provider output write failed", { jobId, code: error.code });
     throw new AiJobError("INTERNAL_ERROR", error.message);
   }
 }

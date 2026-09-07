@@ -17,19 +17,19 @@ import type { AiJobStatus, AiJobView } from "@/lib/ai/jobs";
  * the upload is ours, `queued` and `processing` come from the job row, and
  * `completed` is the webhook.
  *
- * "Analyzing video" and "Finalizing" are NOT separate signals. The model does
- * detection and inpainting inside one Replicate prediction that reports a
- * single `processing` state, and our copy of the result happens inside the
- * webhook, where the row still says `processing`. Showing them as the current
- * step would mean deciding by a timer that analysis "must be done by now" —
- * which is the same lie as a percentage that counts itself up, wearing a
- * different label. The brief is explicit: never show a number, or a stage, the
- * backend does not know.
+ * ⚠️ UPDATED IN PART 4. "Finalizing" used to be one of two stages we could not
+ * observe. It is now a REAL one: the audio mux runs in our own worker and the
+ * row says `finalizing` while it does, so the step is announced because it is
+ * genuinely happening — not because a timer decided it ought to be.
  *
- * So both appear in the PATH — the member can see the whole journey, which is
- * most of what those labels were for — and neither is ever announced as
- * current. If a later part subscribes to Replicate's log stream, they become
- * real signals and this file is where they turn on.
+ * "Analyzing video" is still not a separate signal. The model does detection
+ * and inpainting inside one Replicate prediction reporting a single
+ * `processing` state, so announcing it as the current step would mean deciding
+ * by a timer that analysis "must be done by now" — the same lie as a
+ * self-incrementing percentage, wearing a different label. It appears in the
+ * PATH, so the member sees the whole journey, and lights up together with
+ * "Removing text" rather than before it. Subscribing to Replicate's log stream
+ * is what would make it real, and this file is where it would turn on.
  */
 
 export type AiCleanStage =
@@ -37,6 +37,7 @@ export type AiCleanStage =
   | "uploading"
   | "queued"
   | "processing"
+  | "finalizing"
   | "completed"
   | "failed"
   | "cancelled"
@@ -67,10 +68,13 @@ export const AI_CLEAN_PATH: readonly { key: string; label: string }[] = [
 /**
  * Which path steps are done, doing, and to come.
  *
- * 🔴 `analyzing` and `finalizing` are never returned as `current` — see the
- * note at the top. While the job is processing they read as "doing" together
- * with `removing`, because all three are genuinely underway inside one
- * prediction and pretending to know which would be the fabrication.
+ * 🔴 `analyzing` is never returned as the current step on its own — see the
+ * note at the top. While the job is processing it reads as "doing" together
+ * with `removing`, because both are underway inside one prediction and
+ * pretending to know which would be the fabrication.
+ *
+ * `finalizing` IS its own step as of Part 4: the audio mux runs in our worker
+ * and the row says so while it does.
  */
 export function pathState(stage: AiCleanStage): Record<string, "done" | "doing" | "todo"> {
   const state: Record<string, "done" | "doing" | "todo"> = {};
@@ -87,7 +91,13 @@ export function pathState(stage: AiCleanStage): Record<string, "done" | "doing" 
     mark(["queued"], "doing");
   } else if (stage === "processing") {
     mark(["uploading", "queued"], "done");
-    mark(["analyzing", "removing", "finalizing"], "doing");
+    // Two steps, one signal — see the note at the top.
+    mark(["analyzing", "removing"], "doing");
+  } else if (stage === "finalizing") {
+    // Real, and therefore its own step: the AI is finished and our worker is
+    // putting the original sound back on.
+    mark(["uploading", "queued", "analyzing", "removing"], "done");
+    mark(["finalizing"], "doing");
   } else if (stage === "completed") {
     mark(AI_CLEAN_PATH.map((p) => p.key), "done");
   }
@@ -113,6 +123,9 @@ function progressFor(stage: AiCleanStage, uploadFraction: number | null): number
       return 0.35;
     case "processing":
       return 0.6;
+    case "finalizing":
+      // Past the long part. The mux is seconds of work against minutes of AI.
+      return 0.85;
     case "completed":
       return 1;
     default:
@@ -137,6 +150,12 @@ const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
   processing: {
     label: "Removing text",
     detail: "Frenz AI is finding the text and rebuilding what was behind it.",
+  },
+  finalizing: {
+    label: "Restoring your audio",
+    // Said in the member's terms. "Muxing an AAC track with stream copy" is
+    // true and is not for them.
+    detail: "Putting the original sound back on your cleaned video.",
   },
   completed: { label: "Ready", detail: null },
   failed: { label: "Didn't finish", detail: null },
@@ -171,7 +190,7 @@ export function stageFor(input: StageInput): StageView {
     // already a written sentence rather than a provider's error.
     detail: job.status === "failed" ? (job.error?.message ?? null) : copy.detail,
     progress: progressFor(stage, null),
-    active: job.status === "queued" || job.status === "processing",
+    active: job.status === "queued" || job.status === "processing" || job.status === "finalizing",
   };
 }
 

@@ -4,6 +4,7 @@ import { CheckCircle2, Download, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { AiJobView } from "@/lib/ai/jobs";
+import { cleanedFileName } from "@/lib/ai/clean-media";
 import { formatBytes, formatDuration } from "@/lib/utils";
 
 /**
@@ -19,11 +20,14 @@ import { formatBytes, formatDuration } from "@/lib/utils";
  * state for the length of a session would produce exactly that failure, and it
  * would look like the file was gone.
  *
- * ── What this part does not do yet ───────────────────────────────────────────
+ * ── What the member is told about their audio ────────────────────────────────
  *
- * This is the model's raw output: the cleaned video. Restoring the original
- * audio track is the next part's work (the model returns video without it), and
- * saying so here is better than letting somebody discover it in a player.
+ * The model returns video with no sound, and Part 4's worker muxes the original
+ * back on. `audioRestored` records what actually happened, and there are three
+ * different truths to tell — sound is back, the source never had any, or we do
+ * not know because the row predates this. They are said differently, because
+ * "no audio" and "we could not restore your audio" are not the same sentence
+ * and a member can tell.
  */
 export function AICleanResult({
   job,
@@ -59,7 +63,7 @@ export function AICleanResult({
     if (!url) return;
     const a = document.createElement("a");
     a.href = url;
-    a.download = `frenz-ai-clean-${job.id.slice(0, 8)}.mp4`;
+    a.download = cleanedFileName(job.source.name);
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
@@ -115,8 +119,14 @@ export function AICleanResult({
       </div>
 
       <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-        This is the cleaned picture. The original sound isn&apos;t back on it yet — that arrives in the next
-        update. Your video is kept privately for three days.
+        {job.result.audioRestored === true
+          ? "Cleaned, with your original audio back on it."
+          : job.result.audioRestored === false
+            ? // Not an apology: this video never had sound to restore, and
+              // saying so is the difference between a fact and a fault.
+              "Cleaned. This video had no sound to restore."
+            : "Cleaned and ready."}{" "}
+        Your video is kept privately for three days.
       </p>
     </div>
   );

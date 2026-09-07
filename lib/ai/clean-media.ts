@@ -232,3 +232,39 @@ export function extensionForUpload(name: string | undefined, mimeType: string): 
 
   return "mp4";
 }
+
+/**
+ * What the file is called when it lands in somebody's Downloads folder.
+ *
+ * 🔴 Sanitised, not trusted. The name came off the member's own device and
+ * travelled through a database, so it is treated as text from outside: path
+ * separators, dots that could hide an extension, control characters and
+ * anything non-printable are stripped, and the length is bounded.
+ *
+ * 🔴 p{M} — COMBINING MARKS — is in the allow-list, and a test caught its
+ * absence. Without it "Ọjọ́" became "Ọjọ": the acute accent is its own code
+ * point, so a filter that keeps only letters and numbers silently rewrites
+ * every Yoruba, Igbo, Vietnamese or Hindi name it touches. On a product built
+ * in Nigeria that is not an edge case. What is left
+ * is recognisably their file with `-cleaned` on it — which is worth the care,
+ * because "holiday-cleaned.mp4" in a folder of thirty downloads is findable and
+ * "frenz-ai-clean-9f2c1b8e.mp4" is not.
+ */
+export function cleanedFileName(sourceName: string | null): string {
+  const base = (sourceName ?? "")
+    .replace(/\.[^.]*$/, "")
+    /*
+      🔴 \p{M} — COMBINING MARKS — belongs here, and a test caught its absence.
+      Without it "Ọjọ́" became "Ọjọ": the acute accent is its own code point, so
+      an allow-list of letters and numbers alone silently rewrites every Yoruba,
+      Igbo, Vietnamese or Hindi name it touches. On a product built in Nigeria
+      that is not an edge case, it is the common one.
+    */
+    .replace(/[^\p{L}\p{M}\p{N} ._-]/gu, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .slice(0, 60);
+
+  return base ? `${base}-cleaned.mp4` : "frenz-ai-cleaned-video.mp4";
+}

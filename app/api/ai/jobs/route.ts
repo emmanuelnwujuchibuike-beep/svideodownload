@@ -21,6 +21,7 @@ import {
   reserveSourcePath,
 } from "@/lib/ai/job-store";
 import { hasProviderFor } from "@/lib/ai/providers";
+import { hasWorker } from "@/lib/worker";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
 import { peekAiUsage } from "@/lib/ai/usage";
 import { aiJobCreateLimiter, aiJobReadLimiter } from "@/lib/rate-limit";
@@ -68,6 +69,9 @@ const capabilities = (): AiCapabilities => {
     // its credentials. `hasProviderFor` reads the same registry the start route
     // dispatches through, so the answer here cannot differ from the answer there.
     replicate: !!clean && hasProviderFor(clean),
+    // The ffmpeg worker. A job that cannot be finalized must never be started —
+    // see the note on AiCapabilities.finalizer.
+    finalizer: hasWorker,
     /*
       🔴 DEVELOPMENT ONLY. Lets a job be created while no provider is configured,
       so the plumbing can be exercised. The job sits at `queued`, nothing

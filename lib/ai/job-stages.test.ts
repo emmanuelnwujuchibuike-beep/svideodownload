@@ -13,6 +13,7 @@ const job = (status: AiJobStatus, extra: Partial<AiJobView> = {}): AiJobView => 
   expiresAt: null,
   durationMs: null,
   source: { size: null, mimeType: null, durationSeconds: null, name: null },
+  result: { size: null, durationSeconds: null, audioRestored: null },
   error: null,
   ...extra,
 });
@@ -35,6 +36,7 @@ describe("stageFor", () => {
   it("reads each job status as its own stage", () => {
     expect(stageFor({ job: job("queued") }).stage).toBe("queued");
     expect(stageFor({ job: job("processing") }).stage).toBe("processing");
+    expect(stageFor({ job: job("finalizing") }).stage).toBe("finalizing");
     expect(stageFor({ job: job("completed") }).stage).toBe("completed");
     expect(stageFor({ job: job("failed") }).stage).toBe("failed");
     expect(stageFor({ job: job("cancelled") }).stage).toBe("cancelled");
@@ -44,6 +46,9 @@ describe("stageFor", () => {
   it("knows which states still change, because that is what drives polling", () => {
     expect(stageFor({ job: job("queued") }).active).toBe(true);
     expect(stageFor({ job: job("processing") }).active).toBe(true);
+    // Finalizing is still work in flight — polling must not stop here, or a
+    // member watches "restoring your audio" forever on a job that finished.
+    expect(stageFor({ job: job("finalizing") }).active).toBe(true);
     for (const status of ["completed", "failed", "cancelled", "expired"] as AiJobStatus[]) {
       expect(stageFor({ job: job(status) }).active, status).toBe(false);
     }
@@ -60,6 +65,12 @@ describe("stageFor", () => {
 
   it("only reaches 1 when the job is genuinely finished", () => {
     expect(stageFor({ job: job("completed") }).progress).toBe(1);
+    // Finalizing is close, and still not done. A bar that hit 100% before the
+    // file existed would be the same lie as a fake percentage.
+    expect(stageFor({ job: job("finalizing") }).progress!).toBeLessThan(1);
+    expect(stageFor({ job: job("finalizing") }).progress!).toBeGreaterThan(
+      stageFor({ job: job("processing") }).progress!,
+    );
   });
 
   it("shows a failure in the server's own words", () => {
@@ -79,7 +90,7 @@ describe("stageFor", () => {
 
 describe("pathState", () => {
   it("shows the whole journey at every stage", () => {
-    for (const stage of ["uploading", "queued", "processing", "completed"] as const) {
+    for (const stage of ["uploading", "queued", "processing", "finalizing", "completed"] as const) {
       const state = pathState(stage);
       expect(Object.keys(state).sort(), stage).toEqual(AI_CLEAN_PATH.map((p) => p.key).sort());
     }
@@ -87,21 +98,34 @@ describe("pathState", () => {
 
   it("🔴 never announces a step we cannot observe as the current one", () => {
     /*
-      "Analyzing video" and "Finalizing" are not separate signals — the model
-      does both inside one prediction that reports a single `processing` state.
-      They appear in the path so the member can see the journey, and they light
-      up TOGETHER with "Removing text" rather than one at a time, because
-      choosing between them would mean deciding by a timer.
+      "Analyzing video" is not a separate signal — the model does detection and
+      inpainting inside one prediction reporting a single `processing` state.
+      It appears in the path so the member sees the journey, and lights up
+      TOGETHER with "Removing text" rather than before it, because choosing
+      between them would mean deciding by a timer.
     */
     const processing = pathState("processing");
     expect(processing.analyzing).toBe("doing");
     expect(processing.removing).toBe("doing");
-    expect(processing.finalizing).toBe("doing");
 
-    // And they are never "doing" at a stage where nothing is running.
+    // 🔴 And NOT finalizing: while the AI runs, the audio mux has not started.
+    // Marking it "doing" here is exactly the fabrication this test guards.
+    expect(processing.finalizing).toBe("todo");
+
+    // Nothing is "doing" at a stage where nothing is running.
     const queued = pathState("queued");
     expect(queued.analyzing).toBe("todo");
     expect(queued.finalizing).toBe("todo");
+  });
+
+  it("Part 4: finalizing is a REAL step, so it gets announced on its own", () => {
+    // The audio mux runs in our own worker and the row says `finalizing` while
+    // it does — announced because it is happening, not because a timer said so.
+    const state = pathState("finalizing");
+    expect(state.finalizing).toBe("doing");
+    expect(state.removing).toBe("done");
+    expect(state.analyzing).toBe("done");
+    expect(state.ready).toBe("todo");
   });
 
   it("marks earlier steps done as the job moves on", () => {

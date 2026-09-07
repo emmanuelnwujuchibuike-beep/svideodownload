@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
+import { StudioNav } from "@/features/studio/studio-nav";
 import { getHomeProfile } from "@/lib/social/home";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -74,6 +75,20 @@ export const metadata: Metadata = {
 export default function Downloads() {
   return (
     <AppContent>
+      {/*
+        The Studio tab row, here too (owner, 2026-09-07: "Let this top nav also
+        be in the signed in Download page").
+
+        Rendered on the PAGE rather than in the (app) layout, for the same
+        reason the bottom banner below is: that layout is shared with /home,
+        /reels and messaging, which own their own chrome, and giving all of them
+        a second nav is a product decision nobody asked for.
+
+        It sits outside the Suspense boundary on purpose — it needs no data, so
+        it paints with the first bytes and is there while the skeleton streams,
+        rather than arriving late and pushing the page down.
+      */}
+      <StudioNav />
       <Suspense fallback={<DownloadsSkeleton />}>
         <DownloadsData />
       </Suspense>

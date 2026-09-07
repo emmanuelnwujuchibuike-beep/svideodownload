@@ -33,8 +33,6 @@ import { PreparingAd } from "@/features/monetization/preparing-ad";
 import { ResultOffer } from "@/features/monetization/result-offer";
 import { useUser } from "@/features/auth/use-user";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { buildDownloadContext } from "@/lib/download-hub/context";
-import type { DownloadContext } from "@/lib/download-hub/types";
 import { PLATFORMS, detectPlatform } from "@/lib/platforms";
 import { sourceUrlSchema } from "@/lib/validation";
 import type { MediaKind, PlatformId } from "@/types";
@@ -76,10 +74,6 @@ const FloatingDownloadProgress = dynamic(
 // Discovery Gateway™ — only renders once a download has actually completed, so
 // code-split it (along with the Learning Academy content it links to) out of the
 // landing page's initial bundle. Same proven pattern as PreviewCard above.
-const DiscoveryGateway = dynamic(
-  () => import("@/features/download-hub/discovery-gateway").then((m) => m.DiscoveryGateway),
-  { ssr: false },
-);
 
 // The 5 GB gate only appears for a signed-out visitor already over the limit — a
 // rare state. Code-split it (and its icons) out of the landing's initial bundle,
@@ -167,10 +161,10 @@ export function Downloader({
   // What was actually saved, in the shape the Gateway ranks over. Held in state
   // rather than derived from `metadata` because the chosen format matters: the
   // right next step after a 360p grab differs from a 1080p one.
-  const [savedContext, setSavedContext] = useState<DownloadContext | null>(null);
-  useEffect(() => setSavedContext(null), [metadata?.id]);
 
-  const { downloadCount, countDownload } = useGatewayMemory();
+  // `downloadCount` went with the "What next?" panel; the COUNTER stays, because
+  // /downloads still shows that panel and reads the same shared memory.
+  const { countDownload } = useGatewayMemory();
   const { user } = useUser();
   const { plan, ready: planReady } = useEntitlements();
 
@@ -267,15 +261,6 @@ export function Downloader({
       .catch(() => {
         /* An ad that cannot even load its own module is not the visitor's problem. */
       });
-    setSavedContext(
-      buildDownloadContext({
-        metadata,
-        formatId,
-        kind,
-        signedIn: !!user,
-        downloadCount: downloadCount + 1,
-      }),
-    );
   };
 
   const handleDownload = (formatId: string, kind: MediaKind, options?: DownloadOptions) => {
@@ -704,7 +689,21 @@ export function Downloader({
                   <PublishButton metadata={metadata} highlight />
                 </div>
               </div>
-              {savedContext ? <DiscoveryGateway context={savedContext} /> : null}
+              {/*
+                🔴 The "Saved. What next?" panel is GONE from the public
+                downloader (owner, 2026-09-07: "result card in landing page
+                still shows … and whats next card").
+
+                It was a third thing asking for attention on a card that had
+                just finished the one job the visitor came for: the download
+                itself, then a publish prompt, then a list of further options.
+                On a landing page that reads as being sold to after being
+                served.
+
+                It still mounts on /downloads (features/downloads/download-box.tsx),
+                where somebody is already inside the app and a "what next" is an
+                offer rather than an interruption.
+              */}
             </>
           ) : null}
 

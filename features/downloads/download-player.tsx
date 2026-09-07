@@ -490,6 +490,10 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     stacking context in the document regardless of z-index or document order.
     It is the only mechanism that reliably wins, and it is the standard one.
 
+    🟢 CONFIRMED WORKING by the owner, 2026-09-07: "the history Media player
+    doesn't show the in page push on the media anymore." Do not refactor this
+    into something tidier without a reason better than tidiness.
+
     🔴 It COVERS the ad, it does not hide it. The creative stays exactly as
     Monetag rendered it, still on the page, still counted — a fullscreen viewer
     occluding the page beneath it is ordinary publisher layout, and the same

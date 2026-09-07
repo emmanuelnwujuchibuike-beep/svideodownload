@@ -45,6 +45,35 @@ import type { PostCard } from "@/lib/social/posts";
 /** Bounded so a profile with hundreds of posts cannot fan out on one tap. */
 const MAX_PRELOAD = 24;
 
+/**
+ * The preload window is centred on the TAPPED tile, not on the start of the grid.
+ *
+ * Owner, 2026-09-03: "when I click on a media on the bottom in profile media
+ * grid, it take me to the first one automatically and plays it."
+ *
+ * 🔴 That was this. The neighbour fetch was `posts.slice(0, MAX_PRELOAD)` — the
+ * first 24 posts, from the top of the grid, whatever was tapped. On a profile
+ * with more than 24 posts, tapping anything below the 24th produced an
+ * `ordered` list that DID NOT CONTAIN THE TAPPED ITEM. Replacing `items` with
+ * it left `startId` pointing at nothing, so the viewer fell back to the first
+ * clip and played it — the wrong video, opened instantly, exactly as reported.
+ *
+ * It also meant those tiles had no neighbours to swipe to even when they did
+ * open correctly, which is the other half of the same mistake.
+ *
+ * A window centred on the tap fixes both: the tapped item is in it by
+ * construction, and there is something to swipe to in BOTH directions, which is
+ * what "go to the next when slide down or up" actually asks for.
+ */
+function preloadWindow<T>(all: T[], tappedIndex: number): T[] {
+  if (all.length <= MAX_PRELOAD) return all;
+  const half = Math.floor(MAX_PRELOAD / 2);
+  // Clamp so a tap near either end still gets a full window rather than a
+  // truncated one — the last tile deserves as many neighbours as the middle.
+  const start = Math.min(Math.max(0, tappedIndex - half), all.length - MAX_PRELOAD);
+  return all.slice(start, start + MAX_PRELOAD);
+}
+
 async function toFeedItem(id: string): Promise<FeedItem | null> {
   try {
     const res = await fetch(`/api/posts/${id}/feed-item`);
@@ -84,17 +113,26 @@ export function useProfileMediaViewer(posts: PostCard[]) {
           Replacing `items` here does NOT remount ReelsFeed (its key is stable),
           and `startId` keeps the tapped clip pinned where it already is.
         */
-        const neighbours = posts.slice(0, MAX_PRELOAD).filter((p) => p.id !== post.id);
+        const tappedIndex = Math.max(0, posts.findIndex((p) => p.id === post.id));
+        // NOT named `window` — that shadows the global, and the failure path
+        // above calls `window.location.href`.
+        const preloadSet = preloadWindow(posts, tappedIndex);
+        const neighbours = preloadSet.filter((p) => p.id !== post.id);
         const resolved = await Promise.all(neighbours.map((p) => toFeedItem(p.id)));
         const byId = new Map<string, FeedItem>([[tapped.id, tapped]]);
         resolved.forEach((it) => {
           if (it) byId.set(it.id, it);
         });
-        const ordered = posts
-          .slice(0, MAX_PRELOAD)
+        const ordered = preloadSet
           .map((p) => byId.get(p.id))
           .filter((it): it is FeedItem => !!it);
-        if (ordered.length > 1) setItems(ordered);
+        /*
+          Never swap in a list that has lost the tapped item. `startId` is what
+          pins the viewer to what was actually tapped, so a list without it
+          silently reopens on something else — the bug this window fixes, and
+          the guard that stops any future version of it reaching the screen.
+        */
+        if (ordered.length > 1 && ordered.some((it) => it.id === tapped.id)) setItems(ordered);
       } finally {
         setLoadingId(null);
       }

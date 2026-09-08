@@ -209,6 +209,67 @@ jobs:
           test -d model/backend/models \
             || echo "::warning::backend/models not present — weights may download at runtime"
 
+      # ── 🔴 UPSTREAM PINS A VERSION THAT DOES NOT EXIST ────────────────────
+      #
+      # Build #2 died at 3m54s:
+      #
+      #     ERROR: Could not find a version that satisfies onnxruntime-gpu==1.20.1
+      #       (from versions: … 1.20.0, 1.20.2, …)
+      #
+      # The SAME trap that broke the other workflow, and for the same reason:
+      # `onnxruntime` and `onnxruntime-gpu` are released independently and their
+      # version lists differ. The CPU package has 1.20.1; the GPU package goes
+      # 1.20.0 straight to 1.20.2. Upstream's requirements file pins the number
+      # that only exists on the CPU side.
+      #
+      # Verified against PyPI directly: 1.20.1 returns 404 for the GPU package
+      # and 1.20.2 returns 200.
+      - name: Repair upstream pins that cannot resolve
+        run: |
+          set -euo pipefail
+          cd model
+          before=$(grep -n "onnxruntime" requirements.txt || true)
+          echo "── upstream onnxruntime pins ──"
+          echo "${before:-（none）}"
+
+          # Only this one substitution, and only when it is actually present.
+          sed -i 's/^onnxruntime-gpu==1\.20\.1$/onnxruntime-gpu==1.20.2/' requirements.txt
+
+          echo "── after ──"
+          grep -n "onnxruntime" requirements.txt || echo "(none)"
+
+      # Every pin, checked against PyPI BEFORE Docker starts. A version that
+      # cannot resolve is a typo-class error and deserves a typo-class
+      # turnaround, not four minutes of build.
+      - name: Check every pin resolves on PyPI
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r line; do
+            line="${line%%#*}"
+            case "$line" in ""|-*) continue ;; esac
+            case "$line" in *==*) : ;; *) continue ;; esac
+            pkg="${line%%==*}"; ver="${line##*==}"; ver="${ver%% *}"
+            pkg="$(echo "$pkg" | tr -d '[:space:]')"; ver="$(echo "$ver" | tr -d '[:space:]')"
+            [ -n "$pkg" ] && [ -n "$ver" ] || continue
+
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/${pkg}/${ver}/json")
+            if [ "$code" = "200" ]; then
+              echo "  ✅ ${pkg}==${ver}"
+            else
+              fail=1
+              echo "  🔴 ${pkg}==${ver} does not exist on PyPI (HTTP ${code})"
+              curl -sS "https://pypi.org/pypi/${pkg}/json" \
+                | python3 -c "import sys,json; print('     recent:', ', '.join(sorted(json.load(sys.stdin)['releases'])[-10:]))" 2>/dev/null || true
+            fi
+          done < model/requirements.txt
+
+          if [ "$fail" != "0" ]; then
+            echo "::error::one or more pinned versions do not exist — add a fix to the repair step above"
+            exit 1
+          fi
+          echo "every pin resolves"
+
       - name: Set up Cog
         uses: replicate/setup-cog@v2
         with:

@@ -7,7 +7,8 @@ import { FrenzAICompare } from "@/features/ai/core/frenz-ai-compare";
 import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
 import { FrenzAIReveal } from "@/features/ai/core/frenz-ai-reveal";
 import { FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
-import { useHistory } from "@/features/history/use-history";
+import { startDownload } from "@/features/downloads/manager";
+import { haptic } from "@/lib/motion/haptics";
 import type { AiJobView } from "@/lib/ai/jobs";
 import { cleanedFileName } from "@/lib/ai/clean-media";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
@@ -65,7 +66,6 @@ export function AICleanResult({
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [view, setView] = useState<View>("result");
-  const { addDownload } = useHistory();
 
   useEffect(() => {
     let alive = true;
@@ -117,23 +117,50 @@ export function AICleanResult({
        like every other download in this app.
 
     2. IT WAS INVISIBLE AFTERWARDS. A cleaned video was the only thing this
-       product could produce that never appeared in Downloads. It is recorded
-       through the SAME store the downloader writes to, so it shows up in
-       history, in the rail, and on other devices via the store's own sync.
+       product could produce that never appeared in Downloads. It goes through
+       the real download manager now — see the note on `startDownload` below.
 
-    `directUrl` is the field that makes a retry work later: history's default
-    retry path is the /api/download pipeline, which cannot fetch an AI result.
-    That field exists precisely for records whose bytes come from somewhere
-    else — wallpapers set it for the same reason — and because our route
-    re-signs on every request, the stored url keeps working for the three days
-    the file is kept.
+    The url is STABLE, which is what lets history keep it: the route re-signs on
+    every request, so a record written today still works for the three days the
+    file is kept. A raw signed url, expiring in minutes, could never be stored.
   */
   const downloadHref = `/api/ai/jobs/${encodeURIComponent(job.id)}/result?download=1&redirect=1`;
 
   const download = () => {
+    haptic("light");
     setDownloading(true);
 
-    addDownload({
+    /*
+      🔴 THE PLATFORM'S OWN DOWNLOAD MANAGER, not an `<a>` and a history write.
+
+      Owner, 2026-09-08: "the frenz ai download pipeline should be the platform
+      download with the haptic sound, download complete card to save or view in
+      history."
+
+      The first attempt clicked a link and called `addDownload` directly. That
+      saved the file and put a row in history, and it still was not the
+      product's download: no progress, no completion card, no sound, no haptic,
+      no "Save" / "View in history", and none of the manager's protections.
+
+      `startDownload` is that pipeline, and using it means AI Clean inherits all
+      of it for nothing:
+
+        · the completion card, its sound and its haptic — `FloatingDownloadProgress`
+          is mounted app-wide in app/(app)/layout.tsx, so it already covers this
+          screen;
+        · the history row, written by the manager at the moment the file actually
+          lands rather than optimistically when the button is pressed;
+        · DOUBLE-TAP PROTECTION — two taps on a laggy phone matched against the
+          same in-flight (url, formatId, kind) return the original task instead
+          of starting a second transfer;
+        · serialised device-saves, which is what stops a browser silently
+          dropping every save but the first.
+
+      `directUrl` is what tells the manager to fetch THIS url rather than push it
+      through the /api/download extractor pipeline, which has no idea what an AI
+      job is. Wallpapers use the same field for the same reason.
+    */
+    startDownload({
       url: downloadHref,
       directUrl: downloadHref,
       platform: "generic",
@@ -143,23 +170,12 @@ export function AICleanResult({
       formatId: "ai-clean",
       kind: "video",
       qualityLabel: "AI Clean",
-      size: job.result.size ?? null,
       durationSeconds: job.source.durationSeconds ?? null,
-      status: "completed",
     });
 
-    const a = document.createElement("a");
-    a.href = downloadHref;
-    // Same-origin now, so this is honoured and names the file.
-    a.download = cleanedFileName(job.source.name);
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    // The navigation is the browser's from here; the button should not sit
-    // disabled waiting for something that will never call back.
-    setTimeout(() => setDownloading(false), 1200);
+    // The manager owns everything after this — progress, the card, the save.
+    // The button only has to stop looking pressed.
+    setTimeout(() => setDownloading(false), 900);
   };
 
   return (

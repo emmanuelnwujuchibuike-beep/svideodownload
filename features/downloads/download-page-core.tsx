@@ -5,6 +5,8 @@ import Link from "next/link";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
+import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
+import nextDynamic from "next/dynamic";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
@@ -60,6 +62,18 @@ import type { PlatformStatusMap } from "@/lib/platform-status";
  * so this component renders it too, immediately after Recent downloads,
  * keyed by `showDisclaimer` so `/downloads` doesn't end up with two copies.
  */
+/*
+  🔴 NOT in the first load. The landing page holds a 1.6-second budget measured
+  in kilobytes of JavaScript, and this panel does not exist until two seconds
+  after the page is already usable — so it must not be part of what makes the
+  page usable. `ssr: false` because it reads localStorage to decide whether it
+  has been seen, which the server cannot know.
+*/
+const FrenzAIVignette = nextDynamic(
+  () => import("@/features/ai/frenz-ai-vignette").then((m) => m.FrenzAIVignette),
+  { ssr: false },
+);
+
 export function DownloadPageCore({
   platformStatus,
   ctaWallpaperUrl = null,
@@ -131,32 +145,25 @@ export function DownloadPageCore({
         </div>
       </section>
 
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <Link
-          href="/features"
-          className="group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl bg-white p-4 text-left text-slate-900 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06] transition duration-200 hover:-translate-y-0.5 active:scale-[0.995] dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
-        >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -right-8 top-6 h-32 w-32 rotate-[18deg] rounded-[2rem] bg-gradient-to-br from-violet-400/25 via-indigo-400/15 to-transparent blur-[1px] transition-transform duration-500 group-hover:rotate-[22deg] motion-reduce:transition-none dark:from-violet-400/20 dark:via-indigo-400/10"
-          />
-          <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
-            <Compass className="h-6 w-6" />
-          </span>
-          <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
-            <span className="min-w-0">
-              <span className="block text-base font-bold leading-tight">Explore Features</span>
-              <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/60">
-                See everything Frenz can do.
-              </span>
-            </span>
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
-              <ArrowRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-0.5 dark:text-white" />
-            </span>
-          </span>
-        </Link>
+      {/*
+        ── 🔴 FRENZ AI TAKES THE FEATURES SLOT ──────────────────────────────
 
+        Owner, 2026-09-08: "Replace the features button with the frenz Ai button
+        and move the features button below the Frenz AI and wallpaper button
+        below in horizontal rectangular shape to full the section width."
+
+        So: [ Frenz AI | Wallpapers ] on top, Explore Features as a full-width
+        bar beneath. Frenz AI is the newest thing the product does; Features is
+        a directory, and a directory belongs below the doors rather than beside
+        them.
+      */}
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <FrenzAICta />
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
+      </div>
+
+      <div className="mt-3">
+        <ExploreFeaturesBar />
       </div>
 
       {/*
@@ -234,6 +241,13 @@ export function DownloadPageCore({
           <DownloadDisclaimer variant="card" />
         </div>
       ) : null}
+
+      {/*
+        The vignette (owner, 2026-09-08): two seconds after landing, once ever,
+        on BOTH this page and the landing — which share this component, so
+        mounting it here covers both without a second call site to keep in step.
+      */}
+      <FrenzAIVignette />
     </>
   );
 }

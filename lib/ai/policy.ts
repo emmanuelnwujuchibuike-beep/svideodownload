@@ -135,22 +135,35 @@ const AI_CLEAN: Record<AiAudience, AiPlanPolicy> = {
     rewardScope: "job",
     maxConcurrent: 1,
   },
+  /*
+    ── 🔴 NO ADS FOR ANYONE WHO PAYS (owner, 2026-09-08) ──────────────────────
+
+      "pro and business plan wont show any reward ad during ai generation, only
+       the free — the pro and business and max ai only use the limit and credit."
+
+    A day-scoped ad was the previous answer and this replaces it outright. The
+    reasoning is sound and worth keeping written down: a subscription IS the
+    exchange. Asking somebody who already paid to also watch an advert makes the
+    subscription feel like it bought nothing, and one ad a day is still one more
+    than none.
+
+    ⚠️ `rewardScope` stays `day` on these rows even though nothing reads it while
+    `requiresReward` is false. It is the shape Part 10 may want back, and a
+    field that is merely inert is cheaper than one that has to be re-derived.
+  */
   pro: {
     dailyLimit: 5,
     unlimited: false,
-    requiresReward: true,
-    rewardsPerJob: 1,
-    // ONE ad for the day, not one per video. A paying member asked to watch an
-    // ad before every single generation would reasonably feel they were paying
-    // for nothing.
+    requiresReward: false,
+    rewardsPerJob: 0,
     rewardScope: "day",
     maxConcurrent: 2,
   },
   business: {
     dailyLimit: 15,
     unlimited: false,
-    requiresReward: true,
-    rewardsPerJob: 1,
+    requiresReward: false,
+    rewardsPerJob: 0,
     rewardScope: "day",
     maxConcurrent: 3,
   },
@@ -170,8 +183,9 @@ const AI_CLEAN: Record<AiAudience, AiPlanPolicy> = {
     */
     dailyLimit: 30,
     unlimited: false,
-    requiresReward: true,
-    rewardsPerJob: 1,
+    // Paid, so no ad. See the block on `pro` above.
+    requiresReward: false,
+    rewardsPerJob: 0,
     rewardScope: "day",
     maxConcurrent: 3,
   },

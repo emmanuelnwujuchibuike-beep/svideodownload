@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
+import { reconcileWithProvider } from "@/lib/ai/reconcile";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -86,11 +87,27 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       there is anything to tell them. `failStalledJob` is compare-and-set, so
       two tabs polling together still produce exactly one refund.
     */
-    if (await failStalledJob(row)) {
-      const ended = await getOwnJob(subject, id);
-      if (ended) {
+    /*
+      ── 🔴 ASK THE PROVIDER, DON'T ONLY WAIT TO BE TOLD ──────────────────────
+
+      Before the deadline, and much sooner than it: a job quiet for 90 seconds
+      gets its real status read from Replicate. A webhook that is lost, refused
+      or never sent used to mean `processing` for ever with nothing logged
+      anywhere — three jobs died that way on 2026-09-08. Reading a prediction is
+      a free GET, so this costs nothing but recovers everything.
+
+      Compare-and-set on both sides, so a callback landing mid-flight and this
+      cannot both act. See lib/ai/reconcile.ts.
+    */
+    const changed = await reconcileWithProvider(row);
+
+    // The deadline stays underneath as the last backstop, for the case where
+    // the provider itself has lost the work.
+    if (changed || (await failStalledJob(row))) {
+      const fresh = await getOwnJob(subject, id);
+      if (fresh) {
         return applyAiSubjectCookie(
-          NextResponse.json({ job: jobToView(ended, storedErrorMessage) }),
+          NextResponse.json({ job: jobToView(fresh, storedErrorMessage) }),
           resolution,
         );
       }

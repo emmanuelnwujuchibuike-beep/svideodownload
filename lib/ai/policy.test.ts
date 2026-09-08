@@ -61,25 +61,32 @@ describe("the rewarded ad, and who owes how many", () => {
     }
   });
 
-  it("🔴 charges the PAID plans ONE ad for the whole day, not one per video", () => {
+  it("🔴 shows NO ad at all to anyone who pays (owner, 2026-09-08)", () => {
+    /*
+      "pro and business plan wont show any reward ad during ai generation, only
+       the free — the pro and business and max ai only use the limit and credit."
+
+      This REPLACED a day-scoped ad. A subscription is itself the exchange, and
+      one ad a day is still one more than none.
+    */
     for (const a of ["pro", "business", "max_ai"] as const) {
       const p = policyFor(a, CLEAN);
-      expect(p.requiresReward).toBe(true);
-      expect(p.rewardScope).toBe("day");
+      expect(p.requiresReward).toBe(false);
+      expect(p.rewardsPerJob).toBe(0);
+
+      const view = entitlementView({ audience: a, policy: p, usedToday: 0 });
+      expect(view.rewardRequired).toBe(false);
+      // …and they start immediately. "No ad" is not the same as "no run".
+      expect(view.canStart).toBe(true);
     }
   });
 
-  it("stops asking for an ad once the day is already unlocked", () => {
-    const pro = policyFor("pro", CLEAN);
-    const before = entitlementView({ audience: "pro", policy: pro, usedToday: 0, dayUnlocked: false });
-    const after = entitlementView({ audience: "pro", policy: pro, usedToday: 0, dayUnlocked: true });
-
-    expect(before.rewardRequired).toBe(true);
-    // The whole point of `day` scope: a second generation, and a second tab,
-    // and an SPA navigation, must not each re-trigger an ad.
-    expect(after.rewardRequired).toBe(false);
-    expect(after.rewardUnlocked).toBe(true);
-    expect(after.canStart).toBe(true);
+  it("keeps ads for the tiers that pay nothing", () => {
+    // Guest and free are the only audiences that cost provider money without
+    // returning a subscription, so they are the only ones an ad applies to.
+    for (const a of ["guest", "free"] as const) {
+      expect(policyFor(a, CLEAN).requiresReward).toBe(true);
+    }
   });
 
   it("🔴 never asks for an ad that cannot buy anything", () => {

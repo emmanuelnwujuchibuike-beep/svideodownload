@@ -131,9 +131,17 @@ export function AICleanAllowance({
       <span className="font-medium text-muted-foreground">
         {remaining} of {limit} free cleans left today
       </span>
-      {entitlement.rewardRequired ? (
-        <span className="text-muted-foreground/80">· each unlocked by a short ad</span>
-      ) : null}
+      {/*
+        🔴 The "· each unlocked by a short ad" line was removed here (owner,
+        2026-09-08: "remove the each unlock by a short ad from the frenz ai
+        progress page").
+
+        It was true and it was still wrong to show. The ad is not a property of
+        the allowance, it is a step in starting ONE job — so stating it beside
+        the count made every remaining clean read as a cost rather than as
+        something the member has. The prompt belongs at the moment of use, on
+        the button, where it is an answer to "what happens if I press this".
+      */}
     </div>
   );
 }

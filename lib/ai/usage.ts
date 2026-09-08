@@ -49,6 +49,46 @@ export interface AiUsageReservation {
  * `lib/ai/entitlement.ts` already resolves plan, promo and abuse ceiling, and
  * two places deciding what a plan is worth is one place too many.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 A DEPLOY AND A MIGRATION ARE TWO EVENTS, AND EITHER CAN LAND FIRST
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Learned in production, 2026-09-08 (owner: "now all ai remover is showing that
+ * didnt finish in less than 3secs").
+ *
+ * The guest release shipped code that calls `reserve_ai_usage` with six
+ * arguments and a migration that creates it. Vercel deployed in about a minute;
+ * the Supabase migration had not applied. For that window EVERY job failed
+ * instantly — the function did not exist, PostgREST answered "Could not find
+ * the function", the reservation failed CLOSED as designed, and the member was
+ * told their clean did not finish.
+ *
+ * Failing closed was right. Assuming the schema was the mistake. A commit
+ * message saying "0145 must apply first" is not a mechanism, and the two
+ * systems have no ordering guarantee between them in either direction.
+ *
+ * So the call is written to work against BOTH schemas: it tries the new
+ * signature and, only when the answer is specifically "that function does not
+ * exist", falls back to the pre-0145 one. Every other error still fails closed.
+ *
+ * ⚠️ The fallback cannot serve a GUEST — there is no column to count them in
+ * before 0145 — so a guest is refused rather than mis-metered. That is the
+ * correct degradation: signed-in members keep working through the window, and
+ * the anonymous tier simply waits for its schema.
+ *
+ * Once 0145 is applied everywhere this branch is dead weight, and it is
+ * deliberately being left: the next migration to add a parameter will hit the
+ * same window, and this is the shape that survives it.
+ */
+const MISSING_FUNCTION = new Set(["PGRST202", "42883"]);
+
+function functionMissing(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code && MISSING_FUNCTION.has(error.code)) return true;
+  return /could not find the function|does not exist/i.test(error.message ?? "");
+}
+
 export async function reserveAiUsage(
   subject: AiSubject,
   feature: AiFeature,
@@ -68,6 +108,23 @@ export async function reserveAiUsage(
         p_ip_limit: ip?.limit ?? 0,
       })
       .single<{ allowed: boolean; used: number; remaining: number }>();
+
+    if (functionMissing(error)) {
+      // Pre-0145 database. A member can still be metered by the old counter.
+      if (subject.kind !== "user") {
+        console.error("[ai/usage] guest reserve needs migration 0145", { feature });
+        return { allowed: false, used: 0, remaining: 0 };
+      }
+      console.warn("[ai/usage] falling back to the pre-0145 reserve signature", { feature });
+      const legacy = await admin
+        .rpc("reserve_ai_usage", { p_user_id: subject.userId, p_feature: feature, p_limit: limit })
+        .single<{ allowed: boolean; used: number; remaining: number }>();
+      if (legacy.error || !legacy.data) {
+        console.error("[ai/usage] legacy reserve failed", { feature, code: legacy.error?.code });
+        return { allowed: false, used: 0, remaining: 0 };
+      }
+      return { allowed: legacy.data.allowed, used: legacy.data.used, remaining: legacy.data.remaining };
+    }
 
     if (error || !data) {
       // 🔴 A PostgREST failure resolves as `{ error }` — it does not throw. A
@@ -99,6 +156,17 @@ export async function consumeAiUsage(subject: AiSubject, feature: AiFeature): Pr
       p_guest_id: subject.guestId,
       p_feature: feature,
     });
+
+    // See the block above reserveAiUsage: the schema may not have caught up yet.
+    if (functionMissing(error)) {
+      if (subject.kind !== "user") return false;
+      const legacy = await admin.rpc("consume_ai_usage", {
+        p_user_id: subject.userId,
+        p_feature: feature,
+      });
+      return legacy.data === true;
+    }
+
     if (error) {
       console.error("[ai/usage] consume failed", { feature, code: error.code, message: error.message });
       return false;
@@ -154,6 +222,24 @@ export async function releaseAiUsage(
       })
       .single<{ released: boolean; reserved: number }>();
 
+    /*
+      🔴 A REFUND MUST SURVIVE THE WINDOW. If the schema has not caught up and
+      this simply failed, a member whose job broke through no fault of theirs
+      would keep the charge — the one outcome this function exists to prevent.
+    */
+    if (functionMissing(error)) {
+      if (subject.kind !== "user") return { released: false, reserved: 0 };
+      const legacy = await admin
+        .rpc("release_ai_usage", {
+          p_user_id: subject.userId,
+          p_feature: feature,
+          p_max_releases: releaseCapFor(dailyLimit),
+        })
+        .single<{ released: boolean; reserved: number }>();
+      if (legacy.error || !legacy.data) return { released: false, reserved: 0 };
+      return { released: legacy.data.released, reserved: legacy.data.reserved };
+    }
+
     if (error || !data) {
       console.error("[ai/usage] release failed", { feature, code: error?.code, message: error?.message });
       return { released: false, reserved: 0 };
@@ -195,21 +281,32 @@ export async function peekAiUsage(subject: AiSubject, feature: AiFeature): Promi
       rule ("Do not rely exclusively on the user's device clock").
     */
     const today = new Date().toISOString().slice(0, 10);
-    let query = admin
-      .from("ai_usage_daily")
-      .select("reserved_jobs, reward_unlocked_at")
-      .eq("feature", feature)
-      .eq("usage_date", today);
+    const read = async (columns: string) => {
+      let q = admin.from("ai_usage_daily").select(columns).eq("feature", feature).eq("usage_date", today);
+      q = subject.kind === "user" ? q.eq("user_id", subject.userId) : q.eq("guest_id", subject.guestId);
+      return q.maybeSingle();
+    };
 
-    query = subject.kind === "user"
-      ? query.eq("user_id", subject.userId)
-      : query.eq("guest_id", subject.guestId);
+    let { data, error } = await read("reserved_jobs, reward_unlocked_at");
 
-    const { data, error } = await query.maybeSingle();
+    /*
+      Pre-0145 the extra column — and the guest one — do not exist, and asking
+      for a missing column fails the WHOLE query rather than returning a null
+      field. A display value must degrade to a number, never to an error.
+    */
+    if (error && /column .* does not exist|reward_unlocked_at|guest_id/i.test(error.message ?? "")) {
+      if (subject.kind !== "user") return { usedToday: 0, dayUnlocked: false };
+      ({ data, error } = await read("reserved_jobs"));
+    }
+
     if (error || !data) return { usedToday: 0, dayUnlocked: false };
+
+    // A dynamic `select()` string widens PostgREST's inferred row type, so the
+    // two fields are read through a narrow local shape rather than asserted.
+    const row = data as unknown as { reserved_jobs?: number | null; reward_unlocked_at?: string | null };
     return {
-      usedToday: typeof data.reserved_jobs === "number" ? data.reserved_jobs : 0,
-      dayUnlocked: !!data.reward_unlocked_at,
+      usedToday: typeof row.reserved_jobs === "number" ? row.reserved_jobs : 0,
+      dayUnlocked: !!row.reward_unlocked_at,
     };
   } catch {
     return { usedToday: 0, dayUnlocked: false };
@@ -231,6 +328,12 @@ export async function unlockAiDay(subject: AiSubject, feature: AiFeature): Promi
       p_guest_id: subject.guestId,
       p_feature: feature,
     });
+    if (functionMissing(error)) {
+      // Nothing to stamp yet. Paid plans no longer use a day unlock at all
+      // (see lib/ai/policy.ts), so this is inert rather than degraded.
+      console.warn("[ai/usage] day unlock needs migration 0145", { feature });
+      return false;
+    }
     if (error) {
       console.error("[ai/usage] day unlock failed", { feature, code: error.code, message: error.message });
       return false;

@@ -98,16 +98,57 @@ export async function POST(request: Request) {
   const { jobId } = parsed.data;
 
   /*
-    Started, not awaited. The finalizer writes its own outcome to the job row
-    and logs its own failures, so nothing here needs the result — and the
-    dispatcher on the other end has an eight-second timeout it is entitled to
-    hit without that meaning anything went wrong.
+    ── 🔴 THE OUTCOME USED TO BE THROWN AWAY ─────────────────────────────────
+
+    This was `void finalizeAICleanJob(jobId).catch(…)`, on the reasoning that
+    the finalizer writes its own outcome to the job row. It does — but ONLY
+    after it claims the job. Every check before that claim (no such job, no
+    provider output recorded, no source path, not claimable) returns a code
+    that went straight into the void.
+
+    Measured on production 2026-09-08: Replicate succeeded in 3.8 seconds, the
+    output URL was recorded, the dispatcher reported `ok` — and the job sat in
+    `processing` for ever with nothing, anywhere, saying why. The worker had
+    accepted the work and quietly declined to do it.
+
+    So: race the finalizer against a short budget. A small clip finishes the
+    whole mux in a couple of seconds, so the common case now answers with its
+    real outcome and the caller records it. Anything genuinely slow still gets
+    the 202 and continues in the background exactly as before — the budget
+    ends the WAIT, never the work.
   */
-  void finalizeAICleanJob(jobId).catch((e) => {
+  const REPORT_BUDGET_MS = 6_000;
+
+  const work = finalizeAICleanJob(jobId).catch((e) => {
     // Anything reaching here escaped the service's own try/catch, which would
     // be a bug in the service rather than a failed job. Logged loudly.
     console.error("[ai/finalize] escaped the service", { jobId, error: String(e) });
+    return { ok: false as const, jobId, code: "AI_FINALIZATION_FAILED" as const, detail: String(e) };
   });
 
-  return NextResponse.json({ ok: true, accepted: true }, { status: 202 });
+  const outcome = await Promise.race([
+    work,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), REPORT_BUDGET_MS)),
+  ]);
+
+  if (outcome === null) {
+    // Still working. The job row is where the result will appear.
+    return NextResponse.json({ ok: true, accepted: true, pending: true }, { status: 202 });
+  }
+
+  /*
+    Finished inside the budget, so say what happened. `detail` is operator-facing
+    and never reaches a browser: this endpoint is reachable only by the frontend
+    holding the worker secret, and the frontend logs it rather than forwarding it.
+  */
+  return NextResponse.json(
+    {
+      ok: outcome.ok,
+      accepted: true,
+      code: "code" in outcome ? outcome.code : null,
+      detail: "detail" in outcome ? outcome.detail : null,
+      skipped: "skipped" in outcome ? outcome.skipped : null,
+    },
+    { status: 200 },
+  );
 }

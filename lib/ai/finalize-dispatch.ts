@@ -89,6 +89,47 @@ export async function dispatchFinalization(jobId: string): Promise<DispatchResul
       }
       return { dispatched: false, reason: "failed", detail: `worker answered ${res.status}` };
     }
+
+    /*
+      ── 🔴 READ WHAT THE WORKER SAID ──────────────────────────────────────
+
+      A 2xx used to be taken as "handed off successfully" and nothing more.
+      But the worker answers 200 with its actual OUTCOME when it finishes
+      inside its reporting budget — including the outcomes that mean it
+      declined the work: no provider output recorded, no source path, not
+      claimable, or a hard failure.
+
+      Ignoring the body is how a job could be reported dispatched-ok and still
+      never move: the worker said "I am not doing this" and we wrote "ok".
+    */
+    try {
+      const body = (await res.json()) as {
+        ok?: boolean;
+        pending?: boolean;
+        code?: string | null;
+        detail?: string | null;
+        skipped?: string | null;
+      };
+
+      // Still running past the budget: a genuine hand-off, outcome to follow
+      // on the job row.
+      if (body?.pending) return { dispatched: true };
+
+      if (body && body.ok === false) {
+        return {
+          dispatched: false,
+          reason: "failed",
+          detail: `worker declined: ${body.code ?? "unknown"}${body.detail ? ` — ${body.detail}` : ""}`,
+        };
+      }
+      if (body?.skipped) {
+        return { dispatched: false, reason: "failed", detail: `worker skipped: ${body.skipped}` };
+      }
+    } catch {
+      // A 2xx with an unreadable body is still a hand-off. Older workers
+      // answered a bare 202 and must keep working.
+    }
+
     return { dispatched: true };
   } catch (e) {
     /*

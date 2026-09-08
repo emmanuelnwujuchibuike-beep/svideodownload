@@ -3827,3 +3827,47 @@ html.dark .streak-recover {
   font-weight: 600;
   color: hsl(var(--muted-foreground));
 }
+
+  /* ── The Frenz AI tile's ambient field ──────────────────────────────────────
+     Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
+     background that feels alive and move just like gemini, dont use an image in
+     the ai button."
+
+     🔴 TWO blobs, and that number is the budget, not an aesthetic choice. This
+     sits on the landing page, which is held to a 1.6s target and has already
+     been made unresponsive once today by effects that looked cheap. Each blob
+     is ONE element moving on `transform` alone — no filter animation, no
+     background-position, no opacity keyframes — so the compositor owns them and
+     the main thread never sees a frame.
+
+     Long, co-prime cycles (19s and 23s) so the pair never visibly repeats: the
+     thing that makes an ambient field read as alive rather than as a loop is
+     that you cannot find its beat. */
+  @keyframes frenz-ai-ambient-a {
+    0%,
+    100% { transform: translate3d(-8%, -6%, 0) scale(1.05); }
+    50%  { transform: translate3d(10%, 8%, 0) scale(1.25); }
+  }
+
+  @keyframes frenz-ai-ambient-b {
+    0%,
+    100% { transform: translate3d(12%, 10%, 0) scale(1.2); }
+    50%  { transform: translate3d(-6%, -8%, 0) scale(1); }
+  }
+
+  .frenz-ai-ambient-a {
+    animation: frenz-ai-ambient-a 19s ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
+  }
+  .frenz-ai-ambient-b {
+    animation: frenz-ai-ambient-b 23s ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
+  }
+
+  /* The battery rule, verified in a browser rather than assumed. */
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-ai-ambient-a,
+    .frenz-ai-ambient-b {
+      animation: none !important;
+    }
+  }

@@ -1,18 +1,12 @@
 "use client";
 
 import { ChevronRight, Lock, X } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { Portal } from "@/components/ui/portal";
 import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
 import { STREAK_TIERS, tierFor, type StreakTier } from "@/lib/streaks/tiers";
 import { cn } from "@/lib/utils";
-
-const StreakTiersSheet = dynamic(
-  () => import("@/features/streaks/streak-tiers-sheet").then((m) => m.StreakTiersSheet),
-  { ssr: false },
-);
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -51,12 +45,24 @@ const StreakTiersSheet = dynamic(
 export function StreakDetailsPanel({
   streak,
   onClose,
+  onOpenGallery,
 }: {
   streak: number;
   onClose: () => void;
+  /**
+   * 🔴 The gallery REPLACES this panel; it does not sit on top of it.
+   *
+   * Owner, 2026-09-08: "the streak gallery modal also doesnt exit
+   * immediately". It closed instantly on its own — the problem was that this
+   * panel rendered it as a child, so two fixed overlays with two scrims were
+   * stacked, and dismissing the top one revealed the bottom one still sitting
+   * there. It read as a tap that did nothing.
+   *
+   * Handing the decision up means exactly one overlay exists at any moment.
+   */
+  onOpenGallery: () => void;
 }) {
   const [entered, setEntered] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setEntered(true));
@@ -152,7 +158,7 @@ export function StreakDetailsPanel({
             {/* ── the Flame Gallery row ─────────────────────────────────── */}
             <button
               type="button"
-              onClick={() => setGalleryOpen(true)}
+              onClick={onOpenGallery}
               className="mt-5 flex w-full items-center gap-3 rounded-2xl bg-white/[0.07] px-3.5 py-3 text-left ring-1 ring-inset ring-white/10 transition hover:bg-white/[0.11]"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
@@ -169,7 +175,7 @@ export function StreakDetailsPanel({
 
             <button
               type="button"
-              onClick={() => setGalleryOpen(true)}
+              onClick={onOpenGallery}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 px-5 py-3 text-sm font-bold text-white shadow-[0_14px_34px_-12px_rgb(99_102_241/0.95)] transition active:scale-[0.99]"
             >
               View All Flames
@@ -178,13 +184,6 @@ export function StreakDetailsPanel({
           </div>
         </div>
       </div>
-
-      {/*
-        The full gallery already exists and is already the owner's approved
-        artwork — this panel is a doorway to it, not a replacement. Building a
-        second gallery here would be two things to keep in step.
-      */}
-      {galleryOpen ? <StreakTiersSheet streak={streak} onClose={() => setGalleryOpen(false)} /> : null}
     </Portal>
   );
 }

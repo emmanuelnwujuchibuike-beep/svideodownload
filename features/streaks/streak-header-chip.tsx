@@ -18,6 +18,11 @@ const StreakDetailsPanel = dynamic(
   { ssr: false },
 );
 
+const StreakTiersSheet = dynamic(
+  () => import("@/features/streaks/streak-tiers-sheet").then((m) => m.StreakTiersSheet),
+  { ssr: false },
+);
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  THE STREAK, IN THE HEADER
@@ -52,7 +57,15 @@ export function StreakHeaderChip({ className }: { className?: string }) {
   // is on screen in the same commit as the rest of the header.
   const [cached] = useState<number | null>(() => readDisplayCache());
   const { data } = useStreak();
-  const [open, setOpen] = useState(false);
+  /*
+    🔴 ONE overlay at a time — "panel" or "gallery", never both.
+
+    They used to nest, so dismissing the gallery revealed the panel still
+    underneath and read as a tap that did nothing (owner, 2026-09-08). A single
+    value cannot express "both open", which is what makes that impossible now
+    rather than merely fixed.
+  */
+  const [view, setView] = useState<"none" | "panel" | "gallery">("none");
 
   const streak = data?.currentStreak ?? cached ?? 0;
 
@@ -64,7 +77,7 @@ export function StreakHeaderChip({ className }: { className?: string }) {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setView("panel")}
         aria-label={`${streak} day streak. View details`}
         className={cn(
           "relative inline-flex items-center gap-1.5 rounded-full pl-1.5 pr-2.5 py-1",
@@ -79,7 +92,17 @@ export function StreakHeaderChip({ className }: { className?: string }) {
         <span className="text-[13px] font-extrabold tabular-nums leading-none">{streak}</span>
       </button>
 
-      {open ? <StreakDetailsPanel streak={streak} onClose={() => setOpen(false)} /> : null}
+      {view === "panel" ? (
+        <StreakDetailsPanel
+          streak={streak}
+          onClose={() => setView("none")}
+          onOpenGallery={() => setView("gallery")}
+        />
+      ) : null}
+
+      {view === "gallery" ? (
+        <StreakTiersSheet streak={streak} onClose={() => setView("none")} />
+      ) : null}
     </>
   );
 }

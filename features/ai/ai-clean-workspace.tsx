@@ -15,7 +15,7 @@ import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
 import { AICleanReadyState } from "@/features/ai/ai-clean-ready-state";
 import { AICleanUrlInput } from "@/features/ai/ai-clean-url-input";
 import { AICleanVideoPreview } from "@/features/ai/ai-clean-video-preview";
-import { FrenzAIHeader } from "@/features/ai/frenz-ai-header";
+import { FrenzAIPageHero } from "@/features/ai/frenz-ai-page-hero";
 import { useAiCleanJob } from "@/features/ai/use-ai-clean-job";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { inspectVideoFile, type AICleanErrorCode } from "@/lib/ai/clean-media";
@@ -255,8 +255,14 @@ export function AICleanWorkspace() {
       bare
     >
       {/*
-        🔴 NO HEADER ON THE INPUT SCREEN (owner, 2026-09-08: "remove the frenz
-        Ai hero section in the screenshot above").
+        🔴 THE HERO IS THE NEW ONE, AND ONLY WHERE A SCREEN LACKS ITS OWN.
+
+        Owner, 2026-09-08: "use the new upgraded hero in all ai pages." The
+        input, progress and result screens each open with their own version of
+        it; every OTHER state — the link field, the preview, ready, and the two
+        error panels — gets it from here. `FrenzAIHeader`, the original, used to
+        render above ALL of them, which stacked two different treatments of the
+        same title on one screen.
 
         What was removed is this header plus the dots allowance strip beneath
         it. The headline did not disappear — it MOVED into the input page and
@@ -268,20 +274,16 @@ export function AICleanWorkspace() {
         heading of their own.
       */}
       {chromeless ? null : (
-        <FrenzAIHeader
-          crumb="AI Clean"
-        title="Clean your videos with AI."
-        description="Remove unwanted captions, subtitles and text overlays while keeping your video looking natural."
-        badge={<AICleanProBadge />}
-        action={
-          <button
-            type="button"
-            onClick={() => setTutorialOpen(true)}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 text-xs font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <HelpCircle className="h-4 w-4" aria-hidden />
-            How it works
-          </button>
+        <FrenzAIPageHero
+          action={
+            <button
+              type="button"
+              onClick={() => setTutorialOpen(true)}
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-border/70 bg-card px-3.5 text-xs font-semibold text-muted-foreground transition hover:border-primary/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <HelpCircle className="h-4 w-4" aria-hidden />
+              How it works
+            </button>
           }
         />
       )}

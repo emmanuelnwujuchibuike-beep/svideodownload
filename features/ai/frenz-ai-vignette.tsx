@@ -80,14 +80,26 @@ export function FrenzAIVignette() {
   }, [open]);
 
   const dismiss = () => {
+    /*
+      🔴 GONE ON THE TAP (owner, 2026-09-08: "the vignette try frenz ai exit
+      button doesnt click and exit immediatel").
+
+      This used to set `entered = false` and unmount 200ms later, so the exit
+      animation could play. On a phone that reads as a dead button: you tap, the
+      thing is still there, so you tap again. A dismissal is the one interaction
+      that must never wait for a flourish — the person has already told you they
+      do not want to look at it.
+
+      The entrance animation stays. Arriving gently is pleasant; leaving slowly
+      is not.
+    */
+    setOpen(false);
     setEntered(false);
     try {
       window.localStorage.setItem(SEEN_KEY, "1");
     } catch {
       /* nothing to do — it simply shows again next time */
     }
-    // Let the exit transition run before it leaves the tree.
-    window.setTimeout(() => setOpen(false), 200);
   };
 
   if (!open) return null;

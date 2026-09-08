@@ -161,7 +161,7 @@ export function DownloadPageCore({
         them.
       */}
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <FrenzAICta imageUrl={frenzAiTileImageUrl ?? undefined} />
+        <FrenzAICta />
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
 

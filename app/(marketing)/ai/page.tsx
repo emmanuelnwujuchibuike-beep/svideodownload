@@ -77,7 +77,10 @@ export default async function PublicFrenzAIPage() {
   return (
     <>
       <SiteHeader landing />
-      <main className="container max-w-3xl px-3 py-6 sm:py-10">
+      <main
+        className="container max-w-3xl px-3 pb-10 sm:pb-14"
+        style={{ paddingTop: "calc(var(--frenz-header-bottom, 4rem) + 1rem)" }}
+      >
         {/*
           `cleanHref` points at the PUBLIC workspace. Passing it rather than
           hard-coding one inside the component is what lets a single design

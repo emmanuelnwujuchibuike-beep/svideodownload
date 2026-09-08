@@ -382,8 +382,25 @@ function landingChunks(): string[] {
  * labels and the six call sites rather than six fields.
  *
  * 🔴 ADMIN ROUTE ONLY, as below. No public ceiling moves.
+ *
+ * ── 361 → 364 kB, 2026-09-08 ────────────────────────────────────────────────
+ *
+ * What bought it: the Frenz AI access panel (features/admin/frenz-ai-settings).
+ * Three operator switches — anonymous visibility, free-tier on/off, and the
+ * free daily allowance — that had been readable and writable ONLY through the
+ * API or a direct database write since the day they shipped. "Configurable in
+ * admin dashboard" was the requirement; this is the first commit where that is
+ * actually true.
+ *
+ * It is 2 kB of form, and it is its own component rather than fields on the
+ * images panel so that neither form can clobber the other's values.
+ *
+ * 🔴 THE PUBLIC BUDGET DID NOT MOVE. `ENTRY_ROUTE_CEILING` below is what guards
+ * the landing, the downloader pages and everything a cold visitor can reach;
+ * this number governs `/admin`, which is auth-gated, visited by one person, and
+ * never on a 2-second budget.
  */
-const GLOBAL_CEILING = 361 * 1024;
+const GLOBAL_CEILING = 364 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

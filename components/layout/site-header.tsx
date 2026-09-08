@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
+import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { InstallButton, InstallCta, InstallHeaderCta } from "@/features/pwa/install-button";
 import { LanguageSelector } from "@/components/i18n/language-selector";
 import { useShowAds } from "@/features/monetization/use-show-ads";
@@ -432,6 +433,18 @@ export function SiteHeader({
             compact pill, where the header still has a wordmark and a search
             field to fit around.
           */}
+          {/*
+            The streak, left of the install action.
+
+            🔴 It lives in BOTH headers. Mounting it only in `AppTopbar` (the
+            signed-in shell) meant it never showed on the landing or download
+            pages — the two the owner was looking at when they said they could
+            not see it. Those render this header instead.
+
+            It renders nothing without a streak, so a first-time visitor's
+            header is unchanged and the row cannot shift.
+          */}
+          <StreakHeaderChip />
           {landing ? <InstallHeaderCta /> : <InstallButton />}
           <ThemeToggle />
           <UserMenu />

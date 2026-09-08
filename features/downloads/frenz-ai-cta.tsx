@@ -1,5 +1,4 @@
 import { ArrowRight, Compass, Wand2 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -28,26 +27,11 @@ import { cn } from "@/lib/utils";
  *
  * ── Cheap, because this is a 1.6-second route ───────────────────────────────
  *
- * A server component with no image, no blur and no animation beyond a hover
- * transform. The landing budget is measured in kilobytes of JS and this adds
- * none.
+ * A server component: no image, no blur, no JavaScript. The ambient field below
+ * is two composited transforms — see the note on it for why that number and
+ * those properties are the budget rather than a preference.
  */
-export function FrenzAICta({
-  /**
-   * The background photo, from landing settings.
-   *
-   * 🔴 Owner, 2026-09-08: "the ai button should be this image", with a
-   * cyberpunk AI-eye render attached. Art direction that specific must be
-   * UPLOADABLE, not committed — it will change, and changing it should not
-   * need a deploy. Empty falls back to the drawn backdrop below, so the tile
-   * is never broken while the slot is empty.
-   */
-  imageUrl,
-  className,
-}: {
-  imageUrl?: string;
-  className?: string;
-}) {
+export function FrenzAICta({ className }: { className?: string }) {
   return (
     <Link
       href="/ai"
@@ -60,41 +44,48 @@ export function FrenzAICta({
         className,
       )}
     >
-      {imageUrl ? (
-        <>
-          <Image
-            src={imageUrl}
-            alt=""
-            aria-hidden
-            fill
-            /*
-              A fixed hint, not a viewport fraction: this is a half-width tile
-              in a two-column grid capped by the page container, so `50vw`
-              would make the optimizer serve a variant several times larger
-              than it is ever shown at. `quality={74}` deliberately — 75
-              poisons the optimizer's cache key on this project.
-            */
-            sizes="(min-width: 640px) 320px, 50vw"
-            quality={74}
-            className="object-cover opacity-70 transition duration-500 group-hover:opacity-80 motion-reduce:transition-none"
-          />
-          {/* The copy has to stay readable over whatever the photo is doing. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b1030] via-[#0b1030]/55 to-transparent"
-          />
-        </>
-      ) : (
-        /* One static wash. No animation on the front door. */
+      {/*
+        ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ─────────────────────
+
+        Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
+        background that feels alive and move just like gemini, dont use an image
+        in the ai button."
+
+        So the image is gone — including the uploadable slot that briefly
+        existed for it — and this is two soft colour fields drifting past each
+        other behind the copy.
+
+        Why it is affordable on a page with a 1.6-second budget, which this
+        feature has already blown once today:
+
+          · TWO elements, not a scene. Each is one radial gradient;
+          · they animate `transform` ONLY. No filter, no background-position,
+            no opacity keyframes — all of which repaint. Transform is composited,
+            so the main thread never sees a frame of this;
+          · 19s and 23s, co-prime, so the pair never visibly repeats. An ambient
+            field reads as alive precisely when you cannot find its beat;
+          · both stop dead under `prefers-reduced-motion`.
+
+        It is also why there is no `backdrop-blur` here: the softness is in the
+        gradient's own falloff, which costs nothing, rather than in a filter
+        that would re-blur the tile on every frame the blobs move.
+      */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <span
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-70"
+          className="frenz-ai-ambient-a absolute -left-1/4 -top-1/4 h-[150%] w-[150%]"
           style={{
             background:
-              "radial-gradient(circle, rgba(217,70,239,0.55) 0%, rgba(99,102,241,0.25) 45%, transparent 70%)",
+              "radial-gradient(closest-side, rgba(59,130,246,0.85) 0%, rgba(59,130,246,0.35) 45%, transparent 72%)",
           }}
         />
-      )}
+        <span
+          className="frenz-ai-ambient-b absolute -bottom-1/4 -right-1/4 h-[150%] w-[150%]"
+          style={{
+            background:
+              "radial-gradient(closest-side, rgba(217,70,239,0.75) 0%, rgba(139,92,246,0.32) 45%, transparent 72%)",
+          }}
+        />
+      </span>
 
       {/*
         🔴 A WAND, NOT A SPARKLE (owner: "the ai button icon should be something

@@ -264,6 +264,47 @@ jobs:
             exit 1
           fi
 
+      # ── 🔴 DO THE PINNED VERSIONS ACTUALLY EXIST? ─────────────────────────
+      #
+      # Run #3 spent two minutes reaching `pip install` before learning that
+      # `onnxruntime-gpu==1.20.1` does not exist — the GPU package skips 1.20.1
+      # entirely, which the CPU package it was copied from does not.
+      #
+      # PyPI can answer that in one request per package, before Docker starts.
+      # A pin that cannot resolve is a typo-class mistake and deserves a
+      # typo-class turnaround, not a build.
+      - name: Check every pin resolves on PyPI
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r line; do
+            case "$line" in ""|\#*) continue ;; esac
+            case "$line" in *==*) : ;; *) continue ;; esac
+
+            pkg="${line%%==*}"
+            ver="${line##*==}"
+            # Strip anything after the version (markers, comments).
+            ver="${ver%% *}"
+
+            code=$(curl -sS -o /dev/null -w '%{http_code}' \
+              "https://pypi.org/pypi/${pkg}/${ver}/json")
+            if [ "$code" = "200" ]; then
+              echo "  ✅ ${pkg}==${ver}"
+            else
+              fail=1
+              echo "  🔴 ${pkg}==${ver} does not exist on PyPI (HTTP ${code})"
+              avail=$(curl -sS "https://pypi.org/pypi/${pkg}/json" \
+                | python3 -c "import sys,json; print(', '.join(sorted(json.load(sys.stdin)['releases'])[-12:]))" 2>/dev/null || true)
+              [ -n "$avail" ] && echo "     recent versions: ${avail}"
+            fi
+          done < model/requirements.txt
+
+          if [ "$fail" != "0" ]; then
+            echo "::error::one or more pinned versions do not exist — fix docs/replicate-gpu/requirements.txt"
+            exit 1
+          fi
+          echo "every pin resolves"
+
       # ── 🔴 REPLICATE'S OWN ACTION, NOT A HAND-ROLLED INSTALL ──────────────
       #
       # The first two attempts curl'd the cog binary and ran `cog login`

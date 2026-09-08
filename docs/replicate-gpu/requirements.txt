@@ -21,5 +21,22 @@
 
 opencv-python-headless==4.10.0.84
 numpy==2.0.2
-onnxruntime-gpu==1.20.1
+onnxruntime-gpu==1.20.2
 Pillow==10.4.0
+
+# ── 🔴 1.20.2, NOT 1.20.1 — THE TWO PACKAGES DO NOT SHARE A VERSION LIST ────
+#
+# Upstream pins `onnxruntime==1.20.1`, and the obvious change is to keep the
+# number and swap the package. That build failed (run #3, 2026-09-08):
+#
+#     ERROR: Could not find a version that satisfies onnxruntime-gpu==1.20.1
+#       (from versions: … 1.19.2, 1.20.0, 1.20.2, 1.21.0 …)
+#
+# `onnxruntime` and `onnxruntime-gpu` are released independently and their
+# version lists are NOT the same — the GPU package has no 1.20.1 at all, going
+# straight from 1.20.0 to 1.20.2. Matching the CPU pin digit for digit was an
+# assumption, not a fact.
+#
+# 1.20.2 is the nearest release in the same line, so the ONNX Runtime the model
+# gets is the one its author tested against, plus a patch. It needs CUDA 12.x,
+# which is what cog.yaml requests.

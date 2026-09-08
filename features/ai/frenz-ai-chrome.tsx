@@ -44,7 +44,7 @@ export function FrenzAICrumb({
     <nav
       aria-label="Breadcrumb"
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/80 py-1.5 pl-1.5 pr-3 shadow-[0_6px_20px_-14px_hsl(229_55%_3%/0.5)] backdrop-blur",
+        "inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-1.5 pl-1.5 pr-3 shadow-[0_6px_20px_-14px_hsl(229_55%_3%/0.5)]",
         className,
       )}
     >
@@ -101,7 +101,7 @@ export function FrenzAIAllowanceBar({
     return (
       <div
         className={cn(
-          "flex items-center gap-3 rounded-2xl border border-border/60 bg-card/80 px-4 py-3 backdrop-blur",
+          "flex items-center gap-3 rounded-2xl border border-border/60 bg-card/95 px-4 py-3",
           className,
         )}
       >
@@ -121,7 +121,7 @@ export function FrenzAIAllowanceBar({
       href={href}
       prefetch={false}
       className={cn(
-        "group flex items-center gap-3 rounded-2xl border border-border/60 bg-card/80 px-3.5 py-3 backdrop-blur",
+        "group flex items-center gap-3 rounded-2xl border border-border/60 bg-card/95 px-3.5 py-3",
         "shadow-[0_8px_26px_-18px_hsl(229_55%_3%/0.55)] transition hover:border-foreground/15",
         className,
       )}

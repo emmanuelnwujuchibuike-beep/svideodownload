@@ -169,7 +169,7 @@ export function AICleanTutorial({
           aria-label="Close tutorial"
           onClick={() => finish("skipped")}
           className={cn(
-            "absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-200 motion-reduce:transition-none",
+            "absolute inset-0 bg-black/50 transition-opacity duration-200 motion-reduce:transition-none",
             shown ? "opacity-100" : "opacity-0",
           )}
         />

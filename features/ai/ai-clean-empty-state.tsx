@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, Link2, Sparkles, Zap } from "lucide-react";
+import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIInputScene } from "@/features/ai/core/frenz-ai-input-scene";
@@ -33,8 +34,9 @@ import type { AiCleanEntitlement } from "@/lib/ai/client";
  * ── The performance rule, which was part of the same instruction ────────────
  *
  * "only do not break the performance and over heating rule". No photographs,
- * no new library, `backdrop-blur` confined to small boxes rather than stretched
- * across the page, and the only motion is one slow arc and a twinkle — both
+ * no new library, and NO `backdrop-blur` anywhere (it was removed site-wide on
+ * 2026-09-08 after 25 of them made the app unresponsive), and the only motion is
+ * one slow arc and a twinkle — both
  * stopping under `prefers-reduced-motion` and on a hidden tab.
  *
  * ── What did NOT change ─────────────────────────────────────────────────────
@@ -54,6 +56,13 @@ export function AICleanEmptyState({
   /** Null until the server answers; the bar renders nothing until then. */
   entitlement?: AiCleanEntitlement | null;
 }) {
+  /*
+    Only a FREE member sees the upsell. `unlimited` covers every paid tier at
+    once, so this needs no list of plan names to keep in step with billing —
+    and an unknown entitlement counts as "do not show", never as "free".
+  */
+  const showUpsell = !!entitlement && !entitlement.unlimited && entitlement.plan === "free";
+
   return (
     <div className="px-1 pb-2">
       <FrenzAICrumb tool="AI Clean" />
@@ -97,7 +106,7 @@ export function AICleanEmptyState({
         <button
           type="button"
           onClick={onPasteLink}
-          className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/80 px-5 py-3 text-sm font-semibold backdrop-blur transition hover:border-foreground/20 active:scale-[0.99]"
+          className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/95 px-5 py-3 text-sm font-semibold transition hover:border-foreground/20 active:scale-[0.99]"
         >
           <Link2 className="h-4 w-4 text-primary" aria-hidden />
           Paste video link
@@ -108,22 +117,42 @@ export function AICleanEmptyState({
         </button>
       </div>
 
-      {/* ── the AI Powered card ──────────────────────────────────────────── */}
-      <section className="mt-4 flex items-center gap-3 rounded-2xl border border-border/60 bg-gradient-to-br from-primary/[0.06] via-violet-500/[0.05] to-transparent px-3.5 py-3.5 backdrop-blur">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-card/90 ring-1 ring-inset ring-border/70">
-          <Sparkles className="h-5 w-5 text-primary" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-bold">AI Powered</p>
-          <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
-            Fast, secure and natural results with advanced AI technology.
-          </p>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-card/90 px-3 py-1.5 text-[11px] font-bold text-primary ring-1 ring-inset ring-border/70">
-          <Zap className="h-3.5 w-3.5" aria-hidden />
-          Pro
-        </span>
-      </section>
+      {/*
+        ── 🔴 THE UPSELL IS FOR FREE MEMBERS ONLY ─────────────────────────────
+
+        Owner, 2026-09-08: "this pro card shouldnt be on pro users upwards, only
+        on free and the button should lead to the pricing page."
+
+        Selling Pro to somebody already paying for it is the clearest possible
+        signal that a product is not reading its own state — and the chip is a
+        real link now, so it goes somewhere rather than looking tappable and
+        doing nothing.
+
+        Hidden while the entitlement is UNKNOWN too, not just when it says paid.
+        Rendering it optimistically would flash an upsell at a Pro member on
+        every load, which is the exact thing being fixed.
+      */}
+      {showUpsell ? (
+        <section className="mt-4 flex items-center gap-3 rounded-2xl border border-border/60 bg-gradient-to-br from-primary/[0.06] via-violet-500/[0.05] to-transparent px-3.5 py-3.5">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-card/90 ring-1 ring-inset ring-border/70">
+            <Sparkles className="h-5 w-5 text-primary" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-bold">AI Powered</p>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">
+              Fast, secure and natural results with advanced AI technology.
+            </p>
+          </div>
+          <Link
+            href="/pricing"
+            prefetch={false}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-card/90 px-3 py-1.5 text-[11px] font-bold text-primary ring-1 ring-inset ring-border/70 transition hover:ring-primary/40 active:scale-[0.98]"
+          >
+            <Zap className="h-3.5 w-3.5" aria-hidden />
+            Pro
+          </Link>
+        </section>
+      ) : null}
 
       {/*
         The allowance moved DOWN here from above the stage. On the old layout it

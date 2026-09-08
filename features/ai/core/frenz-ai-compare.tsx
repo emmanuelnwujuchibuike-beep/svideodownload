@@ -195,10 +195,10 @@ export function FrenzAICompare({
           </span>
         </div>
 
-        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white/90 backdrop-blur-sm">
+        <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white/90">
           Before
         </span>
-        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white/90 backdrop-blur-sm">
+        <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white/90">
           After
         </span>
       </div>

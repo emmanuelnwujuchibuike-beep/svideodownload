@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
  * as "no simplifying", so both are the brief. What that costs here:
  *
  *   · not one photograph. The two video frames are CSS gradients, the marks are
- *     the existing brand PNG at 16-30px, and the glass is `backdrop-blur` on
+ *     the existing brand PNG at 16-30px, and the glass is `` on
  *     small boxes rather than across the page;
  *   · nothing animates except four spheres and the centre mark, on 9-16 second
  *     cycles, on `transform`/`opacity` only;
@@ -111,8 +111,8 @@ export function FrenzAIWelcome({ cleanHref = "/studio/ai/clean" }: { cleanHref?:
             href="/studio/ai/clean?tutorial=1"
             prefetch={false}
             className={cn(
-              "inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-border/70 bg-card/80 px-4 py-3.5 sm:px-6",
-              "text-[13.5px] font-semibold backdrop-blur transition hover:border-foreground/20 active:scale-[0.99] sm:text-sm",
+              "inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-border/70 bg-card/95 px-4 py-3.5 sm:px-6",
+              "text-[13.5px] font-semibold transition hover:border-foreground/20 active:scale-[0.99] sm:text-sm",
             )}
           >
             <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden />

@@ -65,7 +65,7 @@ export function FrenzAIBeforeAfterScene({ className }: { className?: string }) {
           // sits lower), so the seam BETWEEN them is above the container middle.
           // Centring on the container put the mark on the right card instead of
           // the join — caught in a screenshot.
-          className="frenz-ai-breathe absolute left-1/2 top-[44%] z-[2] flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/75 ring-1 ring-inset ring-white/80 backdrop-blur-md dark:bg-white/15"
+          className="frenz-ai-breathe absolute left-1/2 top-[44%] z-[2] flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/94 ring-1 ring-inset ring-white/80 dark:bg-white/15"
           style={{ boxShadow: "0 0 40px -6px rgba(99,102,241,0.75)" }}
         >
           <FrenzLogo size={26} alt="" />
@@ -79,10 +79,10 @@ export function FrenzAIBeforeAfterScene({ className }: { className?: string }) {
       <span aria-hidden className="frenz-ai-drift-a absolute bottom-[2%] left-[28%] h-5 w-5 rounded-full bg-gradient-to-br from-indigo-400 to-blue-700 shadow-[0_6px_16px_-4px_rgb(67_56_202/0.8)]" />
 
       {/* the small floating mark tiles */}
-      <span aria-hidden className="frenz-ai-drift-b absolute -right-1 top-[2%] flex h-11 w-11 items-center justify-center rounded-2xl bg-white/60 ring-1 ring-inset ring-white/70 backdrop-blur dark:bg-white/10">
+      <span aria-hidden className="frenz-ai-drift-b absolute -right-1 top-[2%] flex h-11 w-11 items-center justify-center rounded-2xl bg-white/92 ring-1 ring-inset ring-white/70 dark:bg-white/10">
         <FrenzLogo size={20} alt="" />
       </span>
-      <span aria-hidden className="frenz-ai-drift-c absolute -left-2 bottom-[16%] flex h-10 w-10 items-center justify-center rounded-2xl bg-white/55 ring-1 ring-inset ring-white/70 backdrop-blur dark:bg-white/10">
+      <span aria-hidden className="frenz-ai-drift-c absolute -left-2 bottom-[16%] flex h-10 w-10 items-center justify-center rounded-2xl bg-white/90 ring-1 ring-inset ring-white/70 dark:bg-white/10">
         <FrenzLogo size={18} alt="" />
       </span>
     </div>
@@ -101,7 +101,7 @@ function VideoCard({ variant }: { variant: "original" | "clean" }) {
     <figure
       className={cn(
         "relative w-[46%] max-w-[11rem] overflow-hidden rounded-[1.25rem] p-2",
-        "bg-white/55 ring-1 ring-inset ring-white/70 backdrop-blur-md",
+        "bg-white/90 ring-1 ring-inset ring-white/70",
         "shadow-[0_20px_50px_-24px_rgb(49_46_129/0.65)]",
         "dark:bg-white/10 dark:ring-white/20",
         clean ? "mt-6 rotate-[2deg]" : "-rotate-[2deg]",
@@ -164,11 +164,11 @@ function VideoCard({ variant }: { variant: "original" | "clean" }) {
 
           {/* the scrubber */}
           <span className="absolute inset-x-1.5 bottom-1.5">
-            <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/40">
+            <span className="block h w-full overflow-hidden rounded-full bg-white/40">
               <span className="block h-full w-[27%] rounded-full bg-rose-500" />
             </span>
             <span className="mt-1 flex items-center justify-between">
-              <span className="text-[7px] font-semibold text-white/95">0:12 / 0:45</span>
+              <span className="text font-semibold text-white/95">0:12 / 0:45</span>
               <Volume2 className="h-2.5 w-2.5 text-white/95" aria-hidden />
             </span>
           </span>
@@ -178,7 +178,7 @@ function VideoCard({ variant }: { variant: "original" | "clean" }) {
       {/* the label chip, floating over the top-left corner as drawn */}
       <figcaption
         className={cn(
-          "absolute left-3.5 top-3.5 rounded-md px-2 py-1 text-[9px] font-bold",
+          "absolute left-3.5 top-3.5 rounded-md px-2 py-1 text font-bold",
           clean
             ? "bg-white/90 text-indigo-700 ring-1 ring-inset ring-indigo-200"
             : "bg-slate-900/80 text-white",

@@ -69,7 +69,7 @@ export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
           className={cn(
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition",
             open
-              ? "bg-white/10 ring-1 ring-inset ring-white/20 backdrop-blur-sm"
+              ? "bg-white/10 ring-1 ring-inset ring-white/20"
               : "bg-secondary text-muted-foreground",
           )}
         >

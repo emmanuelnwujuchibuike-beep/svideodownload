@@ -140,6 +140,32 @@ export function AICleanWorkspace() {
     if (!hasSeenAICleanTutorial()) setTutorialOpen(true);
   }, []);
 
+  /*
+    ── 🔴 "HOW IT WORKS" ARRIVES AS A QUERY PARAM ──────────────────────────
+
+    The welcome page links here with `?tutorial=1`, and nothing read it — so
+    the button did nothing at all for anybody who had already seen the
+    tutorial once (which is everybody after their first visit, since the
+    effect above only fires for first-timers).
+
+    Read from `location` rather than `useSearchParams` deliberately: this
+    component is deep inside a client tree, and `useSearchParams` opts the
+    whole subtree into a Suspense boundary it does not otherwise need. One
+    read on mount is all this requires.
+  */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const wants = new URLSearchParams(window.location.search).get("tutorial");
+    if (wants === "1") {
+      setTutorialOpen(true);
+      // Take it out of the URL so a refresh — or a back-navigation — does not
+      // reopen a sheet the person has just closed.
+      const url = new URL(window.location.href);
+      url.searchParams.delete("tutorial");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
   const acceptFile = useCallback(
     (file: File) => {
       const verdict = inspectVideoFile(file);
@@ -197,6 +223,17 @@ export function AICleanWorkspace() {
   const previewing = source?.kind === "file";
   const enteringLink = stage === "link";
 
+  /*
+    🔴 The PROGRESS screen has no header either (owner, 2026-09-08: "the
+    progress page still have the old hero i said you should remove").
+
+     draws its own chrome — the work scene, the
+    headline that changes with the stage, its own tracker. A second title
+    above all of that is the duplicate the owner keeps pointing at.
+
+    Result and error states KEEP it: those screens carry no heading of their
+    own, and somebody landing on a finished job needs to know where they are.
+  */
   const idleScreen =
     !finished &&
     !running &&
@@ -206,6 +243,9 @@ export function AICleanWorkspace() {
     !readyToStart &&
     !previewing &&
     !enteringLink;
+
+  /** Screens that draw their own heading, so the shared header would duplicate it. */
+  const chromeless = idleScreen || running;
 
   return (
     <FrenzAIEnvironment
@@ -227,7 +267,7 @@ export function AICleanWorkspace() {
         result still needs to know where they are, and those screens carry no
         heading of their own.
       */}
-      {idleScreen ? null : (
+      {chromeless ? null : (
         <FrenzAIHeader
           crumb="AI Clean"
         title="Clean your videos with AI."
@@ -256,7 +296,7 @@ export function AICleanWorkspace() {
         limit as the second thing somebody reads about a tool they have not
         tried yet.
       */}
-      {idleScreen ? null : (
+      {chromeless ? null : (
         <AICleanAllowance entitlement={cleanJob.entitlement} className="mb-4" />
       )}
 

@@ -70,7 +70,7 @@ export function FrenzAIStage({
       stage={stage}
       armed={armed}
       className={cn(
-        "overflow-hidden rounded-[1.75rem] border border-border/50 bg-card/70 backdrop-blur-xl",
+        "overflow-hidden rounded-[1.75rem] border border-border/50 bg-card/95",
         // Depth from light rather than from a heavy border: an inset highlight
         // along the top edge, a soft drop below. In dark mode the ambient wash
         // behind is what actually defines the shape.

@@ -103,7 +103,7 @@ export function AICleanUpload({
           "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
           dragging
             ? "border-primary bg-primary/[0.07]"
-            : "border-border/70 bg-card/55 backdrop-blur hover:border-primary/40",
+            : "border-border/70 bg-card/95 hover:border-primary/40",
         )}
       >
         {/* The light inside the card, from `public/ai input page.jpg`. Static. */}

@@ -89,7 +89,7 @@ function MarkTile() {
   return (
     <span
       aria-hidden
-      className="inline-flex h-5 w-5 items-center justify-center rounded-[7px] bg-brand-tile text-white shadow-sm"
+      className="inline-flex h-5 w-5 items-center justify-center rounded bg-brand-tile text-white shadow-sm"
     >
       <Sparkles className="h-3 w-3" />
     </span>

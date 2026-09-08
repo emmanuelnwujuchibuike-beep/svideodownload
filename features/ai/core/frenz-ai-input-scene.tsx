@@ -68,10 +68,10 @@ export function FrenzAIInputScene({ className }: { className?: string }) {
       </svg>
 
       {/* the stack: two cards behind, one in front */}
-      <span className="absolute left-[6%] top-[34%] h-[38%] w-[42%] -rotate-[10deg] rounded-2xl bg-indigo-400/20 ring-1 ring-inset ring-white/40 backdrop-blur-[2px]" />
-      <span className="absolute left-[18%] top-[28%] h-[42%] w-[46%] -rotate-[5deg] rounded-2xl bg-indigo-400/25 ring-1 ring-inset ring-white/45 backdrop-blur-[2px]" />
+      <span className="absolute left-[6%] top-[34%] h-[38%] w-[42%] -rotate-[10deg] rounded-2xl bg-indigo-400/20 ring-1 ring-inset ring-white/40" />
+      <span className="absolute left-[18%] top-[28%] h-[42%] w-[46%] -rotate-[5deg] rounded-2xl bg-indigo-400/25 ring-1 ring-inset ring-white/45" />
 
-      <span className="absolute left-[32%] top-[24%] flex h-[48%] w-[52%] items-center justify-center rounded-2xl bg-gradient-to-br from-sky-300/45 via-indigo-400/35 to-violet-500/30 ring-1 ring-inset ring-white/55 shadow-[0_18px_44px_-20px_rgb(79_70_229/0.85)] backdrop-blur-[3px]">
+      <span className="absolute left-[32%] top-[24%] flex h-[48%] w-[52%] items-center justify-center rounded-2xl bg-gradient-to-br from-sky-300/45 via-indigo-400/35 to-violet-500/30 ring-1 ring-inset ring-white/55 shadow-[0_18px_44px_-20px_rgb(79_70_229/0.85)]">
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/92 shadow-[0_6px_16px_-4px_rgb(30_27_75/0.55)]">
           <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5 fill-indigo-600">
             <path d="M8 5v14l11-7z" />

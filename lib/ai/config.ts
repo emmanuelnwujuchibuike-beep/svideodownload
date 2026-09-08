@@ -120,17 +120,63 @@ export const AI_CLEAN_CONFIG = {
   /* ── The model's input parameters. Backend-controlled; never client-supplied. ── */
 
   /** hybrid | inpaint | inpaint_ns | blur | black | background. */
-  method: "hybrid",
-  /** original | 1080p | 720p | 480p | 360p. 720p is the cost/quality balance. */
-  resolution: "720p",
-  /** 0-1. Lower finds more text and more false positives. */
-  confidence: 0.25,
+  method: process.env.AI_CLEAN_METHOD?.trim() || "hybrid",
+
+  /**
+   * original | 1080p | 720p | 480p | 360p.
+   *
+   * ── 🔴 "original", BECAUSE ANYTHING ELSE RESAMPLES THE WHOLE VIDEO ─────────
+   *
+   * This was "720p", chosen as a cost/quality balance before anyone had seen a
+   * finished result. The first successful job showed what it actually does. The
+   * owner's clip is 480x854, and the model's own log said:
+   *
+   *     - Upscaling output back to 480x854...
+   *
+   * Because `predict.py` only downscales when `height > target_height`, a 854px
+   * tall video was reduced to ~404x720, inpainted, and then scaled back up.
+   * That is a full round trip through a smaller raster: EVERY pixel is softened,
+   * not just the region under the caption. The owner reported it as "the
+   * removing affects the video", which is exactly right — the removal was fine
+   * and the resampling around it was not.
+   *
+   * At original resolution nothing outside the patched boxes is touched at all.
+   *
+   * ⚠️ The cost is bounded by the input, not by this: `AI_CLEAN_LIMITS` already
+   * caps file size and duration, and the model spent 3.8 seconds on this clip at
+   * 720p. Overridable per-deploy if a very large video ever proves otherwise.
+   */
+  resolution: process.env.AI_CLEAN_RESOLUTION?.trim() || "original",
+
+  /**
+   * 0-1. Lower finds more text AND more false positives.
+   *
+   * A false positive is not a harmless miss here — it erases a region of real
+   * picture. Kept at the model author's default; raise it if the owner reports
+   * things being wiped that were never text.
+   */
+  confidence: Number(process.env.AI_CLEAN_CONFIDENCE) || 0.25,
+
   /** Overlap threshold when merging detections. */
-  iou: 0.45,
+  iou: Number(process.env.AI_CLEAN_IOU) || 0.45,
+
   /** Pixels of padding around a detected box, 0-20. */
-  margin: 5,
-  /** Detect every Nth frame and interpolate between, 0-100. */
-  detectionInterval: 5,
+  margin: Number(process.env.AI_CLEAN_MARGIN) || 5,
+
+  /**
+   * Detect every Nth frame; boxes are reused for the frames in between.
+   *
+   * 🔴 WAS 5, WHICH IS A SECOND ACCURACY BUG. Text that moves, or appears for
+   * under five frames, gets a box computed somewhere it no longer is — so the
+   * cleaner erases the wrong part of the picture and misses the actual caption.
+   * On a 66-frame clip it detected on 14 frames and reused those boxes for the
+   * other 52.
+   *
+   * 1 means every frame is looked at. Detection is the expensive stage, so this
+   * is the one change here that genuinely costs time — and it is worth it: this
+   * feature's entire value is that the result looks untouched.
+   */
+  detectionInterval: Number(process.env.AI_CLEAN_DETECTION_INTERVAL) || 1,
 } as const;
 
 /** Exactly the body the model expects, built in one place. */

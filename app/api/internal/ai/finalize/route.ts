@@ -44,10 +44,45 @@ export const maxDuration = 300;
 const schema = z.object({ jobId: z.string().uuid() }).strict();
 
 export async function POST(request: Request) {
-  if (!WORKER_SECRET || request.headers.get("x-worker-secret") !== WORKER_SECRET) {
+  /*
+    ── 🔴 THE BUG THAT MEANT AI CLEAN HAD NEVER ONCE FINISHED ────────────────
+
+    This read `!WORKER_SECRET || header !== WORKER_SECRET`, which 403s when the
+    worker has NO secret configured. Every other internal route on the same
+    worker does the opposite:
+
+        rejectIfUnauthorizedWorker   if (hasWorker || !WORKER_SECRET) return null
+        /api/internal/store-media    if (WORKER_SECRET && header !== …) → 403
+
+    So on a worker without `WORKER_SECRET`, downloads kept working and this one
+    endpoint refused every request, forever. Measured 2026-09-08 across all 17
+    jobs ever created: 0 completed, 0 result paths, **0 that ever reached
+    `finalizing`** — the status this route's service is what sets. The provider
+    had genuinely succeeded; one job even had `provider_output_url` recorded in
+    its metadata and was still failed hours later, by which time Replicate had
+    expired the file.
+
+    It now matches the rest of the codebase. One posture for every worker route
+    is itself the fix: the odd one out was the one that was wrong, and having
+    two rules is how it stayed wrong without anyone noticing.
+  */
+  if (WORKER_SECRET && request.headers.get("x-worker-secret") !== WORKER_SECRET) {
     // Identical answer for a missing secret and a wrong one. A route that is
     // more specific about which is a route that helps somebody guess.
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  if (!WORKER_SECRET) {
+    /*
+      Not a refusal — see above — but not silent either. An unsecured internal
+      endpoint is a real exposure (it makes this machine download and transcode
+      video on request), and the only reason to accept it is that refusing was
+      strictly worse: it broke the feature completely while the operator had no
+      way to see why.
+    */
+    console.warn(
+      "[ai/finalize] WORKER_SECRET is not set on this worker — the finalize endpoint is UNAUTHENTICATED. Set it on both the worker and the frontend.",
+    );
   }
 
   let body: unknown;

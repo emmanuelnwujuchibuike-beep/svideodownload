@@ -159,7 +159,39 @@ export async function POST(request: Request) {
           modelVersion: state.modelVersion,
           dispatched: dispatch.dispatched,
           ...(dispatch.dispatched ? {} : { reason: dispatch.reason }),
+          ...(dispatch.dispatched === false && dispatch.reason === "refused"
+            ? { status: dispatch.status, detail: dispatch.detail }
+            : {}),
         });
+
+        /*
+          ── 🔴 A REFUSED HANDOFF ENDS THE JOB. IT USED TO ORPHAN IT. ────────
+
+          This block previously logged the outcome and stopped. When the worker
+          refused, the job stayed `processing` with nowhere left to go: we had
+          already answered Replicate 200 so it never redelivered, and the only
+          thing that would eventually touch the row was the 45-minute stall
+          deadline — by which time Replicate had expired the output file, so
+          the member got "succeeded with no usable output", which is both
+          confusing and untrue.
+
+          That was the whole bug. Every AI Clean job ever created died in this
+          silence.
+
+          A 403/404 from our own worker cannot improve on a retry, so the job
+          ends NOW with an honest error and the allowance goes back. Transient
+          failures are deliberately NOT ended here — `no-worker` and `failed`
+          leave the job for the reconciler, which is exactly what that path is
+          for.
+        */
+        if (dispatch.dispatched === false && dispatch.reason === "refused") {
+          console.error("[ai/webhook] worker REFUSED the finalization — ending the job", {
+            jobId: job.id,
+            status: dispatch.status,
+            detail: dispatch.detail,
+          });
+          await failJob(job.id, subjectFromRow(job), feature.id, "FINALIZER_UNAVAILABLE", dispatch.detail);
+        }
       });
 
       return NextResponse.json({ ok: true }, { status: 200 });

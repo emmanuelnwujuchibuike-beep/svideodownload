@@ -55,6 +55,18 @@ export type AiErrorCode =
    * back. See lib/ai/stall.ts.
    */
   | "PROVIDER_TIMEOUT"
+  /**
+   * The AI finished, and our own worker refused to take the result.
+   *
+   * 🔴 Distinct from PROVIDER_ERROR because the provider did nothing wrong and
+   * the fix is entirely ours — a mismatched worker secret, or the finalize
+   * route not deployed. Naming it separately is what turns "that didn't
+   * finish" into a log line an operator can act on, and it is the failure that
+   * silently consumed EVERY AI Clean job before 2026-09-08: the model
+   * succeeded, our worker 403'd the handoff, and the job sat in `processing`
+   * until it aged out.
+   */
+  | "FINALIZER_UNAVAILABLE"
   /** This plan owes a rewarded ad and the request arrived without one. */
   | "REWARD_REQUIRED"
   /** A reward was presented and the database refused to spend it. */
@@ -121,6 +133,12 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
     // Says what happened and what it cost, because both are the member's
     // questions and a job that ran too long is not their mistake.
     message: "This one took too long and we stopped waiting. Your allowance wasn't used — try again, or try a shorter clip.",
+  },
+  FINALIZER_UNAVAILABLE: {
+    status: 503,
+    // Says what it cost, because that is the member's real question, and does
+    // not blame them or the video — this one is entirely on us.
+    message: "We couldn't finish this video. Your allowance wasn't used — please try again shortly.",
   },
   PROCESSING_FAILED: { status: 500, message: "The cleanup didn't finish. Nothing was changed — you can try again." },
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },

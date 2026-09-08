@@ -149,6 +149,27 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
         dispatched: dispatch.dispatched,
         ...(dispatch.dispatched ? {} : { reason: dispatch.reason }),
       });
+
+      /*
+        🔴 Same rule as the webhook: a REFUSAL is permanent, so the job ends
+        here with an honest error rather than being handed back to a poll that
+        will get the identical 403 every few seconds until the stall deadline.
+
+        This mattered more than it looks. Replicate deletes prediction output
+        after about an hour, so a job left spinning on a refused handoff does
+        not merely stay slow — it becomes unrecoverable, and then reports
+        "succeeded with no usable output", which reads like the model's fault
+        and is not.
+      */
+      if (dispatch.dispatched === false && dispatch.reason === "refused") {
+        console.error("[ai/reconcile] worker REFUSED the finalization — ending the job", {
+          jobId: job.id,
+          status: dispatch.status,
+          detail: dispatch.detail,
+        });
+        return await failFrom(job, "FINALIZER_UNAVAILABLE", dispatch.detail);
+      }
+
       return true;
     }
 

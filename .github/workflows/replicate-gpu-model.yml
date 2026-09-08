@@ -1,0 +1,217 @@
+name: Publish AI Clean model on GPU
+
+# ============================================================================
+#  Builds hjunior29/video-text-remover with GPU enabled and pushes it to
+#  Replicate under YOUR account. Run it from the Actions tab — no Docker, no
+#  Python, no terminal.
+# ============================================================================
+#
+# ── 🔴 WHY THIS EXISTS ──────────────────────────────────────────────────────
+#
+# The model AI Clean calls is published on CPU hardware. Measured 2026-09-08: a
+# 0.15 MB clip ran over ten minutes against a published typical of 124 seconds,
+# and three jobs in a row were abandoned. Its own README says "GPU is
+# auto-detected and used if available (3-6x faster)" — the CUDA path is written
+# and dormant, because upstream ships `gpu: false` and the CPU build of ONNX
+# Runtime.
+#
+# The fix is to republish the same MIT-licensed code on GPU. That normally means
+# `cog push`, which needs Docker — and the owner's machine has no Docker, no
+# cog and no Python. Installing all three plus WSL2 to build a multi-gigabyte
+# CUDA image over a home connection is a bad trade.
+#
+# A GitHub runner already has Docker, a fast connection and plenty of bandwidth,
+# and this repository is PUBLIC so Actions minutes are free. The build happens
+# there and nothing is installed locally.
+#
+# ── WHAT YOU NEED, ONCE ─────────────────────────────────────────────────────
+#
+#   1. Create the model at https://replicate.com/create
+#        owner:      your Replicate username
+#        name:       video-text-remover-gpu
+#        visibility: PRIVATE  (costs nothing, nobody else needs it)
+#        hardware:   Nvidia T4     ← see the note on T4 below
+#
+#   2. Copy your token from https://replicate.com/account/api-tokens
+#
+#   3. GitHub → this repo → Settings → Secrets and variables → Actions →
+#      New repository secret:  REPLICATE_API_TOKEN = that token
+#
+#   4. Actions → "Publish AI Clean model on GPU" → Run workflow →
+#      type your Replicate username → Run
+#
+#   5. When it finishes it prints the model and version hash. Put BOTH into
+#      Vercel (frenzsave project → Settings → Environment Variables):
+#
+#        REPLICATE_AI_CLEAN_MODEL          = <username>/video-text-remover-gpu
+#        REPLICATE_AI_CLEAN_MODEL_VERSION  = <the 64-char hash>
+#
+#      Set them TOGETHER. A new owner/name with the old hash resolves to
+#      nothing and every job fails until it is corrected. Clearing both rolls
+#      back to the committed defaults in lib/ai/config.ts.
+#
+# ── ⚠️ T4, NOT SOMETHING BIGGER ─────────────────────────────────────────────
+#
+# T4 is $0.000225/sec against CPU's $0.000100 — 2.25x per second, but at several
+# times fewer seconds it lands CHEAPER per job as well as much faster. This is a
+# YOLOv8 detector, not a diffusion model; an L40S or A100 costs 4-6x more per
+# second and cannot use the extra silicon.
+#
+# ── ⚠️ THIS IS NOT A VERCEL DEPLOY ──────────────────────────────────────────
+#
+# A Vercel project named `replicate-gpu` was created against this repo and fails
+# on every push. It always will: `docs/replicate-gpu/` is a model definition,
+# not a website — no package.json, nothing to build. Delete that project. The
+# model goes to Replicate's registry (r8.im), which is what this workflow does.
+
+on:
+  # 🔴 MANUAL ONLY. A CUDA image build is ~15 minutes of a runner and pushes a
+  # multi-gigabyte layer to a third party. That is a decision somebody makes,
+  # never something a `git push` triggers by accident.
+  workflow_dispatch:
+    inputs:
+      replicate_owner:
+        description: "Your Replicate username (the owner of the model)"
+        required: true
+        type: string
+      model_name:
+        description: "Model name you created on Replicate"
+        required: true
+        default: "video-text-remover-gpu"
+        type: string
+      cuda_version:
+        description: "CUDA version for the image (12.1 works with onnxruntime-gpu 1.20)"
+        required: true
+        default: "12.1"
+        type: string
+
+concurrency:
+  group: replicate-gpu-model
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check the token is configured
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${REPLICATE_API_TOKEN:-}" ]; then
+            echo "::error::REPLICATE_API_TOKEN secret is not set. See the header of this workflow."
+            exit 1
+          fi
+          echo "token present"
+
+      - name: Free up disk space
+        # A CUDA base image is several gigabytes and a stock runner has little
+        # room to spare. These directories are preinstalled toolchains this job
+        # never touches; removing them is the standard fix for "no space left
+        # on device" halfway through a docker build.
+        run: |
+          set -euo pipefail
+          df -h / | tail -1
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup || true
+          sudo docker image prune -af || true
+          df -h / | tail -1
+
+      - name: Check out our overrides
+        uses: actions/checkout@v4
+        with:
+          path: frenzsave
+          sparse-checkout: docs/replicate-gpu
+
+      - name: Clone the upstream model (MIT)
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/hjunior29/video-text-remover.git model
+          echo "── upstream cog.yaml ──"
+          cat model/cog.yaml
+          echo "── upstream requirements.txt ──"
+          cat model/requirements.txt
+
+      - name: Apply the GPU overrides
+        env:
+          OWNER: ${{ inputs.replicate_owner }}
+          NAME: ${{ inputs.model_name }}
+          CUDA: ${{ inputs.cuda_version }}
+        run: |
+          set -euo pipefail
+          cp frenzsave/docs/replicate-gpu/cog.yaml         model/cog.yaml
+          cp frenzsave/docs/replicate-gpu/requirements.txt model/requirements.txt
+
+          # The placeholder in the committed file becomes the real destination.
+          sed -i "s|r8.im/YOUR-REPLICATE-USERNAME/video-text-remover-gpu|r8.im/${OWNER}/${NAME}|" model/cog.yaml
+          sed -i "s|^  cuda: .*|  cuda: \"${CUDA}\"|" model/cog.yaml
+
+          echo "── patched cog.yaml ──"
+          cat model/cog.yaml
+          echo "── patched requirements.txt ──"
+          cat model/requirements.txt
+
+          # 🔴 Ship both or neither. A GPU container that cannot address its GPU
+          # runs at CPU speed and bills 2.25x/second for it, and nothing looks
+          # wrong — so the two changes are asserted here rather than trusted.
+          grep -q "gpu: true" model/cog.yaml || { echo "::error::cog.yaml does not enable the GPU"; exit 1; }
+          grep -q "onnxruntime-gpu" model/requirements.txt || { echo "::error::requirements.txt still pins the CPU build of ONNX Runtime"; exit 1; }
+          grep -q "^onnxruntime==" model/requirements.txt && { echo "::error::both ONNX Runtime builds present — they conflict and the CPU wheel may win silently"; exit 1; } || true
+
+      - name: Install cog
+        run: |
+          set -euo pipefail
+          sudo curl -o /usr/local/bin/cog -L \
+            "https://github.com/replicate/cog/releases/latest/download/cog_$(uname -s)_$(uname -m)"
+          sudo chmod +x /usr/local/bin/cog
+          cog --version
+
+      - name: Log in to Replicate
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+        run: printf '%s' "$REPLICATE_API_TOKEN" | cog login --token-stdin
+
+      - name: Build and push
+        working-directory: model
+        env:
+          OWNER: ${{ inputs.replicate_owner }}
+          NAME: ${{ inputs.model_name }}
+        run: |
+          set -euo pipefail
+          echo "pushing to r8.im/${OWNER}/${NAME} — the first build is slow (CUDA image), later ones are cached"
+          cog push "r8.im/${OWNER}/${NAME}"
+
+      - name: Report the version to pin
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          OWNER: ${{ inputs.replicate_owner }}
+          NAME: ${{ inputs.model_name }}
+        run: |
+          set -euo pipefail
+          version=$(curl -sS -H "Authorization: Bearer ${REPLICATE_API_TOKEN}" \
+            "https://api.replicate.com/v1/models/${OWNER}/${NAME}/versions" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['results'][0]['id'])")
+
+          hardware=$(curl -sS -H "Authorization: Bearer ${REPLICATE_API_TOKEN}" \
+            "https://api.replicate.com/v1/models/${OWNER}/${NAME}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('latest_version',{}).get('id','?'))" || true)
+
+          {
+            echo "## Model published ✅"
+            echo ""
+            echo "Set BOTH of these in Vercel (frenzsave → Settings → Environment Variables), then redeploy:"
+            echo ""
+            echo '```'
+            echo "REPLICATE_AI_CLEAN_MODEL=${OWNER}/${NAME}"
+            echo "REPLICATE_AI_CLEAN_MODEL_VERSION=${version}"
+            echo '```'
+            echo ""
+            echo "⚠️ Set them together. A new owner/name with the old hash resolves to nothing."
+            echo ""
+            echo "Then run ONE prediction from the model's page on Replicate and open its Logs:"
+            echo "you want a line mentioning \`CUDAExecutionProvider\`. \`CPUExecutionProvider\` alone"
+            echo "means the GPU is present but unused — you would pay 2.25x/second for CPU speed."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "version=${version}"

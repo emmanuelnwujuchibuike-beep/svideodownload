@@ -108,9 +108,28 @@ export function FrenzAIWorkScene({ className }: { className?: string }) {
         </g>
       </svg>
 
-      {/* ── the stacked glass cards ──────────────────────────────────────── */}
-      <span className="absolute left-[13%] top-[24%] h-24 w-28 -rotate-[10deg] rounded-2xl bg-gradient-to-br from-indigo-400/25 to-violet-500/15 ring-1 ring-inset ring-white/25" />
-      <span className="absolute left-[26%] top-[18%] h-28 w-32 -rotate-[4deg] rounded-2xl bg-gradient-to-br from-sky-300/30 to-indigo-400/20 ring-1 ring-inset ring-white/30" />
+      {/*
+        ── the stacked cards ──────────────────────────────────────────────
+
+        🔴 All three hold the frame now (owner, 2026-09-08: "this progress card
+        only have one wallpaper in one while the rest 2 crs are empty"). Two
+        empty tinted rectangles behind a filled one read as the image having
+        failed to load twice, which is the opposite of the reassurance this
+        screen exists to give.
+
+        It costs NOTHING extra: same url, same rendered width, so the browser
+        fetches and decodes ONE image and paints it three times. They are
+        progressively dimmed and desaturated so the front card still reads as
+        the subject rather than the three competing.
+      */}
+      <span className="absolute left-[13%] top-[24%] h-24 w-28 -rotate-[10deg] overflow-hidden rounded-2xl opacity-45 ring-1 ring-inset ring-white/25">
+        <FrenzAIStill sizes="112px" className="saturate-[0.7]" />
+        <span aria-hidden className="absolute inset-0 bg-indigo-500/25" />
+      </span>
+      <span className="absolute left-[26%] top-[18%] h-28 w-32 -rotate-[4deg] overflow-hidden rounded-2xl opacity-70 ring-1 ring-inset ring-white/30">
+        <FrenzAIStill sizes="128px" className="saturate-[0.85]" />
+        <span aria-hidden className="absolute inset-0 bg-indigo-500/15" />
+      </span>
 
       {/*
         The front card, holding a real frame.

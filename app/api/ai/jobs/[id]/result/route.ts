@@ -105,6 +105,37 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       job.result_path,
       wantsDownload ? cleanedFileName(sourceName) : undefined,
     );
+
+    /*
+      ── 🔴 `&redirect=1` MAKES THIS A REAL DOWNLOAD TARGET ───────────────────
+
+      Owner, 2026-09-08: "the frenz ai result video downloads like this" — with
+      a screenshot of Safari showing a supabase.co file-preview page and "Open
+      in WA Business", rather than a saved file. Handing the browser a foreign
+      URL takes the member OFF the site, which is not what a download feels
+      like anywhere else in this app.
+
+      With this flag the route 302s to the freshly-signed URL instead of
+      returning it as JSON, which buys three things at once:
+
+        · the member navigates to OUR origin, so it behaves like every other
+          download here;
+        · the `Content-Disposition` on the final response is what the browser
+          obeys, so the file saves rather than previews;
+        · the url is STABLE — it re-signs on every request — so it can be
+          stored in download history and still work tomorrow, which a signed
+          url expiring in minutes could never do.
+
+      No video passes through this function either way: the redirect is a
+      header, and storage still serves the bytes.
+    */
+    if (wantsDownload && new URL(request.url).searchParams.get("redirect") === "1") {
+      return NextResponse.redirect(signed.url, {
+        status: 302,
+        // A signed url must never be cached by anything between us and them.
+        headers: { "cache-control": "no-store" },
+      });
+    }
     return NextResponse.json(
       { url: signed.url, expiresIn: signed.expiresIn, size: job.result_size },
       { headers: { "cache-control": "no-store" } },

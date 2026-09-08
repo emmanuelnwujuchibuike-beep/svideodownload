@@ -7,6 +7,7 @@ import { FrenzAICompare } from "@/features/ai/core/frenz-ai-compare";
 import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
 import { FrenzAIReveal } from "@/features/ai/core/frenz-ai-reveal";
 import { FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
+import { useHistory } from "@/features/history/use-history";
 import type { AiJobView } from "@/lib/ai/jobs";
 import { cleanedFileName } from "@/lib/ai/clean-media";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
@@ -64,6 +65,7 @@ export function AICleanResult({
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [view, setView] = useState<View>("result");
+  const { addDownload } = useHistory();
 
   useEffect(() => {
     let alive = true;
@@ -97,30 +99,67 @@ export function AICleanResult({
 
   const canCompare = !!previewUrl && !!sourceUrl;
 
-  const download = async () => {
+  /*
+    ── 🔴 SAME-ORIGIN, AND IT LANDS IN HISTORY ────────────────────────────────
+
+    Owner, 2026-09-08, with a screenshot of Safari on a supabase.co file page
+    offering "Open in WA Business": "the frenz ai result video downloads like
+    this, it should download through the platform download pipeline and save in
+    history."
+
+    Two separate faults, both fixed here.
+
+    1. IT LEFT THE SITE. Pointing an `<a download>` at a foreign origin makes
+       the browser ignore the attribute and navigate, so the member ended up on
+       Supabase's own preview page. The link is now OUR route with
+       `?download=1&redirect=1`, which 302s to a freshly-signed url carrying a
+       `Content-Disposition` — a same-origin click that saves a file, exactly
+       like every other download in this app.
+
+    2. IT WAS INVISIBLE AFTERWARDS. A cleaned video was the only thing this
+       product could produce that never appeared in Downloads. It is recorded
+       through the SAME store the downloader writes to, so it shows up in
+       history, in the rail, and on other devices via the store's own sync.
+
+    `directUrl` is the field that makes a retry work later: history's default
+    retry path is the /api/download pipeline, which cannot fetch an AI result.
+    That field exists precisely for records whose bytes come from somewhere
+    else — wallpapers set it for the same reason — and because our route
+    re-signs on every request, the stored url keeps working for the three days
+    the file is kept.
+  */
+  const downloadHref = `/api/ai/jobs/${encodeURIComponent(job.id)}/result?download=1&redirect=1`;
+
+  const download = () => {
     setDownloading(true);
-    /*
-      🔴 A DOWNLOAD link, not the preview one (owner, 2026-09-08: "downloading
-      the video dont work").
 
-      `fetchResultUrl(true)` asks the server for a URL signed with a
-      `Content-Disposition`. The `download` attribute below cannot do that job
-      on its own: browsers ignore it for cross-origin URLs, and the signed URL
-      is on supabase.co — so the old code opened the video and saved nothing.
+    addDownload({
+      url: downloadHref,
+      directUrl: downloadHref,
+      platform: "generic",
+      platformName: "Frenz AI",
+      title: cleanedFileName(job.source.name),
+      thumbnail: null,
+      formatId: "ai-clean",
+      kind: "video",
+      qualityLabel: "AI Clean",
+      size: job.result.size ?? null,
+      durationSeconds: job.source.durationSeconds ?? null,
+      status: "completed",
+    });
 
-      The attribute stays as the filename hint for the same-origin case and for
-      browsers that honour both.
-    */
-    const url = await fetchResultUrl(true);
-    setDownloading(false);
-    if (!url) return;
     const a = document.createElement("a");
-    a.href = url;
+    a.href = downloadHref;
+    // Same-origin now, so this is honoured and names the file.
     a.download = cleanedFileName(job.source.name);
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
     a.remove();
+
+    // The navigation is the browser's from here; the button should not sit
+    // disabled waiting for something that will never call back.
+    setTimeout(() => setDownloading(false), 1200);
   };
 
   return (

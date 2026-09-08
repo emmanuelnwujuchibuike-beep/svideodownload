@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { StreakFlameMark } from "@/features/streaks/streak-flame-mark";
@@ -52,7 +53,63 @@ const StreakTiersSheet = dynamic(
  * corrects it in place. A first-time visitor has no cache, renders nothing, and
  * gets their pill next visit. No shift either way.
  */
+/**
+ * 🔴 THE ONLY THREE HEADERS THAT CARRY IT.
+ *
+ * Owner, 2026-09-08: “it should be on the landing page and it should not show
+ * on other pages top header only the landing page, profile page and the
+ * download page.”
+ *
+ * The rule lives HERE rather than at the two call sites, and that is the whole
+ * point of putting it in the component. The chip is rendered by TWO different
+ * headers — `SiteHeader` for the marketing routes and `AppTopbar` for the
+ * signed-in shell — and between them they cover most of the app: /features,
+ * /pricing, /blog, /help, /account, /u/… and every other route would have shown
+ * it. Two call sites each holding half a rule is how they drift; one list that
+ * both consult cannot.
+ *
+ *   /            the landing page   (SiteHeader)
+ *   /profile     the doorway page   (SiteHeader) — NOT the signed-in dashboard
+ *   /downloads   the download hub   (AppTopbar)
+ *
+ * Exact matches. `/profile` is the marketing profile doorway; `/u/<handle>` is
+ * somebody ELSE’s profile and has no business showing you your own streak.
+ */
+const STREAK_ROUTES = new Set(["/", "/profile", "/downloads"]);
+
+/**
+ * The gate is a separate component, so the rule cannot land after the hooks.
+ *
+ * Hooks cannot live behind a condition: a route check written INSIDE the chip
+ * would necessarily run after `useStreak()` and `readDisplayCache()`. Splitting
+ * it means those only exist on the three routes that show the chip.
+ *
+ * ── ⚠️ WHAT THIS DOES *NOT* SAVE ────────────────────────────────────────────
+ *
+ * It does not save a request, and an earlier version of this comment claimed it
+ * did. Measured against a production build on 2026-09-08: /api/streak is called
+ * exactly twice on EVERY route — including the ones excluded here — because
+ * `StreakTracker` (features/app-shell/deferred-shell.tsx) mounts app-wide and
+ * does one GET plus the POST that records the day. And `useQuery` de-dupes by
+ * key, as features/data documents: "five components mounting = ONE fetch". So
+ * an inline gate would have cost nothing extra either.
+ *
+ * What the split actually buys is one subscriber, one localStorage read and one
+ * render fewer on ~40 routes, and a shape where the rule PHYSICALLY cannot be
+ * written after a hook. That is worth the extra function; a fabricated
+ * performance number is not.
+ */
 export function StreakHeaderChip({ className }: { className?: string }) {
+  const pathname = usePathname();
+
+  // A trailing slash is the same route; a query string never reaches usePathname.
+  const route = pathname !== "/" && pathname?.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  if (!route || !STREAK_ROUTES.has(route)) return null;
+
+  return <StreakChip className={className} />;
+}
+
+function StreakChip({ className }: { className?: string }) {
   // `useState(initialiser)` runs during the first render, so the cached number
   // is on screen in the same commit as the rest of the header.
   const [cached] = useState<number | null>(() => readDisplayCache());

@@ -44,6 +44,17 @@ export type AiErrorCode =
    * time on a loop that cannot succeed. Observed in production 2026-09-08.
    */
   | "PROVIDER_UNAVAILABLE"
+  /**
+   * The job was accepted, dispatched, and then nothing ever came back.
+   *
+   * 🔴 Its own code because it is the only failure NOBODY observes. Every other
+   * error here is something that happened; this one is something that stopped
+   * happening, so there is no callback to carry it and no exception to catch —
+   * the row simply sits at `processing` until a deadline notices. Without it
+   * the member watches a spinner forever and their reservation is never given
+   * back. See lib/ai/stall.ts.
+   */
+  | "PROVIDER_TIMEOUT"
   /** This plan owes a rewarded ad and the request arrived without one. */
   | "REWARD_REQUIRED"
   /** A reward was presented and the database refused to spend it. */
@@ -104,6 +115,12 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   PROVIDER_UNAVAILABLE: {
     status: 503,
     message: "AI Clean is temporarily unavailable. Nothing was charged — please try again later.",
+  },
+  PROVIDER_TIMEOUT: {
+    status: 504,
+    // Says what happened and what it cost, because both are the member's
+    // questions and a job that ran too long is not their mistake.
+    message: "This one took too long and we stopped waiting. Your allowance wasn't used — try again, or try a shorter clip.",
   },
   PROCESSING_FAILED: { status: 500, message: "The cleanup didn't finish. Nothing was changed — you can try again." },
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },

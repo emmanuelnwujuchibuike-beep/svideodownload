@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { jobToView } from "@/lib/ai/jobs";
+import { failStalledJob } from "@/lib/ai/stall-server";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -67,6 +68,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!row) {
       return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
     }
+
+    /*
+      ── 🔴 THE DEADLINE IS ENFORCED HERE, ON THE POLL ────────────────────────
+
+      A job whose provider callback never arrives has nothing else that could
+      ever end it: no cron sweeps `ai_jobs` (both Vercel slots are spent), the
+      webhook is the thing that is missing, and the worker only speaks about
+      jobs it received. Before this, such a row stayed `processing` forever —
+      an endless spinner for the member and a daily allowance slot reserved
+      for nobody. See lib/ai/stall.ts for the deadlines and why they are long.
+
+      Doing it on the read costs one comparison on a row already in hand, and
+      it reaches the one person who is actually waiting, at the first moment
+      there is anything to tell them. `failStalledJob` is compare-and-set, so
+      two tabs polling together still produce exactly one refund.
+    */
+    if (await failStalledJob(row)) {
+      const ended = await getOwnJob(userId, id);
+      if (ended) return NextResponse.json({ job: jobToView(ended, storedErrorMessage) });
+    }
+
     return NextResponse.json({ job: jobToView(row, storedErrorMessage) });
   } catch (e) {
     if (isAiJobError(e)) {

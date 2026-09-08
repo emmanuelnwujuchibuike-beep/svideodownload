@@ -14,6 +14,27 @@
     },
     "app/api/cron/trending/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/cron/digest/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/daily-digest/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/wallpaper-reminder/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/streak-reminders/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/friend-reminders/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/abandoned-downloads/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/notification-test/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [

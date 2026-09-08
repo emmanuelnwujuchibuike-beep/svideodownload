@@ -82,6 +82,77 @@ interface SendOutcome {
   message?: string;
 }
 
+/*
+  ═════════════════════════════════════════════════════════════════════════════
+   🔴 EVERY PUSH IS BOUNDED. AN UNBOUNDED ONE TAKES ITS CALLER DOWN WITH IT.
+  ═════════════════════════════════════════════════════════════════════════════
+
+  Fixed 2026-09-08, after `/api/cron/wallpaper-reminder` failed for three
+  consecutive days (GitHub Actions runs 33968061715, 34035733405, 34138218619)
+  while `digest` and `streak-reminders` — same workflow shape, same credential,
+  same minute — both succeeded. So it was never auth, and never the outage.
+
+  The route's own code cannot return non-2xx: the database error is handled,
+  `sendAdminAlertOnce` catches everything and `sendSmartPush` is wrapped in
+  BOTH a `.catch()` and a `try`. Every path returns 200. A route that cannot
+  fail was failing, which leaves exactly one candidate — it never returned at
+  all, and the platform killed it.
+
+  `webpush.sendNotification` sets NO socket timeout, and Node's https has none
+  by default. One subscription whose push service accepts the TCP connection
+  and then never answers holds that promise open forever; `Promise.all` waits
+  for the slowest; the function exceeds its duration and the caller sees 504.
+  Production has 54 subscriptions across FCM and `web.push.apple.com`, and a
+  stale APNs endpoint behaving that way is ordinary, not exotic.
+
+  🔴 The severity is not "a notification was missed". Best-effort work decided
+  the HTTP status of its caller — so a dead phone silently disabled the daily
+  wallpaper reminder, and would do the same to any route that ever sends a push
+  inline. Three bounds, because each one alone has a hole:
+
+    1. a SOCKET timeout, so a connection that stops speaking is destroyed
+       rather than waited on (web-push 3.6.7 supports it and we never passed it);
+    2. a WALL-CLOCK cap per subscription, because a socket timeout only fires
+       on silence — a response dripping a byte at a time resets it forever;
+    3. a WALL-CLOCK cap on the whole fan-out, so N slow devices cannot add up
+       even when each one is individually within its budget.
+
+  Sized to fit inside a serverless invocation with room to spare. Cron routes
+  additionally declare `maxDuration` (vercel.json) so the budget below is the
+  thing that expires first — a bound nobody reaches is not a bound.
+*/
+
+/** Destroy a push request that stops speaking for this long. */
+const PUSH_SOCKET_TIMEOUT_MS = 5_000;
+/** Ceiling for ONE subscription's whole sequence: attempt, backoff, retry. */
+const PUSH_ATTEMPT_BUDGET_MS = 11_000;
+/** Ceiling for the entire fan-out, however many devices are registered. */
+const PUSH_FANOUT_BUDGET_MS = 12_000;
+
+/**
+ * Resolve with `onTimeout` if `work` has not settled in `ms`.
+ *
+ * The underlying request may still be in flight — we cannot abort a socket we
+ * do not own — but nothing waits on it any more, which is the property that
+ * matters. The timer is always cleared, so a fast path never holds the event
+ * loop open behind a pending `setTimeout`.
+ */
+async function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(onTimeout), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+const TIMED_OUT: SendOutcome = { ok: false, message: "timed out waiting for the push service" };
+
 async function sendOnce(s: SubRow, body: string, topic: string | undefined): Promise<SendOutcome> {
   try {
     await webpush.sendNotification(
@@ -90,6 +161,8 @@ async function sendOnce(s: SubRow, body: string, topic: string | undefined): Pro
       {
         TTL: 60 * 60 * 24, // hold for a day if the device is offline
         urgency: "high",
+        // 🔴 See the block above. Without this the request can never end.
+        timeout: PUSH_SOCKET_TIMEOUT_MS,
         ...(topic ? { topic } : {}),
       },
     );
@@ -175,35 +248,72 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
     const topic = payload.tag ? payload.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) : undefined;
     const tag = payload.tag ?? null;
 
-    await Promise.all(
-      subs.map(async (s) => {
-        const first = await sendOnce(s, body, topic);
-        if (first.ok) {
-          logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
-          return;
-        }
-        if (first.code === 404 || first.code === 410) {
-          dead.push(s.id); // gone — prune it, no retry
-          logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "pruned", status_code: first.code, error: first.message ?? null, attempt: 1 });
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        const retry = await sendOnce(s, body, topic);
-        if (retry.ok) {
-          logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "retried", status_code: 201, error: null, attempt: 2 });
-        } else {
-          logRows.push({
-            user_id: userId,
-            anon_id: anonId,
-            subscription_id: s.id,
-            tag,
-            status: "failed",
-            status_code: retry.code ?? first.code ?? null,
-            error: (retry.message ?? first.message ?? null),
-            attempt: 2,
-          });
-        }
-      }),
+    const deliverToOne = async (s: SubRow) => {
+      const first = await sendOnce(s, body, topic);
+      if (first.ok) {
+        logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
+        return;
+      }
+      if (first.code === 404 || first.code === 410) {
+        dead.push(s.id); // gone — prune it, no retry
+        logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "pruned", status_code: first.code, error: first.message ?? null, attempt: 1 });
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const retry = await sendOnce(s, body, topic);
+      if (retry.ok) {
+        logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "retried", status_code: 201, error: null, attempt: 2 });
+      } else {
+        logRows.push({
+          user_id: userId,
+          anon_id: anonId,
+          subscription_id: s.id,
+          tag,
+          status: "failed",
+          status_code: retry.code ?? first.code ?? null,
+          error: (retry.message ?? first.message ?? null),
+          attempt: 2,
+        });
+      }
+    };
+
+    /*
+      🔴 A SLOW DEVICE IS NOT A DEAD ONE — a timeout NEVER prunes.
+
+      404 and 410 are the push service stating the subscription is gone, which
+      is knowledge. A timeout is the absence of knowledge, and deleting a real
+      subscription because its owner's phone was on a bad train would silently
+      unsubscribe someone who did nothing wrong. It is logged as a failure (so
+      the admin push monitor can show it) and the row is left alone.
+    */
+    await withDeadline(
+      Promise.all(
+        subs.map((s) =>
+          // `.catch` BEFORE the race: one subscription throwing must not reject
+          // the whole `Promise.all` and cost every other device its delivery,
+          // its prune and its log row.
+          withDeadline(
+            deliverToOne(s).catch(() => {}),
+            PUSH_ATTEMPT_BUDGET_MS,
+            undefined,
+          ).then(() => {
+            if (!logRows.some((r) => r.subscription_id === s.id)) {
+              logRows.push({
+                user_id: userId,
+                anon_id: anonId,
+                subscription_id: s.id,
+                tag,
+                status: "failed",
+                status_code: null,
+                error: TIMED_OUT.message ?? "timed out",
+                attempt: 1,
+              });
+            }
+          }),
+        ),
+      ),
+      PUSH_FANOUT_BUDGET_MS,
+      undefined,
     );
 
     if (dead.length) await db.from("push_subscriptions").delete().in("id", dead);

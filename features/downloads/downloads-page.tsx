@@ -100,6 +100,7 @@ export function DownloadsPage({
   wallpapers,
   /** Admin-chosen background for the Wallpaper Gallery tile — see lib/wallpapers-cta. */
   ctaWallpaperUrl = null,
+  frenzAiTileImageUrl = null,
   /** Platform health for the supported-platforms strip inside DownloadBox. */
   platformStatus,
   /** Admin visibility switch for the Multi-Link batch downloader — same
@@ -108,6 +109,8 @@ export function DownloadsPage({
 }: {
   wallpapers: Wallpaper[];
   ctaWallpaperUrl?: string | null;
+  /** Background photo for the Frenz AI tile. Empty ⇒ it draws its own. */
+  frenzAiTileImageUrl?: string | null;
   platformStatus?: PlatformStatusMap;
   multiLink?: MultiLinkPublicConfig;
 }) {
@@ -171,7 +174,13 @@ export function DownloadsPage({
         section) — quick actions, the usage dashboard, the downloading list,
         history panel, wallpaper gallery and trust strip stay here.
       */}
-      <DownloadPageCore platformStatus={platformStatus} ctaWallpaperUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} multiLink={multiLink} />
+      <DownloadPageCore
+        platformStatus={platformStatus}
+        ctaWallpaperUrl={ctaWallpaperUrl}
+        frenzAiTileImageUrl={frenzAiTileImageUrl}
+        rotateUrls={rotateUrls}
+        multiLink={multiLink}
+      />
 
       <DownloadQuickActions />
 

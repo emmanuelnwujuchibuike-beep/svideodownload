@@ -10,6 +10,7 @@ import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
+import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { useTopbarCenter } from "@/features/app-shell/topbar-slot";
@@ -411,6 +412,20 @@ export function AppTopbar() {
             own bell in the row it took over. Two NotificationBells would mean
             two PWA app-icon badge writers for one count. Rendered, not hidden,
             is the distinction that matters. */}
+        {/*
+          🔴 THE STREAK MOVED HERE FROM THE HERO (owner, 2026-09-08, with a
+          marked-up screenshot: "Streak in Header (Compact) — clean, compact and
+          always visible without taking focus from the main action").
+
+          It sat on the hero's Fast/Secure/Private row, directly under the
+          headline — the most valuable space on the page, which belongs to the
+          thing the page is for. Here it is visible on every route and competing
+          with none of them. It renders nothing when there is no streak.
+        */}
+        <span className={searchActive ? "hidden" : ""}>
+          {searchActive ? null : <StreakHeaderChip />}
+        </span>
+
         <span className={searchActive ? "hidden" : "lg:hidden"}>
           {searchActive ? null : <NotificationBell />}
         </span>

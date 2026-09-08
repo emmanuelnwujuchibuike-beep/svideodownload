@@ -75,6 +75,8 @@ const schema = z.object({
     see the field's note in lib/landing/settings.ts.
   */
   frenzAiFreeEnabled: z.boolean().optional(),
+  // Same shape and same clearable rule as the other image slots.
+  frenzAiTileImageUrl: reelsPoster.optional(),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

@@ -108,7 +108,7 @@ export function FrenzAIWelcome({ cleanHref = "/studio/ai/clean" }: { cleanHref?:
         */}
         <div className="mt-7 flex items-center gap-2.5">
           <Link
-            href="/studio/ai/clean?tutorial=1"
+            href={`${cleanHref}?tutorial=1`}
             prefetch={false}
             className={cn(
               "inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-border/70 bg-card/95 px-4 py-3.5 sm:px-6",

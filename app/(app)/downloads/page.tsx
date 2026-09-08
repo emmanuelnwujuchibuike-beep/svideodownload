@@ -144,6 +144,7 @@ async function DownloadsData() {
     <DownloadsPage
       wallpapers={wallpapers}
       ctaWallpaperUrl={landing.wallpaperCtaImageUrl || null}
+      frenzAiTileImageUrl={landing.frenzAiTileImageUrl || null}
       platformStatus={platformStatus}
       multiLink={publicMultiLinkConfig(multiLink)}
     />

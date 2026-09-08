@@ -1,0 +1,70 @@
+# ============================================================================
+#  video-subtitle-remover — the server's requirements
+# ============================================================================
+#
+# Replaces upstream's requirements.txt during the build. Two changes, both
+# forced by evidence rather than preference.
+#
+# ── 🔴 1. THE ONNXRUNTIME INDEX, WHICH IS THE WHOLE BUILD FAILURE ───────────
+#
+# Three builds died on:
+#
+#     ERROR: Could not find a version that satisfies onnxruntime-gpu==1.20.1
+#       (from versions: … 1.20.0, 1.20.2, …)
+#
+# I read that as a bad pin and "corrected" it to 1.20.2. It was not a bad pin —
+# it was the wrong INDEX. Upstream's own Dockerfile says so plainly:
+#
+#     pip uninstall -y onnxruntime-gpu && \
+#     pip install onnxruntime-gpu==1.20.1 --index-url \
+#       https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-11/pypi/simple/
+#
+# 1.20.1 is the CUDA-11 build, published to a Microsoft feed and never to PyPI.
+# PyPI's 1.20.2 is the CUDA-12 build, which would be the wrong one for the
+# CUDA 11.8 image this runs in — so "fixing" the number would have produced a
+# container that installs cleanly and cannot see the GPU.
+#
+# `--extra-index-url` rather than `--index-url`: everything else here comes from
+# PyPI and must keep doing so.
+#
+# ── ⚠️ 2. NO DESKTOP GUI PACKAGES ───────────────────────────────────────────
+#
+# Upstream ships a Qt application, and its requirements carry the toolkit for
+# it. A headless Replicate container needs none of it:
+#
+#     pyside6-fluent-widgets   Qt6. Hundreds of megabytes, for a window.
+#     je-showinfilemanager     opens a file manager; needs pywin32, a
+#                              Windows-only package, on a Linux image.
+#
+# `backend/main.py` — the only thing predict.py imports — does not use either.
+# Dropping them is a large saving on an image that is already too big, and it
+# removes a Windows dependency from a Linux build.
+#
+# `darkdetect` STAYS: it is pure Python, tiny, and `pyside6-fluent-widgets`
+# depends on it, so removing it risks an import somewhere upstream that I have
+# not read. The saving is not worth the guess.
+
+--extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-11/pypi/simple/
+
+filesplit==3.0.2
+opencv-python==4.11.0.86
+scikit-image==0.25.2
+tqdm==4.67.1
+numpy==2.2.5
+av==17.0.0
+einops==0.8.1
+paddleocr==3.4.0
+matplotlib
+Pillow
+scipy
+requests
+darkdetect
+
+# The CUDA-11 build, from the index above. Pinned explicitly rather than left
+# to a transitive resolution, so the version that ends up installed is the one
+# this file names.
+onnxruntime-gpu==1.20.1
+
+# paddle needs this and does not declare it (upstream's Dockerfile installs it
+# for the same reason, with the comment "# for paddle").
+setuptools==80.4.0

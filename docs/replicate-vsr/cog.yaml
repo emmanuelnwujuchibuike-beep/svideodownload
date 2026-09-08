@@ -64,10 +64,14 @@ build:
   # at the right point in the build.
   python_requirements: requirements.txt
 
-  # torch and paddlepaddle stay here because each needs its OWN index url, which
-  # a requirements file cog manages cannot express. They install before the
-  # requirements above, and upstream's file lists neither, so nothing later can
-  # pull a CPU torch over the CUDA one.
+  # ⚠️ These run AFTER `python_requirements`, not before. The failing build's
+  # log numbered the requirements install `[stage-1 9/11]`, with these as 10
+  # and 11 — the opposite of what an earlier note here claimed. It matters:
+  # requirements.txt must therefore be able to resolve on its OWN, which is
+  # why the onnxruntime index lives in that file rather than in a `run` line.
+  #
+  # torch and paddlepaddle stay here because each needs its own index url.
+  # Installed last, so they are the final word on those two packages.
   run:
     - "pip install --no-cache-dir torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu118"
     - "pip install --no-cache-dir paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/"

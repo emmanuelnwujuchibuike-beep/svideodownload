@@ -77,6 +77,7 @@ const FrenzAIVignette = nextDynamic(
 export function DownloadPageCore({
   platformStatus,
   ctaWallpaperUrl = null,
+  frenzAiTileImageUrl = null,
   /** Rotates the Wallpaper tile through up to 10 recent uploads every 2s
    *  (see wallpaper-cta-rotator.tsx). Both callers pass this now — landing's
    *  `Hero` fetches its own `listWallpapers(null, 10)`; `/downloads` reuses
@@ -95,6 +96,8 @@ export function DownloadPageCore({
 }: {
   platformStatus?: PlatformStatusMap;
   ctaWallpaperUrl?: string | null;
+  /** Background photo for the Frenz AI tile. Empty ⇒ it draws its own. */
+  frenzAiTileImageUrl?: string | null;
   rotateUrls?: string[];
   showDisclaimer?: boolean;
   multiLink?: MultiLinkPublicConfig;
@@ -158,7 +161,7 @@ export function DownloadPageCore({
         them.
       */}
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <FrenzAICta />
+        <FrenzAICta imageUrl={frenzAiTileImageUrl ?? undefined} />
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
 

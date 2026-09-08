@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Sparkles, X } from "lucide-react";
+import { ArrowRight, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -109,13 +109,22 @@ export function FrenzAIVignette() {
           "sm:bottom-6",
         )}
       >
-        <div className="relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-[#101744] via-[#1b1560] to-[#3b1063] p-4 text-white shadow-[0_24px_60px_-20px_rgba(49,46,129,0.75)] ring-1 ring-inset ring-white/12">
+        {/*
+          🔴 WHITE AND BLUE (owner, 2026-09-08: "the vignette color should be
+          white and blue not all dark blue").
+
+          The dark slab read as an ad interstitial — the very thing this must
+          not be mistaken for on a page that also carries real ad units. A light
+          card on the page's own ground reads as the product speaking, and the
+          blue carries the brand without shouting.
+        */}
+        <div className="relative overflow-hidden rounded-[1.5rem] bg-white p-4 text-slate-900 shadow-[0_24px_60px_-20px_rgba(30,58,138,0.35)] ring-1 ring-inset ring-blue-500/15 dark:bg-[#0d1330] dark:text-white dark:ring-white/10">
           <span
             aria-hidden
             className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full opacity-70"
             style={{
               background:
-                "radial-gradient(circle, rgba(217,70,239,0.55) 0%, rgba(99,102,241,0.22) 45%, transparent 70%)",
+                "radial-gradient(circle, rgba(59,130,246,0.28) 0%, rgba(99,102,241,0.14) 45%, transparent 70%)",
             }}
           />
 
@@ -123,29 +132,29 @@ export function FrenzAIVignette() {
             type="button"
             onClick={dismiss}
             aria-label="Dismiss"
-            className="absolute right-2.5 top-2.5 z-[1] flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+            className="absolute right-2.5 top-2.5 z-[1] flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/[0.06] text-slate-500 transition hover:bg-slate-900/10 hover:text-slate-900 dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
           >
             <X className="h-4 w-4" aria-hidden />
           </button>
 
           <div className="relative z-[1] flex items-start gap-3 pr-8">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-fuchsia-500 shadow-lg shadow-fuchsia-500/30">
-              <Sparkles className="h-5 w-5" aria-hidden />
+              <Wand2 className="h-5 w-5 text-white" aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/60">New</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">New</p>
               <p className="mt-0.5 text-[15px] font-bold leading-tight">Try Frenz AI</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-white/75">
+              <p className="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-white/70">
                 Remove captions, subtitles and text from your videos and images — free to try.
               </p>
             </div>
           </div>
 
           <Link
-            href="/studio/ai"
+            href="/ai"
             prefetch={false}
             onClick={dismiss}
-            className="relative z-[1] mt-3.5 flex w-full items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-[#1b1560] transition active:scale-[0.99]"
+            className="relative z-[1] mt-3.5 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-500 px-5 py-3 text-sm font-bold text-white shadow-[0_12px_28px_-10px_rgb(37_99_235/0.9)] transition active:scale-[0.99]"
           >
             Try AI Clean
             <ArrowRight className="h-4 w-4" aria-hidden />

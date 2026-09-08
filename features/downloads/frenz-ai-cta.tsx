@@ -1,4 +1,5 @@
-import { ArrowRight, Compass, Sparkles } from "lucide-react";
+import { ArrowRight, Compass, Wand2 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -31,10 +32,25 @@ import { cn } from "@/lib/utils";
  * transform. The landing budget is measured in kilobytes of JS and this adds
  * none.
  */
-export function FrenzAICta({ className }: { className?: string }) {
+export function FrenzAICta({
+  /**
+   * The background photo, from landing settings.
+   *
+   * 🔴 Owner, 2026-09-08: "the ai button should be this image", with a
+   * cyberpunk AI-eye render attached. Art direction that specific must be
+   * UPLOADABLE, not committed — it will change, and changing it should not
+   * need a deploy. Empty falls back to the drawn backdrop below, so the tile
+   * is never broken while the slot is empty.
+   */
+  imageUrl,
+  className,
+}: {
+  imageUrl?: string;
+  className?: string;
+}) {
   return (
     <Link
-      href="/studio/ai"
+      href="/ai"
       prefetch={false}
       className={cn(
         "group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
@@ -44,18 +60,54 @@ export function FrenzAICta({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* One static wash. No animation on the front door. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-70"
-        style={{
-          background:
-            "radial-gradient(circle, rgba(217,70,239,0.55) 0%, rgba(99,102,241,0.25) 45%, transparent 70%)",
-        }}
-      />
+      {imageUrl ? (
+        <>
+          <Image
+            src={imageUrl}
+            alt=""
+            aria-hidden
+            fill
+            /*
+              A fixed hint, not a viewport fraction: this is a half-width tile
+              in a two-column grid capped by the page container, so `50vw`
+              would make the optimizer serve a variant several times larger
+              than it is ever shown at. `quality={74}` deliberately — 75
+              poisons the optimizer's cache key on this project.
+            */
+            sizes="(min-width: 640px) 320px, 50vw"
+            quality={74}
+            className="object-cover opacity-70 transition duration-500 group-hover:opacity-80 motion-reduce:transition-none"
+          />
+          {/* The copy has to stay readable over whatever the photo is doing. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b1030] via-[#0b1030]/55 to-transparent"
+          />
+        </>
+      ) : (
+        /* One static wash. No animation on the front door. */
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full opacity-70"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(217,70,239,0.55) 0%, rgba(99,102,241,0.25) 45%, transparent 70%)",
+          }}
+        />
+      )}
 
+      {/*
+        🔴 A WAND, NOT A SPARKLE (owner: "the ai button icon should be something
+        more related to cleaning or ai").
+
+        A four-pointed sparkle is the generic AI glyph every product uses, and
+        it says "something clever happens" rather than what. A wand is the verb:
+        it is what you point at a thing to remove what you do not want, and it
+        is already the badge on the AI work scene — so the two surfaces now
+        share one symbol for one action.
+      */}
       <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/30">
-        <Sparkles className="h-6 w-6" />
+        <Wand2 className="h-6 w-6" />
       </span>
 
       <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">

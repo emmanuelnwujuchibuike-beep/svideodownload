@@ -170,6 +170,16 @@ export interface LandingSettings {
    * Paid plans are unaffected in both cases.
    */
   frenzAiFreeEnabled: boolean;
+  /**
+   * The background photo on the Frenz AI tile (landing + downloads).
+   *
+   * Owner, 2026-09-08: "the ai button should be this image", with a cyberpunk
+   * AI-eye render attached. An image that specific has to be uploadable rather
+   * than committed — it is art direction, it will change, and it should not
+   * need a deploy or me. Empty falls back to the drawn circuitry backdrop, so
+   * the tile is never broken while the slot is empty.
+   */
+  frenzAiTileImageUrl: string;
 }
 
 /** Nobody gets more than this from the admin field. A typo must not cost money. */
@@ -185,6 +195,8 @@ export const DEFAULT_LANDING: LandingSettings = {
   // ON by default: switching a feature off is a decision an operator makes, not
   // a state a fresh install falls into.
   frenzAiFreeEnabled: true,
+  // Empty: the tile draws its own backdrop until an image is uploaded.
+  frenzAiTileImageUrl: "",
 };
 
 /**
@@ -249,6 +261,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiPublicEnabled: raw.frenzAiPublicEnabled !== false,
       frenzAiFreeDailyCredits: normalizeFreeCredits(raw.frenzAiFreeDailyCredits),
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
+      frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
     };
     cache = { at: Date.now(), value };
     return value;
@@ -302,6 +315,7 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
     frenzAiPublicEnabled: pick("frenzAiPublicEnabled") !== false,
     frenzAiFreeDailyCredits: normalizeFreeCredits(pick("frenzAiFreeDailyCredits")),
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
+    frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

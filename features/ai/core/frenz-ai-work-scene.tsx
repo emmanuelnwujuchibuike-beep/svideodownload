@@ -24,12 +24,18 @@ import { cn } from "@/lib/utils";
  *
  * ── Drawn, and cheap ────────────────────────────────────────────────────────
  *
- * Inline SVG and CSS, no images, no library. This screen can be open for ten
- * minutes on a phone, so every animation is `transform`/`opacity` on a long
- * cycle, and all of it stops under `prefers-reduced-motion` and on a hidden tab
- * via `--ai-play` — the same contract as the rest of the environment. A looping
- * shimmer on a screen somebody leaves open is a permanent battery cost for
- * decoration.
+ * Inline SVG and CSS, no images, no library.
+ *
+ * 🔴 EXACTLY TWO THINGS MOVE, and that number is the point. This screen had
+ * NINE animations, on a surface a member stares at for the whole of a job —
+ * and the owner reported the phone overheating while watching it. Every one of
+ * those was a composited layer being ticked forever for decoration.
+ *
+ * The orbit and the front card breathing are kept because they say "this is
+ * working". The badges, the spheres and the twinkles are now static: they read
+ * identically in a screenshot and cost nothing per frame. Both survivors are
+ * transform/opacity on long cycles and stop under `prefers-reduced-motion` and
+ * on a hidden tab via `--ai-play`.
  *
  * A server component: no hooks, no state. It is rendered by a client parent,
  * which is fine — the boundary forbids passing functions, not rendering.
@@ -114,18 +120,18 @@ export function FrenzAIWorkScene({ className }: { className?: string }) {
       </span>
 
       {/* ── the badges ───────────────────────────────────────────────────── */}
-      <span className="frenz-ai-drift-a absolute right-[16%] top-[16%] flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[13px] font-bold text-white shadow-[0_10px_24px_-8px_rgb(217_70_239/0.9)]">
+      <span className="absolute right-[16%] top-[16%] flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[13px] font-bold text-white shadow-[0_10px_24px_-8px_rgb(217_70_239/0.9)]">
         AI
       </span>
-      <span className="frenz-ai-drift-b absolute bottom-[16%] right-[20%] flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_12px_28px_-8px_rgb(37_99_235/0.9)]">
+      <span className="absolute bottom-[16%] right-[20%] flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-[0_12px_28px_-8px_rgb(37_99_235/0.9)]">
         <Wand2 className="h-5 w-5" />
       </span>
 
       {/* ── the drifting spheres ─────────────────────────────────────────── */}
-      <span className="frenz-ai-drift-c absolute left-[8%] top-[42%] h-4 w-4 rounded-full bg-gradient-to-br from-indigo-300 to-violet-500 shadow-[0_4px_10px_-2px_rgb(79_70_229/0.7)]" />
-      <span className="frenz-ai-drift-a absolute bottom-[12%] left-[22%] h-3 w-3 rounded-full bg-gradient-to-br from-sky-300 to-blue-500 shadow-[0_4px_10px_-2px_rgb(37_99_235/0.7)]" />
-      <span className="frenz-ai-twinkle absolute right-[10%] top-[46%] h-2 w-2 rounded-full bg-white" />
-      <span className="frenz-ai-twinkle absolute left-[46%] top-[10%] text-white/80 [animation-delay:1.2s]">
+      <span className="absolute left-[8%] top-[42%] h-4 w-4 rounded-full bg-gradient-to-br from-indigo-300 to-violet-500 shadow-[0_4px_10px_-2px_rgb(79_70_229/0.7)]" />
+      <span className="absolute bottom-[12%] left-[22%] h-3 w-3 rounded-full bg-gradient-to-br from-sky-300 to-blue-500 shadow-[0_4px_10px_-2px_rgb(37_99_235/0.7)]" />
+      <span className="absolute right-[10%] top-[46%] h-2 w-2 rounded-full bg-white" />
+      <span className="absolute left-[46%] top-[10%] text-white/80 [animation-delay:1.2s]">
         <Sparkles className="h-3.5 w-3.5" />
       </span>
     </div>

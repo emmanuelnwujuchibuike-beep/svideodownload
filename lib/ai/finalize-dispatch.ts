@@ -116,9 +116,25 @@ export async function dispatchFinalization(jobId: string): Promise<DispatchResul
       if (body?.pending) return { dispatched: true };
 
       if (body && body.ok === false) {
+        /*
+          🔴 A DECLINE IS "refused", NOT "failed".
+
+          The worker looked at the job and said no. That verdict does not change
+          on a retry — the first real one seen in production was:
+
+              worker declined: AI_FINALIZATION_FAILED
+                — Error: SUPABASE_SERVICE_ROLE_KEY is not set
+
+          which is a missing environment variable on the worker. Nothing about
+          polling it again makes that true. Classing it as transient left the
+          member on a spinner until the 45-minute deadline for a
+          misconfiguration that was knowable in the first second, so it ends the
+          job now with an honest error and a refund.
+        */
         return {
           dispatched: false,
-          reason: "failed",
+          reason: "refused",
+          status: res.status,
           detail: `worker declined: ${body.code ?? "unknown"}${body.detail ? ` — ${body.detail}` : ""}`,
         };
       }

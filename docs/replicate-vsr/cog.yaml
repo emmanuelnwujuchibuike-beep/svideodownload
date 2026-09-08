@@ -50,14 +50,26 @@ build:
     - "libxrender-dev"
     - "libgomp1"
 
-  # 🔴 NOT `python_requirements`. Upstream's requirements.txt deliberately omits
-  # torch and paddlepaddle, because each needs its own index URL, and cog has no
-  # way to express that. So the wheels come from `run` and the rest from the
-  # file — installed in that order so nothing later pulls a CPU torch over the
-  # CUDA one.
+  # 🔴 `python_requirements`, NOT a `run` line that reads the file.
+  #
+  # First attempt put all three pip installs in `run:` and the build failed at
+  # 8m14s with:
+  #
+  #     RUN pip install --no-cache-dir -r requirements.txt
+  #     ERROR: Could not open requirements file: No such file or directory
+  #
+  # `run:` executes while the image is being prepared, BEFORE cog copies the
+  # source in — so the repository's own files do not exist yet. This field is
+  # the one that works: cog copies the requirements file itself and installs it
+  # at the right point in the build.
+  python_requirements: requirements.txt
+
+  # torch and paddlepaddle stay here because each needs its OWN index url, which
+  # a requirements file cog manages cannot express. They install before the
+  # requirements above, and upstream's file lists neither, so nothing later can
+  # pull a CPU torch over the CUDA one.
   run:
     - "pip install --no-cache-dir torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu118"
     - "pip install --no-cache-dir paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/"
-    - "pip install --no-cache-dir -r requirements.txt"
 
 predict: "predict.py:Predictor"

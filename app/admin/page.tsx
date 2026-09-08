@@ -169,6 +169,7 @@ import { listVerificationQueue, verificationCounts } from "@/lib/social/verifica
 import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
+import { FrenzAISettings } from "@/features/admin/frenz-ai-settings";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
 import { getPlatformStatus } from "@/lib/platform-status-store";
@@ -846,7 +847,17 @@ async function PlatformStatusSection() {
 
 async function LandingSection() {
   const landing = await getLandingSettings();
-  return <LandingEditor settings={landing} />;
+  /*
+    Two panels, one read. They are separate FORMS on purpose: each POSTs only
+    the fields it displays, so neither can clobber the other's — see the note
+    in frenz-ai-settings.tsx and the partial-update fix in setLandingSettings.
+  */
+  return (
+    <div className="space-y-6">
+      <LandingEditor settings={landing} />
+      <FrenzAISettings settings={landing} />
+    </div>
+  );
 }
 
 async function WallpapersSection() {

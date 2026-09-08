@@ -258,18 +258,50 @@ export async function getLandingSettings(): Promise<LandingSettings> {
 }
 
 /** Admin: persist the landing image slots. */
-export async function setLandingSettings(s: LandingSettings): Promise<void> {
+/**
+ * Write landing settings, MERGING with what is already stored.
+ *
+ * ── 🔴 IT USED TO REPLACE, AND THAT WAS SILENT DATA LOSS ────────────────────
+ *
+ * Found 2026-09-08. `features/admin/landing-editor.tsx` POSTs exactly two
+ * fields — the reels poster and the wallpaper image — while the route's zod
+ * schema gives every other field a `.default()`. So each time an operator
+ * pressed Save on that panel:
+ *
+ *     feedGridImages           -> []      the 2x2 grid images WIPED
+ *     frenzAiPublicEnabled     -> true    reset
+ *     frenzAiFreeDailyCredits  -> 2       reset
+ *     frenzAiFreeEnabled       -> true    reset
+ *
+ * Nothing reported it, and the panel that caused it does not display any of
+ * those values, so an operator could not have seen it happen. This is the exact
+ * trap already written down for `MonetizationSettings` — "that object is
+ * written wholesale from one big admin form, so a field there would be reset to
+ * its zod default every time an operator saved the panel".
+ *
+ * A partial update now leaves everything it does not mention alone, so adding a
+ * field to this object can never again be a way to lose a different one. The
+ * caller sends what it edited; nothing else moves.
+ */
+export async function setLandingSettings(s: Partial<LandingSettings>): Promise<void> {
   const db = createAdminClient();
+  const current = await getLandingSettings();
+
+  const pick = <K extends keyof LandingSettings>(key: K): LandingSettings[K] =>
+    s[key] === undefined ? current[key] : (s[key] as LandingSettings[K]);
+
   const value: LandingSettings = {
-    reelsPosterUrl: isAllowedImageUrl(s.reelsPosterUrl) ? s.reelsPosterUrl : "",
-    feedGridImages: normalizeFeedGridImages(s.feedGridImages),
-    wallpaperCtaImageUrl: isAllowedImageUrl(s.wallpaperCtaImageUrl) ? s.wallpaperCtaImageUrl : "",
+    reelsPosterUrl: isAllowedImageUrl(pick("reelsPosterUrl")) ? pick("reelsPosterUrl") : "",
+    feedGridImages: normalizeFeedGridImages(pick("feedGridImages")),
+    wallpaperCtaImageUrl: isAllowedImageUrl(pick("wallpaperCtaImageUrl"))
+      ? pick("wallpaperCtaImageUrl")
+      : "",
     // Normalised on the way IN as well as on the way out. An admin field that is
     // only validated on read is one bad write away from a stored value nothing
     // else in the system expects.
-    frenzAiPublicEnabled: s.frenzAiPublicEnabled !== false,
-    frenzAiFreeDailyCredits: normalizeFreeCredits(s.frenzAiFreeDailyCredits),
-    frenzAiFreeEnabled: s.frenzAiFreeEnabled !== false,
+    frenzAiPublicEnabled: pick("frenzAiPublicEnabled") !== false,
+    frenzAiFreeDailyCredits: normalizeFreeCredits(pick("frenzAiFreeDailyCredits")),
+    frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

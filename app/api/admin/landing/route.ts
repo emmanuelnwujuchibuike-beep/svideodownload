@@ -38,11 +38,24 @@ const reelsPoster = z
     message: "Image must be an https URL or a site asset path.",
   });
 
+/*
+  🔴 EVERY FIELD IS OPTIONAL, AND THAT IS THE FIX.
+
+  These carried `.default()`, and the Landing panel POSTs only two of them —
+  so every save reset the feed-grid images to [] and all three Frenz AI
+  settings to their defaults, silently, on a screen that does not even show
+  them. `setLandingSettings` now merges, and a field that was not sent must
+  therefore arrive as `undefined` rather than as a manufactured default.
+
+  A default here is indistinguishable from an operator's deliberate choice by
+  the time it reaches the store. Optional is the only shape that can tell
+  "leave it alone" apart from "set it to this".
+*/
 const schema = z.object({
-  reelsPosterUrl: reelsPoster.default(""),
-  feedGridImages: z.array(gridImage).max(FEED_GRID_SLOTS).default([]),
+  reelsPosterUrl: reelsPoster.optional(),
+  feedGridImages: z.array(gridImage).max(FEED_GRID_SLOTS).optional(),
   // Same shape and same clearable rule as the reels poster.
-  wallpaperCtaImageUrl: reelsPoster.default(""),
+  wallpaperCtaImageUrl: reelsPoster.optional(),
   /*
     Frenz AI operator switches (owner, 2026-09-08).
 
@@ -54,14 +67,14 @@ const schema = z.object({
     `setLandingSettings`: a number that becomes a daily allowance costs real
     provider money, and one validation is one thing to forget.
   */
-  frenzAiPublicEnabled: z.boolean().default(true),
-  frenzAiFreeDailyCredits: z.coerce.number().int().min(0).max(FRENZ_AI_MAX_FREE_CREDITS).default(2),
+  frenzAiPublicEnabled: z.boolean().optional(),
+  frenzAiFreeDailyCredits: z.coerce.number().int().min(0).max(FRENZ_AI_MAX_FREE_CREDITS).optional(),
   /*
     Turn the free tier off entirely and show "Pro feature" instead. Kept
     separate from a zero credit count so the interface can say the right thing;
     see the field's note in lib/landing/settings.ts.
   */
-  frenzAiFreeEnabled: z.boolean().default(true),
+  frenzAiFreeEnabled: z.boolean().optional(),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

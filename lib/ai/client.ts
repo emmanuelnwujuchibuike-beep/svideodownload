@@ -176,11 +176,74 @@ export function uploadSource(opts: {
   });
 }
 
-/** Tell the server the upload landed and processing may begin. */
+/**
+ * Tell the server the upload landed and processing may begin.
+ *
+ * `rewardSessionId` is an AUTHORIZATION, not a setting: the server decides
+ * whether one is needed and the database decides whether that one is spendable.
+ * Sending it when none is owed changes nothing.
+ */
 export async function startAiJob(
   id: string,
+  rewardSessionId?: string,
 ): Promise<AiJobResult<{ job: AiJobView; started: boolean; usage?: AiJobUsage }>> {
-  return request(`/api/ai/jobs/${encodeURIComponent(id)}/start`, { method: "POST" });
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(rewardSessionId ? { rewardSessionId } : {}),
+  });
+}
+
+/**
+ * What this member may do right now.
+ *
+ * 🔴 FOR DISPLAY ONLY. Every value here is re-resolved server-side when a job
+ * is actually started — a plan can change, another tab can spend the last slot,
+ * and this object lives in a browser the member controls. Rendering from it is
+ * fine; deciding from it would be a bug.
+ */
+export interface AiCleanEntitlement {
+  plan: string;
+  unlimited: boolean;
+  dailyLimit: number | null;
+  usedToday: number;
+  remainingToday: number | null;
+  rewardRequired: boolean;
+  rewardsPerJob: number;
+  canStart: boolean;
+}
+
+export async function getAiCleanEntitlement(): Promise<AiJobResult<AiCleanEntitlement>> {
+  return request("/api/ai/clean/entitlement");
+}
+
+/** Open a short-lived reward session. The server binds it to this member. */
+export async function openAiRewardSession(): Promise<
+  AiJobResult<{ sessionId: string; expiresAt: string; verifiable: boolean }>
+> {
+  return request("/api/ai/clean/reward", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "open" }),
+  });
+}
+
+/**
+ * Report that the ad finished.
+ *
+ * ⚠️ This is an ATTESTATION, not proof — no ad network wired to this site can
+ * verify a web rewarded ad (see lib/ai/reward.ts). The server treats it as such:
+ * the grant it produces is single-use, expiring, bound to this member and this
+ * feature, and cannot buy a session the daily allowance does not already hold.
+ */
+export async function grantAiReward(
+  sessionId: string,
+): Promise<AiJobResult<{ granted: boolean; sessionId: string }>> {
+  return request("/api/ai/clean/reward", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "grant", sessionId }),
+  });
 }
 
 /** Stop a job that is still queued or processing. */

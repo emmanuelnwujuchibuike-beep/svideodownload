@@ -34,6 +34,20 @@ export type AiErrorCode =
   | "JOB_NOT_FOUND"
   | "JOB_ALREADY_PROCESSING"
   | "PROVIDER_ERROR"
+  /**
+   * The provider refused for a reason on OUR side of the relationship —
+   * billing, quota, throttling.
+   *
+   * 🔴 Separate from PROVIDER_ERROR because the advice differs. A transient
+   * failure is worth retrying; an account with no credit is not, and telling
+   * somebody to "try again in a moment" when the answer is 402 wastes their
+   * time on a loop that cannot succeed. Observed in production 2026-09-08.
+   */
+  | "PROVIDER_UNAVAILABLE"
+  /** This plan owes a rewarded ad and the request arrived without one. */
+  | "REWARD_REQUIRED"
+  /** A reward was presented and the database refused to spend it. */
+  | "REWARD_INVALID"
   | "PROCESSING_FAILED"
   | "STORAGE_ERROR"
   | "RATE_LIMITED"
@@ -67,6 +81,30 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   // 502 for a provider that answered badly, 500 for work that genuinely broke.
   // The member sees the same sentence either way; the status is for us.
   PROVIDER_ERROR: { status: 502, message: "The AI service didn't respond. Nothing was charged — try again." },
+  /*
+    Deliberately vague about WHY. "Our provider account is out of credit" is an
+    operations problem, and telling the member whose video it is would be both
+    confusing and an invitation. What they need to know is that it is not their
+    fault, they were not charged, and waiting is the right move — all three of
+    which are true.
+  */
+  REWARD_REQUIRED: {
+    status: 402,
+    message: "Watch a short ad to unlock this clean.",
+  },
+  /*
+    ONE sentence for every refusal — expired, already spent, wrong owner, wrong
+    feature. Which check a claim failed is exactly what an attacker wants to
+    learn, and a member only needs to know to try again.
+  */
+  REWARD_INVALID: {
+    status: 403,
+    message: "We couldn't verify that reward. Please try again.",
+  },
+  PROVIDER_UNAVAILABLE: {
+    status: 503,
+    message: "AI Clean is temporarily unavailable. Nothing was charged — please try again later.",
+  },
   PROCESSING_FAILED: { status: 500, message: "The cleanup didn't finish. Nothing was changed — you can try again." },
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },
   RATE_LIMITED: { status: 429, message: "You're going a bit fast — give it a moment." },

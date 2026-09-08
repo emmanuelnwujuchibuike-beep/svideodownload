@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { AI_CLEAN_CONFIG, AI_CLEAN_LIMITS } from "@/lib/ai/config";
 import { getUserAIEntitlement, usageForClient } from "@/lib/ai/entitlement";
@@ -6,6 +7,7 @@ import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
 import { getOwnJob, recordUploadedSource, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
+import { claimAiReward } from "@/lib/ai/reward";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl, statSourceObject } from "@/lib/ai/storage-server";
 import { peekAiUsage, releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
@@ -39,11 +41,29 @@ export const dynamic = "force-dynamic";
  * one of three daily runs. Everything that can fail for OUR reasons happens
  * after it, and every one of those paths releases.
  *
- * ── The request body is empty, deliberately ──────────────────────────────────
+ * ── The body carries an authorization, and nothing else ──────────────────────
  *
- * There is nothing left for the client to say. The path is the server's, the
- * size and type are read from storage, the model and its parameters are
- * configuration. A body would only be a place to try to influence one of them.
+ * One optional field: `rewardSessionId`. The path is still the server's, the
+ * size and type are still read from storage, the model and its parameters are
+ * still configuration — none of that is negotiable from a request.
+ *
+ * A reward id is not a parameter that changes what happens; it is a token the
+ * database either honours or refuses, and it is worthless on its own. The
+ * schema is `.strict()`, so a body carrying `plan`, `skipAd`, `remaining` or a
+ * user id is REFUSED — the brief names exactly those, and a rejected field is
+ * easier to reason about than a silently dropped one.
+ *
+ * ── 🔴 RESERVE FIRST, THEN CLAIM THE REWARD ──────────────────────────────────
+ *
+ * The order is deliberate and it is not interchangeable.
+ *
+ * Claiming first would mean that a member whose allowance ran out in another
+ * tab burns their ad on a job that is then refused — attention spent for
+ * nothing, which is the one outcome this flow must never produce. Reserving
+ * first means the daily cap is the outer gate (an ad can never buy a fourth
+ * clean), and a reward that turns out to be invalid simply releases the slot it
+ * was holding. Both operations are single atomic statements, so two tabs racing
+ * cannot both win either one.
  */
 
 /** A job left `queued` this long with nothing uploaded is abandoned, not busy. */
@@ -52,6 +72,8 @@ const ABANDONED_AFTER_MS = 30 * 60 * 1000;
 function fail(code: Parameters<typeof aiErrorBody>[0], extra?: Record<string, unknown>) {
   return NextResponse.json(aiErrorBody(code, extra), { status: aiErrorStatus(code) });
 }
+
+const bodySchema = z.object({ rewardSessionId: z.string().uuid().optional() }).strict();
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   let userId: string | null = null;
@@ -76,6 +98,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   if (!/^[0-9a-fA-F-]{36}$/.test(id)) return fail("JOB_NOT_FOUND");
+
+  // An absent body is fine — it is how a plan that owes no ad starts a job.
+  let rewardSessionId: string | undefined;
+  try {
+    const raw = await _request.json();
+    const parsed = bodySchema.safeParse(raw);
+    if (!parsed.success) return fail("INVALID_INPUT");
+    rewardSessionId = parsed.data.rewardSessionId;
+  } catch {
+    /* no body at all */
+  }
 
   try {
     /* 2 · OWNERSHIP. Read as the member, so RLS decides, plus an id filter. */
@@ -145,6 +178,45 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       return fail("DAILY_LIMIT_REACHED", { usage: usageForClient(entitlement, reservation.used) });
     }
 
+    /*
+      4b · THE REWARD GATE.
+
+      🔴 The slot is already held, so nothing here can be bypassed by racing —
+      and every refusal below releases it, because a member who could not spend
+      a reward has not had a clean.
+
+      `entitlement.requiresReward` comes from the plan policy, never from the
+      request. Part 10 turns it on for the paid plans by editing a row in
+      lib/ai/policy.ts; not a line of this changes.
+    */
+    if (entitlement.requiresReward) {
+      if (!rewardSessionId) {
+        await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
+        return fail("REWARD_REQUIRED", { usage: usageForClient(entitlement, reservation.used) });
+      }
+
+      const claim = await claimAiReward({ sessionId: rewardSessionId, userId, feature: feature.id });
+      if (!claim.claimed) {
+        await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
+        console.warn("[ai/jobs] reward claim refused", {
+          jobId: job.id,
+          userId,
+          feature: feature.id,
+          reason: claim.reason,
+          released: true,
+        });
+        // One sentence whatever the reason — see REWARD_INVALID's copy.
+        return fail("REWARD_INVALID");
+      }
+
+      console.info("[ai/jobs] reward claimed", {
+        jobId: job.id,
+        userId,
+        feature: feature.id,
+        rewardSessionId,
+      });
+    }
+
     /* 5 · THE PROVIDER. Everything from here releases on failure. */
     try {
       const sourceUrl = await signSourceUrl(expectedPath);
@@ -209,7 +281,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         released: true,
       });
 
-      return fail(code === "FEATURE_UNAVAILABLE" ? "FEATURE_UNAVAILABLE" : "PROVIDER_ERROR", {
+      // The adapter's classification survives to the member: an out-of-credit
+      // provider must not be reported as something a retry could fix.
+      const surfaced =
+        code === "FEATURE_UNAVAILABLE" || code === "PROVIDER_UNAVAILABLE" ? code : "PROVIDER_ERROR";
+      return fail(surfaced, {
         usage: usageForClient(entitlement, await peekAiUsage(userId, feature.id)),
       });
     }

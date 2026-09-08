@@ -4,6 +4,7 @@ import { AlertTriangle, HelpCircle, RotateCcw } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AICleanAllowance } from "@/features/ai/ai-clean-allowance";
 import { AICleanEmptyState } from "@/features/ai/ai-clean-empty-state";
 import { AICleanProcessing } from "@/features/ai/ai-clean-processing";
 import { AICleanResult } from "@/features/ai/ai-clean-result";
@@ -68,6 +69,20 @@ import {
  * boot order the brief asks for: page paints, then the tutorial arrives — never
  * a modal over an empty screen.
  */
+
+/*
+  The app's REAL rewarded gate — the same component the downloader uses. Nothing
+  in Frenz AI simulates an ad or grants a reward on a timer; this is the actual
+  ad surface, and the server treats its completion as an attestation (see
+  lib/ai/reward.ts for exactly how much that is worth).
+
+  Dynamically imported: a member who never needs an ad — anyone on a paid plan —
+  never downloads it.
+*/
+const RewardedAdGate = dynamic(
+  () => import("@/features/monetization/rewarded-ad").then((m) => m.RewardedAdGate),
+  { ssr: false },
+);
 
 const AICleanTutorial = dynamic(
   () => import("@/features/ai/ai-clean-tutorial").then((m) => m.AICleanTutorial),
@@ -184,6 +199,12 @@ export function AICleanWorkspace() {
         }
       />
 
+      {/*
+        What today looks like. Rendered from the server's answer and never read
+        back as authority — the start request re-resolves all of it.
+      */}
+      <AICleanAllowance entitlement={cleanJob.entitlement} className="mb-4" />
+
       <AICleanHero>
         {/*
           A live job outranks whatever the picker was showing: somebody who
@@ -287,6 +308,22 @@ export function AICleanWorkspace() {
       </AICleanHero>
 
       {tutorialOpen ? <AICleanTutorial open onClose={closeTutorial} /> : null}
+
+      {/*
+        The ad. `onReward` attests it to the server, which then starts the job;
+        `onCancel` simply closes — no allowance was reserved and no reward
+        granted, so an abandoned ad costs the member nothing, which is the
+        brief's rule and falls out of the ordering rather than being handled.
+      */}
+      {cleanJob.pendingReward ? (
+        <RewardedAdGate
+          open
+          step={cleanJob.pendingReward.step}
+          totalSteps={cleanJob.pendingReward.total}
+          onReward={() => void cleanJob.completeReward()}
+          onCancel={cleanJob.cancelReward}
+        />
+      ) : null}
     </FrenzAIEnvironment>
   );
 }

@@ -5,13 +5,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   cancelAiJob,
   createAiJob,
+  getAiCleanEntitlement,
   getAiJob,
+  grantAiReward,
+  openAiRewardSession,
   getAiJobResult,
   getAiJobSource,
   listAiJobs,
   newClientRequestId,
   startAiJob,
   uploadSource,
+  type AiCleanEntitlement,
   type AiJobUsage,
 } from "@/lib/ai/client";
 import { nextPollDelayMs, stageFor, type StageView } from "@/lib/ai/job-stages";
@@ -59,6 +63,23 @@ export interface AiCleanJobState {
   restoring: boolean;
   /** True while a submission is in flight, so the button can be disabled. */
   busy: boolean;
+  /**
+   * What the server says this member may do. Null until the first answer.
+   *
+   * 🔴 For RENDERING only. The interface reads it to say "1 of 3 left today" and
+   * to decide whether to open an ad — never to decide whether a job may run.
+   * That decision is re-made server-side on every start, because this object
+   * lives in a browser the member controls.
+   */
+  entitlement: AiCleanEntitlement | null;
+  /**
+   * Set while a real rewarded ad must be watched before the job can start.
+   *
+   * The workspace renders the app's existing `RewardedAdGate` on this — the
+   * same component the downloader uses. Nothing here simulates an ad or grants
+   * a reward on a timer.
+   */
+  pendingReward: { sessionId: string; step: number; total: number } | null;
 }
 
 export interface AiCleanJobActions {
@@ -72,6 +93,12 @@ export interface AiCleanJobActions {
   fetchResultUrl: () => Promise<string | null>;
   /** The same for the ORIGINAL, so the result can be compared against it. */
   fetchSourceUrl: () => Promise<string | null>;
+  /** The ad finished: attest it, then start the job it was earned for. */
+  completeReward: () => Promise<void>;
+  /** The ad was closed early. Nothing is charged and nothing starts. */
+  cancelReward: () => void;
+  /** Re-read the allowance — after a job finishes, or on returning to the tab. */
+  refreshEntitlement: () => Promise<void>;
 }
 
 export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
@@ -82,6 +109,12 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
   const [uploadFraction, setUploadFraction] = useState(0);
   const [restoring, setRestoring] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [entitlement, setEntitlement] = useState<AiCleanEntitlement | null>(null);
+  const [pendingReward, setPendingReward] = useState<{ sessionId: string; step: number; total: number } | null>(
+    null,
+  );
+  /** The job waiting on that ad. Held in a ref so the gate can stay dumb. */
+  const awaitingRewardJobId = useRef<string | null>(null);
 
   /*
     Refs, not state, for everything the effects need to READ without being
@@ -174,14 +207,26 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     };
   }, [poll, stopPolling]);
 
+  const refreshEntitlement = useCallback(async () => {
+    const res = await getAiCleanEntitlement();
+    if (alive.current && res.ok) {
+      const { ok: _ok, ...view } = res;
+      setEntitlement(view as AiCleanEntitlement);
+    }
+  }, []);
+
   /* ── restore ──────────────────────────────────────────────────────────── */
 
   useEffect(() => {
     alive.current = true;
     (async () => {
-      const res = await listAiJobs({ feature: "ai_clean", limit: 1, active: true });
+      // Both in parallel: what is running, and what this member may do.
+      const [jobs] = await Promise.all([
+        listAiJobs({ feature: "ai_clean", limit: 1, active: true }),
+        refreshEntitlement(),
+      ]);
       if (!alive.current) return;
-      if (res.ok && res.jobs.length > 0) applyJob(res.jobs[0]!);
+      if (jobs.ok && jobs.jobs.length > 0) applyJob(jobs.jobs[0]!);
       setRestoring(false);
     })();
 
@@ -190,7 +235,7 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
       uploadAbort.current?.abort();
       if (pollTimer.current !== null) window.clearTimeout(pollTimer.current);
     };
-  }, [applyJob]);
+  }, [applyJob, refreshEntitlement]);
 
   /* ── the submission ───────────────────────────────────────────────────── */
 
@@ -258,6 +303,35 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
           return;
         }
 
+        /*
+          🔴 THE AD GOES HERE — between the upload and the start.
+
+          Not before the upload: making somebody watch an ad and THEN discover
+          their file is too large is the wrong order. Not after the start: by
+          then the job is already running and the ad has bought nothing.
+
+          `rewardRequired` is the server's answer from the entitlement read. If
+          the browser were wrong about it, the start below would refuse with
+          REWARD_REQUIRED — the flow is a courtesy, the gate is the server.
+        */
+        if (entitlement?.rewardRequired) {
+          const session = await openAiRewardSession();
+          if (!alive.current) return;
+          if (!session.ok) {
+            setError({ code: session.code, message: session.error });
+            return;
+          }
+          awaitingRewardJobId.current = created.job.id;
+          setPendingReward({
+            sessionId: session.sessionId,
+            step: 1,
+            // One today. Part 10 raises this for the paid plans and the gate
+            // already renders "1 of 3" from these two numbers.
+            total: Math.max(1, entitlement.rewardsPerJob || 1),
+          });
+          return; // completeReward() picks it up from here.
+        }
+
         const started = await startAiJob(created.job.id);
         if (!alive.current) return;
 
@@ -282,8 +356,63 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
         }
       }
     },
-    [applyJob, busy],
+    [applyJob, busy, entitlement],
   );
+
+  /**
+   * The ad finished. Attest it, then start the job it was earned for.
+   *
+   * A failure at either step leaves the job `queued` and unstarted — nothing is
+   * charged, and the member can try again. That is the brief's rule about a
+   * skipped or failed ad, and it falls out of the ordering rather than needing
+   * to be handled: the allowance is only ever spent inside `start`.
+   */
+  const completeReward = useCallback(async () => {
+    const pending = pendingReward;
+    const jobId = awaitingRewardJobId.current;
+    if (!pending || !jobId) return;
+
+    setPendingReward(null);
+    setBusy(true);
+    try {
+      const granted = await grantAiReward(pending.sessionId);
+      if (!alive.current) return;
+      if (!granted.ok) {
+        setError({ code: granted.code, message: granted.error });
+        return;
+      }
+
+      const started = await startAiJob(jobId, pending.sessionId);
+      if (!alive.current) return;
+      if (!started.ok) {
+        setError({ code: started.code, message: started.error });
+        const refreshed = await getAiJob(jobId);
+        if (refreshed.ok && alive.current) applyJob(refreshed.job);
+        return;
+      }
+
+      applyJob(started.job);
+      if (started.usage) setUsage(started.usage);
+      attempts.current = 0;
+      void refreshEntitlement();
+    } finally {
+      if (alive.current) setBusy(false);
+      awaitingRewardJobId.current = null;
+    }
+  }, [applyJob, pendingReward, refreshEntitlement]);
+
+  /**
+   * The ad was closed early.
+   *
+   * Nothing to undo: no allowance was reserved and no reward was granted, so
+   * this only clears the gate. The job stays `queued` and the member may try
+   * again — the brief is explicit that an abandoned ad must not be punished.
+   */
+  const cancelReward = useCallback(() => {
+    setPendingReward(null);
+    awaitingRewardJobId.current = null;
+    setBusy(false);
+  }, []);
 
   const cancel = useCallback(async () => {
     const current = jobRef.current;
@@ -341,5 +470,10 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     reset,
     fetchResultUrl,
     fetchSourceUrl,
+    entitlement,
+    pendingReward,
+    completeReward,
+    cancelReward,
+    refreshEntitlement,
   };
 }

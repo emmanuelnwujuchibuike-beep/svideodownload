@@ -35,7 +35,27 @@ describe("getUserAIEntitlement", () => {
       dailyLimit: 3,
       unlimited: false,
       maxConcurrent: 1,
+      // Part 5: a free clean is unlocked by one rewarded ad.
+      requiresReward: true,
+      rewardsPerJob: 1,
     });
+  });
+
+  it("🔴 Part 5: whether an ad is owed comes from the PLAN, never from a request", async () => {
+    /*
+      The brief forbids the client asserting `plan`, `skipAd` or `remaining`.
+      This is the other half of that: the answer is derived from the plan the
+      subscription helper reports, so there is no argument a caller could pass
+      that changes it.
+    */
+    getUserPlan.mockResolvedValue("free");
+    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(true);
+
+    getUserPlan.mockResolvedValue("pro");
+    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
+
+    getUserPlan.mockResolvedValue("business");
+    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
   });
 
   it("🔴 meters Pro as well, at an abuse ceiling far above any real use", async () => {

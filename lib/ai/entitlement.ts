@@ -1,4 +1,5 @@
 import type { AiFeature, AiFeatureDef } from "@/lib/ai/jobs";
+import { entitlementView, featureOfferedTo, policyFor, type AiEntitlementView } from "@/lib/ai/policy";
 import { getUserPlan } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 
@@ -50,34 +51,27 @@ export interface AiEntitlement {
   unlimited: boolean;
   /** Jobs this member may have queued or processing at once. */
   maxConcurrent: number;
+  /**
+   * Whether a verified rewarded-ad session is required before each job.
+   *
+   * ⚠️ False for the paid plans in Part 5 and true for them in Part 10 — a row
+   * change in lib/ai/policy.ts, not a change here.
+   */
+  requiresReward: boolean;
+  /** How many verified rewards one job costs. 0 when none are required. */
+  rewardsPerJob: number;
 }
 
-/**
- * Abuse ceilings for paid plans, in jobs per UTC day.
- *
- * Neither number is a product promise, and neither is reachable by hand: at
- * ten minutes of video each, 100 jobs is more footage than a person cleans in
- * a day. They exist so that a stolen session cannot spend the owner's provider
- * budget overnight before anyone notices.
- */
-const PAID_DAILY_CEILING: Record<Exclude<BillingPlan, "free">, number> = {
-  pro: 100,
-  business: 500,
-};
+/*
+  ⚠️ The per-plan numbers that used to be two hardcoded objects here now live in
+  ONE declarative table: lib/ai/policy.ts.
 
-/**
- * How many jobs may be in flight at once.
- *
- * One for a free member is not stinginess: each job is a provider bill and a
- * long-running task, and a single video at a time is what the interface offers
- * anyway. The paid tiers get room to queue a few without it becoming a way to
- * start fifty.
- */
-const MAX_CONCURRENT: Record<BillingPlan, number> = {
-  free: 1,
-  pro: 3,
-  business: 5,
-};
+  That move is the whole architectural point of Part 5. The owner has already
+  said what Part 10 changes — a new `max_ai` plan with 15 daily credits, and
+  `pro`/`business` moving to "up to 3 rewarded ads each generation" — and with
+  the rules as data that is a diff to rows rather than a rewrite of every
+  authorization path. Nothing below asks which plan it is serving.
+*/
 
 /**
  * The entitlement for one member and one feature.
@@ -90,26 +84,45 @@ export async function getUserAIEntitlement(
   userId: string,
   feature: AiFeatureDef,
 ): Promise<AiEntitlement> {
+  // 🔴 The plan comes from the EXISTING subscription helper, never from a
+  // request. `getUserPlan` already resolves the subscriptions table, an active
+  // promo, and the rule that a promo may lift a free member but never downgrade
+  // a paying one. A second answer to "is this person Pro" is a second thing to
+  // be wrong.
   const plan = await getUserPlan(userId);
-
-  if (plan === "free") {
-    return {
-      plan,
-      feature: feature.id,
-      allowed: feature.freeDailyJobs > 0,
-      dailyLimit: feature.freeDailyJobs,
-      unlimited: false,
-      maxConcurrent: MAX_CONCURRENT.free,
-    };
-  }
+  const policy = policyFor(plan);
 
   return {
     plan,
     feature: feature.id,
-    allowed: true,
-    dailyLimit: PAID_DAILY_CEILING[plan],
-    unlimited: true,
-    maxConcurrent: MAX_CONCURRENT[plan],
+    allowed: featureOfferedTo(plan, feature.id) && policy.dailyLimit > 0,
+    dailyLimit: policy.dailyLimit,
+    unlimited: policy.unlimited,
+    maxConcurrent: policy.maxConcurrent,
+    requiresReward: policy.requiresReward,
+    rewardsPerJob: policy.rewardsPerJob,
+  };
+}
+
+/**
+ * The whole picture for one member: plan, policy and what they have spent.
+ *
+ * One call, so the entitlement endpoint and the start path cannot disagree
+ * about the same member in the same second.
+ */
+export async function getAiEntitlementSnapshot(
+  userId: string,
+  feature: AiFeatureDef,
+  usedToday: number,
+): Promise<{ entitlement: AiEntitlement; view: AiEntitlementView }> {
+  const entitlement = await getUserAIEntitlement(userId, feature);
+  return {
+    entitlement,
+    view: entitlementView({
+      plan: entitlement.plan,
+      policy: policyFor(entitlement.plan),
+      usedToday,
+    }),
   };
 }
 

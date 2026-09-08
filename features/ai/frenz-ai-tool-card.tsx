@@ -2,6 +2,7 @@ import { ArrowRight, Lock } from "lucide-react";
 import Link from "next/link";
 
 import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
+import { FrenzAICircuitry } from "@/features/ai/core/frenz-ai-circuitry";
 import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
 import type { FrenzAiStudioTool } from "@/lib/ai/studio-tools";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,17 @@ import { cn } from "@/lib/utils";
  * The icon tile carries the Frenz AI Core rather than a generic glyph, so the
  * mark that means "this is AI" is the same one on the hub, in the workspace and
  * in every processing state.
+ *
+ * ── The backdrop (2026-09-08) ────────────────────────────────────────────────
+ *
+ * An openable card sits on `FrenzAICircuitry` — a drawn, sub-kilobyte scene
+ * rather than the photographic render the owner referenced, because the same
+ * message asked for everything to be lightweight and a 300 kB JPEG on the first
+ * card of the page is the opposite of that. See that file for the trade.
+ *
+ * Because the card is now dark in both themes, its type is white and the
+ * Pro/soon pills sit on a scrim — a card that only reads correctly in one theme
+ * is a card that is broken in the other.
  *
  * ── 🔴 THIS IS A SERVER COMPONENT, AND IT HAS TO STAY ONE ────────────────────
  *
@@ -56,7 +68,9 @@ export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
         <span
           className={cn(
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition",
-            open ? "bg-brand-tile shadow-sm" : "bg-secondary text-muted-foreground",
+            open
+              ? "bg-white/10 ring-1 ring-inset ring-white/20 backdrop-blur-sm"
+              : "bg-secondary text-muted-foreground",
           )}
         >
           {open ? (
@@ -78,8 +92,17 @@ export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
         </div>
       </div>
 
-      <h2 className={cn("mt-4 text-base font-bold tracking-[-0.01em]", !open && "text-muted-foreground")}>{name}</h2>
-      <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{blurb}</p>
+      <h2
+        className={cn(
+          "mt-4 text-base font-bold tracking-[-0.01em]",
+          open ? "text-white" : "text-muted-foreground",
+        )}
+      >
+        {name}
+      </h2>
+      <p className={cn("mt-1.5 text-sm leading-relaxed", open ? "text-white/70" : "text-muted-foreground")}>
+        {blurb}
+      </p>
 
       {/* `self-start` matters: the card is a column flex container, so without it
           the pill stretches to the full width on every breakpoint and `w-auto`
@@ -113,11 +136,16 @@ export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
       aria-label={`Open ${name}`}
       className={cn(
         shell,
-        "group border-transparent bg-card shadow-card outline-none",
+        // `isolate` so the backdrop's absolute layers stack inside the card and
+        // cannot escape it; `overflow-hidden` keeps them inside the radius.
+        "group isolate overflow-hidden border-transparent bg-card shadow-card outline-none",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         "motion-safe:hover:-translate-y-0.5 motion-safe:active:scale-[0.995]",
       )}
     >
+      {/* Drawn, not downloaded — see FrenzAICircuitry. */}
+      <FrenzAICircuitry className="absolute inset-0 -z-10" />
+
       {/*
         The gradient edge. A masked border rather than a glow: the gradient
         fills the element, and `mask-composite: exclude` punches out everything

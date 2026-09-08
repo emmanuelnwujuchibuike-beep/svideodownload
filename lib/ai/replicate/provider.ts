@@ -135,13 +135,29 @@ export const replicateProvider: AiProvider = {
     });
 
     if (!res.ok) {
-      // Logged with the status and a bounded body — never returned upward.
+      /*
+        🔴 402 and 429 are OUR account, not this job.
+
+        Observed in production on 2026-09-08: an out-of-credit Replicate account
+        answers 402 on every submission, and a member was told "try again in a
+        moment" — advice that could never work, on a failure they did not cause.
+        429 is the same shape: Replicate throttles uncredited accounts hard.
+
+        Both map to PROVIDER_UNAVAILABLE so the interface stops promising a
+        retry that cannot succeed. The usage release is unaffected — nobody is
+        charged for either (see the start route's catch).
+      */
+      const ourProblem = res.status === 402 || res.status === 429;
       console.error("[ai/replicate] submit rejected", {
         jobId: input.jobId,
         status: res.status,
+        classified: ourProblem ? "PROVIDER_UNAVAILABLE" : "PROVIDER_ERROR",
         body: res.text.slice(0, 500),
       });
-      throw new AiJobError("PROVIDER_ERROR", `replicate ${res.status}: ${res.text.slice(0, 500)}`);
+      throw new AiJobError(
+        ourProblem ? "PROVIDER_UNAVAILABLE" : "PROVIDER_ERROR",
+        `replicate ${res.status}: ${res.text.slice(0, 500)}`,
+      );
     }
 
     const body = (res.json ?? {}) as ReplicatePrediction;

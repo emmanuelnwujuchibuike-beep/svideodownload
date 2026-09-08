@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { FrenzAIStage } from "@/features/ai/frenz-ai-stage";
 import { FrenzAIToolCard } from "@/features/ai/frenz-ai-tool-card";
-import { FRENZ_AI_STUDIO_TOOLS } from "@/lib/ai/studio-tools";
+import { openableFrenzAiTools } from "@/lib/ai/studio-tools";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,8 @@ export default async function FrenzAIPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai");
 
+  const tools = openableFrenzAiTools();
+
   return (
     <div>
       <FrenzAIStage
@@ -45,16 +47,32 @@ export default async function FrenzAIPage() {
         title="Create more. Edit smarter."
         subtitle="Powerful AI tools designed to help you transform your content faster."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          {FRENZ_AI_STUDIO_TOOLS.map((tool) => (
+        {/*
+          🔴 Only tools that OPEN (owner, 2026-09-08: "hide the soon in ai
+          feature page untill built").
+
+          The coming-soon cards were honest — they were dashed, unfocusable and
+          labelled — but honest is not the same as useful. Two thirds of the page
+          was things nobody could do, which makes the one real tool harder to
+          find, not easier. `openableFrenzAiTools` is the registry's own filter,
+          so an unbuilt tool appears here the moment it gets an href and not a
+          moment before.
+        */}
+        {/*
+          One column while there is one tool. A lone card in a two-column grid
+          sits in the left half with a hole beside it, which reads as something
+          that failed to load rather than as a product with one tool.
+        */}
+        <div className={tools.length > 1 ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
+          {tools.map((tool) => (
             <FrenzAIToolCard key={tool.id} tool={tool} />
           ))}
         </div>
       </FrenzAIStage>
 
-      <p className="mt-5 px-1 text-xs leading-relaxed text-muted-foreground">
-        More tools are on the way. Anything marked coming soon isn&apos;t built yet — you&apos;ll see it here
-        the moment it is.
+      {/* The second sentence went with the cards it described. */}
+      <p className="mt-5 px-1 text-center text-xs leading-relaxed text-muted-foreground">
+        More tools are on the way.
       </p>
     </div>
   );

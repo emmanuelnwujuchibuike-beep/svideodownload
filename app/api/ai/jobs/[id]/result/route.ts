@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { cleanedFileName } from "@/lib/ai/clean-media";
 import { aiFeature } from "@/lib/ai/jobs";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
@@ -85,7 +86,25 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
     }
 
-    const signed = await signResultUrl(job.result_path);
+    /*
+      ── 🔴 `?download=1` IS WHAT MAKES SAVING WORK ────────────────────────
+
+      Without it the panel got a bare signed URL and used `<a download>`, and
+      browsers ignore that attribute across origins — a Supabase URL is a
+      different origin, so the video opened and played and nothing was saved.
+      Asking storage for a `Content-Disposition` fixes it at the source, with
+      no video passing through this function.
+
+      The filename comes from the member's own upload, via the same helper the
+      panel uses, so the saved file is named the way the screen says it is.
+    */
+    const wantsDownload = new URL(request.url).searchParams.get("download") === "1";
+    const sourceName =
+      typeof job.metadata?.source_name === "string" ? job.metadata.source_name : null;
+    const signed = await signResultUrl(
+      job.result_path,
+      wantsDownload ? cleanedFileName(sourceName) : undefined,
+    );
     return NextResponse.json(
       { url: signed.url, expiresIn: signed.expiresIn, size: job.result_size },
       { headers: { "cache-control": "no-store" } },

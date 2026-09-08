@@ -113,19 +113,72 @@ export function pathState(stage: AiCleanStage): Record<string, "done" | "doing" 
  * stage, which is the honest shape for work whose length we cannot see: it
  * moves when something actually happened and never creeps to look busy.
  */
-function progressFor(stage: AiCleanStage, uploadFraction: number | null): number | null {
+/**
+ * How far a stage may drift toward the next one while it waits.
+ *
+ * ── 🔴 THIS MOVES, AND IT STILL DOES NOT LIE ────────────────────────────────
+ *
+ * Owner, 2026-09-08: "the progress shouldnt delay at 60% while removing text,
+ * it should be moving a little untill it completes so users dont think it got
+ * stuck."
+ *
+ * They are right about the problem. A bar frozen on 60% for a minute and a half
+ * reads as a hung page, and this feature has spent a long time looking hung.
+ *
+ * The standing rule here is that nothing invents progress it cannot observe,
+ * and that rule is kept. What this adds is an ESTIMATE, held to two promises
+ * that make it honest:
+ *
+ *   1. it is ASYMPTOTIC — each stage approaches the next stage's floor and can
+ *      never arrive. Sixty percent creeps toward eighty-four and stops short,
+ *      so the bar can never claim a step that has not happened;
+ *   2. only a real event moves it past a floor, and only genuine completion
+ *      reaches 100%.
+ *
+ * The curve also decelerates, which is the honest shape: fast early movement
+ * says "this started", and visible slowing says "still working" rather than
+ * "about to finish". A linear creep would promise a finish time we do not know.
+ *
+ * ⚠️ It costs nothing to run. The value is recomputed on the polls the page is
+ * already making, so there is no timer, no extra render loop, and no battery
+ * cost on a screen somebody leaves open — which is a rule this feature has
+ * already broken twice today.
+ */
+function creepToward(floor: number, ceiling: number, elapsedMs: number, halfLifeMs: number): number {
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return floor;
+  // 1 - e^(-t/τ): approaches 1 without reaching it, fast at first, then slower.
+  const progressed = 1 - Math.exp(-elapsedMs / halfLifeMs);
+  return floor + (ceiling - floor) * progressed;
+}
+
+function progressFor(
+  stage: AiCleanStage,
+  uploadFraction: number | null,
+  /** How long the CURRENT stage has been running. Null when unknown. */
+  elapsedMs: number | null,
+): number | null {
   switch (stage) {
     case "uploading":
       // The upload is a third of the visible journey, so a finished upload
-      // reads as a third done rather than as nearly finished.
+      // reads as a third done rather than as nearly finished. This one is a
+      // real measurement — bytes the browser has actually sent — so it never
+      // creeps.
       return 0.05 + Math.max(0, Math.min(1, uploadFraction ?? 0)) * 0.28;
     case "queued":
-      return 0.35;
+      // Toward `processing`'s floor. Queue time at the provider was measured at
+      // ~19s, so this reaches most of the way there in about half a minute.
+      return creepToward(0.35, 0.58, elapsedMs ?? 0, 25_000);
     case "processing":
-      return 0.6;
+      /*
+        The long one, and the one the owner watched sit still. A whole job was
+        measured end to end at 99 seconds, so the half-life is set near that:
+        the bar is still visibly moving a minute in, and still short of 84%.
+      */
+      return creepToward(0.6, 0.84, elapsedMs ?? 0, 45_000);
     case "finalizing":
-      // Past the long part. The mux is seconds of work against minutes of AI.
-      return 0.85;
+      // Past the long part. The mux is seconds of work against minutes of AI,
+      // so this creeps quickly — and still never reaches 1.
+      return creepToward(0.85, 0.98, elapsedMs ?? 0, 12_000);
     case "completed":
       return 1;
     default:
@@ -140,6 +193,13 @@ export interface StageInput {
   uploading?: boolean;
   /** 0-1 from the upload's own progress events. */
   uploadFraction?: number | null;
+  /**
+   * Injected clock, so the creeping progress stays a PURE function.
+   *
+   * Defaults to `Date.now()`. Tests pass a fixed value and assert the curve
+   * without waiting for real seconds to pass.
+   */
+  now?: number;
 }
 
 const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
@@ -172,7 +232,7 @@ export function stageFor(input: StageInput): StageView {
       stage: "uploading",
       label: "Uploading",
       detail: "Your video is going straight to private storage.",
-      progress: progressFor("uploading", uploadFraction ?? 0),
+      progress: progressFor("uploading", uploadFraction ?? 0, null),
       active: true,
     };
   }
@@ -183,13 +243,26 @@ export function stageFor(input: StageInput): StageView {
 
   const copy = LABELS[job.status];
   const stage = job.status as AiCleanStage;
+
+  /*
+    How long this stage has been running, for the creep above.
+
+    `startedAt` is when the provider was engaged and is the right clock for
+    `processing`; before that there is only `createdAt`. `now` is injected so
+    the whole thing stays a pure function and can be tested without a clock.
+  */
+  const since = Date.parse(
+    (stage === "queued" ? job.createdAt : (job.startedAt ?? job.createdAt)) ?? "",
+  );
+  const elapsedMs = Number.isFinite(since) ? (input.now ?? Date.now()) - since : null;
+
   return {
     stage,
     label: copy.label,
     // A failed job says what went wrong in the words the server chose, which is
     // already a written sentence rather than a provider's error.
     detail: job.status === "failed" ? (job.error?.message ?? null) : copy.detail,
-    progress: progressFor(stage, null),
+    progress: progressFor(stage, null, elapsedMs),
     active: job.status === "queued" || job.status === "processing" || job.status === "finalizing",
   };
 }

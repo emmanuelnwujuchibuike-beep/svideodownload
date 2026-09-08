@@ -264,8 +264,18 @@ export async function cancelAiJob(
  */
 export async function getAiJobResult(
   id: string,
+  /**
+   * Ask for a link that SAVES rather than plays.
+   *
+   * 🔴 The `download` attribute on an `<a>` is ignored for cross-origin URLs,
+   * and a Supabase signed URL is cross-origin. Without this the browser simply
+   * opens the video. The flag makes storage send a `Content-Disposition`, which
+   * is obeyed everywhere. See `signResultUrl`.
+   */
+  forDownload = false,
 ): Promise<AiJobResult<{ url: string; expiresIn: number; size: number | null }>> {
-  return request(`/api/ai/jobs/${encodeURIComponent(id)}/result`);
+  const suffix = forDownload ? "?download=1" : "";
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/result${suffix}`);
 }
 
 /**

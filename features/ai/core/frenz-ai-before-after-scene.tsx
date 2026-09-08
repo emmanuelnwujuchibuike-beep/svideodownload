@@ -1,5 +1,7 @@
 import { Volume2 } from "lucide-react";
 
+import { FrenzAIStill } from "@/features/ai/core/frenz-ai-still";
+
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { cn } from "@/lib/utils";
 
@@ -109,46 +111,19 @@ function VideoCard({ variant }: { variant: "original" | "clean" }) {
     >
       <div className="relative overflow-hidden rounded-[0.9rem]">
         {/*
-          The "video": a drawn landscape. Sky, a far ridge, a near ridge, water.
-          Four gradients rather than a photograph — see the note above on why
-          there are no images on this screen.
+          🔴 A REAL FRAME, from the owner's own wallpaper gallery.
+
+          This was a drawn landscape — four CSS gradients and two clip-paths —
+          which was cheap and looked it. The owner's verdict was "too
+          unprofessional", and they were right: the entire claim of this card is
+          "your video, cleaned", and a diagram of a mountain cannot make it.
+
+          Both cards render the SAME url at the SAME width, so the pair costs
+          one fetch and one decode. See FrenzAIStill for the sizing, the quality
+          setting and why neither breaks the performance rule.
         */}
-        <div className="relative aspect-[9/13] w-full">
-          <span
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg,#bfdbfe 0%,#e0f2fe 38%,#f0f9ff 52%,#dbeafe 100%)",
-            }}
-          />
-          {/* far ridge */}
-          <span
-            className="absolute inset-x-0 top-[26%] h-[26%]"
-            style={{
-              background: "linear-gradient(180deg,#94a3b8 0%,#64748b 100%)",
-              clipPath: "polygon(0 62%, 18% 22%, 34% 54%, 52% 8%, 72% 46%, 88% 20%, 100% 52%, 100% 100%, 0 100%)",
-            }}
-          />
-          {/* near ridge */}
-          <span
-            className="absolute inset-x-0 top-[38%] h-[22%]"
-            style={{
-              background: "linear-gradient(180deg,#475569 0%,#334155 100%)",
-              clipPath: "polygon(0 70%, 22% 30%, 44% 66%, 66% 24%, 86% 58%, 100% 34%, 100% 100%, 0 100%)",
-            }}
-          />
-          {/* water, and its reflection */}
-          <span
-            className="absolute inset-x-0 bottom-0 top-[58%]"
-            style={{ background: "linear-gradient(180deg,#38bdf8 0%,#0ea5e9 45%,#0369a1 100%)" }}
-          />
-          <span
-            className="absolute inset-x-0 top-[58%] h-[16%] opacity-40"
-            style={{
-              background: "linear-gradient(180deg,#334155 0%,transparent 100%)",
-              clipPath: "polygon(0 0, 22% 55%, 44% 6%, 66% 52%, 86% 12%, 100% 44%, 100% 0)",
-            }}
-          />
+        <div className="relative aspect-[9/13] w-full overflow-hidden bg-slate-200 dark:bg-slate-800">
+          <FrenzAIStill sizes="176px" />
 
           {/*
             🔴 THE CAPTION IS THE WHOLE DEMONSTRATION, so it is only on the
@@ -164,11 +139,11 @@ function VideoCard({ variant }: { variant: "original" | "clean" }) {
 
           {/* the scrubber */}
           <span className="absolute inset-x-1.5 bottom-1.5">
-            <span className="block h w-full overflow-hidden rounded-full bg-white/40">
+            <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/40">
               <span className="block h-full w-[27%] rounded-full bg-rose-500" />
             </span>
             <span className="mt-1 flex items-center justify-between">
-              <span className="text font-semibold text-white/95">0:12 / 0:45</span>
+              <span className="text-[7px] font-semibold text-white/95">0:12 / 0:45</span>
               <Volume2 className="h-2.5 w-2.5 text-white/95" aria-hidden />
             </span>
           </span>
@@ -178,7 +153,7 @@ function VideoCard({ variant }: { variant: "original" | "clean" }) {
       {/* the label chip, floating over the top-left corner as drawn */}
       <figcaption
         className={cn(
-          "absolute left-3.5 top-3.5 rounded-md px-2 py-1 text font-bold",
+          "absolute left-3.5 top-3.5 rounded-md px-2 py-1 text-[9px] font-bold",
           clean
             ? "bg-white/90 text-indigo-700 ring-1 ring-inset ring-indigo-200"
             : "bg-slate-900/80 text-white",

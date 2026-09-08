@@ -70,7 +70,25 @@ export function FrenzAICompare({
       new Promise((resolve) => {
         if (!canvas) return resolve(false);
         const video = document.createElement("video");
-        video.crossOrigin = "anonymous";
+        /*
+          ── 🔴 NO `crossOrigin`, AND THAT IS THE FIX ──────────────────────
+
+          Owner, 2026-09-08: "the before and after button on the video is ready
+          page doesnt show anything."
+
+          This set `video.crossOrigin = "anonymous"`, which does not merely
+          request CORS — it makes the browser REFUSE TO LOAD the media unless
+          the response carries a matching `Access-Control-Allow-Origin`. The
+          videos are Supabase signed URLs on another origin, so both loads
+          failed, `onerror` fired, and the comparison reported itself
+          unavailable. Every time.
+
+          And it was never needed. Drawing a cross-origin video into a canvas is
+          allowed; it only marks the canvas as tainted, which blocks READING it
+          back — `getImageData`, `toDataURL`, `toBlob`. This component does none
+          of those: it draws two frames and shows them. Tainting costs us
+          nothing, and asking for CORS cost us the whole feature.
+        */
         video.preload = "metadata";
         video.muted = true;
         video.playsInline = true;

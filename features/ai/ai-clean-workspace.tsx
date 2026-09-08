@@ -245,7 +245,7 @@ export function AICleanWorkspace() {
     !enteringLink;
 
   /** Screens that draw their own heading, so the shared header would duplicate it. */
-  const chromeless = idleScreen || running;
+  const chromeless = idleScreen || running || finished;
 
   return (
     <FrenzAIEnvironment

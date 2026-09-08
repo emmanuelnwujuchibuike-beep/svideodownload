@@ -27,7 +27,7 @@ const SHOTS = [
   { name: "hub-mobile-dark", device: "Pixel 7", theme: "dark" },
   { name: "hub-desktop-light", device: null, theme: "light" },
   { name: "welcome-mobile-light", device: "Pixel 7", theme: "light", query: "?view=welcome", ready: "text=Try AI Clean" },
-  { name: "input-mobile-light", device: "Pixel 7", theme: "light", query: "?view=input", ready: "text=AI Powered" },
+  { name: "input-mobile-light", device: "Pixel 7", theme: "light", query: "?view=input", ready: "text=Drop your video here" },
   { name: "processing-mobile-light", device: "Pixel 7", theme: "light", query: "?view=processing" },
   { name: "processing-mobile-dark", device: "Pixel 7", theme: "dark", query: "?view=processing" },
 ];
@@ -60,8 +60,14 @@ for (const shot of SHOTS) {
     like evidence.
   */
   await page.waitForSelector(shot.ready ?? (shot.query ? "text=Pro Tip" : "section.group"), { timeout: 30_000 });
-  // Let one beat of the ambient animation land, so a paused/never-started
-  // animation is visible as a difference between runs rather than invisible.
+  /*
+    🔴 WAIT FOR IMAGES, AND ASSERT THEY DECODED.
+
+    A blank card is what a broken image looks like, and a screenshot taken
+    before the optimizer answers looks identical to one where the url is dead.
+    So: wait for every img to settle, then report any that carry no pixels.
+  */
+  await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(1200);
 
   /*
@@ -92,6 +98,11 @@ for (const shot of SHOTS) {
     out.animatedNow = document.getAnimations().filter((a) => a.playState === "running").length;
     // The horizontal-scroll law: the page body must never scroll sideways.
     out.bodyScrollsX = document.documentElement.scrollWidth > window.innerWidth + 1;
+    // An <img> that never decoded has naturalWidth 0 — the signature of a
+    // broken src, and invisible in a screenshot except as an empty box.
+    out.brokenImages = [...document.images]
+      .filter((im) => !im.complete || im.naturalWidth === 0)
+      .map((im) => im.currentSrc.slice(-60) || im.src.slice(-60));
     return out;
   });
 
@@ -102,6 +113,7 @@ for (const shot of SHOTS) {
   console.log("  zero-area grads  ", audit.zeroAreaGradientStrokes.length ? `🔴 ${audit.zeroAreaGradientStrokes}` : "none");
   console.log("  running anims    ", audit.animatedNow);
   console.log("  body scrolls x   ", audit.bodyScrollsX ? "🔴 YES" : "no");
+  console.log("  broken images    ", audit.brokenImages.length ? `🔴 ${audit.brokenImages.length}: ${audit.brokenImages[0]}` : "none");
   console.log("  card overflows   ", audit.cardOverflowsViewport ? "🔴 YES" : "no");
   if (problems.length) console.log("  page problems    ", problems.slice(0, 5));
 

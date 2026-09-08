@@ -161,3 +161,55 @@ describe("nextPollDelayMs", () => {
     expect(nextPollDelayMs(10_000)).toBeLessThanOrEqual(30_000);
   });
 });
+
+/**
+ * The creeping progress — added 2026-09-08 after the owner reported the bar
+ * "delaying at 60% while removing text" and looking stuck.
+ *
+ * 🔴 These tests exist to keep it HONEST, not merely moving. A bar that creeps
+ * is only acceptable while it cannot claim a step that has not happened.
+ */
+describe("progress creeps without lying", () => {
+  const job = (status: string, startedSecondsAgo: number, now: number) =>
+    ({
+      job: {
+        status,
+        createdAt: new Date(now - startedSecondsAgo * 1000).toISOString(),
+        startedAt: new Date(now - startedSecondsAgo * 1000).toISOString(),
+        error: null,
+      },
+      now,
+    }) as never;
+
+  const NOW = Date.parse("2026-09-08T12:00:00.000Z");
+
+  it("moves while processing, so it never looks frozen", () => {
+    const at10 = stageFor(job("processing", 10, NOW)).progress ?? 0;
+    const at60 = stageFor(job("processing", 60, NOW)).progress ?? 0;
+    const at180 = stageFor(job("processing", 180, NOW)).progress ?? 0;
+
+    expect(at10).toBeGreaterThan(0.6);
+    expect(at60).toBeGreaterThan(at10);
+    expect(at180).toBeGreaterThan(at60);
+  });
+
+  it("🔴 never reaches the next stage's floor, however long it waits", () => {
+    // An hour in — far beyond any real job — it must still be short of the
+    // value that means "finalizing has started".
+    const forever = stageFor(job("processing", 3600, NOW)).progress ?? 0;
+    expect(forever).toBeLessThan(0.85);
+  });
+
+  it("🔴 only genuine completion reaches 100%", () => {
+    expect(stageFor(job("processing", 99999, NOW)).progress).toBeLessThan(1);
+    expect(stageFor(job("finalizing", 99999, NOW)).progress).toBeLessThan(1);
+    expect(stageFor(job("completed", 1, NOW)).progress).toBe(1);
+  });
+
+  it("decelerates, because a straight line would promise a finish time", () => {
+    const p = (s: number) => stageFor(job("processing", s, NOW)).progress ?? 0;
+    const firstMinute = p(60) - p(0);
+    const secondMinute = p(120) - p(60);
+    expect(secondMinute).toBeLessThan(firstMinute);
+  });
+});

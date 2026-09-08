@@ -1,5 +1,7 @@
 import { Sparkles, Wand2 } from "lucide-react";
 
+import { FrenzAIStill } from "@/features/ai/core/frenz-ai-still";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -110,9 +112,26 @@ export function FrenzAIWorkScene({ className }: { className?: string }) {
       <span className="absolute left-[13%] top-[24%] h-24 w-28 -rotate-[10deg] rounded-2xl bg-gradient-to-br from-indigo-400/25 to-violet-500/15 ring-1 ring-inset ring-white/25" />
       <span className="absolute left-[26%] top-[18%] h-28 w-32 -rotate-[4deg] rounded-2xl bg-gradient-to-br from-sky-300/30 to-indigo-400/20 ring-1 ring-inset ring-white/30" />
 
-      {/* the front card, with the play button */}
-      <span className="frenz-ai-breathe absolute left-[38%] top-[26%] flex h-24 w-32 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-200/40 via-indigo-300/25 to-violet-400/20 shadow-[0_16px_40px_-18px_rgb(79_70_229/0.8)] ring-1 ring-inset ring-white/40">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/85 shadow-[0_6px_18px_-4px_rgb(30_27_75/0.55)]">
+      {/*
+        The front card, holding a real frame.
+
+        🔴 Owner, 2026-09-08: "the progress animation glass card is too empty."
+        It was — an empty tinted rectangle with a play button floating on it,
+        which read as a placeholder rather than as somebody's video being
+        worked on. The same still the welcome scene uses fills it, so this costs
+        NO extra fetch: one url, already in cache by the time anyone reaches
+        this screen.
+
+        A dark scrim sits over it so the white play button keeps its contrast
+        against whatever the photograph happens to be doing underneath.
+      */}
+      <span className="frenz-ai-breathe absolute left-[38%] top-[26%] flex h-24 w-32 items-center justify-center overflow-hidden rounded-2xl shadow-[0_16px_40px_-18px_rgb(79_70_229/0.8)] ring-1 ring-inset ring-white/40">
+        <FrenzAIStill sizes="128px" />
+        <span
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-br from-indigo-900/35 via-indigo-800/20 to-violet-900/35"
+        />
+        <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/90 shadow-[0_6px_18px_-4px_rgb(30_27_75/0.55)]">
           <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5 fill-indigo-600">
             <path d="M8 5v14l11-7z" />
           </svg>

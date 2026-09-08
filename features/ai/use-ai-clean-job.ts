@@ -90,7 +90,8 @@ export interface AiCleanJobActions {
   /** Clear the finished/failed job so the member can choose another video. */
   reset: () => void;
   /** A short-lived link to the finished video, fetched when it is needed. */
-  fetchResultUrl: () => Promise<string | null>;
+  /** `forDownload` asks for a link that SAVES rather than plays — see client.ts. */
+  fetchResultUrl: (forDownload?: boolean) => Promise<string | null>;
   /** The same for the ORIGINAL, so the result can be compared against it. */
   fetchSourceUrl: () => Promise<string | null>;
   /** The ad finished: attest it, then start the job it was earned for. */
@@ -434,10 +435,10 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     setUploading(false);
   }, [applyJob, stopPolling]);
 
-  const fetchResultUrl = useCallback(async () => {
+  const fetchResultUrl = useCallback(async (forDownload = false) => {
     const current = jobRef.current;
     if (!current) return null;
-    const res = await getAiJobResult(current.id);
+    const res = await getAiJobResult(current.id, forDownload);
     if (!res.ok) {
       setError({ code: res.code, message: res.error });
       return null;

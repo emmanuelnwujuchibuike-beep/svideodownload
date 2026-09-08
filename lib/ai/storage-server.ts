@@ -160,16 +160,68 @@ export async function signSourceViewUrl(path: string): Promise<{ url: string; ex
   return { url: data.signedUrl, expiresIn: AI_SIGNED_URL_TTL_SECONDS };
 }
 
-/** A link the MEMBER can open. Minutes, not hours — see the note at the top. */
-export async function signResultUrl(path: string): Promise<{ url: string; expiresIn: number }> {
+/**
+ * A link the MEMBER can open. Minutes, not hours — see the note at the top.
+ *
+ * ── 🔴 `downloadAs` IS WHAT MAKES DOWNLOADING ACTUALLY WORK ──────────────────
+ *
+ * Owner, 2026-09-08: "downloading the video dont work, it should follow the
+ * normal download route."
+ *
+ * The result panel was doing `<a href={signedUrl} download="clean.mp4">`, and
+ * the browser ignored the `download` attribute completely — because **the
+ * attribute is only honoured for SAME-ORIGIN urls**. A Supabase signed URL is
+ * `…supabase.co`, a different origin, so Chrome and Safari drop the attribute
+ * and navigate to the file instead: the video opens and plays, and nothing is
+ * saved. The rest of the app never hits this because its downloads proxy
+ * through `/api/download`, which is same-origin.
+ *
+ * Supabase can set the header itself. `?download=<name>` on a signed URL makes
+ * storage answer with `Content-Disposition: attachment; filename=…`, which a
+ * browser obeys regardless of origin.
+ *
+ * ⚠️ Deliberately NOT solved by proxying the file through a route of ours. That
+ * would work too, and it would pull every finished video through a serverless
+ * function that bills by the millisecond and holds the whole stream in memory —
+ * paying real money to re-add a header the storage layer will set for free.
+ *
+ * The filename is sanitised: it lands in a `Content-Disposition` header, and a
+ * name carrying a quote or a newline is how a header gets split.
+ */
+export async function signResultUrl(
+  path: string,
+  downloadAs?: string,
+): Promise<{ url: string; expiresIn: number }> {
   const admin = createAdminClient();
   const { data, error } = await admin.storage
     .from(AI_RESULT_BUCKET)
-    .createSignedUrl(path, AI_SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(
+      path,
+      AI_SIGNED_URL_TTL_SECONDS,
+      downloadAs ? { download: safeDownloadName(downloadAs) } : undefined,
+    );
   if (error || !data?.signedUrl) {
     throw new AiJobError("STORAGE_ERROR", error?.message ?? "no signed result url");
   }
   return { url: data.signedUrl, expiresIn: AI_SIGNED_URL_TTL_SECONDS };
+}
+
+/**
+ * A filename safe to put in a `Content-Disposition` header.
+ *
+ * 🔴 Quotes, backslashes and any control character are removed rather than
+ * escaped. This value originates in a filename the MEMBER chose, and a header
+ * is exactly the wrong place to be clever: a stray `"` ends the quoted string
+ * and a `\r\n` starts a new header. Stripping is the boring, safe answer.
+ */
+function safeDownloadName(name: string): string {
+  const cleaned = name
+    // eslint-disable-next-line no-control-regex -- the point is to strip them
+    .replace(/[\u0000-\u001F\u007F"\\;\r\n]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  return cleaned || "frenz-ai-clean.mp4";
 }
 
 /**

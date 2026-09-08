@@ -140,7 +140,7 @@ export function FrenzAICleanShowcase({
           The beam. A long, slow sweep rather than a shimmer — motion that reads
           as light moving through the scene, not as a loading state.
         */}
-        <span className="frenz-ai-beam absolute right-10 top-[18%] h-40 w rotate-[38deg] rounded-full bg-gradient-to-b from-transparent via-white to-transparent opacity-80 shadow-[0_0_18px_4px_rgb(255_255_255/0.35)]" />
+        <span className="frenz-ai-beam absolute right-10 top-[18%] h-40 w-[3px] rotate-[38deg] rounded-full bg-gradient-to-b from-transparent via-white to-transparent opacity-80 shadow-[0_0_18px_4px_rgb(255_255_255/0.35)]" />
 
         {/* the three chips — the text this tool removes */}
         <span className="frenz-ai-drift-a absolute right-[4.5rem] top-[22%] -rotate-[8deg] rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-[0_8px_20px_-6px_rgb(217_70_239/0.7)]">

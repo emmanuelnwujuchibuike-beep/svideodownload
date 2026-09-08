@@ -11,6 +11,7 @@ import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { getJobAsService, transitionJob } from "@/lib/ai/job-store";
 import { AI_RESULT_BUCKET, aiResultKey, pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
+import { notifyAiCleanFailed, notifyAiCleanFinished } from "@/lib/ai/notify";
 import { consumeAiUsage, releaseAiUsage } from "@/lib/ai/usage";
 import { AI_CLEAN_LIMITS } from "@/lib/ai/config";
 import {
@@ -429,7 +430,22 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
       metadata: { ...(job.metadata ?? {}), provider_output_url: null },
     });
 
-    if (completed) await consumeAiUsage(job.user_id, feature.id);
+    if (completed) {
+      await consumeAiUsage(job.user_id, feature.id);
+      /*
+        🔴 They are almost certainly not looking at this tab. The model runs for
+        minutes, so by the time it lands the member has switched apps and the
+        polling has stopped — see lib/ai/notify.ts. Awaited rather than fired
+        and forgotten: this runs on the long-lived worker, not on a serverless
+        function that freezes at the response, and the push fan-out is bounded
+        so it cannot hang the finalizer.
+      */
+      await notifyAiCleanFinished({
+        userId: job.user_id,
+        jobId,
+        audioRestored: hasAudio && verdict.probe.hasAudio,
+      });
+    }
 
     console.info("[ai/finalize] completed", {
       jobId,
@@ -465,6 +481,14 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     // 🔴 Ours, so it is free. The member is not charged for a mux that failed.
     const entitlement = await getUserAIEntitlement(job.user_id, feature);
     await releaseAiUsage(job.user_id, feature.id, entitlement.dailyLimit);
+
+    // …and they are told, with the refund stated. A silent failure on a job
+    // somebody stopped watching is indistinguishable from one still running.
+    await notifyAiCleanFailed({
+      userId: job.user_id,
+      jobId,
+      message: "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
+    });
 
     console.error("[ai/finalize] failed", {
       jobId,

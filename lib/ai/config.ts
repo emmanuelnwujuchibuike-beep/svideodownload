@@ -72,7 +72,29 @@ export const AI_CLEAN_LIMITS = {
  */
 export const AI_CLEAN_CONFIG = {
   provider: "replicate" as const,
-  model: "hjunior29/video-text-remover",
+  /**
+   * Which published model runs the job.
+   *
+   * ── 🔴 OVERRIDABLE, BECAUSE THE UPSTREAM ONE IS ON CPU ──────────────────────
+   *
+   * Measured 2026-09-08: `hjunior29/video-text-remover` is published on CPU
+   * hardware (`"hardware": {"arch": "cpu"}`, $0.0001/sec). Its own README says
+   * "GPU is auto-detected and used if available (3-6x faster)" — the CUDA path
+   * exists and is simply dormant, because `cog.yaml` ships `gpu: false` and
+   * `requirements.txt` pins the CPU build of onnxruntime.
+   *
+   * The consequence is not academic: a 1.5 MB clip sat in `processing` for 41
+   * minutes and was abandoned without a result, against a published typical
+   * run of 124 seconds. Most of that is queue and cold boot on a shared CPU
+   * pool nobody keeps warm.
+   *
+   * The model is MIT-licensed, so the fix is to publish the same code on GPU
+   * hardware under our own account — see docs/replicate-gpu/. That changes the
+   * OWNER and NAME, not just the version, which is why this is an environment
+   * variable now. Swapping providers becomes a dashboard edit and a rollback
+   * becomes instant, with no deploy in either direction.
+   */
+  model: process.env.REPLICATE_AI_CLEAN_MODEL?.trim() || "hjunior29/video-text-remover",
   /**
    * 🔴 THE PIN.
    *

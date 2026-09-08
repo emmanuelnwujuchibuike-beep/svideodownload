@@ -1,8 +1,10 @@
 import "server-only";
 
 import { getUserAIEntitlement } from "@/lib/ai/entitlement";
+import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
+import { notifyAiCleanFailed } from "@/lib/ai/notify";
 import { AI_STALL_DEADLINE_MS, stalledForMs, type StallableJob } from "@/lib/ai/stall";
 import { releaseAiUsage } from "@/lib/ai/usage";
 
@@ -54,6 +56,17 @@ export async function failStalledJob(
     // is worth logging and is not worth reporting the job as still running.
     console.error("[ai/stall] refund failed", { jobId: job.id, error: String(e) });
   }
+
+  /*
+    They stopped watching long before this — the deadline is measured in tens
+    of minutes. A push is the only way they learn, and it says the allowance
+    came back because otherwise a timeout reads as a wasted run.
+  */
+  await notifyAiCleanFailed({
+    userId: job.user_id,
+    jobId: job.id,
+    message: aiErrorMessage("PROVIDER_TIMEOUT"),
+  });
 
   console.warn("[ai/stall] failed a stalled job", {
     jobId: job.id,

@@ -1,0 +1,44 @@
+# ============================================================================
+#  video-text-remover, on GPU
+# ============================================================================
+#
+# A drop-in replacement for the `cog.yaml` in
+# https://github.com/hjunior29/video-text-remover (MIT licensed).
+#
+# TWO LINES DIFFER FROM UPSTREAM, and they are the whole reason this exists:
+#
+#     build.gpu:  false  ->  true
+#     build.cuda: (absent) -> "12.1"
+#
+# The model's own README says "GPU is auto-detected and used if available
+# (3-6x faster)", and its detection stage runs through ONNX Runtime, which
+# picks CUDAExecutionProvider automatically when the GPU build is installed.
+# So the acceleration is already written; upstream simply published on CPU.
+#
+# 🔴 The paired change is in requirements.txt — `onnxruntime` must become
+# `onnxruntime-gpu`, or this container gets a GPU it cannot address and you
+# pay 2.25x per second for exactly the same speed. Ship both or neither.
+#
+# Why 12.1: onnxruntime-gpu 1.20.x builds against CUDA 12.x, and 12.1 is the
+# version Replicate's images are best tested on. If `cog push` complains, 12.4
+# is the next thing to try — not a lower major version.
+
+image: r8.im/YOUR-REPLICATE-USERNAME/video-text-remover-gpu
+
+build:
+  # ── the change ────────────────────────────────────────────────────────────
+  gpu: true
+  cuda: "12.1"
+
+  # ── everything below is upstream, unmodified ──────────────────────────────
+  system_packages:
+    - "libglib2.0-0"
+    - "libsm6"
+    - "libxext6"
+    - "libxrender-dev"
+    - "libgomp1"
+    - "ffmpeg"
+  python_version: "3.12"
+  python_requirements: requirements.txt
+
+predict: "predict.py:Predictor"

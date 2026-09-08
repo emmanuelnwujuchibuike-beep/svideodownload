@@ -1,0 +1,25 @@
+# Drop-in replacement for upstream's requirements.txt.
+#
+# ONE LINE DIFFERS:  onnxruntime  ->  onnxruntime-gpu
+#
+# Same version number, same API, same outputs — `onnxruntime-gpu` is the same
+# library built with CUDAExecutionProvider compiled in. The model's detector
+# calls ort.InferenceSession without naming a provider, so ORT selects CUDA on
+# its own the moment this build is present and a GPU is visible. No code change.
+#
+# 🔴 Do NOT install both. Having `onnxruntime` and `onnxruntime-gpu` in the same
+# environment is a documented conflict: they provide the same `onnxruntime`
+# module and whichever landed last wins, silently. A container that quietly
+# resolved to the CPU wheel would run at CPU speed on GPU hardware and bill
+# 2.25x per second for it — the exact failure this whole change exists to undo,
+# made invisible.
+#
+# opencv-python-headless stays as-is on purpose: the inpainting is cv2.inpaint
+# over the detected text boxes only (see _apply_hybrid in predict.py), which is
+# a small ROI per box rather than a full frame, so it is not the bottleneck and
+# a CUDA OpenCV build would add a long compile for no measurable gain.
+
+opencv-python-headless==4.10.0.84
+numpy==2.0.2
+onnxruntime-gpu==1.20.1
+Pillow==10.4.0

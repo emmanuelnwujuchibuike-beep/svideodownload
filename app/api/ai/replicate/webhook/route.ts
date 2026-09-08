@@ -1,11 +1,13 @@
 import { after, NextResponse } from "next/server";
 
+import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { findJobByPredictionId, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
 import { getUserAIEntitlement } from "@/lib/ai/entitlement";
 import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
+import { notifyAiCleanFailed } from "@/lib/ai/notify";
 import { releaseAiUsage } from "@/lib/ai/usage";
 
 export const runtime = "nodejs";
@@ -204,6 +206,17 @@ async function failJob(
 
   if (updated) {
     await refund(userId, feature);
+    /*
+      The provider gave up on a job the member is probably no longer watching —
+      this model runs for minutes, so a silent failure is indistinguishable
+      from one still running. The refund is stated in the sentence because
+      "it failed" alone reads as "and it cost me one of my two".
+    */
+    await notifyAiCleanFailed({
+      userId,
+      jobId,
+      message: aiErrorMessage(code === "PROVIDER_UNAVAILABLE" ? "PROVIDER_UNAVAILABLE" : "PROCESSING_FAILED"),
+    });
     console.error("[ai/webhook] failed", {
       jobId,
       userId,

@@ -105,12 +105,14 @@ export async function getUserAIEntitlement(
   const settings = await getLandingSettings();
   const policy = applyConfiguredLimits(policyFor(plan), {
     freeDailyCredits: settings.frenzAiFreeDailyCredits,
+    freeEnabled: settings.frenzAiFreeEnabled,
   });
 
   return {
     plan,
     feature: feature.id,
-    allowed: featureOfferedTo(plan, feature.id) && policy.dailyLimit > 0,
+    // `offered` is the operator switch; the rest is the plan's own rules.
+    allowed: featureOfferedTo(plan, feature.id) && policy.offered !== false && policy.dailyLimit > 0,
     dailyLimit: policy.dailyLimit,
     unlimited: policy.unlimited,
     maxConcurrent: policy.maxConcurrent,
@@ -143,6 +145,7 @@ export async function getAiEntitlementSnapshot(
         requiresReward: entitlement.requiresReward,
         rewardsPerJob: entitlement.rewardsPerJob,
         maxConcurrent: entitlement.maxConcurrent,
+        offered: entitlement.allowed,
       },
       usedToday,
     }),

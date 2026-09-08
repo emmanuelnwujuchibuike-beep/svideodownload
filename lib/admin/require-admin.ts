@@ -71,7 +71,7 @@ export async function getAdminUser(): Promise<User | null> {
   */
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, is_admin")
     .eq("id", user.id)
     .single();
 
@@ -86,7 +86,9 @@ export async function getAdminUser(): Promise<User | null> {
        so it never reaches the browser, and `user.email` here comes from the
        verified `getUser()` response rather than from anything the client sent.
   */
-  return isAdmin(profile?.role, user.email) ? user : null;
+  // `is_admin` first — see the note on isAdmin(). Since 0144 it is the durable
+  // signal; the other two are compatibility and recovery.
+  return isAdmin(profile?.role, user.email, profile?.is_admin) ? user : null;
 }
 
 /**

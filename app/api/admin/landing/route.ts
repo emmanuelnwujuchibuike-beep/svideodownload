@@ -56,6 +56,12 @@ const schema = z.object({
   */
   frenzAiPublicEnabled: z.boolean().default(true),
   frenzAiFreeDailyCredits: z.coerce.number().int().min(0).max(FRENZ_AI_MAX_FREE_CREDITS).default(2),
+  /*
+    Turn the free tier off entirely and show "Pro feature" instead. Kept
+    separate from a zero credit count so the interface can say the right thing;
+    see the field's note in lib/landing/settings.ts.
+  */
+  frenzAiFreeEnabled: z.boolean().default(true),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

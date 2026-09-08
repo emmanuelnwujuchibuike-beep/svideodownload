@@ -74,7 +74,10 @@ describe("server-side authorization is the boundary, not the middleware", () => 
   });
 
   it("re-reads the role from the DATABASE rather than trusting the JWT", () => {
-    expect(strip(requireAdmin)).toMatch(/from\("profiles"\)[\s\S]{0,120}select\("role"\)/);
+    // Reads BOTH signals from the database. `is_admin` is the durable one as
+    // of 0144; `role` is kept for compatibility. The point of the assertion is
+    // unchanged: the decision comes from a fresh row, never from the JWT.
+    expect(strip(requireAdmin)).toMatch(/from\("profiles"\)[\s\S]{0,120}select\("role, is_admin"\)/);
   });
 
   it("is server-only, so a client component importing it fails the build", () => {
@@ -327,6 +330,18 @@ describe("database hardening (migration 0136)", () => {
     */
     expect(sql).toMatch(/profiles_protect_role/);
     expect(sql).toMatch(/before update on public\.profiles/);
+
+    /*
+      🔴 0144 added `profiles.is_admin`, which grants operator access and lives
+      on a row its own subject may update. Without the same guard, that is
+      `update profiles set is_admin = true where id = <self>` — the identical
+      escalation 0136 closed, under a new column name.
+    */
+    const flagGuard = readFileSync(
+      join(process.cwd(), "supabase/migrations/0144_admin_flag.sql"),
+      "utf8",
+    );
+    expect(flagGuard).toMatch(/new\.is_admin\s*:=\s*old\.is_admin/);
     expect(sql).toMatch(/new\.role := old\.role/);
     // Server-side callers (service role) have no auth.uid() and stay able to grant.
     expect(sql).toMatch(/auth\.uid\(\) is null/);

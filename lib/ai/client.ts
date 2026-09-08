@@ -204,6 +204,8 @@ export async function startAiJob(
  */
 export interface AiCleanEntitlement {
   plan: string;
+  /** False when an operator has switched free access off — a different state. */
+  offered: boolean;
   unlimited: boolean;
   dailyLimit: number | null;
   usedToday: number;

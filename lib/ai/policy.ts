@@ -68,6 +68,14 @@ export interface AiPlanPolicy {
   rewardsPerJob: number;
   /** Jobs this member may have queued, processing or finalizing at once. */
   maxConcurrent: number;
+  /**
+   * Whether this plan is offered the feature at all right now.
+   *
+   * False means "not for your plan", which is a different sentence from "you
+   * have used today's allowance" — and the interface says a different thing for
+   * each. Defaults true; only the operator switch turns it off.
+   */
+  offered?: boolean;
 }
 
 /**
@@ -143,9 +151,20 @@ export function policyFor(plan: BillingPlan): AiPlanPolicy {
  */
 export function applyConfiguredLimits(
   policy: AiPlanPolicy,
-  config: { freeDailyCredits?: number } = {},
+  config: { freeDailyCredits?: number; freeEnabled?: boolean } = {},
 ): AiPlanPolicy {
+  // Paid plans are never touched by an operator field — see the note above.
   if (policy.unlimited) return policy;
+
+  /*
+    The switch beats the number. An operator who has turned the free tier off
+    means off, whatever the credit field happens to say — and `offered: false`
+    is what lets the interface say "Pro feature" instead of "0 left today".
+  */
+  if (config.freeEnabled === false) {
+    return { ...policy, dailyLimit: 0, offered: false };
+  }
+
   if (typeof config.freeDailyCredits !== "number" || !Number.isFinite(config.freeDailyCredits)) {
     return policy;
   }
@@ -174,6 +193,8 @@ export function featureOfferedTo(_plan: BillingPlan, _feature: AiFeature): boole
  */
 export interface AiEntitlementView {
   plan: BillingPlan;
+  /** False when the operator has switched this plan's access off entirely. */
+  offered: boolean;
   /** True when the plan has no product cap. The interface hides counts then. */
   unlimited: boolean;
   /** null when unlimited — a number here would invent a restriction. */
@@ -197,9 +218,13 @@ export function entitlementView(input: {
   const { plan, policy, usedToday } = input;
   const remaining = Math.max(0, policy.dailyLimit - usedToday);
 
+  const offered = policy.offered !== false;
+
   return {
     plan,
     unlimited: policy.unlimited,
+    // Surfaced so the interface can tell "not for your plan" apart from "spent".
+    offered,
     dailyLimit: policy.unlimited ? null : policy.dailyLimit,
     usedToday,
     remainingToday: policy.unlimited ? null : remaining,
@@ -213,8 +238,8 @@ export function entitlementView(input: {
       does — and the interface shows the limit-reached state instead of a
       "Watch Ad" button.
     */
-    rewardRequired: policy.requiresReward && remaining > 0,
-    rewardsPerJob: policy.requiresReward && remaining > 0 ? policy.rewardsPerJob : 0,
-    canStart: remaining > 0,
+    rewardRequired: offered && policy.requiresReward && remaining > 0,
+    rewardsPerJob: offered && policy.requiresReward && remaining > 0 ? policy.rewardsPerJob : 0,
+    canStart: offered && remaining > 0,
   };
 }

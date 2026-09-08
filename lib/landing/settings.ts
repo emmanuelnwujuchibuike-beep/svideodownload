@@ -154,6 +154,22 @@ export interface LandingSettings {
    * policy, and enforced by the same atomic reservation as before.
    */
   frenzAiFreeDailyCredits: number;
+  /**
+   * Whether FREE members may run AI Clean at all.
+   *
+   * Owner, 2026-09-08: "since the replicate says credit first, then before the
+   * reward ad start showing, set in admin dashboard so i can turn off anonymous
+   * ai usage to show upgrade to pro and i can remove it later."
+   *
+   * 🔴 Distinct from setting the allowance to zero, and the difference is what a
+   * member reads. Zero credits produces "you have used your 0 free cleans
+   * today", which is nonsense. This switch produces "AI Clean is a Pro feature
+   * right now" — which is the truth, and is the honest thing to say while every
+   * job costs provider credit the owner is paying for directly.
+   *
+   * Paid plans are unaffected in both cases.
+   */
+  frenzAiFreeEnabled: boolean;
 }
 
 /** Nobody gets more than this from the admin field. A typo must not cost money. */
@@ -166,6 +182,9 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiPublicEnabled: true,
   // Two, because there is no rewarded ad to earn a third with yet.
   frenzAiFreeDailyCredits: 2,
+  // ON by default: switching a feature off is a decision an operator makes, not
+  // a state a fresh install falls into.
+  frenzAiFreeEnabled: true,
 };
 
 /**
@@ -229,6 +248,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       // is present-day crawlability must mean ON.
       frenzAiPublicEnabled: raw.frenzAiPublicEnabled !== false,
       frenzAiFreeDailyCredits: normalizeFreeCredits(raw.frenzAiFreeDailyCredits),
+      frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
     };
     cache = { at: Date.now(), value };
     return value;
@@ -249,6 +269,7 @@ export async function setLandingSettings(s: LandingSettings): Promise<void> {
     // else in the system expects.
     frenzAiPublicEnabled: s.frenzAiPublicEnabled !== false,
     frenzAiFreeDailyCredits: normalizeFreeCredits(s.frenzAiFreeDailyCredits),
+    frenzAiFreeEnabled: s.frenzAiFreeEnabled !== false,
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

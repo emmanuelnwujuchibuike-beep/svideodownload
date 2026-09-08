@@ -55,6 +55,34 @@ export function AICleanAllowance({
   const remaining = entitlement.remainingToday ?? 0;
   const limit = entitlement.dailyLimit ?? 0;
 
+  /*
+    ── Switched off for free members entirely ──────────────────────────────────
+
+    A DIFFERENT sentence from "you have used today's allowance", and that
+    distinction is the whole reason the operator switch is separate from a zero
+    credit count. Telling somebody they have spent 0 of 0 free cleans is
+    nonsense; telling them it is a Pro feature right now is simply true.
+  */
+  if (entitlement.offered === false) {
+    return (
+      <div
+        className={cn(
+          "rounded-2xl border border-border/70 bg-secondary/30 px-4 py-4 text-center",
+          className,
+        )}
+      >
+        <FrenzAICore presence="calm" size="md" className="mx-auto" />
+        <p className="mt-2.5 text-sm font-semibold">AI Clean is a Pro feature right now</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Every clean runs on paid AI hardware. Pro members can use it today.
+        </p>
+        <Link href="/account/plan" prefetch className="btn-lux btn-lux-primary mt-3.5">
+          Upgrade to Pro
+        </Link>
+      </div>
+    );
+  }
+
   /* ── Spent: the one moment an upgrade is the useful thing to say ── */
   if (!entitlement.canStart) {
     return (

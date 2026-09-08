@@ -114,6 +114,7 @@ describe("entitlementView", () => {
       [
         "canStart",
         "dailyLimit",
+        "offered",
         "plan",
         "remainingToday",
         "rewardRequired",
@@ -189,5 +190,40 @@ describe("applyConfiguredLimits", () => {
 
   it("floors a fractional value rather than admitting half a job", () => {
     expect(applyConfiguredLimits(policyFor("free"), { freeDailyCredits: 2.9 }).dailyLimit).toBe(2);
+  });
+});
+
+describe("the operator switch", () => {
+  it("🔴 says \"not for your plan\", which is NOT the same as \"you spent it\"", () => {
+    /*
+      Zero credits would render "you have used your 0 free cleans today", which
+      is nonsense. The switch is a separate field so the interface can say the
+      true thing instead — and so no ad is ever offered for a session that
+      cannot exist.
+    */
+    const off = applyConfiguredLimits(policyFor("free"), { freeEnabled: false });
+    const view = entitlementView({ plan: "free", policy: off, usedToday: 0 });
+    expect(view.offered).toBe(false);
+    expect(view.canStart).toBe(false);
+    expect(view.rewardRequired).toBe(false);
+  });
+
+  it("beats the credit number, whatever it says", () => {
+    const off = applyConfiguredLimits(policyFor("free"), { freeEnabled: false, freeDailyCredits: 9 });
+    expect(off.dailyLimit).toBe(0);
+    expect(entitlementView({ plan: "free", policy: off, usedToday: 0 }).canStart).toBe(false);
+  });
+
+  it("🔴 never switches off a PAID plan", () => {
+    // The switch is about the free tier. A paying member losing access because
+    // of it would be the operator accidentally cancelling what they sold.
+    const pro = applyConfiguredLimits(policyFor("pro"), { freeEnabled: false });
+    expect(entitlementView({ plan: "pro", policy: pro, usedToday: 0 }).canStart).toBe(true);
+  });
+
+  it("leaves everything alone when the switch is on", () => {
+    const on = applyConfiguredLimits(policyFor("free"), { freeEnabled: true, freeDailyCredits: 2 });
+    expect(entitlementView({ plan: "free", policy: on, usedToday: 0 }).canStart).toBe(true);
+    expect(entitlementView({ plan: "free", policy: on, usedToday: 0 }).offered).toBe(true);
   });
 });

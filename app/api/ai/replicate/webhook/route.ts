@@ -2,7 +2,7 @@ import { after, NextResponse } from "next/server";
 
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
-import { findJobByPredictionId, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
+import { findJobByPredictionId, noteJobDiagnostic, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
@@ -184,6 +184,13 @@ export async function POST(request: Request) {
           leave the job for the reconciler, which is exactly what that path is
           for.
         */
+        // 🔴 On the ROW, not only in a log — see noteJobDiagnostic.
+        await noteJobDiagnostic(job.id, {
+          finalize_dispatch: dispatch.dispatched ? "ok" : dispatch.reason,
+          finalize_detail: dispatch.dispatched ? null : ("detail" in dispatch ? dispatch.detail : null),
+          finalize_from: "webhook",
+        });
+
         if (dispatch.dispatched === false && dispatch.reason === "refused") {
           console.error("[ai/webhook] worker REFUSED the finalization — ending the job", {
             jobId: job.id,

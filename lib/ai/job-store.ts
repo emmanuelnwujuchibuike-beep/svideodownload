@@ -460,6 +460,42 @@ export async function getJobAsService(jobId: string): Promise<AiJobRow | null> {
  * Not a column, because a column implies something worth keeping. This is a
  * baton being passed between two machines.
  */
+/**
+ * Write a diagnostic breadcrumb onto a job, without changing its status.
+ *
+ * ── 🔴 WHY THIS EXISTS: LOGS ARE NOT ALWAYS REACHABLE ───────────────────────
+ *
+ * The finalization handoff failed silently for every AI Clean job ever created,
+ * and diagnosing it was slow for one reason: the only record of what happened
+ * was a `console.info` in a Vercel function, and the person debugging had
+ * database access but not log access. Every theory had to be reasoned from
+ * source instead of read from evidence, and two of them were wrong.
+ *
+ * So the outcome of the handoff now lands in the ROW. `ai_jobs.metadata` is
+ * already service-role-only and is never returned to a browser (`jobToView` is
+ * an allow-list), so this adds no exposure — and it turns "why is this job
+ * stuck" from an argument into a query.
+ *
+ * Best-effort by construction: a diagnostic that can fail a job would be worse
+ * than no diagnostic. It never throws.
+ */
+export async function noteJobDiagnostic(
+  jobId: string,
+  note: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.from("ai_jobs").select("metadata").eq("id", jobId).maybeSingle();
+    const existing = (data?.metadata ?? {}) as Record<string, unknown>;
+    await admin
+      .from("ai_jobs")
+      .update({ metadata: { ...existing, ...note, noted_at: new Date().toISOString() } })
+      .eq("id", jobId);
+  } catch (e) {
+    console.error("[ai/jobs] diagnostic note failed", { jobId, error: String(e) });
+  }
+}
+
 export async function recordProviderOutput(jobId: string, url: string): Promise<void> {
   const admin = createAdminClient();
   const { data, error: readError } = await admin

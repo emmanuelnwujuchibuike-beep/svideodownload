@@ -91,10 +91,32 @@ export async function dispatchFinalization(jobId: string): Promise<DispatchResul
     }
     return { dispatched: true };
   } catch (e) {
-    // An abort here is the EXPECTED shape when the worker accepts the job and
-    // starts working before answering — it is not a failure of the dispatch.
+    /*
+      ── 🔴 A TIMEOUT IS A FAILURE. IT USED TO BE REPORTED AS SUCCESS. ───────
+
+      This read: "an abort here is the EXPECTED shape when the worker accepts
+      the job and starts working before answering". That is simply not how the
+      worker behaves. `/api/internal/ai/finalize` validates the body, starts
+      `finalizeAICleanJob` WITHOUT awaiting it, and returns 202 in
+      milliseconds — deliberately, so this call never waits on a mux.
+
+      So an abort does not mean "busy working". It means the worker did not
+      answer in eight seconds: unreachable host, wrong URL, DNS failure, a cold
+      container, a hung TLS handshake. Every one of those is a failed handoff.
+
+      Calling it success was the worst possible shape for this bug. The job was
+      left in `processing` with NO error recorded, nothing retried, and a log
+      line claiming the dispatch had worked — which is precisely what a stuck
+      job looks like from the outside, and why this took so long to find.
+    */
     const aborted = e instanceof Error && e.name === "AbortError";
-    return aborted ? { dispatched: true } : { dispatched: false, reason: "failed", detail: String(e) };
+    return {
+      dispatched: false,
+      reason: "failed",
+      detail: aborted
+        ? `worker did not answer within ${DISPATCH_TIMEOUT_MS}ms — check DOWNLOAD_WORKER_URL is reachable from Vercel`
+        : String(e),
+    };
   } finally {
     clearTimeout(timer);
   }

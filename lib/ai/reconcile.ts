@@ -3,7 +3,7 @@ import "server-only";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { aiFeature, type AiJobRow, type AiJobStatus } from "@/lib/ai/jobs";
-import { recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
+import { recordProviderOutput, transitionJob, noteJobDiagnostic } from "@/lib/ai/job-store";
 import { notifyAiCleanFailed } from "@/lib/ai/notify";
 import { providerFor } from "@/lib/ai/providers";
 import { subjectFromRow } from "@/lib/ai/subject";
@@ -161,6 +161,12 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
         "succeeded with no usable output", which reads like the model's fault
         and is not.
       */
+      await noteJobDiagnostic(job.id, {
+        finalize_dispatch: dispatch.dispatched ? "ok" : dispatch.reason,
+        finalize_detail: dispatch.dispatched ? null : ("detail" in dispatch ? dispatch.detail : null),
+        finalize_from: "reconcile",
+      });
+
       if (dispatch.dispatched === false && dispatch.reason === "refused") {
         console.error("[ai/reconcile] worker REFUSED the finalization — ending the job", {
           jobId: job.id,

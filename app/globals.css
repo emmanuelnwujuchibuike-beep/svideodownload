@@ -698,9 +698,58 @@
     .frenz-ai-breathe,
     .frenz-ai-drift,
     .frenz-ai-pulse,
-    .frenz-ai-materialize {
+    .frenz-ai-materialize,
+    .frenz-ai-beam,
+    .frenz-ai-drift-a,
+    .frenz-ai-drift-b,
+    .frenz-ai-drift-c,
+    .frenz-ai-twinkle {
       animation: none !important;
     }
+  }
+
+  /* ── The AI Clean showcase card ────────────────────────────────────────────
+     The owner's reference (public/frenz ai page.jpg) annotates this card
+     "subtle motion · glowing accents · feels alive, not static".
+
+     🔴 "Alive" is easy to over-serve. Every cycle below is 9-16 SECONDS, on
+     `transform`/`opacity` only, so the card reads as a lit scene rather than as
+     something loading — and so a phone's compositor is not pinned to make a
+     card look premium. All of it stops under `prefers-reduced-motion` above,
+     and none of it is on the landing page's critical path. */
+  @keyframes frenz-ai-beam {
+    0%, 100% { transform: rotate(38deg) translateY(-18%); opacity: 0.25; }
+    50%      { transform: rotate(38deg) translateY(18%);  opacity: 0.85; }
+  }
+  @keyframes frenz-ai-chip-drift {
+    0%, 100% { transform: var(--chip-rot) translate3d(0, 0, 0); }
+    50%      { transform: var(--chip-rot) translate3d(0, -6px, 0); }
+  }
+  @keyframes frenz-ai-twinkle {
+    0%, 100% { opacity: 0.15; transform: scale(0.8); }
+    50%      { opacity: 0.95; transform: scale(1); }
+  }
+
+  .frenz-ai-beam {
+    animation: frenz-ai-beam 11s ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
+    will-change: transform, opacity;
+  }
+  /* Each chip keeps its own rotation through the keyframe via `--chip-rot`;
+     writing the rotation into the animation instead would fight the class that
+     sets it and the chips would snap flat on the first frame. */
+  .frenz-ai-drift-a { --chip-rot: rotate(-8deg); animation: frenz-ai-chip-drift 9s ease-in-out infinite; }
+  .frenz-ai-drift-b { --chip-rot: rotate(-6deg); animation: frenz-ai-chip-drift 11s ease-in-out infinite 0.8s; }
+  .frenz-ai-drift-c { --chip-rot: rotate(6deg);  animation: frenz-ai-chip-drift 13s ease-in-out infinite 1.6s; }
+  .frenz-ai-drift-a,
+  .frenz-ai-drift-b,
+  .frenz-ai-drift-c {
+    animation-play-state: var(--ai-play, running);
+    will-change: transform;
+  }
+  .frenz-ai-twinkle {
+    animation: frenz-ai-twinkle 4.5s ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
   }
 
   /* Loading stripe — the indeterminate bar shown inside a route's loading.tsx

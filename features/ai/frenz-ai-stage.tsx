@@ -43,6 +43,7 @@ export function FrenzAIStage({
   action,
   className,
   coreSize = "xl",
+  tight = false,
 }: {
   stage?: AiCleanStage;
   armed?: boolean;
@@ -53,6 +54,16 @@ export function FrenzAIStage({
   action?: ReactNode;
   className?: string;
   coreSize?: "lg" | "xl";
+  /**
+   * Pull the mark, eyebrow and headline together.
+   *
+   * 🔴 A direct instruction, not a taste call. The owner's reference image
+   * (`public/frenz ai page.jpg`) is annotated "tighter spacing between logo and
+   * headline — feels more energetic and focused", with an arrow at exactly this
+   * gap. The generous default reads as a marketing hero; tight reads as a tool
+   * somebody is about to use, which is what the hub is.
+   */
+  tight?: boolean;
 }) {
   return (
     <FrenzAIEnvironment
@@ -72,12 +83,12 @@ export function FrenzAIStage({
           <FrenzAICore presence={presenceFor({ stage, armed })} size={coreSize} />
 
           {eyebrow ? (
-            <span className="mt-5 text-[11px] font-bold uppercase tracking-[0.22em] text-primary">
+            <span className={cn("text-[11px] font-bold uppercase tracking-[0.22em] text-primary", tight ? "mt-2" : "mt-5")}>
               {eyebrow}
             </span>
           ) : null}
 
-          <h1 className="mt-2 text-[1.7rem] font-bold leading-[1.1] tracking-[-0.035em] sm:text-[2.1rem]">
+          <h1 className={cn("text-[1.7rem] font-bold leading-[1.1] tracking-[-0.035em] sm:text-[2.1rem]", tight ? "mt-1" : "mt-2")}>
             {title}
           </h1>
 
@@ -88,7 +99,7 @@ export function FrenzAIStage({
           {action ? <div className="mt-5">{action}</div> : null}
         </div>
 
-        {children ? <div className="mt-8">{children}</div> : null}
+        {children ? <div className={tight ? "mt-6" : "mt-8"}>{children}</div> : null}
       </div>
     </FrenzAIEnvironment>
   );

@@ -1,0 +1,63 @@
+# ============================================================================
+#  video-subtitle-remover, on GPU — the model that actually REMOVES text
+# ============================================================================
+#
+# Dropped into a clone of https://github.com/YaoFANGUK/video-subtitle-remover
+# (Apache-2.0) by .github/workflows/replicate-vsr-model.yml.
+#
+# ── 🔴 WHY WE ARE REPLACING THE CURRENT MODEL ───────────────────────────────
+#
+# Measured 2026-09-08 on the owner's own video, all four methods of
+# `hjunior29/video-text-remover`, looking at a frame from each:
+#
+#     hybrid / inpaint / inpaint_ns   a large smeared grey blob
+#     background                      a solid grey censor bar
+#
+# and in every one the caption was still legible along the top of the patch.
+# That model fills with `cv2.inpaint`, a single-frame diffusion algorithm: it
+# spreads neighbouring pixels inward and cannot reconstruct paving, skin or
+# fabric, because it has never seen what was behind the text. No parameter
+# changes that.
+#
+# This one can, because it is TEMPORAL. STTN and ProPainter look across frames
+# and recover the region from moments when it was not covered — real pixels
+# rather than an average of the edges. It also detects the subtitles itself, so
+# it drops into the existing pipeline with no new inputs.
+#
+# ── ⚠️ THE IMAGE IS LARGE, AND THAT IS THE COST ─────────────────────────────
+#
+# The repository is ~1.5 GB because the weights are bundled, and torch plus
+# PaddlePaddle add several more. Expect a 30-60 minute first build and roughly
+# 10-14 GB. The workflow frees the runner's disk aggressively for exactly this
+# reason; later builds reuse cached layers.
+
+image: r8.im/YOUR-REPLICATE-USERNAME/video-subtitle-remover
+
+build:
+  gpu: true
+  # 11.8 is what upstream documents for BOTH torch and paddlepaddle-gpu, and
+  # the two must agree — a mismatch here is the classic "installed fine, runs on
+  # CPU" failure, which would cost GPU money for CPU speed.
+  cuda: "11.8"
+  python_version: "3.12"
+
+  system_packages:
+    - "ffmpeg"
+    - "libgl1"
+    - "libglib2.0-0"
+    - "libsm6"
+    - "libxext6"
+    - "libxrender-dev"
+    - "libgomp1"
+
+  # 🔴 NOT `python_requirements`. Upstream's requirements.txt deliberately omits
+  # torch and paddlepaddle, because each needs its own index URL, and cog has no
+  # way to express that. So the wheels come from `run` and the rest from the
+  # file — installed in that order so nothing later pulls a CPU torch over the
+  # CUDA one.
+  run:
+    - "pip install --no-cache-dir torch==2.7.0 torchvision==0.22.0 --index-url https://download.pytorch.org/whl/cu118"
+    - "pip install --no-cache-dir paddlepaddle-gpu==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/"
+    - "pip install --no-cache-dir -r requirements.txt"
+
+predict: "predict.py:Predictor"

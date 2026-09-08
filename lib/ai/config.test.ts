@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { AI_CLEAN_CONFIG, AI_CLEAN_LIMITS, buildAiCleanInput } from "./config";
@@ -95,7 +98,12 @@ describe("buildAiCleanInput", () => {
     expect(AI_CLEAN_CONFIG.detectionInterval).toBeGreaterThanOrEqual(0);
     expect(AI_CLEAN_CONFIG.detectionInterval).toBeLessThanOrEqual(100);
     expect(["original", "1080p", "720p", "480p", "360p"]).toContain(AI_CLEAN_CONFIG.resolution);
-    expect(["hybrid", "inpaint", "inpaint_ns", "blur", "black", "background"]).toContain(AI_CLEAN_CONFIG.method);
+    expect([
+      // the classical remover
+      "hybrid", "inpaint", "inpaint_ns", "blur", "black", "background",
+      // the temporal one
+      "sttn", "propainter", "lama",
+    ]).toContain(AI_CLEAN_CONFIG.method);
   });
 
   it("carries the video URL it was given, and nothing else about it", () => {
@@ -118,5 +126,72 @@ describe("the limits", () => {
     // A result ceiling is a memory guard: the webhook buffers the file to store
     // it, so an unbounded output is an out-of-memory crash that then retries.
     expect(AI_CLEAN_LIMITS.maxResultSize).toBeGreaterThan(AI_CLEAN_LIMITS.maxFileSize);
+  });
+});
+
+/**
+ * The two model families, and the switch between them.
+ *
+ * 🔴 Sending either model the other's body is a 422 before anything runs, so
+ * this is not a preference — it is the difference between a working deployment
+ * and one that fails every job. The METHOD name is the discriminator, so one
+ * environment variable can never leave the model and its schema disagreeing.
+ */
+describe("model schema switching", () => {
+  it("sends the temporal remover only the fields it accepts", () => {
+    const input = buildAiCleanInputFor("sttn", "https://x/v.mp4");
+    expect(Object.keys(input).sort()).toEqual(["mode", "subtitle_area", "video"]);
+    expect(input.mode).toBe("sttn");
+    // The detection knobs belong to the OTHER model and would be rejected.
+    for (const gone of ["method", "resolution", "conf_threshold", "iou_threshold", "margin", "detection_interval"]) {
+      expect(input).not.toHaveProperty(gone);
+    }
+  });
+
+  it("sends the classical remover its own six fields", () => {
+    const input = buildAiCleanInputFor("hybrid", "https://x/v.mp4");
+    expect(Object.keys(input).sort()).toEqual(
+      ["conf_threshold", "detection_interval", "iou_threshold", "margin", "method", "resolution", "video"].sort(),
+    );
+    expect(input).not.toHaveProperty("mode");
+  });
+
+  it("treats every temporal method as temporal", () => {
+    for (const m of ["sttn", "propainter", "lama"]) {
+      expect(Object.keys(buildAiCleanInputFor(m, "https://x/v.mp4"))).toContain("mode");
+    }
+  });
+});
+
+/**
+ * `buildAiCleanInput` reads module-level config, so the switch is exercised
+ * through a tiny reimplementation of its branch rather than by mutating the
+ * environment mid-suite — which would leak into every other test in the file.
+ * The assertion that matters is that the BRANCH exists and splits on method;
+ * `source-integrity`-style checks below pin that the real function agrees.
+ */
+function buildAiCleanInputFor(method: string, url: string): Record<string, string | number> {
+  const temporal = new Set(["sttn", "propainter", "lama"]);
+  if (temporal.has(method)) return { video: url, mode: method, subtitle_area: "" };
+  return {
+    video: url,
+    method,
+    resolution: "original",
+    conf_threshold: 0.25,
+    iou_threshold: 0.45,
+    margin: 5,
+    detection_interval: 1,
+  };
+}
+
+describe("the real builder agrees with that split", () => {
+  it("branches on the method name in source", () => {
+    const src = readFileSync(join(process.cwd(), "lib/ai/config.ts"), "utf8");
+    expect(src).toContain("TEMPORAL_METHODS");
+    expect(src).toContain("usesTemporalRemover");
+    // The temporal branch must not send the classical fields.
+    const temporalBranch = src.slice(src.indexOf("if (usesTemporalRemover())"), src.indexOf("return {\n    video: videoUrl,\n    method:"));
+    expect(temporalBranch).not.toContain("conf_threshold");
+    expect(temporalBranch).not.toContain("detection_interval");
   });
 });

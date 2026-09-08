@@ -1,0 +1,266 @@
+name: Publish the real text remover (VSR) on GPU
+
+# ============================================================================
+#  Builds YaoFANGUK/video-subtitle-remover (Apache-2.0) with the GPU enabled
+#  and pushes it to Replicate under YOUR account. Actions tab, no terminal.
+# ============================================================================
+#
+# ── 🔴 WHY A DIFFERENT MODEL ────────────────────────────────────────────────
+#
+# Owner, 2026-09-08: "i think the video text remover is bluring the text instead
+# of removing it." They were right, and it was measured rather than argued. The
+# owner's own video was run through all four methods of the current model and a
+# frame pulled from each:
+#
+#     hybrid / inpaint / inpaint_ns   a large smeared grey blob
+#     background                      a solid grey censor bar
+#
+# with the caption still legible along the top edge of the patch in every one.
+#
+# That model fills with `cv2.inpaint` — a single-frame diffusion algorithm. It
+# spreads neighbouring pixels inward, so it cannot reconstruct paving, skin or
+# fabric: it never saw what was behind the text. No parameter fixes that.
+#
+# This one is TEMPORAL. STTN and ProPainter recover the covered region from
+# frames where it was NOT covered, putting real picture back rather than an
+# average of the edges. It detects the subtitles itself, so nothing upstream of
+# it has to change.
+#
+# ── WHAT YOU NEED (the same two secrets as the other workflow) ──────────────
+#
+#     REPLICATE_API_TOKEN        ← https://replicate.com/account/api-tokens
+#     REPLICATE_CLI_AUTH_TOKEN   ← https://replicate.com/auth/token
+#
+# Then: Actions → this workflow → Run workflow → leave everything blank.
+#
+# The model is created for you on the chosen hardware, and the username comes
+# from the token. When it finishes, the Summary prints the two variables to put
+# into Vercel:
+#
+#     REPLICATE_AI_CLEAN_MODEL          = <username>/video-subtitle-remover
+#     REPLICATE_AI_CLEAN_MODEL_VERSION  = <the 64-char hash>
+#
+# ⚠️ AI_CLEAN_METHOD must also be set to `sttn` (or propainter/lama) — this
+# model's parameter names differ from the old one's. The Summary repeats this.
+#
+# ── ⚠️ THIS BUILD IS BIG AND SLOW ───────────────────────────────────────────
+#
+# The repository is ~1.5 GB because the weights are bundled, and torch plus
+# PaddlePaddle add several more: expect 30-60 minutes and 10-14 GB on the first
+# run. The disk cleanup below is not optional — a stock runner does not have
+# room. Later builds reuse cached layers.
+#
+# ── ⚠️ L40S, NOT T4 ─────────────────────────────────────────────────────────
+#
+# The opposite call from the other workflow, and for a real reason: that model
+# was a YOLOv8 detector that could not use a bigger card. This one runs
+# transformer video inpainting over many frames at once, which is genuinely
+# VRAM-hungry — upstream says so of ProPainter explicitly. A T4's 16 GB will
+# OOM on longer clips.
+
+on:
+  workflow_dispatch:
+    inputs:
+      replicate_owner:
+        description: "Replicate username — LEAVE BLANK to use the token's own account"
+        required: false
+        type: string
+      model_name:
+        description: "Model name (created automatically if it does not exist)"
+        required: true
+        default: "video-subtitle-remover"
+        type: string
+      hardware:
+        description: "Replicate hardware SKU"
+        required: true
+        default: "gpu-l40s"
+        type: choice
+        options:
+          - gpu-l40s
+          - gpu-a100-large
+          - gpu-t4
+
+concurrency:
+  group: replicate-vsr-model
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Check both tokens are configured
+        env:
+          API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          CLI_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${API_TOKEN:-}" ]; then
+            echo "::error::REPLICATE_API_TOKEN is not set (https://replicate.com/account/api-tokens)"
+            missing=1
+          fi
+          if [ -z "${CLI_TOKEN:-}" ]; then
+            echo "::error::REPLICATE_CLI_AUTH_TOKEN is not set — a DIFFERENT token (https://replicate.com/auth/token)"
+            missing=1
+          fi
+          [ "$missing" = "0" ] || exit 1
+          echo "both tokens present"
+
+      - name: Verify the API token and resolve the account
+        id: account
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          OWNER_INPUT: ${{ inputs.replicate_owner }}
+        run: |
+          set -euo pipefail
+          token="$(printf '%s' "$REPLICATE_API_TOKEN" | tr -d '[:space:]')"
+          code=$(curl -sS -o /tmp/account.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${token}" https://api.replicate.com/v1/account)
+          if [ "$code" != "200" ]; then
+            echo "::error::Replicate rejected REPLICATE_API_TOKEN (HTTP $code)"
+            cat /tmp/account.json
+            exit 1
+          fi
+          resolved=$(python3 -c "import json;print(json.load(open('/tmp/account.json')).get('username',''))")
+          [ -n "$resolved" ] || { echo "::error::token valid but no username"; exit 1; }
+          owner="${OWNER_INPUT:-}"
+          [ -z "$owner" ] && owner="$resolved"
+          echo "publishing under: $owner"
+          # The token is never an output — see the note in the other workflow.
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure the model exists
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          OWNER: ${{ steps.account.outputs.owner }}
+          NAME: ${{ inputs.model_name }}
+          HW: ${{ inputs.hardware }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(printf '%s' "$REPLICATE_API_TOKEN" | tr -d '[:space:]')"
+          code=$(curl -sS -o /tmp/model.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${TOKEN}" \
+            "https://api.replicate.com/v1/models/${OWNER}/${NAME}")
+          if [ "$code" = "200" ]; then echo "model already exists"; exit 0; fi
+
+          echo "creating ${OWNER}/${NAME} on ${HW}…"
+          code=$(curl -sS -o /tmp/create.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+            https://api.replicate.com/v1/models \
+            -d "{\"owner\":\"${OWNER}\",\"name\":\"${NAME}\",\"visibility\":\"private\",\"hardware\":\"${HW}\",\"description\":\"video-subtitle-remover (Apache-2.0) for Frenzsave AI Clean\"}")
+          if [ "$code" != "201" ] && [ "$code" != "409" ]; then
+            echo "::error::could not create the model (HTTP $code)"
+            cat /tmp/create.json
+            exit 1
+          fi
+          echo "model ready"
+
+      # 🔴 Aggressive, and required. A stock runner has ~14 GB free; this image
+      # needs more than that. `tool-cache: true` here (unlike the other
+      # workflow) because nothing in this build uses the preinstalled SDKs.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          docker-images: true
+          large-packages: true
+          swap-storage: true
+
+      - name: Check out our overrides
+        uses: actions/checkout@v4
+        with:
+          path: frenzsave
+          sparse-checkout: docs/replicate-vsr
+
+      - name: Clone video-subtitle-remover (Apache-2.0)
+        run: |
+          set -euo pipefail
+          df -h / | tail -1
+          # Shallow: the history is irrelevant and the weights are in the tree.
+          git clone --depth 1 https://github.com/YaoFANGUK/video-subtitle-remover.git model
+          du -sh model | cut -f1 | xargs -I{} echo "repo size: {}"
+          df -h / | tail -1
+
+      - name: Apply the cog wrapper
+        env:
+          OWNER: ${{ steps.account.outputs.owner }}
+          NAME: ${{ inputs.model_name }}
+        run: |
+          set -euo pipefail
+          cp frenzsave/docs/replicate-vsr/cog.yaml   model/cog.yaml
+          cp frenzsave/docs/replicate-vsr/predict.py model/predict.py
+          sed -i "s|r8.im/YOUR-REPLICATE-USERNAME/video-subtitle-remover|r8.im/${OWNER}/${NAME}|" model/cog.yaml
+
+          echo "── cog.yaml ──"
+          cat model/cog.yaml
+
+          grep -q "gpu: true" model/cog.yaml \
+            || { echo "::error::cog.yaml does not enable the GPU"; exit 1; }
+          if grep -q "YOUR-REPLICATE-USERNAME" model/cog.yaml; then
+            echo "::error::image placeholder not replaced — owner resolved empty?"
+            exit 1
+          fi
+          # The wrapper imports upstream's own module; if that path is not there,
+          # the build would succeed and every prediction would fail.
+          test -f model/backend/main.py \
+            || { echo "::error::backend/main.py missing — upstream layout changed"; exit 1; }
+          test -d model/backend/models \
+            || echo "::warning::backend/models not present — weights may download at runtime"
+
+      - name: Set up Cog
+        uses: replicate/setup-cog@v2
+        with:
+          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
+
+      - name: Build and push
+        working-directory: model
+        env:
+          OWNER: ${{ steps.account.outputs.owner }}
+          NAME: ${{ inputs.model_name }}
+        run: |
+          set -euo pipefail
+          echo "pushing to r8.im/${OWNER}/${NAME} — expect 30-60 minutes on the first build"
+          cog push "r8.im/${OWNER}/${NAME}"
+
+      - name: Report the version to pin
+        env:
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          OWNER: ${{ steps.account.outputs.owner }}
+          NAME: ${{ inputs.model_name }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(printf '%s' "$REPLICATE_API_TOKEN" | tr -d '[:space:]')"
+          version=$(curl -sS -H "Authorization: Bearer ${TOKEN}" \
+            "https://api.replicate.com/v1/models/${OWNER}/${NAME}/versions" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin)['results']; print(r[0]['id'] if r else '')")
+          [ -n "$version" ] || { echo "::error::pushed, but no version came back"; exit 1; }
+
+          {
+            echo "## The real text remover is published ✅"
+            echo ""
+            echo "Set these in Vercel (frenzsave → Settings → Environment Variables), then redeploy:"
+            echo ""
+            echo '```'
+            echo "REPLICATE_AI_CLEAN_MODEL=${OWNER}/${NAME}"
+            echo "REPLICATE_AI_CLEAN_MODEL_VERSION=${version}"
+            echo "AI_CLEAN_METHOD=sttn"
+            echo '```'
+            echo ""
+            echo "⚠️ **All three together.** This model's inputs are not the old one's —"
+            echo "\`AI_CLEAN_METHOD\` must be \`sttn\`, \`propainter\` or \`lama\`, and the old"
+            echo "values (\`hybrid\`, \`inpaint\`, \`background\`) will be rejected."
+            echo ""
+            echo "\`AI_CLEAN_RESOLUTION\`, \`AI_CLEAN_CONFIDENCE\`, \`AI_CLEAN_IOU\`,"
+            echo "\`AI_CLEAN_MARGIN\` and \`AI_CLEAN_DETECTION_INTERVAL\` do not apply here and"
+            echo "are ignored — this model finds the text itself."
+            echo ""
+            echo "### First run will be slow"
+            echo ""
+            echo "A cold container loads torch, PaddleOCR and the bundled weights. Judge the"
+            echo "speed on the SECOND run, not the first."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "model:   ${OWNER}/${NAME}"
+          echo "version: ${version}"

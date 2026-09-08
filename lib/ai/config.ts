@@ -179,8 +179,51 @@ export const AI_CLEAN_CONFIG = {
   detectionInterval: Number(process.env.AI_CLEAN_DETECTION_INTERVAL) || 1,
 } as const;
 
-/** Exactly the body the model expects, built in one place. */
+/**
+ * The temporal remover's methods.
+ *
+ * 🔴 These are the DISCRIMINATOR between the two model families, not just a
+ * setting. `video-subtitle-remover` takes `{video, mode, subtitle_area}` and
+ * `hjunior29/video-text-remover` takes six entirely different fields — send
+ * either model the other's body and Replicate answers 422 before anything runs.
+ *
+ * Keying off the method name means one environment variable switches both the
+ * model and the shape of its input, so the two can never be set to disagree.
+ */
+const TEMPORAL_METHODS = new Set(["sttn", "propainter", "lama"]);
+
+/** True when the configured method belongs to the temporal remover. */
+export function usesTemporalRemover(): boolean {
+  return TEMPORAL_METHODS.has(AI_CLEAN_CONFIG.method);
+}
+
+/**
+ * Exactly the body the model expects, built in one place.
+ *
+ * ── 🔴 TWO MODELS, TWO SCHEMAS ───────────────────────────────────────────────
+ *
+ * The classical remover was measured on 2026-09-08 producing a smeared grey
+ * blob with the caption still readable through it — it fills with
+ * `cv2.inpaint`, which averages the surrounding pixels because it has only ever
+ * seen one frame. The temporal one recovers the region from frames where it was
+ * not covered, which is what "removing" actually requires.
+ *
+ * The temporal model also finds the text itself, so the detection knobs
+ * (confidence, iou, margin, interval) have nothing to tune and are deliberately
+ * NOT sent — passing ignored fields to a strict schema is how a working
+ * deployment breaks on somebody else's next release.
+ */
 export function buildAiCleanInput(videoUrl: string): Record<string, string | number> {
+  if (usesTemporalRemover()) {
+    return {
+      video: videoUrl,
+      mode: AI_CLEAN_CONFIG.method,
+      // Empty means "find and remove all text", which is what this product
+      // promises. A band is only worth sending when a member picks one.
+      subtitle_area: process.env.AI_CLEAN_SUBTITLE_AREA?.trim() || "",
+    };
+  }
+
   return {
     video: videoUrl,
     method: AI_CLEAN_CONFIG.method,

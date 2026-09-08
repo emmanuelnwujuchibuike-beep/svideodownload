@@ -5,7 +5,6 @@ import { Suspense } from "react";
 import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
-import { StudioNav } from "@/features/studio/studio-nav";
 import { getHomeProfile } from "@/lib/social/home";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -76,19 +75,24 @@ export default function Downloads() {
   return (
     <AppContent>
       {/*
-        The Studio tab row, here too (owner, 2026-09-07: "Let this top nav also
-        be in the signed in Download page").
+        🔴 THE STUDIO TAB ROW IS DELIBERATELY *NOT* HERE.
 
-        Rendered on the PAGE rather than in the (app) layout, for the same
-        reason the bottom banner below is: that layout is shared with /home,
-        /reels and messaging, which own their own chrome, and giving all of them
-        a second nav is a product decision nobody asked for.
+        It was added on 2026-09-07 ("Let this top nav also be in the signed in
+        Download page") and removed on 2026-09-08 ("remove the top nav below the
+        top header in the download page"), with a screenshot of this exact bar:
+        Home · Frenz AI · Content · Audience sitting under the topbar.
 
-        It sits outside the Suspense boundary on purpose — it needs no data, so
-        it paints with the first bytes and is there while the skeleton streams,
-        rather than arriving late and pushing the page down.
+        The reversal is right. On /studio those tabs are the page own
+        structure — you are inside Studio and they move you around it. On
+        /downloads they were a row of links to somewhere ELSE, stacked directly
+        beneath a header that already carries search, streak and notifications:
+        two bands of navigation before a single pixel of the thing the visitor
+        came for, and the second band pointed away from the page.
+
+        `StudioNav` itself is untouched and still renders in
+        app/(app)/studio/layout.tsx, where it belongs. This note stays so the
+        next person does not helpfully re-add it.
       */}
-      <StudioNav />
       <Suspense fallback={<DownloadsSkeleton />}>
         <DownloadsData />
       </Suspense>

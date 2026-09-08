@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
  * ── Cheap, because this is a 1.6-second route ───────────────────────────────
  *
  * A server component: no image, no blur, no JavaScript. The ambient field below
- * is two composited transforms — see the note on it for why that number and
+ * is three composited transforms — see the note on it for why that number and
  * those properties are the budget rather than a preference.
  */
 export function FrenzAICta({ className }: { className?: string }) {
@@ -38,54 +38,78 @@ export function FrenzAICta({ className }: { className?: string }) {
       prefetch={false}
       className={cn(
         "group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
-        "bg-gradient-to-br from-[#101744] via-[#1b1560] to-[#3b1063] text-white",
-        "shadow-[0_10px_30px_-10px_rgba(49,46,129,0.55)] ring-1 ring-inset ring-white/10",
+        "bg-gradient-to-br from-[#4f7ef8] via-[#7159f4] to-[#a855f7] text-white",
+        "shadow-[0_10px_30px_-10px_rgba(79,70,229,0.55)] ring-1 ring-inset ring-white/20",
         "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
         className,
       )}
     >
       {/*
-        ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ─────────────────────
+        ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ───────────────────
 
         Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
         background that feels alive and move just like gemini, dont use an image
         in the ai button."
 
-        So the image is gone — including the uploadable slot that briefly
-        existed for it — and this is two soft colour fields drifting past each
-        other behind the copy.
+        And, after seeing it: "the ai button blue is too dark, there should be a
+        touch of white background there. and and is just static it doesnt move."
 
-        Why it is affordable on a page with a 1.6-second budget, which this
-        feature has already blown once today:
+        Both were fair. The base was #101744 — near-black navy — so every blob
+        painted on top of it landed as a dark bruise rather than as light, and
+        the two of them were so large and so soft that their real, measured
+        travel was invisible. See app/globals.css for the motion rewrite; what
+        changed HERE is the palette.
 
-          · TWO elements, not a scene. Each is one radial gradient;
-          · they animate `transform` ONLY. No filter, no background-position,
-            no opacity keyframes — all of which repaint. Transform is composited,
-            so the main thread never sees a frame of this;
-          · 19s and 23s, co-prime, so the pair never visibly repeats. An ambient
-            field reads as alive precisely when you cannot find its beat;
-          · both stop dead under `prefers-reduced-motion`.
+        ── THE WHITE IS A LAYER, NOT A TINT ────────────────────────────
 
-        It is also why there is no `backdrop-blur` here: the softness is in the
-        gradient's own falloff, which costs nothing, rather than in a filter
-        that would re-blur the tile on every frame the blobs move.
+        Blob A is white and it MOVES, which is the difference between a tile
+        that has a touch of white in it and a tile that is simply lighter. A
+        static wash would have satisfied the words and missed the ask: light
+        drifting across a surface is the thing that reads as alive.
+
+        ── WHY THE SCRIM EXISTS ──────────────────────────────────
+
+        White text over a field with a white blob wandering through it is
+        unreadable for whatever seconds the blob spends behind the words — and
+        it would pass every review, because a screenshot only catches one frame
+        of a 13-second cycle. The scrim is a STATIC bottom gradient: painted
+        once, never animated, and it guarantees the copy reads at every frame
+        rather than at most of them. It is the same device the Wallpapers tile
+        beside it uses for its label.
       */}
       <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* A — the white. Fastest, so the light is what you notice moving. */}
         <span
-          className="frenz-ai-ambient-a absolute -left-1/4 -top-1/4 h-[150%] w-[150%]"
+          className="frenz-ai-ambient-a absolute -left-1/3 -top-1/3 h-[130%] w-[130%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(59,130,246,0.85) 0%, rgba(59,130,246,0.35) 45%, transparent 72%)",
+              "radial-gradient(closest-side, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.42) 38%, rgba(255,255,255,0) 72%)",
           }}
         />
+        {/* B — sky, sweeping up from the lower left. */}
         <span
-          className="frenz-ai-ambient-b absolute -bottom-1/4 -right-1/4 h-[150%] w-[150%]"
+          className="frenz-ai-ambient-b absolute -bottom-1/3 -left-1/4 h-[135%] w-[135%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(217,70,239,0.75) 0%, rgba(139,92,246,0.32) 45%, transparent 72%)",
+              "radial-gradient(closest-side, rgba(56,189,248,0.95) 0%, rgba(37,99,235,0.35) 45%, transparent 74%)",
+          }}
+        />
+        {/* C — fuchsia, on the three-stop circuit. */}
+        <span
+          className="frenz-ai-ambient-c absolute -right-1/3 -top-1/4 h-[135%] w-[135%]"
+          style={{
+            background:
+              "radial-gradient(closest-side, rgba(240,120,255,0.85) 0%, rgba(168,85,247,0.3) 45%, transparent 74%)",
           }}
         />
       </span>
+
+      {/* The scrim. Static, painted once, and the only reason white type is
+          safe over a field with a white blob loose in it. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#1e1650]/75 via-[#1e1650]/22 to-transparent"
+      />
 
       {/*
         🔴 A WAND, NOT A SPARKLE (owner: "the ai button icon should be something
@@ -97,18 +121,18 @@ export function FrenzAICta({ className }: { className?: string }) {
         is already the badge on the AI work scene — so the two surfaces now
         share one symbol for one action.
       */}
-      <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/30">
+      <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-fuchsia-600 text-white shadow-lg shadow-indigo-900/30 ring-1 ring-inset ring-white/30">
         <Wand2 className="h-6 w-6" />
       </span>
 
       <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
         <span className="min-w-0">
           <span className="block text-base font-bold leading-tight">Frenz AI</span>
-          <span className="mt-1 block text-xs leading-snug text-white/70">
+          <span className="mt-1 block text-xs leading-snug text-white/85">
             Remove captions and text from your videos.
           </span>
         </span>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/20 transition group-hover:bg-white/25">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/30 transition group-hover:bg-white/30">
           <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
         </span>
       </span>

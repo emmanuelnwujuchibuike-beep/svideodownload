@@ -484,6 +484,25 @@ export function SiteHeader({
               not look compressed, and on a phone this row is where that is won
               or lost.
             */}
+            {/*
+              🔴 THE STREAK, ON A PHONE TOO.
+
+              Owner, 2026-09-08: “i dont see the streak badge on the landing page
+              top header like is on the download page.”
+
+              It WAS added to this header — into the cluster 60 lines above,
+              which is `hidden … lg:flex`. Desktop only. Every device the owner
+              actually looks at renders THIS row instead, so the fix landed
+              somewhere they could never see it. A header with two right-hand
+              clusters needs the chip in both, and that is the whole bug.
+
+              First in the row, so it cannot shift the menu button as the number
+              grows from 9 to 14 to 100 — growth pushes into the gap on its
+              right, never into the controls. It still renders nothing without a
+              streak, so a first-time visitor’s header is byte-for-byte
+              unchanged and there is no layout shift either way.
+            */}
+            <StreakHeaderChip />
             {landing ? <InstallHeaderCta /> : <SearchTriggerIcon />}
             {/* Language selector — the top ~50 languages (owner, replaced the
                 downloads/history icon; History is in the bottom nav). */}

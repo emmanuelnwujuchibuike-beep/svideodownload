@@ -3828,46 +3828,87 @@ html.dark .streak-recover {
   color: hsl(var(--muted-foreground));
 }
 
-  /* ── The Frenz AI tile's ambient field ──────────────────────────────────────
+  /* ── The Frenz AI tile's ambient field ─────────────────────────
      Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
      background that feels alive and move just like gemini, dont use an image in
      the ai button."
 
-     🔴 TWO blobs, and that number is the budget, not an aesthetic choice. This
-     sits on the landing page, which is held to a 1.6s target and has already
-     been made unresponsive once today by effects that looked cheap. Each blob
-     is ONE element moving on `transform` alone — no filter animation, no
-     background-position, no opacity keyframes — so the compositor owns them and
-     the main thread never sees a frame.
+     🔴 REWRITTEN 2026-09-08 — "and is just static it doesnt move".
 
-     Long, co-prime cycles (19s and 23s) so the pair never visibly repeats: the
-     thing that makes an ambient field read as alive rather than as a loop is
-     that you cannot find its beat. */
+     It was NOT static. Measured on production the same day, on a real Pixel 7
+     with no reduced-motion preference:
+
+         t+0.0s   matrix(1.09733, 0, 0, 1.09733, -10.5472, -6.83115)
+         t+2.5s   matrix(1.18418, 0, 0, 1.18418,  11.4938,  8.62492)
+
+     Running, compositing, moving. It was IMPERCEPTIBLE, which for an effect
+     whose entire job is to feel alive is the same thing as broken — the owner
+     is right and the measurement is beside the point.
+
+     Why you could not see it: each blob was 150% of the tile with a very soft
+     `closest-side` falloff, so 22px of travel moved a huge diffuse field by
+     under a tenth of its own radius. A big soft thing nudged slightly looks
+     identical to a big soft thing standing still.
+
+     Three changes, none of which cost a frame more than before:
+
+       · SMALLER blobs (130-135%, was 150%) and BIGGER travel (±18%, was ±8%)
+         with a wider scale swing — so displacement is a large fraction of the
+         blob rather than a rounding error;
+       · FASTER cycles: 13s / 17s / 23s, still co-prime so the trio never
+         visibly repeats, but roughly half the old period;
+       · blob C has THREE stops instead of two, so it travels a circuit rather
+         than sliding back and forth along one line. A two-stop translate always
+         reads as a pendulum; the thing that makes Gemini’s field read as alive
+         is that no element retraces its own path.
+
+     🔴 THE BUDGET IS UNCHANGED, AND IT IS THE HARD PART.
+
+     This sits on the landing page — 1.6s target — and this feature has already
+     made the app unresponsive twice today. So: THREE elements, each animating
+     `transform` and NOTHING else. No filter, no background-position, no
+     box-shadow, no `backdrop-blur` anywhere near it. Transform is composited,
+     so the main thread never sees a frame of this, and the softness comes from
+     the gradient's own falloff, which is painted once. Three composited layers
+     the size of one tile is nothing; three blurred ones would not be. */
   @keyframes frenz-ai-ambient-a {
     0%,
-    100% { transform: translate3d(-8%, -6%, 0) scale(1.05); }
-    50%  { transform: translate3d(10%, 8%, 0) scale(1.25); }
+    100% { transform: translate3d(-14%, -10%, 0) scale(1); }
+    50%  { transform: translate3d(16%, 14%, 0) scale(1.35); }
   }
 
   @keyframes frenz-ai-ambient-b {
     0%,
-    100% { transform: translate3d(12%, 10%, 0) scale(1.2); }
-    50%  { transform: translate3d(-6%, -8%, 0) scale(1); }
+    100% { transform: translate3d(18%, 12%, 0) scale(1.3); }
+    50%  { transform: translate3d(-16%, -14%, 0) scale(0.95); }
+  }
+
+  /* Three stops: a circuit, not a pendulum. */
+  @keyframes frenz-ai-ambient-c {
+    0%,
+    100% { transform: translate3d(-6%, 18%, 0) scale(1.15); }
+    33%  { transform: translate3d(20%, -14%, 0) scale(0.9); }
+    66%  { transform: translate3d(-18%, -4%, 0) scale(1.3); }
   }
 
   .frenz-ai-ambient-a {
-    animation: frenz-ai-ambient-a 19s ease-in-out infinite;
+    animation: frenz-ai-ambient-a 13s ease-in-out infinite;
     animation-play-state: var(--ai-play, running);
   }
   .frenz-ai-ambient-b {
-    animation: frenz-ai-ambient-b 23s ease-in-out infinite;
+    animation: frenz-ai-ambient-b 17s ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
+  }
+  .frenz-ai-ambient-c {
+    animation: frenz-ai-ambient-c 23s ease-in-out infinite;
     animation-play-state: var(--ai-play, running);
   }
 
   /* The battery rule, verified in a browser rather than assumed. */
   @media (prefers-reduced-motion: reduce) {
     .frenz-ai-ambient-a,
-    .frenz-ai-ambient-b {
+    .frenz-ai-ambient-b,
+    .frenz-ai-ambient-c {
       animation: none !important;
     }
   }

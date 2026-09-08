@@ -3,7 +3,11 @@ import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
-import { FEED_GRID_SLOTS, setLandingSettings } from "@/lib/landing/settings";
+import {
+  FEED_GRID_SLOTS,
+  FRENZ_AI_MAX_FREE_CREDITS,
+  setLandingSettings,
+} from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 
 export const runtime = "nodejs";
@@ -39,6 +43,19 @@ const schema = z.object({
   feedGridImages: z.array(gridImage).max(FEED_GRID_SLOTS).default([]),
   // Same shape and same clearable rule as the reels poster.
   wallpaperCtaImageUrl: reelsPoster.default(""),
+  /*
+    Frenz AI operator switches (owner, 2026-09-08).
+
+    `frenzAiPublicEnabled` decides whether signed-out visitors — and the AdSense
+    crawler — see Frenz AI at all; it defaults ON because being crawlable now is
+    the reason it exists, and the owner turns it off once AdSense has approved.
+
+    `frenzAiFreeDailyCredits` is the free allowance. Bounded HERE as well as in
+    `setLandingSettings`: a number that becomes a daily allowance costs real
+    provider money, and one validation is one thing to forget.
+  */
+  frenzAiPublicEnabled: z.boolean().default(true),
+  frenzAiFreeDailyCredits: z.coerce.number().int().min(0).max(FRENZ_AI_MAX_FREE_CREDITS).default(2),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

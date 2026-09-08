@@ -211,7 +211,7 @@ export function DownloadsTab({ emptyText }: { emptyText: string }) {
         <span className="inline-flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> AI Collections</span>
         <span className="inline-flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Private Vault</span>
         <span className="inline-flex items-center gap-1.5"><HardDrive className="h-3.5 w-3.5" /> Cloud Sync</span>
-        <span className="font-semibold text-foreground/80">— coming soon</span>
+
       </div>
     </div>
   );

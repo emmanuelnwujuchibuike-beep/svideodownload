@@ -124,13 +124,63 @@ export interface LandingSettings {
    * render a broken image — the same fail-closed rule `reelsPosterUrl` follows.
    */
   wallpaperCtaImageUrl: string;
+  /**
+   * Whether Frenz AI is shown to SIGNED-OUT visitors.
+   *
+   * Owner, 2026-09-08: "put the frenz ai in the landing page and make it
+   * anonymous and so google adsense crawler can see it and so it can be indexed
+   * in google; for now make it configurable in admin dashboard where i can turn
+   * off frenz ai from unsigned in users when adsense already approved".
+   *
+   * Default TRUE, because the reason it exists is to be crawlable right now. It
+   * is a switch rather than a constant precisely so it can be turned off the
+   * day it has done its job, without a deploy.
+   *
+   * 🔴 This governs VISIBILITY, never authority. Running a job still needs a
+   * session: usage is counted per user id and a job is owned by one. A
+   * signed-out visitor — or a crawler — sees the page and its real content and
+   * is asked to sign in to use it.
+   */
+  frenzAiPublicEnabled: boolean;
+  /**
+   * Free AI Clean sessions per day.
+   *
+   * Owner, 2026-09-08: "make the free users usage credit to be 2 now because
+   * there is no rewarded ad and it should be setable in admin dashboard."
+   *
+   * Admin-settable because the right number is a business decision that will
+   * move — and it moves again in Part 10, when credits arrive. The authority is
+   * still entirely server-side: this is read on the server, applied to the plan
+   * policy, and enforced by the same atomic reservation as before.
+   */
+  frenzAiFreeDailyCredits: number;
 }
+
+/** Nobody gets more than this from the admin field. A typo must not cost money. */
+export const FRENZ_AI_MAX_FREE_CREDITS = 20;
 
 export const DEFAULT_LANDING: LandingSettings = {
   reelsPosterUrl: "",
   feedGridImages: [],
   wallpaperCtaImageUrl: "",
+  frenzAiPublicEnabled: true,
+  // Two, because there is no rewarded ad to earn a third with yet.
+  frenzAiFreeDailyCredits: 2,
 };
+
+/**
+ * A free-credit value we are willing to act on.
+ *
+ * Clamped rather than trusted: this number becomes a daily allowance that costs
+ * real provider money, and an admin field is still an input. A missing or
+ * malformed value falls back to the default rather than to zero — locking every
+ * free member out of the feature is a worse failure than one extra clean.
+ */
+export function normalizeFreeCredits(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_LANDING.frenzAiFreeDailyCredits;
+  return Math.max(0, Math.min(FRENZ_AI_MAX_FREE_CREDITS, Math.floor(n)));
+}
 
 /** URLs we are willing to render on the public landing. */
 function isAllowedImageUrl(value: unknown): value is string {
@@ -175,6 +225,10 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       reelsPosterUrl: isAllowedImageUrl(raw.reelsPosterUrl) ? raw.reelsPosterUrl : "",
       feedGridImages: normalizeFeedGridImages(raw.feedGridImages),
       wallpaperCtaImageUrl: isAllowedImageUrl(raw.wallpaperCtaImageUrl) ? raw.wallpaperCtaImageUrl : "",
+      // Absent means "not configured yet", which for a switch whose whole point
+      // is present-day crawlability must mean ON.
+      frenzAiPublicEnabled: raw.frenzAiPublicEnabled !== false,
+      frenzAiFreeDailyCredits: normalizeFreeCredits(raw.frenzAiFreeDailyCredits),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -190,6 +244,11 @@ export async function setLandingSettings(s: LandingSettings): Promise<void> {
     reelsPosterUrl: isAllowedImageUrl(s.reelsPosterUrl) ? s.reelsPosterUrl : "",
     feedGridImages: normalizeFeedGridImages(s.feedGridImages),
     wallpaperCtaImageUrl: isAllowedImageUrl(s.wallpaperCtaImageUrl) ? s.wallpaperCtaImageUrl : "",
+    // Normalised on the way IN as well as on the way out. An admin field that is
+    // only validated on read is one bad write away from a stored value nothing
+    // else in the system expects.
+    frenzAiPublicEnabled: s.frenzAiPublicEnabled !== false,
+    frenzAiFreeDailyCredits: normalizeFreeCredits(s.frenzAiFreeDailyCredits),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

@@ -19,10 +19,12 @@ import type { BillingPlan } from "@/lib/monetization/types";
  *    business features and also a 15 daily credits, while pro and business uses
  *    rewarded ads up to 3 rewarded ad each generation."
  *
- * So the rules in this file are KNOWN to be provisional. Part 5's "free gets 3
- * a day behind an ad, Pro is unlimited and ad-free" is not the end state — in
- * Part 10 the paid plans start watching ads too, a new plan appears above them,
- * and the allowance becomes credits.
+ * So the rules in this file are KNOWN to be provisional — and they have already
+ * moved once. Part 5 shipped "free gets 3 a day behind an ad"; a day later the
+ * owner set it to 2 with no ad, because no rewarded ad is running yet. That
+ * change was two fields on one row, which is the argument for this file making
+ * itself. Part 10 moves them again: the paid plans start watching ads, a new
+ * plan appears above them, and the allowance becomes credits.
  *
  * Written as branches, that would be a rewrite of every authorization path.
  * Written as a table, it is a diff to these rows: add `max_ai`, set
@@ -80,11 +82,23 @@ export interface AiPlanPolicy {
  */
 const POLICY: Record<BillingPlan, AiPlanPolicy> = {
   free: {
-    // The owner's rule for Part 5: three successful cleans per day.
-    dailyLimit: 3,
+    /*
+      ⚠️ TWO, and no ad (owner, 2026-09-08: "make the free users usage credit to
+      be 2 now because there is no rewarded ad").
+
+      Part 5 built the whole rewarded-ad path and it stays built — the tables,
+      the atomic claim, the provider seam, all of it. What changed is the POLICY
+      that decides whether it runs, which is the entire reason the rules live in
+      a table. Turning ads back on for free members is `requiresReward: true`
+      here and nothing else, and Part 10 turns them on for the paid plans the
+      same way.
+
+      This number is also admin-settable; see `applyConfiguredLimits`.
+    */
+    dailyLimit: 2,
     unlimited: false,
-    requiresReward: true,
-    rewardsPerJob: 1,
+    requiresReward: false,
+    rewardsPerJob: 0,
     // One at a time. A free member with three jobs in flight is either testing
     // us or automating us.
     maxConcurrent: 1,
@@ -111,6 +125,31 @@ const POLICY: Record<BillingPlan, AiPlanPolicy> = {
 /** The policy for a plan. Never throws — an unknown plan is treated as free. */
 export function policyFor(plan: BillingPlan): AiPlanPolicy {
   return POLICY[plan] ?? POLICY.free;
+}
+
+/**
+ * The policy with an operator's configured numbers applied.
+ *
+ * 🔴 Only the FREE allowance is configurable, and only downward-safe: the value
+ * arrives already clamped by `normalizeFreeCredits` (0-20). An admin field feeds
+ * a daily allowance that costs real provider money, so it is bounded at the
+ * source and bounded again on read.
+ *
+ * The paid ceilings are deliberately NOT settable. They are abuse limits, not
+ * product knobs, and an operator raising one by mistake is how a stolen session
+ * becomes an unbounded bill.
+ *
+ * Pure: the caller does the async settings read, so the rules stay testable.
+ */
+export function applyConfiguredLimits(
+  policy: AiPlanPolicy,
+  config: { freeDailyCredits?: number } = {},
+): AiPlanPolicy {
+  if (policy.unlimited) return policy;
+  if (typeof config.freeDailyCredits !== "number" || !Number.isFinite(config.freeDailyCredits)) {
+    return policy;
+  }
+  return { ...policy, dailyLimit: Math.max(0, Math.floor(config.freeDailyCredits)) };
 }
 
 /**

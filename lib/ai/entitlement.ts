@@ -1,5 +1,12 @@
 import type { AiFeature, AiFeatureDef } from "@/lib/ai/jobs";
-import { entitlementView, featureOfferedTo, policyFor, type AiEntitlementView } from "@/lib/ai/policy";
+import {
+  applyConfiguredLimits,
+  entitlementView,
+  featureOfferedTo,
+  policyFor,
+  type AiEntitlementView,
+} from "@/lib/ai/policy";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { getUserPlan } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 
@@ -90,7 +97,15 @@ export async function getUserAIEntitlement(
   // a paying one. A second answer to "is this person Pro" is a second thing to
   // be wrong.
   const plan = await getUserPlan(userId);
-  const policy = policyFor(plan);
+  /*
+    The free allowance is an operator setting (owner, 2026-09-08). Read on the
+    SERVER, applied here, and enforced by the same atomic reservation as before
+    — the number moving does not move where the authority lives.
+  */
+  const settings = await getLandingSettings();
+  const policy = applyConfiguredLimits(policyFor(plan), {
+    freeDailyCredits: settings.frenzAiFreeDailyCredits,
+  });
 
   return {
     plan,
@@ -120,7 +135,15 @@ export async function getAiEntitlementSnapshot(
     entitlement,
     view: entitlementView({
       plan: entitlement.plan,
-      policy: policyFor(entitlement.plan),
+      // The entitlement already carries the configured numbers; rebuilding the
+      // policy from scratch here would quietly ignore them.
+      policy: {
+        dailyLimit: entitlement.dailyLimit,
+        unlimited: entitlement.unlimited,
+        requiresReward: entitlement.requiresReward,
+        rewardsPerJob: entitlement.rewardsPerJob,
+        maxConcurrent: entitlement.maxConcurrent,
+      },
       usedToday,
     }),
   };

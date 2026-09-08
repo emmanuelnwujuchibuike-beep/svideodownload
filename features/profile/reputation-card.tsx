@@ -92,7 +92,7 @@ export function ReputationCard({ reputation }: { reputation: Reputation }) {
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
         Earned from account age, contributions, healthy engagement &amp; verification. Points ledger, streaks &amp;
-        prestige coming soon.
+        prestige is earned over time.
       </p>
     </section>
   );

@@ -1,4 +1,4 @@
-import { ArrowRight, Lock } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
@@ -59,7 +59,7 @@ import { cn } from "@/lib/utils";
  * component and become a string the client side maps itself.
  */
 export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
-  const { icon: Icon, href, status, name, blurb, pro } = tool;
+  const { icon: Icon, href, name, blurb, pro } = tool;
   const open = href !== null;
 
   const body = (
@@ -81,15 +81,7 @@ export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
           )}
         </span>
 
-        <div className="flex items-center gap-1.5">
-          {pro ? <AICleanProBadge /> : null}
-          {status === "soon" ? (
-            <span className="inline-flex select-none items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              <Lock className="h-2.5 w-2.5" aria-hidden />
-              Coming soon
-            </span>
-          ) : null}
-        </div>
+        <div className="flex items-center gap-1.5">{pro ? <AICleanProBadge /> : null}</div>
       </div>
 
       <h2

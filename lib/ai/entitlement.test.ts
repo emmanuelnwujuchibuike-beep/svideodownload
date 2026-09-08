@@ -25,19 +25,20 @@ beforeEach(() => {
 });
 
 describe("getUserAIEntitlement", () => {
-  it("gives a free member the owner's three a day, and one at a time", async () => {
+  it("gives a free member two a day, and one at a time", async () => {
     getUserPlan.mockResolvedValue("free");
     const e = await getUserAIEntitlement("u1", feature);
     expect(e).toEqual({
       plan: "free",
       feature: "ai_clean",
       allowed: true,
-      dailyLimit: 3,
+      // Two, ad-free (owner, 2026-09-08). With no Supabase in the test env the
+      // settings read returns the defaults, which is the same number.
+      dailyLimit: 2,
       unlimited: false,
       maxConcurrent: 1,
-      // Part 5: a free clean is unlocked by one rewarded ad.
-      requiresReward: true,
-      rewardsPerJob: 1,
+      requiresReward: false,
+      rewardsPerJob: 0,
     });
   });
 
@@ -49,7 +50,9 @@ describe("getUserAIEntitlement", () => {
       that changes it.
     */
     getUserPlan.mockResolvedValue("free");
-    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(true);
+    // Ad-free today; the assertion that matters is that the ANSWER comes from
+    // the plan, not from anything a caller passed.
+    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
 
     getUserPlan.mockResolvedValue("pro");
     expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
@@ -90,11 +93,11 @@ describe("usageForClient", () => {
   it("tells a free member the truth about a real cap", async () => {
     getUserPlan.mockResolvedValue("free");
     const e = await getUserAIEntitlement("u1", feature);
-    expect(usageForClient(e, 2)).toEqual({
+    expect(usageForClient(e, 1)).toEqual({
       plan: "free",
       unlimited: false,
-      limit: 3,
-      used: 2,
+      limit: 2,
+      used: 1,
       remaining: 1,
     });
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { entitlementView, policyFor } from "./policy";
+import { applyConfiguredLimits, entitlementView, policyFor } from "./policy";
 import type { BillingPlan } from "@/lib/monetization/types";
 
 /**
@@ -15,12 +15,14 @@ import type { BillingPlan } from "@/lib/monetization/types";
 const PLANS: BillingPlan[] = ["free", "pro", "business"];
 
 describe("policyFor", () => {
-  it("gives free members the owner's three a day, behind an ad", () => {
+  it("gives free members two a day, with no ad (owner, 2026-09-08)", () => {
+    // Changed from "3 behind an ad" the day after Part 5 shipped, because no
+    // rewarded ad is running. Two fields on one row — see the module note.
     const free = policyFor("free");
-    expect(free.dailyLimit).toBe(3);
+    expect(free.dailyLimit).toBe(2);
     expect(free.unlimited).toBe(false);
-    expect(free.requiresReward).toBe(true);
-    expect(free.rewardsPerJob).toBe(1);
+    expect(free.requiresReward).toBe(false);
+    expect(free.rewardsPerJob).toBe(0);
   });
 
   it("does not ask paid members for an ad in Part 5", () => {
@@ -49,7 +51,7 @@ describe("policyFor", () => {
     // Failing open here would mean a corrupted plan string buying somebody
     // unlimited provider time.
     const unknown = policyFor("enterprise" as BillingPlan);
-    expect(unknown.dailyLimit).toBe(3);
+    expect(unknown.dailyLimit).toBe(2);
     expect(unknown.unlimited).toBe(false);
   });
 });
@@ -59,10 +61,9 @@ describe("entitlementView", () => {
 
   it("counts down as a free member spends the day", () => {
     for (const [used, remaining] of [
-      [0, 3],
-      [1, 2],
-      [2, 1],
-      [3, 0],
+      [0, 2],
+      [1, 1],
+      [2, 0],
     ] as const) {
       const view = entitlementView({ plan: "free", policy: free, usedToday: used });
       expect(view.remainingToday, `used ${used}`).toBe(remaining);
@@ -71,12 +72,14 @@ describe("entitlementView", () => {
   });
 
   it("🔴 stops asking for an ad once the allowance is gone", () => {
+    // Vacuously true while free requires no ad — kept because the rule must
+    // still hold the moment `requiresReward` goes back on.
     /*
       THE distinction in the brief: a rewarded ad unlocks a REMAINING session,
       it does not create an extra one. Showing a "Watch Ad" button that cannot
       buy anything is the worst thing this screen could do.
     */
-    const spent = entitlementView({ plan: "free", policy: free, usedToday: 3 });
+    const spent = entitlementView({ plan: "free", policy: free, usedToday: free.dailyLimit });
     expect(spent.canStart).toBe(false);
     expect(spent.rewardRequired).toBe(false);
     expect(spent.rewardsPerJob).toBe(0);
@@ -156,5 +159,35 @@ describe("🔴 the shape Part 10 needs", () => {
   it("carries a per-plan allowance already, which is what credits will be", () => {
     // 15 daily credits for max_ai is a `dailyLimit` of 15 on a new row.
     expect(policyFor("free").dailyLimit).toBeTypeOf("number");
+  });
+});
+
+describe("applyConfiguredLimits", () => {
+  it("lets an operator set the free allowance", () => {
+    // Owner, 2026-09-08: "it should be setable in admin dashboard".
+    const configured = applyConfiguredLimits(policyFor("free"), { freeDailyCredits: 5 });
+    expect(configured.dailyLimit).toBe(5);
+  });
+
+  it("🔴 never lets a configured number touch a paid plan's abuse ceiling", () => {
+    // Those are not product knobs. An operator raising one by mistake is how a
+    // stolen session becomes an unbounded provider bill.
+    const pro = policyFor("pro");
+    expect(applyConfiguredLimits(pro, { freeDailyCredits: 9999 })).toEqual(pro);
+  });
+
+  it("ignores a value that is not a usable number", () => {
+    const free = policyFor("free");
+    for (const bad of [undefined, Number.NaN, "3" as unknown as number]) {
+      expect(applyConfiguredLimits(free, { freeDailyCredits: bad }), String(bad)).toEqual(free);
+    }
+  });
+
+  it("accepts zero — an operator may switch the free tier off entirely", () => {
+    expect(applyConfiguredLimits(policyFor("free"), { freeDailyCredits: 0 }).dailyLimit).toBe(0);
+  });
+
+  it("floors a fractional value rather than admitting half a job", () => {
+    expect(applyConfiguredLimits(policyFor("free"), { freeDailyCredits: 2.9 }).dailyLimit).toBe(2);
   });
 });

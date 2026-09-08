@@ -41,6 +41,30 @@ import { cn } from "@/lib/utils";
  * nothing below it reflows and the page does not jump under a reading finger.
  * It slides UNDER the topbar, which is opaque, so it disappears rather than
  * showing through it.
+ *
+ * ── 🔴 IT IS FLUSH WITH THE HEADER, AND THAT TAKES A NEGATIVE MARGIN ─────────
+ *
+ * Owner, 2026-09-08: "it shouldn't give that white space between the header and
+ * the NAV, and below the NAV there are much space between the NAV and the hero."
+ *
+ * `AppContent` opens its `<main>` with `pt-4`, so anything placed first inside
+ * it starts 16px down — a gap this bar cannot close by styling itself. `-mt-4`
+ * cancels exactly that padding, and `-mx-3 sm:-mx-4` cancels the horizontal
+ * padding so the rule underneath runs the full width like real chrome rather
+ * than stopping short like a card. Both are tied to the values in that
+ * component; if its padding changes, these change with it.
+ *
+ * The bottom hairline is what makes the bar READ as attached to the header:
+ * without it, a floating strip of tabs with air on both sides looks like a
+ * component that failed to align.
+ *
+ * ── The dividers ────────────────────────────────────────────────────────────
+ *
+ * A short vertical hairline between tabs, centred and inset — not a full-height
+ * `border-l`, which would draw a table. The active tab is a gradient underline
+ * and gradient text rather than a solid filled pill: a flat blue lozenge is the
+ * "not premium" the owner was pointing at, and light on the edge of a shape
+ * reads more expensive than paint across the whole of it.
  */
 
 const TABS = [
@@ -64,13 +88,18 @@ export function StudioNav() {
     <nav
       aria-label="Creator Studio"
       className={cn(
-        "sticky z-20 -mx-3 mb-6 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-        // Opaque, or the page scrolls visibly through the tabs.
-        "bg-background",
+        "sticky z-20 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        // Flush with the header above and tight to the content below — see the
+        // note about AppContent's padding.
+        "-mx-3 -mt-4 mb-3 px-3 sm:-mx-4 sm:px-4",
+        // Opaque, or the page scrolls visibly through the tabs. The hairline is
+        // what attaches it to the header rather than leaving it floating.
+        "border-b border-border/60 bg-background",
         "transition-transform duration-300 ease-out motion-reduce:transition-none",
-        // Far enough to clear its own height plus the padding, so no sliver is
-        // left peeking below the topbar.
-        hidden ? "-translate-y-[150%]" : "translate-y-0",
+        // Its own height is enough: the bar's top sits at the topbar's bottom
+        // edge, so moving up by one height puts all of it inside that opaque
+        // band. -150% used to overshoot into the status bar for no benefit.
+        hidden ? "-translate-y-full" : "translate-y-0",
       )}
       /*
         Sits directly under AppTopbar, which is `sticky top-0` at
@@ -80,26 +109,56 @@ export function StudioNav() {
       */
       style={{ top: "calc(4rem + var(--frenz-safe-top))" }}
     >
-      <ul className="flex min-w-max items-center gap-1.5">
-        {TABS.map((tab) => {
+      <ul className="flex min-w-max items-stretch">
+        {TABS.map((tab, i) => {
           // `/studio` must not light up for `/studio/content`, so the home tab
           // matches exactly while the rest match their subtree.
           const active = tab.href === "/studio" ? pathname === "/studio" : pathname.startsWith(tab.href);
           return (
-            <li key={tab.href}>
+            <li key={tab.href} className="relative">
+              {/*
+                The divider. A short centred hairline rather than a full-height
+                border — it separates without ruling the bar into cells.
+              */}
+              {i > 0 ? (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-border/70"
+                />
+              ) : null}
+
               <Link
                 href={tab.href}
                 prefetch
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-semibold transition",
-                  active
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-secondary/70 hover:text-foreground",
+                  "group relative flex items-center gap-2 px-4 py-3 text-sm font-semibold outline-none transition",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <tab.icon className="h-4 w-4" aria-hidden />
-                {tab.label}
+                <tab.icon
+                  className={cn("h-4 w-4 transition-colors", active ? "text-primary" : "")}
+                  aria-hidden
+                />
+                {/*
+                  Gradient TYPE on the active tab. `.text-gradient` is the app's
+                  shared brand sweep, so this is the same blue-to-purple the
+                  wordmark and the AI Core use rather than a third one.
+                */}
+                <span className={active ? "text-gradient" : undefined}>{tab.label}</span>
+
+                {/*
+                  The indicator. Sits on the bar's own bottom rule, so the active
+                  tab looks like it is holding the line up — the detail that
+                  makes a tab row read as chrome instead of as buttons.
+                */}
+                {active ? (
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-3 -bottom-px h-[2px] rounded-full bg-gradient-to-r from-blue-600 via-violet-500 to-fuchsia-500"
+                  />
+                ) : null}
               </Link>
             </li>
           );

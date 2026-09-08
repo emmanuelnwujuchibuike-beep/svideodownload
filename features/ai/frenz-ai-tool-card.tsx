@@ -1,5 +1,3 @@
-"use client";
-
 import { ArrowRight, Lock } from "lucide-react";
 import Link from "next/link";
 
@@ -31,9 +29,22 @@ import { cn } from "@/lib/utils";
  * mark that means "this is AI" is the same one on the hub, in the workspace and
  * in every processing state.
  *
- * A client component now, because the Core is one. It still renders a real
- * `<Link>`, so a tap on a cold page is an ordinary navigation rather than a
- * dead one.
+ * ── 🔴 THIS IS A SERVER COMPONENT, AND IT HAS TO STAY ONE ────────────────────
+ *
+ * Marking it `"use client"` broke the whole hub with "something went wrong"
+ * (owner, 2026-09-08). The page is a SERVER component and it passes `tool`,
+ * whose `icon` is a Lucide COMPONENT — a function. Functions cannot cross the
+ * server-to-client boundary, so React throws at render time and the error
+ * boundary swallows the page.
+ *
+ * It never needed to be a client component: there is not a hook in this file.
+ * A server component may freely RENDER a client one, which is how `FrenzAICore`
+ * works here — the boundary only forbids passing a function as a prop, not
+ * rendering a client child.
+ *
+ * ⚠️ `next build` does NOT catch this: it compiles clean and fails at runtime.
+ * If a `"use client"` is ever added here, `tool.icon` has to stop being a
+ * component and become a string the client side maps itself.
  */
 export function FrenzAIToolCard({ tool }: { tool: FrenzAiStudioTool }) {
   const { icon: Icon, href, status, name, blurb, pro } = tool;

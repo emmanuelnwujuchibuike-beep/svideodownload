@@ -26,6 +26,8 @@ const SHOTS = [
   { name: "hub-mobile-light", device: "Pixel 7", theme: "light" },
   { name: "hub-mobile-dark", device: "Pixel 7", theme: "dark" },
   { name: "hub-desktop-light", device: null, theme: "light" },
+  { name: "processing-mobile-light", device: "Pixel 7", theme: "light", query: "?view=processing" },
+  { name: "processing-mobile-dark", device: "Pixel 7", theme: "dark", query: "?view=processing" },
 ];
 
 const browser = await chromium.launch();
@@ -44,10 +46,20 @@ for (const shot of SHOTS) {
   page.on("pageerror", (e) => problems.push(`pageerror: ${String(e).slice(0, 200)}`));
   page.on("requestfailed", (r) => problems.push(`requestfailed: ${r.url().slice(0, 120)}`));
 
-  await page.goto(`${BASE}${PROBE_ROUTE}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.goto(`${BASE}${PROBE_ROUTE}${shot.query ?? ""}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 60_000,
+  });
+  /*
+    🔴 Wait for something only THIS view renders. The first run of the
+    processing shots silently photographed the HUB instead — the harness had
+    dropped the query string, and a generic selector was happy either way. A
+    screenshot of the wrong page is worse than no screenshot, because it looks
+    like evidence.
+  */
+  await page.waitForSelector(shot.query ? "text=Pro Tip" : "section.group", { timeout: 30_000 });
   // Let one beat of the ambient animation land, so a paused/never-started
   // animation is visible as a difference between runs rather than invisible.
-  await page.waitForSelector("section.group", { timeout: 30_000 });
   await page.waitForTimeout(1200);
 
   /*
@@ -57,7 +69,7 @@ for (const shot of SHOTS) {
   */
   const audit = await page.evaluate(() => {
     const out = {};
-    const card = document.querySelector("section.group");
+    const card = document.querySelector("section.group") ?? document.querySelector("ol");
     out.cardFound = !!card;
     if (card) {
       const r = card.getBoundingClientRect();

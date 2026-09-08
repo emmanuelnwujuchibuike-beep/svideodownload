@@ -1,5 +1,5 @@
 import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { WORKER_SECRET, WORKER_URL, hasWorker } from "@/lib/worker";
 import { getProxyUsage, type ProxyUsage } from "@/server/proxy/proxy-manager";
 
@@ -42,10 +42,51 @@ const startOfTodayIso = () => {
   return d.toISOString();
 };
 
-/** Aggregate download stats from Supabase (admin reads via RLS policy). */
+/**
+ * Aggregate download stats.
+ *
+ * ── 🔴 THIS READS AS THE SERVICE ROLE, AND THAT IS THE FIX ───────────────────
+ *
+ * Owner, 2026-09-08: "my downloads in admin revenue and traffic doesnt show all
+ * downloads, it ends at 4 or 8 even i have hundreds of visitors that download
+ * that day."
+ *
+ * It was reading through the SIGNED-IN ADMIN'S client, relying on the RLS
+ * policy `auth.uid() = user_id or public.is_admin()`. The second half never
+ * fired, because this product has TWO definitions of "admin" and they had
+ * drifted apart:
+ *
+ *   • the route guard (lib/admin/require-admin.ts) accepts
+ *     `profiles.role = 'admin'` OR a match in the ADMIN_EMAILS env var;
+ *   • `public.is_admin()` in SQL accepts ONLY `profiles.role = 'admin'`.
+ *
+ * The owner is an admin by the env var, and no profile carries the role. So
+ * they passed the guard, saw the page, and then RLS quietly narrowed every
+ * query to `auth.uid() = user_id` — their OWN downloads. Measured on
+ * 2026-09-08: the dashboard showed a handful against a real 17,657 total and 33
+ * that day, because 16,102 of those downloads are signed-out and belong to
+ * nobody.
+ *
+ * Reading with the service role removes the second definition from the path
+ * entirely. The AUTHORIZATION has not moved: every caller is behind
+ * `requireAdminPage`, which verifies the session against the auth server before
+ * this function is ever reached. What changes is that the answer no longer
+ * depends on a SQL function agreeing with the guard — which is the class of bug
+ * that produced a dashboard confidently reporting the wrong number.
+ *
+ * ⚠️ The same divergence still silences other admin-only policies (the
+ * `analytics` table is `using (public.is_admin())` with no owner fallback at
+ * all). Setting `role = 'admin'` on the operator's profile fixes those too and
+ * is worth doing separately.
+ */
 export async function fetchDownloadStats(): Promise<DownloadStats | null> {
   try {
-    const supabase = await createClient();
+    /*
+      🔴 Service role, NOT the member's client. Safe only because every caller
+      is admin-gated first — see the note above. A new caller must keep that
+      property.
+    */
+    const supabase = createAdminClient();
     const countAll = () =>
       supabase.from("downloads").select("*", { count: "exact", head: true });
 
@@ -86,10 +127,21 @@ export async function fetchDownloadStats(): Promise<DownloadStats | null> {
   }
 }
 
-/** Recent admin alerts (milestones, proxy warnings) for the dashboard log. */
+/**
+ * Recent admin alerts (milestones, proxy warnings) for the dashboard log.
+ *
+ * 🔴 Service role, for the same reason as `fetchDownloadStats` above and with
+ * more force: `admin_alerts` is admin-read-ONLY, with no owner fallback at all.
+ * So while `public.is_admin()` disagreed with the route guard, this returned an
+ * empty list every single time and the dashboard showed "no alerts" — which is
+ * indistinguishable from "nothing has gone wrong", and is the worse of the two
+ * failures a monitoring panel can have.
+ *
+ * Caller is `requireAdminPage`-gated; the authorization has not moved.
+ */
 export async function fetchRecentAlerts(): Promise<AdminAlert[]> {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .from("admin_alerts")
       .select("kind, subject, created_at")

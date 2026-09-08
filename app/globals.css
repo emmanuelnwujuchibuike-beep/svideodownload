@@ -602,6 +602,107 @@
     .shimmer::after { animation: none; }
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     FRENZ AI — the environment's motion vocabulary
+     ══════════════════════════════════════════════════════════════════════
+
+     Owner, 2026-09-07: Frenz AI should feel alive, not like another dashboard.
+
+     🔴 EVERY ANIMATION HERE MOVES ONLY `transform` AND `opacity`.
+
+     Those two are the properties a browser can hand to the compositor: they do
+     not read layout, do not repaint, and run off the main thread. Anything
+     animating width, top, box-shadow or background-position instead would
+     recalculate layout on every frame of an idle page — which is precisely how
+     an ambient effect becomes the reason a phone gets warm. This project's
+     battery rule is why the numbers are slow and why the list below is short.
+
+     Speed and brightness are NOT baked in. Each animation reads
+     `--ai-orbit`, `--ai-breath`, `--ai-intensity` and `--ai-play`, which one
+     wrapper sets from lib/ai/presence.ts. Changing state is therefore one
+     inline-style write on one element, and every descendant follows — instead
+     of React re-rendering a tree of animated components to change a glow.
+
+     `--ai-play` is how the whole environment stops: a hidden tab or a viewer
+     who asked for less motion resolves to `paused`, and nothing below runs. */
+
+  @keyframes frenz-ai-orbit {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* The core's breath. Scale barely moves — most of the life is in opacity,
+     which is cheaper and reads as light rather than as something growing. */
+  @keyframes frenz-ai-breathe {
+    0%, 100% { transform: scale(1); opacity: calc(0.55 + var(--ai-intensity, 0.3) * 0.45); }
+    50% { transform: scale(1.045); opacity: 1; }
+  }
+
+  /* Ambient light in the room. Translated, never re-positioned: a 3% drift over
+     half a minute that the eye registers without the mind noticing. */
+  @keyframes frenz-ai-drift {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    33% { transform: translate3d(2.5%, -1.5%, 0) scale(1.04); }
+    66% { transform: translate3d(-2%, 2%, 0) scale(0.98); }
+  }
+
+  /* The energy pulse, emitted only while real work is happening. One expanding
+     ring, then nothing — not a loop that draws attention to itself. */
+  @keyframes frenz-ai-pulse {
+    0% { transform: scale(0.85); opacity: calc(var(--ai-intensity, 0.5) * 0.5); }
+    70% { opacity: 0; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* A result arriving. Blur is the one exception to the transform/opacity rule
+     and it is affordable HERE because it runs once, for 600ms, on one element —
+     never on an idle loop. It is what makes the result feel created rather than
+     pasted in. */
+  @keyframes frenz-ai-materialize {
+    0% { opacity: 0; transform: scale(0.965); filter: blur(14px) saturate(1.4); }
+    60% { opacity: 1; }
+    100% { opacity: 1; transform: scale(1); filter: blur(0) saturate(1); }
+  }
+
+  .frenz-ai-orbit {
+    animation: frenz-ai-orbit var(--ai-orbit, 24s) linear infinite;
+    animation-play-state: var(--ai-play, running);
+    transform-origin: 50% 50%;
+    will-change: transform;
+  }
+  .frenz-ai-breathe {
+    animation: frenz-ai-breathe var(--ai-breath, 7s) ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
+    transform-origin: 50% 50%;
+    will-change: transform, opacity;
+  }
+  .frenz-ai-drift {
+    animation: frenz-ai-drift calc(var(--ai-orbit, 24s) * 1.6) ease-in-out infinite;
+    animation-play-state: var(--ai-play, running);
+    will-change: transform;
+  }
+  .frenz-ai-pulse {
+    animation: frenz-ai-pulse calc(var(--ai-breath, 7s) * 0.9) ease-out infinite;
+    animation-play-state: var(--ai-play, running);
+    transform-origin: 50% 50%;
+  }
+  .frenz-ai-materialize {
+    animation: frenz-ai-materialize 620ms var(--ease-out) both;
+  }
+
+  /* 🔴 The preference wins outright. Not "shorter" — off. Presence already
+     resolves to `dormant` in JavaScript, and this is the belt to that braces:
+     a surface that somehow rendered with a running value still stops here. */
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-ai-orbit,
+    .frenz-ai-breathe,
+    .frenz-ai-drift,
+    .frenz-ai-pulse,
+    .frenz-ai-materialize {
+      animation: none !important;
+    }
+  }
+
   /* Loading stripe — the indeterminate bar shown inside a route's loading.tsx
      (Next Suspense fallback) by PageLoader. Pure CSS; nothing here or in that
      component touches navigation/prefetch. */

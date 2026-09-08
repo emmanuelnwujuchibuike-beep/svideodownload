@@ -1,8 +1,10 @@
 "use client";
 
-import { Check, Loader2, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
+import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
 import { AI_CLEAN_PATH, pathState, type StageView } from "@/lib/ai/job-stages";
+import { presenceFor } from "@/lib/ai/presence";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,9 +24,15 @@ import { cn } from "@/lib/utils";
  *
  * ── Motion ───────────────────────────────────────────────────────────────────
  *
- * A width transition on the bar and a spinner on the active step. No looping
- * shimmer down the whole panel: this screen can be open for ten minutes on a
- * phone, and a permanent animation is a permanent battery cost.
+ * The Core replaced the spinner (2026-09-07). A spinner says "something is
+ * happening somewhere"; the Core says which state the environment is in, and it
+ * says it in the same visual language as every other Frenz AI surface — it
+ * brightens and quickens as the work moves from queued to finalizing, driven
+ * entirely by CSS variables rather than by React re-rendering an animation.
+ *
+ * Beyond that: a width transition on the bar, and nothing else. This screen can
+ * be open for ten minutes on a phone, and a looping shimmer down the whole panel
+ * would be a permanent battery cost for decoration.
  */
 export function AICleanProcessing({
   view,
@@ -43,16 +51,15 @@ export function AICleanProcessing({
   return (
     <div className="p-4 sm:p-6">
       <div className="mx-auto max-w-xl py-2 sm:py-6">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" aria-hidden />
-          <h2 className="text-lg font-bold tracking-[-0.01em]">{view.label}</h2>
+        <div className="flex flex-col items-center text-center">
+          <FrenzAICore presence={presenceFor({ stage: view.stage })} size="lg" />
+          <h2 className="mt-4 text-lg font-bold tracking-[-0.01em]">{view.label}</h2>
+          {fileName ? (
+            <p className="mt-1 max-w-full truncate text-sm text-muted-foreground" title={fileName}>
+              {fileName}
+            </p>
+          ) : null}
         </div>
-
-        {fileName ? (
-          <p className="mt-1 truncate text-sm text-muted-foreground" title={fileName}>
-            {fileName}
-          </p>
-        ) : null}
 
         {/*
           One live region for the whole panel. Announcing each step separately
@@ -72,7 +79,7 @@ export function AICleanProcessing({
         </div>
 
         {view.detail ? (
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{view.detail}</p>
+          <p className="mt-3 text-center text-sm leading-relaxed text-muted-foreground">{view.detail}</p>
         ) : null}
 
         <ol className="mt-5 space-y-2.5">
@@ -98,7 +105,7 @@ export function AICleanProcessing({
           })}
         </ol>
 
-        <p className="mt-5 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-5 text-center text-xs leading-relaxed text-muted-foreground">
           You can leave this page. The work carries on, and it will be here when you come back.
         </p>
 
@@ -107,7 +114,7 @@ export function AICleanProcessing({
             type="button"
             onClick={onCancel}
             disabled={cancelling}
-            className="btn-lux btn-lux-secondary mt-5 text-muted-foreground"
+            className="btn-lux btn-lux-secondary mx-auto mt-5 flex text-muted-foreground"
           >
             <X className="h-4 w-4" aria-hidden />
             {cancelling ? "Stopping…" : "Cancel"}

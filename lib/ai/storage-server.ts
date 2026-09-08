@@ -139,6 +139,27 @@ export async function signSourceUrl(path: string): Promise<string> {
   return data.signedUrl;
 }
 
+/**
+ * A link to the SOURCE for the member to look at — not for a provider to fetch.
+ *
+ * 🔴 Deliberately NOT `signSourceUrl`. That one is signed for two hours because
+ * Replicate may sit in a queue before it downloads; this one is opened by a
+ * browser that is already on the page, so it gets the same short life as the
+ * result. Reusing the long-lived link here would put a two-hour capability on a
+ * private video into a URL bar, a browser history and a screenshot — for a
+ * convenience worth ten minutes.
+ */
+export async function signSourceViewUrl(path: string): Promise<{ url: string; expiresIn: number }> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage
+    .from(AI_SOURCE_BUCKET)
+    .createSignedUrl(path, AI_SIGNED_URL_TTL_SECONDS);
+  if (error || !data?.signedUrl) {
+    throw new AiJobError("STORAGE_ERROR", error?.message ?? "no signed source view url");
+  }
+  return { url: data.signedUrl, expiresIn: AI_SIGNED_URL_TTL_SECONDS };
+}
+
 /** A link the MEMBER can open. Minutes, not hours — see the note at the top. */
 export async function signResultUrl(path: string): Promise<{ url: string; expiresIn: number }> {
   const admin = createAdminClient();

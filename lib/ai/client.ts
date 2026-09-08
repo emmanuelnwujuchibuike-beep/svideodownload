@@ -202,3 +202,16 @@ export async function getAiJobResult(
 ): Promise<AiJobResult<{ url: string; expiresIn: number; size: number | null }>> {
   return request(`/api/ai/jobs/${encodeURIComponent(id)}/result`);
 }
+
+/**
+ * A short-lived link to the member's ORIGINAL, for the before/after.
+ *
+ * Same lifetime and same ownership rules as the result — a source file is not
+ * less private than a result. Fetched on demand for the same reason: a link
+ * held in state across a session is dead by the time anybody uses it.
+ */
+export async function getAiJobSource(
+  id: string,
+): Promise<AiJobResult<{ url: string; expiresIn: number }>> {
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/source`);
+}

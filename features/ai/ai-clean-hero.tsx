@@ -27,9 +27,20 @@ export function AICleanHero({ children, className }: { children: ReactNode; clas
         className,
       )}
     >
+      {/*
+        The wash now BREATHES WITH THE JOB (2026-09-07). Its opacity is derived
+        from `--ai-intensity`, which FrenzAIEnvironment sets from the job's
+        state — so the surface itself brightens as the work moves from queued to
+        finalizing and settles again afterwards.
+
+        The fallback keeps it exactly as it was for any surface rendered without
+        an environment above it, and the multiplier holds it well under the
+        text: this is light behind a card, never a tint the copy is read against.
+      */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 -z-10 h-64 w-[140%] -translate-x-1/2 rounded-[50%] bg-brand opacity-[0.06] blur-3xl dark:opacity-[0.12]"
+        className="pointer-events-none absolute -top-32 left-1/2 -z-10 h-64 w-[140%] -translate-x-1/2 rounded-[50%] bg-brand blur-3xl"
+        style={{ opacity: "calc(var(--ai-intensity, 0.22) * 0.28)" }}
       />
       {children}
     </section>

@@ -1,11 +1,14 @@
 "use client";
 
-import { CheckCircle2, Download, Loader2, RotateCcw } from "lucide-react";
+import { Download, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { FrenzAICompare } from "@/features/ai/core/frenz-ai-compare";
+import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
+import { FrenzAIReveal } from "@/features/ai/core/frenz-ai-reveal";
 import type { AiJobView } from "@/lib/ai/jobs";
 import { cleanedFileName } from "@/lib/ai/clean-media";
-import { formatBytes, formatDuration } from "@/lib/utils";
+import { cn, formatBytes, formatDuration } from "@/lib/utils";
 
 /**
  * The finished video.
@@ -20,6 +23,18 @@ import { formatBytes, formatDuration } from "@/lib/utils";
  * state for the length of a session would produce exactly that failure, and it
  * would look like the file was gone.
  *
+ * ── The reveal, and the proof (2026-09-07) ───────────────────────────────────
+ *
+ * A result does not appear — it materialises, then its controls follow a beat
+ * later (FrenzAIReveal). One 620ms animation, once, so the finished video reads
+ * as something that was made rather than something that loaded.
+ *
+ * And it can be checked. "Before" puts the original beside the result on a
+ * dragging divider, which for a text-removal tool is the difference between
+ * claiming it worked and showing it. That comparison decodes ONE frame from each
+ * file and then releases both video elements — see FrenzAICompare for why two
+ * playing videos was the wrong build.
+ *
  * ── What the member is told about their audio ────────────────────────────────
  *
  * The model returns video with no sound, and Part 4's worker muxes the original
@@ -29,18 +44,25 @@ import { formatBytes, formatDuration } from "@/lib/utils";
  * "no audio" and "we could not restore your audio" are not the same sentence
  * and a member can tell.
  */
+type View = "result" | "compare";
+
 export function AICleanResult({
   job,
   fetchResultUrl,
+  fetchSourceUrl,
   onStartAnother,
 }: {
   job: AiJobView;
   fetchResultUrl: () => Promise<string | null>;
+  /** Optional: without it, the comparison is simply not offered. */
+  fetchSourceUrl?: () => Promise<string | null>;
   onStartAnother: () => void;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [view, setView] = useState<View>("result");
 
   useEffect(() => {
     let alive = true;
@@ -54,6 +76,25 @@ export function AICleanResult({
       alive = false;
     };
   }, [fetchResultUrl]);
+
+  /*
+    The original, fetched separately and quietly. It is only needed for the
+    comparison, so its failure must never delay or disturb the result itself —
+    the toggle simply does not appear.
+  */
+  useEffect(() => {
+    if (!fetchSourceUrl) return;
+    let alive = true;
+    (async () => {
+      const url = await fetchSourceUrl();
+      if (alive) setSourceUrl(url);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [fetchSourceUrl]);
+
+  const canCompare = !!previewUrl && !!sourceUrl;
 
   const download = async () => {
     setDownloading(true);
@@ -72,27 +113,63 @@ export function AICleanResult({
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="h-5 w-5 text-emerald-500" aria-hidden />
-        <h2 className="text-lg font-bold tracking-[-0.01em]">Your video is ready</h2>
+      <div className="flex flex-col items-center text-center">
+        {/* Settled: the environment comes back down after the work. */}
+        <FrenzAICore presence="settled" size="lg" />
+        <h2 className="mt-3 text-lg font-bold tracking-[-0.01em]">Your video is ready</h2>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl bg-black/90">
+      {canCompare ? (
+        <div className="mx-auto mt-4 flex w-fit rounded-full bg-secondary p-1">
+          {(["result", "compare"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setView(tab)}
+              aria-pressed={view === tab}
+              className={cn(
+                "rounded-full px-4 py-1.5 text-xs font-semibold transition",
+                view === tab ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {tab === "result" ? "Result" : "Before / after"}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4">
         {loading ? (
-          <div className="flex h-48 items-center justify-center text-white/60">
+          <div className="flex h-48 items-center justify-center rounded-2xl bg-black/90 text-white/60">
             <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden />
             <span className="sr-only">Loading your video</span>
           </div>
         ) : previewUrl ? (
-          <video
-            src={previewUrl}
-            controls
-            playsInline
-            preload="metadata"
-            className="mx-auto block max-h-[46vh] w-full object-contain"
-          />
+          <FrenzAIReveal>
+            <div className={view === "result" ? undefined : "hidden"}>
+              <div className="overflow-hidden rounded-2xl bg-black/90">
+                <video
+                  src={previewUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="mx-auto block max-h-[46vh] w-full object-contain"
+                />
+              </div>
+            </div>
+            {/*
+              Mounted alongside rather than swapped in, so switching tabs does
+              not re-run the frame capture. Hidden with a class, not unmounted:
+              the two decodes happen once for the life of this panel.
+            */}
+            {canCompare && sourceUrl ? (
+              <div className={view === "compare" ? undefined : "hidden"}>
+                <FrenzAICompare beforeUrl={sourceUrl} afterUrl={previewUrl} />
+              </div>
+            ) : null}
+          </FrenzAIReveal>
         ) : (
-          <div className="flex h-48 items-center justify-center px-6 text-center text-sm text-white/70">
+          <div className="flex h-48 items-center justify-center rounded-2xl bg-black/90 px-6 text-center text-sm text-white/70">
             That link has expired. Press Download and we&apos;ll make a fresh one.
           </div>
         )}

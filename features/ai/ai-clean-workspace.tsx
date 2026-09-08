@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AICleanEmptyState } from "@/features/ai/ai-clean-empty-state";
 import { AICleanProcessing } from "@/features/ai/ai-clean-processing";
 import { AICleanResult } from "@/features/ai/ai-clean-result";
+import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AICleanErrorState } from "@/features/ai/ai-clean-error-state";
 import { AICleanHero } from "@/features/ai/ai-clean-hero";
 import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
@@ -36,6 +37,18 @@ import {
  * black on re-render) or one never revoked at all (a 90 MB blob pinned in memory
  * until the tab closes). Created here, revoked here, in every path: replace,
  * remove, error, unmount.
+ *
+ * ── 🔴 THE ENVIRONMENT WRAPPER IS NOT DECORATION ─────────────────────────────
+ *
+ * `FrenzAIEnvironment` is what supplies the four CSS custom properties every
+ * animated Frenz AI surface reads (lib/ai/presence.ts). Without an ancestor
+ * setting them, the Core inside the processing panel silently falls back to its
+ * defaults and never brightens as the job moves from queued to finalizing —
+ * which is the whole point of the thing. It also resolves reduced-motion and tab
+ * visibility once, here, for everything below.
+ *
+ * It wraps the WHOLE surface rather than the stage, so the header's own state
+ * and the panel's stay in step.
  *
  * ── Two flows, and only one of them is connected ──────────────────────────────
  *
@@ -148,7 +161,12 @@ export function AICleanWorkspace() {
   }, []);
 
   return (
-    <div>
+    <FrenzAIEnvironment
+      stage={cleanJob.view.stage}
+      // Awake once a video is chosen, before anything has been sent.
+      armed={!!source}
+      bare
+    >
       <FrenzAIHeader
         crumb="AI Clean"
         title="Clean your videos with AI."
@@ -176,6 +194,7 @@ export function AICleanWorkspace() {
           <AICleanResult
             job={cleanJob.job}
             fetchResultUrl={cleanJob.fetchResultUrl}
+            fetchSourceUrl={cleanJob.fetchSourceUrl}
             onStartAnother={() => {
               cleanJob.reset();
               clearSource();
@@ -268,7 +287,7 @@ export function AICleanWorkspace() {
       </AICleanHero>
 
       {tutorialOpen ? <AICleanTutorial open onClose={closeTutorial} /> : null}
-    </div>
+    </FrenzAIEnvironment>
   );
 }
 

@@ -7,6 +7,7 @@ import {
   createAiJob,
   getAiJob,
   getAiJobResult,
+  getAiJobSource,
   listAiJobs,
   newClientRequestId,
   startAiJob,
@@ -14,7 +15,7 @@ import {
   type AiJobUsage,
 } from "@/lib/ai/client";
 import { nextPollDelayMs, stageFor, type StageView } from "@/lib/ai/job-stages";
-import type { AiJobView } from "@/lib/ai/jobs";
+import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -69,6 +70,8 @@ export interface AiCleanJobActions {
   reset: () => void;
   /** A short-lived link to the finished video, fetched when it is needed. */
   fetchResultUrl: () => Promise<string | null>;
+  /** The same for the ORIGINAL, so the result can be compared against it. */
+  fetchSourceUrl: () => Promise<string | null>;
 }
 
 export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
@@ -115,7 +118,13 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     if (res.ok) {
       applyJob(res.job);
       // A job that stopped changing needs no more asking.
-      if (res.job.status !== "queued" && res.job.status !== "processing") {
+      //
+      // 🔴 `isActiveStatus`, never a hand-written list. This was three separate
+      // copies of "queued or processing", all written before `finalizing`
+      // existed — and every one of them would have stopped polling the instant
+      // the audio mux began, leaving somebody watching "removing text" on a job
+      // that had already finished. The registry knows; this must ask it.
+      if (!isActiveStatus(res.job.status)) {
         stopPolling();
         return;
       }
@@ -136,7 +145,7 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
 
   // Watch whatever job is current, and stop when there is nothing to watch.
   useEffect(() => {
-    if (job && (job.status === "queued" || job.status === "processing")) {
+    if (job && isActiveStatus(job.status)) {
       schedule();
     } else {
       stopPolling();
@@ -152,7 +161,7 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
         stopPolling();
         return;
       }
-      if (current && (current.status === "queued" || current.status === "processing")) {
+      if (current && isActiveStatus(current.status)) {
         attempts.current = 0;
         void poll();
       }
@@ -307,6 +316,19 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     return res.url;
   }, []);
 
+  /*
+    Deliberately silent on failure, unlike the result above. The comparison is
+    an enhancement: if the original cannot be signed, the panel simply shows the
+    finished video on its own. Raising an error for it would put a red message
+    on a screen whose actual news is that the job succeeded.
+  */
+  const fetchSourceUrl = useCallback(async () => {
+    const current = jobRef.current;
+    if (!current) return null;
+    const res = await getAiJobSource(current.id);
+    return res.ok ? res.url : null;
+  }, []);
+
   return {
     job,
     view: stageFor({ job, uploading, uploadFraction }),
@@ -318,5 +340,6 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     cancel,
     reset,
     fetchResultUrl,
+    fetchSourceUrl,
   };
 }

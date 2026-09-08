@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
+import { AICleanInputPreview } from "./input-preview";
 import { AICleanProcessing } from "@/features/ai/ai-clean-processing";
+import { FrenzAIWelcome } from "@/features/ai/frenz-ai-welcome";
 import { FrenzAIHub } from "@/features/ai/frenz-ai-hub";
 import { stageFor } from "@/lib/ai/job-stages";
 
@@ -26,6 +28,22 @@ export default async function FrenzAIProbePage({
 }) {
   if (process.env.NODE_ENV === "production") notFound();
   const { view } = await searchParams;
+
+  if (view === "welcome") {
+    return (
+      <main className="mx-auto max-w-2xl px-3 py-6">
+        <FrenzAIWelcome />
+      </main>
+    );
+  }
+
+  if (view === "input") {
+    return (
+      <main className="mx-auto max-w-2xl px-3 py-6">
+        <AICleanInputPreview />
+      </main>
+    );
+  }
 
   if (view === "processing") {
     return (

@@ -175,6 +175,38 @@ export function AICleanWorkspace() {
     setAICleanTutorialState(outcome === "completed" ? "completed" : "skipped");
   }, []);
 
+  /*
+    ── 🔴 WHICH SCREEN IS THIS? NAMED ONCE, USED TWICE ──────────────────────
+
+    The branch chain below decides what to render, and the chrome around it now
+    needs the same answer — the input screen carries its own breadcrumb,
+    headline and allowance (public/ai input page.jpg), so the old header and
+    allowance strip must not appear above it.
+
+    Writing that condition out a second time is exactly the mistake this
+    codebase has a standing rule about: three hand-written copies of "is this
+    still running" once drifted apart and stopped polling mid-job. So every
+    state is a NAMED boolean here, the chain reads the names, and `idleScreen`
+    is the negation of all of them. One place to change when a state is added.
+  */
+  const finished = !!cleanJob.job && cleanJob.job.status === "completed";
+  const running = cleanJob.view.active || cleanJob.busy;
+  const jobFailed =
+    !!cleanJob.job && (cleanJob.job.status === "failed" || cleanJob.job.status === "cancelled");
+  const readyToStart = stage === "ready" && !!source;
+  const previewing = source?.kind === "file";
+  const enteringLink = stage === "link";
+
+  const idleScreen =
+    !finished &&
+    !running &&
+    !cleanJob.error &&
+    !jobFailed &&
+    !error &&
+    !readyToStart &&
+    !previewing &&
+    !enteringLink;
+
   return (
     <FrenzAIEnvironment
       stage={cleanJob.view.stage}
@@ -182,8 +214,22 @@ export function AICleanWorkspace() {
       armed={!!source}
       bare
     >
-      <FrenzAIHeader
-        crumb="AI Clean"
+      {/*
+        🔴 NO HEADER ON THE INPUT SCREEN (owner, 2026-09-08: "remove the frenz
+        Ai hero section in the screenshot above").
+
+        What was removed is this header plus the dots allowance strip beneath
+        it. The headline did not disappear — it MOVED into the input page and
+        gained a scene beside it, exactly as `public/ai input page.jpg` draws
+        it. Rendering both would print the title twice.
+
+        It stays for every other state: somebody watching a job or reading a
+        result still needs to know where they are, and those screens carry no
+        heading of their own.
+      */}
+      {idleScreen ? null : (
+        <FrenzAIHeader
+          crumb="AI Clean"
         title="Clean your videos with AI."
         description="Remove unwanted captions, subtitles and text overlays while keeping your video looking natural."
         badge={<AICleanProBadge />}
@@ -196,22 +242,37 @@ export function AICleanWorkspace() {
             <HelpCircle className="h-4 w-4" aria-hidden />
             How it works
           </button>
-        }
-      />
+          }
+        />
+      )}
 
       {/*
         What today looks like. Rendered from the server's answer and never read
         back as authority — the start request re-resolves all of it.
       */}
-      <AICleanAllowance entitlement={cleanJob.entitlement} className="mb-4" />
+      {/*
+        Hidden on the idle screen, which shows the same figure in the shape the
+        reference draws: a bar at the BOTTOM, after the action, rather than a
+        limit as the second thing somebody reads about a tool they have not
+        tried yet.
+      */}
+      {idleScreen ? null : (
+        <AICleanAllowance entitlement={cleanJob.entitlement} className="mb-4" />
+      )}
 
-      <AICleanHero>
+      {/*
+        `bare` on the idle screen: the reference lays the input page directly on
+        the page ground, not inside a bordered card. Every other state keeps the
+        frame, which is what makes processing and results read as one surface
+        the work happens inside.
+      */}
+      <AICleanHero bare={idleScreen}>
         {/*
           A live job outranks whatever the picker was showing: somebody who
           refreshes mid-clean must land on their video's real state, not on an
           empty drop zone that invites them to start a second one.
         */}
-        {cleanJob.job && cleanJob.job.status === "completed" ? (
+        {finished && cleanJob.job ? (
           <AICleanResult
             job={cleanJob.job}
             fetchResultUrl={cleanJob.fetchResultUrl}
@@ -221,7 +282,7 @@ export function AICleanWorkspace() {
               clearSource();
             }}
           />
-        ) : cleanJob.view.active || cleanJob.busy ? (
+        ) : running ? (
           <AICleanProcessing
             view={cleanJob.view}
             fileName={source?.kind === "file" ? source.file.name : (cleanJob.job?.source.name ?? null)}
@@ -243,7 +304,7 @@ export function AICleanWorkspace() {
             }}
             canRetry={source?.kind === "file"}
           />
-        ) : cleanJob.job && (cleanJob.job.status === "failed" || cleanJob.job.status === "cancelled") ? (
+        ) : jobFailed && cleanJob.job ? (
           <AICleanJobFailure
             message={
               cleanJob.job.error?.message ??
@@ -269,14 +330,14 @@ export function AICleanWorkspace() {
               setStage("choose");
             }}
           />
-        ) : stage === "ready" && source ? (
+        ) : readyToStart && source ? (
           <AICleanReadyState
             source={source.kind === "file" ? { kind: "file", name: source.file.name } : { kind: "link", url: source.url }}
             isPro={isPremium}
             planKnown={planKnown}
             onBack={() => setStage(source.kind === "file" ? "choose" : "link")}
           />
-        ) : source?.kind === "file" ? (
+        ) : previewing && source?.kind === "file" ? (
           <AICleanVideoPreview
             // Keyed on the URL so a replaced file gets a fresh <video> rather
             // than a reused element still holding the previous clip's metadata.
@@ -293,7 +354,7 @@ export function AICleanWorkspace() {
               setError(code);
             }}
           />
-        ) : stage === "link" ? (
+        ) : enteringLink ? (
           <AICleanUrlInput
             onSubmit={(url) => {
               releaseObjectUrl();
@@ -303,7 +364,11 @@ export function AICleanWorkspace() {
             onCancel={() => setStage("choose")}
           />
         ) : (
-          <AICleanEmptyState onFile={acceptFile} onPasteLink={() => setStage("link")} />
+          <AICleanEmptyState
+            onFile={acceptFile}
+            onPasteLink={() => setStage("link")}
+            entitlement={cleanJob.entitlement}
+          />
         )}
       </AICleanHero>
 

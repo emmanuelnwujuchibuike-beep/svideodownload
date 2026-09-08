@@ -19,11 +19,31 @@ import { cn } from "@/lib/utils";
  * far short of a "huge gradient": at this opacity it reads as light in the room,
  * not as colour on the page.
  */
-export function AICleanHero({ children, className }: { children: ReactNode; className?: string }) {
+export function AICleanHero({
+  children,
+  className,
+  bare = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /**
+   * Drop the frame and the wash, keeping only the positioning context.
+   *
+   * 🔴 For the INPUT screen (owner, 2026-09-08). `public/ai input page.jpg`
+   * lays that page directly on the page ground — no card, no border — because
+   * it already contains several cards of its own, and a card of cards reads as
+   * a dashboard rather than as one task.
+   *
+   * Every other state keeps the frame, which is what makes choosing, watching
+   * and downloading feel like one surface the work happens inside.
+   */
+  bare?: boolean;
+}) {
   return (
     <section
       className={cn(
-        "relative isolate overflow-hidden rounded-3xl border border-border/70 bg-card shadow-card",
+        "relative isolate overflow-hidden",
+        bare ? "rounded-none" : "rounded-3xl border border-border/70 bg-card shadow-card",
         className,
       )}
     >
@@ -37,11 +57,13 @@ export function AICleanHero({ children, className }: { children: ReactNode; clas
         an environment above it, and the multiplier holds it well under the
         text: this is light behind a card, never a tint the copy is read against.
       */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-32 left-1/2 -z-10 h-64 w-[140%] -translate-x-1/2 rounded-[50%] bg-brand blur-3xl"
-        style={{ opacity: "calc(var(--ai-intensity, 0.22) * 0.28)" }}
-      />
+      {bare ? null : (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-32 left-1/2 -z-10 h-64 w-[140%] -translate-x-1/2 rounded-[50%] bg-brand blur-3xl"
+          style={{ opacity: "calc(var(--ai-intensity, 0.22) * 0.28)" }}
+        />
+      )}
       {children}
     </section>
   );

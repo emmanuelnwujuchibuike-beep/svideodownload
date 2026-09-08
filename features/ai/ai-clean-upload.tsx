@@ -1,8 +1,9 @@
 "use client";
 
-import { Link2, UploadCloud } from "lucide-react";
+import { ArrowRight, Link2, UploadCloud } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
+import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { AI_CLEAN_ACCEPT, AI_CLEAN_FORMAT_LINE } from "@/lib/ai/clean-media";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -39,10 +40,13 @@ import { cn } from "@/lib/utils";
 export function AICleanUpload({
   onFile,
   onPasteLink,
+  showPasteLink = true,
 }: {
   onFile: (file: File) => void;
   /** Switches the stage to the link field. */
   onPasteLink: () => void;
+  /** False on the input page, which draws its own link pill below the card. */
+  showPasteLink?: boolean;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -95,23 +99,46 @@ export function AICleanUpload({
       <label
         htmlFor={inputId}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-5 py-10 text-center transition-colors duration-200 sm:py-14",
+          "relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.5rem] border-2 border-dashed px-5 py-9 text-center transition-colors duration-200 sm:py-12",
           "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
           dragging
-            ? "border-primary bg-primary/[0.06]"
-            : "border-border bg-secondary/25 hover:border-primary/40 hover:bg-secondary/40",
+            ? "border-primary bg-primary/[0.07]"
+            : "border-border/70 bg-card/55 backdrop-blur hover:border-primary/40",
         )}
       >
+        {/* The light inside the card, from `public/ai input page.jpg`. Static. */}
         <span
-          className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 motion-reduce:transform-none",
-            dragging ? "bg-brand-tile text-white scale-105" : "bg-secondary text-muted-foreground",
-          )}
-        >
-          <UploadCloud className="h-7 w-7" aria-hidden />
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{
+            background:
+              "radial-gradient(60% 45% at 50% 30%, rgba(129,140,248,0.16) 0%, transparent 70%)," +
+              "radial-gradient(40% 35% at 88% 88%, rgba(217,70,239,0.12) 0%, transparent 70%)",
+          }}
+        />
+
+        {/*
+          The mark in a lit sphere with a ring around it, as drawn — replacing a
+          grey tile and a cloud glyph. It is the same brand mark the rest of the
+          feature uses, at 30px, so it costs nothing new.
+        */}
+        <span className="relative flex h-20 w-20 items-center justify-center">
+          <span
+            aria-hidden
+            className="absolute inset-0 rounded-full bg-gradient-to-br from-white/80 to-indigo-100/60 ring-1 ring-inset ring-white/70 dark:from-white/15 dark:to-indigo-500/15 dark:ring-white/20"
+            style={{ boxShadow: "0 10px 34px -10px rgba(99,102,241,0.65)" }}
+          />
+          {/* the orbit ring: a wide, flat ellipse behind the sphere */}
+          <span
+            aria-hidden
+            className="absolute inset-x-[-28%] top-1/2 h-8 -translate-y-1/2 rounded-[50%] border border-indigo-300/45 dark:border-indigo-300/25"
+          />
+          <span className={cn("relative transition-transform duration-200 motion-reduce:transform-none", dragging && "scale-110")}>
+            <FrenzLogo size={34} alt="" />
+          </span>
         </span>
 
-        <span className="mt-4 block text-base font-semibold sm:text-lg">
+        <span className="mt-4 block text-lg font-bold sm:text-xl">
           {dragging ? "Drop it anywhere here" : "Drop your video here"}
         </span>
         <span className="mt-1 block text-sm text-muted-foreground">or choose a video from your device</span>
@@ -119,7 +146,17 @@ export function AICleanUpload({
         {/* A span, not a button: a button inside a label swallows the click on
             some browsers, and this one only has to LOOK like the primary action
             — the label around it is what opens the picker. */}
-        <span className="btn-lux btn-lux-primary mt-5">Choose Video</span>
+        <span
+          className={cn(
+            "mt-5 inline-flex items-center gap-2 rounded-full px-7 py-3.5",
+            "bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500",
+            "text-sm font-bold text-white shadow-[0_14px_32px_-12px_rgb(99_102_241/0.95)]",
+          )}
+        >
+          <UploadCloud className="h-4 w-4" aria-hidden />
+          Choose Video
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </span>
 
         {/* Not `uppercase`: the owner writes it "WebM", and a CSS transform that
             renders it "WEBM" is a silent edit of their copy. */}
@@ -128,19 +165,29 @@ export function AICleanUpload({
         </span>
       </label>
 
-      <div className="mt-4 text-center">
-        <button
-          type="button"
-          onClick={() => {
-            haptic("light");
-            onPasteLink();
-          }}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          <Link2 className="h-4 w-4" aria-hidden />
-          Paste video link
-        </button>
-      </div>
+      {/*
+        🔴 SUPPRESSIBLE, because the input page draws this itself.
+
+        `public/ai input page.jpg` puts "Paste video link" BELOW the card as its
+        own pill. Rendering the built-in one too printed it twice on the same
+        screen — caught in a screenshot, invisible in review. Default stays on
+        so every other caller is unchanged.
+      */}
+      {showPasteLink ? (
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              onPasteLink();
+            }}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-full px-4 text-sm font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Link2 className="h-4 w-4" aria-hidden />
+            Paste video link
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

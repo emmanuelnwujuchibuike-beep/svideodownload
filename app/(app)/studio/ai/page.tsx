@@ -1,41 +1,32 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { FrenzAIHub } from "@/features/ai/frenz-ai-hub";
+import { FrenzAIWelcome } from "@/features/ai/frenz-ai-welcome";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Frenz AI" };
 
 /**
- * Frenz AI — the hub, inside Studio.
+ * Frenz AI — the first thing you see when you tap the tab.
  *
- * ── Rebuilt from the owner's reference, 2026-09-08 ────────────────────────
- * `public/frenz ai page.jpg`, with the instruction "build everything exactly
- * in details as it in the image, dont skip or simplify any thing". The whole
- * composition lives in `FrenzAIHub` so this page and the public one cannot
- * drift; see that file for what each annotation on the image became.
+ * ── Rebuilt as a WELCOME page, 2026-09-08 ─────────────────────────────────
+ * Owner: "use the image description Frenz AI welcome page as the first page
+ * when a user click the Frenz AI button, and after that when Try AI Clean is
+ * clicked it opens the existing Frenz AI landing but without the hero section."
  *
- * ── Why it stays inside Studio ────────────────────────────────────────────
- * Frenzsave → Frenz Studio → Frenz AI → a tool. Mounting it here means it
- * inherits the Studio shell's nav — the exact Home / Frenz AI / Content /
- * Audience row drawn across the top of the reference — and puts the AI tools
- * beside the creator's own work rather than in a separate destination that
- * would have to justify its own chrome.
+ * So this route is now `public/frenz ai welcome page.jpg` — the before/after
+ * scene, the two actions, the allowance and the trust row — and "Try AI Clean"
+ * goes to /studio/ai/clean, which carries the input design from
+ * `public/ai input page.jpg`.
  *
- * ── 🔴 AND THIS ONE IS `noindex`, WHICH IS WHY IT MAY SAY "COMING SOON" ───
- * The Studio layout sets `robots: { index: false }` and redirects a signed-out
- * visitor, so no crawler reaches this page. That is what lets it carry the
- * reference's exact wording while the standing "no soon anywhere" rule — which
- * exists for the AdSense review of INDEXED pages — is still honoured where it
- * actually applies. The public surface passes different copy; see
- * FrenzAIRoadmap.
+ * ⚠️ The previous hub (the Core, "Create more. Edit smarter.", the AI Clean
+ * card and the roadmap panel) is NOT deleted — `features/ai/frenz-ai-hub.tsx`
+ * still exists and is what a public, crawlable Frenz AI page will render. It is
+ * simply no longer what this route shows.
  *
- * ── Server-rendered, and it fetches nothing ───────────────────────────────
- * The tool list is a static registry (`lib/ai/studio-tools.ts`), so this page
- * is markup over a constant. The only round trip is the user check the Studio
- * pages all repeat — a layout does not re-run per navigation, so it cannot be
- * the only gate.
+ * Server-rendered and it fetches nothing but the session; the allowance is the
+ * one live value and the welcome component asks for it on mount.
  */
 export default async function FrenzAIPage() {
   const supabase = await createClient();
@@ -44,5 +35,5 @@ export default async function FrenzAIPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai");
 
-  return <FrenzAIHub />;
+  return <FrenzAIWelcome />;
 }

@@ -6,41 +6,63 @@ name: Publish AI Clean model on GPU
 #  Python, no terminal, nothing installed locally.
 # ============================================================================
 #
-# ── 🔴 WHY THIS EXISTS ──────────────────────────────────────────────────────
+# ── 🔴 REPLICATE USES TWO DIFFERENT TOKENS. THIS COST TWO FAILED RUNS. ──────
+#
+# Run #2 got all the way to `cog login` and was told:
+#
+#     "that looks like a Replicate API token, not a CLI auth token.
+#      Please fetch a token from https://replicate.com/auth/token to log in"
+#
+# They are not interchangeable, and the names are close enough to be a trap:
+#
+#   REPLICATE_API_TOKEN        r8_…  from replicate.com/account/api-tokens
+#                              The REST API. Runs predictions. This is the one
+#                              the SITE uses, and the one this workflow uses to
+#                              look up the account, create the model and read
+#                              back the version.
+#
+#   REPLICATE_CLI_AUTH_TOKEN         from replicate.com/auth/token
+#                              The registry. `cog login` and `cog push` only
+#                              accept this one.
+#
+# Both must exist as repository secrets. The workflow checks for each by name
+# and says which is missing rather than failing at the registry.
+#
+# ── WHY THIS EXISTS ─────────────────────────────────────────────────────────
 #
 # The model AI Clean calls is published on CPU hardware. Measured 2026-09-08: a
 # 0.15 MB clip ran over ten minutes against a published typical of 124 seconds,
 # and three jobs in a row were abandoned. Its own README says "GPU is
-# auto-detected and used if available (3-6x faster)" — the CUDA path is already
-# written and merely dormant, because upstream ships `gpu: false` and the CPU
-# build of ONNX Runtime.
+# auto-detected and used if available (3-6x faster)" — the CUDA path is written
+# and dormant, because upstream ships `gpu: false` and the CPU build of ONNX
+# Runtime.
 #
-# Republishing the same MIT-licensed code on GPU normally means `cog push`,
-# which needs Docker — and the owner's machine has no Docker, no cog and no
-# Python. Installing all three plus WSL2 to build a multi-gigabyte CUDA image
-# over a home connection is a bad trade. A GitHub runner already has Docker and
-# a fast link, and this repository is PUBLIC so the minutes are free.
+# Republishing the MIT-licensed code on GPU normally means `cog push`, which
+# needs Docker — and the owner's machine has no Docker, no cog and no Python.
+# A GitHub runner has all of it, and this repository is PUBLIC so the minutes
+# are free.
 #
-# ── WHAT YOU NEED (one secret, and nothing else) ────────────────────────────
+# ── SETUP (two secrets, then a button) ──────────────────────────────────────
 #
-#   1. Copy your token: https://replicate.com/account/api-tokens
-#   2. This repo → Settings → Secrets and variables → Actions →
-#      New repository secret:  REPLICATE_API_TOKEN
-#   3. Actions → this workflow → Run workflow → leave every field blank → Run
+#   Repo → Settings → Secrets and variables → Actions → New repository secret
 #
-# The model itself is CREATED FOR YOU if it does not exist, on Nvidia T4, and
-# the username is read from the token. There is no form to fill in correctly.
+#     REPLICATE_API_TOKEN        ← https://replicate.com/account/api-tokens
+#     REPLICATE_CLI_AUTH_TOKEN   ← https://replicate.com/auth/token
 #
-#   4. When it finishes, the run Summary prints two environment variables. Put
-#      BOTH into Vercel (frenzsave → Settings → Environment Variables) and
-#      redeploy:
+#   Then: Actions → this workflow → Run workflow → leave every field blank.
 #
-#        REPLICATE_AI_CLEAN_MODEL          = <username>/video-text-remover-gpu
-#        REPLICATE_AI_CLEAN_MODEL_VERSION  = <the 64-char hash>
+#   The model is created for you if it does not exist, on Nvidia T4, and the
+#   username is read from the token. There is no form to fill in correctly.
 #
-#      Set them TOGETHER. A new owner/name with the old hash resolves to
-#      nothing and every job fails until corrected. Clearing both rolls back to
-#      the committed defaults in lib/ai/config.ts.
+#   When it finishes, the run Summary prints two environment variables. Put
+#   BOTH into Vercel (frenzsave → Settings → Environment Variables) and
+#   redeploy:
+#
+#     REPLICATE_AI_CLEAN_MODEL          = <username>/video-text-remover-gpu
+#     REPLICATE_AI_CLEAN_MODEL_VERSION  = <the 64-char hash>
+#
+#   Set them TOGETHER. A new owner/name with the old hash resolves to nothing.
+#   Clearing both rolls back to the committed defaults in lib/ai/config.ts.
 #
 # ── ⚠️ T4, NOT SOMETHING BIGGER ─────────────────────────────────────────────
 #
@@ -53,8 +75,7 @@ name: Publish AI Clean model on GPU
 #
 # A Vercel project named `replicate-gpu` was created against this repo and fails
 # on every push. It always will: `docs/replicate-gpu/` is a model definition —
-# no package.json, nothing for Vercel to build. Delete that project. The model
-# goes to Replicate's own registry (r8.im), which is what this workflow does.
+# no package.json, nothing for Vercel to build. Delete that project.
 
 on:
   # 🔴 MANUAL ONLY. A CUDA build is ~15 minutes of a runner and pushes a
@@ -63,13 +84,6 @@ on:
   workflow_dispatch:
     inputs:
       replicate_owner:
-        # 🔴 OPTIONAL, and resolved from the token when blank.
-        #
-        # Run #1 failed at `cog login`, and a mistyped username is one of the
-        # few things that causes it. The token already knows who it belongs to;
-        # asking a human to retype a value the API can state exactly is
-        # inviting the error. Overridable only for a model under an
-        # ORGANISATION rather than the token's own account.
         description: "Replicate username — LEAVE BLANK to use the token's own account"
         required: false
         type: string
@@ -94,17 +108,31 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      # ── 🔴 PROVE THE TOKEN FIRST, BEFORE SPENDING ANYTHING ────────────────
+      # ── 🔴 BOTH SECRETS, BY NAME, BEFORE ANYTHING IS SPENT ────────────────
       #
-      # Run #1 died at `cog login` with nothing readable from outside, and that
-      # one failure has at least three causes: a bad token, a token carrying a
-      # stray newline, or a cog/registry problem. Asking the API directly
-      # separates them in a single request that costs a second — and it resolves
-      # the username, so nobody has to type one correctly.
-      #
-      # It runs FIRST so a bad credential costs five seconds rather than a
-      # fifteen-minute build that fails at the very end.
-      - name: Verify the token and resolve the account
+      # Run #2 spent four minutes freeing disk and building before discovering
+      # the wrong token was configured. Checking both here costs a second, and
+      # the message says WHICH one is missing and WHERE to get it — the two
+      # names are close enough that "the token is wrong" is not useful advice.
+      - name: Check both tokens are configured
+        env:
+          API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+          CLI_TOKEN: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${API_TOKEN:-}" ]; then
+            echo "::error::REPLICATE_API_TOKEN is not set. Get it from https://replicate.com/account/api-tokens (starts r8_)."
+            missing=1
+          fi
+          if [ -z "${CLI_TOKEN:-}" ]; then
+            echo "::error::REPLICATE_CLI_AUTH_TOKEN is not set. This is a DIFFERENT token — get it from https://replicate.com/auth/token"
+            missing=1
+          fi
+          [ "$missing" = "0" ] || exit 1
+          echo "both tokens present"
+
+      - name: Verify the API token and resolve the account
         id: account
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
@@ -112,60 +140,43 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${REPLICATE_API_TOKEN:-}" ]; then
-            echo "::error::REPLICATE_API_TOKEN secret is not set. Repo Settings → Secrets and variables → Actions → New repository secret."
-            exit 1
-          fi
-
           # A pasted secret very often carries a trailing newline or space. It
-          # is invisible in the GitHub UI and it makes every request 401.
+          # is invisible in the GitHub UI and it 401s every request.
           raw_len=$(printf '%s' "$REPLICATE_API_TOKEN" | wc -c)
           token="$(printf '%s' "$REPLICATE_API_TOKEN" | tr -d '[:space:]')"
           if [ "${#token}" -ne "$raw_len" ]; then
-            echo "::warning::the token secret contained whitespace; trimmed before use"
+            echo "::warning::REPLICATE_API_TOKEN contained whitespace; trimmed before use"
           fi
-          echo "token length: ${#token}"
           case "$token" in
-            r8_*) echo "token shape: looks like a Replicate token (r8_…)" ;;
-            *)    echo "::warning::token does not start with r8_ — is this a Replicate API token rather than something else?" ;;
+            r8_*) : ;;
+            *) echo "::warning::REPLICATE_API_TOKEN does not start with r8_ — did the two tokens get swapped?" ;;
           esac
 
           code=$(curl -sS -o /tmp/account.json -w '%{http_code}' \
             -H "Authorization: Bearer ${token}" https://api.replicate.com/v1/account)
-
           if [ "$code" != "200" ]; then
-            echo "::error::Replicate rejected the token (HTTP $code). Mint a fresh one at https://replicate.com/account/api-tokens and update the REPLICATE_API_TOKEN secret."
+            echo "::error::Replicate rejected REPLICATE_API_TOKEN (HTTP $code). Mint a fresh one at https://replicate.com/account/api-tokens"
             cat /tmp/account.json
             exit 1
           fi
 
           resolved=$(python3 -c "import json;print(json.load(open('/tmp/account.json')).get('username',''))")
-          if [ -z "$resolved" ]; then
-            echo "::error::token is valid but the account has no username"
-            cat /tmp/account.json
-            exit 1
-          fi
+          [ -n "$resolved" ] || { echo "::error::token valid but the account has no username"; cat /tmp/account.json; exit 1; }
 
           owner="${OWNER_INPUT:-}"
           [ -z "$owner" ] && owner="$resolved"
           echo "authenticated as: $resolved"
           echo "publishing under: $owner"
 
-          # 🔴 THE TOKEN IS NOT AN OUTPUT.
-          #
-          # Step outputs are ordinary workflow context, not secrets: they are
-          # not masked, they appear under debug logging, and anything dumping
-          # the context prints them. Only the resolved OWNER crosses steps;
-          # every step that needs the token re-reads the SECRET, which GitHub
+          # 🔴 THE TOKEN IS NOT AN OUTPUT. Step outputs are ordinary workflow
+          # context, not secrets: unmasked, present under debug logging, and
+          # printed by anything that dumps the context. Only the OWNER crosses
+          # steps; every step needing a token re-reads the SECRET, which GitHub
           # does mask.
           echo "owner=$owner" >> "$GITHUB_OUTPUT"
 
-      # ── 🔴 CREATE THE MODEL IF IT IS NOT THERE ────────────────────────────
-      #
-      # `cog push` uploads TO a model; it does not create one. Leaving that as a
-      # manual step means forgetting it fails at the END of a fifteen-minute
-      # build — the most expensive possible place. The API can do it, so this
-      # does, and the human step is gone.
+      # `cog push` uploads TO a model and does not create one. Leaving that
+      # manual means forgetting it fails at the END of a fifteen-minute build.
       - name: Ensure the model exists
         env:
           REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
@@ -178,7 +189,6 @@ jobs:
           code=$(curl -sS -o /tmp/model.json -w '%{http_code}' \
             -H "Authorization: Bearer ${TOKEN}" \
             "https://api.replicate.com/v1/models/${OWNER}/${NAME}")
-
           if [ "$code" = "200" ]; then
             echo "model ${OWNER}/${NAME} already exists"
             exit 0
@@ -199,17 +209,13 @@ jobs:
           fi
           echo "model ready"
 
-      - name: Free up disk space
-        # A CUDA base image is several gigabytes and a stock runner has little
-        # room to spare. These are preinstalled toolchains this job never
-        # touches; removing them is the standard fix for "no space left on
-        # device" halfway through a docker build.
-        run: |
-          set -euo pipefail
-          df -h / | tail -1
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup || true
-          sudo docker image prune -af || true
-          df -h / | tail -1
+      # Replicate's own recommendation for this build. A CUDA base image is
+      # several gigabytes and a stock runner has little room to spare.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          docker-images: false
 
       - name: Check out our overrides
         uses: actions/checkout@v4
@@ -223,8 +229,6 @@ jobs:
           git clone --depth 1 https://github.com/hjunior29/video-text-remover.git model
           echo "── upstream cog.yaml ──"
           cat model/cog.yaml
-          echo "── upstream requirements.txt ──"
-          cat model/requirements.txt
 
       - name: Apply the GPU overrides
         env:
@@ -255,22 +259,21 @@ jobs:
             echo "::error::both ONNX Runtime builds present — they provide the same module and the CPU wheel can win silently"
             exit 1
           fi
-          # And the destination actually got substituted.
-          grep -q "YOUR-REPLICATE-USERNAME" model/cog.yaml \
-            && { echo "::error::the image placeholder was not replaced — owner resolved empty?"; exit 1; } || true
+          if grep -q "YOUR-REPLICATE-USERNAME" model/cog.yaml; then
+            echo "::error::the image placeholder was not replaced — owner resolved empty?"
+            exit 1
+          fi
 
-      - name: Install cog
-        run: |
-          set -euo pipefail
-          sudo curl -o /usr/local/bin/cog -L \
-            "https://github.com/replicate/cog/releases/latest/download/cog_$(uname -s)_$(uname -m)"
-          sudo chmod +x /usr/local/bin/cog
-          cog --version
-
-      - name: Log in to Replicate
-        env:
-          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
-        run: printf '%s' "$REPLICATE_API_TOKEN" | tr -d '[:space:]' | cog login --token-stdin
+      # ── 🔴 REPLICATE'S OWN ACTION, NOT A HAND-ROLLED INSTALL ──────────────
+      #
+      # The first two attempts curl'd the cog binary and ran `cog login`
+      # manually, and got the token distinction wrong. This is the path
+      # Replicate documents and maintains: it installs cog AND authenticates,
+      # and it takes the CLI auth token, which is the one the registry accepts.
+      - name: Set up Cog
+        uses: replicate/setup-cog@v2
+        with:
+          token: ${{ secrets.REPLICATE_CLI_AUTH_TOKEN }}
 
       - name: Build and push
         working-directory: model

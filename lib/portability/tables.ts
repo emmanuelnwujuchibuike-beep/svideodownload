@@ -90,6 +90,8 @@ export const NOT_EXPORTED: Record<string, string> = {
   reward_sessions: "Short-lived reward-download authorizations. They expire in minutes and mean nothing once redeemed; the download itself is exported through your download history.",
   ai_usage_daily:
     "Counters recording how many AI jobs you ran on a given day, used only to enforce the daily allowance. It holds no videos, no filenames and nothing about what you cleaned — the jobs themselves are exported through ai_jobs.",
+  ai_guest_links:
+    "A link between this browser and your account, recorded once if you used the AI tools before signing up. It is a random identifier and nothing else — no address, no device details, nothing about you — and it exists only so the free daily allowance cannot be doubled by signing up or signing out.",
 
   /*
     Rows ABOUT you that were written BY someone else. Real personal data, and

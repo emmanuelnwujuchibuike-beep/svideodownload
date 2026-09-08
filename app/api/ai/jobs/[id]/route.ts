@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
-import { jobToView } from "@/lib/ai/jobs";
+import { aiFeature, jobToView } from "@/lib/ai/jobs";
 import { failStalledJob } from "@/lib/ai/stall-server";
+import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,22 +33,24 @@ export const dynamic = "force-dynamic";
  * provider account, the paths are private-bucket keys, and the message is
  * whatever a provider chose to say, which is not fit to be shown to anyone.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  let userId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    /* treated as anonymous */
-  }
-  if (!userId) {
-    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const feature = aiFeature("ai_clean");
+  if (!feature) {
+    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
+      status: aiErrorStatus("FEATURE_UNAVAILABLE"),
+    });
   }
 
-  const burst = await aiJobReadLimiter.limit(`ai-read:${userId}`);
+  /*
+    🔴 A GUEST POLLS THEIR OWN JOB. There is no session to require — the signed
+    cookie identifies them, and `getOwnJob` scopes the read to it. Requiring
+    auth here would mean a signed-out visitor could start a job and never be
+    able to watch it finish.
+  */
+  const resolution = await resolveAiSubject(request, feature.id);
+  const { subject } = resolution;
+
+  const burst = await aiJobReadLimiter.limit(`ai-read:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -64,7 +66,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
-    const row = await getOwnJob(userId, id);
+    const row = await getOwnJob(subject, id);
     if (!row) {
       return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
     }
@@ -85,16 +87,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       two tabs polling together still produce exactly one refund.
     */
     if (await failStalledJob(row)) {
-      const ended = await getOwnJob(userId, id);
-      if (ended) return NextResponse.json({ job: jobToView(ended, storedErrorMessage) });
+      const ended = await getOwnJob(subject, id);
+      if (ended) {
+        return applyAiSubjectCookie(
+          NextResponse.json({ job: jobToView(ended, storedErrorMessage) }),
+          resolution,
+        );
+      }
     }
 
-    return NextResponse.json({ job: jobToView(row, storedErrorMessage) });
+    return applyAiSubjectCookie(
+      NextResponse.json({ job: jobToView(row, storedErrorMessage) }),
+      resolution,
+    );
   } catch (e) {
     if (isAiJobError(e)) {
       return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });
     }
-    console.error("[ai/jobs] get threw", { userId, jobId: id, error: String(e) });
+    console.error("[ai/jobs] get threw", { subject: subject.key, jobId: id, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
   }
 }

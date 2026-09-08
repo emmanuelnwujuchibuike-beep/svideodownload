@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
+import { aiFeature } from "@/lib/ai/jobs";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signResultUrl } from "@/lib/ai/storage-server";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
+import { subjectOwnerId } from "@/lib/ai/subject";
+import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,22 +36,19 @@ export const dynamic = "force-dynamic";
  *
  * `no-store`, because a cached signed URL outlives the reason it was issued.
  */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  let userId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    /* anonymous */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const feat = aiFeature("ai_clean");
+  if (!feat) {
+    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
+      status: aiErrorStatus("FEATURE_UNAVAILABLE"),
+    });
   }
-  if (!userId) {
-    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
-  }
+  // A guest owns their result exactly as a member does — see the note in
+  // lib/ai/job-store.ts on why the signed cookie replaces RLS here.
+  const resolution = await resolveAiSubject(request, feat.id);
+  const { subject } = resolution;
 
-  const burst = await aiJobReadLimiter.limit(`ai-result:${userId}`);
+  const burst = await aiJobReadLimiter.limit(`ai-result:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -63,7 +62,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
-    const job = await getOwnJob(userId, id);
+    const job = await getOwnJob(subject, id);
     // Somebody else's job answers exactly as a job that does not exist.
     if (!job) {
       return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
@@ -81,8 +80,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       );
     }
 
-    if (!pathBelongsTo(job.result_path, userId, job.id)) {
-      console.error("[ai/result] stored path failed ownership", { jobId: job.id, userId });
+    if (!pathBelongsTo(job.result_path, subjectOwnerId(subject), job.id)) {
+      console.error("[ai/result] stored path failed ownership", { jobId: job.id, subject: subject.key });
       return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
     }
 
@@ -95,7 +94,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (isAiJobError(e)) {
       return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });
     }
-    console.error("[ai/result] threw", { userId, jobId: id, error: String(e) });
+    console.error("[ai/result] threw", { subject: subject.key, jobId: id, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
   }
 }

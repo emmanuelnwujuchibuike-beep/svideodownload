@@ -2,6 +2,7 @@ import "server-only";
 
 import { AiJobError } from "@/lib/ai/errors";
 import type { AiFeature } from "@/lib/ai/jobs";
+import type { AiSubject } from "@/lib/ai/subject";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -130,7 +131,7 @@ export interface AiRewardSession {
  * feature, until a specific moment.
  */
 export async function createAiRewardSession(opts: {
-  userId: string;
+  subject: AiSubject;
   feature: AiFeature;
 }): Promise<AiRewardSession> {
   const provider = activeRewardProvider();
@@ -140,7 +141,11 @@ export async function createAiRewardSession(opts: {
   const { data, error } = await admin
     .from("reward_sessions")
     .insert({
-      user_id: opts.userId,
+      user_id: opts.subject.userId,
+      // A guest reward is bound to their SIGNED identifier, not their address —
+      // two people behind one carrier NAT must not be able to spend each
+      // other's ads. See migration 0145.
+      guest_id: opts.subject.guestId,
       // The feature binding. A download reward is a different value and can
       // never match the claim below.
       type: opts.feature,
@@ -175,7 +180,7 @@ export async function createAiRewardSession(opts: {
  */
 export async function grantAiRewardSession(opts: {
   sessionId: string;
-  userId: string;
+  subject: AiSubject;
   feature: AiFeature;
   claim?: unknown;
 }): Promise<{ granted: boolean; reason?: string }> {
@@ -183,7 +188,7 @@ export async function grantAiRewardSession(opts: {
 
   const { data: row, error: readError } = await admin
     .from("reward_sessions")
-    .select("id, user_id, type, status, provider, expires_at, consumed_at")
+    .select("id, user_id, guest_id, type, status, provider, expires_at, consumed_at")
     .eq("id", opts.sessionId)
     .maybeSingle();
 
@@ -194,7 +199,11 @@ export async function grantAiRewardSession(opts: {
 
   // 🔴 Ownership and feature are checked before the provider is even asked. A
   // session belonging to somebody else is not a provider question.
-  if (!row || row.user_id !== opts.userId || row.type !== opts.feature) {
+  const owns =
+    opts.subject.kind === "user"
+      ? row?.user_id === opts.subject.userId
+      : !!row?.guest_id && row.guest_id === opts.subject.guestId;
+  if (!row || !owns || row.type !== opts.feature) {
     return { granted: false, reason: "not-found" };
   }
   if (row.consumed_at) return { granted: false, reason: "already-consumed" };
@@ -207,7 +216,7 @@ export async function grantAiRewardSession(opts: {
   const provider = rewardProvider((row.provider as string) ?? attestedRewardProvider.id) ?? attestedRewardProvider;
   const verification = await provider.verify({
     sessionId: opts.sessionId,
-    userId: opts.userId,
+    userId: opts.subject.key,
     claim: opts.claim,
   });
 
@@ -243,7 +252,7 @@ export async function grantAiRewardSession(opts: {
 
   console.info("[ai/reward] granted", {
     sessionId: opts.sessionId,
-    userId: opts.userId,
+    subject: opts.subject.key,
     feature: opts.feature,
     provider: provider.id,
     verifiable: provider.verifiable,
@@ -273,7 +282,7 @@ export type RewardClaimReason =
  */
 export async function claimAiReward(opts: {
   sessionId: string;
-  userId: string;
+  subject: AiSubject;
   feature: AiFeature;
 }): Promise<{ claimed: boolean; reason: RewardClaimReason }> {
   try {
@@ -281,7 +290,8 @@ export async function claimAiReward(opts: {
     const { data, error } = await admin
       .rpc("claim_ai_reward", {
         p_session_id: opts.sessionId,
-        p_user_id: opts.userId,
+        p_user_id: opts.subject.userId,
+        p_guest_id: opts.subject.guestId,
         p_feature: opts.feature,
       })
       .single<{ claimed: boolean; reason: RewardClaimReason }>();
@@ -296,7 +306,7 @@ export async function claimAiReward(opts: {
     if (!data.claimed) {
       console.warn("[ai/reward] claim refused", {
         sessionId: opts.sessionId,
-        userId: opts.userId,
+        subject: opts.subject.key,
         reason: data.reason,
       });
     }

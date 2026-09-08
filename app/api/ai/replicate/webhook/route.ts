@@ -5,9 +5,10 @@ import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { findJobByPredictionId, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
-import { getUserAIEntitlement } from "@/lib/ai/entitlement";
+import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { notifyAiCleanFailed } from "@/lib/ai/notify";
+import { subjectFromRow, type AiSubject } from "@/lib/ai/subject";
 import { releaseAiUsage } from "@/lib/ai/usage";
 
 export const runtime = "nodejs";
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
         // Replicate says it succeeded and there is no video in the output.
         // Treated as a provider failure and refunded — the member has nothing
         // either way, and the fault is not theirs.
-        return await failJob(job.id, job.user_id, feature.id, "PROVIDER_ERROR", "succeeded with no usable output");
+        return await failJob(job.id, subjectFromRow(job), feature.id, "PROVIDER_ERROR", "succeeded with no usable output");
       }
 
       try {
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
     }
 
     if (state.status === "failed") {
-      return await failJob(job.id, job.user_id, feature.id, "PROCESSING_FAILED", state.detail);
+      return await failJob(job.id, subjectFromRow(job), feature.id, "PROCESSING_FAILED", state.detail);
     }
 
     if (state.status === "cancelled") {
@@ -175,7 +176,7 @@ export async function POST(request: Request) {
       if (updated) {
         // A cancelled run still consumed provider time, but the member asked for
         // it to stop and got nothing — the slot goes back.
-        await refund(job.user_id, feature.id);
+        await refund(subjectFromRow(job), feature.id);
       }
       return NextResponse.json({ ok: true }, { status: 200 });
     }
@@ -191,7 +192,10 @@ export async function POST(request: Request) {
 /** Mark it failed, refund the slot, and never store the provider's words. */
 async function failJob(
   jobId: string,
-  userId: string,
+  // 🔴 Null only if the row somehow has neither owner, which the check
+  // constraint forbids. Typed nullable anyway: a refund credited to the wrong
+  // subject is worse than one that is skipped and logged.
+  subject: AiSubject | null,
   feature: AiFeature,
   code: string,
   detail: string | null | undefined,
@@ -205,21 +209,24 @@ async function failJob(
   });
 
   if (updated) {
-    await refund(userId, feature);
+    await refund(subject, feature);
     /*
       The provider gave up on a job the member is probably no longer watching —
       this model runs for minutes, so a silent failure is indistinguishable
       from one still running. The refund is stated in the sentence because
       "it failed" alone reads as "and it cost me one of my two".
     */
-    await notifyAiCleanFailed({
-      userId,
-      jobId,
-      message: aiErrorMessage(code === "PROVIDER_UNAVAILABLE" ? "PROVIDER_UNAVAILABLE" : "PROCESSING_FAILED"),
-    });
+    // A guest has nowhere to receive a push; they see it when they return.
+    if (subject?.kind === "user") {
+      await notifyAiCleanFailed({
+        userId: subject.userId,
+        jobId,
+        message: aiErrorMessage(code === "PROVIDER_UNAVAILABLE" ? "PROVIDER_UNAVAILABLE" : "PROCESSING_FAILED"),
+      });
+    }
     console.error("[ai/webhook] failed", {
       jobId,
-      userId,
+      subject: subject?.key ?? null,
       feature,
       code,
       transition: "-> failed",
@@ -236,9 +243,9 @@ async function failJob(
  * daily allowance, and a webhook has no session to read it from. `getUserPlan`
  * is a single indexed read and this path runs at most once per job.
  */
-async function refund(userId: string, feature: AiFeature) {
+async function refund(subject: AiSubject | null, feature: AiFeature) {
   const def = aiFeature(feature);
-  if (!def) return;
-  const entitlement = await getUserAIEntitlement(userId, def);
-  await releaseAiUsage(userId, feature, entitlement.dailyLimit);
+  if (!def || !subject) return;
+  const entitlement = await getAiEntitlement(subject, def);
+  await releaseAiUsage(subject, feature, entitlement.dailyLimit);
 }

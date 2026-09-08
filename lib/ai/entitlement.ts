@@ -1,153 +1,145 @@
-import type { AiFeature, AiFeatureDef } from "@/lib/ai/jobs";
+import { audienceFromPlan, type AiAudience } from "@/lib/ai/audience";
+import type { AiFeatureDef } from "@/lib/ai/jobs";
 import {
   applyConfiguredLimits,
   entitlementView,
-  featureOfferedTo,
   policyFor,
   type AiEntitlementView,
+  type AiPlanPolicy,
+  type AiRewardScope,
 } from "@/lib/ai/policy";
+import type { AiSubject } from "@/lib/ai/subject";
+import { AI_GUEST_IP_DAILY_CEILING } from "@/lib/ai/subject";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getUserPlan } from "@/lib/monetization/plan";
-import type { BillingPlan } from "@/lib/monetization/types";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  FRENZ AI — what a member's plan entitles them to, resolved in one place
+ *  FRENZ AI — what a subject may do, resolved in exactly one place
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Owner, 2026-09-07 (Part 2): "Do NOT create a second independent subscription
  * system. If the existing Frenzsave project already has a server-side
  * subscription helper, reuse it."
  *
- * It does, and this file is a thin layer over it. `getUserPlan` already
- * resolves the `subscriptions` table, an active site-wide promo, and the rule
- * that a promo may lift a free member to Pro but may never downgrade a paying
- * one. Re-implementing any part of that here would mean two answers to "is this
- * person Pro", and the wrong one would eventually be the one that ran.
+ * It does, and this is a thin layer over it. `getUserPlan` already resolves the
+ * `subscriptions` table, an active site-wide promo, and the rule that a promo
+ * may lift a free member to Pro but never downgrade a paying one.
+ * Re-implementing any of that would mean two answers to "is this person Pro",
+ * and the wrong one would eventually be the one that ran.
  *
- * ── 🔴 Pro is metered too, and that is deliberate ────────────────────────────
+ * ── 🔴 A GUEST NEVER TOUCHES THE SUBSCRIPTION SYSTEM ────────────────────────
+ *
+ * There is no account to look up, so there is no lookup. `audience` is decided
+ * from the subject KIND before any plan query happens, which also means the
+ * guest path costs zero database reads for entitlement — it matters, because
+ * that path now runs for every anonymous visitor who opens the page.
+ *
+ * ── Every audience is metered, including the paid ones ──────────────────────
  *
  * The obvious shape is "free members go through the counter, Pro skips it". It
  * is also where the bugs live: the moment one class of member takes a different
  * code path, that path stops being tested, and the day a Pro account is
  * compromised there is nothing between it and an unbounded provider bill.
- *
- * So EVERY member is reserved against the same counter. Pro's ceiling is not a
- * product limit — it is an abuse ceiling, set far above what any real person
- * does in a day, and no Pro member will ever meet it by using the product.
- * "Unlimited subject to abuse/rate protection" is exactly what the owner asked
- * for; this is what that sentence looks like in code.
  */
 
 export interface AiEntitlement {
-  plan: BillingPlan;
-  feature: AiFeature;
-  /** Whether this plan may use this feature at all. */
+  audience: AiAudience;
+  feature: AiFeatureDef["id"];
+  /** Whether this audience may use this feature at all. */
   allowed: boolean;
-  /**
-   * Jobs admitted per UTC day. Always a real number — see the note above about
-   * why Pro is metered rather than exempt.
-   */
+  /** Jobs admitted per UTC day for this feature. */
   dailyLimit: number;
-  /**
-   * True when the limit is an abuse ceiling rather than a product cap. The
-   * difference matters to the interface: "3 left today" is a fact worth showing
-   * a free member, and showing a Pro member "97 left today" would invent a
-   * restriction they are not under.
-   */
   unlimited: boolean;
-  /** Jobs this member may have queued or processing at once. */
+  /** Jobs this subject may have in flight at once. */
   maxConcurrent: number;
-  /**
-   * Whether a verified rewarded-ad session is required before each job.
-   *
-   * ⚠️ False for the paid plans in Part 5 and true for them in Part 10 — a row
-   * change in lib/ai/policy.ts, not a change here.
-   */
+  /** Whether a rewarded-ad session is required. */
   requiresReward: boolean;
-  /** How many verified rewards one job costs. 0 when none are required. */
+  /** How many rewards one unlock costs. */
   rewardsPerJob: number;
+  /** Whether that unlock covers one job or the rest of today. */
+  rewardScope: AiRewardScope;
+  /**
+   * The per-address ceiling to apply alongside this subject's own allowance.
+   *
+   * Null for a signed-in member: they are already identified by something
+   * stronger than an address, and metering an office or a campus as one
+   * account would be absurd. Only guests carry it — see lib/ai/subject.ts for
+   * why it is a ceiling rather than a quota.
+   */
+  ipCeiling: number | null;
 }
 
-/*
-  ⚠️ The per-plan numbers that used to be two hardcoded objects here now live in
-  ONE declarative table: lib/ai/policy.ts.
-
-  That move is the whole architectural point of Part 5. The owner has already
-  said what Part 10 changes — a new `max_ai` plan with 15 daily credits, and
-  `pro`/`business` moving to "up to 3 rewarded ads each generation" — and with
-  the rules as data that is a diff to rows rather than a rewrite of every
-  authorization path. Nothing below asks which plan it is serving.
-*/
-
-/**
- * The entitlement for one member and one feature.
- *
- * Takes the feature DEFINITION rather than its id so the caller has already
- * been through the registry — an entitlement for a feature that does not exist
- * is not a question worth being able to ask.
- */
-export async function getUserAIEntitlement(
-  userId: string,
+/** The entitlement for one subject and one feature. */
+export async function getAiEntitlement(
+  subject: AiSubject,
   feature: AiFeatureDef,
 ): Promise<AiEntitlement> {
-  // 🔴 The plan comes from the EXISTING subscription helper, never from a
-  // request. `getUserPlan` already resolves the subscriptions table, an active
-  // promo, and the rule that a promo may lift a free member but never downgrade
-  // a paying one. A second answer to "is this person Pro" is a second thing to
-  // be wrong.
-  const plan = await getUserPlan(userId);
+  const audience: AiAudience =
+    subject.kind === "guest"
+      ? "guest"
+      : // 🔴 The plan comes from the EXISTING subscription helper, never from a
+        // request. A second answer to "is this person Pro" is a second thing to
+        // be wrong.
+        audienceFromPlan(await getUserPlan(subject.userId));
+
   /*
-    The free allowance is an operator setting (owner, 2026-09-08). Read on the
-    SERVER, applied here, and enforced by the same atomic reservation as before
-    — the number moving does not move where the authority lives.
+    The guest and free allowances are operator settings (owner, 2026-09-08).
+    Read on the SERVER, applied here, and enforced by the same atomic
+    reservation as before — the number moving does not move where the authority
+    lives. Paid rows are untouched by config; see `applyConfiguredLimits`.
   */
   const settings = await getLandingSettings();
-  const policy = applyConfiguredLimits(policyFor(plan), {
+  const policy = applyConfiguredLimits(policyFor(audience, feature.id), audience, {
     freeDailyCredits: settings.frenzAiFreeDailyCredits,
     freeEnabled: settings.frenzAiFreeEnabled,
   });
 
   return {
-    plan,
+    audience,
     feature: feature.id,
-    // `offered` is the operator switch; the rest is the plan's own rules.
-    allowed: featureOfferedTo(plan, feature.id) && policy.offered !== false && policy.dailyLimit > 0,
+    allowed: policy.offered !== false && policy.dailyLimit > 0,
     dailyLimit: policy.dailyLimit,
     unlimited: policy.unlimited,
     maxConcurrent: policy.maxConcurrent,
     requiresReward: policy.requiresReward,
     rewardsPerJob: policy.rewardsPerJob,
+    rewardScope: policy.rewardScope,
+    ipCeiling: subject.kind === "guest" ? AI_GUEST_IP_DAILY_CEILING : null,
   };
 }
 
 /**
- * The whole picture for one member: plan, policy and what they have spent.
+ * The whole picture for one subject: audience, policy, and what they have spent.
  *
  * One call, so the entitlement endpoint and the start path cannot disagree
- * about the same member in the same second.
+ * about the same subject in the same second.
  */
 export async function getAiEntitlementSnapshot(
-  userId: string,
+  subject: AiSubject,
   feature: AiFeatureDef,
-  usedToday: number,
+  usage: { usedToday: number; dayUnlocked: boolean },
 ): Promise<{ entitlement: AiEntitlement; view: AiEntitlementView }> {
-  const entitlement = await getUserAIEntitlement(userId, feature);
+  const entitlement = await getAiEntitlement(subject, feature);
+  const policy: AiPlanPolicy = {
+    dailyLimit: entitlement.dailyLimit,
+    unlimited: entitlement.unlimited,
+    requiresReward: entitlement.requiresReward,
+    rewardsPerJob: entitlement.rewardsPerJob,
+    rewardScope: entitlement.rewardScope,
+    maxConcurrent: entitlement.maxConcurrent,
+    // The entitlement already carries the configured numbers; rebuilding the
+    // policy from scratch here would quietly ignore them.
+    offered: entitlement.allowed,
+  };
+
   return {
     entitlement,
     view: entitlementView({
-      plan: entitlement.plan,
-      // The entitlement already carries the configured numbers; rebuilding the
-      // policy from scratch here would quietly ignore them.
-      policy: {
-        dailyLimit: entitlement.dailyLimit,
-        unlimited: entitlement.unlimited,
-        requiresReward: entitlement.requiresReward,
-        rewardsPerJob: entitlement.rewardsPerJob,
-        maxConcurrent: entitlement.maxConcurrent,
-        offered: entitlement.allowed,
-      },
-      usedToday,
+      audience: entitlement.audience,
+      policy,
+      usedToday: usage.usedToday,
+      dayUnlocked: usage.dayUnlocked,
     }),
   };
 }
@@ -155,20 +147,18 @@ export async function getAiEntitlementSnapshot(
 /**
  * The allowance as a member should see it.
  *
- * A free member is told the truth about a real cap. A paid member is told they
- * are not capped, and the ceiling they will never meet is not mentioned —
- * quoting it would read as a limit and would be the only place in the product
- * that suggested Pro had one.
+ * Kept because the job routes return it on a refusal, so the interface can
+ * update its counter from the same response that told it no.
  */
 export function usageForClient(
   entitlement: AiEntitlement,
   used: number,
-): { plan: BillingPlan; unlimited: boolean; limit: number | null; used: number; remaining: number | null } {
+): { plan: AiAudience; unlimited: boolean; limit: number | null; used: number; remaining: number | null } {
   if (entitlement.unlimited) {
-    return { plan: entitlement.plan, unlimited: true, limit: null, used, remaining: null };
+    return { plan: entitlement.audience, unlimited: true, limit: null, used, remaining: null };
   }
   return {
-    plan: entitlement.plan,
+    plan: entitlement.audience,
     unlimited: false,
     limit: entitlement.dailyLimit,
     used,

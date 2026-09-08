@@ -12,6 +12,7 @@ import {
   type AiJobSourceInput,
   type AiJobStatus,
 } from "@/lib/ai/jobs";
+import type { AiSubject } from "@/lib/ai/subject";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -52,18 +53,44 @@ const JOB_COLUMNS =
 const UNIQUE_VIOLATION = "23505";
 
 /**
+ * The client and filter for reading one subject's rows.
+ *
+ * ── 🔴 WHY A GUEST READ USES THE SERVICE ROLE ───────────────────────────────
+ *
+ * A member's read runs as the member, so `ai_jobs_select_own` decides, and the
+ * explicit `.eq("user_id", …)` is belt to that braces. A guest holds no
+ * Supabase session at all — there is no JWT for a policy to inspect — so RLS
+ * would return nothing and the feature simply would not work.
+ *
+ * What replaces the policy is the signed cookie. `guest_id` only ever arrives
+ * from `readGuestToken`, which verifies an HMAC the browser has never seen, so
+ * a visitor cannot ask for somebody else's rows: they cannot name somebody
+ * else's identifier. That is the whole reason the identifier is signed rather
+ * than merely random.
+ *
+ * ⚠️ Consequence worth knowing: every guest query MUST go through this helper.
+ * A service-role read with a forgotten filter returns the entire table.
+ */
+async function subjectScope(subject: AiSubject) {
+  if (subject.kind === "user") {
+    return { db: await createClient(), column: "user_id" as const, value: subject.userId };
+  }
+  return { db: createAdminClient(), column: "guest_id" as const, value: subject.guestId };
+}
+
+/**
  * One job, but only if it is this member's.
  *
  * The user's own client plus an explicit filter: an id belonging to somebody
  * else returns null rather than a row, and it does so twice over.
  */
-export async function getOwnJob(userId: string, jobId: string): Promise<AiJobRow | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+export async function getOwnJob(subject: AiSubject, jobId: string): Promise<AiJobRow | null> {
+  const { db, column, value } = await subjectScope(subject);
+  const { data, error } = await db
     .from("ai_jobs")
     .select(JOB_COLUMNS)
     .eq("id", jobId)
-    .eq("user_id", userId)
+    .eq(column, value)
     .maybeSingle();
 
   // A PostgREST failure is a resolved `{ error }`, never a throw — treating it
@@ -93,16 +120,16 @@ export interface AiJobPage {
  * row or skip one.
  */
 export async function listOwnJobs(
-  userId: string,
+  subject: AiSubject,
   opts: { limit: number; cursor?: string | null; feature?: AiFeature | null; activeOnly?: boolean },
 ): Promise<AiJobPage> {
   const limit = Math.max(1, Math.min(50, Math.floor(opts.limit)));
-  const supabase = await createClient();
+  const { db, column, value } = await subjectScope(subject);
 
-  let query = supabase
+  let query = db
     .from("ai_jobs")
     .select(JOB_COLUMNS)
-    .eq("user_id", userId)
+    .eq(column, value)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     // One more than asked for: whether a next page exists is answered by
@@ -140,12 +167,12 @@ export async function listOwnJobs(
 }
 
 /** How many of this member's jobs are still going to change. */
-export async function countActiveJobs(userId: string, feature: AiFeature): Promise<number> {
-  const supabase = await createClient();
-  const { count, error } = await supabase
+export async function countActiveJobs(subject: AiSubject, feature: AiFeature): Promise<number> {
+  const { db, column, value } = await subjectScope(subject);
+  const { count, error } = await db
     .from("ai_jobs")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
+    .eq(column, value)
     .eq("feature", feature)
     .in("status", [...AI_ACTIVE_STATUSES]);
 
@@ -158,14 +185,14 @@ export async function countActiveJobs(userId: string, feature: AiFeature): Promi
 
 /** The job this member already created with this request id, if any. */
 export async function findJobByRequestId(
-  userId: string,
+  subject: AiSubject,
   clientRequestId: string,
 ): Promise<AiJobRow | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const { db, column, value } = await subjectScope(subject);
+  const { data, error } = await db
     .from("ai_jobs")
     .select(JOB_COLUMNS)
-    .eq("user_id", userId)
+    .eq(column, value)
     .eq("client_request_id", clientRequestId)
     .maybeSingle();
 
@@ -177,7 +204,7 @@ export async function findJobByRequestId(
 }
 
 export interface CreateJobInput {
-  userId: string;
+  subject: AiSubject;
   feature: AiFeatureDef;
   source: AiJobSourceInput;
   clientRequestId: string;
@@ -204,7 +231,7 @@ export type CreateJobResult =
  * error. That is what makes retrying safe rather than expensive.
  */
 export async function createJob(input: CreateJobInput): Promise<CreateJobResult> {
-  const { userId, feature, source, clientRequestId } = input;
+  const { subject, feature, source, clientRequestId } = input;
   const admin = createAdminClient();
 
   const expiresAt = new Date(Date.now() + feature.retentionHours * 3_600_000).toISOString();
@@ -212,7 +239,8 @@ export async function createJob(input: CreateJobInput): Promise<CreateJobResult>
   const { data, error } = await admin
     .from("ai_jobs")
     .insert({
-      user_id: userId,
+      user_id: subject.userId,
+      guest_id: subject.guestId,
       feature: feature.id,
       provider: feature.provider,
       status: "queued",
@@ -230,7 +258,7 @@ export async function createJob(input: CreateJobInput): Promise<CreateJobResult>
 
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
-      const existing = await findJobByRequestId(userId, clientRequestId);
+      const existing = await findJobByRequestId(subject, clientRequestId);
       if (existing) return { created: false, row: existing };
     }
     console.error("[ai/jobs] insert failed", { code: error.code, message: error.message });

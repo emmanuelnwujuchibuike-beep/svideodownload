@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { AI_CLEAN_CONFIG, AI_CLEAN_LIMITS } from "@/lib/ai/config";
-import { getUserAIEntitlement, usageForClient } from "@/lib/ai/entitlement";
+import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
 import { getOwnJob, recordUploadedSource, transitionJob } from "@/lib/ai/job-store";
@@ -10,9 +10,10 @@ import { providerFor } from "@/lib/ai/providers";
 import { claimAiReward } from "@/lib/ai/reward";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl, statSourceObject } from "@/lib/ai/storage-server";
+import { subjectOwnerId } from "@/lib/ai/subject";
+import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { peekAiUsage, releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,19 +77,26 @@ function fail(code: Parameters<typeof aiErrorBody>[0], extra?: Record<string, un
 const bodySchema = z.object({ rewardSessionId: z.string().uuid().optional() }).strict();
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  let userId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    /* anonymous */
-  }
-  if (!userId) return fail("AUTH_REQUIRED");
+  const feat = aiFeature("ai_clean");
+  if (!feat) return fail("FEATURE_UNAVAILABLE");
 
-  const burst = await aiJobCreateLimiter.limit(`ai-start:${userId}`);
+  /*
+    🔴 THE ONE ENDPOINT THAT SPENDS MONEY, AND IT NO LONGER REQUIRES A SESSION.
+
+    Owner, 2026-09-08: a guest gets 2 a day and must be able to actually run
+    them. So the gate here is not "are you signed in" — it is the same gate it
+    always was, resolved for whoever is asking: a real allowance in Postgres, an
+    atomic reservation, a rewarded ad, and for guests an address ceiling on top.
+
+    Nothing about the authorization got weaker; it got a second kind of subject.
+    The identifier a guest presents is HMAC-signed and HttpOnly, so they cannot
+    name anybody else's allowance, and they cannot invent an extra one of their
+    own — only discard the one they have, which the ceiling then catches.
+  */
+  const resolution = await resolveAiSubject(_request, feat.id);
+  const { subject } = resolution;
+
+  const burst = await aiJobCreateLimiter.limit(`ai-start:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -112,7 +120,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
   try {
     /* 2 · OWNERSHIP. Read as the member, so RLS decides, plus an id filter. */
-    const job = await getOwnJob(userId, id);
+    const job = await getOwnJob(subject, id);
     if (!job) return fail("JOB_NOT_FOUND");
 
     const feature = aiFeature(job.feature);
@@ -138,10 +146,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       database" is not on its own a statement about whose it is.
     */
     const expectedPath = job.source_path;
-    if (!expectedPath || !pathBelongsTo(expectedPath, userId, job.id)) {
+    if (!expectedPath || !pathBelongsTo(expectedPath, subjectOwnerId(subject), job.id)) {
       // No reserved key, or one that does not belong to this member and this
       // job. Either is a row that should not exist; refusing beats acting on it.
-      console.error("[ai/jobs] source path failed ownership", { jobId: job.id, userId });
+      console.error("[ai/jobs] source path failed ownership", { jobId: job.id, subject: subject.key });
       return fail("INTERNAL_ERROR");
     }
 
@@ -170,10 +178,26 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     });
 
     /* 4 · THE CHARGE. Atomic, and the first thing here that costs anything. */
-    const entitlement = await getUserAIEntitlement(userId, feature);
+    const entitlement = await getAiEntitlement(subject, feature);
     if (!entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
 
-    const reservation = await reserveAiUsage(userId, feature.id, entitlement.dailyLimit);
+    /*
+      🔴 THE ADDRESS CEILING RIDES ALONG, IN THE SAME TRANSACTION.
+
+      `ipCeiling` is null for a signed-in member and a number for a guest. Both
+      limits are applied inside one SQL function (migration 0145), so a guest
+      cycling cookies cannot slip between two separate checks — and a shared
+      carrier NAT is never mistaken for one abuser, because the ceiling is set
+      six times a single visitor's allowance.
+    */
+    const reservation = await reserveAiUsage(
+      subject,
+      feature.id,
+      entitlement.dailyLimit,
+      entitlement.ipCeiling && resolution.ipKey
+        ? { key: resolution.ipKey, limit: entitlement.ipCeiling }
+        : null,
+    );
     if (!reservation.allowed) {
       return fail("DAILY_LIMIT_REACHED", { usage: usageForClient(entitlement, reservation.used) });
     }
@@ -191,16 +215,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     */
     if (entitlement.requiresReward) {
       if (!rewardSessionId) {
-        await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
+        await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
         return fail("REWARD_REQUIRED", { usage: usageForClient(entitlement, reservation.used) });
       }
 
-      const claim = await claimAiReward({ sessionId: rewardSessionId, userId, feature: feature.id });
+      const claim = await claimAiReward({ sessionId: rewardSessionId, subject, feature: feature.id });
       if (!claim.claimed) {
-        await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
+        await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
         console.warn("[ai/jobs] reward claim refused", {
           jobId: job.id,
-          userId,
+          subject: subject.key,
           feature: feature.id,
           reason: claim.reason,
           released: true,
@@ -211,7 +235,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
       console.info("[ai/jobs] reward claimed", {
         jobId: job.id,
-        userId,
+        subject: subject.key,
         feature: feature.id,
         rewardSessionId,
       });
@@ -239,7 +263,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
       console.info("[ai/jobs] started", {
         jobId: job.id,
-        userId,
+        subject: subject.key,
         feature: feature.id,
         provider: feature.provider,
         model: AI_CLEAN_CONFIG.model,
@@ -262,7 +286,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         provider was unreachable is the single most corrosive thing a metered
         feature can do.
       */
-      await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
+      await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
       const code = isAiJobError(providerError) ? providerError.code : "PROVIDER_ERROR";
       const detail = isAiJobError(providerError) ? providerError.detail : String(providerError);
 
@@ -274,7 +298,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
       console.error("[ai/jobs] provider submit failed", {
         jobId: job.id,
-        userId,
+        subject: subject.key,
         feature: feature.id,
         code,
         transition: "queued -> failed",
@@ -286,15 +310,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       const surfaced =
         code === "FEATURE_UNAVAILABLE" || code === "PROVIDER_UNAVAILABLE" ? code : "PROVIDER_ERROR";
       return fail(surfaced, {
-        usage: usageForClient(entitlement, await peekAiUsage(userId, feature.id)),
+        usage: usageForClient(entitlement, (await peekAiUsage(subject, feature.id)).usedToday),
       });
     }
   } catch (e) {
     if (isAiJobError(e)) {
-      console.error("[ai/jobs] start failed", { userId, jobId: id, code: e.code, detail: e.detail });
+      console.error("[ai/jobs] start failed", { subject: subject.key, jobId: id, code: e.code, detail: e.detail });
       return fail(e.code);
     }
-    console.error("[ai/jobs] start threw", { userId, jobId: id, error: String(e) });
+    console.error("[ai/jobs] start threw", { subject: subject.key, jobId: id, error: String(e) });
     return fail("INTERNAL_ERROR");
   }
 }

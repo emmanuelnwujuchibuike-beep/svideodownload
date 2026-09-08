@@ -5,9 +5,9 @@ import { getAiEntitlementSnapshot } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
 import { createAiRewardSession, grantAiRewardSession } from "@/lib/ai/reward";
-import { peekAiUsage } from "@/lib/ai/usage";
+import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
+import { peekAiUsage, unlockAiDay } from "@/lib/ai/usage";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,23 +45,25 @@ const schema = z
   .strict();
 
 export async function POST(request: Request) {
-  let userId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    /* anonymous */
+  const feature0 = aiFeature("ai_clean");
+  if (!feature0) {
+    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
+      status: aiErrorStatus("FEATURE_UNAVAILABLE"),
+    });
   }
-  if (!userId) {
-    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
-  }
+
+  /*
+    🔴 NO SESSION REQUIRED. A guest earns and spends rewards exactly as a member
+    does — that is the whole point of the guest tier, which is 2/day behind an
+    ad. What identifies them is a signed, HttpOnly identifier the browser cannot
+    forge, not a number it keeps.
+  */
+  const resolution = await resolveAiSubject(request, feature0.id);
+  const { subject } = resolution;
 
   // Keyed by member: this guards a per-account spend, and several people behind
   // one office address are not one abuser.
-  const burst = await aiJobCreateLimiter.limit(`ai-reward:${userId}`);
+  const burst = await aiJobCreateLimiter.limit(`ai-reward:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -80,16 +82,11 @@ export async function POST(request: Request) {
     return NextResponse.json(aiErrorBody("INVALID_INPUT"), { status: aiErrorStatus("INVALID_INPUT") });
   }
 
-  const feature = aiFeature("ai_clean");
-  if (!feature) {
-    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
-      status: aiErrorStatus("FEATURE_UNAVAILABLE"),
-    });
-  }
+  const feature = feature0;
 
   try {
-    const usedToday = await peekAiUsage(userId, feature.id);
-    const { view } = await getAiEntitlementSnapshot(userId, feature, usedToday);
+    const usage = await peekAiUsage(subject, feature.id);
+    const { view } = await getAiEntitlementSnapshot(subject, feature, usage);
 
     // Nothing left today. No ad, and the limit-reached state instead.
     if (!view.canStart) {
@@ -108,14 +105,15 @@ export async function POST(request: Request) {
     }
 
     if (parsed.data.action === "open") {
-      const session = await createAiRewardSession({ userId, feature: feature.id });
+      const session = await createAiRewardSession({ subject, feature: feature.id });
       console.info("[ai/reward] session opened", {
-        userId,
+        subject: subject.key,
         feature: feature.id,
         sessionId: session.id,
         provider: session.provider,
       });
-      return NextResponse.json(
+      return applyAiSubjectCookie(
+        NextResponse.json(
         {
           sessionId: session.id,
           expiresAt: session.expiresAt,
@@ -125,6 +123,8 @@ export async function POST(request: Request) {
           usage: view,
         },
         { headers: { "cache-control": "no-store" } },
+        ),
+        resolution,
       );
     }
 
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
 
     const result = await grantAiRewardSession({
       sessionId: parsed.data.sessionId,
-      userId,
+      subject,
       feature: feature.id,
     });
 
@@ -148,15 +148,43 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(
-      { granted: true, sessionId: parsed.data.sessionId, usage: view },
-      { headers: { "cache-control": "no-store" } },
+    /*
+      ── 🔴 ONE AD FOR THE DAY, FOR THE PLANS THAT PAY ────────────────────────
+
+      Owner, 2026-09-08: "Pro / Business / Max AI: one reward ad should unlock
+      the applicable daily allowance… Do not show an ad after the generation
+      has already been unlocked."
+
+      So a `day`-scoped grant stamps today's usage row and is finished. The
+      session is NOT claimed here and never will be — claiming is what spends a
+      reward on ONE job, which is the `job` scope's mechanism (guest and free).
+      Using the same path for both would either charge a paid member an ad per
+      video or let a guest's single ad cover their whole day.
+
+      The stamp grants no allowance of its own: the cap is still the cap, so a
+      replayed unlock can only re-state a permission that is already true.
+    */
+    if (view.rewardScope === "day") {
+      await unlockAiDay(subject, feature.id);
+    }
+
+    // Re-read, so the response tells the truth about what the grant just
+    // changed rather than echoing the state from before it.
+    const after = await peekAiUsage(subject, feature.id);
+    const { view: updated } = await getAiEntitlementSnapshot(subject, feature, after);
+
+    return applyAiSubjectCookie(
+      NextResponse.json(
+        { granted: true, sessionId: parsed.data.sessionId, usage: updated },
+        { headers: { "cache-control": "no-store" } },
+      ),
+      resolution,
     );
   } catch (e) {
     if (isAiJobError(e)) {
       return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });
     }
-    console.error("[ai/reward] route threw", { userId, error: String(e) });
+    console.error("[ai/reward] route threw", { subject: subject.key, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
   }
 }

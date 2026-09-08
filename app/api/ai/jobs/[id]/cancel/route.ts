@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
-import { getUserAIEntitlement } from "@/lib/ai/entitlement";
+import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
 import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
 import { releaseAiUsage } from "@/lib/ai/usage";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
+import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,22 +39,19 @@ export const dynamic = "force-dynamic";
  * received nothing, and the refund cap in `release_ai_usage` is what stops the
  * generosity becoming a loop.
  */
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  let userId: string | null = null;
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userId = user?.id ?? null;
-  } catch {
-    /* anonymous */
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const feat = aiFeature("ai_clean");
+  if (!feat) {
+    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
+      status: aiErrorStatus("FEATURE_UNAVAILABLE"),
+    });
   }
-  if (!userId) {
-    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
-  }
+  // A guest may abandon their own job. Stopping a run they started is the one
+  // thing it would be actively rude to require an account for.
+  const resolution = await resolveAiSubject(request, feat.id);
+  const { subject } = resolution;
 
-  const burst = await aiJobCreateLimiter.limit(`ai-cancel:${userId}`);
+  const burst = await aiJobCreateLimiter.limit(`ai-cancel:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -68,7 +65,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    const job = await getOwnJob(userId, id);
+    const job = await getOwnJob(subject, id);
     if (!job) {
       return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
     }
@@ -94,12 +91,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     });
 
     if (updated && feature) {
-      const entitlement = await getUserAIEntitlement(userId, feature);
-      await releaseAiUsage(userId, feature.id, entitlement.dailyLimit);
+      const entitlement = await getAiEntitlement(subject, feature);
+      await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
       console.info("[ai/jobs] cancelled", {
         jobId: job.id,
-        userId,
-        feature: feature.id,
+                feature: feature.id,
         transition: `${job.status} -> cancelled`,
         released: true,
       });
@@ -113,7 +109,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (isAiJobError(e)) {
       return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });
     }
-    console.error("[ai/jobs] cancel threw", { userId, jobId: id, error: String(e) });
+    console.error("[ai/jobs] cancel threw", { subject: subject.key, jobId: id, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
   }
 }

@@ -353,8 +353,8 @@ export const DATA_DOMAINS: DataDomain[] = [
     name: "Frenz AI",
     owner: "lib/ai",
     description:
-      "AI work and what it is allowed to cost. `ai_jobs` is one row per unit of work for every feature and provider — the tool is a column, not a table, so a second AI tool needs no schema of its own. `ai_usage_daily` is the per-member, per-day, per-feature allowance, written only by the atomic reserve/consume/release functions in migration 0141; it holds counters and no content. Storage is listed as object because a job's source and result live in the two PRIVATE buckets (frenz-ai-source, frenz-ai-results) and the row holds only their keys.",
-    tables: ["ai_jobs", "ai_usage_daily"],
+      "AI work and what it is allowed to cost. `ai_jobs` is one row per unit of work for every feature and provider — the tool is a column, not a table, so a second AI tool needs no schema of its own. `ai_usage_daily` is the per-member, per-day, per-feature allowance, written only by the atomic reserve/consume/release functions in migration 0141; it holds counters and no content. Storage is listed as object because a job's source and result live in the two PRIVATE buckets (frenz-ai-source, frenz-ai-results) and the row holds only their keys. `ai_guest_links` binds a signed-out browser identifier to the account that later claimed it, so signing up (or signing out) never grants a second daily allowance; it holds an opaque random id and a user id, and nothing about the person or what they cleaned.",
+    tables: ["ai_jobs", "ai_usage_daily", "ai_guest_links"],
     storage: ["relational", "object"],
   },
   {

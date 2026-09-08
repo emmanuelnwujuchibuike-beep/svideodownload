@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AiFeature } from "@/lib/ai/jobs";
+import type { AiSubject } from "@/lib/ai/subject";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -49,14 +50,23 @@ export interface AiUsageReservation {
  * two places deciding what a plan is worth is one place too many.
  */
 export async function reserveAiUsage(
-  userId: string,
+  subject: AiSubject,
   feature: AiFeature,
   limit: number,
+  /** The address ceiling, for guests only. Null for a signed-in member. */
+  ip?: { key: string; limit: number } | null,
 ): Promise<AiUsageReservation> {
   try {
     const admin = createAdminClient();
     const { data, error } = await admin
-      .rpc("reserve_ai_usage", { p_user_id: userId, p_feature: feature, p_limit: limit })
+      .rpc("reserve_ai_usage", {
+        p_user_id: subject.userId,
+        p_guest_id: subject.guestId,
+        p_feature: feature,
+        p_limit: limit,
+        p_ip_key: ip?.key ?? null,
+        p_ip_limit: ip?.limit ?? 0,
+      })
       .single<{ allowed: boolean; used: number; remaining: number }>();
 
     if (error || !data) {
@@ -81,11 +91,12 @@ export async function reserveAiUsage(
  * must not be reported as failed because a counter update did not land, and the
  * cap is unaffected either way (see the migration).
  */
-export async function consumeAiUsage(userId: string, feature: AiFeature): Promise<boolean> {
+export async function consumeAiUsage(subject: AiSubject, feature: AiFeature): Promise<boolean> {
   try {
     const admin = createAdminClient();
     const { data, error } = await admin.rpc("consume_ai_usage", {
-      p_user_id: userId,
+      p_user_id: subject.userId,
+      p_guest_id: subject.guestId,
       p_feature: feature,
     });
     if (error) {
@@ -128,7 +139,7 @@ export interface AiUsageRelease {
  * fix.
  */
 export async function releaseAiUsage(
-  userId: string,
+  subject: AiSubject,
   feature: AiFeature,
   dailyLimit: number,
 ): Promise<AiUsageRelease> {
@@ -136,7 +147,8 @@ export async function releaseAiUsage(
     const admin = createAdminClient();
     const { data, error } = await admin
       .rpc("release_ai_usage", {
-        p_user_id: userId,
+        p_user_id: subject.userId,
+        p_guest_id: subject.guestId,
         p_feature: feature,
         p_max_releases: releaseCapFor(dailyLimit),
       })
@@ -165,20 +177,67 @@ export async function releaseAiUsage(
  * cannot be read is not a reason to tell somebody they have used something they
  * have not. The CHARGE still fails closed, which is where it matters.
  */
-export async function peekAiUsage(userId: string, feature: AiFeature): Promise<number> {
+export interface AiUsageState {
+  usedToday: number;
+  /** True once a DAY-scoped rewarded ad has unlocked this feature today. */
+  dayUnlocked: boolean;
+}
+
+export async function peekAiUsage(subject: AiSubject, feature: AiFeature): Promise<AiUsageState> {
   try {
     const admin = createAdminClient();
+    /*
+      🔴 UTC, matching `(now() at time zone 'utc')::date` in the SQL functions.
+      `toISOString` is always UTC, so this cannot drift with the server's
+      timezone — and a display that disagreed with the counter about which day
+      it is would show somebody a spent allowance they still had, or the
+      reverse. One clock for the whole product; see the brief's daily-reset
+      rule ("Do not rely exclusively on the user's device clock").
+    */
     const today = new Date().toISOString().slice(0, 10);
-    const { data, error } = await admin
+    let query = admin
       .from("ai_usage_daily")
-      .select("reserved_jobs")
-      .eq("user_id", userId)
+      .select("reserved_jobs, reward_unlocked_at")
       .eq("feature", feature)
-      .eq("usage_date", today)
-      .maybeSingle();
-    if (error || !data) return 0;
-    return typeof data.reserved_jobs === "number" ? data.reserved_jobs : 0;
+      .eq("usage_date", today);
+
+    query = subject.kind === "user"
+      ? query.eq("user_id", subject.userId)
+      : query.eq("guest_id", subject.guestId);
+
+    const { data, error } = await query.maybeSingle();
+    if (error || !data) return { usedToday: 0, dayUnlocked: false };
+    return {
+      usedToday: typeof data.reserved_jobs === "number" ? data.reserved_jobs : 0,
+      dayUnlocked: !!data.reward_unlocked_at,
+    };
   } catch {
-    return 0;
+    return { usedToday: 0, dayUnlocked: false };
+  }
+}
+
+/**
+ * Record that a day-scoped rewarded ad was watched.
+ *
+ * Grants NO allowance — see `unlock_ai_day` in migration 0145. It records a
+ * permission, so replaying it can only re-state something already true and can
+ * never buy a generation past the cap.
+ */
+export async function unlockAiDay(subject: AiSubject, feature: AiFeature): Promise<boolean> {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.rpc("unlock_ai_day", {
+      p_user_id: subject.userId,
+      p_guest_id: subject.guestId,
+      p_feature: feature,
+    });
+    if (error) {
+      console.error("[ai/usage] day unlock failed", { feature, code: error.code, message: error.message });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[ai/usage] day unlock threw", { feature, error: String(e) });
+    return false;
   }
 }

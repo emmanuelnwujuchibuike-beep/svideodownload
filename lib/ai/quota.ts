@@ -1,12 +1,18 @@
-import type { BillingPlan } from "@/lib/monetization/types";
+import type { AiAudience } from "@/lib/ai/audience";
 
 /**
  * Frenz AI's daily allowance, in CREDITS.
  *
- * Owner, 2026-09-07: Frenz AI is for signed-in members only. So there is no
- * guest tier here at all — an anonymous visitor is refused before a limit is
- * ever looked up, which is a different thing from having a limit of zero and
- * reads differently in the UI.
+ * ⚠️ REVISED 2026-09-08. The note here used to read "Frenz AI is for signed-in
+ * members only, so there is no guest tier at all". That stopped being true when
+ * the owner opened AI Clean to anonymous visitors — but only AI Clean.
+ *
+ * The distinction survives and is now the interesting part: a guest has a real
+ * allowance for the VIDEO TEXT REMOVER, which is metered per feature in
+ * Postgres and paid for by a rewarded ad, and NO credits at all for the tools
+ * this file governs. Those spend the owner's Anthropic key per request with
+ * nothing offsetting them, which is a different economic question and gets a
+ * different answer.
  *
  * ── Credits, not runs ─────────────────────────────────────────────────────────
  *
@@ -27,10 +33,33 @@ import type { BillingPlan } from "@/lib/monetization/types";
  * read by the download path and mirrored into admin overrides, and Frenz AI
  * should not be able to break either while its shape is still settling.
  */
-export const FRENZ_AI_DAILY_CREDITS: Record<BillingPlan, number> = {
+export const FRENZ_AI_DAILY_CREDITS: Record<AiAudience, number> = {
+  /*
+    🔴 A GUEST SPENDS NO CREDITS. Anonymous access is AI Clean only, which has
+    its own per-feature allowance and a rewarded ad to offset it. The credit
+    pool funds the vision tools, which bill the owner's Anthropic key per
+    request with nothing to offset them at all.
+  */
+  guest: 0,
   free: 12,
   pro: 80,
   business: 300,
+  /*
+    ⚠️ 15, AND IT IS NOT THE VIDEO TEXT REMOVER LIMIT.
+
+    Owner, 2026-09-08: "Max AI's existing 15 AI credits/day must remain
+    separate… the two systems must not accidentally increase or decrease one
+    another", and most sharply: "The existing 15 AI credits must NEVER allow Max
+    AI to exceed 30 Video Text Remover generations per day."
+
+    These credits are a Redis counter keyed `ai:u:<id>`, spent by
+    /api/ai/media. Video Text Remover's 30/day is a Postgres row in
+    `ai_usage_daily` keyed by feature. Neither is computed from the other, and
+    policy.test.ts pins that they stay different numbers in different systems —
+    because "they happen not to be connected" is a property that decays the
+    moment somebody tidies one into the other.
+  */
+  max_ai: 15,
 };
 
 /*
@@ -56,11 +85,14 @@ export const FRENZ_AI_DAILY_CREDITS: Record<BillingPlan, number> = {
   one is not either.
 */
 
-export function frenzAiDailyCredits(plan: BillingPlan): number {
+export function frenzAiDailyCredits(plan: AiAudience): number {
   return FRENZ_AI_DAILY_CREDITS[plan] ?? FRENZ_AI_DAILY_CREDITS.free;
 }
 
-/** The counter key. Per MEMBER — Frenz AI has no anonymous tier to key by IP. */
+/**
+ * The counter key. Per MEMBER: the credit pool has no anonymous tier, so this
+ * is never called for a guest — see the revised note at the top of this file.
+ */
 export function frenzAiQuotaKey(userId: string): string {
   return `ai:u:${userId}`;
 }

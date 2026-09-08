@@ -15,106 +15,108 @@ import type { BillingPlan } from "@/lib/monetization/types";
 const getUserPlan = vi.fn<(userId: string | null | undefined) => Promise<BillingPlan>>();
 vi.mock("@/lib/monetization/plan", () => ({ getUserPlan: (id: string) => getUserPlan(id) }));
 
-const { getUserAIEntitlement, usageForClient } = await import("./entitlement");
+const { getAiEntitlement, usageForClient } = await import("./entitlement");
+const { guestSubject, userSubject } = await import("./subject");
 const { aiFeature } = await import("./jobs");
 
 const feature = aiFeature("ai_clean")!;
+const member = userSubject("u1");
+const guest = guestSubject("aaaaaaaaaaaaaaaaaaaaaa");
 
 beforeEach(() => {
   getUserPlan.mockReset();
 });
 
-describe("getUserAIEntitlement", () => {
-  it("gives a free member two a day, and one at a time", async () => {
+describe("getAiEntitlement", () => {
+  it("gives a free member two a day, behind an ad, one at a time", async () => {
     getUserPlan.mockResolvedValue("free");
-    const e = await getUserAIEntitlement("u1", feature);
+    const e = await getAiEntitlement(member, feature);
     expect(e).toEqual({
-      plan: "free",
+      audience: "free",
       feature: "ai_clean",
       allowed: true,
-      // Two, ad-free (owner, 2026-09-08). With no Supabase in the test env the
-      // settings read returns the defaults, which is the same number.
+      // With no Supabase in the test env the settings read returns defaults,
+      // which is the same 2 the policy table carries.
       dailyLimit: 2,
       unlimited: false,
       maxConcurrent: 1,
-      requiresReward: false,
-      rewardsPerJob: 0,
+      requiresReward: true,
+      rewardsPerJob: 1,
+      rewardScope: "job",
+      // 🔴 Null for a member: an office or a campus is not one abuser.
+      ipCeiling: null,
     });
   });
 
-  it("🔴 Part 5: whether an ad is owed comes from the PLAN, never from a request", async () => {
+  it("gives Pro five a day behind ONE ad for the day", async () => {
+    getUserPlan.mockResolvedValue("pro");
+    const e = await getAiEntitlement(member, feature);
+    expect(e.audience).toBe("pro");
+    expect(e.dailyLimit).toBe(5);
+    expect(e.rewardScope).toBe("day");
+    expect(e.ipCeiling).toBeNull();
+  });
+
+  it("resolves max_ai to 30 without any billing change", async () => {
+    // `getUserPlan` returns whatever string the subscriptions row holds; the AI
+    // layer is where it is checked against a real list. Nothing in billing had
+    // to learn a new plan for this to work.
+    getUserPlan.mockResolvedValue("max_ai" as BillingPlan);
+    const e = await getAiEntitlement(member, feature);
+    expect(e.audience).toBe("max_ai");
+    expect(e.dailyLimit).toBe(30);
+  });
+
+  it("🔴 falls to free for an unrecognised plan, never to the top tier", async () => {
+    getUserPlan.mockResolvedValue("enterprise" as BillingPlan);
+    const e = await getAiEntitlement(member, feature);
+    expect(e.audience).toBe("free");
+    expect(e.dailyLimit).toBe(2);
+  });
+});
+
+describe("🔴 a guest never touches the subscription system", () => {
+  it("resolves without asking for a plan at all", async () => {
+    const e = await getAiEntitlement(guest, feature);
+    expect(e.audience).toBe("guest");
+    expect(e.dailyLimit).toBe(2);
+    expect(e.requiresReward).toBe(true);
+    expect(e.rewardScope).toBe("job");
     /*
-      The brief forbids the client asserting `plan`, `skipAd` or `remaining`.
-      This is the other half of that: the answer is derived from the plan the
-      subscription helper reports, so there is no argument a caller could pass
-      that changes it.
+      There is no account to look up, so there is no lookup. Not just a
+      performance point — a guest path that queried `subscriptions` would be
+      asking a question with no possible answer, and whatever it did with the
+      empty result would eventually be wrong.
     */
-    getUserPlan.mockResolvedValue("free");
-    // Ad-free today; the assertion that matters is that the ANSWER comes from
-    // the plan, not from anything a caller passed.
-    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
-
-    getUserPlan.mockResolvedValue("pro");
-    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
-
-    getUserPlan.mockResolvedValue("business");
-    expect((await getUserAIEntitlement("u1", feature)).requiresReward).toBe(false);
+    expect(getUserPlan).not.toHaveBeenCalled();
   });
 
-  it("🔴 meters Pro as well, at an abuse ceiling far above any real use", async () => {
-    // Pro is not exempt from the counter — a class of member on a different
-    // code path is a class of member whose code path is never tested, and the
-    // day an account is stolen there is nothing between it and the bill.
-    getUserPlan.mockResolvedValue("pro");
-    const e = await getUserAIEntitlement("u1", feature);
-    expect(e.unlimited).toBe(true);
-    expect(e.dailyLimit).toBeGreaterThan(feature.freeDailyJobs * 10);
-    expect(e.maxConcurrent).toBeGreaterThan(1);
-  });
-
-  it("gives business a higher ceiling than pro", async () => {
-    getUserPlan.mockResolvedValue("pro");
-    const pro = await getUserAIEntitlement("u1", feature);
-    getUserPlan.mockResolvedValue("business");
-    const business = await getUserAIEntitlement("u1", feature);
-    expect(business.dailyLimit).toBeGreaterThan(pro.dailyLimit);
-    expect(business.unlimited).toBe(true);
-  });
-
-  it("asks the existing subscription helper, exactly once, with the real user id", async () => {
-    getUserPlan.mockResolvedValue("free");
-    await getUserAIEntitlement("user-42", feature);
-    expect(getUserPlan).toHaveBeenCalledTimes(1);
-    expect(getUserPlan).toHaveBeenCalledWith("user-42");
+  it("carries an address ceiling, and it is well above one visitor's allowance", async () => {
+    const e = await getAiEntitlement(guest, feature);
+    expect(e.ipCeiling).not.toBeNull();
+    // Carrier-grade NAT means thousands of unrelated people share an address in
+    // this product's biggest markets. A ceiling near the per-visitor allowance
+    // would break the feature for a whole network to stop one script.
+    expect(e.ipCeiling!).toBeGreaterThan(e.dailyLimit * 3);
   });
 });
 
 describe("usageForClient", () => {
-  it("tells a free member the truth about a real cap", async () => {
-    getUserPlan.mockResolvedValue("free");
-    const e = await getUserAIEntitlement("u1", feature);
-    expect(usageForClient(e, 1)).toEqual({
-      plan: "free",
+  it("reports a real count for a capped audience", async () => {
+    getUserPlan.mockResolvedValue("pro");
+    const e = await getAiEntitlement(member, feature);
+    expect(usageForClient(e, 3)).toEqual({
+      plan: "pro",
       unlimited: false,
-      limit: 2,
-      used: 1,
-      remaining: 1,
+      limit: 5,
+      used: 3,
+      remaining: 2,
     });
   });
 
-  it("never reports a negative remainder", async () => {
+  it("never reports a negative remaining", async () => {
     getUserPlan.mockResolvedValue("free");
-    const e = await getUserAIEntitlement("u1", feature);
-    expect(usageForClient(e, 9).remaining).toBe(0);
-  });
-
-  it("🔴 never quotes the abuse ceiling to a paid member", async () => {
-    // Showing "97 left today" would invent a restriction Pro is not under, and
-    // it would be the only place in the product that suggested one existed.
-    getUserPlan.mockResolvedValue("pro");
-    const e = await getUserAIEntitlement("u1", feature);
-    const view = usageForClient(e, 3);
-    expect(view).toEqual({ plan: "pro", unlimited: true, limit: null, used: 3, remaining: null });
-    expect(JSON.stringify(view)).not.toContain(String(e.dailyLimit));
+    const e = await getAiEntitlement(member, feature);
+    expect(usageForClient(e, 99).remaining).toBe(0);
   });
 });

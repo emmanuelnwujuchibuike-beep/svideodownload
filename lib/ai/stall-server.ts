@@ -1,11 +1,12 @@
 import "server-only";
 
-import { getUserAIEntitlement } from "@/lib/ai/entitlement";
+import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
 import { notifyAiCleanFailed } from "@/lib/ai/notify";
 import { AI_STALL_DEADLINE_MS, stalledForMs, type StallableJob } from "@/lib/ai/stall";
+import { subjectFromRow } from "@/lib/ai/subject";
 import { releaseAiUsage } from "@/lib/ai/usage";
 
 /**
@@ -29,7 +30,7 @@ import { releaseAiUsage } from "@/lib/ai/usage";
  * whichever check happened to run first.
  */
 export async function failStalledJob(
-  job: StallableJob & { user_id: string; feature: string },
+  job: StallableJob & { user_id?: string | null; guest_id?: string | null; feature: string },
   now: number = Date.now(),
 ): Promise<boolean> {
   const over = stalledForMs(job, now);
@@ -48,9 +49,15 @@ export async function failStalledJob(
   // refund — the winner already issued the only one.
   if (!ended) return false;
 
+  // 🔴 Read off the ROW. A stalled job may belong to a guest, and this path
+  // runs with no request and no session to resolve one from — the row is the
+  // only place that records whose allowance to give back.
+  const subject = subjectFromRow(job);
   try {
-    const entitlement = await getUserAIEntitlement(job.user_id, def);
-    await releaseAiUsage(job.user_id, def.id as AiFeature, entitlement.dailyLimit);
+    if (subject) {
+      const entitlement = await getAiEntitlement(subject, def);
+      await releaseAiUsage(subject, def.id as AiFeature, entitlement.dailyLimit);
+    }
   } catch (e) {
     // The job is already correctly marked failed. A refund that did not land
     // is worth logging and is not worth reporting the job as still running.
@@ -62,11 +69,16 @@ export async function failStalledJob(
     of minutes. A push is the only way they learn, and it says the allowance
     came back because otherwise a timeout reads as a wasted run.
   */
-  await notifyAiCleanFailed({
-    userId: job.user_id,
-    jobId: job.id,
-    message: aiErrorMessage("PROVIDER_TIMEOUT"),
-  });
+  // Only a signed-in member has somewhere to receive a push. A guest gets the
+  // answer from the page when they come back, which is the honest limit of not
+  // asking anyone to sign up.
+  if (subject?.kind === "user") {
+    await notifyAiCleanFailed({
+      userId: subject.userId,
+      jobId: job.id,
+      message: aiErrorMessage("PROVIDER_TIMEOUT"),
+    });
+  }
 
   console.warn("[ai/stall] failed a stalled job", {
     jobId: job.id,

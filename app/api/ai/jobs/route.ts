@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { extensionForUpload } from "@/lib/ai/clean-media";
-import { getUserAIEntitlement, usageForClient } from "@/lib/ai/entitlement";
+import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import {
   aiFeature,
@@ -23,9 +23,10 @@ import {
 import { hasProviderFor } from "@/lib/ai/providers";
 import { hasWorker } from "@/lib/worker";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
+import { subjectOwnerId } from "@/lib/ai/subject";
+import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { peekAiUsage } from "@/lib/ai/usage";
 import { aiJobCreateLimiter, aiJobReadLimiter } from "@/lib/rate-limit";
-import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,29 +86,27 @@ const capabilities = (): AiCapabilities => {
   };
 };
 
-async function currentUserId(): Promise<string | null> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    return user?.id ?? null;
-  } catch {
-    return null;
-  }
-}
 
 function fail(code: Parameters<typeof aiErrorBody>[0], extra?: Record<string, unknown>) {
   return NextResponse.json(aiErrorBody(code, extra), { status: aiErrorStatus(code) });
 }
 
 export async function POST(request: Request) {
-  const userId = await currentUserId();
-  if (!userId) return fail("AUTH_REQUIRED");
+  const feature0 = aiFeature("ai_clean");
+  if (!feature0) return fail("FEATURE_UNAVAILABLE");
 
-  // Keyed by member, not by IP: this guards a per-account spend, and several
+  /*
+    🔴 NO SESSION REQUIRED (owner, 2026-09-08: "Do not force users to sign up
+    before they can try the AI"). A guest opens a real job against a real
+    allowance; what identifies them is a signed, HttpOnly identifier they
+    cannot forge, plus the address ceiling applied at /start.
+  */
+  const resolution = await resolveAiSubject(request, feature0.id);
+  const { subject } = resolution;
+
+  // Keyed by SUBJECT, not by IP: this guards a per-account spend, and several
   // people behind one office address are not one abuser.
-  const burst = await aiJobCreateLimiter.limit(`ai-job:${userId}`);
+  const burst = await aiJobCreateLimiter.limit(`ai-job:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -137,7 +136,7 @@ export async function POST(request: Request) {
   if (!verdict.ok) return fail(verdict.code);
 
   try {
-    const entitlement = await getUserAIEntitlement(userId, feature);
+    const entitlement = await getAiEntitlement(subject, feature);
     if (!entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
 
     /*
@@ -145,30 +144,30 @@ export async function POST(request: Request) {
       ticket with it, because the reason a client retries is usually that the
       first ticket never arrived.
     */
-    const existing = await findJobByRequestId(userId, clientRequestId);
+    const existing = await findJobByRequestId(subject, clientRequestId);
     if (existing) {
       const upload =
         existing.status === "queued"
           ? await createSourceUploadTicket({
-              userId,
+              userId: subjectOwnerId(subject),
               feature: feature.id,
               jobId: existing.id,
               extension: extensionForUpload(source.name, source.mimeType),
             })
           : null;
-      return NextResponse.json({
+      return applyAiSubjectCookie(NextResponse.json({
         job: jobToView(existing, storedErrorMessage),
         created: false,
         upload,
-        usage: usageForClient(entitlement, await peekAiUsage(userId, feature.id)),
+        usage: usageForClient(entitlement, (await peekAiUsage(subject, feature.id)).usedToday),
         dispatch: { ready: availability.dispatchable },
-      });
+      }), resolution);
     }
 
-    const active = await countActiveJobs(userId, feature.id);
+    const active = await countActiveJobs(subject, feature.id);
     if (active >= entitlement.maxConcurrent) return fail("JOB_ALREADY_PROCESSING");
 
-    const result = await createJob({ userId, feature, source, clientRequestId });
+    const result = await createJob({ subject, feature, source, clientRequestId });
 
     /*
       The upload target. Server-built path, signed for one exact object — the
@@ -176,7 +175,7 @@ export async function POST(request: Request) {
       however the request is crafted.
     */
     const upload = await createSourceUploadTicket({
-      userId,
+      userId: subjectOwnerId(subject),
       feature: feature.id,
       jobId: result.row.id,
       extension: extensionForUpload(source.name, source.mimeType),
@@ -187,33 +186,33 @@ export async function POST(request: Request) {
 
     console.info("[ai/jobs] opened", {
       jobId: result.row.id,
-      userId,
+      subject: subject.key,
       feature: feature.id,
       provider: feature.provider,
       created: result.created,
       dispatchable: availability.dispatchable,
-      plan: entitlement.plan,
+      audience: entitlement.audience,
     });
 
-    return NextResponse.json(
+    return applyAiSubjectCookie(NextResponse.json(
       {
         job: jobToView(result.row, storedErrorMessage),
         created: result.created,
         upload,
-        usage: usageForClient(entitlement, await peekAiUsage(userId, feature.id)),
+        usage: usageForClient(entitlement, (await peekAiUsage(subject, feature.id)).usedToday),
         dispatch: {
           ready: availability.dispatchable,
           ...(availability.dispatchable ? {} : { reason: "The AI service isn't connected yet." }),
         },
       },
       { status: result.created ? 201 : 200 },
-    );
+    ), resolution);
   } catch (e) {
     if (isAiJobError(e)) {
-      console.error("[ai/jobs] create failed", { userId, feature: featureId, code: e.code, detail: e.detail });
+      console.error("[ai/jobs] create failed", { subject: subject.key, feature: featureId, code: e.code, detail: e.detail });
       return fail(e.code);
     }
-    console.error("[ai/jobs] create threw", { userId, feature: featureId, error: String(e) });
+    console.error("[ai/jobs] create threw", { subject: subject.key, feature: featureId, error: String(e) });
     return fail("INTERNAL_ERROR");
   }
 }
@@ -230,10 +229,15 @@ const MAX_PAGE = 50;
  * a PWA relaunch, or a connection that dropped and came back.
  */
 export async function GET(request: Request) {
-  const userId = await currentUserId();
-  if (!userId) return fail("AUTH_REQUIRED");
+  const feat = aiFeature("ai_clean");
+  if (!feat) return fail("FEATURE_UNAVAILABLE");
 
-  const burst = await aiJobReadLimiter.limit(`ai-read:${userId}`);
+  // A guest's history is their own jobs, scoped by their signed identifier —
+  // see the note on `subjectScope` in lib/ai/job-store.ts.
+  const resolution = await resolveAiSubject(request, feat.id);
+  const { subject } = resolution;
+
+  const burst = await aiJobReadLimiter.limit(`ai-read:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
       status: aiErrorStatus("RATE_LIMITED"),
@@ -252,7 +256,7 @@ export async function GET(request: Request) {
   if (featureParam && !aiFeature(featureParam)) return fail("INVALID_INPUT");
 
   try {
-    const page = await listOwnJobs(userId, {
+    const page = await listOwnJobs(subject, {
       limit,
       cursor: url.searchParams.get("cursor"),
       feature: (featureParam as AiFeature | null) ?? null,
@@ -265,7 +269,7 @@ export async function GET(request: Request) {
     });
   } catch (e) {
     if (isAiJobError(e)) return fail(e.code);
-    console.error("[ai/jobs] list threw", { userId, error: String(e) });
+    console.error("[ai/jobs] list threw", { subject: subject.key, error: String(e) });
     return fail("INTERNAL_ERROR");
   }
 }

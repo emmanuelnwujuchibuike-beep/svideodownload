@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Clock3, Crown, Sparkles } from "lucide-react";
+import { ArrowRight, Clock3, Crown, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -44,6 +44,12 @@ export function AICleanLimitReached({
   className?: string;
 }) {
   const limit = entitlement.dailyLimit;
+  /*
+    🔴 The server tells us whether a GPU model is actually deployed. It is not
+    inferred from the plan: a free member is told about a capability that
+    EXISTS, and told nothing at all when it does not.
+  */
+  const gpuOffered = entitlement.gpuOffered === true;
 
   return (
     <section
@@ -97,15 +103,25 @@ export function AICleanLimitReached({
       {/*
         ── 🔴 EVERY LINE HERE IS SOMETHING PRO ACTUALLY GIVES TODAY ───────────
 
-        No "faster GPU processing", because both plans run the same model on the
-        same hardware. Selling a speed tier that does not exist would be the one
-        promise a member could check in a minute and find false — and the first
-        thing they would blame when a Pro job took just as long.
+        The speed line is CONDITIONAL, and that condition is the whole point.
+
+        Owner, 2026-09-09: "wire the route and pipeline so pro users and
+        business users and any higher plan yet to come to use gpu while free use
+        cpu." The routing is built (lib/ai/hardware.ts) — but the GPU model does
+        not exist yet: the version published on 2026-09-08 was disabled by
+        Replicate, so every tier currently runs on CPU.
+
+        So the claim appears only when a GPU model is really configured. Selling
+        a speed tier that does not exist is the one promise a member can check
+        in a minute and find false, and it would be the first thing they blamed
+        when a Pro job took exactly as long as a free one. The day a working
+        model is set, this line turns itself on with no code change.
       */}
       <ul className="mx-auto mt-5 flex max-w-xs flex-col gap-2 text-left">
         {[
           { icon: Sparkles, text: "No daily limit on AI Clean" },
           { icon: Clock3, text: "No ads before a video is cleaned" },
+          ...(gpuOffered ? [{ icon: Zap, text: "Faster processing on GPU hardware" }] : []),
         ].map(({ icon: Icon, text }) => (
           <li key={text} className="flex items-center gap-2.5 text-[13px] font-medium">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">

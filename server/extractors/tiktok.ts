@@ -357,6 +357,21 @@ interface TikWmData {
   hd_size?: number;
   music?: string;
   images?: string[];
+  /**
+   * 🔴 TIKTOK LIVE PHOTOS — parallel to `images`, and the reason a video was
+   * being handed out as a JPG.
+   *
+   * A photo post's slides are not all stills. A slide can be a Live Photo (a
+   * short MP4 with sound), and TikWM reports that in a SECOND array aligned by
+   * index with `images`:
+   *
+   *     images:      [ "…photomode…jpeg", "…photomode…jpeg" ]
+   *     live_images: [ null,              "…video_mp4…"     ]
+   *
+   * `null` means that slide really is a still. A URL means it is a video.
+   * Measured on the owner's own link, 2026-09-09.
+   */
+  live_images?: (string | null)[];
   author?: { nickname?: string; unique_id?: string };
 }
 function abs(u: string): string {
@@ -391,6 +406,168 @@ function abs(u: string): string {
  */
 const TIKWM_TIMEOUT_MS = Number(process.env.TIKWM_TIMEOUT_MS || 12000);
 
+/**
+ * TikWM data → our format list. Pure, so the slide mapping is testable.
+ *
+ * 🔴 Extracted 2026-09-09 because it was NOT testable and it was WRONG: every
+ * slide of a photo post was stamped , so a TikTok Live Photo —
+ * a real MP4 — was handed out as a JPG. The bug lived inside an async function
+ * that also did the fetch, so no test could reach it without a network.
+ */
+export function buildTikWmFormats(d: TikWmData): MediaFormat[] {
+  const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.tiktok.com/" };
+  const formats: MediaFormat[] = [];
+
+  if (Array.isArray(d.images) && d.images.length) {
+    /*
+      ── 🔴 A SLIDE IS NOT ALWAYS A PHOTO (owner, 2026-09-09) ───────────────
+
+      "this tiktok link is a multiple post of one image and one video but when
+      fetched it shows both as image instead of one as video."
+
+      Exactly right, and this was the line. Every slide was stamped
+      `kind: "image"` because only `d.images` was read — but TikWM reports
+      Live Photos in a SECOND array aligned by index, and for the owner's post
+      it held `[null, "…mime_type=video_mp4…"]`. Slide two is a real MP4 and
+      was being handed out as a JPG.
+
+      ⚠️ The obvious fix — "if there are images AND a `play`, emit both" —
+      would have been WRONG, and checking is what caught it. On a photo post
+      `d.play` is the MUSIC track: measured on this link,
+      `d.play === d.music_info.play`, `duration: 0`, `hdplay: null`, and the
+      host is `v16-ies-music`. Emitting it as a video would have offered the
+      soundtrack as the missing clip.
+
+      So the per-slide array is the only honest source, and each slide becomes
+      ONE item of whichever kind it actually is — which keeps the batch count
+      equal to the number of slides in the post.
+    */
+    const live = Array.isArray(d.live_images) ? d.live_images : [];
+    const multi = d.images.length > 1;
+
+    d.images.forEach((img, i) => {
+      const motion = typeof live[i] === "string" && /^https?:\/\//i.test(live[i]!) ? live[i]! : null;
+
+      if (motion) {
+        formats.push({
+          formatId: `live-${i}`,
+          kind: "video",
+          // Named for what it is on TikTok, so somebody recognises the slide
+          // they are looking at rather than wondering where a photo went.
+          label: `Photo ${i + 1} · Live`,
+          ext: "mp4",
+          resolution: null,
+          fps: null,
+          filesize: null,
+          tbr: null,
+          // TikTok's Live Photo renditions are H.264/AAC; naming them lets
+          // the download path stream-copy instead of probing and re-encoding.
+          vcodec: "h264",
+          acodec: "aac",
+          directUrl: abs(motion),
+          httpHeaders: headers,
+          isSeparateItem: multi,
+        });
+        return;
+      }
+
+      formats.push({
+        formatId: `img-${i}`,
+        kind: "image",
+        label: `Photo ${i + 1}`,
+        ext: /\.png/i.test(img) ? "png" : "jpg",
+        resolution: null,
+        fps: null,
+        filesize: null,
+        tbr: null,
+        vcodec: null,
+        acodec: null,
+        directUrl: abs(img),
+        httpHeaders: headers,
+        /* Same flag, same reason as `buildImageFormats` — this is the path
+           that actually serves photo posts in production, since TikTok gives
+           datacenter IPs a blank page. Missing it here is what the owner hit. */
+        isSeparateItem: multi,
+      });
+    });
+  } else {
+    /*
+      Keep BOTH streams — but the H.264 one goes FIRST (owner, 2026-08-09:
+      "this TikTok link takes too much time while preparing").
+
+      TikWM's `hdplay` is very often bytevc1/H.265. That plays nowhere
+      reliably outside Safari, so the server has to re-encode it to H.264 —
+      and a re-encode is not a copy, it is minutes of CPU. Measured on the
+      owner's link: `hdplay` took 55 SECONDS to first byte, while `play`
+      (already H.264, streamed as-is) took 4.
+
+      `play` was second in this list, so it was never the default; everyone
+      got the 55-second path without choosing it. Ordering H.264 first makes
+      the fast, universally-playable stream what you get unless you ask for
+      the other one — and the other one now says what it costs.
+    */
+    if (d.play && d.play !== d.hdplay)
+      formats.push({
+        formatId: d.hdplay ? "tt-sd" : "tt-0",
+        kind: "video",
+        label: "HD · No watermark",
+        ext: "mp4",
+        resolution: null,
+        fps: null,
+        // Delivered byte-for-byte, so this number is exact.
+        filesize: typeof d.size === "number" && d.size > 0 ? d.size : null,
+        tbr: null,
+        vcodec: "h264",
+        acodec: "aac",
+        directUrl: abs(d.play),
+        httpHeaders: headers,
+      });
+    if (d.hdplay)
+      formats.push({
+        formatId: "tt-0",
+        kind: "video",
+        label: "Best quality · converts on download",
+        ext: "mp4",
+        resolution: null,
+        fps: null,
+        /*
+          🔴 Deliberately NULL, not `hd_size` (owner: "make the file size in
+          the quality review accurate… not showing a small file size while
+          the main size is higher").
+
+          `hd_size` describes the H.265 SOURCE. What we deliver is that source
+          re-encoded to H.264, which is a different file and a much bigger
+          one — measured on the owner's link, 16.4 MB advertised against 43.4
+          MB delivered, 2.6× out. There is no honest number to put here
+          without encoding the file first, so the review shows none rather
+          than one that is wrong.
+        */
+        filesize: null,
+        tbr: null,
+        vcodec: null,
+        acodec: "aac",
+        directUrl: abs(d.hdplay),
+        httpHeaders: headers,
+      });
+  }
+  if (d.music)
+    formats.push({
+      formatId: "audio",
+      kind: "audio",
+      label: "Audio (MP3)",
+      ext: "mp3",
+      resolution: null,
+      fps: null,
+      filesize: null,
+      tbr: null,
+      vcodec: null,
+      acodec: "aac",
+      directUrl: abs(d.music),
+      httpHeaders: headers,
+    });
+  return formats;
+}
+
 async function tikwmExtract(
   url: string,
   platform: ReturnType<typeof detectPlatform>,
@@ -410,105 +587,7 @@ async function tikwmExtract(
     const j = (await res.json()) as { code?: number; data?: TikWmData };
     if (j.code !== 0 || !j.data) return null;
     const d = j.data;
-    const headers = { "User-Agent": DESKTOP_UA, Referer: "https://www.tiktok.com/" };
-    const formats: MediaFormat[] = [];
-
-    if (Array.isArray(d.images) && d.images.length) {
-      d.images.forEach((img, i) =>
-        formats.push({
-          formatId: `img-${i}`,
-          kind: "image",
-          label: `Photo ${i + 1}`,
-          ext: /\.png/i.test(img) ? "png" : "jpg",
-          resolution: null,
-          fps: null,
-          filesize: null,
-          tbr: null,
-          vcodec: null,
-          acodec: null,
-          directUrl: abs(img),
-          httpHeaders: headers,
-          /* Same flag, same reason as `buildImageFormats` — this is the path
-             that actually serves photo posts in production, since TikTok gives
-             datacenter IPs a blank page. Missing it here is what the owner hit. */
-          isSeparateItem: d.images!.length > 1,
-        }),
-      );
-    } else {
-      /*
-        Keep BOTH streams — but the H.264 one goes FIRST (owner, 2026-08-09:
-        "this TikTok link takes too much time while preparing").
-
-        TikWM's `hdplay` is very often bytevc1/H.265. That plays nowhere
-        reliably outside Safari, so the server has to re-encode it to H.264 —
-        and a re-encode is not a copy, it is minutes of CPU. Measured on the
-        owner's link: `hdplay` took 55 SECONDS to first byte, while `play`
-        (already H.264, streamed as-is) took 4.
-
-        `play` was second in this list, so it was never the default; everyone
-        got the 55-second path without choosing it. Ordering H.264 first makes
-        the fast, universally-playable stream what you get unless you ask for
-        the other one — and the other one now says what it costs.
-      */
-      if (d.play && d.play !== d.hdplay)
-        formats.push({
-          formatId: d.hdplay ? "tt-sd" : "tt-0",
-          kind: "video",
-          label: "HD · No watermark",
-          ext: "mp4",
-          resolution: null,
-          fps: null,
-          // Delivered byte-for-byte, so this number is exact.
-          filesize: typeof d.size === "number" && d.size > 0 ? d.size : null,
-          tbr: null,
-          vcodec: "h264",
-          acodec: "aac",
-          directUrl: abs(d.play),
-          httpHeaders: headers,
-        });
-      if (d.hdplay)
-        formats.push({
-          formatId: "tt-0",
-          kind: "video",
-          label: "Best quality · converts on download",
-          ext: "mp4",
-          resolution: null,
-          fps: null,
-          /*
-            🔴 Deliberately NULL, not `hd_size` (owner: "make the file size in
-            the quality review accurate… not showing a small file size while
-            the main size is higher").
-
-            `hd_size` describes the H.265 SOURCE. What we deliver is that source
-            re-encoded to H.264, which is a different file and a much bigger
-            one — measured on the owner's link, 16.4 MB advertised against 43.4
-            MB delivered, 2.6× out. There is no honest number to put here
-            without encoding the file first, so the review shows none rather
-            than one that is wrong.
-          */
-          filesize: null,
-          tbr: null,
-          vcodec: null,
-          acodec: "aac",
-          directUrl: abs(d.hdplay),
-          httpHeaders: headers,
-        });
-    }
-    if (d.music)
-      formats.push({
-        formatId: "audio",
-        kind: "audio",
-        label: "Audio (MP3)",
-        ext: "mp3",
-        resolution: null,
-        fps: null,
-        filesize: null,
-        tbr: null,
-        vcodec: null,
-        acodec: "aac",
-        directUrl: abs(d.music),
-        httpHeaders: headers,
-      });
+    const formats = buildTikWmFormats(d);
     if (formats.length === 0) return null;
 
     return {

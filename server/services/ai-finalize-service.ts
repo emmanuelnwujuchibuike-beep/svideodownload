@@ -19,7 +19,10 @@ import { runProPainter } from "@/lib/ai/propainter";
 import {
   buildRestoreArgs,
   buildResizeToSourceArgs,
+  buildMaskCoverageArgs,
   buildTextMaskArgs,
+  MASK_REFINE_MIN_RATIO,
+  parseMaskCoverage,
   canStreamCopy,
   checkFinalProbe,
   expectedFinalDuration,
@@ -575,9 +578,30 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
       completed_at: new Date().toISOString(),
       error_code: null,
       error_message: null,
-      // The provider's URL has served its purpose and expires on their
-      // schedule. Clearing it keeps a dead link out of the row.
-      metadata: { ...(job.metadata ?? {}), provider_output_url: null },
+      /*
+        ── 🔴 FRESH METADATA, NOT THE COPY READ AT THE TOP OF THIS FUNCTION ───
+
+        This spread `job.metadata`, which was read BEFORE the reconstruction
+        ran — so every diagnostic written during finalization was silently
+        erased at the moment the job succeeded. `noteJobDiagnostic` merges
+        correctly; this one line then threw the merge away.
+
+        Found 2026-09-09 by the symptom it causes: two jobs completed on the
+        ProPainter engine with NO `propainter` key at all, which the code makes
+        impossible — every path through `reconstructWithProPainter` writes one.
+        Failed jobs kept theirs because the failure path does not patch
+        metadata, which is exactly why this looked like "the branch never ran"
+        rather than "the record was deleted".
+
+        The cost of the bug was not a broken job; it was that success became
+        unobservable. We could not tell whether ProPainter had run, how long it
+        took, or whether it had been rescaled — on precisely the jobs where
+        those answers matter most.
+
+        The provider's URL still gets cleared: it has served its purpose and
+        expires on their schedule, so a dead link is kept out of the row.
+      */
+      metadata: { ...((await getJobAsService(jobId))?.metadata ?? job.metadata ?? {}), provider_output_url: null },
     });
 
     // Resolved before the claim; see the note there. Recomputing it here is
@@ -681,6 +705,39 @@ class FinalizeFailure extends Error {
 
 /* ─────────────────────── the ProPainter reconstruction ────────────────────── */
 
+/**
+ * Mean coverage of a finished mask, 0-1, or null when it cannot be measured.
+ *
+ * 🔴 Null is "unknown", never "empty". An ffprobe that fails to start must not
+ * make a good mask look like a failed one and trigger the fallback.
+ */
+async function measureMaskCoverage(maskPath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(FFPROBE, buildMaskCoverageArgs(maskPath), { windowsHide: true });
+    } catch {
+      resolve(null);
+      return;
+    }
+    let out = "";
+    let settled = false;
+    const finish = (v: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(null);
+    }, FFPROBE_TIMEOUT_MS * 4);
+    child.stdout?.on("data", (c: Buffer) => (out += c.toString()));
+    child.on("error", () => finish(null));
+    child.on("close", () => finish(parseMaskCoverage(out)));
+  });
+}
+
 /** Run ffmpeg with a fixed argument array. Resolves false rather than throwing. */
 function runFfmpeg(args: string[], budgetMs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -768,8 +825,24 @@ async function reconstructWithProPainter(opts: {
   */
   const fps = Math.round(opts.sourceProbe?.frameRate ?? 0) || 30;
 
+  /*
+    ── 🔴 A GLYPH MASK, WITH THE RECTANGLE AS A SAFETY NET ────────────────────
+
+    The detector paints a solid block over the whole caption; using that block
+    as the mask is what produced the smear the owner reported. `refine: true`
+    keeps only the high-contrast letters inside it — measured 12.70% → 8.07% of
+    the frame on their video, and the difference between a stretched band and a
+    clean reconstruction.
+
+    But the refinement is a heuristic about how captions are DRAWN (bright
+    glyphs, dark outline). A caption it cannot see segments to almost nothing,
+    and a near-empty mask means the text survives untouched — a silent, total
+    failure. So the result is MEASURED, and anything implausibly sparse falls
+    back to the rectangle. Too much removal beats none.
+  */
+  const maskStartedAt = Date.now();
   const built = await runFfmpeg(
-    buildTextMaskArgs({ sourcePath: sourceFile, blackPath: detectionFile, outPath: maskFile, fps }),
+    buildTextMaskArgs({ sourcePath: sourceFile, blackPath: detectionFile, outPath: maskFile, fps, refine: true }),
     FFMPEG_HARD_TIMEOUT_MS,
   );
   if (!built) {
@@ -777,6 +850,54 @@ async function reconstructWithProPainter(opts: {
     await noteJobDiagnostic(jobId, { propainter: "mask-build-failed" });
     return null;
   }
+
+  let coverage = await measureMaskCoverage(maskFile);
+  let maskKind: "refined" | "rectangle" = "refined";
+
+  /*
+    The rectangle for comparison. Built to a second file so the refined one is
+    never lost if this pass fails — and only when the refined mask looks thin,
+    so the ordinary case pays nothing for the check.
+  */
+  if (coverage !== null && coverage < 0.001) {
+    // Essentially empty: not worth comparing against anything, just fall back.
+    maskKind = "rectangle";
+  } else if (coverage !== null) {
+    const rectFile = path.join(dir, "mask-rect.mp4");
+    const rectBuilt = await runFfmpeg(
+      buildTextMaskArgs({ sourcePath: sourceFile, blackPath: detectionFile, outPath: rectFile, fps, refine: false }),
+      FFMPEG_HARD_TIMEOUT_MS,
+    );
+    const rectCoverage = rectBuilt ? await measureMaskCoverage(rectFile) : null;
+    if (rectCoverage && coverage / rectCoverage < MASK_REFINE_MIN_RATIO) {
+      // The segmentation found almost none of what the detector marked. The
+      // caption is not bright-on-dark; use the block.
+      const { copyFile } = await import("node:fs/promises");
+      await copyFile(rectFile, maskFile).catch(() => {});
+      coverage = rectCoverage;
+      maskKind = "rectangle";
+    }
+  }
+
+  /*
+    🔴 An abnormally large mask is FLAGGED, not silently processed. Past about a
+    third of the frame there is no longer enough surrounding picture for a
+    flow-based inpainter to borrow from, and the output will be invented rather
+    than reconstructed. It still runs — refusing would leave the member with
+    nothing — but the row records it, so "why did this one look wrong?" has an
+    answer without re-deriving it.
+  */
+  const oversized = coverage !== null && coverage > 0.33;
+
+  console.info("[ai/finalize] mask built", {
+    jobId,
+    maskKind,
+    coveragePercent: coverage === null ? null : Number((coverage * 100).toFixed(2)),
+    oversized,
+    sourceSize: opts.sourceProbe?.width ? `${opts.sourceProbe.width}x${opts.sourceProbe.height}` : null,
+    fps,
+    buildMs: Date.now() - maskStartedAt,
+  });
 
   // The mask lives beside the job's own objects, never at a guessable path.
   const maskKey = `${ownerId}/${feature.replace(/[^a-z0-9]/gi, "").toLowerCase()}/${jobId}/mask.mp4`;
@@ -874,6 +995,11 @@ async function reconstructWithProPainter(opts: {
     await noteJobDiagnostic(jobId, {
       propainter: "ok",
       propainter_predict_s: result.predictTimeSeconds,
+      // What the reconstruction was actually asked to do, so a bad-looking
+      // result can be explained without re-running anything.
+      mask_kind: maskKind,
+      mask_coverage: coverage === null ? null : Number((coverage * 100).toFixed(2)),
+      ...(oversized ? { mask_oversized: true } : {}),
       ...(resized ? { propainter_resized: resized } : {}),
     });
     return finalPath;

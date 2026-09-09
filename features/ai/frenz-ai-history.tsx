@@ -121,10 +121,34 @@ export function FrenzAIHistory({ className }: { className?: string }) {
   };
 
   return (
-    <section className={cn("px-4 sm:px-6", className)} aria-labelledby="ai-history-heading">
+    <section className={className} aria-labelledby="ai-history-heading">
+      {/*
+        ── 🔴 A SECTION, NOT A FOOTNOTE (owner, 2026-09-09) ──────────────────
+
+        "Put it where it will be visible more and look professional."
+
+        A 17px heading over a bare list read as an appendix to the page above
+        it. It now opens on its own rule and carries a count, which is what
+        makes it scan as a place rather than a leftover — and the count is the
+        one thing that tells somebody at a glance whether there is anything
+        here worth scrolling to.
+      */}
+      <div className="mb-4 h-px w-full bg-border/70" aria-hidden />
+
       <div className="flex items-center justify-between gap-3">
-        <h2 id="ai-history-heading" className="text-[1.05rem] font-bold tracking-[-0.02em]">
+        <h2 id="ai-history-heading" className="flex items-baseline gap-2 text-[1.2rem] font-bold tracking-[-0.02em]">
           Your videos
+          {/*
+            Only once something is loaded, and never a "0" — an empty state
+            already says there is nothing, and a zero beside a heading reads as
+            a failure rather than as a fact.
+          */}
+          {history.loaded && history.jobs.length > 0 ? (
+            <span className="text-[13px] font-semibold tabular-nums text-muted-foreground">
+              {history.jobs.length}
+              {history.hasMore ? "+" : ""}
+            </span>
+          ) : null}
         </h2>
         {/*
           A quiet refresh. The list polls itself while a job is running, so this

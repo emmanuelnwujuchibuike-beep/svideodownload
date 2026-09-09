@@ -203,7 +203,14 @@ describe("the engine switch", () => {
     // Resolved once, from the admin setting, inside the one submit path.
     expect(submit).toContain("const { frenzAiEngine } = await getLandingSettings();");
     expect(submit).toContain("engine: frenzAiEngine,");
-    expect(submit).toMatch(/metadata: \{ \.\.\.\(job\.metadata \?\? \{\}\), engine: frenzAiEngine \}/);
+    /*
+      The engine is spread onto the job's OWN metadata rather than replacing it.
+      Matched loosely on purpose: that object also carries `hardware` and
+      `audience` now, and a literal match would fail every time a field is added
+      without anything actually being wrong. What must stay true is the spread
+      and the engine key.
+    */
+    expect(submit).toMatch(/metadata: \{ \.\.\.\(job\.metadata \?\? \{\}\),[^}]*engine: frenzAiEngine/);
 
     // 🔴 And exactly ONE place still does it, so the two entry points cannot
     // disagree about which engine a job was started on.

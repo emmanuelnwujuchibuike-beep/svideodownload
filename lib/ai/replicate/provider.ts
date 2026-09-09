@@ -1,6 +1,6 @@
 import "server-only";
 
-import { AI_CLEAN_CONFIG, aiCleanMisconfiguration, buildAiCleanInput } from "@/lib/ai/config";
+import { AI_CLEAN_CONFIG, aiCleanMisconfiguration, buildAiCleanInput, aiCleanModelFor } from "@/lib/ai/config";
 import { AiJobError } from "@/lib/ai/errors";
 import type { AiProvider, AiProviderState, AiProviderSubmission } from "@/lib/ai/provider";
 import { extractOutputUrl, mapReplicateStatus } from "@/lib/ai/replicate/status";
@@ -127,7 +127,10 @@ export const replicateProvider: AiProvider = {
     const res = await call("/predictions", {
       method: "POST",
       body: JSON.stringify({
-        version: AI_CLEAN_CONFIG.version,
+        // 🔴 The model AND its version come from one function keyed on the
+        // hardware tier the caller resolved from the plan — never from the
+        // request, which has never been able to name either.
+        version: aiCleanModelFor(input.modelTier).version,
         input: buildAiCleanInput(input.sourceUrl, input.engine),
         webhook: input.webhookUrl,
         webhook_events_filter: ["start", "completed"],

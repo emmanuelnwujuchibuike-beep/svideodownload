@@ -1,3 +1,4 @@
+import type { AiHardware, AiModelTier } from "@/lib/ai/hardware";
 import type { AiCleanEngine } from "@/lib/ai/config";
 import type { AiFeatureDef, AiJobStatus, AiProviderId } from "@/lib/ai/jobs";
 
@@ -46,6 +47,23 @@ export interface AiProviderSubmission {
    * reads it back from there rather than asking the setting again.
    */
   engine: AiCleanEngine;
+  /**
+   * Which silicon this job runs on, resolved ONCE by the caller from the
+   * member's plan (lib/ai/hardware.ts).
+   *
+   * 🔴 Passed for the same reason as `engine`: the answer must not be able to
+   * change between resolving and submitting. It also must never come from the
+   * request — a client that could name its hardware could name the model.
+   */
+  hardware: AiHardware;
+  /**
+   * Which MODEL this plan gets — standard, the GPU build, or BRIA (Max AI).
+   *
+   * 🔴 Separate from `hardware` because "faster" and "more accurate" are
+   * different promises sold separately, and BRIA is a different model rather
+   * than the same one on better silicon.
+   */
+  modelTier: AiModelTier;
 }
 
 /** What a provider says about work it is holding. */

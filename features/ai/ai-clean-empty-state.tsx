@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Link2, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, History, Link2, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -140,7 +140,7 @@ export function AICleanEmptyState({
           </div>
 
           {/* ── paste a link ─────────────────────────────────────────────── */}
-          <div className="mt-3 flex justify-center">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
               onClick={onPasteLink}
@@ -153,6 +153,31 @@ export function AICleanEmptyState({
                 aria-hidden
               />
             </button>
+
+            {/*
+              ── 🔴 THE WAY BACK TO FINISHED WORK ────────────────────────────
+
+              Owner, 2026-09-09: "many downloads finished while I was outside
+              the page and I couldn't find them."
+
+              This screen is where somebody lands after leaving mid-job: the
+              workspace only restores an ACTIVE job, so a member whose video
+              finished while the app was closed arrives at an empty picker with
+              no route to the thing they came back for. The history lives one
+              page up and there was nothing here pointing at it.
+
+              A plain link rather than a second list: duplicating the history
+              onto this screen would mean two places to keep in step, and this
+              page's job is choosing a video, not reviewing past ones.
+            */}
+            <Link
+              href="/ai"
+              prefetch={false}
+              className="group inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
+            >
+              <History className="h-4 w-4" aria-hidden />
+              Your videos
+            </Link>
           </div>
         </>
       )}

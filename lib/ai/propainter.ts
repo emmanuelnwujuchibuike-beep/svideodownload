@@ -75,6 +75,17 @@ export async function runProPainter(req: ProPainterRequest): Promise<ProPainterR
           save_fps: req.fps,
           mask_dilation: AI_CLEAN_PROPAINTER.maskDilation,
           resize_ratio: 1,
+          /*
+            🔴 NATIVE RESOLUTION, SMALLER CHUNKS. -1/-1 means "leave the size
+            alone"; the three values below cut peak GPU memory instead. Sending
+            the defaults made a 720x1280 clip fail with CUDA OOM — see the note
+            in lib/ai/config.ts for the measurement.
+          */
+          width: -1,
+          height: -1,
+          subvideo_length: AI_CLEAN_PROPAINTER.subvideoLength,
+          neighbor_length: AI_CLEAN_PROPAINTER.neighborLength,
+          ref_stride: AI_CLEAN_PROPAINTER.refStride,
           fp16: AI_CLEAN_PROPAINTER.fp16,
         },
       }),

@@ -219,6 +219,14 @@ export interface AiCleanEntitlement {
   rewardRequired: boolean;
   rewardsPerJob: number;
   canStart: boolean;
+  /** True only when this member really is on the faster hardware today. */
+  gpuAccelerated?: boolean;
+  /** True when a GPU model exists on this deployment at all — gates the upsell. */
+  gpuOffered?: boolean;
+  /** True when the BRIA model exists — gates the Max AI label. */
+  briaOffered?: boolean;
+  /** "standard" | "gpu" | "bria" — what this member runs on today. */
+  modelTier?: string;
 }
 
 export async function getAiCleanEntitlement(): Promise<AiJobResult<AiCleanEntitlement>> {

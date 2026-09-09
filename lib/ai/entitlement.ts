@@ -1,3 +1,4 @@
+import { aiCleanBriaConfigured, aiCleanGpuConfigured } from "@/lib/ai/config";
 import { audienceFromPlan, type AiAudience } from "@/lib/ai/audience";
 import type { AiFeatureDef } from "@/lib/ai/jobs";
 import {
@@ -140,6 +141,9 @@ export async function getAiEntitlementSnapshot(
       policy,
       usedToday: usage.usedToday,
       dayUnlocked: usage.dayUnlocked,
+      // The capability, read once here — the pure view never touches env.
+      gpuConfigured: aiCleanGpuConfigured(),
+      briaConfigured: aiCleanBriaConfigured(),
     }),
   };
 }

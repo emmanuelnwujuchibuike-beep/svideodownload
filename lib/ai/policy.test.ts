@@ -129,6 +129,14 @@ describe("the counter a member reads", () => {
         "audience",
         "canStart",
         "dailyLimit",
+        // Part 6+: which silicon this member gets, and whether the product
+        // offers a faster tier at all. Both are booleans about capability —
+        // neither leaks a model name, a version or a threshold.
+        "gpuAccelerated",
+        "gpuOffered",
+        // Max AI: whether BRIA exists here, and which tier this member runs on.
+        "briaOffered",
+        "modelTier",
         "offered",
         "remainingToday",
         "rewardRequired",

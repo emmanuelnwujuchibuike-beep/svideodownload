@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, X } from "lucide-react";
+import { useState } from "react";
 
 import { aiCleanPath, pathState, type StageView } from "@/lib/ai/job-stages";
 import type { AiSourceKind } from "@/lib/ai/jobs";
@@ -64,6 +65,9 @@ export function AICleanProcessing({
 }) {
   const steps = pathState(view.stage);
   const percent = view.progress === null ? 0 : Math.round(view.progress * 100);
+
+  /** The second step of Cancel. See the note above the button for why it exists. */
+  const [confirming, setConfirming] = useState(false);
 
   /*
     `ready` is the finished STATE, not a step somebody waits through — the
@@ -193,22 +197,97 @@ export function AICleanProcessing({
           You can close this page — the work carries on and we&apos;ll notify you when it&apos;s ready.
         </p>
 
+        {/*
+          ── 🔴 CANCELLING IS NOT FREE, SO IT ASKS TWICE ────────────────────
+
+          Owner, 2026-09-09: "put a two step are you sure, cancelling starts the
+          process again and may consume your credit. When a user want to cancel
+          an AI video, then tell them they can go to next page and it continues
+          without clicking the cancel button."
+
+          Both halves matter and they are different facts:
+
+          1. STOPPING COSTS. The slot is refunded on cancel, so nothing is
+             stolen — but starting over spends one of the day's videos again,
+             and the minutes already waited are gone. Somebody tapping Cancel
+             out of impatience is usually about to pay for that impatience
+             twice, and this is the moment to say so.
+
+          2. THEY PROBABLY WANT THE OTHER THING. Almost every cancel on a
+             long-running job is really "I need to go" — and leaving is already
+             free: the work runs on our machines, not in this tab, and a push
+             arrives when it lands. The dialogue offers that first, because it
+             is what most people actually mean.
+
+          A plain `window.confirm` would have done the job and is rejected on
+          purpose: it cannot say two things, it cannot be styled, and on iOS it
+          steals focus in a way that has broken sheets in this app before.
+        */}
         {onCancel ? (
           <div className="mt-5">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={cancelling}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium",
-                "text-muted-foreground transition hover:text-rose-600 active:scale-[0.99]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                "disabled:opacity-60 dark:hover:text-rose-400",
-              )}
-            >
-              <X className="h-3.5 w-3.5" aria-hidden />
-              {cancelling ? "Stopping…" : "Cancel"}
-            </button>
+            {confirming ? (
+              <div
+                role="alertdialog"
+                aria-labelledby="ai-cancel-title"
+                aria-describedby="ai-cancel-body"
+                className="rounded-2xl border border-border/70 bg-card/95 p-4"
+              >
+                <p id="ai-cancel-title" className="text-[13.5px] font-semibold">
+                  Stop cleaning this video?
+                </p>
+                <p id="ai-cancel-body" className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                  You don&apos;t have to stop it to leave — close this page and the work carries on,
+                  and we&apos;ll notify you when it&apos;s ready. If you stop now, starting again
+                  uses another of your daily videos.
+                </p>
+
+                <div className="mt-3.5 flex flex-col gap-2 sm:flex-row-reverse">
+                  {/*
+                    🔴 "Keep cleaning" is the primary and it is FIRST in the
+                    reversed row, so on a phone the safe choice sits under the
+                    thumb and the destructive one is a deliberate reach.
+                  */}
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="inline-flex flex-1 items-center justify-center rounded-full bg-foreground px-5 py-2.5 text-[13px] font-semibold text-background transition active:scale-[0.99]"
+                  >
+                    Keep cleaning
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirming(false);
+                      onCancel();
+                    }}
+                    disabled={cancelling}
+                    className={cn(
+                      "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-medium",
+                      "text-rose-600 transition hover:bg-rose-50 active:scale-[0.99]",
+                      "disabled:opacity-60 dark:text-rose-400 dark:hover:bg-rose-500/10",
+                    )}
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                    {cancelling ? "Stopping…" : "Stop anyway"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                disabled={cancelling}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium",
+                  "text-muted-foreground transition hover:text-rose-600 active:scale-[0.99]",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "disabled:opacity-60 dark:hover:text-rose-400",
+                )}
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+                {cancelling ? "Stopping…" : "Cancel"}
+              </button>
+            )}
           </div>
         ) : null}
       </div>

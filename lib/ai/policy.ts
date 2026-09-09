@@ -1,4 +1,11 @@
 import { isConfigurableAudience, type AiAudience } from "@/lib/ai/audience";
+import {
+  aiCleanBriaOffered,
+  aiCleanGpuOffered,
+  hardwareFor,
+  modelTierFor,
+  type AiModelTier,
+} from "@/lib/ai/hardware";
 import type { AiFeature } from "@/lib/ai/jobs";
 
 /**
@@ -299,6 +306,34 @@ export interface AiEntitlementView {
   rewardUnlocked: boolean;
   /** False when the allowance is spent — an ad cannot buy past the cap. */
   canStart: boolean;
+  /**
+   * Whether THIS subject already runs on the faster hardware.
+   *
+   * 🔴 Present so the interface can stop claiming a speed tier that does not
+   * exist. It is false for everybody until a GPU model is configured, and the
+   * upsell copy is gated on it — see lib/ai/hardware.ts.
+   */
+  gpuAccelerated: boolean;
+  /**
+   * Whether a GPU model exists on this deployment AT ALL.
+   *
+   * 🔴 Distinct from `gpuAccelerated`, and the difference is what makes the
+   * upsell honest: a FREE member is never accelerated, so their own flag is
+   * always false — but they are exactly who the "faster on Pro" line is for.
+   * That line is gated on this one, so it appears when the capability is real
+   * and stays silent when it is not.
+   */
+  gpuOffered: boolean;
+  /**
+   * Whether the BRIA model (Max AI) exists on this deployment at all.
+   *
+   * 🔴 Gates the "Max AI" label the same way `gpuOffered` gates the speed
+   * claim. The plan can be sold before the model ships; the CLAIM about what it
+   * does may not be.
+   */
+  briaOffered: boolean;
+  /** The model tier this subject actually runs on today. */
+  modelTier: AiModelTier;
 }
 
 export function entitlementView(input: {
@@ -307,6 +342,10 @@ export function entitlementView(input: {
   usedToday: number;
   /** Whether a day-scoped reward has already been granted for today. */
   dayUnlocked?: boolean;
+  /** True only when a GPU model is actually configured on this deployment. */
+  gpuConfigured?: boolean;
+  /** True only when the BRIA model is actually configured on this deployment. */
+  briaConfigured?: boolean;
 }): AiEntitlementView {
   const { audience, policy, usedToday } = input;
   const remaining = Math.max(0, policy.dailyLimit - usedToday);
@@ -341,5 +380,14 @@ export function entitlementView(input: {
     rewardScope: policy.rewardScope,
     rewardUnlocked: policy.rewardScope === "day" && dayUnlocked,
     canStart: spendable,
+    // Entitlement AND capability. A paid tier is entitled whether or not a GPU
+    // model is deployed; this says what is actually happening.
+    gpuAccelerated: hardwareFor(audience, { gpuConfigured: input.gpuConfigured === true }) === "gpu",
+    gpuOffered: aiCleanGpuOffered({ gpuConfigured: input.gpuConfigured === true }),
+    briaOffered: aiCleanBriaOffered({ briaConfigured: input.briaConfigured === true }),
+    modelTier: modelTierFor(audience, {
+      gpuConfigured: input.gpuConfigured === true,
+      briaConfigured: input.briaConfigured === true,
+    }),
   };
 }

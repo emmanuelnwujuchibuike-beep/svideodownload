@@ -314,11 +314,121 @@ export const AI_CLEAN_PROPAINTER = {
    * no benefit, and the owner's specific concern was oversized masks.
    */
   maskDilation: Number(process.env.AI_CLEAN_PROPAINTER_DILATION ?? "0") || 0,
+  /**
+   * ── 🔴 THE SETTINGS THAT STOP IT RUNNING OUT OF GPU MEMORY ───────────────
+   *
+   * Measured 2026-09-09 on the owner's 720x1280 / 286-frame video, with
+   * ProPainter's own defaults (subvideo_length 80, neighbor 10, ref_stride 10):
+   *
+   *     CUDA out of memory. Tried to allocate 9.89 GiB (44.39 GiB capacity)
+   *
+   * On a 44 GiB card. ProPainter holds a whole sub-video of optical flow and
+   * every neighbour frame resident, so peak memory scales with
+   * subvideo_length x width x height — and a portrait 720x1280 clip is already
+   * near the edge before anything is asked of it.
+   *
+   * That failure was INVISIBLE in production: the reconstruction returned
+   * nothing and the job fell back (shipping the detector intermediate) or, once
+   * the fallback was closed, failed outright. The owner saw a smear and a
+   * "didn't finish", never an out-of-memory.
+   *
+   * 🔴 These reduce MEMORY, not resolution.  stays 1 and
+   * width/height stay -1, so the video is inpainted at its native size — the
+   * chunk is simply smaller. Verified: the same clip that OOM'd completed in
+   * 191s at full 720x1280 x 286 with these values.
+   */
+  subvideoLength: envInt("AI_CLEAN_PROPAINTER_SUBVIDEO", 40),
+  /** Local frames each output frame may borrow from. 10 -> 6 for memory. */
+  neighborLength: envInt("AI_CLEAN_PROPAINTER_NEIGHBOR", 6),
+  /** Stride between global reference frames. Wider = fewer frames resident. */
+  refStride: envInt("AI_CLEAN_PROPAINTER_REF_STRIDE", 12),
   /** Half precision. Materially faster, and no visible difference on video. */
   fp16: process.env.AI_CLEAN_PROPAINTER_FP32?.trim() !== "1",
   /** How long the worker will wait for the GPU before giving up and failing honestly. */
   timeoutMs: envInt("AI_CLEAN_PROPAINTER_TIMEOUT_MS", 15 * 60_000),
 } as const;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE GPU TIER (owner, 2026-09-09)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * "wire the route and pipeline so pro users and business users and any higher
+ * plan yet to come to use gpu while free use cpu."
+ *
+ * ── 🔴 BOTH VALUES ARE ENVIRONMENT, AND THAT IS DELIBERATE ──────────────────
+ *
+ * The CPU model's version is a committed constant, because pinning it in git
+ * beside its caller is the stronger form of pinning. This one is NOT, for one
+ * reason: THE GPU MODEL DOES NOT EXIST YET. The version published on
+ * 2026-09-08 was disabled by Replicate — "consistently fails to complete
+ * setup" — and the pipeline stayed on CPU because a feature that returns a
+ * mediocre result beats one that never returns at all.
+ *
+ * So the routing ships now and the model is configuration. The day a GPU model
+ * boots, it is two dashboard values and no deploy; until then both are unset,
+ * `aiCleanGpuConfigured()` is false, and EVERY audience runs on CPU exactly as
+ * it does today.
+ *
+ * ⚠️ Set BOTH or neither. A model without a version is a floating reference,
+ * which is the thing `AI_CLEAN_CONFIG.version` exists to prevent — so a
+ * half-configured pair reports itself unconfigured rather than guessing.
+ */
+export const AI_CLEAN_GPU = {
+  model: process.env.REPLICATE_AI_CLEAN_GPU_MODEL?.trim() || "",
+  version: process.env.REPLICATE_AI_CLEAN_GPU_VERSION?.trim() || "",
+} as const;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  BRIA — the Max AI model (owner, 2026-09-09)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * "max ai will use BRIA model... while pro and business uses just gpu and not
+ * BRIA."
+ *
+ * Environment for the same reason the GPU pair is: no BRIA model is published
+ * under this account yet, and a committed constant pointing at nothing would be
+ * a pin on a thing that does not exist. Both values or neither.
+ */
+export const AI_CLEAN_BRIA = {
+  model: process.env.REPLICATE_AI_CLEAN_BRIA_MODEL?.trim() || "",
+  version: process.env.REPLICATE_AI_CLEAN_BRIA_VERSION?.trim() || "",
+} as const;
+
+/** True only when a COMPLETE BRIA model reference is configured. */
+export function aiCleanBriaConfigured(): boolean {
+  return !!AI_CLEAN_BRIA.model && !!AI_CLEAN_BRIA.version;
+}
+
+/** True only when a COMPLETE GPU model reference is configured. */
+export function aiCleanGpuConfigured(): boolean {
+  return !!AI_CLEAN_GPU.model && !!AI_CLEAN_GPU.version;
+}
+
+/**
+ * The model and version a job should run on, given its hardware tier.
+ *
+ * 🔴 One place decides this, and it is not the route and not the browser. A
+ * request that could name its own model could point the owner's credentials at
+ * an arbitrary one and bill them for it — the same rule that has governed
+ * `AI_CLEAN_CONFIG` since Part 2, extended rather than loosened.
+ *
+ * Falls back to CPU whenever the GPU pair is incomplete, so a misconfiguration
+ * is a slower job rather than a broken one.
+ */
+export function aiCleanModelFor(tier: "standard" | "gpu" | "bria"): { model: string; version: string } {
+  if (tier === "bria" && aiCleanBriaConfigured()) {
+    return { model: AI_CLEAN_BRIA.model, version: AI_CLEAN_BRIA.version };
+  }
+  if ((tier === "gpu" || tier === "bria") && aiCleanGpuConfigured()) {
+    // 🔴 A Max AI member on a deployment with no BRIA model still gets the
+    // FASTER model rather than dropping all the way to CPU. Falling to the next
+    // rung down beats falling to the bottom for somebody on the top plan.
+    return { model: AI_CLEAN_GPU.model, version: AI_CLEAN_GPU.version };
+  }
+  return { model: AI_CLEAN_CONFIG.model, version: AI_CLEAN_CONFIG.version };
+}
 
 /** Whether this deployment holds everything a real run needs. */
 export function aiCleanConfigured(): boolean {

@@ -316,6 +316,63 @@ export interface MaskPlan {
  * we just computed and hand ProPainter a grey, ambiguous mask.
  */
 /** erosion ×2, dilation ×20, erosion ×14 — see the note above for the numbers. */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE DETECTOR GIVES A RECTANGLE. THE MASK MUST NOT BE ONE.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, on a video whose caption came back as a full-width smear:
+ * "instead of naturally reconstructing the background after removing the text,
+ * the removed region becomes blurry, smeared, stretched, or visibly distorted."
+ *
+ * Measured on that exact video (720x1280, 286 frames, 3 lines of caption):
+ *
+ *     detector rectangle, as shipped     12.70% of the frame   117,006 px
+ *     glyph-refined mask                  8.07% of the frame    74,411 px
+ *
+ * hjunior29 in `black` mode does not paint the letters — it paints a SOLID
+ * 588x200 BLOCK over the whole caption. Using that block as the mask asks
+ * ProPainter to invent an eighth of the picture, and a flow-based inpainter
+ * given a region that large with no clean source frames produces exactly the
+ * woven, stretched band the owner photographed.
+ *
+ * ── How the letters are recovered without a second model ────────────────────
+ *
+ * The rectangle is kept, but only as a REGION OF INTEREST. Inside it the
+ * caption is high-contrast by construction — social captions are bright glyphs
+ * with a dark outline or shadow, which is what makes them readable over any
+ * footage. So the mask becomes:
+ *
+ *     (the detector painted here)  AND  (this pixel is very bright OR very dark)
+ *
+ * Everything mid-tone inside the rectangle is background, and it is now left
+ * alone. Verified end to end: ProPainter with the refined mask reconstructed
+ * the arms, chair, floor and crowd cleanly where the rectangle mask had smeared
+ * them.
+ *
+ * ⚠️ It is a HEURISTIC, and it can fail — a caption in a mid-grey, or coloured
+ * text with no outline, segments to almost nothing. That is why the caller
+ * measures the result and falls back to the rectangle when the refined mask is
+ * implausibly sparse (`MASK_REFINE_MIN_RATIO`). Removing nothing is a worse
+ * failure than removing too much.
+ */
+const MASK_BRIGHT = 200;
+const MASK_DARK = 40;
+
+/**
+ * How much of the rectangle the refined mask must still cover to be trusted.
+ *
+ * 🔴 A floor, not a target. Below this the segmentation has plainly failed —
+ * the caption was not bright-on-dark — and the rectangle is used instead. Set
+ * from the measured case: a working refinement covered 64% of the rectangle
+ * (74,411 of 117,006), so 20% is far below anything healthy and far above the
+ * near-zero a failure produces.
+ */
+export const MASK_REFINE_MIN_RATIO = 0.2;
+
+/** Grown a little after segmentation, to swallow the glyphs' antialiased edge. */
+const MASK_REFINE_GROW = 2;
+
 const MASK_MORPHOLOGY = [
   ...Array(2).fill("erosion"),
   ...Array(20).fill("dilation"),
@@ -378,7 +435,35 @@ export function buildResizeToSourceArgs(plan: {
     plan.outPath,
   ];
 }
-export function buildTextMaskArgs(plan: MaskPlan): string[] {
+/** The detector's rectangle: painted black, and not black in the source. */
+const MASK_RECT_CHAIN =
+  "[1]format=gray[a];[0]format=gray[b];" +
+  `[a][b]blend=all_expr='if(lt(A,16)*gt(B,16),255,0)',${MASK_MORPHOLOGY}`;
+
+/**
+ * The mask ProPainter is given.
+ *
+ * `refine: false` produces the plain rectangle — what shipped before, and what
+ * the caller falls back to when segmentation fails. `refine: true` (the
+ * default) keeps only the high-contrast glyph pixels inside that rectangle.
+ *
+ * ⚠️ Encoded LOSSLESS (`-qp 0`). A lossy encode blurs the hard threshold this
+ * graph just computed and hands ProPainter a grey, ambiguous mask.
+ */
+export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string[] {
+  const refine = plan.refine !== false;
+
+  const filter = refine
+    ? `${MASK_RECT_CHAIN}[rect];` +
+      // Very bright OR very dark, anywhere in the frame. `+` is a sum, and
+      // `if()` treats any non-zero as true, so this is an OR.
+      `[0]format=gray,geq=lum='if(gt(p(X\\,Y)\\,${MASK_BRIGHT})+lt(p(X\\,Y)\\,${MASK_DARK})\\,255\\,0)'[glyph];` +
+      // AND with the rectangle, so contrast elsewhere in the picture — a white
+      // shirt, a dark doorway — can never enter the mask.
+      `[rect][glyph]blend=all_expr='if(gt(A,127)*gt(B,127),255,0)',` +
+      `${Array(MASK_REFINE_GROW).fill("dilation").join(",")},format=yuv420p`
+    : `${MASK_RECT_CHAIN},format=yuv420p`;
+
   return [
     "-hide_banner",
     "-loglevel",
@@ -390,9 +475,7 @@ export function buildTextMaskArgs(plan: MaskPlan): string[] {
     "-i",
     plan.blackPath,
     "-filter_complex",
-    "[1]format=gray[a];[0]format=gray[b];" +
-      "[a][b]blend=all_expr='if(lt(A,16)*gt(B,16),255,0)'," +
-      `${MASK_MORPHOLOGY},format=yuv420p`,
+    filter,
     "-c:v",
     "libx264",
     "-preset",
@@ -403,4 +486,51 @@ export function buildTextMaskArgs(plan: MaskPlan): string[] {
     String(plan.fps),
     plan.outPath,
   ];
+}
+
+/**
+ * Measure how much of the frame a finished mask actually covers.
+ *
+ * 🔴 This is what makes the refinement safe to ship. The segmentation is a
+ * heuristic about how social captions are drawn, and a caption it cannot see
+ * would otherwise produce an almost-empty mask and a video with the text still
+ * in it — a silent, total failure of the feature.
+ *
+ * The mask is binary, so mean luminance IS the coverage fraction: YAVG/255.
+ * One cheap pass over a lossless grayscale video, on a machine that has just
+ * written it.
+ */
+export function buildMaskCoverageArgs(maskPath: string): string[] {
+  return [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    // 🔴 The path is interpolated into a lavfi graph, where `:` and `\` are
+    // syntax. It is always a temp path this codebase built from `tmpdir()` and
+    // a uuid, never anything a member supplied — but it is escaped anyway,
+    // because the day that stops being true is not the day to discover it.
+    `movie=${maskPath.replace(/\\/g, "/").replace(/:/g, "\\:")},signalstats`,
+    "-show_entries",
+    "frame_tags=lavfi.signalstats.YAVG",
+    "-of",
+    "csv=p=0",
+  ];
+}
+
+/**
+ * Mean coverage, 0-1, from `buildMaskCoverageArgs` output. Pure, so the parsing
+ * is testable without ffprobe.
+ *
+ * Returns null when nothing usable came back — the caller must treat that as
+ * "unknown", never as "empty", or an ffprobe hiccup would discard a good mask.
+ */
+export function parseMaskCoverage(raw: string): number | null {
+  const values = raw
+    .split(/\r?\n/)
+    .map((line) => Number.parseFloat(line.trim()))
+    .filter((n) => Number.isFinite(n) && n >= 0 && n <= 255);
+  if (values.length === 0) return null;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  return mean / 255;
 }

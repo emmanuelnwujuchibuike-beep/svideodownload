@@ -1,6 +1,10 @@
 import "server-only";
 
-import { AI_CLEAN_CONFIG } from "@/lib/ai/config";
+import { AI_CLEAN_CONFIG, aiCleanBriaConfigured, aiCleanGpuConfigured, aiCleanModelFor } from "@/lib/ai/config";
+import type { AiAudience } from "@/lib/ai/audience";
+import { getAiEntitlement } from "@/lib/ai/entitlement";
+import { hardwareFor, modelTierFor, type AiHardware, type AiModelTier } from "@/lib/ai/hardware";
+import { subjectFromRow } from "@/lib/ai/subject";
 import { AiJobError } from "@/lib/ai/errors";
 import type { AiFeatureDef, AiJobRow, AiJobStatus } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
@@ -42,6 +46,14 @@ export interface ProviderSubmission {
   reference: string;
   modelVersion: string | null;
   engine: string;
+  /** Which silicon this job was routed to, from the member's plan. */
+  hardware: AiHardware;
+  /** Which model tier — standard, gpu, or bria (Max AI). */
+  modelTier: AiModelTier;
+  /** The plan tier that decided it. */
+  audience: AiAudience;
+  /** The model that ran — differs between tiers once a GPU model exists. */
+  model: string;
 }
 
 /**
@@ -89,6 +101,34 @@ export async function submitJobToProvider(
   const { frenzAiEngine } = await getLandingSettings();
 
   /*
+    ── 🔴 WHICH SILICON, DECIDED FROM THE PLAN (owner, 2026-09-09) ───────────
+
+    "wire the route and pipeline so pro users and business users and any higher
+    plan yet to come to use gpu while free use cpu."
+
+    Resolved HERE, in the one function both entry points share, for the same
+    reason the engine is: an upload submits from the frontend and a link
+    submits from a worker callback, and the two must not be able to disagree
+    about what a member's plan buys them.
+
+    The audience comes from the row's own subject — the member's real,
+    server-side entitlement — never from anything the request said. A client
+    that could name its tier could name its model.
+
+    ⚠️ It falls through to CPU whenever no GPU model is configured, which is
+    the case today: the GPU version published on 2026-09-08 was disabled by
+    Replicate. So this changes nothing for anybody until a working model is set,
+    and nothing in the interface claims otherwise (see `aiCleanGpuOffered`).
+  */
+  const subject = subjectFromRow(job);
+  const audience = subject ? (await getAiEntitlement(subject, feature)).audience : "free";
+  const gpuConfigured = aiCleanGpuConfigured();
+  const briaConfigured = aiCleanBriaConfigured();
+  const hardware = hardwareFor(audience, { gpuConfigured });
+  const modelTier = modelTierFor(audience, { gpuConfigured, briaConfigured });
+  const chosen = aiCleanModelFor(modelTier);
+
+  /*
     The webhook address. `SITE_URL` rather than the request's own origin,
     because one of the two callers is the WORKER, whose origin is the worker's
     hostname — a webhook pointed there would reach a machine with no Replicate
@@ -103,21 +143,42 @@ export async function submitJobToProvider(
     sourceUrl,
     webhookUrl: `${origin}/api/ai/replicate/webhook`,
     engine: frenzAiEngine,
+    hardware,
+    modelTier,
   });
 
   const row = await transitionJob(job.id, opts.from, "processing", {
     replicate_prediction_id: state.reference,
-    model: AI_CLEAN_CONFIG.model,
+    // The model that ACTUALLY ran for this member's tier, not the default one.
+    model: chosen.model,
     // The engine this job was STARTED on. The worker reads it back rather than
     // re-reading a setting that may have moved.
-    metadata: { ...(job.metadata ?? {}), engine: frenzAiEngine },
+    // `hardware` is recorded so "why was this one slow?" stays answerable
+    // later, and so Part 8 can report CPU vs GPU volume without inferring it.
+    /*
+      ⚠️ Spreads the row this function was HANDED, which is safe only because
+      nothing writes metadata between that read and this line — both callers
+      read the row immediately before calling. The finalizer had the same shape
+      and it was NOT safe there: a diagnostic written mid-run was erased by a
+      stale spread at completion. If a `noteJobDiagnostic` is ever added to this
+      path, re-read the row here first.
+    */
+    metadata: { ...(job.metadata ?? {}), engine: frenzAiEngine, hardware, modelTier, audience },
     // What ACTUALLY ran, as the provider reported it — not our intention.
     model_version: state.modelVersion,
     started_at: new Date().toISOString(),
   });
 
   return {
-    submission: { reference: state.reference, modelVersion: state.modelVersion, engine: frenzAiEngine },
+    submission: {
+      reference: state.reference,
+      modelVersion: state.modelVersion,
+      engine: frenzAiEngine,
+      hardware,
+      modelTier,
+      audience,
+      model: chosen.model,
+    },
     row,
   };
 }

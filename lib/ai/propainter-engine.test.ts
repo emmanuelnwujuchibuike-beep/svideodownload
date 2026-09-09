@@ -64,7 +64,11 @@ describe("the mask filter graph", () => {
     quietly turn the closing back into an opening.
   */
   it("opens to drop speckle, then CLOSES to fill the holes gt(B,16) punches", () => {
-    const ops = graph.match(/erosion|dilation/g) ?? [];
+    // Annotated: `match()` returns `RegExpMatchArray | null`, and the union
+    // with a bare `[]` narrows the element type to `never` — which makes
+    // `indexOf("dilation")` a compile error that only `tsc` sees. `next build`
+    // does not typecheck test files and vitest does not typecheck at all.
+    const ops: string[] = graph.match(/erosion|dilation/g) ?? [];
     // Opening first: the two erosions lead.
     expect(ops[0]).toBe("erosion");
     expect(ops[1]).toBe("erosion");

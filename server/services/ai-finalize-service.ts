@@ -1114,6 +1114,11 @@ async function reconstructWithProPainter(opts: {
       refine: true,
       statsPath: statsFile,
       extraBoxes: detected.boxes,
+      // The glyph halo scales with the frame — see `maskRefineGrow`. Without
+      // these the mask grows by 2px at every resolution, which left a visible
+      // ghost of every letter on the owner's 1080p clips.
+      width: opts.sourceProbe?.width ?? null,
+      height: opts.sourceProbe?.height ?? null,
     }),
     FFMPEG_HARD_TIMEOUT_MS,
   );
@@ -1153,6 +1158,8 @@ async function reconstructWithProPainter(opts: {
         fps,
         refine: false,
         statsPath: rectStats,
+        width: opts.sourceProbe?.width ?? null,
+        height: opts.sourceProbe?.height ?? null,
       }),
       FFMPEG_HARD_TIMEOUT_MS,
     );

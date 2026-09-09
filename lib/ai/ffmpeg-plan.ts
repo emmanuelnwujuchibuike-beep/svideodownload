@@ -254,6 +254,16 @@ export interface MaskPlan {
   outPath: string;
   /** Source frame rate, so the mask has one frame per source frame. */
   fps: number;
+  /**
+   * The source frame size, used only to scale how far the glyph mask is grown.
+   *
+   * 🔴 A caption's anti-aliased halo is a fraction of the text's size, and the
+   * text is a fraction of the frame — so a fixed dilation count covers it at
+   * one resolution and leaves a visible ghost at another. See `maskRefineGrow`.
+   * Null is safe: it falls back to the value that was correct at 480p.
+   */
+  width?: number | null;
+  height?: number | null;
 }
 
 /**
@@ -370,8 +380,63 @@ const MASK_DARK = 40;
  */
 export const MASK_REFINE_MIN_RATIO = 0.2;
 
-/** Grown a little after segmentation, to swallow the glyphs' antialiased edge. */
-const MASK_REFINE_GROW = 2;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE GLYPH HALO — why the removed text came back as a grey ghost
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, on a 1080x1920 clip: "the text still looks transparent and
+ * showing and it glitches by the sides."
+ *
+ * The refinement keeps pixels that are very bright or very dark, which is the
+ * glyph CORE. What it does not keep is the ring of mid-tone pixels around every
+ * letter — the anti-aliasing the renderer drew to make the edge smooth, plus
+ * whatever shadow or outline the caption carries. Those are, by definition,
+ * neither bright nor dark.
+ *
+ * So ProPainter is handed a mask of letter-shaped holes with their outlines
+ * still in the picture, faithfully reconstructs the holes, and the outlines
+ * survive. A caption's anti-aliased edge IS a legible, letter-shaped shape —
+ * which is exactly what "transparent and showing" describes.
+ *
+ * ── 🔴 TWO DILATIONS IS A FIXED NUMBER AGAINST A SCALING PROBLEM ────────────
+ *
+ * A halo is a fraction of the text's own size, and text is a fraction of the
+ * frame. At 480x854 two pixels covered it. At 1080x1920 the same caption is
+ * 2.25x larger and its halo is 2.25x wider, while the mask still grew by two —
+ * so the taller the video, the more of the outline survives. The owner's
+ * earlier 480p clips looked better for precisely this reason, which is why
+ * "it was much better before" is a real observation about a real regression
+ * rather than a preference.
+ *
+ * Scaling with the frame's short edge fixes it at every size, and it is cheap
+ * in the direction that matters: a temporal inpainter given a few more pixels
+ * has more context, not less. Over-growing costs a slightly larger repaired
+ * region; under-growing costs a visible ghost of the text we were paid to
+ * remove.
+ *
+ * Baselined on the size that was already correct — 2 dilations at a 480px short
+ * edge — so a 1080p clip grows by 5 (2.25x rounds up from 4.5, which is the
+ * safe direction for a halo) and a 720p one by 3.
+ */
+const MASK_REFINE_GROW_BASE = 2;
+const MASK_REFINE_GROW_REFERENCE_EDGE = 480;
+/** Never below the value that worked at 480p, never wide enough to smear. */
+const MASK_REFINE_GROW_MAX = 8;
+
+export function maskRefineGrow(width: number | null | undefined, height: number | null | undefined): number {
+  const shortEdge = Math.min(width || 0, height || 0);
+  /*
+    🔴 An unknown size gets the BASELINE, not the maximum. A probe that failed
+    to read dimensions is not evidence the video is large, and growing every
+    unmeasurable clip to the ceiling would repaint more of somebody's picture
+    than the text needed — silently, and on exactly the jobs we know least
+    about.
+  */
+  if (!Number.isFinite(shortEdge) || shortEdge <= 0) return MASK_REFINE_GROW_BASE;
+  const scaled = Math.round((shortEdge / MASK_REFINE_GROW_REFERENCE_EDGE) * MASK_REFINE_GROW_BASE);
+  return Math.max(MASK_REFINE_GROW_BASE, Math.min(MASK_REFINE_GROW_MAX, scaled));
+}
 
 const MASK_MORPHOLOGY = [
   ...Array(2).fill("erosion"),
@@ -500,6 +565,13 @@ export function buildTextMaskArgs(
 ): string[] {
   const refine = plan.refine !== false;
 
+  /*
+    🔴 The halo grows with the frame — see `maskRefineGrow`. A fixed 2 was
+    enough at 480p and left a visible ghost of every letter at 1080p, which is
+    what "the text still looks transparent" was.
+  */
+  const grow = maskRefineGrow(plan.width, plan.height);
+
   const base = refine
     ? `${maskRectChain(MASK_ROI_MORPHOLOGY)}[rect];` +
       // Very bright OR very dark, anywhere in the frame. `+` is a sum, and
@@ -508,7 +580,7 @@ export function buildTextMaskArgs(
       // AND with the rectangle, so contrast elsewhere in the picture — a white
       // shirt, a dark doorway — can never enter the mask.
       `[rect][glyph]blend=all_expr='if(gt(A,127)*gt(B,127),255,0)',` +
-      `${Array(MASK_REFINE_GROW).fill("dilation").join(",")},format=yuv420p`
+      `${Array(grow).fill("dilation").join(",")},format=yuv420p`
     : `${maskRectChain(MASK_MORPHOLOGY)},format=yuv420p`;
 
   /*

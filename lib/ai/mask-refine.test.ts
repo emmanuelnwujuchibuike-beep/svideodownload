@@ -5,6 +5,7 @@ import {
   buildMaskedCompositeArgs,
   buildTextMaskArgs,
   MASK_REFINE_MIN_RATIO,
+  maskRefineGrow,
   parseMaskCoverage,
 } from "@/lib/ai/ffmpeg-plan";
 
@@ -457,5 +458,68 @@ describe("buildMaskedCompositeArgs — the chroma bug", () => {
 
   it("converts back to yuv420p only after the merge, for the encoder", () => {
     expect(graph).toContain("maskedmerge,format=yuv420p[out]");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE GLYPH HALO — the grey ghost of the removed text
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, on a 1080x1920 clip: "the text still looks transparent and
+ * showing… it was much better before."
+ *
+ * The refinement keeps the glyph CORE — very bright or very dark pixels — and
+ * cannot keep the ring of mid-tone anti-aliasing around every letter, which is
+ * by definition neither. ProPainter fills the holes; the outlines survive; a
+ * caption's outline is a legible, letter-shaped shape.
+ *
+ * The halo scales with the text and the text scales with the frame, so a fixed
+ * two-pixel grow covered it at 480p and covered proportionally less at 1080p.
+ * "Much better before" is a real observation about a real regression: the
+ * earlier clips were smaller.
+ */
+describe("maskRefineGrow", () => {
+  it("keeps the value that was already correct at 480p", () => {
+    expect(maskRefineGrow(480, 854)).toBe(2);
+  });
+
+  it("grows with the frame, so a 1080p halo is covered too", () => {
+    expect(maskRefineGrow(1080, 1920)).toBe(5);
+    expect(maskRefineGrow(720, 1280)).toBe(3);
+  });
+
+  /* Landscape: the SHORT edge is what text size tracks, not the width. */
+  it("measures the short edge whichever way the video is turned", () => {
+    expect(maskRefineGrow(1920, 1080)).toBe(maskRefineGrow(1080, 1920));
+  });
+
+  /*
+    🔴 AN UNKNOWN SIZE GETS THE BASELINE, NOT THE MAXIMUM. A probe that failed
+    to read dimensions is not evidence the video is large, and growing every
+    unmeasurable clip to the ceiling would repaint more of somebody's picture
+    than the text needed — on exactly the jobs we know least about.
+  */
+  it("falls back to the baseline rather than the ceiling", () => {
+    for (const [w, h] of [[null, null], [0, 0], [undefined, 1080], [-5, 100]] as const) {
+      expect(maskRefineGrow(w, h), `${w}x${h}`).toBe(2);
+    }
+  });
+
+  /*
+    A ceiling, because the point of the refinement is a TIGHT mask. A grow wide
+    enough to merge neighbouring letters would undo the whole 12.70% → 8.07%
+    improvement that made ProPainter reconstruct cleanly in the first place.
+  */
+  it("never grows wide enough to smear, however large the video", () => {
+    expect(maskRefineGrow(4320, 7680)).toBeLessThanOrEqual(8);
+  });
+
+  it("reaches the filter graph", () => {
+    const at1080 = graphOf(buildTextMaskArgs({ ...plan, width: 1080, height: 1920 }));
+    const at480 = graphOf(buildTextMaskArgs({ ...plan, width: 480, height: 854 }));
+    const count = (g: string) => (g.slice(g.indexOf("gt(A,127)")).match(/dilation/g) ?? []).length;
+    expect(count(at1080)).toBe(5);
+    expect(count(at480)).toBe(2);
   });
 });

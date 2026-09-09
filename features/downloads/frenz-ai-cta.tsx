@@ -55,26 +55,29 @@ export function FrenzAICta({ className }: { className?: string }) {
         */
         "group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
         /*
-          🔴 THE FIELD, MATCHED TO THE OWNER'S SCREENSHOT.
+          🔴 WHITE GROUND, GRADIENT AS A TINT (owner, 2026-09-09).
 
-          Owner, 2026-09-08: "make the frenz ai button to be exactly as it is on
-          this screenshot, exactly."
+          "this Frenz AI button in the landing page and Download page is too
+          colourful, make it more of white with touches of gradient purple,
+          blue, and touches of AI color like Gemini; the background should be
+          more of white so it doesn't cause visual color noise when a user
+          lands."
 
-          Corner for corner in that image: deep indigo bottom-left, electric
-          blue through the middle, magenta at the top-right. `to-tr` is what
-          puts the magenta in the corner it actually occupies — the previous
-          `to-br` ran the pink into the bottom-right, where the screenshot is
-          still blue.
+          It was a full-bleed indigo→violet→magenta gradient with white type —
+          the loudest element on a page whose job is a paste field. The colour
+          did not go away, it moved: the card is white and the ambient field
+          below now paints Google-blue and violet at ~0.3 alpha, so the hue
+          reads as a sheen on paper rather than a block of saturation.
         */
-        "bg-gradient-to-tr from-[#2a1b9e] via-[#5b3ff0] to-[#d13ad6] text-white",
+        "bg-white text-slate-900 dark:bg-[#0b1020] dark:text-white",
         /*
           The bloom. The tile in the screenshot sits in its own violet light
           rather than on a flat drop shadow — two shadows, one tight and dark
           for the lift, one wide and coloured for the glow. Both are painted
           once and never animate, so the whole effect is free after first paint.
         */
-        "shadow-[0_10px_30px_-12px_rgba(30,27,75,0.65),0_0_38px_-10px_rgba(192,38,211,0.55)]",
-        "ring-1 ring-inset ring-white/20",
+        "shadow-[0_10px_30px_-14px_rgba(15,23,42,0.22)]",
+        "ring-1 ring-inset ring-slate-900/[0.07] dark:ring-white/10",
         "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
         className,
       )}
@@ -106,7 +109,7 @@ export function FrenzAICta({ className }: { className?: string }) {
           className="frenz-ai-ambient-a absolute -left-1/3 -top-1/3 h-[130%] w-[130%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(255,255,255,0.60) 0%, rgba(255,255,255,0.20) 42%, rgba(255,255,255,0) 74%)",
+              "radial-gradient(closest-side, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 76%)",
           }}
         />
         {/* B — electric blue, sweeping up from the lower left. */}
@@ -114,7 +117,7 @@ export function FrenzAICta({ className }: { className?: string }) {
           className="frenz-ai-ambient-b absolute -bottom-1/3 -left-1/4 h-[135%] w-[135%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(56,132,255,0.95) 0%, rgba(37,99,235,0.35) 45%, transparent 74%)",
+              "radial-gradient(closest-side, rgba(66,133,244,0.30) 0%, rgba(66,133,244,0.10) 46%, transparent 74%)",
           }}
         />
         {/* C — magenta, on the three-stop circuit, anchored top-right where the
@@ -123,7 +126,7 @@ export function FrenzAICta({ className }: { className?: string }) {
           className="frenz-ai-ambient-c absolute -right-1/3 -top-1/4 h-[135%] w-[135%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(240,110,255,0.90) 0%, rgba(168,85,247,0.32) 45%, transparent 74%)",
+              "radial-gradient(closest-side, rgba(168,85,247,0.26) 0%, rgba(217,70,239,0.10) 46%, transparent 74%)",
           }}
         />
       </span>
@@ -136,7 +139,7 @@ export function FrenzAICta({ className }: { className?: string }) {
       */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#1e1650]/72 via-[#1e1650]/20 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-white/85 via-white/35 to-transparent dark:from-[#0b1020]/85 dark:via-[#0b1020]/35"
       />
 
       {/*
@@ -158,14 +161,14 @@ export function FrenzAICta({ className }: { className?: string }) {
       */}
       <span
         aria-hidden
-        className="relative z-[1] flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-full p-[2px] shadow-[0_0_16px_-2px_rgba(217,70,239,0.75),0_0_30px_-4px_rgba(56,189,248,0.5)]"
+        className="relative z-[1] flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-full p-[2px] shadow-[0_6px_18px_-6px_rgba(99,102,241,0.55)]"
         style={{
           background:
             "conic-gradient(from 150deg, #22d3ee 0%, #3b82f6 22%, #a855f7 48%, #f0abfc 68%, #38bdf8 86%, #22d3ee 100%)",
         }}
       >
-        <span className="flex h-full w-full items-center justify-center rounded-full bg-[#241a6b]/50">
-          <Wand2 className="h-[1.35rem] w-[1.35rem] text-white" />
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-[#141a33]">
+          <Wand2 className="h-[1.35rem] w-[1.35rem] text-indigo-600 dark:text-indigo-300" />
         </span>
       </span>
 
@@ -175,9 +178,9 @@ export function FrenzAICta({ className }: { className?: string }) {
         decoration that costs three static nodes.
       */}
       <span aria-hidden className="pointer-events-none absolute inset-0 z-[1]">
-        <Spark className="absolute left-[4.6rem] top-[1.1rem] h-3.5 w-3.5 opacity-95" />
-        <Spark className="absolute left-[3.9rem] top-[2.9rem] h-2.5 w-2.5 opacity-80" />
-        <Spark className="absolute left-[1.15rem] top-[0.5rem] h-2 w-2 opacity-70" />
+        <Spark className="absolute left-[4.6rem] top-[1.1rem] h-3.5 w-3.5 text-fuchsia-400/80 dark:text-fuchsia-300/90" />
+        <Spark className="absolute left-[3.9rem] top-[2.9rem] h-2.5 w-2.5 text-blue-400/80 dark:text-blue-300/90" />
+        <Spark className="absolute left-[1.15rem] top-[0.5rem] h-2 w-2 text-violet-400/70 dark:text-violet-300/80" />
       </span>
 
       <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-3">
@@ -188,14 +191,14 @@ export function FrenzAICta({ className }: { className?: string }) {
             different design; the tint is what makes it read as a product name.
           */}
           <span className="block text-[1.05rem] font-bold leading-tight tracking-[-0.01em]">
-            Frenz <span className="text-[#a9c4ff]">AI</span>
+            Frenz <span className="text-gradient">AI</span>
           </span>
-          <span className="mt-1 block text-xs leading-snug text-white/85">
+          <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/70">
             Remove captions and text from your videos.
           </span>
         </span>
-        <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/45 shadow-[0_0_14px_-4px_rgba(255,255,255,0.7)] transition group-hover:bg-white/25">
-          <ArrowRight className="h-[1.05rem] w-[1.05rem] text-white transition-transform group-hover:translate-x-0.5" />
+        <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/80 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
+          <ArrowRight className="h-[1.05rem] w-[1.05rem] text-slate-700 transition-transform group-hover:translate-x-0.5 dark:text-white" />
         </span>
       </span>
     </Link>
@@ -214,7 +217,7 @@ export function FrenzAICta({ className }: { className?: string }) {
  */
 function Spark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} fill="white" aria-hidden focusable="false">
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden focusable="false">
       <path d="M12 0c.6 6.2 5.2 10.8 12 12-6.8 1.2-11.4 5.8-12 12-.6-6.2-5.2-10.8-12-12 6.8-1.2 11.4-5.8 12-12z" />
     </svg>
   );

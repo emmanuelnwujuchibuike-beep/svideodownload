@@ -738,6 +738,31 @@ async function reconstructWithProPainter(opts: {
   const outFile = path.join(dir, "reconstructed.mp4");
 
   /*
+    ── 🔴 PREFLIGHT: THE CREDENTIAL THIS MACHINE NEEDS ─────────────────────
+
+    The ProPainter call is the only Replicate request that runs on the WORKER,
+    and the worker is not where provider credentials live — the frontend is. So
+    a deployment can have a perfectly valid token and still fail every job here.
+
+    Checked BEFORE the mask is built, because everything below it is wasted
+    otherwise: an ffmpeg pass over every frame, an upload into the member's own
+    storage prefix, and a delete to clean it up again — all to reach an API call
+    that could never have been made.
+
+    Reported as its own diagnostic so the row says what an operator must DO,
+    rather than "failed: submit threw: Error" (which is what it said for two
+    days).
+  */
+  if (!process.env.REPLICATE_API_TOKEN?.trim()) {
+    console.error("[ai/finalize] REPLICATE_API_TOKEN is not set on the WORKER — ProPainter cannot run", { jobId });
+    await noteJobDiagnostic(jobId, {
+      propainter: "no-token-on-worker",
+      propainter_hint: "set REPLICATE_API_TOKEN on the worker, or switch the admin engine back to classical",
+    });
+    return null;
+  }
+
+  /*
     The source frame rate, or 30. ProPainter's `save_fps` defaults to 24, so an
     unknown rate must not become a silent resample of the member's video.
   */

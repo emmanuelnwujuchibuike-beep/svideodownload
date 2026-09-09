@@ -1,61 +1,64 @@
 "use client";
 
-import { Check, CircleCheck, Cloud, Crown, ListChecks, Sparkles, Wand2, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
-import { FrenzAIWorkScene } from "@/features/ai/core/frenz-ai-work-scene";
-import { AI_CLEAN_PATH, pathState, type StageView } from "@/lib/ai/job-stages";
+import { aiCleanPath, pathState, type StageView } from "@/lib/ai/job-stages";
+import type { AiSourceKind } from "@/lib/ai/jobs";
 import { cn } from "@/lib/utils";
 
 /**
  * What a member watches while their video is being cleaned.
  *
- * Rebuilt from `public/ai progress.jpg` (owner, 2026-09-08): the work scene, a
- * headline, a five-step tracker with a real bar, a Pro tip, and Cancel.
+ * ── 🔴 REBUILT 2026-09-09 ───────────────────────────────────────────────────
  *
- * ── 🔴 NO INVENTED PERCENTAGE, AND NO INVENTED STAGE ─────────────────────────
+ * Owner: "the steps description looks too bold and cluster, it looks
+ * unprofessional, I need a modern UI design that fits Adobe and top class AI
+ * app system. And also the top loading animation is unnecessary, redesign the
+ * whole page and restructure it."
  *
- * The bar moves when the job's real state changes, and during the upload it
- * follows bytes the browser has actually sent. It never creeps on a timer to
- * look busy. The steps are the JOURNEY, always all visible, and the ones we
- * cannot individually observe are never announced as the current one — see
- * lib/ai/job-stages.ts for exactly which and why.
+ * What was wrong, concretely:
  *
- * The honest cost: while the model runs, two steps light up together rather
- * than one after another. A member sees where they are; nobody is told a thing
- * we do not know. The reference shows a single active step and a precise 68%,
- * and that is the one place this deliberately departs from the drawing —
- * inventing a number would be the fabrication the whole design avoids.
+ *   · an illustrated scene took the top third of the screen and said nothing —
+ *     on a ten-minute wait it is decoration in the most expensive position;
+ *   · five steps across a phone gave each ~64px, so "Analyzing video" and
+ *     "Removing text" wrapped to two lines and the row read as a wall;
+ *   · every label was semibold, every active circle was a 40px gradient disc
+ *     with a 4px glow ring, and a tick row sat underneath. Four competing
+ *     emphases in one card;
+ *   · the dark "Pro Tip" panel introduced a fifth colour temperature.
  *
- * ── 🔴 AND IT SAYS HOW LONG, BECAUSE IT IS LONG ─────────────────────────────
+ * ── The restructure ─────────────────────────────────────────────────────────
  *
- * Measured 2026-09-08: a 0.15 MB clip ran over ten minutes. The model is
- * published on CPU hardware and no code here can change that — only a GPU
- * redeploy can (docs/replicate-gpu/). What this screen owes the member is the
- * truth about the wait and permission to leave, and both are below the tracker.
+ * Reading order is now: what is happening → how far → what is left → the way
+ * out. One accent colour, one bold element (the percentage), and the step list
+ * runs VERTICALLY, which is what removes the wrapping and the crowding at a
+ * stroke. Serious tools state progress; they do not perform it.
  *
- * ── Motion ───────────────────────────────────────────────────────────────────
+ * ── 🔴 STILL NO INVENTED PERCENTAGE, AND NO INVENTED STAGE ──────────────────
  *
- * The scene, a width transition on the bar, and a pulse on the active step.
- * Nothing else. This screen can be open for ten minutes on a phone.
+ * Unchanged, and load-bearing. The bar moves when the job's real state changes
+ * and follows real bytes during the upload. Steps we cannot individually
+ * observe are never announced as the current one, so while the model runs two
+ * rows are active together rather than one marching after the other. A member
+ * sees where they are; nobody is told a thing we do not know.
+ *
+ * ── Motion ──────────────────────────────────────────────────────────────────
+ *
+ * A width transition on the bar and one soft pulse on active rows. Nothing
+ * else, and both stop under `prefers-reduced-motion`. This screen can be open
+ * for ten minutes on a phone in somebody's hand.
  */
-
-/** The icon for each step of the path, in the reference's order. */
-const STEP_ICON: Record<string, typeof Cloud> = {
-  uploading: Cloud,
-  queued: ListChecks,
-  analyzing: Sparkles,
-  removing: Wand2,
-  finalizing: CircleCheck,
-};
-
 export function AICleanProcessing({
   view,
   fileName,
+  sourceKind = "upload",
   onCancel,
   cancelling,
 }: {
   view: StageView;
   fileName: string | null;
+  /** Part 6: a link says "Getting your video" where a file says "Uploading". */
+  sourceKind?: AiSourceKind;
   onCancel?: () => void;
   cancelling?: boolean;
 }) {
@@ -63,158 +66,147 @@ export function AICleanProcessing({
   const percent = view.progress === null ? 0 : Math.round(view.progress * 100);
 
   /*
-    The reference shows five steps. `AI_CLEAN_PATH` carries a sixth, `ready`,
-    which is the finished STATE rather than a step somebody waits through — the
-    result screen is what announces it, so it is not drawn here.
+    `ready` is the finished STATE, not a step somebody waits through — the
+    result screen announces it, so it is not a row here.
   */
-  const tracked = AI_CLEAN_PATH.filter((s) => s.key !== "ready");
+  const tracked = aiCleanPath(sourceKind).filter((s) => s.key !== "ready");
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="mx-auto max-w-xl">
-        <FrenzAIWorkScene />
-
-        <div className="mt-1 text-center">
-          <h2 className="text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[1.8rem]">
+    <div className="p-5 sm:p-7">
+      <div className="mx-auto max-w-md">
+        {/* ── what is happening ─────────────────────────────────────────── */}
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="min-w-0 text-[1.35rem] font-semibold leading-tight tracking-[-0.02em] sm:text-[1.5rem]">
             {view.label}
           </h2>
-          <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
-            {view.detail ?? "AI is working its magic. Your clean video will be ready shortly."}
-          </p>
-          {fileName ? (
-            <p className="mt-1.5 truncate text-xs text-muted-foreground/80" title={fileName}>
-              {fileName}
-            </p>
-          ) : null}
+          {/*
+            🔴 The one bold thing on the screen. When everything is emphasised
+            nothing is, which is exactly what made the old card read as noise.
+            `tabular-nums` so the number does not jitter as it counts.
+          */}
+          <span className="shrink-0 text-[1.35rem] font-semibold tabular-nums text-primary sm:text-[1.5rem]">
+            {percent}%
+          </span>
         </div>
 
-        {/* ── the tracker card ──────────────────────────────────────────── */}
-        <div className="mt-5 rounded-[1.5rem] border border-border/60 bg-card/80 p-4 shadow-[0_18px_40px_-30px_hsl(229_55%_3%/0.5)] sm:p-5">
-          <ol className="flex items-start justify-between gap-1">
-            {tracked.map((step, i) => {
-              const state = steps[step.key] ?? "todo";
-              const Icon = STEP_ICON[step.key] ?? Sparkles;
-              return (
-                <li key={step.key} className="relative flex min-w-0 flex-1 flex-col items-center">
-                  {/*
-                    The connector, drawn from each step BACK to the previous one
-                    so it can never dangle past the last item. It is behind the
-                    circle and inset, which is why the circle needs its own
-                    background rather than being transparent.
-                  */}
-                  {i > 0 ? (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "absolute right-1/2 top-5 h-px w-[calc(100%-1.75rem)] translate-x-[-0.875rem]",
-                        state === "todo" ? "bg-border" : "bg-primary/40",
-                      )}
-                    />
-                  ) : null}
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">
+          {view.detail ?? "Frenz AI is working on your video."}
+        </p>
 
-                  <span
-                    className={cn(
-                      "relative z-[1] flex h-10 w-10 items-center justify-center rounded-full ring-1 transition-colors",
-                      state === "done" && "bg-primary/12 text-primary ring-primary/30",
-                      state === "doing" &&
-                        "bg-gradient-to-br from-blue-500 to-violet-600 text-white ring-violet-400/50 shadow-[0_0_0_4px_rgb(139_92_246/0.18)]",
-                      state === "todo" && "bg-secondary text-muted-foreground ring-border",
-                    )}
-                  >
-                    <Icon className="h-[18px] w-[18px]" aria-hidden />
-                  </span>
+        {fileName ? (
+          <p className="mt-1 truncate text-xs text-muted-foreground/70" title={fileName}>
+            {fileName}
+          </p>
+        ) : null}
 
-                  <span
-                    className={cn(
-                      "mt-2 text-center text-[10.5px] leading-tight",
-                      state === "todo" ? "text-muted-foreground" : "font-semibold",
-                    )}
-                  >
-                    {step.label}
-                  </span>
-
-                  {/* The reference puts a tick under each completed step. */}
-                  <span className="mt-1 h-3.5">
-                    {state === "done" ? (
-                      <Check className="h-3.5 w-3.5 text-primary" aria-hidden />
-                    ) : null}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-
+        {/* ── how far ───────────────────────────────────────────────────── */}
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-5 h-1 w-full overflow-hidden rounded-full bg-border/70"
+        >
           {/*
-            One live region for the whole panel. Announcing each step separately
-            would talk over somebody using a screen reader every few seconds;
-            the heading changing is the news.
+            1px, not 10. A hairline reads as a measurement; a thick gradient bar
+            reads as a loading toy. The gradient is kept but restrained to the
+            brand's blue→violet, dropping the cyan that made three hues compete.
           */}
           <div
-            role="status"
-            aria-live="polite"
-            className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-secondary"
-          >
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-violet-600 via-blue-500 to-cyan-400 transition-[width] duration-500 ease-out motion-reduce:transition-none"
-              style={{ width: `${Math.max(4, percent)}%` }}
-            />
-            <span className="sr-only">{view.label}</span>
-          </div>
-
-          <p className="mt-2.5 text-center text-xs text-muted-foreground">
-            {view.label} <span className="font-bold text-foreground">{percent}%</span>
-          </p>
+            className="h-full rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-[width] duration-700 ease-out motion-reduce:transition-none"
+            style={{ width: `${Math.max(3, percent)}%` }}
+          />
+          <span className="sr-only">{view.label}</span>
         </div>
 
-        {/* ── the Pro tip, as drawn ─────────────────────────────────────── */}
-        <section className="relative mt-4 overflow-hidden rounded-[1.25rem] bg-[#0d1030] px-4 py-3.5 text-white ring-1 ring-inset ring-white/10">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(80% 120% at 92% 50%, rgba(217,70,239,0.45) 0%, transparent 62%)," +
-                "radial-gradient(70% 110% at 70% 90%, rgba(56,189,248,0.35) 0%, transparent 60%)",
-            }}
-          />
-          <div className="relative flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-amber-300 ring-1 ring-inset ring-white/15">
-              <Crown className="h-4 w-4" aria-hidden />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[13px] font-bold">Pro Tip</p>
-              <p className="mt-0.5 text-[12.5px] leading-relaxed text-slate-300">
-                This AI removes text, logos and watermarks for a clean, professional look.
-              </p>
-            </div>
-          </div>
-        </section>
+        {/* ── what is left ──────────────────────────────────────────────── */}
+        {/*
+          🔴 VERTICAL. Five labels across a 390px phone is ~64px each, which is
+          why two of them wrapped and the whole row read as clutter. Down the
+          page each row gets the full width, the text sits on one line at a
+          readable size, and the eye follows a single column.
+        */}
+        <ol className="mt-6 flex flex-col">
+          {tracked.map((step, i) => {
+            const state = steps[step.key] ?? "todo";
+            const last = i === tracked.length - 1;
+            return (
+              <li key={step.key} className="relative flex items-center gap-3 pb-4 last:pb-0">
+                {/*
+                  The rail, drawn from this row's marker down to the next. Behind
+                  the marker and inset so it never pokes out of the last item.
+                */}
+                {!last ? (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute left-[9px] top-[18px] h-[calc(100%-10px)] w-px",
+                      state === "done" ? "bg-primary/30" : "bg-border",
+                    )}
+                  />
+                ) : null}
+
+                {/*
+                  A 18px marker instead of a 40px gradient disc with a glow. Done
+                  is a quiet filled tick, active is a small solid dot with one
+                  soft pulse, and to-come is an outline. Three states, read at a
+                  glance, none of them shouting.
+                */}
+                <span
+                  className={cn(
+                    "relative z-[1] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full",
+                    state === "done" && "bg-primary text-white",
+                    state === "doing" && "bg-primary text-white",
+                    state === "todo" && "border border-border bg-background",
+                  )}
+                >
+                  {state === "done" ? (
+                    <Check className="h-[11px] w-[11px]" strokeWidth={3} aria-hidden />
+                  ) : state === "doing" ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse" aria-hidden />
+                  ) : null}
+                </span>
+
+                <span
+                  className={cn(
+                    "text-[13.5px] leading-none",
+                    state === "todo" && "text-muted-foreground/70",
+                    state === "done" && "text-muted-foreground",
+                    // Only the CURRENT work is emphasised, and only in weight.
+                    state === "doing" && "font-medium text-foreground",
+                  )}
+                >
+                  {step.label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
 
         {/*
-          🔴 The permission to leave, stated plainly. On CPU hardware this runs
-          for minutes, and a member who believes they must watch will sit on a
-          screen that cannot move faster for their attention. They get a push
-          when it lands (lib/ai/notify.ts).
+          ── The way out ───────────────────────────────────────────────────
+
+          🔴 The permission to leave, stated plainly and WITHOUT naming the
+          hardware. It used to say "on CPU hardware this runs for minutes",
+          which is an implementation detail on a member's screen and reads as an
+          apology (owner, 2026-09-09). They get a push when it lands.
         */}
-        <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
-          This usually takes a few minutes. You can close this page — the work carries on and
-          we&apos;ll notify you when it&apos;s ready.
+        <p className="mt-6 text-[12.5px] leading-relaxed text-muted-foreground">
+          You can close this page — the work carries on and we&apos;ll notify you when it&apos;s ready.
         </p>
 
         {onCancel ? (
-          <div className="mt-4 flex justify-center">
+          <div className="mt-5">
             <button
               type="button"
               onClick={onCancel}
               disabled={cancelling}
               className={cn(
-                "inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold",
-                "border border-rose-300/70 bg-rose-50 text-rose-600",
-                "transition hover:bg-rose-100 active:scale-[0.99] disabled:opacity-60",
-                "dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15",
+                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium",
+                "text-muted-foreground transition hover:text-rose-600 active:scale-[0.99]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "disabled:opacity-60 dark:hover:text-rose-400",
               )}
             >
-              <X className="h-4 w-4" aria-hidden />
+              <X className="h-3.5 w-3.5" aria-hidden />
               {cancelling ? "Stopping…" : "Cancel"}
             </button>
           </div>

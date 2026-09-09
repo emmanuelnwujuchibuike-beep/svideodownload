@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIInputScene } from "@/features/ai/core/frenz-ai-input-scene";
+import { AICleanLimitReached } from "@/features/ai/ai-clean-limit-reached";
 import { AICleanUpload } from "@/features/ai/ai-clean-upload";
 import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import type { AiCleanEntitlement } from "@/lib/ai/client";
@@ -63,6 +64,18 @@ export function AICleanEmptyState({
   */
   const showUpsell = !!entitlement && !entitlement.unlimited && entitlement.plan === "free";
 
+  /*
+    🔴 `canStart`, not `remainingToday === 0`. The server already folds every
+    reason a job cannot begin into that one boolean — the daily cap, an operator
+    switching free access off, a day-scoped reward that has not been earned.
+    Recomputing it from the counter here would be a fourth copy of a rule that
+    lives in lib/ai/policy.ts, and it would miss the cases that are not counting.
+
+    `unlimited` is checked first so no paid tier can ever land here through a
+    transient false.
+  */
+  const limitReached = !!entitlement && !entitlement.unlimited && !entitlement.canStart;
+
   return (
     <div className="px-1 pb-2">
       <FrenzAICrumb tool="AI Clean" />
@@ -96,26 +109,53 @@ export function AICleanEmptyState({
         <FrenzAIInputScene className="h-24 w-28 shrink-0 sm:h-36 sm:w-44" />
       </div>
 
-      {/* ── the drop zone ────────────────────────────────────────────────── */}
-      <div className="mt-5">
-        <AICleanUpload onFile={onFile} onPasteLink={onPasteLink} showPasteLink={false} />
-      </div>
+      {/*
+        ── 🔴 NO PICKER ONCE THE ALLOWANCE IS SPENT ───────────────────────────
 
-      {/* ── paste a link ─────────────────────────────────────────────────── */}
-      <div className="mt-3 flex justify-center">
-        <button
-          type="button"
-          onClick={onPasteLink}
-          className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/95 px-5 py-3 text-sm font-semibold transition hover:border-foreground/20 active:scale-[0.99]"
-        >
-          <Link2 className="h-4 w-4 text-primary" aria-hidden />
-          Paste video link
-          <ArrowRight
-            className="h-4 w-4 text-muted-foreground transition-transform motion-safe:group-hover:translate-x-0.5"
-            aria-hidden
-          />
-        </button>
-      </div>
+        Owner, 2026-09-09: "it shouldnt work when uploading a video, it should
+        show upgrade to pro when a user want to upload when they reach their
+        free limit."
+
+        The cap was never leaking — `reserveAiUsage` is atomic and fails closed,
+        so a fourth job was always refused. It was refused in the WRONG PLACE:
+        the drop zone rendered whatever the allowance said, so somebody at their
+        limit picked a file, waited out a full upload, and only then heard no.
+
+        `canStart` comes from the server and is already false at that point. It
+        is a courtesy, not the gate — editing it in a browser changes nothing,
+        because `/start` re-resolves and re-reserves on every request. What it
+        saves is the member's time and their data.
+
+        ⚠️ Rendered only when the entitlement is KNOWN. `limitReached` requires a
+        loaded value, so an unanswered request shows the picker rather than
+        locking somebody out of a tool they are entitled to.
+      */}
+      {limitReached && entitlement ? (
+        <AICleanLimitReached entitlement={entitlement} className="mt-5" />
+      ) : (
+        <>
+          {/* ── the drop zone ────────────────────────────────────────────── */}
+          <div className="mt-5">
+            <AICleanUpload onFile={onFile} onPasteLink={onPasteLink} showPasteLink={false} />
+          </div>
+
+          {/* ── paste a link ─────────────────────────────────────────────── */}
+          <div className="mt-3 flex justify-center">
+            <button
+              type="button"
+              onClick={onPasteLink}
+              className="group inline-flex items-center gap-2 rounded-full border border-border/70 bg-card/95 px-5 py-3 text-sm font-semibold transition hover:border-foreground/20 active:scale-[0.99]"
+            >
+              <Link2 className="h-4 w-4 text-primary" aria-hidden />
+              Paste video link
+              <ArrowRight
+                className="h-4 w-4 text-muted-foreground transition-transform motion-safe:group-hover:translate-x-0.5"
+                aria-hidden
+              />
+            </button>
+          </div>
+        </>
+      )}
 
       {/*
         ── 🔴 THE UPSELL IS FOR FREE MEMBERS ONLY ─────────────────────────────

@@ -86,7 +86,32 @@ export async function runProPainter(req: ProPainterRequest): Promise<ProPainterR
       return { ok: false, reason: `submit failed: HTTP ${res.status}` };
     }
   } catch (e) {
-    return { ok: false, reason: `submit threw: ${e instanceof Error ? e.name : "unknown"}` };
+    /*
+      ── 🔴 REPORT OUR OWN ERROR'S MESSAGE, NOT JUST ITS NAME ─────────────────
+
+      This said `e.name`, which for a plain `new Error(...)` is the string
+      "Error" and nothing else. The owner's jobs failed for two days with
+      `propainter: "failed: submit threw: Error"` recorded on every one of them
+      — a diagnostic that names no cause, points at no fix, and cost a whole
+      round trip to work out.
+
+      The actual cause was `authHeaders()` throwing "REPLICATE_API_TOKEN is not
+      set": the ProPainter call runs on the Docker WORKER, and the worker does
+      not hold that credential. Every word needed to know that was in the
+      message that was thrown away.
+
+      ⚠️ Still never the RESPONSE body — a provider error body can echo the
+      request back verbatim, and the request carries signed URLs. The rule is
+      "ours is safe to log, theirs is not", so an Error we constructed here is
+      surfaced and everything else stays a name.
+    */
+    const ours = e instanceof Error && /REPLICATE_API_TOKEN/.test(e.message);
+    return {
+      ok: false,
+      reason: ours
+        ? `submit threw: ${(e as Error).message} — this call runs on the WORKER, so the token must be set there too`
+        : `submit threw: ${e instanceof Error ? e.name : "unknown"}`,
+    };
   }
 
   const id = submitted.id;

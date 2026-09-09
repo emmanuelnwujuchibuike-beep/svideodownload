@@ -232,9 +232,23 @@ export interface StageInput {
 }
 
 const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
+  /*
+    ── 🔴 NEVER NAME THE HARDWARE ──────────────────────────────────────────
+
+    Owner, 2026-09-09: "it says running on cpu, i thought is gpu... users feel
+    less of the app when they see running on cpu."
+
+    They are right, and it was worse than a tone problem: "this model runs on
+    CPU, so it can take a few minutes to start" is an implementation detail
+    leaking into a member's screen, it reads as an apology, and it is no longer
+    even accurate — the detector's measured predict time is ~6 seconds.
+
+    What a person waiting needs to know is that the work is real and that they
+    may leave. Which silicon it runs on is ours to worry about.
+  */
   queued: {
     label: "Queued",
-    detail: "Waiting for a machine. This model runs on CPU, so it can take a few minutes to start.",
+    detail: "Your video is in line. This usually starts within a few seconds.",
   },
   /*
     🔴 SAID IN THE MEMBER'S TERMS, AND HONESTLY.

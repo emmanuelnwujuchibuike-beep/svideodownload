@@ -365,6 +365,7 @@ export function AICleanWorkspace() {
           <AICleanProcessing
             view={cleanJob.view}
             fileName={source?.kind === "file" ? source.file.name : (cleanJob.job?.source.name ?? null)}
+            sourceKind={cleanJob.job?.source.kind ?? (source?.kind === "link" ? "url" : "upload")}
             onCancel={cleanJob.job ? () => void cleanJob.cancel() : undefined}
           />
         ) : cleanJob.error ? (

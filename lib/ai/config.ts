@@ -226,7 +226,19 @@ export function buildAiCleanInput(videoUrl: string): Record<string, string | num
 
   return {
     video: videoUrl,
-    method: AI_CLEAN_CONFIG.method,
+    /*
+      🔴 ON THE PROPAINTER ENGINE THIS PASS IS A DETECTOR, NOT A CLEANER.
+
+      `black` fills every detected caption region with pure black, which is the
+      only way this model will tell us where the text is — it has no mask
+      output. The worker then recovers the mask by thresholding, and the actual
+      reconstruction is done by ProPainter. See lib/ai/propainter.ts.
+
+      Measured 2026-09-09: run in `black` mode it paints a solid merged
+      RECTANGLE over the whole caption block, which is also how we learned that
+      its inpainting rewrites ~100,000 px where the glyphs occupy ~20,000.
+    */
+    method: aiCleanEngine() === "propainter" ? "black" : AI_CLEAN_CONFIG.method,
     resolution: AI_CLEAN_CONFIG.resolution,
     conf_threshold: AI_CLEAN_CONFIG.confidence,
     iou_threshold: AI_CLEAN_CONFIG.iou,
@@ -234,6 +246,75 @@ export function buildAiCleanInput(videoUrl: string): Record<string, string | num
     detection_interval: AI_CLEAN_CONFIG.detectionInterval,
   };
 }
+
+/* ─────────────────────────── the inpainting engine ────────────────────────── */
+
+export type AiCleanEngine = "classical" | "propainter";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  WHICH THING ACTUALLY RECONSTRUCTS THE BACKGROUND
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `classical`   hjunior29 does detection AND fill. One call. What ships today.
+ * `propainter`  hjunior29 does detection only (`black`); the worker derives the
+ *               mask with ffmpeg and ProPainter does the reconstruction.
+ *
+ * ── 🔴 WHY THE SECOND ENGINE EXISTS ─────────────────────────────────────────
+ *
+ * Measured on the owner's own video, 2026-09-09, five configurations of the
+ * classical model on one pinned source:
+ *
+ *     hybrid m=5   inpaint m=5   inpaint_ns m=5   hybrid m=0   hybrid m=14
+ *
+ * All five produced the SAME smeared band — including `margin: 0`, the tightest
+ * mask the model can make. That is what rules out the mask as the cause and
+ * indicts the fill: all three of its algorithms are OpenCV single-frame
+ * diffusion, which has no information about what is behind the text and can
+ * only average the surrounding pixels.
+ *
+ * ProPainter is temporal — it recovers the region from frames where it was not
+ * covered. On the same clip it reconstructed sky, horizon, sea and animal
+ * texture with no rectangular edge, where the classical model left a visible
+ * box.
+ *
+ * ⚠️ DEFAULTS TO `classical`. The second engine costs a GPU call on top of a
+ * CPU one and roughly 210s of inference, so it is an operator decision, not a
+ * silent upgrade. It also has a genuine weakness: a caption that never moves
+ * over a background that never moves gives a temporal model nothing to borrow
+ * from, and it will hallucinate rather than reconstruct.
+ */
+export function aiCleanEngine(): AiCleanEngine {
+  return process.env.AI_CLEAN_ENGINE?.trim().toLowerCase() === "propainter" ? "propainter" : "classical";
+}
+
+/**
+ * The reconstruction model, when the ProPainter engine is on.
+ *
+ * Version pinned in committed code for the same reason the classical one is:
+ * the model that ran is recorded in git beside the code that called it.
+ * `e5ea7ae0…` was read from the Replicate API on 2026-09-09 and is the model's
+ * own `latest_version`; the model is public with ~195k runs.
+ */
+export const AI_CLEAN_PROPAINTER = {
+  model: process.env.REPLICATE_PROPAINTER_MODEL?.trim() || "jd7h/propainter",
+  version:
+    process.env.REPLICATE_PROPAINTER_VERSION?.trim() ||
+    "e5ea7ae04e97c96a0e14c70d8e4cb899abdf326a377c01f1c10966ccd6c6bae4",
+  /**
+   * 🔴 0, deliberately, and this is the knob the owner asked about.
+   *
+   * ProPainter's own default is 4. Ours is 0 because the mask the worker builds
+   * has ALREADY been closed with six dilations to fill the holes left by the
+   * caption's black outline — dilating again would grow the repainted area for
+   * no benefit, and the owner's specific concern was oversized masks.
+   */
+  maskDilation: Number(process.env.AI_CLEAN_PROPAINTER_DILATION ?? "0") || 0,
+  /** Half precision. Materially faster, and no visible difference on video. */
+  fp16: process.env.AI_CLEAN_PROPAINTER_FP32?.trim() !== "1",
+  /** How long the worker will wait for the GPU before giving up and failing honestly. */
+  timeoutMs: envInt("AI_CLEAN_PROPAINTER_TIMEOUT_MS", 15 * 60_000),
+} as const;
 
 /** Whether this deployment holds everything a real run needs. */
 export function aiCleanConfigured(): boolean {

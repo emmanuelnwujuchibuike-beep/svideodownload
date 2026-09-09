@@ -194,8 +194,23 @@ describe("the real builder agrees with that split", () => {
     const src = readFileSync(join(process.cwd(), "lib/ai/config.ts"), "utf8");
     expect(src).toContain("TEMPORAL_METHODS");
     expect(src).toContain("usesTemporalRemover");
-    // The temporal branch must not send the classical fields.
-    const temporalBranch = src.slice(src.indexOf("if (usesTemporalRemover())"), src.indexOf("return {\n    video: videoUrl,\n    method:"));
+    /*
+      The temporal branch must not send the classical fields.
+
+      ⚠️ Sliced to `resolution:`, which only the classical body has, rather than
+      to an exact reproduction of its opening lines. The previous anchor was the
+      literal "return {\n    video: videoUrl,\n    method:" and it broke the
+      moment a comment was added between those two lines — `indexOf` returned
+      -1, the slice ran to the end of the file, and the test failed on the
+      classical fields it was supposed to be excluding. An anchor that has to
+      match formatting is an anchor that will drift.
+    */
+    const start = src.indexOf("if (usesTemporalRemover())");
+    const end = src.indexOf("resolution: AI_CLEAN_CONFIG.resolution,");
+    expect(start, "temporal branch").toBeGreaterThan(-1);
+    expect(end, "classical branch").toBeGreaterThan(start);
+
+    const temporalBranch = src.slice(start, end);
     expect(temporalBranch).not.toContain("conf_threshold");
     expect(temporalBranch).not.toContain("detection_interval");
   });

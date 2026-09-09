@@ -24,6 +24,14 @@ export interface MediaProbe {
   height: number | null;
   videoCodec: string | null;
   audioCodec: string | null;
+  /**
+   * Frames per second, from ffprobe’s `r_frame_rate` ("30/1").
+   *
+   * 🔴 Needed because ProPainter’s `save_fps` DEFAULTS TO 24: handing it a
+   * 30fps video without this silently resamples the whole thing and changes its
+   * duration. Null when ffprobe did not report a usable rate.
+   */
+  frameRate: number | null;
   hasAudio: boolean;
   hasVideo: boolean;
   formatName: string | null;
@@ -119,7 +127,14 @@ export function buildRestoreArgs(plan: RestorePlan): string[] {
 /** ffprobe's JSON, turned into the handful of facts this pipeline uses. */
 export function parseProbeOutput(raw: string): MediaProbe | null {
   let parsed: {
-    streams?: { codec_type?: string; codec_name?: string; width?: number; height?: number }[];
+    streams?: {
+      codec_type?: string;
+      codec_name?: string;
+      width?: number;
+      height?: number;
+      r_frame_rate?: string;
+      avg_frame_rate?: string;
+    }[];
     format?: { duration?: string; format_name?: string; size?: string };
   };
   try {
@@ -140,11 +155,29 @@ export function parseProbeOutput(raw: string): MediaProbe | null {
     height: video?.height ?? null,
     videoCodec: video?.codec_name?.toLowerCase() ?? null,
     audioCodec: audio?.codec_name?.toLowerCase() ?? null,
+    frameRate: parseFrameRate(video?.r_frame_rate) ?? parseFrameRate(video?.avg_frame_rate),
     hasAudio: !!audio,
     hasVideo: !!video,
     formatName: parsed.format?.format_name ?? null,
     bytes: Number(parsed.format?.size) || null,
   };
+}
+
+/**
+ * ffprobe reports a rate as a RATIO string, "30/1" or "30000/1001".
+ *
+ * Parsed rather than eval-ed, and rejected unless it lands in a range a real
+ * video could have — a 0/0 from a malformed file must read as "unknown" so the
+ * caller falls back to a safe default, not as 0fps.
+ */
+function parseFrameRate(value: string | undefined): number | null {
+  if (!value) return null;
+  const [numerator, denominator] = value.split("/");
+  const n = Number(numerator);
+  const d = denominator === undefined ? 1 : Number(denominator);
+  if (!Number.isFinite(n) || !Number.isFinite(d) || d === 0) return null;
+  const fps = n / d;
+  return fps > 0 && fps <= 480 ? fps : null;
 }
 
 /**
@@ -209,4 +242,77 @@ export function expectedFinalDuration(opts: {
   if (!opts.hasAudio) return opts.cleanedDuration;
   if (opts.sourceDuration && opts.cleanedDuration) return Math.min(opts.sourceDuration, opts.cleanedDuration);
   return opts.cleanedDuration ?? opts.sourceDuration;
+}
+
+/* ──────────────────────── the text mask, for ProPainter ───────────────────── */
+
+export interface MaskPlan {
+  /** The member's original. */
+  sourcePath: string;
+  /** hjunior29's `black` output — the detector's answer, as painted rectangles. */
+  blackPath: string;
+  outPath: string;
+  /** Source frame rate, so the mask has one frame per source frame. */
+  fps: number;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  RECOVERING THE DETECTOR'S MASK WITHOUT A SECOND DETECTOR
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * hjunior29 never exposes its mask. But in `black` mode it fills every detected
+ * caption region with pure black, so the mask falls straight out of a
+ * comparison — and this needs nothing but ffmpeg, which the worker already has.
+ *
+ *     A < 16    the model painted here
+ *     B > 16    and the source was NOT itself black
+ *
+ * 🔴 The second half is not a nicety. This video is letterboxed: the bars top
+ * and bottom are black in BOTH inputs, and without `B > 16` they would be
+ * masked and handed to ProPainter to "reconstruct" — a quarter of the frame
+ * repainted for nothing. Verified by counting white pixels per frame: 12.7–13.1%
+ * with the guard, and the whole frame without it.
+ *
+ * ── Then an opening, then a closing ─────────────────────────────────────────
+ *
+ *   erosion ×2    drops the speckle that compression noise leaves scattered
+ *                 outside the caption box;
+ *   dilation ×6   closes the holes left by the caption's own black OUTLINE,
+ *                 whose source pixels are dark enough to fail `B > 16`, and
+ *                 restores the box to its true size after the erosion.
+ *
+ * A hole means a surviving fragment of outline in the finished video. Growing
+ * the box by a few pixels costs a temporal inpainter nothing, because it has
+ * real information from other frames — which is exactly the trade the classical
+ * model could not make.
+ *
+ * ⚠️ Encoded LOSSLESS (`-qp 0`). A lossy encode would blur the hard threshold
+ * we just computed and hand ProPainter a grey, ambiguous mask.
+ */
+export function buildTextMaskArgs(plan: MaskPlan): string[] {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-nostdin",
+    "-y",
+    "-i",
+    plan.sourcePath,
+    "-i",
+    plan.blackPath,
+    "-filter_complex",
+    "[1]format=gray[a];[0]format=gray[b];" +
+      "[a][b]blend=all_expr='if(lt(A,16)*gt(B,16),255,0)'," +
+      "erosion,erosion,dilation,dilation,dilation,dilation,dilation,dilation,format=yuv420p",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-qp",
+    "0",
+    "-r",
+    String(plan.fps),
+    plan.outPath,
+  ];
 }

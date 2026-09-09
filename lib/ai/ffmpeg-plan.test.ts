@@ -202,6 +202,7 @@ describe("checkFinalProbe", () => {
     height: 720,
     videoCodec: "h264",
     audioCodec: "aac",
+    frameRate: 30,
     hasAudio: true,
     hasVideo: true,
     formatName: "mov,mp4",

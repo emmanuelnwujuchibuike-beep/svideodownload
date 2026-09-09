@@ -8,15 +8,17 @@ import { pipeline } from "node:stream/promises";
 
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
-import { getJobAsService, transitionJob } from "@/lib/ai/job-store";
-import { AI_RESULT_BUCKET, aiResultKey, pathBelongsTo } from "@/lib/ai/storage";
+import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
+import { AI_RESULT_BUCKET, AI_SOURCE_BUCKET, aiResultKey, pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { notifyAiCleanFailed, notifyAiCleanFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
 import { consumeAiUsage, releaseAiUsage } from "@/lib/ai/usage";
-import { AI_CLEAN_LIMITS } from "@/lib/ai/config";
+import { AI_CLEAN_LIMITS, AI_CLEAN_PROPAINTER, aiCleanEngine } from "@/lib/ai/config";
+import { runProPainter } from "@/lib/ai/propainter";
 import {
   buildRestoreArgs,
+  buildTextMaskArgs,
   canStreamCopy,
   checkFinalProbe,
   expectedFinalDuration,
@@ -393,21 +395,62 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     }
 
     const hasAudio = !!sourceProbe?.hasAudio;
-    const canCopyVideo = canStreamCopy(cleanedProbe.videoCodec);
 
     console.info("[ai/finalize] probed", {
       jobId,
       audioPresent: hasAudio,
       sourceCodec: sourceProbe?.videoCodec ?? null,
       cleanedCodec: cleanedProbe.videoCodec,
-      streamCopy: canCopyVideo,
       sourceBytes,
       cleanedBytes,
+      engine: aiCleanEngine(),
     });
+
+    /*
+      ─── 2b · THE PROPAINTER STAGE ──────────────────────────────────────────
+
+      Only when the engine is on. `cleanedFile` at this point is the DETECTOR's
+      output — hjunior29 in `black` mode, i.e. the caption painted out as solid
+      rectangles — not something anyone should ever see. The mask is derived
+      from it, ProPainter reconstructs, and `pictureFile` moves to that result.
+
+      🔴 IT FALLS BACK RATHER THAN FAILING. If any step here does not work the
+      job continues with the detector's own output. That is a worse-looking
+      video, but it is a finished one, and a member who waited three minutes
+      should not be told "nothing for you" because the second provider was
+      briefly unavailable. Every fallback is recorded on the job so the rate is
+      measurable rather than invisible.
+    */
+    let pictureFile = cleanedFile;
+    let picture = cleanedProbe;
+
+    if (aiCleanEngine() === "propainter") {
+      const swapped = await reconstructWithProPainter({
+        jobId,
+        ownerId,
+        feature: feature.id,
+        dir,
+        sourceFile,
+        detectionFile: cleanedFile,
+        sourceProbe,
+      });
+      if (swapped) {
+        const reprobed = await probeMedia(swapped);
+        if (reprobed?.hasVideo) {
+          pictureFile = swapped;
+          picture = reprobed;
+        } else {
+          console.warn("[ai/finalize] propainter output unreadable, using detection output", { jobId });
+          await noteJobDiagnostic(jobId, { propainter: "unreadable-output" });
+        }
+      }
+    }
+
+    const canCopyVideo = canStreamCopy(picture.videoCodec);
 
     /* 3 · the mux */
     let run = await restoreOriginalAudio({
-      cleanedPath: cleanedFile,
+      cleanedPath: pictureFile,
       sourcePath: sourceFile,
       outPath: finalFile,
       hasAudio,
@@ -425,7 +468,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     if (!run.ok && canCopyVideo) {
       console.warn("[ai/finalize] stream copy failed, re-encoding once", { jobId, detail: run.detail });
       run = await restoreOriginalAudio({
-        cleanedPath: cleanedFile,
+        cleanedPath: pictureFile,
         sourcePath: sourceFile,
         outPath: finalFile,
         hasAudio,
@@ -438,7 +481,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     const expectedDuration = expectedFinalDuration({
       hasAudio,
       sourceDuration: sourceProbe?.durationSeconds ?? null,
-      cleanedDuration: cleanedProbe.durationSeconds,
+      cleanedDuration: picture.durationSeconds,
     });
 
     const verdict = await validateFinalVideo(finalFile, {
@@ -571,5 +614,137 @@ class FinalizeFailure extends Error {
   ) {
     super(detail);
     this.name = "FinalizeFailure";
+  }
+}
+
+/* ─────────────────────── the ProPainter reconstruction ────────────────────── */
+
+/** Run ffmpeg with a fixed argument array. Resolves false rather than throwing. */
+function runFfmpeg(args: string[], budgetMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(FFMPEG, args, { windowsHide: true });
+    } catch {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    const finish = (v: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(hard);
+      resolve(v);
+    };
+    const hard = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(false);
+    }, budgetMs);
+    child.on("error", () => finish(false));
+    child.on("close", (code) => finish(code === 0));
+  });
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  DETECTION OUTPUT ➜ MASK ➜ PROPAINTER ➜ A RECONSTRUCTED PICTURE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Returns the path to a reconstructed video, or null to mean "carry on with
+ * what you already have". EVERY failure path returns null: the detector's own
+ * output is a finished, watchable video, and losing a member's three-minute
+ * wait to a second provider's bad afternoon is a worse outcome than a
+ * worse-looking result. Each fallback is written to the job's metadata so the
+ * rate is measurable instead of invisible.
+ *
+ * ⚠️ The mask is uploaded to the SOURCE bucket under the job's own owner prefix
+ * and removed in a `finally`. It has to be reachable by URL because Replicate
+ * fetches it, and it is signed and short-lived for the same reason every other
+ * URL in this pipeline is.
+ */
+async function reconstructWithProPainter(opts: {
+  jobId: string;
+  ownerId: string;
+  feature: AiFeature;
+  dir: string;
+  sourceFile: string;
+  detectionFile: string;
+  sourceProbe: MediaProbe | null;
+}): Promise<string | null> {
+  const { jobId, ownerId, feature, dir, sourceFile, detectionFile } = opts;
+  const maskFile = path.join(dir, "mask.mp4");
+  const outFile = path.join(dir, "reconstructed.mp4");
+
+  /*
+    The source frame rate, or 30. ProPainter's `save_fps` defaults to 24, so an
+    unknown rate must not become a silent resample of the member's video.
+  */
+  const fps = Math.round(opts.sourceProbe?.frameRate ?? 0) || 30;
+
+  const built = await runFfmpeg(
+    buildTextMaskArgs({ sourcePath: sourceFile, blackPath: detectionFile, outPath: maskFile, fps }),
+    FFMPEG_HARD_TIMEOUT_MS,
+  );
+  if (!built) {
+    console.warn("[ai/finalize] mask build failed", { jobId });
+    await noteJobDiagnostic(jobId, { propainter: "mask-build-failed" });
+    return null;
+  }
+
+  // The mask lives beside the job's own objects, never at a guessable path.
+  const maskKey = `${ownerId}/${feature.replace(/[^a-z0-9]/gi, "").toLowerCase()}/${jobId}/mask.mp4`;
+  const admin = createAdminClient();
+  let maskUrl: string;
+  try {
+    const { readFile } = await import("node:fs/promises");
+    const body = await readFile(maskFile);
+    const up = await admin.storage.from(AI_SOURCE_BUCKET).upload(maskKey, body, {
+      contentType: "video/mp4",
+      upsert: true,
+    });
+    if (up.error) throw new Error(up.error.message);
+    const signed = await admin.storage.from(AI_SOURCE_BUCKET).createSignedUrl(maskKey, 3600);
+    if (signed.error || !signed.data?.signedUrl) throw new Error(signed.error?.message ?? "no signed url");
+    maskUrl = signed.data.signedUrl;
+  } catch (e) {
+    console.warn("[ai/finalize] mask upload failed", { jobId, error: e instanceof Error ? e.name : "unknown" });
+    await noteJobDiagnostic(jobId, { propainter: "mask-upload-failed" });
+    return null;
+  }
+
+  try {
+    const sourceUrl = await signSourceUrl(
+      // the job's own source path, re-signed for the provider's fetch
+      (await getJobAsService(jobId))?.source_path ?? "",
+    );
+    const startedAt = Date.now();
+    const result = await runProPainter({ videoUrl: sourceUrl, maskUrl, fps });
+    if (!result.ok) {
+      console.warn("[ai/finalize] reconstruction declined", { jobId, reason: result.reason });
+      await noteJobDiagnostic(jobId, { propainter: `failed: ${result.reason}` });
+      return null;
+    }
+
+    const bytes = await downloadToFile(result.outputUrl, outFile, AI_CLEAN_LIMITS.maxResultSize);
+    console.info("[ai/finalize] reconstructed", {
+      jobId,
+      model: AI_CLEAN_PROPAINTER.model,
+      predictSeconds: result.predictTimeSeconds,
+      elapsedMs: Date.now() - startedAt,
+      bytes,
+    });
+    await noteJobDiagnostic(jobId, {
+      propainter: "ok",
+      propainter_predict_s: result.predictTimeSeconds,
+    });
+    return outFile;
+  } catch (e) {
+    console.warn("[ai/finalize] reconstruction threw", { jobId, error: e instanceof Error ? e.name : "unknown" });
+    await noteJobDiagnostic(jobId, { propainter: "threw" });
+    return null;
+  } finally {
+    // Never leave the mask behind: it is worthless after the run and it counts
+    // against the same storage ceiling the member's own files do.
+    void admin.storage.from(AI_SOURCE_BUCKET).remove([maskKey]).catch(() => {});
   }
 }

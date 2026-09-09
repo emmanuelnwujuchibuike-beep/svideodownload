@@ -4,6 +4,8 @@ import { Check, X } from "lucide-react";
 import { useState } from "react";
 
 import { aiCleanPath, pathState, type StageView } from "@/lib/ai/job-stages";
+import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
+import type { AiCleanEntitlement } from "@/lib/ai/client";
 import type { AiSourceKind } from "@/lib/ai/jobs";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +55,7 @@ export function AICleanProcessing({
   view,
   fileName,
   sourceKind = "upload",
+  entitlement = null,
   onCancel,
   cancelling,
 }: {
@@ -60,6 +63,8 @@ export function AICleanProcessing({
   fileName: string | null;
   /** Part 6: a link says "Getting your video" where a file says "Uploading". */
   sourceKind?: AiSourceKind;
+  /** For the tier row. Null until the server answers; then it renders. */
+  entitlement?: AiCleanEntitlement | null;
   onCancel?: () => void;
   cancelling?: boolean;
 }) {
@@ -184,6 +189,20 @@ export function AICleanProcessing({
             );
           })}
         </ol>
+
+        {/*
+          ── 🔴 THE UPGRADE, WHERE THERE IS TIME TO READ IT ──────────────────
+
+          Owner, 2026-09-09: "i dont see an upgrade to pro for faster quality
+          edit in free uses ai pages like the progress page."
+
+          This is the best moment the product has for it: somebody is watching
+          a bar and has nothing else to do. It sits BELOW the steps, so it never
+          competes with the answer they came for — and it says something
+          different depending on the plan, including saying what a paid member
+          already has rather than selling them what they bought.
+        */}
+        <FrenzAITierLabel entitlement={entitlement} variant="row" className="mt-6" />
 
         {/*
           ── The way out ───────────────────────────────────────────────────

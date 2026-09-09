@@ -101,7 +101,7 @@ type Source =
 /** Which panel the stage is showing. */
 type Stage = "choose" | "link" | "ready";
 
-export function AICleanWorkspace() {
+export function AICleanWorkspace({ historyHref = "/ai/history" }: { historyHref?: string } = {}) {
   const { isPremium, ready: planKnown } = useEntitlements();
   /*
     Everything about a running job: creating it, uploading, starting, watching,
@@ -366,6 +366,7 @@ export function AICleanWorkspace() {
             view={cleanJob.view}
             fileName={source?.kind === "file" ? source.file.name : (cleanJob.job?.source.name ?? null)}
             sourceKind={cleanJob.job?.source.kind ?? (source?.kind === "link" ? "url" : "upload")}
+            entitlement={cleanJob.entitlement}
             onCancel={cleanJob.job ? () => void cleanJob.cancel() : undefined}
           />
         ) : cleanJob.error ? (
@@ -464,6 +465,7 @@ export function AICleanWorkspace() {
             onFile={acceptFile}
             onPasteLink={() => setStage("link")}
             entitlement={cleanJob.entitlement}
+            historyHref={historyHref}
           />
         )}
       </AICleanHero>

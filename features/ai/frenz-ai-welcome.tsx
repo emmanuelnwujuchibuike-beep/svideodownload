@@ -8,8 +8,8 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIBeforeAfterScene } from "@/features/ai/core/frenz-ai-before-after-scene";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
-import { FrenzAICleanFab } from "@/features/ai/frenz-ai-clean-fab";
-import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
+import { FrenzAIHistoryLink } from "@/features/ai/frenz-ai-history-link";
+import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
 import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,13 @@ import { cn } from "@/lib/utils";
  * the bar renders NOTHING — a flash of "0 of 0" would show a limit to somebody
  * who has not reached one.
  */
-export function FrenzAIWelcome({ cleanHref = "/studio/ai/clean" }: { cleanHref?: string }) {
+export function FrenzAIWelcome({
+  cleanHref = "/studio/ai/clean",
+  historyHref = "/studio/ai/history",
+}: {
+  cleanHref?: string;
+  historyHref?: string;
+}) {
   const [entitlement, setEntitlement] = useState<AiCleanEntitlement | null>(null);
 
   useEffect(() => {
@@ -140,51 +146,17 @@ export function FrenzAIWelcome({ cleanHref = "/studio/ai/clean" }: { cleanHref?:
           </Link>
         </div>
 
-        {/*
-          ── 🔴 THE FLOATING ACTION ────────────────────────────────────────────
 
-          Owner, 2026-09-09: "make the clean your videos be a floating premium
-          widget at the bottom right side of the history page that stick when
-          scrolling up and hide when scrolling down."
-
-          It does NOT replace the button above — that one is the first thing a
-          new visitor sees and belongs in the reading order. This is the same
-          action kept within reach once somebody has scrolled into their
-          history, which is exactly when the inline button has left the screen.
-
-          Rendered here rather than in `FrenzAIHistory` so the history section
-          stays a pure list that any surface can mount without also getting a
-          fixed-position widget it did not ask for.
-        */}
-        <FrenzAICleanFab href={cleanHref} />
 
         <FrenzAIAllowanceBar entitlement={entitlement} className="mt-4" />
 
         {/*
-          ── 🔴 MOVED UP, BECAUSE THE OWNER COULD NOT FIND IT ─────────────────
-
-          Owner, 2026-09-09: "I still don't see the AI history work in the AI
-          page, many downloads finished while I was outside the page and I
-          couldn't find them."
-
-          It was there and it WAS deployed — the markup is in the served HTML.
-          The mistake was where I put it: after the trust row, at the very
-          bottom of a page that opens with a headline, a before/after scene, two
-          buttons and an allowance bar. My reasoning was that "somebody
-          returning for a finished video is scrolling with intent and will find
-          it". They did not, and the reasoning was wrong on its own terms —
-          coming back for a finished video is one of the two things this screen
-          exists for, so it cannot be the last thing on it.
-
-          It now sits directly under the allowance bar: still below the primary
-          action, because a first visit should open on "clean a video", but
-          above the trust row and within one scroll.
-
-          Inside the environment wrapper, so its surfaces read the same four CSS
-          variables as the rest of the page — a surface with no
-          `FrenzAIEnvironment` ancestor silently falls back to the defaults.
+          The tier row: what this plan gets, or what the next one adds. Free
+          sees the upgrade, Pro sees what it already has — see the component.
         */}
-        <FrenzAIHistory className="mt-7" />
+        <FrenzAITierLabel entitlement={entitlement} variant="row" className="mt-4" />
+
+        <FrenzAIHistoryLink href={historyHref} className="mt-4" />
 
         <FrenzAITrustRow className="mt-6" />
       </div>

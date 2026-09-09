@@ -51,9 +51,12 @@ export function AICleanEmptyState({
   onFile,
   onPasteLink,
   entitlement,
+  historyHref = "/ai/history",
 }: {
   onFile: (file: File) => void;
   onPasteLink: () => void;
+  /** Which door this page is behind — the public history or the Studio one. */
+  historyHref?: string;
   /** Null until the server answers; the bar renders nothing until then. */
   entitlement?: AiCleanEntitlement | null;
 }) {
@@ -171,7 +174,7 @@ export function AICleanEmptyState({
               page's job is choosing a video, not reviewing past ones.
             */}
             <Link
-              href="/ai"
+              href={historyHref}
               prefetch={false}
               className="group inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-muted-foreground transition hover:text-foreground"
             >

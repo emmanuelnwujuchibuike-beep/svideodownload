@@ -1,6 +1,6 @@
 "use client";
 
-import { Crown, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, Crown, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 
 import type { AiCleanEntitlement } from "@/lib/ai/client";
@@ -11,43 +11,56 @@ import { cn } from "@/lib/utils";
  *  WHICH TIER IS CLEANING THIS VIDEO
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, 2026-09-09: "max ai will use BRIA model, put a label in the ai pages
- * to use max ai for clean accurate ai clean with faster gpu, while pro and
- * business uses just gpu and not BRIA."
+ * Owner, 2026-09-09: "I don't see an upgrade to pro for faster quality edit in
+ * free uses AI pages like the progress page, and same with pro and business."
  *
- * Two jobs in one small component, and they are opposite:
+ * Two jobs, and they are opposites:
  *
- *   · a member ALREADY on the tier is told what they are getting, so the thing
- *     they pay for is visible while it works;
- *   · a member BELOW it is told what the tier above does, at the moment they
- *     are looking at a result and can judge whether it is worth it.
+ *   · a member ALREADY on a paid tier is told what they are getting, so the
+ *     thing they pay for is visible while it works;
+ *   · a member BELOW one is shown what the tier above does, at the moment they
+ *     are watching a progress bar and have nothing else to read.
  *
- * ── 🔴 IT SAYS NOTHING UNTIL THE MODEL EXISTS ───────────────────────────────
+ * ── 🔴 SOMETHING TRUE IS ALWAYS SAID; THE CLAIMS ARE WHAT IS GATED ─────────
  *
- * `briaOffered` and `gpuOffered` come from the server and mean "this deployment
- * really has that model", not "this plan is entitled to it". Neither model is
- * published yet — the GPU build was disabled by Replicate on 2026-09-08 and
- * BRIA has not been set up — so today this renders NOTHING for everybody.
+ * The first version of this rendered NOTHING unless a GPU or BRIA model was
+ * configured — and neither is, so the owner saw a blank space where they had
+ * asked for an upsell. That was the honesty rule applied one level too far.
  *
- * That is the whole design. A label promising "more accurate" on a plan that
- * currently runs the same model as free is a claim a member can disprove in one
- * comparison, and it would poison the upgrade it was meant to sell. The label
- * turns itself on the day the model is configured, with no code change.
+ * The fix is to separate the two kinds of statement:
+ *
+ *   ALWAYS SAFE   "no ads, no daily limit" — Pro gives that today, it is
+ *                 enforced server-side, and a member can verify it in a minute.
+ *   GATED         "faster GPU", "cleans more accurately" — those depend on a
+ *                 model existing. `gpuOffered` / `briaOffered` come from the
+ *                 server and mean "this deployment really has it", not "this
+ *                 plan is entitled to it".
+ *
+ * So the row always appears with a real benefit, and the speed and accuracy
+ * lines switch themselves on the day the models are configured. Selling a
+ * capability a member can disprove in one comparison would poison the upgrade
+ * it was meant to sell.
  */
 export function FrenzAITierLabel({
   entitlement,
   className,
+  /** `chip` for a tight strip; `row` for a tappable card with a chevron. */
+  variant = "chip",
 }: {
   entitlement: AiCleanEntitlement | null;
   className?: string;
+  variant?: "chip" | "row";
 }) {
+  // Nothing is claimed before the server has answered — a flash of the wrong
+  // tier is worse than a beat of nothing.
   if (!entitlement) return null;
 
   const tier = entitlement.modelTier;
   const briaOffered = entitlement.briaOffered === true;
   const gpuOffered = entitlement.gpuOffered === true;
+  const paid = entitlement.unlimited || (tier !== "standard" && tier !== undefined);
 
-  /* ── Already on Max AI: state it, quietly and with authority. ───────────── */
+  /* ── Already on Max AI: state it, and sell nothing. ─────────────────────── */
   if (tier === "bria") {
     return (
       <Chip
@@ -62,48 +75,65 @@ export function FrenzAITierLabel({
     );
   }
 
-  /* ── On the GPU tier: say what it is, and do NOT imply it is the top. ───── */
-  if (tier === "gpu") {
+  /*
+    ── Pro / Business ──────────────────────────────────────────────────────
+
+    They are told what they have. The Max AI line only appears if BRIA is
+    really deployed — otherwise there is nothing above them worth naming, and
+    inventing one would be selling a plan that cannot yet do anything extra.
+  */
+  if (paid) {
+    if (briaOffered) {
+      return (
+        <UpsellRow
+          className={className}
+          variant={variant}
+          icon={<Crown className="h-3.5 w-3.5" aria-hidden />}
+          title="Max AI cleans more accurately"
+          body="A stronger model for detailed backgrounds and text over faces."
+        />
+      );
+    }
     return (
       <Chip
         className={cn("border-primary/25 bg-primary/[0.07] text-primary", className)}
-        icon={<Zap className="h-3.5 w-3.5" aria-hidden />}
+        icon={gpuOffered ? <Zap className="h-3.5 w-3.5" aria-hidden /> : <Sparkles className="h-3.5 w-3.5" aria-hidden />}
       >
-        Running on faster GPU
+        {gpuOffered ? "Running on faster GPU" : "No ads, no daily limit"}
       </Chip>
     );
   }
 
   /*
-    ── Below the tiers: the upsell, and ONLY for capabilities that exist ──────
+    ── Free and guest: the upgrade ─────────────────────────────────────────
 
-    🔴 The wording follows what is actually deployed. If BRIA is live it leads
-    with accuracy, because that is what Max AI is for and it is the stronger
-    reason to move. If only the GPU model is live it offers speed and says
-    nothing about accuracy. If neither is live it renders nothing at all rather
-    than inventing a reason to upgrade.
+    🔴 The headline follows what is actually deployed, strongest true reason
+    first. Speed is the better sell while somebody is WATCHING A PROGRESS BAR,
+    so it leads whenever a GPU model exists; otherwise the row falls back to the
+    two things Pro genuinely removes today.
   */
-  if (!briaOffered && !gpuOffered) return null;
-
   return (
-    <Link
-      href="/pricing"
-      prefetch={false}
-      className={cn(
-        "group inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition",
-        "border-border/70 bg-card/95 text-muted-foreground hover:border-primary/30 hover:text-foreground",
-        className,
-      )}
-    >
-      <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-      {briaOffered
-        ? "Max AI cleans more accurately, on faster GPU"
-        : "Upgrade for faster GPU processing"}
-    </Link>
+    <UpsellRow
+      className={className}
+      variant={variant}
+      icon={<Crown className="h-3.5 w-3.5" aria-hidden />}
+      title={
+        briaOffered
+          ? "Upgrade for more accurate cleanup"
+          : gpuOffered
+            ? "Upgrade for faster, higher-quality edits"
+            : "Upgrade to Pro"
+      }
+      body={
+        gpuOffered || briaOffered
+          ? "Pro runs on faster GPU hardware — no ads, no daily limit."
+          : "No ads before a clean, and no daily limit."
+      }
+    />
   );
 }
 
-/** The shared pill. Static — no animation on a screen that stays open. */
+/** The pill. Static — no animation on a screen that stays open for minutes. */
 function Chip({
   icon,
   children,
@@ -123,5 +153,63 @@ function Chip({
       {icon}
       {children}
     </span>
+  );
+}
+
+/** The upgrade, as a chip or a full row depending on how much room there is. */
+function UpsellRow({
+  icon,
+  title,
+  body,
+  variant,
+  className,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  variant: "chip" | "row";
+  className?: string;
+}) {
+  if (variant === "chip") {
+    return (
+      <Link
+        href="/pricing"
+        prefetch={false}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition",
+          "border-border/70 bg-card/95 text-muted-foreground hover:border-primary/30 hover:text-foreground",
+          className,
+        )}
+      >
+        {icon}
+        {title}
+        <ArrowRight className="h-3 w-3" aria-hidden />
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href="/pricing"
+      prefetch={false}
+      className={cn(
+        "group flex w-full items-center gap-3 rounded-2xl border border-primary/20 px-4 py-3",
+        "bg-gradient-to-r from-violet-500/[0.08] via-primary/[0.05] to-transparent",
+        "transition hover:border-primary/35 active:scale-[0.995]",
+        className,
+      )}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-bold leading-tight">{title}</span>
+        <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">{body}</span>
+      </span>
+      <ArrowRight
+        className="h-4 w-4 shrink-0 text-primary transition-transform motion-safe:group-hover:translate-x-0.5"
+        aria-hidden
+      />
+    </Link>
   );
 }

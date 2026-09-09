@@ -82,7 +82,18 @@ const FrenzAIHistoryPlayer = dynamic(
   { ssr: false },
 );
 
-export function FrenzAIHistory({ className }: { className?: string }) {
+export function FrenzAIHistory({
+  className,
+  showHeading = true,
+}: {
+  className?: string;
+  /**
+   * False when this list IS the page and the page already has an H1.
+   * Two headings saying "Your videos" on one screen is the duplicate the
+   * dedicated history route would otherwise introduce.
+   */
+  showHeading?: boolean;
+}) {
   const history = useAiHistory("all");
   const [openJob, setOpenJob] = useState<AiJobView | null>(null);
 
@@ -133,10 +144,22 @@ export function FrenzAIHistory({ className }: { className?: string }) {
         one thing that tells somebody at a glance whether there is anything
         here worth scrolling to.
       */}
-      <div className="mb-4 h-px w-full bg-border/70" aria-hidden />
+      {showHeading ? <div className="mb-4 h-px w-full bg-border/70" aria-hidden /> : null}
 
+      {/*
+        🔴 When the page owns the heading, the H2 goes SCREEN-READER ONLY
+        rather than the whole row — the Refresh control still has to be there.
+        Hiding the row would have taken it with it, which is the kind of thing a
+        visual check catches and a diff does not.
+      */}
       <div className="flex items-center justify-between gap-3">
-        <h2 id="ai-history-heading" className="flex items-baseline gap-2 text-[1.2rem] font-bold tracking-[-0.02em]">
+        <h2
+          id="ai-history-heading"
+          className={cn(
+            "flex items-baseline gap-2 text-[1.2rem] font-bold tracking-[-0.02em]",
+            !showHeading && "sr-only",
+          )}
+        >
           Your videos
           {/*
             Only once something is loaded, and never a "0" — an empty state

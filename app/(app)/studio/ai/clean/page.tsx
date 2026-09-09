@@ -29,5 +29,5 @@ export default async function AICleanPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/clean");
 
-  return <AICleanWorkspace />;
+  return <AICleanWorkspace historyHref="/studio/ai/history" />;
 }

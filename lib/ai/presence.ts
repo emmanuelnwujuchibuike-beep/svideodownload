@@ -103,6 +103,7 @@ const BY_STAGE: Record<AiCleanStage, PresenceLevel> = {
   completed: "settled",
   failed: "faulted",
   cancelled: "calm",
+  acquiring: "working",
   expired: "calm",
 };
 

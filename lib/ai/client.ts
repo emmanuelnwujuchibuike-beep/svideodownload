@@ -1,7 +1,7 @@
 "use client";
 
 import type { AiErrorCode } from "@/lib/ai/errors";
-import type { AiFeature, AiJobSourceInput, AiJobView } from "@/lib/ai/jobs";
+import type { AiFeature, AiJobSourceInput, AiJobStatus, AiJobView } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -125,12 +125,18 @@ export async function listAiJobs(opts?: {
   feature?: AiFeature;
   /** Only jobs that can still change — what a returning member asks for. */
   active?: boolean;
+  /**
+   * The history tabs. An EMPTY array is "no filter", not "match nothing" —
+   * see `statusesForFilter` in lib/ai/history.ts for why "All" sends none.
+   */
+  statuses?: readonly AiJobStatus[];
 }): Promise<AiJobResult<{ jobs: AiJobView[]; nextCursor: string | null }>> {
   const params = new URLSearchParams();
   if (opts?.limit) params.set("limit", String(opts.limit));
   if (opts?.cursor) params.set("cursor", opts.cursor);
   if (opts?.feature) params.set("feature", opts.feature);
   if (opts?.active) params.set("active", "1");
+  if (opts?.statuses?.length) params.set("status", opts.statuses.join(","));
   const query = params.toString();
   return request(`/api/ai/jobs${query ? `?${query}` : ""}`);
 }

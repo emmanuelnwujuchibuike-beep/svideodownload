@@ -53,6 +53,15 @@ import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
  * never waits out a long interval to see that their video is ready.
  */
 
+/**
+ * What the member pointed AI Clean at.
+ *
+ * A `File` the browser is holding, or a link the SERVER will fetch (Part 6).
+ * The browser never fetches the link — see lib/ai/source-url.ts for the
+ * allow-list that decides whether the server will either.
+ */
+export type AiCleanInput = File | { url: string };
+
 export interface AiCleanJobState {
   job: AiJobView | null;
   view: StageView;
@@ -83,8 +92,8 @@ export interface AiCleanJobState {
 }
 
 export interface AiCleanJobActions {
-  /** Create, upload, start. The whole submission, from one file. */
-  submit: (file: File) => Promise<void>;
+  /** Create, upload (a file only), start. The whole submission. */
+  submit: (input: AiCleanInput) => Promise<void>;
   /** Stop a running job and give the slot back. */
   cancel: () => Promise<void>;
   /** Clear the finished/failed job so the member can choose another video. */
@@ -221,13 +230,48 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
   useEffect(() => {
     alive.current = true;
     (async () => {
-      // Both in parallel: what is running, and what this member may do.
-      const [jobs] = await Promise.all([
+      /*
+        ── 🔴 `?job=` IS THE PUSH NOTIFICATION'S OWN LINK, AND NOTHING READ IT ──
+
+        `notifyAiCleanFinished` sends people to `/studio/ai/clean?job=<id>` —
+        the whole point of the push being that they LEFT while the model ran.
+        By the time they tap it the job is `completed`, and the restore below
+        asks only for ACTIVE jobs, so every one of those taps landed on an empty
+        picker: the notification said "your video is ready" and the page it
+        opened showed no video at all. Exactly the disappearance the owner
+        reported on 2026-09-09, arriving by a second route.
+
+        A job named in the url is adopted whatever its status, because the
+        member was sent here to look at that specific one. It is still THEIR
+        job — `/api/ai/jobs/[id]` scopes by subject — so an id belonging to
+        somebody else answers 404 and this falls through to the normal restore.
+      */
+      const requested =
+        typeof window === "undefined"
+          ? null
+          : new URLSearchParams(window.location.search).get("job");
+
+      const [named, jobs] = await Promise.all([
+        requested ? getAiJob(requested) : Promise.resolve(null),
         listAiJobs({ feature: "ai_clean", limit: 1, active: true }),
         refreshEntitlement(),
       ]);
       if (!alive.current) return;
-      if (jobs.ok && jobs.jobs.length > 0) applyJob(jobs.jobs[0]!);
+
+      if (named?.ok) {
+        applyJob(named.job);
+        /*
+          Taken out of the url once it has been used. Otherwise "Clean another
+          video" clears the job, and the next refresh — or a back-navigation —
+          drags the finished one straight back over the picker. Same reasoning
+          as the tutorial's `?tutorial=1`.
+        */
+        const url = new URL(window.location.href);
+        url.searchParams.delete("job");
+        window.history.replaceState({}, "", url.toString());
+      } else if (jobs.ok && jobs.jobs.length > 0) {
+        applyJob(jobs.jobs[0]!);
+      }
       setRestoring(false);
     })();
 
@@ -241,11 +285,25 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
   /* ── the submission ───────────────────────────────────────────────────── */
 
   const submit = useCallback(
-    async (file: File) => {
+    async (input: AiCleanInput) => {
       if (busy) return;
       setBusy(true);
       setError(null);
       setUploadFraction(0);
+
+      /*
+        ── 🔴 ONE SUBMISSION, TWO KINDS OF SOURCE (Part 6) ──────────────────
+
+        A File and a link differ in exactly one place — whether the browser
+        has bytes to send — and are identical everywhere else: the same
+        idempotency key, the same allowance, the same ad, the same start, the
+        same polling. So this stayed ONE function rather than becoming two.
+
+        Two `submit` implementations would be two copies of the reward
+        ordering, and the reward ordering is the part of this flow with real
+        consequences if it drifts (see the note below the upload).
+      */
+      const isLink = !(input instanceof File);
 
       try {
         /*
@@ -260,11 +318,24 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
         const created = await createAiJob({
           feature: "ai_clean",
           clientRequestId,
-          source: {
-            size: file.size,
-            mimeType: file.type || "video/mp4",
-            name: file.name,
-          },
+          source: isLink
+            ? {
+                kind: "url",
+                url: input.url,
+                /*
+                  🔴 No size and no mimeType, and the server REFUSES a link
+                  body that carries them. Nothing has been fetched, so any
+                  number here would be invented — and the ceilings are applied
+                  by the worker against the real file, which is the first
+                  moment they can be true rather than claimed.
+                */
+              }
+            : {
+                kind: "upload",
+                size: input.size,
+                mimeType: input.type || "video/mp4",
+                name: input.name,
+              },
         });
         if (!alive.current) return;
 
@@ -277,31 +348,40 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
         applyJob(created.job);
         if (created.usage) setUsage(created.usage);
 
-        if (!created.upload) {
-          // The job exists but there is nowhere to put the file — it is already
-          // past the point an upload belongs. Nothing to do but show its state.
-          return;
-        }
+        /*
+          A link has no upload ticket by design — the browser must never fetch
+          the address somebody pasted, and there is nothing for it to send. So
+          the upload block is skipped entirely and `/start` hands the job to
+          our worker instead.
+        */
+        if (!isLink) {
+          if (!created.upload) {
+            // The job exists but there is nowhere to put the file — it is
+            // already past the point an upload belongs. Nothing to do but show
+            // its state.
+            return;
+          }
 
-        setUploading(true);
-        uploadAbort.current = new AbortController();
-        const sent = await uploadSource({
-          ticket: created.upload,
-          file,
-          onProgress: (fraction) => {
-            if (alive.current) setUploadFraction(fraction);
-          },
-          signal: uploadAbort.current.signal,
-        });
-        if (!alive.current) return;
-        setUploading(false);
-
-        if (!sent) {
-          setError({
-            code: "UPLOAD_FAILED",
-            message: "The upload didn't finish. Check your connection and try again.",
+          setUploading(true);
+          uploadAbort.current = new AbortController();
+          const sent = await uploadSource({
+            ticket: created.upload,
+            file: input,
+            onProgress: (fraction) => {
+              if (alive.current) setUploadFraction(fraction);
+            },
+            signal: uploadAbort.current.signal,
           });
-          return;
+          if (!alive.current) return;
+          setUploading(false);
+
+          if (!sent) {
+            setError({
+              code: "UPLOAD_FAILED",
+              message: "The upload didn't finish. Check your connection and try again.",
+            });
+            return;
+          }
         }
 
         /*

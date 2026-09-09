@@ -1,4 +1,4 @@
-import type { AiJobStatus, AiJobView } from "@/lib/ai/jobs";
+import type { AiJobStatus, AiJobView, AiSourceKind } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -35,6 +35,8 @@ import type { AiJobStatus, AiJobView } from "@/lib/ai/jobs";
 export type AiCleanStage =
   | "idle"
   | "uploading"
+  /** Our worker is fetching a pasted link (Part 6). Not the same as uploading. */
+  | "acquiring"
   | "queued"
   | "processing"
   | "finalizing"
@@ -66,6 +68,22 @@ export const AI_CLEAN_PATH: readonly { key: string; label: string }[] = [
 ] as const;
 
 /**
+ * The same journey, worded for how the video actually arrived (Part 6).
+ *
+ * 🔴 ONE step differs and only its LABEL does. The keys are identical, so
+ * `pathState` stays a pure function of the stage and nothing downstream has to
+ * learn about source kinds. "Uploading" is simply the wrong word for a link —
+ * the member sent nothing from their device — and a tracker that says it while
+ * our server downloads from TikTok is describing work that is not happening.
+ */
+export function aiCleanPath(sourceKind: AiSourceKind): readonly { key: string; label: string }[] {
+  if (sourceKind !== "url") return AI_CLEAN_PATH;
+  return AI_CLEAN_PATH.map((step) =>
+    step.key === "uploading" ? { key: step.key, label: "Getting your video" } : step,
+  );
+}
+
+/**
  * Which path steps are done, doing, and to come.
  *
  * 🔴 `analyzing` is never returned as the current step on its own — see the
@@ -84,7 +102,9 @@ export function pathState(stage: AiCleanStage): Record<string, "done" | "doing" 
 
   mark(AI_CLEAN_PATH.map((p) => p.key), "todo");
 
-  if (stage === "uploading") {
+  if (stage === "uploading" || stage === "acquiring") {
+    // The same slot: "your video is arriving". Which of the two words the
+    // tracker prints is `aiCleanPath`'s job, not this one's.
     mark(["uploading"], "doing");
   } else if (stage === "queued") {
     mark(["uploading"], "done");
@@ -164,6 +184,15 @@ function progressFor(
       // real measurement — bytes the browser has actually sent — so it never
       // creeps.
       return 0.05 + Math.max(0, Math.min(1, uploadFraction ?? 0)) * 0.28;
+    case "acquiring":
+      /*
+        The same band the upload occupies, because it is the same part of the
+        journey — the video arriving. It CREEPS rather than measuring, and that
+        is the honest difference: an upload counts bytes the browser has sent,
+        while a download happening on our worker reports nothing back until it
+        is finished. A 30-second half-life suits a short clip off a CDN.
+      */
+      return creepToward(0.05, 0.33, elapsedMs ?? 0, 30_000);
     case "queued":
       // Toward `processing`'s floor. Queue time at the provider was measured at
       // ~19s, so this reaches most of the way there in about half a minute.
@@ -206,6 +235,19 @@ const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
   queued: {
     label: "Queued",
     detail: "Waiting for a machine. This model runs on CPU, so it can take a few minutes to start.",
+  },
+  /*
+    🔴 SAID IN THE MEMBER'S TERMS, AND HONESTLY.
+
+    "Getting your video" is what is happening: our worker is downloading it from
+    the link they pasted. Not "uploading" (they sent nothing), not "removing
+    text" (nothing has been asked to do that yet). Part 3's rule about never
+    rendering a step that is not the current step applies here too — the reason
+    `acquiring` is a real status rather than a flag on `processing`.
+  */
+  acquiring: {
+    label: "Getting your video",
+    detail: "Fetching it from the link you pasted. Nothing is sent from your device.",
   },
   processing: {
     label: "Removing text",

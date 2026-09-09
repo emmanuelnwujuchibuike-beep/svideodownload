@@ -18,7 +18,7 @@ import { AICleanVideoPreview } from "@/features/ai/ai-clean-video-preview";
 import { FrenzAIPageHero } from "@/features/ai/frenz-ai-page-hero";
 import { useAiCleanJob } from "@/features/ai/use-ai-clean-job";
 import { useEntitlements } from "@/features/auth/use-entitlements";
-import { inspectVideoFile, type AICleanErrorCode } from "@/lib/ai/clean-media";
+import { inspectVideoFile, parseVideoUrl, type AICleanErrorCode } from "@/lib/ai/clean-media";
 import {
   hasSeenAICleanTutorial,
   setAICleanTutorialState,
@@ -51,12 +51,16 @@ import {
  * It wraps the WHOLE surface rather than the stage, so the header's own state
  * and the panel's stay in step.
  *
- * ── Two flows, and only one of them is connected ──────────────────────────────
+ * ── Two flows, and BOTH are connected now (Part 6) ───────────────────────────
  *
- * A FILE is real work now (Part 3): it is uploaded straight to private storage,
- * a job is started, and `useAiCleanJob` owns every state after that. A LINK is
- * not — fetching arbitrary URLs is still a later part — so that path still ends
- * at the honest "not connected yet" panel rather than pretending to run.
+ * A FILE is uploaded straight to private storage from the browser, then started.
+ * A LINK is never touched by the browser at all: the url is validated against an
+ * allow-list server-side, the job moves to `acquiring`, and OUR worker fetches
+ * the video with the same yt-dlp pipeline every download on this site uses.
+ *
+ * Both end in the same place — one job row, one `useAiCleanJob`, one set of
+ * states — which is why `submit` takes a File or a url rather than there being
+ * two submission paths to keep in step.
  *
  * The job machine lives in one hook, deliberately. This component decides WHICH
  * panel to show and nothing about how a job behaves.
@@ -155,13 +159,46 @@ export function AICleanWorkspace() {
   */
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const wants = new URLSearchParams(window.location.search).get("tutorial");
-    if (wants === "1") {
-      setTutorialOpen(true);
-      // Take it out of the URL so a refresh — or a back-navigation — does not
-      // reopen a sheet the person has just closed.
+    const params = new URLSearchParams(window.location.search);
+    const wants = params.get("tutorial");
+    if (wants === "1") setTutorialOpen(true);
+
+    /*
+      ── 🔴 `?source=` — ARRIVING FROM SOMEWHERE ELSE WITH A VIDEO (Part 6) ───
+
+      Owner, 2026-09-09: "check if users can select videos from history too."
+      They could not: the only two ways in were the file picker and the paste
+      field, so a video already in Downloads had to be found, re-copied and
+      re-pasted by hand.
+
+      Part 6 is what makes this possible at all — a `DownloadRecord` carries the
+      original platform `url`, and until the server could fetch a url there was
+      nothing to hand over. Now any surface holding one can deep-link here.
+
+      🔴 IT IS STILL VALIDATED. A query parameter is as untrusted as a typed
+      string — it can be crafted, shared, or arrive from a bookmark — so it goes
+      through the SAME `parseVideoUrl` the paste field uses, and then through the
+      server's allow-list on create. Nothing is fetched by the browser, and
+      nothing auto-starts: it lands on the confirm screen, because a link that
+      spent somebody's daily allowance just by being opened would be a trap.
+    */
+    const incoming = params.get("source");
+    if (incoming) {
+      const parsed = parseVideoUrl(incoming);
+      if (parsed) {
+        setSource({ kind: "link", url: parsed });
+        setStage("ready");
+      } else {
+        setError("invalid-url");
+      }
+    }
+
+    if (wants === "1" || incoming) {
+      // Taken out of the url so a refresh — or a back-navigation — does not
+      // reopen a sheet somebody has just closed, or re-arm a video they cleared.
       const url = new URL(window.location.href);
       url.searchParams.delete("tutorial");
+      url.searchParams.delete("source");
       window.history.replaceState({}, "", url.toString());
     }
   }, []);
@@ -335,16 +372,23 @@ export function AICleanWorkspace() {
             message={cleanJob.error.message}
             onRetry={() => {
               cleanJob.reset();
-              // The file is still in hand when the tab never went away, so a
-              // retry is one tap. After a refresh it is gone, and the empty
-              // state asks for it again — which is honest rather than silent.
+              /*
+                🔴 A LINK CAN ALWAYS BE RETRIED; A FILE OFTEN CANNOT.
+
+                The browser still holds the File only while the tab lived. A
+                link is just a string the member typed, so Part 6 makes "try
+                again" work after a refresh for that path — which is the one
+                where a retry is most likely to help, because the failures are
+                a busy platform or a slow CDN.
+              */
               if (source?.kind === "file") void cleanJob.submit(source.file);
+              else if (source?.kind === "link") void cleanJob.submit({ url: source.url });
             }}
             onChoose={() => {
               cleanJob.reset();
               clearSource();
             }}
-            canRetry={source?.kind === "file"}
+            canRetry={!!source}
           />
         ) : jobFailed && cleanJob.job ? (
           <AICleanJobFailure
@@ -362,7 +406,7 @@ export function AICleanWorkspace() {
               cleanJob.reset();
               clearSource();
             }}
-            canRetry={source?.kind === "file"}
+            canRetry={!!source}
           />
         ) : error ? (
           <AICleanErrorState
@@ -377,7 +421,16 @@ export function AICleanWorkspace() {
             source={source.kind === "file" ? { kind: "file", name: source.file.name } : { kind: "link", url: source.url }}
             isPro={isPremium}
             planKnown={planKnown}
+            busy={cleanJob.busy}
             onBack={() => setStage(source.kind === "file" ? "choose" : "link")}
+            /*
+              🔴 Part 6: the link path is real. The same `submit` the file path
+              uses — one state machine, as the brief requires — with a url
+              instead of a File. The browser sends nothing; the server fetches.
+            */
+            onStart={() =>
+              void cleanJob.submit(source.kind === "file" ? source.file : { url: source.url })
+            }
           />
         ) : previewing && source?.kind === "file" ? (
           <AICleanVideoPreview

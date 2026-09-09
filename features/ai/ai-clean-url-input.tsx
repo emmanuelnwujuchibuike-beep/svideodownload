@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 /**
  * The second way in: a link instead of a file.
  *
- * ── 🔴 THIS PARSES A STRING. IT DOES NOT FETCH ────────────────────────────────
+ * ── 🔴 THIS PARSES A STRING. IT STILL DOES NOT FETCH ─────────────────────────
  *
  * Owner's brief, verbatim: "Do not implement URL downloading yet. Do not fetch
  * arbitrary URLs from the browser." Both halves matter, and the second is not a
@@ -20,8 +20,9 @@ import { cn } from "@/lib/utils";
  * imports no network code at all.
  *
  * Whether a link points at a video, or at a source this product supports, is a
- * question only the server can answer. It is a later part's, and the hint says so
- * in the one line a person will actually read.
+ * question only the server can answer — and as of Part 6 it does, through
+ * `validateAiSourceUrl`'s allow-list and then our worker. None of that changes
+ * this file: the browser still only ever runs `new URL()` on a trimmed string.
  *
  * ── The error is inline, not a takeover ───────────────────────────────────────
  *
@@ -106,7 +107,7 @@ export function AICleanUrlInput({
         </form>
 
         <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
-          Use a supported video source. Links aren&apos;t fetched yet — that arrives with processing.
+          Use a supported video source. We fetch it on our servers — nothing downloads to your device.
         </p>
 
         <div className="mt-5 text-center">

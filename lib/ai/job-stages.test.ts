@@ -12,7 +12,7 @@ const job = (status: AiJobStatus, extra: Partial<AiJobView> = {}): AiJobView => 
   completedAt: null,
   expiresAt: null,
   durationMs: null,
-  source: { size: null, mimeType: null, durationSeconds: null, name: null },
+  source: { size: null, mimeType: null, durationSeconds: null, name: null, kind: "upload" },
   result: { size: null, durationSeconds: null, audioRestored: null },
   error: null,
   ...extra,

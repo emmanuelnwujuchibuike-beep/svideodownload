@@ -7,13 +7,15 @@ import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
 import { getOwnJob, recordUploadedSource, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
+import { dispatchAcquisition } from "@/lib/ai/acquire-dispatch";
+import { submitJobToProvider } from "@/lib/ai/submit";
+import { hasWorker } from "@/lib/worker";
 import { claimAiReward } from "@/lib/ai/reward";
 import { pathBelongsTo } from "@/lib/ai/storage";
-import { signSourceUrl, statSourceObject } from "@/lib/ai/storage-server";
+import { statSourceObject } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { peekAiUsage, releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
-import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  POST /api/ai/jobs/[id]/start — the upload is done; begin processing
+ *  POST /api/ai/jobs/[id]/start — the source is settled; begin the work
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * The only endpoint that spends anything, and therefore the one whose ORDER
@@ -29,12 +31,29 @@ export const dynamic = "force-dynamic";
  *
  *   1. identity + burst
  *   2. the job is this member's, and is still `queued`
- *   3. the OBJECT REALLY EXISTS, at the path the server chose, and is what it
- *      claims to be — the browser's numbers from creation are ignored here
+ *   3. the SOURCE is real — see the fork below
  *   4. reserve the slot                    ← the first thing that costs
- *   5. submit to the provider
+ *   5. begin the work
  *   6. on failure, RELEASE the slot and fail the job
- *   7. on success, record the prediction id and move to `processing`
+ *   7. on success, move the job forward
+ *
+ * ── 🔴 STEPS 3 AND 5 FORK ON THE SOURCE KIND (Part 6) ───────────────────────
+ *
+ *   UPLOAD   the object is already in storage. Step 3 stats it and re-reads
+ *            its real size and type, replacing what the browser claimed at
+ *            creation. Step 5 submits straight to the provider → `processing`.
+ *
+ *   LINK     nothing has been fetched, so there is no object to stat and no
+ *            honest measurement to take. Step 3 only confirms the row carries
+ *            an allow-listed url and that a worker exists to fetch it. Step 5
+ *            moves the job to `acquiring` and hands it to that worker; the
+ *            ceilings are applied there, against the file that actually
+ *            arrives, and the provider is submitted afterwards through
+ *            `/api/internal/ai/submit`.
+ *
+ * Everything BETWEEN those two — the reservation, the reward gate, and the
+ * release on every failure — is identical, which is the point: a link and a
+ * file cost the same and are gated the same way.
  *
  * ── 🔴 WHY VALIDATION COMES BEFORE THE CHARGE ────────────────────────────────
  *
@@ -138,45 +157,71 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!provider || !provider.isConfigured()) return fail("FEATURE_UNAVAILABLE");
 
     /*
-      3 · THE FILE ITSELF.
+      ── 🔴 WHICH KIND OF SOURCE IS THIS? (Part 6) ────────────────────────────
 
-      🔴 The path comes from the ROW, where the server wrote it when it minted
-      the upload ticket — never from the request. `pathBelongsTo` re-checks that
-      it starts with this member's id and this job's id, because the value is
-      about to become a signed URL handed to a third party, and "it was in the
-      database" is not on its own a statement about whose it is.
+      An UPLOAD already has its bytes in storage and is validated here, against
+      what storage actually reports. A LINK has nothing yet — the whole point of
+      this part is that our worker goes and fetches it — so there is no object
+      to stat and the ceilings move to the worker, which is the first moment
+      there is a real file to measure.
+
+      Everything AFTER this branch is identical for both: the same reservation,
+      the same reward gate, the same release-on-failure.
     */
-    const expectedPath = job.source_path;
-    if (!expectedPath || !pathBelongsTo(expectedPath, subjectOwnerId(subject), job.id)) {
-      // No reserved key, or one that does not belong to this member and this
-      // job. Either is a row that should not exist; refusing beats acting on it.
-      console.error("[ai/jobs] source path failed ownership", { jobId: job.id, subject: subject.key });
-      return fail("INTERNAL_ERROR");
-    }
+    const isLinkJob = job.source_kind === "url";
 
-    const stored = await statSourceObject(expectedPath);
-    if (!stored) {
-      // Nothing was uploaded. Not a failure of the job — the member simply has
-      // not finished, or the upload died — so the job stays `queued` and
-      // nothing is charged.
-      const age = Date.now() - Date.parse(job.created_at);
-      return fail("INVALID_INPUT", {
-        error: age > ABANDONED_AFTER_MS ? "That upload didn't finish. Choose the video again." : "The upload hasn't finished yet.",
+    if (isLinkJob) {
+      // Belt to the create route's braces. The row is the authority on what
+      // will be fetched, and a row with no url is one nothing can act on.
+      if (!job.source_url) {
+        console.error("[ai/jobs] link job has no url", { jobId: job.id });
+        return fail("INTERNAL_ERROR");
+      }
+      // The acquisition needs yt-dlp, which only the Docker worker has. Refusing
+      // here rather than charging for work nothing can do.
+      if (!hasWorker) return fail("FEATURE_UNAVAILABLE");
+    } else {
+      /*
+        3 · THE FILE ITSELF.
+
+        🔴 The path comes from the ROW, where the server wrote it when it minted
+        the upload ticket — never from the request. `pathBelongsTo` re-checks that
+        it starts with this member's id and this job's id, because the value is
+        about to become a signed URL handed to a third party, and "it was in the
+        database" is not on its own a statement about whose it is.
+      */
+      const expectedPath = job.source_path;
+      if (!expectedPath || !pathBelongsTo(expectedPath, subjectOwnerId(subject), job.id)) {
+        // No reserved key, or one that does not belong to this member and this
+        // job. Either is a row that should not exist; refusing beats acting on it.
+        console.error("[ai/jobs] source path failed ownership", { jobId: job.id, subject: subject.key });
+        return fail("INTERNAL_ERROR");
+      }
+
+      const stored = await statSourceObject(expectedPath);
+      if (!stored) {
+        // Nothing was uploaded. Not a failure of the job — the member simply has
+        // not finished, or the upload died — so the job stays `queued` and
+        // nothing is charged.
+        const age = Date.now() - Date.parse(job.created_at);
+        return fail("INVALID_INPUT", {
+          error: age > ABANDONED_AFTER_MS ? "That upload didn't finish. Choose the video again." : "The upload hasn't finished yet.",
+        });
+      }
+
+      if (stored.size <= 0) return fail("INVALID_INPUT");
+      if (stored.size > AI_CLEAN_LIMITS.maxFileSize) return fail("FILE_TOO_LARGE");
+      if (stored.mimeType && !AI_CLEAN_LIMITS.allowedMimeTypes.includes(stored.mimeType.toLowerCase())) {
+        return fail("UNSUPPORTED_FORMAT");
+      }
+
+      // What was really stored replaces what the browser claimed at creation.
+      await recordUploadedSource(job.id, {
+        path: expectedPath,
+        size: stored.size,
+        mimeType: stored.mimeType,
       });
     }
-
-    if (stored.size <= 0) return fail("INVALID_INPUT");
-    if (stored.size > AI_CLEAN_LIMITS.maxFileSize) return fail("FILE_TOO_LARGE");
-    if (stored.mimeType && !AI_CLEAN_LIMITS.allowedMimeTypes.includes(stored.mimeType.toLowerCase())) {
-      return fail("UNSUPPORTED_FORMAT");
-    }
-
-    // What was really stored replaces what the browser claimed at creation.
-    await recordUploadedSource(job.id, {
-      path: expectedPath,
-      size: stored.size,
-      mimeType: stored.mimeType,
-    });
 
     /* 4 · THE CHARGE. Atomic, and the first thing here that costs anything. */
     const entitlement = await getAiEntitlement(subject, feature);
@@ -242,44 +287,84 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       });
     }
 
-    /* 5 · THE PROVIDER. Everything from here releases on failure. */
+    /* 5 · THE WORK BEGINS. Everything from here releases on failure. */
     try {
-      const sourceUrl = await signSourceUrl(expectedPath);
+      /*
+        ── 🔴 A LINK GOES TO OUR WORKER FIRST, NOT TO THE PROVIDER ───────────
+
+        There is nothing to submit yet: the video does not exist on our side.
+        The job moves to `acquiring` — a real status, so the progress screen can
+        say "Getting your video" rather than claiming the AI has started — and
+        the worker fetches it. Submitting to Replicate happens afterwards,
+        through the same `submitJobToProvider` this route uses below.
+
+        The transition happens BEFORE the dispatch and is a compare-and-set, so
+        it doubles as the claim: two taps on a laggy phone race, one wins, and
+        the loser's dispatch never happens because its transition matched no row.
+      */
+      if (isLinkJob) {
+        const claimed = await transitionJob(job.id, ["queued"], "acquiring");
+        if (!claimed) {
+          // Somebody else moved it. Not an error — answer with where it is now.
+          const now = await getOwnJob(subject, job.id);
+          return NextResponse.json({
+            job: jobToView(now ?? job, storedErrorMessage),
+            started: false,
+          });
+        }
+
+        const handoff = await dispatchAcquisition(job.id);
+        if (!handoff.dispatched) {
+          /*
+            The worker did not take it. Nothing has been fetched and no provider
+            has been paid, so this is entirely free to undo: release the slot,
+            end the job honestly, and say so. Leaving it in `acquiring` would be
+            the stuck-spinner failure this feature has already had twice.
+          */
+          await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+          await transitionJob(job.id, ["acquiring"], "failed", {
+            error_code: "ACQUISITION_FAILED",
+            error_message: handoff.detail?.slice(0, 2000) ?? null,
+            completed_at: new Date().toISOString(),
+          });
+          console.error("[ai/jobs] acquisition dispatch failed", {
+            jobId: job.id,
+            subject: subject.key,
+            reason: handoff.reason,
+            detail: handoff.detail,
+            transition: "acquiring -> failed",
+            released: true,
+          });
+          return fail("ACQUISITION_FAILED", {
+            usage: usageForClient(entitlement, (await peekAiUsage(subject, feature.id)).usedToday),
+          });
+        }
+
+        console.info("[ai/jobs] acquiring", {
+          jobId: job.id,
+          subject: subject.key,
+          feature: feature.id,
+          transition: "queued -> acquiring",
+        });
+
+        const acquiring = await getOwnJob(subject, job.id);
+        return NextResponse.json({
+          job: jobToView(acquiring ?? { ...job, status: "acquiring" }, storedErrorMessage),
+          started: true,
+          usage: usageForClient(entitlement, reservation.used),
+        });
+      }
+
       const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(_request.url).origin;
 
       /*
-        🔴 THE ENGINE IS RESOLVED ONCE, HERE, AND RECORDED ON THE JOB.
-
-        Owner, 2026-09-09: "i dont see a switch in admin dashboard to switch the
-        propainter off or on." The admin setting is the authority; the
-        environment variable stays as the fallback for a deploy that has no
-        settings row yet.
-
-        Read at SUBMIT time and written to the job, because the worker finishes
-        this job minutes later and must not ask the setting again. An operator
-        flipping the switch in between would otherwise leave a job detected with
-        the classical fill — already smeared — and then reconstructed from that
-        smear, which is worse than either engine on its own.
+        The submission itself lives in `lib/ai/submit.ts`, because the link path
+        submits from a different machine at a different moment, and the two must
+        not drift about the engine, the pinned model or the transition.
       */
-      const { frenzAiEngine } = await getLandingSettings();
-
-      const state = await provider.submit({
-        jobId: job.id,
-        feature,
-        sourceUrl,
-        webhookUrl: `${origin}/api/ai/replicate/webhook`,
-        engine: frenzAiEngine,
-      });
-
-      const updated = await transitionJob(job.id, ["queued"], "processing", {
-        replicate_prediction_id: state.reference,
-        model: AI_CLEAN_CONFIG.model,
-        // The engine this job was STARTED on. The worker reads it back rather
-        // than re-reading a setting that may have moved.
-        metadata: { ...(job.metadata ?? {}), engine: frenzAiEngine },
-        // What ACTUALLY ran, as the provider reported it — not our intention.
-        model_version: state.modelVersion,
-        started_at: new Date().toISOString(),
+      const { submission, row: updated } = await submitJobToProvider(job, feature, {
+        from: ["queued"],
+        origin,
       });
 
       console.info("[ai/jobs] started", {
@@ -288,9 +373,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         feature: feature.id,
         provider: feature.provider,
         model: AI_CLEAN_CONFIG.model,
-        modelVersion: state.modelVersion,
-        engine: frenzAiEngine,
-        predictionId: state.reference,
+        modelVersion: submission.modelVersion,
+        engine: submission.engine,
+        predictionId: submission.reference,
         transition: "queued -> processing",
       });
 

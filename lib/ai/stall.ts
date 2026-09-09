@@ -53,7 +53,10 @@ import { isActiveStatus, type AiJobStatus } from "@/lib/ai/jobs";
  * database records no `finalizing_at` — using the same clock for both stages
  * is honest about what we can actually measure, and errs long.
  */
-export const AI_STALL_DEADLINE_MS: Record<"queued" | "processing" | "finalizing", number> = {
+export const AI_STALL_DEADLINE_MS: Record<
+  "queued" | "acquiring" | "processing" | "finalizing",
+  number
+> = {
   /*
     A queued job is waiting for its own uploader. The browser holds the file
     and PUTs it straight to storage, so this covers a slow phone on a bad
@@ -61,6 +64,22 @@ export const AI_STALL_DEADLINE_MS: Record<"queued" | "processing" | "finalizing"
     upload the start request follows immediately.
   */
   queued: 30 * 60 * 1000,
+  /*
+    🔴 OUR worker fetching a pasted link (Part 6). Much shorter than the
+    provider's window on purpose — this is one yt-dlp extraction and a download
+    of a file we have already capped at 100 MB, on a machine we own and can
+    watch. Nothing here queues behind other customers and nothing cold-starts a
+    model, so ten minutes is already several times the worst honest run.
+
+    ⚠️ Held to the same 20-minute floor as every other stage (see
+    stall.test.ts), even though ten would cover the worst honest run several
+    times over. The floor is there because these numbers KILL JOBS, and the
+    cost of being wrong is asymmetric: a deadline that fires early takes a
+    member's video away for our impatience, while one that fires late only
+    holds an allowance slot a few minutes longer on work that is billing
+    nobody. When in doubt this errs long, like the rest of the table.
+  */
+  acquiring: 20 * 60 * 1000,
   /*
     The provider window: queue time, cold start, download, inpaint, upload.
     The longest stretch by far and the one with the least visibility, so it
@@ -92,7 +111,7 @@ export interface StallableJob {
 export function stalledForMs(job: StallableJob, now: number = Date.now()): number | null {
   if (!isActiveStatus(job.status)) return null;
 
-  const deadline = AI_STALL_DEADLINE_MS[job.status as "queued" | "processing" | "finalizing"];
+  const deadline = AI_STALL_DEADLINE_MS[job.status as keyof typeof AI_STALL_DEADLINE_MS];
   if (!deadline) return null;
 
   /*
@@ -101,7 +120,21 @@ export function stalledForMs(job: StallableJob, now: number = Date.now()): numbe
     that never started is exactly the kind that stalls, and requiring the
     timestamp it never got would exempt it forever.
   */
-  const since = job.status === "queued" ? job.created_at : (job.started_at ?? job.created_at);
+  /*
+    🔴 `acquiring` is measured from `created_at`, deliberately, alongside
+    `queued`. `started_at` records the moment the PROVIDER was engaged, and an
+    acquiring job has not reached that — so reading it here would always fall
+    through to `created_at` anyway, and writing it at acquisition time would
+    make "started" mean two different things on two kinds of job.
+
+    That is safe because a URL job's `queued` stage is sub-second: there is no
+    upload to wait for, so the browser calls /start immediately after create.
+    The 10-minute budget is therefore effectively the acquisition's own.
+  */
+  const since =
+    job.status === "queued" || job.status === "acquiring"
+      ? job.created_at
+      : (job.started_at ?? job.created_at);
   const startedAt = Date.parse(since);
   // An unparseable timestamp is a reason to do nothing, not a reason to fail
   // somebody's job — `NaN` comparisons are false, so this is belt and braces.

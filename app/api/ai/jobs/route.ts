@@ -4,6 +4,7 @@ import { extensionForUpload } from "@/lib/ai/clean-media";
 import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import {
+  AI_JOB_STATUSES,
   aiFeature,
   createJobRequestSchema,
   featureAvailability,
@@ -12,6 +13,7 @@ import {
   validateJobInput,
   type AiCapabilities,
   type AiFeature,
+  type AiJobStatus,
 } from "@/lib/ai/jobs";
 import {
   countActiveJobs,
@@ -22,6 +24,7 @@ import {
 } from "@/lib/ai/job-store";
 import { hasProviderFor } from "@/lib/ai/providers";
 import { hasWorker } from "@/lib/worker";
+import { AI_SOURCE_URL_ERRORS, validateAiSourceUrl } from "@/lib/ai/source-url";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
@@ -135,6 +138,37 @@ export async function POST(request: Request) {
   const verdict = validateJobInput(feature, source);
   if (!verdict.ok) return fail(verdict.code);
 
+  /*
+    ── 🔴 THE LINK GATE (Part 6) ──────────────────────────────────────────────
+
+    Part 1 shipped the paste field with the owner's instruction written across
+    it: "Do not implement URL downloading yet. Do not fetch arbitrary URLs from
+    the browser." The browser half stays true forever. This is the server half,
+    and it runs BEFORE a row exists so a refused link costs nothing and leaves
+    nothing behind.
+
+    `validateAiSourceUrl` is an ALLOW-LIST of the platforms this product already
+    supports, not a deny-list of dangerous addresses — see the module for why
+    that distinction is the whole defence. What is stored and what the worker
+    later fetches is its NORMALISED output, never the string sent here.
+  */
+  const sourceKind = source.kind === "url" ? "url" : "upload";
+  let normalisedUrl: string | null = null;
+
+  if (sourceKind === "url") {
+    // A link job is only offered where the worker can actually fetch it. The
+    // capability check above covers the provider and the finalizer; this covers
+    // the acquisition, which needs yt-dlp and therefore the Docker worker.
+    if (!hasWorker) return fail("FEATURE_UNAVAILABLE");
+
+    const link = validateAiSourceUrl(source.url ?? "");
+    if (!link.ok) {
+      console.info("[ai/jobs] link refused", { subject: subject.key, reason: link.reason });
+      return fail("INVALID_INPUT", { error: AI_SOURCE_URL_ERRORS[link.reason] });
+    }
+    normalisedUrl = link.url;
+  }
+
   try {
     const entitlement = await getAiEntitlement(subject, feature);
     if (!entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
@@ -147,12 +181,15 @@ export async function POST(request: Request) {
     const existing = await findJobByRequestId(subject, clientRequestId);
     if (existing) {
       const upload =
-        existing.status === "queued"
+        // 🔴 A LINK GETS NO UPLOAD TICKET. There is nothing for the browser to
+        // send — the worker fetches the video — so minting one would hand out a
+        // signed write into private storage that only an attacker would use.
+        existing.status === "queued" && sourceKind !== "url"
           ? await createSourceUploadTicket({
               userId: subjectOwnerId(subject),
               feature: feature.id,
               jobId: existing.id,
-              extension: extensionForUpload(source.name, source.mimeType),
+              extension: extensionForUpload(source.name, source.mimeType ?? ""),
             })
           : null;
       return applyAiSubjectCookie(NextResponse.json({
@@ -167,22 +204,37 @@ export async function POST(request: Request) {
     const active = await countActiveJobs(subject, feature.id);
     if (active >= entitlement.maxConcurrent) return fail("JOB_ALREADY_PROCESSING");
 
-    const result = await createJob({ subject, feature, source, clientRequestId });
+    const result = await createJob({
+      subject,
+      feature,
+      source,
+      clientRequestId,
+      // The validator's NORMALISED output, never the string the client sent.
+      sourceUrl: normalisedUrl,
+    });
 
     /*
       The upload target. Server-built path, signed for one exact object — the
       browser never names a key, so it cannot write into another member's folder
       however the request is crafted.
+
+      🔴 Skipped entirely for a link. The bytes will be fetched by our worker
+      and written with the service role, so there is nothing the browser needs
+      to be authorised to do — and an unused signed upload url is a capability
+      handed out for no reason.
     */
-    const upload = await createSourceUploadTicket({
-      userId: subjectOwnerId(subject),
-      feature: feature.id,
-      jobId: result.row.id,
-      extension: extensionForUpload(source.name, source.mimeType),
-    });
+    const upload =
+      sourceKind === "url"
+        ? null
+        : await createSourceUploadTicket({
+            userId: subjectOwnerId(subject),
+            feature: feature.id,
+            jobId: result.row.id,
+            extension: extensionForUpload(source.name, source.mimeType ?? ""),
+          });
     // The key is recorded now, so /start reads it back rather than guessing it
     // from a MIME type the picker may have got wrong. See reserveSourcePath.
-    await reserveSourcePath(result.row.id, upload.path);
+    if (upload) await reserveSourcePath(result.row.id, upload.path);
 
     console.info("[ai/jobs] opened", {
       jobId: result.row.id,
@@ -221,12 +273,18 @@ const DEFAULT_PAGE = 20;
 const MAX_PAGE = 50;
 
 /**
- * GET /api/ai/jobs?limit=&cursor=&feature=&active=1
+ * GET /api/ai/jobs?limit=&cursor=&feature=&active=1&status=a,b
  *
  * This member's own jobs, newest first, keyset-paged. `active=1` narrows to the
  * jobs still going to change, which is what a RETURNING member's page asks for:
  * it is the query behind "your video is still being processed" after a refresh,
  * a PWA relaunch, or a connection that dropped and came back.
+ *
+ * `status` is the history section's tabs (lib/ai/history.ts). It is a comma-
+ * separated list and it is narrowed in SQL rather than in the browser, because
+ * the list is keyset-paged: filtering a fetched page would leave "Cancelled"
+ * empty next to a "Show more" button, twenty rows at a time, until it happened
+ * to reach one.
  */
 export async function GET(request: Request) {
   const feat = aiFeature("ai_clean");
@@ -255,12 +313,28 @@ export async function GET(request: Request) {
   // shows rows its reader did not ask for.
   if (featureParam && !aiFeature(featureParam)) return fail("INVALID_INPUT");
 
+  /*
+    The status filter, checked against the union rather than passed through.
+    These values are interpolated into a PostgREST `in.(…)` list, so an
+    unrecognised one is REFUSED — the same discipline as `feature` above, and
+    for the stronger reason that a filter nobody validated is a filter somebody
+    can write SQL into.
+  */
+  const statusParam = url.searchParams.get("status");
+  const statuses = statusParam
+    ? statusParam.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  if (statuses.some((s) => !(AI_JOB_STATUSES as readonly string[]).includes(s))) {
+    return fail("INVALID_INPUT");
+  }
+
   try {
     const page = await listOwnJobs(subject, {
       limit,
       cursor: url.searchParams.get("cursor"),
       feature: (featureParam as AiFeature | null) ?? null,
       activeOnly: url.searchParams.get("active") === "1",
+      statuses: statuses as AiJobStatus[],
     });
 
     return NextResponse.json({

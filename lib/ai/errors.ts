@@ -72,6 +72,26 @@ export type AiErrorCode =
   /** A reward was presented and the database refused to spend it. */
   | "REWARD_INVALID"
   | "PROCESSING_FAILED"
+  /**
+   * Part 6: our worker could not get the video from the link that was pasted.
+   *
+   * 🔴 Its own code because the advice is different from every other failure
+   * here. Nothing was submitted and nothing was charged, but retrying the SAME
+   * link is unlikely to help — the post may be private, deleted, region-locked
+   * or a shape the extractor does not handle. "Try a different video, or
+   * download it and upload the file" is the useful next step, and it is
+   * useless advice for any other code in this list.
+   */
+  | "ACQUISITION_FAILED"
+  /**
+   * The link resolved, but what came back is not something AI Clean can take —
+   * no video stream, or longer than the feature's ceiling.
+   *
+   * Separate from ACQUISITION_FAILED because the fetch WORKED. Telling somebody
+   * "we couldn't retrieve that link" when we retrieved it fine and it was
+   * eleven minutes long sends them to re-paste a link that will never work.
+   */
+  | "UNSUPPORTED_SOURCE"
   | "STORAGE_ERROR"
   | "RATE_LIMITED"
   /*
@@ -141,6 +161,20 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
     message: "We couldn't finish this video. Your allowance wasn't used — please try again shortly.",
   },
   PROCESSING_FAILED: { status: 500, message: "The cleanup didn't finish. Nothing was changed — you can try again." },
+  /*
+    422, not 500: the request was fine and our side did not break — the video
+    at the other end could not be collected. And the sentence names the way
+    out, because for this one failure there IS a reliable way out: the file
+    upload path, which does not depend on the platform letting us in.
+  */
+  ACQUISITION_FAILED: {
+    status: 422,
+    message: "We couldn't get that video from the link. Try downloading it first, then upload the file.",
+  },
+  UNSUPPORTED_SOURCE: {
+    status: 422,
+    message: "That link doesn't lead to a video AI Clean can take.",
+  },
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },
   RATE_LIMITED: { status: 429, message: "You're going a bit fast — give it a moment." },
   INTERNAL_ERROR: { status: 500, message: "Something went wrong. Nothing was charged — try again in a moment." },

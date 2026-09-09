@@ -8,6 +8,7 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIBeforeAfterScene } from "@/features/ai/core/frenz-ai-before-after-scene";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
+import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
 import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client";
 import { cn } from "@/lib/utils";
 
@@ -142,6 +143,25 @@ export function FrenzAIWelcome({ cleanHref = "/studio/ai/clean" }: { cleanHref?:
 
         <FrenzAITrustRow className="mt-5" />
       </div>
+
+      {/*
+        ── 🔴 THE HISTORY SECTION IS BELOW EVERYTHING, DELIBERATELY ───────────
+
+        Owner, 2026-09-09: a job that finishes while the app is closed "just
+        disappears". It does not disappear — it is in `ai_jobs` — but nothing
+        asked for it, so this section does.
+
+        It goes AFTER the actions rather than above them. The primary job of
+        this screen is still "clean a video"; somebody returning for a finished
+        one is scrolling with intent and will find it, whereas a list of past
+        work above "Try AI Clean" would make a first visit open on an empty
+        panel about videos they have not made yet.
+
+        Rendered inside the environment wrapper so its Core-adjacent surfaces
+        read the same four CSS variables as the rest of the page. A surface
+        outside `FrenzAIEnvironment` silently falls back to the defaults.
+      */}
+      <FrenzAIHistory className="pb-8" />
     </FrenzAIEnvironment>
   );
 }

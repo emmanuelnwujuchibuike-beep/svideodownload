@@ -44,6 +44,17 @@ export type AiFeature =
 /** Mirrors `ai_jobs_status_chk`. The database is the authority; this is the mirror. */
 export type AiJobStatus =
   | "queued"
+  /**
+   * OUR worker is fetching the member's video from a link they pasted (Part 6).
+   * The provider has not been asked for anything, so nothing is billable yet.
+   *
+   * 🔴 Not folded into `processing`. A job in `processing` has been submitted
+   * to a provider and costs money; a job in `acquiring` has not. Sharing one
+   * value between those two would also make the progress screen say "Removing
+   * text" during a download, which is a sentence about work that is not
+   * happening.
+   */
+  | "acquiring"
   | "processing"
   /**
    * The provider is done and OUR worker is running: the cleaned video is being
@@ -62,6 +73,7 @@ export type AiProviderId = "replicate";
 
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",
+  "acquiring",
   "processing",
   "finalizing",
   "completed",
@@ -71,7 +83,12 @@ export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
 ] as const;
 
 /** A job that is still going to change. Everything else is terminal. */
-export const AI_ACTIVE_STATUSES: readonly AiJobStatus[] = ["queued", "processing", "finalizing"] as const;
+export const AI_ACTIVE_STATUSES: readonly AiJobStatus[] = [
+  "queued",
+  "acquiring",
+  "processing",
+  "finalizing",
+] as const;
 
 export function isActiveStatus(status: AiJobStatus): boolean {
   return AI_ACTIVE_STATUSES.includes(status);
@@ -86,7 +103,20 @@ export function isActiveStatus(status: AiJobStatus): boolean {
  * normal and must not be able to walk a finished job backwards.
  */
 const TRANSITIONS: Record<AiJobStatus, readonly AiJobStatus[]> = {
-  queued: ["processing", "failed", "cancelled", "expired"],
+  /*
+    Two ways out, and which one depends on where the video is coming from.
+    An UPLOAD goes straight to `processing` — the file is already in storage by
+    the time /start runs. A LINK goes to `acquiring` first, because the bytes do
+    not exist yet and our worker has to go and get them.
+  */
+  queued: ["acquiring", "processing", "failed", "cancelled", "expired"],
+  /*
+    🔴 `acquiring` may NOT reach `finalizing` or `completed`. The only forward
+    move is `processing`, which is the moment the provider is actually asked to
+    do something — so there is no path where a job we merely downloaded can be
+    handed back as a cleaned video.
+  */
+  acquiring: ["processing", "failed", "cancelled", "expired"],
   /*
     🔴 processing may NOT go straight to completed any more. The provider
     finishing is not the job finishing — the video has no audio on it yet. The
@@ -108,14 +138,32 @@ export function canTransition(from: AiJobStatus, to: AiJobStatus): boolean {
 
 /** What the client may say about its input. Everything here is a CLAIM. */
 export interface AiJobSourceInput {
-  /** Bytes, as reported by the browser's File object. */
-  size: number;
-  mimeType: string;
+  /**
+   * How the bytes will arrive. Absent means `upload` — every client written
+   * before Part 6 sends no `kind` at all, and refusing those would have been a
+   * breaking change to a shipped endpoint for no gain.
+   */
+  kind?: AiSourceKind;
+  /** Bytes, as reported by the browser's File object. Absent for a link. */
+  size?: number;
+  /** Absent for a link: nobody knows what a page will yield until it is fetched. */
+  mimeType?: string;
   /** Seconds. Optional — a container the browser cannot measure has none. */
   durationSeconds?: number;
   /** The original filename, kept only so history is readable. */
   name?: string;
+  /**
+   * The page to fetch, for a `url` source.
+   *
+   * 🔴 A CLAIM, exactly like every other field here. It is worth nothing until
+   * `validateAiSourceUrl` has accepted it, and what is stored is that
+   * function's normalised output rather than this string.
+   */
+  url?: string;
 }
+
+/** Mirrors `ai_jobs_source_kind_chk` (migration 0146). */
+export type AiSourceKind = "upload" | "url";
 
 export interface AiFeatureDef {
   id: AiFeature;
@@ -262,10 +310,36 @@ export type AiInputVerdict =
  * what is allowed — only about who is trusted to say so.
  */
 export function validateJobInput(feature: AiFeatureDef, source: AiJobSourceInput): AiInputVerdict {
-  if (!Number.isFinite(source.size) || source.size <= 0) return { ok: false, code: "INVALID_INPUT" };
+  /*
+    ── 🔴 A LINK HAS NOTHING TO VALIDATE HERE, AND SAYING SO IS THE POINT ─────
+
+    The size, type and duration checks below are all about a file the browser
+    is holding. For a `url` source none of those facts exist yet — the page has
+    not been fetched — and inventing a number to satisfy this function would
+    put a fabricated size on the row.
+
+    They are not skipped, they MOVE: the worker applies the identical ceilings
+    to the file it actually produced (`server/services/ai-acquire-service.ts`),
+    which is the only moment they can be true rather than claimed. That is the
+    same discipline `/start` already follows for uploads, where what storage
+    reports replaces what the browser said.
+
+    The URL's own admissibility is `validateAiSourceUrl`'s job, and the create
+    route runs it before this. It is not repeated here because this module is
+    pure vocabulary and that one owns the allow-list.
+  */
+  if (source.kind === "url") {
+    if (!source.url || !source.url.trim()) return { ok: false, code: "INVALID_INPUT" };
+    return { ok: true };
+  }
+
+  if (source.size === undefined || !Number.isFinite(source.size) || source.size <= 0) {
+    return { ok: false, code: "INVALID_INPUT" };
+  }
   if (source.size > feature.maxBytes) return { ok: false, code: "FILE_TOO_LARGE" };
 
-  const mime = source.mimeType.trim().toLowerCase();
+  const mime = (source.mimeType ?? "").trim().toLowerCase();
+  if (!mime) return { ok: false, code: "INVALID_INPUT" };
   if (feature.mimeTypes.length > 0 && !feature.mimeTypes.includes(mime)) {
     return { ok: false, code: "UNSUPPORTED_FORMAT" };
   }
@@ -330,6 +404,15 @@ export interface AiJobRow {
   audio_restored: boolean | null;
   source_duration: number | string | null;
   source_mime_type: string | null;
+  /**
+   * How the bytes arrived (migration 0146). Nullable in the type although the
+   * column is `not null default 'upload'`, because a row read by a build that
+   * is newer than the migration would come back undefined — and a type that
+   * lied about that is what hid the guest-id bug for a week.
+   */
+  source_kind: AiSourceKind | null;
+  /** The allow-listed page a `url` job was created from. Null for an upload. */
+  source_url: string | null;
   replicate_prediction_id: string | null;
   error_code: string | null;
   error_message: string | null;
@@ -356,6 +439,15 @@ export interface AiJobView {
     mimeType: string | null;
     durationSeconds: number | null;
     name: string | null;
+    /**
+     * Where it came from. The interface needs this to say true things: an
+     * upload that failed can be retried from the file still in the browser's
+     * hand, and a link cannot — but a link can be retried without the member
+     * finding the video again, and an upload cannot.
+     *
+     * 🔴 The URL ITSELF is not here. See the allow-list on `jobToView`.
+     */
+    kind: AiSourceKind;
   };
   /**
    * The finished file, once there is one.
@@ -386,6 +478,13 @@ export interface AiJobView {
  * `replicate_prediction_id`, `source_path`, `result_path`, `error_message`,
  * `metadata`. None of them are the member's business, and several are the
  * makings of an attack on the provider account.
+ *
+ * 🔴 `source_url` is absent too, and for a different reason than the rest.
+ * The member typed it, so it is not a secret FROM them — but this view is the
+ * shape a job takes in a browser, and a link that round-trips through the
+ * client is a link a future edit could accidentally accept back. `source_kind`
+ * is here because the interface genuinely needs it to offer the right retry;
+ * the address is read from the row by the worker and by nothing else.
  */
 export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => string): AiJobView {
   const started = row.started_at ? Date.parse(row.started_at) : null;
@@ -416,6 +515,9 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
       mimeType: row.source_mime_type,
       durationSeconds: sourceDuration,
       name: typeof row.metadata?.source_name === "string" ? row.metadata.source_name : null,
+      // Every row that predates 0146 was an upload, and the column defaults to
+      // it, so the fallback describes those rows correctly rather than guessing.
+      kind: row.source_kind === "url" ? "url" : "upload",
     },
     result: {
       size: row.result_size,
@@ -475,12 +577,44 @@ export const createJobRequestSchema = z
     clientRequestId: z.string().min(8).max(100),
     source: z
       .object({
-        size: z.number().int().positive(),
-        mimeType: z.string().min(1).max(120),
+        /*
+          🔴 OPTIONAL, defaulting to `upload`. Every client shipped before Part
+          6 sends a body with no `kind`, and `.strict()` would REFUSE a field it
+          did not know — so making this required would break the upload flow on
+          every browser holding an older bundle the moment this deploys.
+        */
+        kind: z.enum(["upload", "url"]).optional(),
+        // Absent for a link. Their presence is checked against `kind` below,
+        // where a rule about two fields belongs.
+        size: z.number().int().positive().optional(),
+        mimeType: z.string().min(1).max(120).optional(),
         durationSeconds: z.number().positive().max(86_400).optional(),
         name: z.string().max(200).optional(),
+        /*
+          Bounded hard. This string reaches a URL parser, a database column and
+          a log line, and 2000 characters is far beyond any real share link
+          while being far below anything worth attacking a parser with.
+        */
+        url: z.string().min(4).max(2000).optional(),
       })
-      .strict(),
+      .strict()
+      /*
+        The cross-field rule, here rather than in the route, so it is testable
+        alongside the "a client cannot send user_id" guarantee.
+
+        A `url` source that also carries a size and a MIME type is refused
+        rather than having them ignored: those two fields are what the ceilings
+        are checked against for an upload, and a body that sets them on a link
+        is either a confused client or somebody hoping one of the two paths
+        reads them.
+      */
+      .refine(
+        (s) => (s.kind === "url" ? !!s.url : !!s.size && !!s.mimeType),
+        { message: "a url source needs a url; an upload needs a size and a mimeType" },
+      )
+      .refine((s) => (s.kind === "url" ? s.size === undefined && s.mimeType === undefined : !s.url), {
+        message: "size/mimeType belong to an upload, url belongs to a link — never both",
+      }),
   })
   .strict();
 

@@ -183,11 +183,33 @@ describe("the engine switch", () => {
     expect(body.match(/aiCleanEngine\(\)/g)).toHaveLength(1);
   });
 
+  /*
+    ⚠️ MOVED IN PART 6, and the guarantee did not change.
+
+    The submission used to be written inline in `/api/ai/jobs/[id]/start`. A URL
+    job submits from a different machine at a different moment (the worker
+    fetches the video first, then asks the frontend), so the eight decisions
+    involved were extracted to `lib/ai/submit.ts` rather than copied — a second
+    copy would be the one that forgets to record the engine.
+
+    This test therefore reads the shared module now. What it asserts is
+    unchanged: the engine is resolved ONCE at submit, written onto the job, and
+    read back from the row by the worker.
+  */
   it("records the engine on the job, and the worker reads it back from there", () => {
-    const start = readFileSync(join(process.cwd(), "app/api/ai/jobs/[id]/start/route.ts"), "utf8");
+    const submit = readFileSync(join(process.cwd(), "lib/ai/submit.ts"), "utf8");
     const finalize = readFileSync(join(process.cwd(), "server/services/ai-finalize-service.ts"), "utf8");
-    expect(start).toContain("engine: frenzAiEngine,");
-    expect(start).toMatch(/metadata: \{ \.\.\.\(job\.metadata \?\? \{\}\), engine: frenzAiEngine \}/);
+
+    // Resolved once, from the admin setting, inside the one submit path.
+    expect(submit).toContain("const { frenzAiEngine } = await getLandingSettings();");
+    expect(submit).toContain("engine: frenzAiEngine,");
+    expect(submit).toMatch(/metadata: \{ \.\.\.\(job\.metadata \?\? \{\}\), engine: frenzAiEngine \}/);
+
+    // 🔴 And exactly ONE place still does it, so the two entry points cannot
+    // disagree about which engine a job was started on.
+    const start = readFileSync(join(process.cwd(), "app/api/ai/jobs/[id]/start/route.ts"), "utf8");
+    expect(start).not.toContain("getLandingSettings()");
+
     expect(finalize).toContain("job.metadata?.engine");
     expect(finalize).toContain('if (jobEngine === "propainter")');
   });

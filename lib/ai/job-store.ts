@@ -129,7 +129,20 @@ export interface AiJobPage {
  */
 export async function listOwnJobs(
   subject: AiSubject,
-  opts: { limit: number; cursor?: string | null; feature?: AiFeature | null; activeOnly?: boolean },
+  opts: {
+    limit: number;
+    cursor?: string | null;
+    feature?: AiFeature | null;
+    activeOnly?: boolean;
+    /**
+     * The history section's tabs, narrowed in SQL.
+     *
+     * 🔴 An empty or absent list means UNFILTERED, never "match nothing". The
+     * "All" tab sends no statuses at all, and a `.in("status", [])` would
+     * silently return zero rows for the one tab that promises everything.
+     */
+    statuses?: readonly AiJobStatus[] | null;
+  },
 ): Promise<AiJobPage> {
   const limit = Math.max(1, Math.min(50, Math.floor(opts.limit)));
   const { db, column, value } = await subjectScope(subject);
@@ -149,6 +162,10 @@ export async function listOwnJobs(
   // SQL rather than fetching a page and filtering it in the browser: an active
   // job is rare, so the alternative reads twenty rows to find none.
   if (opts.activeOnly) query = query.in("status", [...AI_ACTIVE_STATUSES]);
+  // `activeOnly` wins if both arrive: it is the narrower question, and a caller
+  // asking for both has contradicted itself rather than asked for an
+  // intersection nothing in the product wants.
+  else if (opts.statuses && opts.statuses.length > 0) query = query.in("status", [...opts.statuses]);
 
   const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
   if (cursor) {
@@ -216,6 +233,16 @@ export interface CreateJobInput {
   feature: AiFeatureDef;
   source: AiJobSourceInput;
   clientRequestId: string;
+  /**
+   * The NORMALISED, allow-listed page url for a `url` source (Part 6).
+   *
+   * 🔴 A separate parameter rather than being read off `source.url`, and that
+   * is deliberate. `source` is the client's claim; this is the value
+   * `validateAiSourceUrl` returned. Making the caller pass it explicitly means
+   * a route cannot store an unvalidated address by forgetting a step — it has
+   * to have run the check to have anything to put here.
+   */
+  sourceUrl?: string | null;
 }
 
 export type CreateJobResult =
@@ -240,6 +267,8 @@ export type CreateJobResult =
  */
 export async function createJob(input: CreateJobInput): Promise<CreateJobResult> {
   const { subject, feature, source, clientRequestId } = input;
+  // Absent means `upload` — every client written before Part 6 sends no kind.
+  const sourceKind = source.kind === "url" ? "url" : "upload";
   const admin = createAdminClient();
 
   const expiresAt = new Date(Date.now() + feature.retentionHours * 3_600_000).toISOString();
@@ -253,9 +282,24 @@ export async function createJob(input: CreateJobInput): Promise<CreateJobResult>
       provider: feature.provider,
       status: "queued",
       client_request_id: clientRequestId,
-      source_size: Math.round(source.size),
-      source_mime_type: source.mimeType.trim().toLowerCase(),
+      /*
+        ── 🔴 A LINK HAS NO MEASUREMENTS YET (Part 6) ────────────────────────
+
+        For an upload these come from the browser's File object and are
+        replaced at /start by what storage actually reports. For a `url` job
+        nothing has been fetched, so they are NULL rather than zero: this
+        project's standing rule is that an absent measurement never renders as
+        a number, and a 0-byte source would also trip the size checks meant to
+        catch a failed upload. The worker fills all three in once it has the
+        real file.
+      */
+      source_size: source.size === undefined ? null : Math.round(source.size),
+      source_mime_type: source.mimeType ? source.mimeType.trim().toLowerCase() : null,
       source_duration: source.durationSeconds ?? null,
+      source_kind: sourceKind,
+      // Written only after `validateAiSourceUrl` accepted it, and stored as its
+      // NORMALISED output — never the string the client sent.
+      source_url: sourceKind === "url" ? (input.sourceUrl ?? null) : null,
       expires_at: expiresAt,
       // The filename is kept for the member's own history and nothing else. It
       // is their text, so it is bounded before it is stored.
@@ -385,22 +429,50 @@ export async function transitionJob(
  */
 export async function recordUploadedSource(
   jobId: string,
-  source: { path: string; size: number; mimeType: string | null },
+  source: {
+    path: string;
+    size: number;
+    mimeType: string | null;
+    /** Measured off the real file. Only the acquisition path knows it. */
+    durationSeconds?: number | null;
+    /**
+     * 🔴 WHICH STATUS THE ROW MUST BE IN — and it is not always `queued`.
+     *
+     * This filtered on `queued` unconditionally, which is correct for an upload
+     * (the browser PUTs the file while the job waits) and SILENTLY WRONG for a
+     * link: Part 6 moves the row to `acquiring` before the worker fetches
+     * anything, so the update would match no row, write nothing, and report no
+     * error — and the submit that followed would fail with "cannot submit a job
+     * with no stored source", pointing at the wrong end of the flow entirely.
+     *
+     * A PostgREST update that matches nothing is a resolved `{ error: null }`.
+     * That is the shape of bug this codebase keeps finding, so the expected
+     * status is now the caller's to state.
+     */
+    expectStatus?: AiJobStatus;
+  },
 ): Promise<void> {
   const admin = createAdminClient();
-  const { error } = await admin
+  const { data, error } = await admin
     .from("ai_jobs")
     .update({
       source_path: source.path,
       source_size: source.size,
       source_mime_type: source.mimeType,
+      ...(source.durationSeconds === undefined ? {} : { source_duration: source.durationSeconds }),
     })
     .eq("id", jobId)
-    .eq("status", "queued");
+    .eq("status", source.expectStatus ?? "queued")
+    .select("id");
 
   if (error) {
     console.error("[ai/jobs] source record failed", { jobId, code: error.code, message: error.message });
     throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  // Matching no row is not an error to Postgres and it must not be silent here:
+  // it means the job moved on (cancelled, swept) while the file was arriving.
+  if (!data || data.length === 0) {
+    throw new AiJobError("INTERNAL_ERROR", `no ${source.expectStatus ?? "queued"} job ${jobId} to record a source on`);
   }
 }
 

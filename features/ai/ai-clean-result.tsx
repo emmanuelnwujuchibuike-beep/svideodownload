@@ -7,10 +7,8 @@ import { FrenzAICompare } from "@/features/ai/core/frenz-ai-compare";
 import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
 import { FrenzAIReveal } from "@/features/ai/core/frenz-ai-reveal";
 import { FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
-import { startDownload } from "@/features/downloads/manager";
-import { haptic } from "@/lib/motion/haptics";
+import { startAiResultDownload } from "@/features/ai/ai-result-download";
 import type { AiJobView } from "@/lib/ai/jobs";
-import { cleanedFileName } from "@/lib/ai/clean-media";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 
 /**
@@ -100,79 +98,14 @@ export function AICleanResult({
   const canCompare = !!previewUrl && !!sourceUrl;
 
   /*
-    ── 🔴 SAME-ORIGIN, AND IT LANDS IN HISTORY ────────────────────────────────
-
-    Owner, 2026-09-08, with a screenshot of Safari on a supabase.co file page
-    offering "Open in WA Business": "the frenz ai result video downloads like
-    this, it should download through the platform download pipeline and save in
-    history."
-
-    Two separate faults, both fixed here.
-
-    1. IT LEFT THE SITE. Pointing an `<a download>` at a foreign origin makes
-       the browser ignore the attribute and navigate, so the member ended up on
-       Supabase's own preview page. The link is now OUR route with
-       `?download=1&redirect=1`, which 302s to a freshly-signed url carrying a
-       `Content-Disposition` — a same-origin click that saves a file, exactly
-       like every other download in this app.
-
-    2. IT WAS INVISIBLE AFTERWARDS. A cleaned video was the only thing this
-       product could produce that never appeared in Downloads. It goes through
-       the real download manager now — see the note on `startDownload` below.
-
-    The url is STABLE, which is what lets history keep it: the route re-signs on
-    every request, so a record written today still works for the three days the
-    file is kept. A raw signed url, expiring in minutes, could never be stored.
+    Saving it. Every decision behind this — the same-origin route, the platform
+    download manager rather than an `<a>`, the file name, the history row — now
+    lives in `features/ai/ai-result-download.ts`, because the history section
+    presses the same button on a different screen and two copies would drift.
   */
-  const downloadHref = `/api/ai/jobs/${encodeURIComponent(job.id)}/result?download=1&redirect=1`;
-
   const download = () => {
-    haptic("light");
     setDownloading(true);
-
-    /*
-      🔴 THE PLATFORM'S OWN DOWNLOAD MANAGER, not an `<a>` and a history write.
-
-      Owner, 2026-09-08: "the frenz ai download pipeline should be the platform
-      download with the haptic sound, download complete card to save or view in
-      history."
-
-      The first attempt clicked a link and called `addDownload` directly. That
-      saved the file and put a row in history, and it still was not the
-      product's download: no progress, no completion card, no sound, no haptic,
-      no "Save" / "View in history", and none of the manager's protections.
-
-      `startDownload` is that pipeline, and using it means AI Clean inherits all
-      of it for nothing:
-
-        · the completion card, its sound and its haptic — `FloatingDownloadProgress`
-          is mounted app-wide in app/(app)/layout.tsx, so it already covers this
-          screen;
-        · the history row, written by the manager at the moment the file actually
-          lands rather than optimistically when the button is pressed;
-        · DOUBLE-TAP PROTECTION — two taps on a laggy phone matched against the
-          same in-flight (url, formatId, kind) return the original task instead
-          of starting a second transfer;
-        · serialised device-saves, which is what stops a browser silently
-          dropping every save but the first.
-
-      `directUrl` is what tells the manager to fetch THIS url rather than push it
-      through the /api/download extractor pipeline, which has no idea what an AI
-      job is. Wallpapers use the same field for the same reason.
-    */
-    startDownload({
-      url: downloadHref,
-      directUrl: downloadHref,
-      platform: "generic",
-      platformName: "Frenz AI",
-      title: cleanedFileName(job.source.name),
-      thumbnail: null,
-      formatId: "ai-clean",
-      kind: "video",
-      qualityLabel: "AI Clean",
-      durationSeconds: job.source.durationSeconds ?? null,
-    });
-
+    startAiResultDownload(job);
     // The manager owns everything after this — progress, the card, the save.
     // The button only has to stop looking pressed.
     setTimeout(() => setDownloading(false), 900);

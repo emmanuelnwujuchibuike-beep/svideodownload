@@ -2,45 +2,53 @@
 
 import { ArrowLeft, FileVideo, Link2, Sparkles } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
 
 /**
  * Where Continue goes — and the one screen in this feature that has to be most
  * careful about what it says.
  *
- * ── 🔴 IT DOES NOT PRETEND ────────────────────────────────────────────────────
+ * ── 🔴 IT DOES NOT PRETEND — AND WHAT THAT MEANS CHANGED IN PART 6 ───────────
  *
- * Owner's brief: "The Continue button can transition to a placeholder
- * processing/options state for UI testing, but no real AI processing should
- * happen yet." The tempting build is a progress bar that fills on a timer and a
- * "Done!" at the end. That is a lie with an animation on it, and this project has
- * declined to fabricate a number three times already. So there is no bar, no
- * percentage, no fake stage list, and no result to download — just the video that
- * was chosen, and a plain sentence about what happens next.
+ * Part 1 shipped this as an honest dead end. The brief then was "no real AI
+ * processing should happen yet", so the panel said the cleanup was not
+ * connected, there was no bar, no percentage and no fake stage list, and the
+ * Pro/free copy was written in the future tense because nothing had been spent.
  *
- * ── The Pro/free block is a SLOT, not a meter ─────────────────────────────────
+ * Part 6 connected it. The same rule now points the other way: a screen that
+ * still said "nothing has been fetched" would be exactly the kind of stale
+ * claim the original was written to avoid. So the panel states what is about to
+ * happen, the button starts a real job, and the allowance sentence is present
+ * tense because the allowance is now real and server-side.
  *
- * The brief describes what free members will get when processing lands: three
- * runs a day, behind a rewarded ad. Every word of that here is future tense and
- * NOTHING is counted. A "2 of 3 left today" read from the browser would be both
- * fake (nothing has been spent) and forgeable (a counter a visitor can edit is
- * not a limit) — the real allowance is already metered server-side in Redis for
- * the media tools (lib/ai/quota.ts), and AI Clean will be charged the same way.
+ * ── In practice this is the LINK screen ─────────────────────────────────────
  *
- * What this component genuinely provides is the LAYOUT that flow will land in:
- * the panel, the position, the Pro/free branch and the copy slot.
+ * A file goes through `AICleanVideoPreview`, which has the frame, the metadata
+ * and its own Continue. Only a pasted link lands here — the file branch is kept
+ * because the shape costs nothing and a future entry point may want it.
+ *
+ * Nothing here decides anything. `onStart` calls the one state machine
+ * (`useAiCleanJob.submit`), and every gate — the allowance, the ad, the URL
+ * allow-list — is re-resolved server-side after that.
  */
 export function AICleanReadyState({
   source,
   isPro,
   planKnown,
   onBack,
+  onStart,
+  busy = false,
 }: {
   source: { kind: "file"; name: string } | { kind: "link"; url: string };
   isPro: boolean;
   /** False until `/api/me` has answered — see the note below. */
   planKnown: boolean;
   onBack: () => void;
+  /** Start the job. Part 6: for a link this is what sends it to our worker. */
+  onStart: () => void;
+  /** True while the submission is in flight, so the button cannot double-fire. */
+  busy?: boolean;
 }) {
   const Icon = source.kind === "file" ? FileVideo : Link2;
   const label = source.kind === "file" ? source.name : source.url;
@@ -65,38 +73,60 @@ export function AICleanReadyState({
           </span>
         </div>
 
+        {/*
+          ── 🔴 THE LINK PATH IS REAL NOW (Part 6) ──────────────────────────
+
+          This panel used to say "the cleanup itself isn't connected yet", which
+          was the honest thing to render while Part 1 shipped an interface with
+          nothing behind it. Our server fetches the video now, so that sentence
+          would be the lie the original was written to avoid.
+
+          What replaces it is a statement of what is about to happen, in the
+          member's terms: OUR server does the fetching, not their browser and
+          not their connection.
+        */}
         <div className="mt-4 rounded-2xl border border-primary/25 bg-primary/[0.04] p-4">
           <p className="flex items-start gap-2 text-sm font-semibold">
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
-            The cleanup itself isn&apos;t connected yet
+            {source.kind === "file" ? "Ready when you are" : "We'll fetch this for you"}
           </p>
           <p className="mt-1.5 pl-6 text-sm leading-relaxed text-muted-foreground">
-            This release is the AI Clean interface.{" "}
             {source.kind === "file"
-              ? "Nothing has been uploaded — your video hasn't left this device."
-              : "Nothing has been fetched — the link hasn't been opened."}{" "}
-            Text detection and the cleaned result arrive in the next update.
+              ? "Your video goes straight to private storage, and only Frenz AI reads it."
+              : "Frenz AI downloads the video on our servers — nothing is sent from your device, and it keeps going if you close the app."}
           </p>
         </div>
 
-        {/*
-          The future gate's home. Rendered as plainly as it reads: a statement
-          about what will be true, never a state that claims to be true now. It
-          stays neutral until the plan is actually known, because guessing "free"
-          at a paying member is the expensive direction of that guess.
-        */}
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
           {!planKnown
-            ? "AI Clean will be included with Pro when it ships."
+            ? "AI Clean is included with Pro."
             : isPro
-              ? "AI Clean will be included with your Pro plan when it ships — no ads, no daily cap."
-              : "When it ships, free members will get 3 AI Clean videos a day, each unlocked by watching a short ad. Pro removes both."}
+              ? "Included with your Pro plan — no ads, no daily cap."
+              : "Free members get 3 AI Clean videos a day, each unlocked by watching a short ad. Pro removes both."}
         </p>
 
-        <button type="button" onClick={onBack} className="btn-lux btn-lux-secondary mt-6 w-full sm:w-auto">
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          Back to the video
-        </button>
+        <div className="mt-6 flex flex-col gap-2.5 sm:flex-row-reverse">
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={busy}
+            className={cn(
+              "group inline-flex flex-1 items-center justify-center gap-2 rounded-full px-6 py-3.5",
+              "bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500",
+              "text-sm font-bold text-white shadow-[0_14px_34px_-12px_rgb(99_102_241/0.95)]",
+              "transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
+              "disabled:opacity-70 disabled:hover:translate-y-0",
+            )}
+          >
+            <Sparkles className="h-4 w-4" aria-hidden />
+            {busy ? "Starting…" : "Clean this video"}
+          </button>
+
+          <button type="button" onClick={onBack} disabled={busy} className="btn-lux btn-lux-secondary disabled:opacity-70">
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Back
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -147,15 +147,19 @@ describe("validateJobInput", () => {
 });
 
 describe("status transitions", () => {
-  it("declares the same seven statuses the database allows", () => {
-    // Mirrors ai_jobs_status_chk after migration 0142 added `finalizing`.
+  it("declares the same eight statuses the database allows", () => {
+    // Mirrors ai_jobs_status_chk: 0142 added `finalizing`, 0146 added
+    // `acquiring` (our worker fetching a pasted link, before any provider is
+    // asked for anything — see the note on AiJobStatus for why it is its own
+    // state rather than a flag on `processing`).
     expect([...AI_JOB_STATUSES].sort()).toEqual(
-      ["cancelled", "completed", "expired", "failed", "finalizing", "processing", "queued"].sort(),
+      ["acquiring", "cancelled", "completed", "expired", "failed", "finalizing", "processing", "queued"].sort(),
     );
   });
 
   it("knows which statuses are still going to change", () => {
     expect(isActiveStatus("queued")).toBe(true);
+    expect(isActiveStatus("acquiring")).toBe(true);
     expect(isActiveStatus("processing")).toBe(true);
     for (const s of ["completed", "failed", "cancelled", "expired"] as AiJobStatus[]) {
       expect(isActiveStatus(s), s).toBe(false);
@@ -227,6 +231,8 @@ describe("jobToView", () => {
     model_version: "abc123def456",
     status: "completed",
     client_request_id: "9f2c1b8e4a7d4f0e",
+    source_kind: "upload",
+    source_url: null,
     source_path: "user/ai_clean/job/source.mp4",
     result_path: "user/ai_clean/job/result.mp4",
     source_size: 1024,
@@ -273,6 +279,10 @@ describe("jobToView", () => {
       mimeType: "video/mp4",
       durationSeconds: 12.5,
       name: "holiday.mp4",
+      // Part 6: the interface needs this to offer the right retry — a file
+      // still in the browser can be resent, a link can be refetched. The URL
+      // itself stays off the view; only the KIND crosses.
+      kind: "upload",
     });
   });
 
@@ -298,12 +308,16 @@ describe("jobToView", () => {
       source_size: null,
       source_duration: null,
       source_mime_type: null,
+      // 🔴 A row written before migration 0146 has no source_kind at all. It
+      // must read as an upload, because that is what every one of those rows
+      // actually was — not as null, and not as a crash.
+      source_kind: null,
       started_at: null,
       completed_at: null,
       metadata: null,
     };
     const view = jobToView(bare, () => "x");
-    expect(view.source).toEqual({ size: null, mimeType: null, durationSeconds: null, name: null });
+    expect(view.source).toEqual({ size: null, mimeType: null, durationSeconds: null, name: null, kind: "upload" });
     expect(view.durationMs).toBeNull();
   });
 

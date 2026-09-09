@@ -128,7 +128,7 @@ export const replicateProvider: AiProvider = {
       method: "POST",
       body: JSON.stringify({
         version: AI_CLEAN_CONFIG.version,
-        input: buildAiCleanInput(input.sourceUrl),
+        input: buildAiCleanInput(input.sourceUrl, input.engine),
         webhook: input.webhookUrl,
         webhook_events_filter: ["start", "completed"],
       }),

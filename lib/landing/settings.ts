@@ -180,7 +180,34 @@ export interface LandingSettings {
    * the tile is never broken while the slot is empty.
    */
   frenzAiTileImageUrl: string;
+  /**
+   * Which engine reconstructs the background behind removed text.
+   *
+   * Owner, 2026-09-09: "i dont see a switch in admin dashboard to switch the
+   * propainter off or on."
+   *
+   * Fair — it shipped as an environment variable, which means a deploy and me.
+   *
+   *   classical    hjunior29 detects AND fills. One CPU call. Fast, cheap, and
+   *                it SMEARS: measured on 2026-09-09, all three of its fill
+   *                algorithms produced the same washed-out band, including at
+   *                `margin: 0`. Its fills are single-frame diffusion and cannot
+   *                know what is behind the text.
+   *   propainter   hjunior29 detects only; ProPainter reconstructs temporally
+   *                from frames where the region was NOT covered. Substantially
+   *                cleaner — no rectangular edge — at the cost of a GPU call on
+   *                top of the CPU one and roughly 210s of inference.
+   *
+   * ⚠️ Defaults to `classical`, because the expensive one should be a decision
+   * somebody makes rather than a state a fresh install falls into. It also has a
+   * real weakness: a caption that never moves over a background that never moves
+   * gives a temporal model nothing to borrow from, and it hallucinates.
+   */
+  frenzAiEngine: AiCleanEngineSetting;
 }
+
+/** The two engines, as a value the settings row can hold. */
+export type AiCleanEngineSetting = "classical" | "propainter";
 
 /** Nobody gets more than this from the admin field. A typo must not cost money. */
 export const FRENZ_AI_MAX_FREE_CREDITS = 20;
@@ -197,7 +224,15 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiFreeEnabled: true,
   // Empty: the tile draws its own backdrop until an image is uploaded.
   frenzAiTileImageUrl: "",
+  // The cheap one. Turning on the GPU engine costs money per job and is the
+  // operator’s call.
+  frenzAiEngine: "classical",
 };
+
+/** Anything that is not exactly "propainter" is the safe, cheap engine. */
+export function normalizeEngine(value: unknown): AiCleanEngineSetting {
+  return value === "propainter" ? "propainter" : "classical";
+}
 
 /**
  * A free-credit value we are willing to act on.
@@ -261,6 +296,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiPublicEnabled: raw.frenzAiPublicEnabled !== false,
       frenzAiFreeDailyCredits: normalizeFreeCredits(raw.frenzAiFreeDailyCredits),
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
+      frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
     };
     cache = { at: Date.now(), value };
@@ -315,6 +351,7 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
     frenzAiPublicEnabled: pick("frenzAiPublicEnabled") !== false,
     frenzAiFreeDailyCredits: normalizeFreeCredits(pick("frenzAiFreeDailyCredits")),
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
+    frenzAiEngine: normalizeEngine(pick("frenzAiEngine")),
     frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });

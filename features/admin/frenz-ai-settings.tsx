@@ -4,12 +4,16 @@ import { Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { FRENZ_AI_MAX_FREE_CREDITS, type LandingSettings } from "@/lib/landing/settings";
+import {
+  FRENZ_AI_MAX_FREE_CREDITS,
+  type AiCleanEngineSetting,
+  type LandingSettings,
+} from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  FRENZ AI — the three operator switches
+ *  FRENZ AI — the operator switches
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Owner, 2026-09-08: "make it configurable in admin dashboard where i can turn
@@ -39,6 +43,7 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [publicEnabled, setPublicEnabled] = useState(settings.frenzAiPublicEnabled);
   const [freeEnabled, setFreeEnabled] = useState(settings.frenzAiFreeEnabled);
   const [credits, setCredits] = useState(String(settings.frenzAiFreeDailyCredits));
+  const [engine, setEngine] = useState<AiCleanEngineSetting>(settings.frenzAiEngine);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -50,12 +55,13 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
       const res = await fetch("/api/admin/landing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // 🔴 Only these three. The route merges, so the image fields this panel
+        // 🔴 Only what this panel owns. The route merges, so the image fields it
         // knows nothing about are left exactly as they are.
         body: JSON.stringify({
           frenzAiPublicEnabled: publicEnabled,
           frenzAiFreeEnabled: freeEnabled,
           frenzAiFreeDailyCredits: Number(credits) || 0,
+          frenzAiEngine: engine,
         }),
       });
       const json = await res.json();
@@ -129,6 +135,47 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           </span>
         </div>
 
+        {/*
+          ── 🔴 THE ENGINE ──────────────────────────────────────────────────
+
+          Owner, 2026-09-09: "i dont see a switch in admin dashboard to switch
+          the propainter off or on."
+
+          It shipped as an environment variable, which means a deploy and me.
+          This is the control, and the setting is now the authority — the env
+          var survives only as the fallback for a deploy with no settings row.
+
+          The hint states the trade honestly in both directions. Quality is not
+          free here: the second engine adds a GPU call and roughly 210s, and it
+          has a genuine weakness that a screenshot of a good result would hide.
+        */}
+        <div>
+          <p className="text-sm font-semibold">Background reconstruction</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            What rebuilds the picture behind removed captions. Measured on a real
+            clip: the fast engine leaves a visible rectangular smear on every
+            setting it has — including the tightest mask it can make — because it
+            fills from a single frame and cannot know what was behind the text.
+          </p>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <EngineChoice
+              value="classical"
+              selected={engine}
+              onSelect={setEngine}
+              title="Fast"
+              body="One CPU call, ~25s of inference. Cheapest. Leaves a smeared band where the caption was."
+            />
+            <EngineChoice
+              value="propainter"
+              selected={engine}
+              onSelect={setEngine}
+              title="Best quality"
+              body="Adds a GPU pass (~210s) that rebuilds the region from frames where it was not covered. No rectangular edge. Costs more per job, and a caption that never moves over a background that never moves gives it nothing to borrow from."
+            />
+          </div>
+        </div>
+
         <div className="flex items-center gap-3">
           <button type="submit" disabled={busy} className="btn-lux btn-lux-primary">
             {busy ? "Saving…" : "Save"}
@@ -167,6 +214,55 @@ function Toggle({
       <span className="min-w-0">
         <span className="block text-sm font-semibold">{label}</span>
         <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * One engine option, as a radio card rather than a toggle.
+ *
+ * A two-state switch would have to be labelled for one of them ("use
+ * ProPainter"), which makes the other the unnamed default and hides what it
+ * actually does. Two cards let both sides state their cost and their weakness,
+ * which is the information an operator needs to choose — this is a money
+ * decision, not a preference.
+ *
+ * A real `<input type="radio">` under a label, so it is keyboard reachable and
+ * announced as a group, rather than a div with a click handler.
+ */
+function EngineChoice({
+  value,
+  selected,
+  onSelect,
+  title,
+  body,
+}: {
+  value: "classical" | "propainter";
+  selected: string;
+  onSelect: (v: "classical" | "propainter") => void;
+  title: string;
+  body: string;
+}) {
+  const active = selected === value;
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer gap-3 rounded-2xl border p-3 transition",
+        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+      )}
+    >
+      <input
+        type="radio"
+        name="frenz-ai-engine"
+        value={value}
+        checked={active}
+        onChange={() => onSelect(value)}
+        className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+      />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{body}</span>
       </span>
     </label>
   );

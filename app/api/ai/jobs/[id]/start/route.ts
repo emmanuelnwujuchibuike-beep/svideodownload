@@ -13,6 +13,7 @@ import { signSourceUrl, statSourceObject } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { peekAiUsage, releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -246,16 +247,36 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       const sourceUrl = await signSourceUrl(expectedPath);
       const origin = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || new URL(_request.url).origin;
 
+      /*
+        🔴 THE ENGINE IS RESOLVED ONCE, HERE, AND RECORDED ON THE JOB.
+
+        Owner, 2026-09-09: "i dont see a switch in admin dashboard to switch the
+        propainter off or on." The admin setting is the authority; the
+        environment variable stays as the fallback for a deploy that has no
+        settings row yet.
+
+        Read at SUBMIT time and written to the job, because the worker finishes
+        this job minutes later and must not ask the setting again. An operator
+        flipping the switch in between would otherwise leave a job detected with
+        the classical fill — already smeared — and then reconstructed from that
+        smear, which is worse than either engine on its own.
+      */
+      const { frenzAiEngine } = await getLandingSettings();
+
       const state = await provider.submit({
         jobId: job.id,
         feature,
         sourceUrl,
         webhookUrl: `${origin}/api/ai/replicate/webhook`,
+        engine: frenzAiEngine,
       });
 
       const updated = await transitionJob(job.id, ["queued"], "processing", {
         replicate_prediction_id: state.reference,
         model: AI_CLEAN_CONFIG.model,
+        // The engine this job was STARTED on. The worker reads it back rather
+        // than re-reading a setting that may have moved.
+        metadata: { ...(job.metadata ?? {}), engine: frenzAiEngine },
         // What ACTUALLY ran, as the provider reported it — not our intention.
         model_version: state.modelVersion,
         started_at: new Date().toISOString(),
@@ -268,6 +289,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         provider: feature.provider,
         model: AI_CLEAN_CONFIG.model,
         modelVersion: state.modelVersion,
+        engine: frenzAiEngine,
         predictionId: state.reference,
         transition: "queued -> processing",
       });

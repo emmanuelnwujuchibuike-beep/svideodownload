@@ -1,3 +1,4 @@
+import type { AiCleanEngine } from "@/lib/ai/config";
 import type { AiFeatureDef, AiJobStatus, AiProviderId } from "@/lib/ai/jobs";
 
 /**
@@ -34,6 +35,17 @@ export interface AiProviderSubmission {
   sourceUrl: string;
   /** Where the provider should call back when it finishes. */
   webhookUrl: string;
+  /**
+   * Which engine this job runs on, resolved ONCE by the caller.
+   *
+   * 🔴 Passed rather than read here, because the answer must not be able to
+   * change between a job's two stages. An operator flipping the admin switch
+   * mid-flight would otherwise leave a job detected with `hybrid` — already
+   * smeared — and then "reconstructed" from that smear, which is worse than
+   * either engine on its own. The value is recorded on the job and the worker
+   * reads it back from there rather than asking the setting again.
+   */
+  engine: AiCleanEngine;
 }
 
 /** What a provider says about work it is holding. */

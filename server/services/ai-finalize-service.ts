@@ -396,6 +396,21 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
 
     const hasAudio = !!sourceProbe?.hasAudio;
 
+    /*
+      🔴 THE ENGINE COMES FROM THE JOB, NOT FROM THE SETTING.
+
+      It was resolved and written when the job was submitted. Re-reading the
+      admin switch here would mean an operator who flipped it during a job gets
+      the two stages disagreeing: a video detected with the classical FILL —
+      already smeared — and then "reconstructed" from that smear.
+
+      Falls back to the environment default only for jobs that predate the field.
+    */
+    const jobEngine =
+      job.metadata?.engine === "propainter" || job.metadata?.engine === "classical"
+        ? job.metadata.engine
+        : aiCleanEngine();
+
     console.info("[ai/finalize] probed", {
       jobId,
       audioPresent: hasAudio,
@@ -403,7 +418,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
       cleanedCodec: cleanedProbe.videoCodec,
       sourceBytes,
       cleanedBytes,
-      engine: aiCleanEngine(),
+      engine: jobEngine,
     });
 
     /*
@@ -424,7 +439,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     let pictureFile = cleanedFile;
     let picture = cleanedProbe;
 
-    if (aiCleanEngine() === "propainter") {
+    if (jobEngine === "propainter") {
       const swapped = await reconstructWithProPainter({
         jobId,
         ownerId,

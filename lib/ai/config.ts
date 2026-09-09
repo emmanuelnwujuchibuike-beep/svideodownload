@@ -213,7 +213,11 @@ export function usesTemporalRemover(): boolean {
  * NOT sent — passing ignored fields to a strict schema is how a working
  * deployment breaks on somebody else's next release.
  */
-export function buildAiCleanInput(videoUrl: string): Record<string, string | number> {
+export function buildAiCleanInput(
+  videoUrl: string,
+  /** Resolved by the caller and recorded on the job; see AiProviderSubmission. */
+  engine: AiCleanEngine = aiCleanEngine(),
+): Record<string, string | number> {
   if (usesTemporalRemover()) {
     return {
       video: videoUrl,
@@ -238,7 +242,7 @@ export function buildAiCleanInput(videoUrl: string): Record<string, string | num
       RECTANGLE over the whole caption block, which is also how we learned that
       its inpainting rewrites ~100,000 px where the glyphs occupy ~20,000.
     */
-    method: aiCleanEngine() === "propainter" ? "black" : AI_CLEAN_CONFIG.method,
+    method: engine === "propainter" ? "black" : AI_CLEAN_CONFIG.method,
     resolution: AI_CLEAN_CONFIG.resolution,
     conf_threshold: AI_CLEAN_CONFIG.confidence,
     iou_threshold: AI_CLEAN_CONFIG.iou,

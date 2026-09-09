@@ -77,6 +77,16 @@ const schema = z.object({
   frenzAiFreeEnabled: z.boolean().optional(),
   // Same shape and same clearable rule as the other image slots.
   frenzAiTileImageUrl: reelsPoster.optional(),
+  /*
+    🔴 An ENUM, not a free string. This value selects which provider spends
+    money on the next job, so the only two things it may ever be are named here
+    — a typo must fall back to the cheap engine, not to something undefined.
+
+    And it must be in this schema at all: a field the panel POSTs that the route
+    does not validate is stripped silently, which is how an admin switch ends up
+    controlling nothing. This codebase has had six of those.
+  */
+  frenzAiEngine: z.enum(["classical", "propainter"]).optional(),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

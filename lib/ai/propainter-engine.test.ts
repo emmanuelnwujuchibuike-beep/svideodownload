@@ -132,7 +132,42 @@ describe("the engine switch", () => {
       solid so the worker can recover the mask by thresholding. Sending `hybrid`
       here would smear the picture first and then reconstruct the smear.
     */
-    expect(src).toContain('aiCleanEngine() === "propainter" ? "black" : AI_CLEAN_CONFIG.method');
+    expect(src).toContain('engine === "propainter" ? "black" : AI_CLEAN_CONFIG.method');
+  });
+
+  it("🔴 takes the engine as an ARGUMENT, so a job cannot change engine mid-flight", () => {
+    /*
+      The value is resolved once at submit time, written to the job, and read
+      back by the worker. If this function called `aiCleanEngine()` itself, an
+      operator flipping the admin switch between a job's two stages would leave
+      it detected with the classical FILL — already smeared — and then
+      "reconstructed" from that smear, which is worse than either engine alone.
+    */
+    expect(src).toMatch(/engine: AiCleanEngine = aiCleanEngine\(\),/);
+
+    const body = src.slice(src.indexOf("export function buildAiCleanInput"), src.indexOf("/* ───"));
+    // exactly one reference, and it is the default-parameter fallback
+    expect(body.match(/aiCleanEngine\(\)/g)).toHaveLength(1);
+  });
+
+  it("records the engine on the job, and the worker reads it back from there", () => {
+    const start = readFileSync(join(process.cwd(), "app/api/ai/jobs/[id]/start/route.ts"), "utf8");
+    const finalize = readFileSync(join(process.cwd(), "server/services/ai-finalize-service.ts"), "utf8");
+    expect(start).toContain("engine: frenzAiEngine,");
+    expect(start).toMatch(/metadata: \{ \.\.\.\(job\.metadata \?\? \{\}\), engine: frenzAiEngine \}/);
+    expect(finalize).toContain("job.metadata?.engine");
+    expect(finalize).toContain('if (jobEngine === "propainter")');
+  });
+
+  it("🔴 the admin API validates the engine, or the switch controls nothing", () => {
+    /*
+      A field the panel POSTs that the route does not validate is stripped
+      silently. This codebase has had six admin switches that were read by
+      nothing; this test is the cheapest way to keep this from being the
+      seventh.
+    */
+    const route = readFileSync(join(process.cwd(), "app/api/admin/landing/route.ts"), "utf8");
+    expect(route).toContain('frenzAiEngine: z.enum(["classical", "propainter"]).optional()');
   });
 
   it("does not dilate a mask that has already been closed", () => {

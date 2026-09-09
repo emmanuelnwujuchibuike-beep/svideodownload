@@ -3,7 +3,12 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AI_CLEAN_CONFIG, AI_CLEAN_LIMITS, buildAiCleanInput } from "./config";
+import {
+  AI_CLEAN_CONFIG,
+  AI_CLEAN_LIMITS,
+  aiCleanMisconfiguration,
+  buildAiCleanInput,
+} from "./config";
 import { AI_CLEAN_FORMATS, AI_CLEAN_MAX_BYTES } from "./clean-media";
 
 /**
@@ -193,5 +198,53 @@ describe("the real builder agrees with that split", () => {
     const temporalBranch = src.slice(src.indexOf("if (usesTemporalRemover())"), src.indexOf("return {\n    video: videoUrl,\n    method:"));
     expect(temporalBranch).not.toContain("conf_threshold");
     expect(temporalBranch).not.toContain("detection_interval");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE MODEL AND THE METHOD ARE ONE SETTING IN THREE VARIABLES
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 The method name selects the request BODY, so a temporal method against the
+ * classical model — or the reverse — is a 422 on every prediction, raised after
+ * the member's upload and after a quota reservation.
+ *
+ * On 2026-09-08 the owner was handed three values to paste into Vercel
+ * (REPLICATE_AI_CLEAN_MODEL, REPLICATE_AI_CLEAN_MODEL_VERSION, AI_CLEAN_METHOD).
+ * Pasting two of the three is an ordinary thing to do and would have broken
+ * every job silently. `aiCleanMisconfiguration` now refuses that pairing, so the
+ * feature reports itself unavailable instead — failing closed, and costing
+ * nobody an upload.
+ */
+describe("the model/method family guard", () => {
+  it("🔴 the shipped default pairing is coherent", () => {
+    // Whatever the committed defaults are, they must agree with each other.
+    expect(aiCleanMisconfiguration()).not.toMatch(/schemas differ/);
+  });
+
+  it("names both variables when they disagree, and nothing else", () => {
+    /*
+      Read from source rather than by mutating process.env mid-suite: the config
+      object is module-level and frozen at import, so an env change here would
+      leak into every other test in the file.
+    */
+    const src = readFileSync(join(process.cwd(), "lib/ai/config.ts"), "utf8");
+    expect(src).toContain("knownModelFamily");
+    expect(src).toMatch(/video-subtitle-remover.*temporal|temporal.*video-subtitle-remover/s);
+    expect(src).toMatch(/video-text-remover.*classical|classical.*video-text-remover/s);
+    // An unrecognised slug must NOT disable the tool.
+    expect(src).toContain("return null;");
+  });
+
+  it("keeps the detail operator-facing", () => {
+    /*
+      The string names environment variables, so it must never reach a member.
+      It is only ever passed to AiJobError's `detail`, which errors.ts documents
+      as "Logged and stored; never returned to a client" — the client gets the
+      code's own message, "This tool isn't available yet."
+    */
+    const errors = readFileSync(join(process.cwd(), "lib/ai/errors.ts"), "utf8");
+    expect(errors).toContain("never returned to a client");
   });
 });

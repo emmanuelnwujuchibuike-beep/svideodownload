@@ -250,5 +250,55 @@ export function aiCleanConfigured(): boolean {
 export function aiCleanMisconfiguration(): string | null {
   if (!process.env.REPLICATE_API_TOKEN?.trim()) return "REPLICATE_API_TOKEN is not set";
   if (!AI_CLEAN_CONFIG.version) return "REPLICATE_AI_CLEAN_MODEL_VERSION is not set";
+
+  /*
+    🔴 THE MODEL AND THE METHOD MUST BE THE SAME FAMILY.
+
+    They are set by THREE separate environment variables that have to move
+    together, because the method name is what selects the request body. Set
+    `AI_CLEAN_METHOD=sttn` while the model is still the classical one and every
+    prediction is rejected 422 before a frame is read — after the upload, after
+    a quota reservation, with the member watching a progress bar for a job that
+    was dead on submission.
+
+    This is not hypothetical. On 2026-09-08 the owner was handed exactly those
+    three values to paste into Vercel, and pasting two of the three would have
+    produced that outcome silently.
+
+    Refusing here turns it into the feature reporting itself unavailable, which
+    is honest and costs nobody an upload. It fails CLOSED, like the entitlement
+    path. The detail string is operator-facing only — `AiJobError.detail` is
+    never returned to a client (lib/ai/errors.ts).
+
+    Only a model we RECOGNISE can be judged. An unknown slug — a fork, a rename,
+    somebody's experiment — returns null and is allowed through, because
+    disabling the tool over a name we have merely not seen is worse than the
+    thing being guarded against.
+  */
+  const family = knownModelFamily(AI_CLEAN_CONFIG.model);
+  const wanted = usesTemporalRemover() ? "temporal" : "classical";
+  if (family && family !== wanted) {
+    return (
+      `AI_CLEAN_METHOD="${AI_CLEAN_CONFIG.method}" is a ${wanted} method but ` +
+      `REPLICATE_AI_CLEAN_MODEL="${AI_CLEAN_CONFIG.model}" is the ${family} model; ` +
+      "their input schemas differ, so every prediction would be rejected 422"
+    );
+  }
+
+  return null;
+}
+
+/**
+ * The family of a model we ship against, or null for anything else.
+ *
+ * Matched on the SLUG rather than the owner, because the same code published
+ * under a different account is still the same schema — which is exactly the
+ * migration in progress: `hjunior29/video-text-remover` (classical) to a
+ * self-published `video-subtitle-remover` (temporal).
+ */
+function knownModelFamily(model: string): "temporal" | "classical" | null {
+  const slug = (model.split("/").pop() ?? "").toLowerCase();
+  if (slug.includes("video-subtitle-remover")) return "temporal";
+  if (slug.includes("video-text-remover")) return "classical";
   return null;
 }

@@ -276,28 +276,72 @@ export function ExploreFeaturesBar({
     <Link
       href="/features"
       className={cn(
-        "group bg-white text-slate-900",
-        "shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06]",
+        "group relative overflow-hidden bg-white text-slate-900",
+        "ring-1 ring-inset ring-slate-900/[0.07] dark:bg-[#0b1020] dark:text-white dark:ring-white/10",
         "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
-        "dark:bg-white/[0.04] dark:text-white dark:ring-white/10",
         tile
-          ? // Matches the Wallpapers tile beside it: same radius, same padding,
-            // same column flow, so the pair reads as one row rather than two
-            // components that happen to be adjacent.
-            "flex h-full w-full flex-col justify-between rounded-[1.25rem] p-4"
-          : "flex w-full items-center gap-3 rounded-2xl px-4 py-3.5",
+          ? /*
+              ── 🔴 THE EXACT SHELL OF THE TILE IT STANDS IN FOR ──────────────
+
+              Owner, 2026-09-09: "the wallpaper and features button isn't as it
+              was before, the shape is now more rectangular, and the features
+              button no longer have the gradient like the Frenz AI button."
+
+              Both halves were mine. My first tile was `rounded-[1.25rem]` with
+              no minimum height, so it collapsed to its content and sat shorter
+              and squarer than the Wallpapers tile beside it — which is the
+              "more rectangular" pair the owner is looking at. And it was flat
+              white, where every other tile in that row carries colour.
+
+              These are `FrenzAICta`'s own values, copied deliberately rather
+              than approximated: same `min-h-[11rem]`, same `rounded-3xl`, same
+              padding, same two-shadow bloom. A tile that stands in for another
+              tile has to be the same object, or the row reads as assembled.
+            */
+            "flex min-h-[11rem] w-full flex-col rounded-3xl p-4 text-left shadow-[0_10px_30px_-14px_rgba(15,23,42,0.22)]"
+          : "flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)]",
         className,
       )}
     >
+      {/*
+        ── 🔴 THE GRADIENT, AS A STATIC WASH ────────────────────────────────
+
+        The AI tile's colour comes from three transform-animated gradient
+        layers. This one takes the same palette and paints it ONCE, with no
+        animation at all — and that is the right trade rather than a lesser
+        one. The animated field is Frenz AI's own identity, and repeating it
+        here would make two different destinations look like the same product.
+
+        It is also the landing page, held to 1.6 seconds: a second animated
+        ambient in the same row is compositor work on every frame for a tile
+        nobody is looking at. Painted once, this costs nothing after first
+        paint.
+      */}
+      {tile ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(120% 90% at 12% 0%, rgba(37,99,235,0.22) 0%, transparent 60%)," +
+              "radial-gradient(110% 85% at 92% 100%, rgba(124,58,237,0.20) 0%, transparent 62%)," +
+              "linear-gradient(140deg, rgba(255,255,255,0.55) 0%, transparent 45%)",
+          }}
+        />
+      ) : null}
+
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25",
-          tile ? "h-10 w-10" : "h-9 w-9",
+          "relative flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25",
+          tile ? "h-11 w-11" : "h-9 w-9",
         )}
       >
-        <Compass className={tile ? "h-5 w-5" : "h-[18px] w-[18px]"} />
+        <Compass className={tile ? "h-[22px] w-[22px]" : "h-[18px] w-[18px]"} />
       </span>
-      <span className={cn("min-w-0", tile ? "mt-3 block" : "flex-1")}>
+
+      {/* `mt-auto` pushes the label to the bottom of the tile, which is how the
+          Frenz AI and Wallpapers tiles are laid out — icon top, words bottom. */}
+      <span className={cn("relative min-w-0", tile ? "mt-auto block pt-3" : "flex-1")}>
         <span className={cn("block font-bold leading-tight", tile ? "text-[15px]" : "text-sm")}>
           Explore Features
         </span>
@@ -305,6 +349,7 @@ export function ExploreFeaturesBar({
           See everything Frenz can do.
         </span>
       </span>
+
       {/* The arrow is the bar's affordance. In the tile the whole card is the
           target and a chevron in the corner would just be furniture. */}
       {tile ? null : (

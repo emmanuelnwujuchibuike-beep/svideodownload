@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getAdminUser } from "@/lib/admin/guard";
 import { creditAiBalance } from "@/lib/ai/balance";
 import { formatCents } from "@/lib/ai/economy";
+import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -78,6 +79,9 @@ export async function POST(request: Request) {
   }
   const { email, amountCents, note } = parsed.data;
 
+  const { frenzAiCurrency } = await getLandingSettings();
+  const symbol = aiCurrencySymbol(frenzAiCurrency);
+
   const db = createAdminClient();
   const { data: profile, error } = await db
     .from("profiles")
@@ -128,8 +132,11 @@ export async function POST(request: Request) {
       balanceCents: balance,
       // Rendered for the operator, so they can see what they actually granted
       // before deciding whether it was what they meant.
-      credited: formatCents(amountCents),
-      balance: formatCents(balance),
+      // 🔴 The CONFIGURED symbol, not a hardcoded "$". An operator on a naira
+      // account reading "$10.00" after granting ₦10.00 would be told the
+      // opposite of what happened, by a factor of about 1,500.
+      credited: formatCents(amountCents, symbol),
+      balance: formatCents(balance, symbol),
     });
   } catch (e) {
     console.error("[admin/ai-credit] credit failed", { user: profile.id, error: String(e) });

@@ -10,6 +10,8 @@ import {
   FRENZ_AI_MAX_PRICE_CENTS,
   FRENZ_AI_MAX_WEEKLY_CREDITS,
   FRENZ_AI_MIN_PRICE_CENTS,
+  FRENZ_AI_MIN_TOPUP_CEILING,
+  FRENZ_AI_MIN_TOPUP_FLOOR,
   FRENZ_AI_MIN_PAID_CREDITS,
   setLandingSettings,
 } from "@/lib/landing/settings";
@@ -120,6 +122,19 @@ const schema = z.object({
     .int()
     .min(FRENZ_AI_MIN_PRICE_CENTS)
     .max(FRENZ_AI_MAX_PRICE_CENTS)
+    .optional(),
+  /*
+    🔴 The billing CURRENCY. An enum, not a string: this value is sent to
+    Paystack on every transaction, and a typo would be a refused checkout in
+    front of somebody trying to pay.
+  */
+  frenzAiCurrency: z.enum(["USD", "NGN", "GHS", "ZAR", "KES"]).optional(),
+  /* The smallest deposit, in the same minor units as the price above. */
+  frenzAiMinTopupCents: z.coerce
+    .number()
+    .int()
+    .min(FRENZ_AI_MIN_TOPUP_FLOOR)
+    .max(FRENZ_AI_MIN_TOPUP_CEILING)
     .optional(),
   /*
     Turn the free tier off entirely and show "Pro feature" instead. Kept

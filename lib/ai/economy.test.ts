@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  AI_TOPUP_OPTIONS_CENTS,
+  AI_MIN_TOPUP_FALLBACK_CENTS,
+  aiTopupOptions,
   decideFunding,
   dayStartUtc,
   formatCents,
@@ -201,25 +202,63 @@ describe("formatCents", () => {
 });
 
 describe("top-up amounts", () => {
+  const MIN = 500;
+
   /*
-    🔴 A FIXED SET, because an amount field is the most obvious thing in this
-    system to tamper with. A value that is not on the list is REFUSED rather
+    🔴 A CLOSED SET, because an amount field is the most obvious thing in this
+    system to tamper with. A value that is not on the ladder is REFUSED rather
     than clamped — clamping turns an attack into a slightly cheaper purchase.
   */
   it("accepts only the offered amounts", () => {
-    for (const cents of AI_TOPUP_OPTIONS_CENTS) expect(isValidTopupCents(cents)).toBe(true);
+    for (const cents of aiTopupOptions(MIN)) expect(isValidTopupCents(cents, MIN)).toBe(true);
   });
 
   it("refuses anything else, including plausible-looking values", () => {
     for (const bad of [1, 499, 501, 100_000, 0, -500, "500", null, undefined, 5.5, Number.NaN]) {
-      expect(isValidTopupCents(bad), JSON.stringify(bad)).toBe(false);
+      expect(isValidTopupCents(bad, MIN), JSON.stringify(bad)).toBe(false);
     }
   });
 
-  it("offers whole dollars only, so no option can produce a fractional cent", () => {
-    for (const cents of AI_TOPUP_OPTIONS_CENTS) {
-      expect(Number.isInteger(cents)).toBe(true);
-      expect(cents % 100).toBe(0);
+  /*
+    The ladder starts exactly where the operator set it — that is the whole
+    point of the setting — and rises monotonically, so the screen never offers
+    a "bigger" option that costs less.
+  */
+  it("starts at the configured minimum and only goes up", () => {
+    const options = aiTopupOptions(MIN);
+    expect(options[0]).toBe(MIN);
+    for (let i = 1; i < options.length; i += 1) {
+      expect(options[i]!).toBeGreaterThan(options[i - 1]!);
     }
+  });
+
+  it("moves with the setting", () => {
+    expect(aiTopupOptions(100)).toEqual([100, 200, 500, 1_000]);
+    expect(aiTopupOptions(2_000)).toEqual([2_000, 4_000, 10_000, 20_000]);
+  });
+
+  /*
+    🔴 A MINIMUM FROM THE REQUEST MUST NOT BE USABLE. The validator takes the
+    minimum as an argument so it stays pure, which means a careless caller could
+    pass one that arrived from the client — and `{ min: 1, amount: 1 }` would
+    then buy credit for one cent. This test does not stop that; the route's own
+    read of the server setting does. It is here to state the hazard next to the
+    function, so the next reader sees it.
+  */
+  it("validates against whatever minimum it is given — so callers must pass the server's", () => {
+    expect(isValidTopupCents(1, 1)).toBe(true);
+    expect(isValidTopupCents(1, MIN)).toBe(false);
+  });
+
+  it("falls back rather than offering an empty ladder", () => {
+    // A screen with no amounts on it is a member who cannot pay us.
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(aiTopupOptions(bad as number).length).toBe(4);
+      expect(aiTopupOptions(bad as number)[0]).toBe(AI_MIN_TOPUP_FALLBACK_CENTS);
+    }
+  });
+
+  it("produces whole minor units, never a fraction", () => {
+    for (const cents of aiTopupOptions(333)) expect(Number.isInteger(cents)).toBe(true);
   });
 });

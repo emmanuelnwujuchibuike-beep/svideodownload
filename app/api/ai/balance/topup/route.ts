@@ -74,18 +74,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const amount = (body as { amountCents?: unknown })?.amountCents;
-  if (!isValidTopupCents(amount)) {
-    return NextResponse.json({ error: "Choose one of the listed amounts." }, { status: 400 });
-  }
-
   const email = user.email;
   if (!email) {
     // Paystack requires one, and we will not invent it.
     return NextResponse.json({ error: "Add an email to your account first." }, { status: 400 });
   }
 
-  const { frenzAiCurrency } = await getLandingSettings();
+  const { frenzAiCurrency, frenzAiMinTopupCents } = await getLandingSettings();
+
+  /*
+    🔴 THE MINIMUM COMES FROM THE SERVER'S SETTINGS, NEVER FROM THE REQUEST.
+
+    `isValidTopupCents` takes the minimum as an argument so the module stays
+    pure — which means a careless caller could hand it one that arrived in the
+    body, and `{ minCents: 1, amountCents: 1 }` would then buy credit for a
+    cent. Reading it here, after the settings fetch, is what closes that: the
+    ladder the server validates against is the ladder the operator configured,
+    whatever the client believes it was offered.
+  */
+  const amount = (body as { amountCents?: unknown })?.amountCents;
+  if (!isValidTopupCents(amount, frenzAiMinTopupCents)) {
+    return NextResponse.json({ error: "Choose one of the listed amounts." }, { status: 400 });
+  }
 
   /*
     🔴 A PREFIXED, RANDOM REFERENCE. The prefix makes an AI top-up recognisable

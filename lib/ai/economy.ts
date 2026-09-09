@@ -208,8 +208,55 @@ export function formatCents(cents: number, currency = "$"): string {
  * top up, and the smallest is ten videos' worth at the shipped price — below
  * that the payment processor's own fee is a meaningful fraction of the sale.
  */
-export const AI_TOPUP_OPTIONS_CENTS: readonly number[] = [500, 1_000, 2_500, 5_000] as const;
+/**
+ * The amounts offered, derived from the operator's minimum.
+ *
+ * ── 🔴 GENERATED FROM ONE SETTING, NOT FOUR ─────────────────────────────────
+ *
+ * Owner, 2026-09-09: "whats the minimum deposit? it should be configurable from
+ * admin dashboard."
+ *
+ * Four separate admin fields would let an operator produce an incoherent ladder
+ * — 5, 3, 40, 12 — and would need four validations. One minimum with a fixed
+ * multiplier ladder is always ordered, always starts where the operator said,
+ * and is one number to reason about.
+ *
+ * ── 🔴 IT IS STILL A CLOSED SET, WHICH IS THE SECURITY PROPERTY ─────────────
+ *
+ * The point of offering amounts rather than accepting one is that a tampered
+ * request matches NOTHING and is refused. Generating the set changes where the
+ * numbers come from; it does not weaken that, because the server regenerates
+ * the same ladder from the same setting when it validates. A client that sends
+ * an amount between two rungs is refused exactly as before.
+ *
+ * The multipliers are 1/2/5/10 — the ordinary shape of a top-up ladder, and
+ * wide enough that somebody who cleans a lot is not buying credit weekly.
+ */
+export const AI_TOPUP_MULTIPLIERS: readonly number[] = [1, 2, 5, 10] as const;
 
-export function isValidTopupCents(value: unknown): value is number {
-  return typeof value === "number" && AI_TOPUP_OPTIONS_CENTS.includes(value);
+export function aiTopupOptions(minCents: number): number[] {
+  /*
+    A malformed minimum yields the shipped default rather than an empty ladder:
+    a top-up screen with no amounts on it is a member who cannot pay us, which
+    is a worse failure than an amount an operator did not choose.
+  */
+  const base =
+    Number.isFinite(minCents) && minCents > 0 ? Math.round(minCents) : AI_MIN_TOPUP_FALLBACK_CENTS;
+  return AI_TOPUP_MULTIPLIERS.map((m) => base * m);
+}
+
+/** Used only when the configured minimum is missing or nonsense. */
+export const AI_MIN_TOPUP_FALLBACK_CENTS = 500;
+
+/**
+ * Is this an amount we actually offered?
+ *
+ * 🔴 The minimum is passed in rather than read here, because this module is
+ * pure and the setting is an async database read. The CALLER must pass the
+ * server's own value — never one that arrived in the request, which would let
+ * somebody supply a minimum of 1 alongside an amount of 1 and buy nothing for
+ * nothing.
+ */
+export function isValidTopupCents(value: unknown, minCents: number): value is number {
+  return typeof value === "number" && aiTopupOptions(minCents).includes(value);
 }

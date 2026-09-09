@@ -11,10 +11,15 @@ import {
   FRENZ_AI_MAX_WEEKLY_CREDITS,
   FRENZ_AI_MIN_PRICE_CENTS,
   FRENZ_AI_MIN_PAID_CREDITS,
+  FRENZ_AI_MIN_TOPUP_CEILING,
+  FRENZ_AI_MIN_TOPUP_FLOOR,
+  AI_CURRENCIES,
+  aiCurrencySymbol,
+  type AiCurrency,
   type AiCleanEngineSetting,
   type LandingSettings,
 } from "@/lib/landing/settings";
-import { formatCents } from "@/lib/ai/economy";
+import { aiTopupOptions, formatCents } from "@/lib/ai/economy";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,6 +58,10 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [businessCredits, setBusinessCredits] = useState(String(settings.frenzAiBusinessDailyCredits));
   const [weekly, setWeekly] = useState(String(settings.frenzAiWeeklyFreeCredits));
   const [price, setPrice] = useState(String(settings.frenzAiVideoPriceCents));
+  const [currency, setCurrency] = useState<AiCurrency>(settings.frenzAiCurrency);
+  const [minTopup, setMinTopup] = useState(String(settings.frenzAiMinTopupCents));
+  // The symbol the operator will actually be charging in — see the currency note.
+  const symbol = aiCurrencySymbol(currency);
   const [engine, setEngine] = useState<AiCleanEngineSetting>(settings.frenzAiEngine);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -92,6 +101,8 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           // Price may NOT be zero — the schema refuses it — so here `||` is
           // guarding an empty field rather than discarding a meaningful 0.
           frenzAiVideoPriceCents: Number(price) || settings.frenzAiVideoPriceCents,
+          frenzAiCurrency: currency,
+          frenzAiMinTopupCents: Number(minTopup) || settings.frenzAiMinTopupCents,
           frenzAiEngine: engine,
         }),
       });
@@ -205,9 +216,51 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           <span className="ml-2 text-xs text-muted-foreground">0&ndash;{FRENZ_AI_MAX_WEEKLY_CREDITS}</span>
         </div>
 
+        {/*
+          ── 🔴 THE CURRENCY, AND WHY IT IS NOT OPTIONAL ────────────────────
+
+          Owner, 2026-09-09: "i need to set up currency? what if user from us
+          want to pay and is in naira? cause my default currency in paystack is
+          naira and i want users to be billed in usd."
+
+          Paystack amounts are in the SUBUNIT of the account's currency and the
+          API never reports which one it assumed. `50` is ₦0.50 on a naira
+          account and $0.50 on a dollar one. Nothing in the response
+          distinguishes them, so a mismatch here is silent and permanent.
+
+          ⚠️ SETTING THIS TO USD DOES NOT ENABLE USD. Charging in a currency
+          other than the account's default is a capability Paystack grants
+          per-merchant — a Nigerian account needs USD switched on for it (a
+          business account, requested through their dashboard or support).
+          Until then a USD transaction is REFUSED at checkout, which is the
+          loud failure we want rather than a silent mispricing.
+        */}
+        <div>
+          <label htmlFor="frenz-ai-currency" className="block text-sm font-semibold">
+            Billing currency
+          </label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Must match what your Paystack account can actually charge. Setting a
+            currency here does not enable it — Paystack grants that per account,
+            and a currency it cannot process is refused at checkout.
+          </p>
+          <select
+            id="frenz-ai-currency"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value as AiCurrency)}
+            className="mt-2 rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {(Object.keys(AI_CURRENCIES) as AiCurrency[]).map((code) => (
+              <option key={code} value={code}>
+                {code} ({AI_CURRENCIES[code]})
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label htmlFor="frenz-ai-price" className="block text-sm font-semibold">
-            Price per AI video, in cents
+            Price per AI video, in {currency} minor units
           </label>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Charged only after a member&apos;s free allowance is used. Pro and
@@ -226,9 +279,57 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
             />
             {/* What they have actually typed, in the units a person thinks in. */}
             <span className="text-sm font-semibold tabular-nums">
-              = {formatCents(Number(price) || 0)}
+              = {formatCents(Number(price) || 0, symbol)}
             </span>
             <span className="text-xs text-muted-foreground">per video</span>
+          </div>
+        </div>
+
+        {/*
+          ── 🔴 THE SMALLEST DEPOSIT (owner, 2026-09-09) ────────────────────
+
+          "whats the minimum deposit? it should be configurable from admin
+          dashboard."
+
+          ONE field, not four. The amounts offered to a member are this times
+          1, 2, 5 and 10 — so the ladder is always ordered, always starts where
+          the operator said, and there is one number to reason about rather
+          than four that could be set into nonsense.
+
+          🔴 The floor of {FRENZ_AI_MIN_TOPUP_FLOOR} is about the CARD
+          PROCESSOR, not about us: below roughly a unit of currency, the
+          per-transaction fee is a large fraction of the sale, so a tiny top-up
+          costs more to collect than it collects.
+        */}
+        <div>
+          <label htmlFor="frenz-ai-min-topup" className="block text-sm font-semibold">
+            Minimum deposit, in {currency} minor units
+          </label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Members are offered this, and 2×, 5× and 10× of it. Anything else is
+            refused server-side, so the ladder is the only thing anybody can buy.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              id="frenz-ai-min-topup"
+              type="number"
+              inputMode="numeric"
+              min={FRENZ_AI_MIN_TOPUP_FLOOR}
+              max={FRENZ_AI_MIN_TOPUP_CEILING}
+              value={minTopup}
+              onChange={(e) => setMinTopup(e.target.value)}
+              className="w-32 rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            {/* The whole ladder, so the operator sees what a member will be
+                offered before saving rather than after. */}
+            <span className="text-xs text-muted-foreground">
+              offers{" "}
+              <span className="font-semibold text-foreground">
+                {aiTopupOptions(Number(minTopup) || 0)
+                  .map((c) => formatCents(c, symbol))
+                  .join(" · ")}
+              </span>
+            </span>
           </div>
         </div>
 

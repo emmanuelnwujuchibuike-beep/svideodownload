@@ -267,6 +267,22 @@ export interface LandingSettings {
    */
   frenzAiCurrency: AiCurrency;
   /**
+   * ── 🔴 THE SMALLEST TOP-UP, IN MINOR UNITS OF `frenzAiCurrency` ─────────
+   *
+   * Owner, 2026-09-09: "whats the minimum deposit? it should be configurable
+   * from admin dashboard."
+   *
+   * The offered amounts are this times 1, 2, 5 and 10 — see `aiTopupOptions`.
+   * One setting rather than four so the ladder is always ordered and always
+   * starts where the operator said.
+   *
+   * ⚠️ It is in the SAME units as `frenzAiVideoPriceCents`, so its sensible
+   * value moves with the currency: 500 is $5.00 on a USD account and ₦5.00 on
+   * a naira one, and the second is not a deposit anybody would make. The admin
+   * field renders the configured symbol beside it for exactly this reason.
+   */
+  frenzAiMinTopupCents: number;
+  /**
    * Whether FREE members may run AI Clean at all.
    *
    * Owner, 2026-09-08: "since the replicate says credit first, then before the
@@ -361,6 +377,8 @@ export const DEFAULT_LANDING: LandingSettings = {
     something priced at $0.50 — or the reverse.
   */
   frenzAiCurrency: "USD" as AiCurrency,
+  // $5.00 at the default currency. An operator on naira must raise this.
+  frenzAiMinTopupCents: 500,
   // ON by default: switching a feature off is a decision an operator makes, not
   // a state a fresh install falls into.
   frenzAiFreeEnabled: true,
@@ -450,6 +468,32 @@ export function normalizeWeeklyCredits(value: unknown): number {
  */
 export const FRENZ_AI_MIN_PRICE_CENTS = 1;
 export const FRENZ_AI_MAX_PRICE_CENTS = 10_000;
+
+/**
+ * Bounds on the smallest top-up.
+ *
+ * ── 🔴 THE FLOOR IS ABOUT PAYMENT FEES, NOT ABOUT US ────────────────────────
+ *
+ * 100 minor units — $1.00, or ₦100. Below that a card processor's own
+ * per-transaction fee is a large fraction of the sale, so a 20-cent top-up
+ * costs more to collect than it collects. Refusing it is kinder than taking it.
+ *
+ * The ceiling is on the MINIMUM, not on what somebody may deposit: the ladder
+ * multiplies this by ten, so a minimum of 100,000 already offers a top of
+ * 1,000,000 minor units. A slipped digit here would otherwise put a five-figure
+ * charge in front of a member as the smallest option available.
+ */
+export const FRENZ_AI_MIN_TOPUP_FLOOR = 100;
+export const FRENZ_AI_MIN_TOPUP_CEILING = 100_000;
+
+export function normalizeMinTopup(value: unknown): number {
+  if (value === null || value === undefined || value === "") {
+    return DEFAULT_LANDING.frenzAiMinTopupCents;
+  }
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_LANDING.frenzAiMinTopupCents;
+  return Math.max(FRENZ_AI_MIN_TOPUP_FLOOR, Math.min(FRENZ_AI_MIN_TOPUP_CEILING, Math.floor(n)));
+}
 
 export function normalizePriceCents(value: unknown): number {
   if (value === null || value === undefined || value === "") {
@@ -553,6 +597,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiWeeklyFreeCredits: normalizeWeeklyCredits(raw.frenzAiWeeklyFreeCredits),
       frenzAiVideoPriceCents: normalizePriceCents(raw.frenzAiVideoPriceCents),
       frenzAiCurrency: isAiCurrency(raw.frenzAiCurrency) ? raw.frenzAiCurrency : DEFAULT_LANDING.frenzAiCurrency,
+      frenzAiMinTopupCents: normalizeMinTopup(raw.frenzAiMinTopupCents),
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
       frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
@@ -622,6 +667,7 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
     frenzAiWeeklyFreeCredits: normalizeWeeklyCredits(pick("frenzAiWeeklyFreeCredits")),
     frenzAiVideoPriceCents: normalizePriceCents(pick("frenzAiVideoPriceCents")),
     frenzAiCurrency: isAiCurrency(pick("frenzAiCurrency")) ? pick("frenzAiCurrency") : DEFAULT_LANDING.frenzAiCurrency,
+    frenzAiMinTopupCents: normalizeMinTopup(pick("frenzAiMinTopupCents")),
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
     frenzAiEngine: normalizeEngine(pick("frenzAiEngine")),
     frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",

@@ -56,8 +56,32 @@ const StreakTiersSheet = dynamic(
 );
 
 export function StreakTracker() {
-  const [unlock, setUnlock] = useState<{ streak: number; tier: StreakTier } | null>(null);
-  const [gallery, setGallery] = useState<number | null>(null);
+  /*
+    🔴 ONE overlay at a time — "celebration" or "gallery", NEVER both.
+
+    Owner, 2026-09-08: "did you fix the streak flame modal exit issue? cause i
+    still see it."
+
+    They were right, and the earlier fix was in the wrong file. `StreakHeaderChip`
+    had this same defect and was collapsed to a single value; THIS mount was not
+    checked, and it is the one a member actually hits — it fires on the milestone
+    ceremony, from `recordStreakActivity`, on any page.
+
+    It held `unlock` and `gallery` as INDEPENDENT states, and
+    `onViewGallery` set the second without clearing the first. So both full-screen
+    overlays were mounted, the ceremony underneath the gallery; dismissing the
+    gallery revealed it still sitting there and read as a close button that did
+    nothing.
+
+    A single discriminated value cannot express "both open", which is what makes
+    that impossible now rather than merely repaired. The tier rides along with
+    the ceremony because it is only meaningful there.
+  */
+  const [view, setView] = useState<
+    | { kind: "none" }
+    | { kind: "celebration"; streak: number; tier: StreakTier }
+    | { kind: "gallery"; streak: number }
+  >({ kind: "none" });
   const { data } = useStreak();
   const ran = useRef(false);
 
@@ -81,7 +105,7 @@ export function StreakTracker() {
         loosens the gate from rendering a ceremony with no rank attached.
       */
       const tier = milestoneFor(state.currentStreak);
-      if (tier) setUnlock({ streak: state.currentStreak, tier });
+      if (tier) setView({ kind: "celebration", streak: state.currentStreak, tier });
     });
     return () => {
       cancelled = true;
@@ -90,19 +114,21 @@ export function StreakTracker() {
 
   return (
     <>
-      {unlock ? (
+      {view.kind === "celebration" ? (
         <StreakUnlockCelebration
-          streak={unlock.streak}
-          tier={unlock.tier}
-          onViewGallery={() => setGallery(unlock.streak)}
-          onDone={() => setUnlock(null)}
+          streak={view.streak}
+          tier={view.tier}
+          // Replaces the ceremony rather than layering over it.
+          onViewGallery={() => setView({ kind: "gallery", streak: view.streak })}
+          onDone={() => setView({ kind: "none" })}
         />
       ) : null}
-      {gallery !== null ? (
+      {view.kind === "gallery" ? (
         <StreakTiersSheet
-          streak={data?.currentStreak ?? gallery}
+          streak={data?.currentStreak ?? view.streak}
           state={data ?? null}
-          onClose={() => setGallery(null)}
+          // Closes to nothing. There is no second overlay left behind.
+          onClose={() => setView({ kind: "none" })}
         />
       ) : null}
     </>

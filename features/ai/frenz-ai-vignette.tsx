@@ -140,11 +140,36 @@ export function FrenzAIVignette() {
             }}
           />
 
+          {/*
+            🔴 z-[2], AND THAT ONE DIGIT IS THE WHOLE BUG.
+
+            Owner, 2026-09-08: "the frenz ai vignette skip button doesnt click on
+            first tap."
+
+            It was `z-[1]` — the same as the content row below it, which is
+            `relative z-[1] … pr-8`. Equal z-index means DOM ORDER decides, and
+            the content row comes later, so it painted over the button. Its
+            `pr-8` reserves the SPACE for the X but the element still spans that
+            region and still receives the taps.
+
+            Measured on production with `elementFromPoint` at the button's exact
+            centre:
+
+                div.relative.z-[1].flex  <  div.relative.overflow-hidden…
+
+            — the content row, not the button. Only the sliver of the X above
+            that row's top edge was hittable, which is why it took a second or
+            third try rather than never working: a big enough target to find by
+            accident, small enough to miss every time you aim for the middle.
+
+            Nothing else on this card needs to sit above the content, so raising
+            just this one control is the whole fix.
+          */}
           <button
             type="button"
             onClick={dismiss}
             aria-label="Dismiss"
-            className="absolute right-2.5 top-2.5 z-[1] flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/[0.06] text-slate-500 transition hover:bg-slate-900/10 hover:text-slate-900 dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
+            className="absolute right-2.5 top-2.5 z-[2] flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/[0.06] text-slate-500 transition hover:bg-slate-900/10 hover:text-slate-900 dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
           >
             <X className="h-4 w-4" aria-hidden />
           </button>

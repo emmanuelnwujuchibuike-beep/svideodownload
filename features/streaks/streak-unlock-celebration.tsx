@@ -120,7 +120,6 @@ export function StreakUnlockCelebration({
   replay?: boolean;
 }) {
   const lite = useLowPowerFx();
-  const [leaving, setLeaving] = useState(false);
   /** Drives only the two-flame crossover; everything else is CSS delays. */
   const [turned, setTurned] = useState(false);
   const marked = useRef(false);
@@ -133,19 +132,36 @@ export function StreakUnlockCelebration({
   const compact = tier.ceremony <= 1;
 
   /*
-    One dismissal path for the button, the backdrop and Escape, so none of them
-    can race another into calling `onDone` twice (which would unmount, then set
-    state on an unmounted parent).
+    🔴 IT LEAVES ON THE TAP. NO EXIT ANIMATION TO SIT THROUGH.
+
+    Owner, 2026-09-08, twice: "the vignette try frenz ai exit button doesnt click
+    and exit immediately, and the streak gallery modal also doesnt exit
+    immediately", then "did you fix the streak flame modal exit issue? cause i
+    still see it."
+
+    This held `onDone` behind a 380ms leaving animation. For 380ms after the tap
+    nothing the member can act on had happened — the overlay was still there and
+    still covering the page. On a phone that is indistinguishable from a dead
+    button, so you tap again, and the second tap hits `dismissed.current` and is
+    swallowed. The animation was the whole complaint.
+
+    Arriving gently is pleasant; leaving slowly is not. Entry keeps its full
+    ceremony — that is the part worth watching — and departure is now immediate.
+    `leaving` state is gone with it: there is no interval in which to render it.
   */
   const dismiss = useRef<(then?: () => void) => void>(() => {});
   dismiss.current = (then?: () => void) => {
+    // Still guarded: the button, the backdrop and Escape share this path, and
+    // two of them racing would call `onDone` twice and set state after unmount.
     if (dismissed.current) return;
     dismissed.current = true;
-    setLeaving(true);
-    window.setTimeout(() => {
-      onDone();
-      then?.();
-    }, 380);
+    onDone();
+    /*
+      Synchronous, so React batches both into ONE commit — `onDone` clears the
+      ceremony and `then` opens the gallery in its place. There is never a frame
+      with both mounted, which is the other half of what the owner was seeing.
+    */
+    then?.();
   };
 
   useEffect(() => {
@@ -244,9 +260,7 @@ export function StreakUnlockCelebration({
         data-ceremony={tier.ceremony}
         className={`streak-ms ${compact ? "streak-ms-compact" : ""} ${
           lite ? LOW_POWER_FX_CLASS : ""
-        } fixed inset-0 z-[130] flex flex-col items-center justify-center px-6 ${
-          leaving ? "streak-ms-leaving" : ""
-        }`}
+        } fixed inset-0 z-[130] flex flex-col items-center justify-center px-6`}
       >
         {/* ── The environment. Layered radial light rather than a flat wash, so
             the screen has depth before anything else arrives. Static

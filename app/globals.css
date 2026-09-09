@@ -2895,13 +2895,12 @@ html.dark .streak-sheet-panel {
 }
 
 @keyframes frenz-ms-in  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes frenz-ms-out { to   { opacity: 0; transform: scale(1.03); } }
-
-.streak-ms-leaving {
-  /* §7, 2500-3500ms: the celebration disappears smoothly rather than snapping. */
-  animation: frenz-ms-out 420ms var(--ease-out) both;
-  pointer-events: none;
-}
+/* 🔴 The exit animation is GONE (owner, 2026-09-08, twice: the overlay
+   "doesnt exit immediately"). It held the dismissal for 420ms of fade, during
+   which the tap had visibly done nothing and the screen was still covered — so
+   it read as a dead button and got tapped again. Entry keeps its full ceremony;
+   departure is now the same frame as the tap. `frenz-ms-out` and
+   `.streak-ms-leaving` are deleted rather than left orphaned. */
 
 /* ── The environment (§5) ──────────────────────────────────────────────────── */
 .streak-ms-env {

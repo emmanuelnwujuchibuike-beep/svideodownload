@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
 import { extensionForUpload } from "@/lib/ai/clean-media";
 import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
@@ -167,6 +168,42 @@ export async function POST(request: Request) {
       return fail("INVALID_INPUT", { error: AI_SOURCE_URL_ERRORS[link.reason] });
     }
     normalisedUrl = link.url;
+  }
+
+  /*
+    ── 🔴 THE ACCEPTABLE-USE GATE ─────────────────────────────────────────────
+
+    Owner, 2026-09-09: "Do NOT rely solely on frontend validation. The
+    backend/API must enforce these restrictions."
+
+    Placed HERE, and the position is the whole design:
+
+      · AFTER the shape, registry and link checks, so a malformed request is
+        still refused as malformed rather than as a policy matter;
+      · BEFORE the entitlement read, the row insert and the upload ticket, so a
+        refused request writes NOTHING — no job, no signed write into private
+        storage, no allowance touched, nothing in anyone's history.
+
+    What it reads is the only member-supplied text this feature has: the
+    filename and, for a link job, the address. AI Clean takes no prompt, so
+    there is no instruction to screen — see the module for the honest account
+    of what that layer can and cannot see.
+
+    🔴 The refusal is deliberately identical for every rule that could have
+    fired, and the reason never leaves the server. A per-reason message would
+    tell somebody probing this exactly which word to change, and it would turn
+    a refusal into an accusation.
+  */
+  const policy = screenAiJob({
+    sourceName: source.kind === "upload" ? (source.name ?? null) : null,
+    sourceUrl: normalisedUrl,
+    sourceKind,
+  });
+  if (!policy.allowed) {
+    // Reason and a truncated subject only — never the text that matched. See
+    // `policyBlockEvent` for why the string itself is not kept.
+    console.info("[ai/jobs] policy block", policyBlockEvent(policy.reason, subject.key));
+    return fail("POLICY_BLOCKED");
   }
 
   try {

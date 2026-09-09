@@ -33,6 +33,22 @@ export type AiErrorCode =
   | "UNSUPPORTED_FORMAT"
   | "JOB_NOT_FOUND"
   | "JOB_ALREADY_PROCESSING"
+  /**
+   * The acceptable-use layer refused it (lib/ai/acceptable-use.ts).
+   *
+   * ── 🔴 422, AND NOT 403 ──────────────────────────────────────────────────
+   *
+   * A 403 says "you may not use this tool", which is false and is also the
+   * thing the brief specifically rules out: "Do not accuse the user of
+   * wrongdoing." The member's access is intact and their allowance is
+   * untouched; it is THIS REQUEST that cannot be processed as described. 422
+   * says exactly that — the request was understood and cannot be acted on.
+   *
+   * ⚠️ The message must never vary by which rule matched. One sentence for
+   * every reason, or the response becomes a readout of the ruleset telling
+   * somebody precisely which word to change.
+   */
+  | "POLICY_BLOCKED"
   | "PROVIDER_ERROR"
   /**
    * The provider refused for a reason on OUR side of the relationship —
@@ -121,6 +137,13 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   UNSUPPORTED_FORMAT: { status: 415, message: "AI Clean takes MP4, MOV, WebM and AVI videos." },
   JOB_NOT_FOUND: { status: 404, message: "We couldn't find that job." },
   JOB_ALREADY_PROCESSING: { status: 409, message: "You already have a video being cleaned. Wait for it to finish." },
+  // 🔴 The sentence is AI_POLICY_MESSAGE, and it is written out here rather
+  // than imported so this module stays free of dependencies — the two are held
+  // together by a test in acceptable-use.test.ts instead of by an import.
+  POLICY_BLOCKED: {
+    status: 422,
+    message: "This request can't be processed. Please make sure you have the rights or permission to edit this media.",
+  },
   // 502 for a provider that answered badly, 500 for work that genuinely broke.
   // The member sees the same sentence either way; the status is for us.
   PROVIDER_ERROR: { status: 502, message: "The AI service didn't respond. Nothing was charged — try again." },

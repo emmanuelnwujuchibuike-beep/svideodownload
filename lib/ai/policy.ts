@@ -234,19 +234,53 @@ export function policyFor(audience: AiAudience, feature: AiFeature): AiPlanPolic
 /**
  * The policy with an operator's configured numbers applied.
  *
- * 🔴 Only GUEST and FREE allowances are configurable. The paid numbers are what
- * somebody is paying for — an operator lowering Pro to 1/day by mistake would
- * be a silent breach of a subscription, and raising Business to 500 would be a
- * provider bill nobody approved. `isConfigurableAudience` is the gate, and a
- * test pins that paid rows come back untouched.
+ * ── 🔴 PAID CAPS ARE CONFIGURABLE NOW TOO (owner, 2026-09-09) ───────────────
+ *
+ * "pro and business cap should be able to change in admin dashboard, if is not
+ * set yet set it up."
+ *
+ * This function previously refused that outright, with the argument that "an
+ * operator lowering Pro to 1/day by mistake would be a silent breach of a
+ * subscription, and raising Business to 500 would be a provider bill nobody
+ * approved". Both of those remain true — they are just not arguments about WHO
+ * decides, which is the question the owner has answered. They are arguments
+ * about BOUNDS, and that is where they now live:
+ * `normalizePaidCredits` in lib/landing/settings.ts clamps every saved value
+ * between a floor that protects the subscription and a ceiling that protects
+ * the bill, and the admin route re-applies the same bounds on the way in.
+ *
+ * 🔴 THE MISSING-VALUE CASE IS THE ONE THAT MATTERS. An absent or non-finite
+ * config leaves the shipped policy untouched, so a settings row that has never
+ * been saved — or a read that failed — gives a paying member exactly what the
+ * code says they get. It must never fall through to zero.
+ *
+ * `guest` remains untouched by the paid branch: it has no cap to raise.
  *
  * Pure: the caller does the async settings read, so the rules stay testable.
  */
 export function applyConfiguredLimits(
   policy: AiPlanPolicy,
   audience: AiAudience,
-  config: { freeDailyCredits?: number; freeEnabled?: boolean } = {},
+  config: {
+    freeDailyCredits?: number;
+    freeEnabled?: boolean;
+    proDailyCredits?: number;
+    businessDailyCredits?: number;
+  } = {},
 ): AiPlanPolicy {
+  /*
+    The paid branch, first and separate. `isConfigurableAudience` gates the
+    free/guest fields below and answers false for these, so folding them into
+    the same branch would have made the gate wrong for one of its two callers.
+  */
+  if (audience === "pro" || audience === "business") {
+    const configured = audience === "pro" ? config.proDailyCredits : config.businessDailyCredits;
+    if (typeof configured !== "number" || !Number.isFinite(configured) || configured <= 0) {
+      return policy;
+    }
+    return { ...policy, dailyLimit: Math.floor(configured) };
+  }
+
   if (!isConfigurableAudience(audience)) return policy;
 
   /*

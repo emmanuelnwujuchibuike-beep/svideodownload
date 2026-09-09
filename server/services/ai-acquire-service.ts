@@ -189,6 +189,31 @@ export async function acquireAiJobSource(jobId: string): Promise<AcquireOutcome>
     }
 
     /*
+      ── 🔴 THE RESOLUTION CEILING, APPLIED BEFORE A PROVIDER SECOND IS BILLED ─
+
+      This is the ONE point in the whole flow where a resolution is known before
+      anything has been submitted: the worker has the file on local disk and
+      ffprobe in its hand, and the detector has not been called yet. An upload
+      cannot be checked here at all — it goes browser-to-storage and is
+      dispatched from Vercel, which has no ffprobe — so a link job is where the
+      cheap version of this check lives, and it is worth taking.
+
+      Refused as UNSUPPORTED_SOURCE rather than a new code: from the member's
+      side a video this large is a file the tool does not take, which is exactly
+      what that sentence already says. The allowance is refunded either way.
+    */
+    const pixels = (probe.width ?? 0) * (probe.height ?? 0);
+    if (pixels > AI_CLEAN_LIMITS.maxPixels) {
+      await fail(
+        jobId,
+        "UNSUPPORTED_SOURCE",
+        `${probe.width}x${probe.height} exceeds ${AI_CLEAN_LIMITS.maxPixels}px`,
+      );
+      await refund(job, feature.id);
+      return { ok: false, jobId, code: "UNSUPPORTED_SOURCE", detail: "resolution over ceiling" };
+    }
+
+    /*
       🔴 THE KEY IS BUILT THE SAME WAY THE UPLOAD PATH BUILDS IT.
 
       `aiSourceKey(ownerId, feature, jobId, ext)` — the same function, from the

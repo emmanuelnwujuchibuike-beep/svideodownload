@@ -6,6 +6,8 @@ import { getAdminUser } from "@/lib/admin/guard";
 import {
   FEED_GRID_SLOTS,
   FRENZ_AI_MAX_FREE_CREDITS,
+  FRENZ_AI_MAX_PAID_CREDITS,
+  FRENZ_AI_MIN_PAID_CREDITS,
   setLandingSettings,
 } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
@@ -69,6 +71,31 @@ const schema = z.object({
   */
   frenzAiPublicEnabled: z.boolean().optional(),
   frenzAiFreeDailyCredits: z.coerce.number().int().min(0).max(FRENZ_AI_MAX_FREE_CREDITS).optional(),
+  /*
+    The paid caps (owner, 2026-09-09: "pro and business cap should be able to
+    change in admin dashboard").
+
+    🔴 A FLOOR as well as a ceiling, which the free field above does not have.
+    Free may legitimately be 0 — that is a deliberate business decision. Paid
+    may not: somebody is paying for this, so a mistyped `1` must be REFUSED by
+    the schema rather than clamped silently, and the operator told. The floor is
+    what stops a slipped keystroke becoming a quiet breach of a subscription.
+
+    Bounded here AND in `normalizePaidCredits`, for the same reason the free
+    field is: one validation is one thing to forget.
+  */
+  frenzAiProDailyCredits: z.coerce
+    .number()
+    .int()
+    .min(FRENZ_AI_MIN_PAID_CREDITS)
+    .max(FRENZ_AI_MAX_PAID_CREDITS)
+    .optional(),
+  frenzAiBusinessDailyCredits: z.coerce
+    .number()
+    .int()
+    .min(FRENZ_AI_MIN_PAID_CREDITS)
+    .max(FRENZ_AI_MAX_PAID_CREDITS)
+    .optional(),
   /*
     Turn the free tier off entirely and show "Pro feature" instead. Kept
     separate from a zero credit count so the interface can say the right thing;

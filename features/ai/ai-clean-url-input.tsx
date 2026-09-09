@@ -3,6 +3,7 @@
 import { ArrowLeft, ArrowRight, Link2 } from "lucide-react";
 import { useId, useState, type FormEvent } from "react";
 
+import { AIRightsNotice } from "@/features/ai/ai-rights-notice";
 import { AI_CLEAN_ERRORS, parseVideoUrl } from "@/lib/ai/clean-media";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,17 @@ export function AICleanUrlInput({
         <p className="mt-3 text-center text-xs leading-relaxed text-muted-foreground">
           Use a supported video source. We fetch it on our servers — nothing downloads to your device.
         </p>
+
+        {/*
+          🔴 THE SECOND ENTRY POINT, AND IT NEEDS THE NOTICE MORE THAN THE FIRST.
+
+          A pasted link is the one path where the media plausibly is not the
+          member's own — an upload came off their device, a link points at
+          somebody's post. This is the screen where "media you own or have
+          permission to edit" is actually load-bearing, so leaving it on the
+          picker alone would have put it everywhere except the place it matters.
+        */}
+        <AIRightsNotice className="mt-3" />
 
         <div className="mt-5 text-center">
           <button

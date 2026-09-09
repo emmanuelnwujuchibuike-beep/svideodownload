@@ -2,8 +2,9 @@
 
 import { ArrowLeft, FileVideo, Link2, Sparkles } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
+import type { AiCleanEntitlement } from "@/lib/ai/client";
+import { cn } from "@/lib/utils";
 
 /**
  * Where Continue goes — and the one screen in this feature that has to be most
@@ -35,6 +36,7 @@ import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
 export function AICleanReadyState({
   source,
   isPro,
+  entitlement = null,
   planKnown,
   onBack,
   onStart,
@@ -42,6 +44,12 @@ export function AICleanReadyState({
 }: {
   source: { kind: "file"; name: string } | { kind: "link"; url: string };
   isPro: boolean;
+  /**
+   * The server's own answer about this member's allowance. Optional because
+   * it arrives a moment after the screen does, and a sentence with a wrong
+   * number in it is worse than a sentence with no number in it.
+   */
+  entitlement?: AiCleanEntitlement | null;
   /** False until `/api/me` has answered — see the note below. */
   planKnown: boolean;
   onBack: () => void;
@@ -97,12 +105,35 @@ export function AICleanReadyState({
           </p>
         </div>
 
+        {/*
+          ── 🔴 THE NUMBER IS READ, NOT WRITTEN ────────────────────────────────
+
+          This sentence said "Free members get 3 AI Clean videos a day, each
+          unlocked by watching a short ad." Both halves were false:
+          `DEFAULT_BY_AUDIENCE.free` is `dailyLimit: 2, requiresReward: false`.
+
+          So the product was promising a free member one more video than it
+          would give them, and warning them about an ad gate that had already
+          been removed. Nothing failed, because a hard-coded sentence cannot
+          disagree with anything — it just sat there being wrong while the
+          policy moved underneath it.
+
+          It now comes from `entitlement`, which is the server's own answer
+          (`/api/ai/clean/entitlement` → `entitlementView`), so the screen and
+          the reservation cannot drift apart again. Until that answer arrives —
+          and for a member whose plan has no cap — the sentence says only what
+          is true without a number in it.
+
+          ⚠️ This matters beyond tidiness: an advertised allowance that the
+          server does not honour is the kind of discrepancy an ad network reads
+          as a misleading offer.
+        */}
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
           {!planKnown
             ? "AI Clean is included with Pro."
             : isPro
-              ? "Included with your Pro plan — no ads, no daily cap."
-              : "Free members get 3 AI Clean videos a day, each unlocked by watching a short ad. Pro removes both."}
+              ? paidAllowanceLine(entitlement)
+              : freeAllowanceLine(entitlement)}
         </p>
 
         <div className="mt-6 flex flex-col gap-2.5 sm:flex-row-reverse">
@@ -130,4 +161,69 @@ export function AICleanReadyState({
       </div>
     </div>
   );
+}
+
+/**
+ * The free-plan allowance, in words, from the server's own numbers.
+ *
+ * ── 🔴 EVERY BRANCH HERE EXISTS BECAUSE THE OLD SENTENCE HAD NONE ───────────
+ *
+ * The line it replaces was a single hard-coded string, which is why it could be
+ * wrong in two ways at once and stay wrong for weeks. This says only what the
+ * entitlement actually reports:
+ *
+ *   · no answer yet → no number, because a wrong number is worse than none;
+ *   · unlimited or no cap → no number, because there isn't one;
+ *   · a cap → that cap, pluralised;
+ *   · and the ad clause appears ONLY when `rewardRequired` is true. The free
+ *     plan currently sets `requiresReward: false`, so mentioning an ad gate
+ *     would be warning somebody about a toll that was already removed.
+ *
+ * ⚠️ Wording, for the ad clause: "watch a short ad to unlock" — never anything
+ * that asks somebody to CLICK or interact with an advertisement. That is an ad
+ * network's line, not a stylistic preference, and the whole sentence is
+ * generated here so there is one place it can be got right.
+ */
+/**
+ * The same sentence for a paying member.
+ *
+ * ── 🔴 IT SAID "no daily cap", AND THERE IS ONE ─────────────────────────────
+ *
+ * `DEFAULT_BY_AUDIENCE.pro` is `dailyLimit: 10`. Business is 25, Max AI 40.
+ * None of them were ever uncapped, so a Pro member could be told they had no
+ * limit and then meet one on their eleventh video of the day. Only `unlimited`
+ * may say so, and only the server may say `unlimited`.
+ *
+ * ── 🔴 AND THE NUMBER IS NOT PRINTED (owner, 2026-09-09) ────────────────────
+ *
+ * "those cap shouldn't be displayed cause it can be changed from the admin at
+ * anytime."
+ *
+ * Right, and it is the stronger form of the same rule that fixed the free line.
+ * A paid cap is an operator setting now, so printing it on this screen turns a
+ * dashboard edit into a promise the product made and then quietly changed. The
+ * remaining allowance is shown by `AICleanAllowance`, which re-reads it — a
+ * live count is a fact, a printed ceiling is a claim.
+ */
+function paidAllowanceLine(entitlement: AiCleanEntitlement | null): string {
+  return entitlement?.unlimited
+    ? "Included with your plan — no ads, no daily cap."
+    : "Included with your plan — no ads, and a bigger daily allowance.";
+}
+
+function freeAllowanceLine(entitlement: AiCleanEntitlement | null): string {
+  const limit = entitlement?.dailyLimit ?? null;
+  const capped = !entitlement?.unlimited && typeof limit === "number" && limit > 0;
+  const reward = entitlement?.rewardRequired === true;
+
+  if (!capped) {
+    return reward
+      ? "Watch a short ad to unlock each AI Clean video. Pro removes the ads."
+      : "Pro adds a bigger daily allowance and faster processing.";
+  }
+
+  const videos = `${limit} AI Clean ${limit === 1 ? "video" : "videos"} a day`;
+  return reward
+    ? `Free members get ${videos}, each unlocked by watching a short ad. Pro removes both.`
+    : `Free members get ${videos}. Pro adds a bigger allowance and faster processing.`;
 }

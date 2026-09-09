@@ -88,12 +88,21 @@ export async function getAiEntitlement(
     The guest and free allowances are operator settings (owner, 2026-09-08).
     Read on the SERVER, applied here, and enforced by the same atomic
     reservation as before — the number moving does not move where the authority
-    lives. Paid rows are untouched by config; see `applyConfiguredLimits`.
+    lives.
+
+    🔴 PAID ROWS ARE CONFIGURABLE TOO as of 2026-09-09 (owner: "pro and business
+    cap should be able to change in admin dashboard"). The sentence that used to
+    end this comment said the opposite, and leaving it would have been the more
+    dangerous half of a half-finished change: a reader would trust it and stop
+    looking. The bounds that protect a subscription now live in
+    `normalizePaidCredits`, not in a refusal to read the field.
   */
   const settings = await getLandingSettings();
   const policy = applyConfiguredLimits(policyFor(audience, feature.id), audience, {
     freeDailyCredits: settings.frenzAiFreeDailyCredits,
     freeEnabled: settings.frenzAiFreeEnabled,
+    proDailyCredits: settings.frenzAiProDailyCredits,
+    businessDailyCredits: settings.frenzAiBusinessDailyCredits,
   });
 
   return {

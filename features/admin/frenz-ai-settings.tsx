@@ -6,6 +6,8 @@ import { useState, type FormEvent } from "react";
 
 import {
   FRENZ_AI_MAX_FREE_CREDITS,
+  FRENZ_AI_MAX_PAID_CREDITS,
+  FRENZ_AI_MIN_PAID_CREDITS,
   type AiCleanEngineSetting,
   type LandingSettings,
 } from "@/lib/landing/settings";
@@ -43,6 +45,8 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [publicEnabled, setPublicEnabled] = useState(settings.frenzAiPublicEnabled);
   const [freeEnabled, setFreeEnabled] = useState(settings.frenzAiFreeEnabled);
   const [credits, setCredits] = useState(String(settings.frenzAiFreeDailyCredits));
+  const [proCredits, setProCredits] = useState(String(settings.frenzAiProDailyCredits));
+  const [businessCredits, setBusinessCredits] = useState(String(settings.frenzAiBusinessDailyCredits));
   const [engine, setEngine] = useState<AiCleanEngineSetting>(settings.frenzAiEngine);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -61,6 +65,16 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           frenzAiPublicEnabled: publicEnabled,
           frenzAiFreeEnabled: freeEnabled,
           frenzAiFreeDailyCredits: Number(credits) || 0,
+          /*
+            🔴 The CURRENT value when a box is empty, never 0. Zero is a legal
+            free credit count and an illegal paid one, so an empty paid field
+            has to mean "leave it alone" rather than "set it to zero" — the
+            route's schema would refuse a 0 and the operator would meet a
+            validation error on a field they never touched.
+          */
+          frenzAiProDailyCredits: Number(proCredits) || settings.frenzAiProDailyCredits,
+          frenzAiBusinessDailyCredits:
+            Number(businessCredits) || settings.frenzAiBusinessDailyCredits,
           frenzAiEngine: engine,
         }),
       });
@@ -110,10 +124,9 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
             Free cleans per day
           </label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            For guests and free members. Paid plans have their own limits and are
-            deliberately not settable here — those are abuse ceilings, and an
-            operator raising one by mistake is how a stolen session becomes an
-            unbounded bill.
+            For guests and free members. Zero is allowed and means nobody gets a
+            free clean; use the switch above if you want the interface to say
+            &ldquo;Pro feature&rdquo; instead of showing a counter.
           </p>
           <input
             id="frenz-ai-credits"
@@ -133,6 +146,66 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           <span className="ml-2 text-xs text-muted-foreground">
             0&ndash;{FRENZ_AI_MAX_FREE_CREDITS}
           </span>
+        </div>
+
+        {/*
+          ── 🔴 THE PAID CAPS (owner, 2026-09-09) ───────────────────────────
+
+          "pro and business cap should be able to change in admin dashboard, if
+          is not set yet set it up."
+
+          The note above this field used to say the opposite — that paid limits
+          were "deliberately not settable here" because "an operator raising one
+          by mistake is how a stolen session becomes an unbounded bill". That
+          risk is real and it has not gone away; it is simply not an argument
+          about who decides. It now lives in the BOUNDS: the floor sits above
+          the free allowance so a slip cannot give a subscriber less than a free
+          member gets, and the ceiling caps what a slipped digit can commit to.
+
+          🔴 The numbers are no longer printed anywhere in the product — the
+          member's screen shows their live remaining count instead — precisely
+          because an operator can change these at any time. A printed ceiling
+          would turn this field into a promise the product had already made.
+        */}
+        <div>
+          <p className="text-sm font-semibold">Paid cleans per day</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Pro and Business. These are not shown anywhere in the app, so you can
+            change them without contradicting something a member has already
+            read. Between {FRENZ_AI_MIN_PAID_CREDITS} and {FRENZ_AI_MAX_PAID_CREDITS}
+            &nbsp;— the floor is there so a mistyped value can never leave a
+            paying member with less than a free one.
+          </p>
+          <div className="mt-2 flex flex-wrap items-end gap-4">
+            {(
+              [
+                { id: "frenz-ai-pro-credits", label: "Pro", value: proCredits, set: setProCredits },
+                {
+                  id: "frenz-ai-business-credits",
+                  label: "Business",
+                  value: businessCredits,
+                  set: setBusinessCredits,
+                },
+              ] as const
+            ).map((field) => (
+              <label key={field.id} htmlFor={field.id} className="block">
+                <span className="block text-xs font-semibold text-muted-foreground">{field.label}</span>
+                <input
+                  id={field.id}
+                  type="number"
+                  inputMode="numeric"
+                  min={FRENZ_AI_MIN_PAID_CREDITS}
+                  max={FRENZ_AI_MAX_PAID_CREDITS}
+                  value={field.value}
+                  onChange={(e) => field.set(e.target.value)}
+                  className={cn(
+                    "mt-1 w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  )}
+                />
+              </label>
+            ))}
+          </div>
         </div>
 
         {/*

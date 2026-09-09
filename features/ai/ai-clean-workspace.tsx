@@ -422,6 +422,9 @@ export function AICleanWorkspace({ historyHref = "/ai/history" }: { historyHref?
           <AICleanReadyState
             source={source.kind === "file" ? { kind: "file", name: source.file.name } : { kind: "link", url: source.url }}
             isPro={isPremium}
+            /* The server's own allowance, so the sentence on that screen cannot
+               claim a number the reservation will not honour. */
+            entitlement={cleanJob.entitlement}
             planKnown={planKnown}
             busy={cleanJob.busy}
             onBack={() => setStage(source.kind === "file" ? "choose" : "link")}

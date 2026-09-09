@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildMaskCoverageArgs,
+  buildMaskedCompositeArgs,
   buildTextMaskArgs,
   MASK_REFINE_MIN_RATIO,
   parseMaskCoverage,
@@ -242,5 +243,93 @@ describe("parseMaskCoverage — the metadata=print format", () => {
 
   it("still reads the ffprobe csv the second pass produces", () => {
     expect(parseMaskCoverage("25.5\n25.5")).toBeCloseTo(0.1, 5);
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE RECONSTRUCTION IS A PATCH, NOT THE PICTURE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, on a 1080x1920 clip: "It not accurate, some parts shows
+ * and glitches… the current result is poor, look into it why it glitches."
+ *
+ * The job row said why, in two fields:
+ *
+ *     propainter_resized = 480x848->1080x1920
+ *     mask_coverage      = 8.2
+ *
+ * ProPainter clamps its own working resolution whatever we send, so a 1080p
+ * video came back at 480p; we upscaled the whole frame 2.25x and shipped it.
+ * 91.8% of that frame had no text in it and needed no repair, and every pixel
+ * of it was replaced by a 480p upscale anyway.
+ */
+describe("buildMaskedCompositeArgs", () => {
+  const plan = {
+    sourcePath: "/tmp/source.mp4",
+    reconstructedPath: "/tmp/reconstructed.mp4",
+    maskPath: "/tmp/mask.mp4",
+    outPath: "/tmp/out.mp4",
+    width: 1080,
+    height: 1920,
+    fps: 30,
+  };
+  const args = buildMaskedCompositeArgs(plan);
+  const graph = args[args.indexOf("-filter_complex") + 1] ?? "";
+
+  /*
+    🔴 THE ORDER OF INPUTS IS THE WHOLE BEHAVIOUR. `maskedmerge` takes
+    base, overlay, mask — and emits the BASE where the mask is black. Swap the
+    first two and the filter silently does the exact opposite: it would keep the
+    reconstruction everywhere and paste the original text back over the one
+    region that was successfully repaired.
+  */
+  it("takes the member's original as the base and the reconstruction as the overlay", () => {
+    expect(args.indexOf(plan.sourcePath)).toBeLessThan(args.indexOf(plan.reconstructedPath));
+    expect(args.indexOf(plan.reconstructedPath)).toBeLessThan(args.indexOf(plan.maskPath));
+    expect(graph).toContain("[base][fix][m]maskedmerge[out]");
+    expect(graph).toContain("[0:v]");
+    expect(graph).toContain("[1:v]");
+    expect(graph).toContain("[2:v]");
+  });
+
+  /*
+    🔴 The mask is THRESHOLDED, not merely scaled. `maskedmerge` blends
+    proportionally, so a mid-grey pixel is a 50% mix — and a mask softened by
+    resampling would ghost the original caption back through the repair at every
+    glyph edge, which is precisely the artefact this change exists to remove.
+  */
+  it("forces the mask back to hard black and white", () => {
+    expect(graph).toContain("format=gray");
+    expect(graph).toMatch(/geq=lum='if\(gt\(p\(X.,Y\).,127\).,255.,0\)'/);
+  });
+
+  it("scales all three inputs to the source's exact size", () => {
+    const scales = graph.match(/scale=1080x1920/g) ?? [];
+    expect(scales.length).toBe(3);
+  });
+
+  /*
+    🔴 NO AUDIO MAP. `buildRestoreArgs` is the one step that owns putting the
+    member's sound back; a track carried through here would give it two
+    candidates and no rule for choosing between them.
+  */
+  it("maps only the composited video", () => {
+    expect(args).toContain("-map");
+    expect(args[args.indexOf("-map") + 1]).toBe("[out]");
+    expect(args.join(" ")).not.toContain("-c:a");
+    expect(args.join(" ")).not.toContain("0:a");
+  });
+
+  it("encodes at visually lossless quality and holds the source frame rate", () => {
+    expect(args[args.indexOf("-crf") + 1]).toBe("16");
+    expect(args[args.indexOf("-r") + 1]).toBe("30");
+  });
+
+  /* Nothing a member supplies reaches this array — same rule as every other
+     builder in this module. The only variables are temp paths and two integers. */
+  it("passes a fixed argument array with no shell string anywhere", () => {
+    expect(args.every((a) => typeof a === "string")).toBe(true);
+    expect(args.some((a) => a.includes("&&") || a.includes(";" + "rm"))).toBe(false);
   });
 });

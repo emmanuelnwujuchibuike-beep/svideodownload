@@ -623,6 +623,123 @@ export function parseMaskCoverage(raw: string): number | null {
   return mean / 255;
 }
 
+/* ─────────────────────── keeping the untouched picture ───────────────────── */
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 ONLY THE REPAIRED REGION COMES FROM PROPAINTER
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, on a 1080x1920 clip: "It not accurate, some parts shows
+ * and glitches… the current result is poor, look into it why it glitches."
+ *
+ * The job's own diagnostics said it outright:
+ *
+ *     propainter_resized = 480x848->1080x1920
+ *     mask_coverage      = 8.2
+ *
+ * ── PROPAINTER DOWNSCALES ON ITS OWN, WHATEVER WE ASK ───────────────────────
+ *
+ * We sent `resize_ratio: 1, width: -1, height: -1` — "leave it alone" — and got
+ * back 480x848 from a 1080x1920 source. The model clamps its working resolution
+ * internally, and `resize_ratio` scales BEFORE that clamp rather than defeating
+ * it. So the reconstruction is a 480p frame, and the resize-back step then blew
+ * the whole picture up 2.25x.
+ *
+ * ── AND WE WERE SHIPPING THAT WHOLE FRAME ───────────────────────────────────
+ *
+ * That is the actual defect, and it is ours rather than the model's. The mask
+ * covered 8.2% of the frame. The other 91.8% had nothing wrong with it — no
+ * text, nothing to repair — and we replaced every pixel of it with a 480p
+ * upscale anyway, because we took ProPainter's output as the picture instead of
+ * as a patch.
+ *
+ * `maskedmerge` fixes it in one filter: the member's ORIGINAL pixels wherever
+ * the mask is black, the reconstruction only where it is white. The 91.8% keeps
+ * its full 1080p detail, and the repaired 8.2% is the best the inpainter could
+ * do — which is exactly the trade this feature is supposed to make.
+ *
+ * It also explains the fragments the owner saw. Text that survived the mask was
+ * being re-rendered from a 480p upscale, so a caption's edge came back as a
+ * soft, smeared remnant rather than as itself. Now anything outside the mask is
+ * untouched source, so a miss looks like the original text — a clean failure
+ * instead of a glitch.
+ *
+ * ── 🔴 ALL THREE INPUTS MUST BE THE SAME SIZE ───────────────────────────────
+ *
+ * `maskedmerge` requires identical dimensions and pixel format across base,
+ * overlay and mask. The reconstruction has already been scaled back to the
+ * source's exact size by `buildResizeToSourceArgs`, and the mask was built at
+ * source size — but the mask is scaled here anyway, explicitly, because a
+ * silent size mismatch in this filter is an ffmpeg error at the very end of a
+ * job that has already been paid for.
+ *
+ * The mask is forced to full-range gray and thresholded hard: `maskedmerge`
+ * blends proportionally, and a mask softened by encoding would ghost the
+ * original through the repair.
+ */
+export function buildMaskedCompositeArgs(plan: {
+  /** The member's original — the base, and what most of the frame stays. */
+  sourcePath: string;
+  /** ProPainter's reconstruction, already at source dimensions. */
+  reconstructedPath: string;
+  /** The mask this job used. White is the region to take from the overlay. */
+  maskPath: string;
+  outPath: string;
+  width: number;
+  height: number;
+  fps: number;
+}): string[] {
+  const size = `${plan.width}x${plan.height}`;
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-nostdin",
+    "-y",
+    "-i",
+    plan.sourcePath,
+    "-i",
+    plan.reconstructedPath,
+    "-i",
+    plan.maskPath,
+    "-filter_complex",
+    // yuv420p on all three: maskedmerge refuses a format mismatch, and the
+    // three files have been through three different encoders to get here.
+    `[0:v]scale=${size},format=yuv420p[base];` +
+      `[1:v]scale=${size},format=yuv420p[fix];` +
+      /*
+        🔴 Thresholded, not just scaled. The mask is lossless h264 but has been
+        resampled, and `maskedmerge` treats a mid-grey pixel as a 50% blend —
+        which at a caption's edge would leave a ghost of the original text
+        showing through the repair. `geq` puts every pixel back to 0 or 255.
+      */
+      `[2:v]scale=${size},format=gray,geq=lum='if(gt(p(X\\,Y)\\,127)\\,255\\,0)',format=yuv420p[m];` +
+      `[base][fix][m]maskedmerge[out]`,
+    "-map",
+    "[out]",
+    /*
+      🔴 The AUDIO IS NOT MAPPED. This runs before `buildRestoreArgs`, which is
+      the one step that owns putting the member's sound back — carrying a track
+      through here would give that step two candidates and no rule for choosing.
+    */
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    // Visually lossless. The output of this pass is the member's picture, and
+    // it goes through one more mux — so the only quality lost in the whole
+    // pipeline should be here, once.
+    "-crf",
+    "16",
+    "-pix_fmt",
+    "yuv420p",
+    "-r",
+    String(plan.fps),
+    plan.outPath,
+  ];
+}
+
 /* ────────────────────────────── the poster ───────────────────────────────── */
 
 /**

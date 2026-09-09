@@ -18,6 +18,7 @@ import { AI_CLEAN_LIMITS, AI_CLEAN_PROPAINTER, aiCleanEngine } from "@/lib/ai/co
 import { runProPainter } from "@/lib/ai/propainter";
 import {
   buildPosterArgs,
+  buildMaskedCompositeArgs,
   buildRestoreArgs,
   buildResizeToSourceArgs,
   buildMaskCoverageArgs,
@@ -95,6 +96,13 @@ export type FinalizeErrorCode =
   | "INVALID_AI_OUTPUT"
   | "INVALID_FINAL_VIDEO"
   | "FINAL_UPLOAD_FAILED"
+  /**
+   * The source is outside what AI Clean takes — currently only the resolution
+   * ceiling, which for an UPLOAD is first knowable here (see the check itself
+   * for why). Its own code so "we would not run this" is never mistaken in the
+   * logs for "we tried and it broke".
+   */
+  | "UNSUPPORTED_SOURCE"
   | "RESULT_NOT_FOUND";
 
 /* ────────────────────────────── ffprobe ──────────────────────────────────── */
@@ -467,6 +475,33 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     const [sourceProbe, cleanedProbe] = await Promise.all([probeMedia(sourceFile), probeMedia(cleanedFile)]);
     if (!cleanedProbe?.hasVideo) {
       throw new FinalizeFailure("INVALID_AI_OUTPUT", "the AI output has no readable video stream");
+    }
+
+    /*
+      ── 🔴 THE RESOLUTION CEILING FOR AN UPLOAD, AT THE ONLY PLACE IT FITS ────
+
+      A link job is probed by the worker before it is submitted, so
+      `ai-acquire-service.ts` applies this ceiling for free. An UPLOAD never
+      passes through the worker before submission — it goes browser-to-storage
+      and is dispatched from Vercel, which has no ffprobe — so this is the first
+      moment its resolution is knowable at all.
+
+      That means the detector has already run and been paid for, and this check
+      cannot recover that. What it does recover is the GPU stage, which is the
+      expensive half, and it stops an absurd file becoming an absurd result in
+      the member's storage. Applied to every job rather than only uploads,
+      because a ceiling with an exception is a ceiling somebody routes around.
+
+      ⚠️ An unreadable probe is NOT over the ceiling. A width of 0 means we
+      failed to read the header, and refusing on that would fail jobs for a
+      reason that has nothing to do with the video.
+    */
+    const sourcePixels = (sourceProbe?.width ?? 0) * (sourceProbe?.height ?? 0);
+    if (sourcePixels > AI_CLEAN_LIMITS.maxPixels) {
+      throw new FinalizeFailure(
+        "UNSUPPORTED_SOURCE",
+        `${sourceProbe?.width}x${sourceProbe?.height} exceeds ${AI_CLEAN_LIMITS.maxPixels}px`,
+      );
     }
 
     const hasAudio = !!sourceProbe?.hasAudio;
@@ -1216,6 +1251,61 @@ async function reconstructWithProPainter(opts: {
       }
     }
 
+    /*
+      ── 🔴 ONLY THE MASKED REGION IS TAKEN FROM THE RECONSTRUCTION ──────────
+
+      Owner, 2026-09-09, on a 1080x1920 clip: "It not accurate, some parts shows
+      and glitches… the current result is poor."
+
+      The job's own row said why: `propainter_resized = 480x848->1080x1920` with
+      `mask_coverage = 8.2`. ProPainter clamps its working resolution internally
+      whatever we send — "leave it alone" produced a 480p reconstruction of a
+      1080p video — and we then upscaled the WHOLE FRAME 2.25x and shipped it.
+
+      91.8% of that frame had nothing wrong with it. There was no text there,
+      nothing to repair, and we replaced every pixel of it with a 480p upscale
+      because the code treated ProPainter's output as the picture rather than as
+      a patch.
+
+      `maskedmerge` takes the member's original everywhere the mask is black and
+      the reconstruction only where it is white. The untouched majority keeps
+      its real detail, and the repair is confined to the region that asked for
+      one.
+
+      🔴 IT ALSO CHANGES WHAT A MISS LOOKS LIKE, which is the "glitches" half of
+      the report. Text the mask did not cover was being re-rendered from a 480p
+      upscale, so a surviving caption came back as a soft smeared remnant. It is
+      now untouched source — so a detector miss shows the original text, clearly
+      and honestly, instead of a corruption of it.
+
+      ⚠️ FALLS BACK RATHER THAN FAILING. If the composite does not run we ship
+      the full reconstruction, which is what shipped before this existed. Worse
+      looking, still a finished video — and the row records which one happened.
+    */
+    let composited: "ok" | "skipped" | "failed" = "skipped";
+    if (srcW && srcH) {
+      const mergedFile = path.join(dir, "composited.mp4");
+      const ok = await runFfmpeg(
+        buildMaskedCompositeArgs({
+          sourcePath: sourceFile,
+          reconstructedPath: finalPath,
+          maskPath: maskFile,
+          outPath: mergedFile,
+          width: srcW,
+          height: srcH,
+          fps,
+        }),
+        FFMPEG_HARD_TIMEOUT_MS,
+      );
+      if (ok) {
+        finalPath = mergedFile;
+        composited = "ok";
+      } else {
+        console.warn("[ai/finalize] masked composite failed, shipping the full reconstruction", { jobId });
+        composited = "failed";
+      }
+    }
+
     console.info("[ai/finalize] reconstructed", {
       jobId,
       model: AI_CLEAN_PROPAINTER.model,
@@ -1226,6 +1316,7 @@ async function reconstructWithProPainter(opts: {
       sourceSize: srcW && srcH ? `${srcW}x${srcH}` : null,
       providerSize: reconstructedProbe?.width ? `${reconstructedProbe.width}x${reconstructedProbe.height}` : null,
       resized,
+      composited,
     });
     await noteJobDiagnostic(jobId, {
       propainter: "ok",
@@ -1236,6 +1327,9 @@ async function reconstructWithProPainter(opts: {
       mask_coverage: coverage === null ? null : Number((coverage * 100).toFixed(2)),
       ...(oversized ? { mask_oversized: true } : {}),
       ...(resized ? { propainter_resized: resized } : {}),
+      // Which picture the member actually received: the original with a patched
+      // region, or the whole reconstruction because the composite could not run.
+      propainter_composited: composited,
     });
     return finalPath;
   } catch (e) {

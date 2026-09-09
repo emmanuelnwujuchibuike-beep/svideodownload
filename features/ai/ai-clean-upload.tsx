@@ -1,9 +1,11 @@
 "use client";
 
 import { ArrowRight, Link2, UploadCloud } from "lucide-react";
+
 import { useId, useRef, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { AIRightsNotice } from "@/features/ai/ai-rights-notice";
 import { AI_CLEAN_ACCEPT, AI_CLEAN_FORMAT_LINE } from "@/lib/ai/clean-media";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -188,6 +190,17 @@ export function AICleanUpload({
           </button>
         </div>
       ) : null}
+
+      {/*
+        The rights notice, under the action rather than over it.
+
+        🔴 BELOW, and that is the placement decision. Above the drop zone it
+        would be the first thing on the screen and would read as a warning
+        about a tool nobody has used yet. Below, it sits where the format line
+        and the size hint sit — a true thing about using this, stated once,
+        next to the button that uses it.
+      */}
+      <AIRightsNotice className="mt-4" />
     </div>
   );
 }

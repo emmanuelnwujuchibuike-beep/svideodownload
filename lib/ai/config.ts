@@ -51,6 +51,33 @@ export const AI_CLEAN_LIMITS = {
   /** Seconds. Provider time is billed by the second, so this is a cost control. */
   maxDuration: envInt("AI_CLEAN_MAX_DURATION", 600),
   /**
+   * ── 🔴 THE RESOLUTION CEILING, AND WHERE IT CAN HONESTLY BE APPLIED ───────
+   *
+   * Owner, 2026-09-09 (the AdSense hardening brief): "Enforce… Maximum
+   * resolution where appropriate."
+   *
+   * 8,294,400 is 3840x2160. Above that a job is not a member cleaning a phone
+   * video; it is either a mistake or an attempt to spend our provider budget,
+   * and both are better refused than run.
+   *
+   * ⚠️ "Where appropriate" is doing real work in that sentence, and this is the
+   * honest account of it: a resolution is only knowable from a PROBE, and
+   * ffprobe exists on the Docker worker and nowhere else — Vercel's runtime has
+   * no binaries. So:
+   *
+   *   · a LINK job is probed by the worker before anything is submitted, so
+   *     this ceiling is applied before a single provider second is billed;
+   *   · an UPLOAD job reaches a probe only on the worker, at finalization. It
+   *     is still refused there — before the GPU stage, which is the expensive
+   *     half — but the detector has already run.
+   *
+   * What bounds an upload BEFORE submission is `maxFileSize`, checked at
+   * /start against what storage actually reports rather than what the browser
+   * claimed. That is a weaker bound on pixels than on bytes and it is the
+   * strongest one available at that point in the flow.
+   */
+  maxPixels: envInt("AI_CLEAN_MAX_PIXELS", 3840 * 2160),
+  /**
    * Bytes. The ceiling on what comes BACK. A cleaned video is roughly the size
    * of its input, so this is deliberately generous — it exists to stop a
    * runaway or wrong output exhausting a serverless function's memory, not to

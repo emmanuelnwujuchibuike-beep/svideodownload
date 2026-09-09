@@ -155,6 +155,39 @@ export interface LandingSettings {
    */
   frenzAiFreeDailyCredits: number;
   /**
+   * ── 🔴 THE PAID DAILY CAPS, NOW OPERATOR-SETTABLE TOO ─────────────────────
+   *
+   * Owner, 2026-09-09: "pro and business cap should be able to change in admin
+   * dashboard, if is not set yet set it up."
+   *
+   * Only the free tier was configurable, and `applyConfiguredLimits` carried a
+   * written argument for keeping it that way: "an operator lowering Pro to
+   * 1/day by mistake would be a silent breach of a subscription, and raising
+   * Business to 500 would be a provider bill nobody approved."
+   *
+   * That argument was about the RISK of the field, not about who should decide,
+   * and the owner has answered the second question. So the field exists and the
+   * risk is answered where risk belongs — in the bounds:
+   *
+   *   · a FLOOR, so a mistyped value cannot take a paying member below what
+   *     the plan is sold with (`FRENZ_AI_MIN_PAID_CREDITS`);
+   *   · a CEILING, so a slipped digit cannot commit to a provider bill nobody
+   *     approved (`FRENZ_AI_MAX_PAID_CREDITS`);
+   *   · and a malformed value falls back to the shipped default rather than to
+   *     zero — locking a subscriber out is the worst of the failures available.
+   *
+   * 0 is NOT a way to switch a paid tier off. There is no product in which a
+   * paying member has no allowance, so the floor refuses it; turning the
+   * feature off for everybody is `frenzAiFreeEnabled`'s job and a different
+   * decision.
+   *
+   * 🔴 Max AI is deliberately absent. That plan does not exist yet — its
+   * policy row is a placeholder — and an admin field for a tier nobody can buy
+   * is a control that cannot be verified against anything.
+   */
+  frenzAiProDailyCredits: number;
+  frenzAiBusinessDailyCredits: number;
+  /**
    * Whether FREE members may run AI Clean at all.
    *
    * Owner, 2026-09-08: "since the replicate says credit first, then before the
@@ -219,6 +252,21 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiPublicEnabled: true,
   // Two, because there is no rewarded ad to earn a third with yet.
   frenzAiFreeDailyCredits: 2,
+  /*
+    ── 🔴 THESE MATCH `AI_CLEAN`, NOT `DEFAULT_BY_AUDIENCE` ──────────────────
+
+    lib/ai/policy.ts has TWO tables. `DEFAULT_BY_AUDIENCE` is the fallback for a
+    feature with no policy of its own (pro 10, business 25); `AI_CLEAN` is the
+    one that actually applies here (pro 5, business 15), and `policyFor` prefers
+    it. I wrote the fallback's numbers in first and the entitlement tests caught
+    it immediately — an operator opening the admin form would have seen 10 and
+    25 for a feature that gives 5 and 15, and saving without editing would have
+    DOUBLED both allowances by accident.
+
+    A test pins these to `AI_CLEAN` so the two files cannot drift apart again.
+  */
+  frenzAiProDailyCredits: 5,
+  frenzAiBusinessDailyCredits: 15,
   // ON by default: switching a feature off is a decision an operator makes, not
   // a state a fresh install falls into.
   frenzAiFreeEnabled: true,
@@ -246,6 +294,63 @@ export function normalizeFreeCredits(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return DEFAULT_LANDING.frenzAiFreeDailyCredits;
   return Math.max(0, Math.min(FRENZ_AI_MAX_FREE_CREDITS, Math.floor(n)));
+}
+
+/**
+ * The bounds on a PAID daily cap.
+ *
+ * 🔴 A FLOOR as well as a ceiling, which the free field does not have and does
+ * not need. Free may legitimately be zero — that is a business decision an
+ * operator makes deliberately. Paid may not: somebody is paying for this, so a
+ * mistyped `1` must not silently become a breach of what they bought. One is
+ * the number a slipped keystroke produces; the floor is what stops it landing.
+ *
+ * The ceiling is a spend control. Every AI job costs real provider money, so a
+ * value with an extra digit in it is a bill nobody approved, arriving as a
+ * surprise a month later.
+ */
+/**
+ * 🔴 THREE, because the free tier gives two. The floor's job is to stop a
+ * slipped keystroke, and the sharpest line it can hold is "a paid plan may
+ * never be configured to give less than the free one" — a Pro member on 1/day
+ * while free members get 2 is not a tuning choice, it is a mistake. Above that
+ * the operator is making a real decision and the field should let them.
+ */
+export const FRENZ_AI_MIN_PAID_CREDITS = 3;
+export const FRENZ_AI_MAX_PAID_CREDITS = 500;
+
+/**
+ * A paid-credit value we are willing to act on.
+ *
+ * Clamped and defaulted exactly like the free one, and for the stronger reason:
+ * a malformed value here would take an allowance away from somebody who paid
+ * for it, so it falls back to the shipped default rather than to the floor.
+ */
+export function normalizePaidCredits(
+  value: unknown,
+  fallback: number,
+): number {
+  /*
+    ── 🔴 ABSENT IS NOT ZERO, AND JAVASCRIPT DISAGREES ───────────────────────
+
+    `Number(null)`, `Number("")` and `Number([])` are all 0 — finite, and
+    therefore indistinguishable from a deliberate zero to the `isFinite` check
+    alone. Every one of those is what "the operator did not fill this in"
+    actually looks like coming out of a form or a JSON column, and clamping them
+    to the floor would silently rewrite an unset field into a real setting.
+
+    Zero is folded in with them rather than clamped, because for a PAID cap
+    there is no product in which zero is a choice — the floor already forbids
+    it. Switching the feature off is `frenzAiFreeEnabled`'s job.
+
+    🔴 Note this is the OPPOSITE rule to `normalizeFreeCredits`, deliberately.
+    Zero free credits is a legitimate business decision an operator makes on
+    purpose; zero paid credits is always a mistake.
+  */
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.max(FRENZ_AI_MIN_PAID_CREDITS, Math.min(FRENZ_AI_MAX_PAID_CREDITS, Math.floor(n)));
 }
 
 /** URLs we are willing to render on the public landing. */
@@ -295,6 +400,14 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       // is present-day crawlability must mean ON.
       frenzAiPublicEnabled: raw.frenzAiPublicEnabled !== false,
       frenzAiFreeDailyCredits: normalizeFreeCredits(raw.frenzAiFreeDailyCredits),
+      frenzAiProDailyCredits: normalizePaidCredits(
+        raw.frenzAiProDailyCredits,
+        DEFAULT_LANDING.frenzAiProDailyCredits,
+      ),
+      frenzAiBusinessDailyCredits: normalizePaidCredits(
+        raw.frenzAiBusinessDailyCredits,
+        DEFAULT_LANDING.frenzAiBusinessDailyCredits,
+      ),
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
       frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
@@ -350,6 +463,17 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
     // else in the system expects.
     frenzAiPublicEnabled: pick("frenzAiPublicEnabled") !== false,
     frenzAiFreeDailyCredits: normalizeFreeCredits(pick("frenzAiFreeDailyCredits")),
+    // Same discipline as the free one, with the paid bounds. `pick` returns the
+    // CURRENT value when the caller did not send the field, so a panel that
+    // edits one cap can never reset the other.
+    frenzAiProDailyCredits: normalizePaidCredits(
+      pick("frenzAiProDailyCredits"),
+      DEFAULT_LANDING.frenzAiProDailyCredits,
+    ),
+    frenzAiBusinessDailyCredits: normalizePaidCredits(
+      pick("frenzAiBusinessDailyCredits"),
+      DEFAULT_LANDING.frenzAiBusinessDailyCredits,
+    ),
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
     frenzAiEngine: normalizeEngine(pick("frenzAiEngine")),
     frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",

@@ -249,30 +249,69 @@ function Spark({ className }: { className?: string }) {
  * doors it is a signpost, and a signpost is a line — which is exactly the
  * "horizontal rectangular shape to full the section width" the owner drew.
  */
-export function ExploreFeaturesBar({ className }: { className?: string }) {
+export function ExploreFeaturesBar({
+  className,
+  /**
+   * ── 🔴 `tile` IS THE LANDING PAGE'S SHAPE (owner, 2026-09-09) ────────────
+   *
+   * "the landing page should show the features button in place of the ai
+   * button as it was before the ai button was implemented."
+   *
+   * On the landing page this sits in the square slot beside Wallpapers, which
+   * is where it lived before Frenz AI took that slot in September. On the
+   * signed-in download page it stays the full-width `bar` beneath the pair.
+   *
+   * One component with two shapes rather than two components: the destination,
+   * the copy and the brand treatment are identical, and the thing that differs
+   * is the box it has to fill. Two components would drift.
+   */
+  variant = "bar",
+}: {
+  className?: string;
+  variant?: "bar" | "tile";
+}) {
+  const tile = variant === "tile";
+
   return (
     <Link
       href="/features"
       className={cn(
-        "group flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-slate-900",
+        "group bg-white text-slate-900",
         "shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)] ring-1 ring-inset ring-slate-900/[0.06]",
         "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
         "dark:bg-white/[0.04] dark:text-white dark:ring-white/10",
+        tile
+          ? // Matches the Wallpapers tile beside it: same radius, same padding,
+            // same column flow, so the pair reads as one row rather than two
+            // components that happen to be adjacent.
+            "flex h-full w-full flex-col justify-between rounded-[1.25rem] p-4"
+          : "flex w-full items-center gap-3 rounded-2xl px-4 py-3.5",
         className,
       )}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25">
-        <Compass className="h-[18px] w-[18px]" />
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/25",
+          tile ? "h-10 w-10" : "h-9 w-9",
+        )}
+      >
+        <Compass className={tile ? "h-5 w-5" : "h-[18px] w-[18px]"} />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-bold leading-tight">Explore Features</span>
+      <span className={cn("min-w-0", tile ? "mt-3 block" : "flex-1")}>
+        <span className={cn("block font-bold leading-tight", tile ? "text-[15px]" : "text-sm")}>
+          Explore Features
+        </span>
         <span className="mt-0.5 block text-xs leading-snug text-slate-500 dark:text-white/60">
           See everything Frenz can do.
         </span>
       </span>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
-        <ArrowRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-0.5 dark:text-white" />
-      </span>
+      {/* The arrow is the bar's affordance. In the tile the whole card is the
+          target and a chevron in the corner would just be furniture. */}
+      {tile ? null : (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/70 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
+          <ArrowRight className="h-4 w-4 text-slate-600 transition-transform group-hover:translate-x-0.5 dark:text-white" />
+        </span>
+      )}
     </Link>
   );
 }

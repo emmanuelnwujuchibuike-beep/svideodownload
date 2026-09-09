@@ -174,12 +174,19 @@ export function DownloadsPage({
         section) — quick actions, the usage dashboard, the downloading list,
         history panel, wallpaper gallery and trust strip stay here.
       */}
+      {/*
+        🔴 `showFrenzAi` — this is the SIGNED-IN download page, the one place
+        the standing AI rule allows the Frenz AI door to appear. The landing
+        page renders the same component without it and gets Explore Features in
+        that slot instead.
+      */}
       <DownloadPageCore
         platformStatus={platformStatus}
         ctaWallpaperUrl={ctaWallpaperUrl}
         frenzAiTileImageUrl={frenzAiTileImageUrl}
         rotateUrls={rotateUrls}
         multiLink={multiLink}
+        showFrenzAi
       />
 
       <DownloadQuickActions />

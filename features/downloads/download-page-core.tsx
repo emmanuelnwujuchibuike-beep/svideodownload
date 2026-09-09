@@ -93,6 +93,16 @@ export function DownloadPageCore({
   multiLink,
   installBanner = true,
   multiFormatSlot = false,
+  /**
+   * 🔴 Whether the FRENZ AI tile appears at all.
+   *
+   * False on the landing page — where Explore Features takes that slot, as it
+   * did before Frenz AI existed — and true on the signed-in download page.
+   * Default FALSE, deliberately: the standing rule is that AI is not publicly
+   * exposed, so a caller that forgets to pass this gets the private-safe
+   * layout rather than accidentally advertising the feature.
+   */
+  showFrenzAi = false,
 }: {
   platformStatus?: PlatformStatusMap;
   ctaWallpaperUrl?: string | null;
@@ -111,6 +121,7 @@ export function DownloadPageCore({
    * keeps the banner it has always had.
    */
   installBanner?: boolean;
+  showFrenzAi?: boolean;
   /**
    * Whether to render the ExoClick multi-format slot above the Cloud storage
    * card. LANDING ONLY.
@@ -149,25 +160,54 @@ export function DownloadPageCore({
       </section>
 
       {/*
-        ── 🔴 FRENZ AI TAKES THE FEATURES SLOT ──────────────────────────────
+        ═══════════════════════════════════════════════════════════════════════
+         🔴 THE SAME TWO SLOTS, FILLED DIFFERENTLY EITHER SIDE OF SIGN-IN
+        ═══════════════════════════════════════════════════════════════════════
 
-        Owner, 2026-09-08: "Replace the features button with the frenz Ai button
-        and move the features button below the Frenz AI and wallpaper button
-        below in horizontal rectangular shape to full the section width."
+        Owner, 2026-09-09: "the landing page should show the features button in
+        place of the ai button as it was before the ai button was implemented,
+        only the signed in download page should have the frenz ai button and the
+        features button below them."
 
-        So: [ Frenz AI | Wallpapers ] on top, Explore Features as a full-width
-        bar beneath. Frenz AI is the newest thing the product does; Features is
-        a directory, and a directory belongs below the doors rather than beside
-        them.
+        So the layout depends on WHO IS LOOKING:
+
+          landing (anonymous)  [ Explore Features | Wallpapers ]
+          /downloads (member)  [ Frenz AI        | Wallpapers ]
+                               [ Explore Features — full width ]
+
+        ── Why this is a prop and not an auth check ──────────────────────────
+
+        `DownloadPageCore` is rendered by the LANDING page, which is
+        `force-static`. Reading a session in here would opt the whole route out
+        of static generation and cost the front door its edge cache — the
+        project's most expensive regression, and one it has already had once.
+        The caller knows which page it is; it says so.
+
+        ── 🔴 AND IT IS THE STANDING AI RULE, NOT A LAYOUT PREFERENCE ────────
+
+        "AI must NOT be publicly exposed as a major landing-page feature." The
+        landing page must not render `FrenzAICta` at all — not hidden, not
+        greyed, not present. An anonymous visitor's HTML contains no Frenz AI
+        button, which is what "not publicly exposed" has to mean when the page
+        is also what a crawler reads.
+
+        The 2026-09-08 instruction this replaces — "Replace the features button
+        with the frenz Ai button" — was written when Frenz AI was a public
+        feature. It still holds, on the page where a member is signed in.
       */}
       <div className="mt-3 grid grid-cols-2 gap-3">
-        <FrenzAICta />
+        {showFrenzAi ? <FrenzAICta /> : <ExploreFeaturesBar variant="tile" />}
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
 
-      <div className="mt-3">
-        <ExploreFeaturesBar />
-      </div>
+      {/* The full-width Features bar exists only where Frenz AI took its slot
+          above. On the landing page Features IS that slot, and repeating it
+          would put the same door on the screen twice. */}
+      {showFrenzAi ? (
+        <div className="mt-3">
+          <ExploreFeaturesBar />
+        </div>
+      ) : null}
 
       {/*
         🔴 THE MULTI-FORMAT SLOT, WHERE IT WAS ACTUALLY ASKED FOR (owner,
@@ -246,11 +286,21 @@ export function DownloadPageCore({
       ) : null}
 
       {/*
-        The vignette (owner, 2026-09-08): two seconds after landing, once ever,
-        on BOTH this page and the landing — which share this component, so
-        mounting it here covers both without a second call site to keep in step.
+        ── 🔴 THE VIGNETTE IS AN AI PROMOTION, SO IT FOLLOWS THE SAME GATE ────
+
+        It shipped on 2026-09-08 to appear on BOTH this page and the landing,
+        two seconds in, once ever — correct while Frenz AI was a public feature.
+
+        Under the standing rule it is exactly what §2 names: "AI calls-to-action
+        intended for anonymous users", and "AI-related feature sections that
+        make AI appear to be a public product". A signed-out visitor must not
+        meet it, and neither must the AdSense crawler.
+
+        🔴 Gated on the SAME flag as the tile rather than a second one. Two
+        switches governing "is AI visible here" is two things to get out of
+        step, and the failure mode is the promotion surviving the button.
       */}
-      <FrenzAIVignette />
+      {showFrenzAi ? <FrenzAIVignette /> : null}
     </>
   );
 }

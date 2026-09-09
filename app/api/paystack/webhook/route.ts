@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { creditAiBalance } from "@/lib/ai/balance";
+import { AI_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 
 export const runtime = "nodejs";
@@ -32,6 +33,72 @@ export async function POST(request: Request) {
     event = JSON.parse(payload);
   } catch {
     return NextResponse.json({ error: "Bad payload" }, { status: 400 });
+  }
+
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 A FRENZ AI TOP-UP IS A `charge.success` TOO, AND IT IS NOT A PLAN
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-09, standing rule §13: "Payment confirmation must be verified
+    server-side. Do not credit the balance based solely on a frontend success
+    callback."
+
+    This branch is what makes that true — the credit happens HERE, after the
+    HMAC check above, and nowhere else. The browser's return from Paystack
+    navigates and refreshes; it grants nothing.
+
+    It comes BEFORE `syncPaystackEvent` and returns, because that function's job
+    is to resolve a charge to a subscription plan. A top-up has no plan, so
+    letting it fall through would at best do nothing and at worst match a stale
+    subscription row and change somebody's tier because they bought AI credit.
+
+    ── What is trusted, and what is not ──────────────────────────────────────
+
+    · the AMOUNT comes from Paystack (`data.amount`), never from our own
+      `ai_topup_cents` metadata. Metadata is what we asked for; `amount` is what
+      settled, and if they ever disagree the money that moved is the truth.
+    · the USER comes from metadata we set at initialisation. It is echoed back
+      unchanged, and the alternative — matching on email — would credit the
+      wrong account for anyone paying with a different address than they
+      registered with.
+    · the REFERENCE is ours and is the idempotency key. `credit_ai_balance` has
+      a unique index on it, so this same delivery arriving three times credits
+      once.
+
+    A `status` that is not "success" is ignored outright: Paystack sends
+    `charge.success` only on success, but the field exists and reading it costs
+    nothing next to crediting a failed payment.
+  */
+  if (event.event === "charge.success" && event.data?.metadata?.purpose === AI_TOPUP_PURPOSE) {
+    const userId = event.data.metadata.user_id;
+    const amount = Number(event.data.amount);
+    const reference = event.data.reference;
+
+    if (!userId || !reference || !Number.isFinite(amount) || amount <= 0) {
+      console.error("[paystack] ai topup missing fields", {
+        hasUser: !!userId,
+        hasReference: !!reference,
+        amount,
+      });
+      // 🔴 Still a 200. A non-2xx makes Paystack retry a delivery that will
+      // fail identically forever, and the problem is ours to find in this log.
+      return NextResponse.json({ received: true });
+    }
+
+    try {
+      await creditAiBalance({ userId, amountCents: amount, kind: "topup", reference });
+    } catch (e) {
+      console.error("[paystack] ai topup credit failed", { reference, error: String(e) });
+      /*
+        🔴 A 500 HERE IS CORRECT, and it is the one place in this route that
+        wants a retry. The member has paid and has not been credited; Paystack
+        redelivers on a non-2xx, and the unique reference means a later success
+        credits exactly once. Acknowledging would strand their money.
+      */
+      return NextResponse.json({ error: "credit failed" }, { status: 500 });
+    }
+    return NextResponse.json({ received: true });
   }
 
   if (HANDLED.has(event.event)) {

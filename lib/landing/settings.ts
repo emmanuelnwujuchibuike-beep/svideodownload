@@ -36,6 +36,32 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const FEED_GRID_SLOTS = 4;
 
 /**
+ * The currencies Paystack settles in, and the symbol each shows as.
+ *
+ * 🔴 Paystack's own supported set, not a wish list — a currency it cannot
+ * process would be a transaction refused at checkout, in front of somebody
+ * trying to pay us. The subunit is 100 for every one of these, which is why a
+ * single "cents" integer works across all of them.
+ */
+export const AI_CURRENCIES = {
+  USD: "$",
+  NGN: "₦",
+  GHS: "GH₵",
+  ZAR: "R",
+  KES: "KSh",
+} as const;
+
+export type AiCurrency = keyof typeof AI_CURRENCIES;
+
+export function isAiCurrency(value: unknown): value is AiCurrency {
+  return typeof value === "string" && value in AI_CURRENCIES;
+}
+
+export function aiCurrencySymbol(currency: AiCurrency): string {
+  return AI_CURRENCIES[currency] ?? "$";
+}
+
+/**
  * ═══════════════════════════════════════════════════════════════════════════
  *  🔴 THE SHAPE OF EACH SLOT — the fix for "it's zooming one-sided"
  * ═══════════════════════════════════════════════════════════════════════════
@@ -223,6 +249,24 @@ export interface LandingSettings {
    */
   frenzAiVideoPriceCents: number;
   /**
+   * ── 🔴 WHICH CURRENCY THOSE "CENTS" ARE ─────────────────────────────────
+   *
+   * Paystack amounts are in the SUBUNIT of the account's currency, and the API
+   * does not tell you which one it assumed. Sending `500` to an NGN account
+   * charges ₦5.00; to a USD account it charges $5.00. Those differ by about a
+   * factor of 1,500, and nothing in the response says which happened.
+   *
+   * So the currency is stated here and passed EXPLICITLY on every transaction.
+   * If it does not match what the Paystack account supports, Paystack refuses
+   * the transaction — which is loud, immediate, and enormously better than
+   * silently taking ₦5 for something priced at $5.
+   *
+   * ⚠️ MUST match the operator's Paystack account. There is no way to detect it
+   * from our side, so this is a setting rather than a guess, and the admin
+   * field says so.
+   */
+  frenzAiCurrency: AiCurrency;
+  /**
    * Whether FREE members may run AI Clean at all.
    *
    * Owner, 2026-09-08: "since the replicate says credit first, then before the
@@ -311,6 +355,12 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiWeeklyFreeCredits: 5,
   // $0.50, in cents. See the field note on why this is never a float.
   frenzAiVideoPriceCents: 50,
+  /*
+    🔴 USD by default, and the operator MUST set this to match their Paystack
+    account. We cannot detect it, and getting it wrong means charging ₦50 for
+    something priced at $0.50 — or the reverse.
+  */
+  frenzAiCurrency: "USD" as AiCurrency,
   // ON by default: switching a feature off is a decision an operator makes, not
   // a state a fresh install falls into.
   frenzAiFreeEnabled: true,
@@ -502,6 +552,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       ),
       frenzAiWeeklyFreeCredits: normalizeWeeklyCredits(raw.frenzAiWeeklyFreeCredits),
       frenzAiVideoPriceCents: normalizePriceCents(raw.frenzAiVideoPriceCents),
+      frenzAiCurrency: isAiCurrency(raw.frenzAiCurrency) ? raw.frenzAiCurrency : DEFAULT_LANDING.frenzAiCurrency,
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
       frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
@@ -570,6 +621,7 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
     ),
     frenzAiWeeklyFreeCredits: normalizeWeeklyCredits(pick("frenzAiWeeklyFreeCredits")),
     frenzAiVideoPriceCents: normalizePriceCents(pick("frenzAiVideoPriceCents")),
+    frenzAiCurrency: isAiCurrency(pick("frenzAiCurrency")) ? pick("frenzAiCurrency") : DEFAULT_LANDING.frenzAiCurrency,
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
     frenzAiEngine: normalizeEngine(pick("frenzAiEngine")),
     frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",

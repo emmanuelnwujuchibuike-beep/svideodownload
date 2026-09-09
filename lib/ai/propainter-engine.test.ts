@@ -45,15 +45,44 @@ describe("the mask filter graph", () => {
     expect(graph).toContain("gt(B,16)");
   });
 
-  it("opens before it closes, so speckle does not survive as holes do not", () => {
-    // erosion first (drop compression speckle), then dilation to close the
-    // holes left by the caption's own black outline and restore the box.
-    const erosion = graph.indexOf("erosion");
-    const dilation = graph.indexOf("dilation");
-    expect(erosion).toBeGreaterThan(-1);
-    expect(dilation).toBeGreaterThan(erosion);
-    expect(graph.match(/erosion/g)).toHaveLength(2);
-    expect(graph.match(/dilation/g)).toHaveLength(6);
+  /*
+    ── 🔴 THIS TEST USED TO ENSHRINE THE BUG ─────────────────────────────────
+
+    It asserted `erosion ×2, dilation ×6` and its own name said that closed the
+    holes. It does not. Erode-then-dilate is an OPENING: it removes speckle and
+    returns the boundary to where it started. Only dilate-then-erode — a
+    CLOSING — fills a hole, and the holes here are the pixels `gt(B,16)` vetoes
+    for being dark in the original, which is exactly where a dark caption pill
+    or a black glyph outline lives.
+
+    Measured on the owner's clip against the real detector output: the old
+    chain left 12.1% of the detected text uncovered and ProPainter faithfully
+    preserved it; the new one leaves 0.7%, in a mask that is SMALLER.
+
+    So the assertions now describe the shape that actually works, and the
+    counts are checked so a well-meaning "simplify the filter chain" cannot
+    quietly turn the closing back into an opening.
+  */
+  it("opens to drop speckle, then CLOSES to fill the holes gt(B,16) punches", () => {
+    const ops = graph.match(/erosion|dilation/g) ?? [];
+    // Opening first: the two erosions lead.
+    expect(ops[0]).toBe("erosion");
+    expect(ops[1]).toBe("erosion");
+
+    // Then a real closing: a run of dilations followed by a run of erosions.
+    const firstDilation = ops.indexOf("dilation");
+    const closingErosions = ops.slice(firstDilation).filter((o) => o === "erosion").length;
+    const dilations = ops.filter((o) => o === "dilation").length;
+    expect(firstDilation).toBe(2);
+    expect(dilations).toBeGreaterThanOrEqual(18);
+    expect(closingErosions).toBeGreaterThanOrEqual(12);
+
+    // 🔴 The closing must not be achieved by simply inflating the mask: the
+    // dilations exceed the trailing erosions by only a few pixels, which is
+    // the same net growth the original chain had.
+    const netGrowth = dilations - closingErosions - 2;
+    expect(netGrowth).toBeGreaterThanOrEqual(0);
+    expect(netGrowth).toBeLessThanOrEqual(6);
   });
 
   it("🔴 encodes the mask LOSSLESS", () => {

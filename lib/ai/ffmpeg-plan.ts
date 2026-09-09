@@ -274,22 +274,110 @@ export interface MaskPlan {
  * repainted for nothing. Verified by counting white pixels per frame: 12.7–13.1%
  * with the guard, and the whole frame without it.
  *
- * ── Then an opening, then a closing ─────────────────────────────────────────
+ * ── 🔴 AN OPENING, THEN A REAL CLOSING (fixed 2026-09-09) ───────────────────
  *
- *   erosion ×2    drops the speckle that compression noise leaves scattered
- *                 outside the caption box;
- *   dilation ×6   closes the holes left by the caption's own black OUTLINE,
- *                 whose source pixels are dark enough to fail `B > 16`, and
- *                 restores the box to its true size after the erosion.
+ * `erosion ×2, dilation ×6` was an OPENING with a net growth of four, and the
+ * comment above it claimed the dilations "close the holes". They cannot. An
+ * opening removes speckle; only a CLOSING — dilate first, erode after — fills a
+ * hole, and a dilation applied after an erosion of the same region just returns
+ * the boundary to where it started.
  *
- * A hole means a surviving fragment of outline in the finished video. Growing
- * the box by a few pixels costs a temporal inpainter nothing, because it has
- * real information from other frames — which is exactly the trade the classical
- * model could not make.
+ * It matters because `B > 16` punches holes in exactly the wrong place. Every
+ * pixel the detector marked as text but which was DARK in the original is
+ * vetoed: a caption on a dark pill, a black outline, white text on a black bar.
+ * Those are the pixels most in need of repainting, and they were the ones
+ * marked "keep".
+ *
+ * Measured on the owner's own clip, against the real detector output, counting
+ * how much of what the detector painted the finished mask actually covers:
+ *
+ *     erosion×2, dilation×6      12.1% of the detected text MISSED   box 248x96
+ *     erosion×2, dilation×20, erosion×14   0.7% missed               box 244x92
+ *
+ * Seventeen times less text left behind, in a mask that is SMALLER rather than
+ * inflated — the closing fills the interior without pushing the boundary out.
+ * That residue was visible: a ProPainter run on the old mask reconstructed the
+ * background correctly and left the caption's dark pill and glyph cores
+ * standing, because it had been told to preserve them.
+ *
+ *   erosion ×2     drops the speckle compression noise leaves scattered
+ *                  outside the caption box (the opening);
+ *   dilation ×20   seals holes up to ~40px across — wide enough for a whole
+ *                  caption pill, not just a glyph stroke;
+ *   erosion ×14    puts the outer boundary back. Net growth is +4, the same as
+ *                  before, so edge coverage of the glyph anti-aliasing is
+ *                  unchanged; only the interior differs.
+ *
+ * Growing the box by a few pixels costs a temporal inpainter nothing, because it
+ * has real information from other frames — exactly the trade the classical model
+ * could not make.
  *
  * ⚠️ Encoded LOSSLESS (`-qp 0`). A lossy encode would blur the hard threshold
  * we just computed and hand ProPainter a grey, ambiguous mask.
  */
+/** erosion ×2, dilation ×20, erosion ×14 — see the note above for the numbers. */
+const MASK_MORPHOLOGY = [
+  ...Array(2).fill("erosion"),
+  ...Array(20).fill("dilation"),
+  ...Array(14).fill("erosion"),
+].join(",");
+
+/**
+ * Put a reconstruction back to the exact size of the source.
+ *
+ * ── 🔴 PROPAINTER DOES NOT RETURN THE SIZE IT WAS GIVEN ─────────────────────
+ *
+ * Measured 2026-09-09 on a real run: a 480×854 source came back **480×864**,
+ * with `resize_ratio: 1`, `width: -1` and `height: -1` — the settings that are
+ * supposed to mean "leave it alone". ProPainter rounds each dimension up to a
+ * multiple of 8 for its own network, and returns it at that size.
+ *
+ * And it is a STRETCH, not padding. The ten extra rows carry real picture
+ * (mean luma 73, continuous with the rows above) rather than black bars, so the
+ * whole frame is scaled by 864/854 — a 1.2% vertical elongation of somebody's
+ * video, silently.
+ *
+ * Nothing downstream noticed, because the mux stream-copies whatever it is
+ * handed and `checkFinalProbe` compares duration and codecs rather than
+ * dimensions. So this scales it back before anything else touches it.
+ *
+ * ⚠️ Re-encode, necessarily — a scale cannot be a stream copy. `-crf 16` is
+ * visually lossless at this size, and it is one generation on a file that has
+ * already been through the model.
+ */
+export function buildResizeToSourceArgs(plan: {
+  inPath: string;
+  outPath: string;
+  width: number;
+  height: number;
+  fps: number;
+}): string[] {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-nostdin",
+    "-y",
+    "-i",
+    plan.inPath,
+    "-vf",
+    // `flags=lanczos` because this is undoing a small upscale: a bilinear pass
+    // back down would soften the reconstruction the model just produced.
+    `scale=${plan.width}:${plan.height}:flags=lanczos`,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "16",
+    "-pix_fmt",
+    "yuv420p",
+    "-r",
+    String(plan.fps),
+    "-an",
+    plan.outPath,
+  ];
+}
 export function buildTextMaskArgs(plan: MaskPlan): string[] {
   return [
     "-hide_banner",
@@ -304,7 +392,7 @@ export function buildTextMaskArgs(plan: MaskPlan): string[] {
     "-filter_complex",
     "[1]format=gray[a];[0]format=gray[b];" +
       "[a][b]blend=all_expr='if(lt(A,16)*gt(B,16),255,0)'," +
-      "erosion,erosion,dilation,dilation,dilation,dilation,dilation,dilation,format=yuv420p",
+      `${MASK_MORPHOLOGY},format=yuv420p`,
     "-c:v",
     "libx264",
     "-preset",

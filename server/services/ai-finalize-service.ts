@@ -18,6 +18,7 @@ import { AI_CLEAN_LIMITS, AI_CLEAN_PROPAINTER, aiCleanEngine } from "@/lib/ai/co
 import { runProPainter } from "@/lib/ai/propainter";
 import {
   buildRestoreArgs,
+  buildResizeToSourceArgs,
   buildTextMaskArgs,
   canStreamCopy,
   checkFinalProbe,
@@ -449,15 +450,61 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
         detectionFile: cleanedFile,
         sourceProbe,
       });
+
+      let reconstructed = false;
       if (swapped) {
         const reprobed = await probeMedia(swapped);
         if (reprobed?.hasVideo) {
           pictureFile = swapped;
           picture = reprobed;
+          reconstructed = true;
         } else {
-          console.warn("[ai/finalize] propainter output unreadable, using detection output", { jobId });
+          console.warn("[ai/finalize] propainter output unreadable", { jobId });
           await noteJobDiagnostic(jobId, { propainter: "unreadable-output" });
         }
+      }
+
+      /*
+        ═══════════════════════════════════════════════════════════════════
+         🔴 THE BLACK RECTANGLE. THIS IS WHERE IT SHIPPED FROM.
+        ═══════════════════════════════════════════════════════════════════
+
+        Owner, 2026-09-09, twice: "produced a solid black rectangular region
+        instead of reconstructing the background", and after a second run,
+        "i ran it again and is still the same result".
+
+        `cleanedFile` on this engine is hjunior29 in `black` mode — the caption
+        painted out as solid rectangles so we can recover a mask from it. It is
+        an INTERMEDIATE. The comment eight lines above already said "not
+        something anyone should ever see", and then the fallback shipped it:
+        every path out of `reconstructWithProPainter` that returns null left
+        `pictureFile` pointing at it, and the mux happily put the member's
+        audio on top and called the job completed.
+
+        Both of the owner's jobs took that path. Neither carried a `propainter`
+        diagnostic at all, which means `reconstructWithProPainter` was never
+        even entered — the worker was running a build that predates it while
+        the frontend was already asking the detector for `black`. A split
+        deploy, and the failure mode was to hand somebody a censored video.
+
+        ── Why FAILING is the correct behaviour, not falling back ───────────
+
+        The fallback reasoning is sound for the CLASSICAL engine: the detector's
+        own output is a finished, watchable video, so a second provider's bad
+        afternoon should not cost the member their wait. On this engine that
+        premise is false. There is no usable fallback here — the only other
+        file on disk is the blackened one — so the honest options are to fail
+        the job and refund, or to ship something nobody would call a result.
+
+        Failing costs the member their wait. Shipping black boxes costs them
+        their wait AND their allowance AND their trust in the tool, and it does
+        it silently. So: fail, refund, and say so.
+      */
+      if (!reconstructed) {
+        throw new FinalizeFailure(
+          "AI_FINALIZATION_FAILED",
+          "reconstruction did not run; refusing to ship the detector's blackened intermediate",
+        );
       }
     }
 
@@ -741,18 +788,70 @@ async function reconstructWithProPainter(opts: {
     }
 
     const bytes = await downloadToFile(result.outputUrl, outFile, AI_CLEAN_LIMITS.maxResultSize);
+
+    /*
+      ── 🔴 PUT IT BACK TO THE SOURCE'S EXACT SIZE ──────────────────────────
+
+      ProPainter rounds each dimension up to a multiple of 8 and returns the
+      video at THAT size, even with `resize_ratio: 1, width: -1, height: -1`.
+      Measured: 480x854 in, 480x864 out, and the extra rows hold real picture
+      rather than black bars — the frame is stretched by 1.2%, not padded.
+
+      Nothing further down would catch it: the mux stream-copies what it is
+      given, and `checkFinalProbe` compares duration and codecs, not geometry.
+      So the member would quietly receive a subtly taller video than the one
+      they sent.
+    */
+    const reconstructedProbe = await probeMedia(outFile);
+    const srcW = opts.sourceProbe?.width ?? null;
+    const srcH = opts.sourceProbe?.height ?? null;
+    let finalPath = outFile;
+    let resized: string | null = null;
+
+    if (
+      srcW &&
+      srcH &&
+      reconstructedProbe?.width &&
+      reconstructedProbe?.height &&
+      (reconstructedProbe.width !== srcW || reconstructedProbe.height !== srcH)
+    ) {
+      const scaledFile = path.join(dir, "reconstructed-scaled.mp4");
+      const ok = await runFfmpeg(
+        buildResizeToSourceArgs({ inPath: outFile, outPath: scaledFile, width: srcW, height: srcH, fps }),
+        FFMPEG_HARD_TIMEOUT_MS,
+      );
+      if (ok) {
+        finalPath = scaledFile;
+        resized = `${reconstructedProbe.width}x${reconstructedProbe.height}->${srcW}x${srcH}`;
+      } else {
+        /*
+          The scale failed. Carry on with the model's own size rather than
+          losing the whole reconstruction over ten pixels — a very slightly
+          taller video that has its text removed beats no video at all — but
+          record it, because a silent aspect change is exactly the class of
+          bug that goes unnoticed for weeks.
+        */
+        console.warn("[ai/finalize] could not scale reconstruction back", { jobId });
+        resized = "failed";
+      }
+    }
+
     console.info("[ai/finalize] reconstructed", {
       jobId,
       model: AI_CLEAN_PROPAINTER.model,
       predictSeconds: result.predictTimeSeconds,
       elapsedMs: Date.now() - startedAt,
       bytes,
+      sourceSize: srcW && srcH ? `${srcW}x${srcH}` : null,
+      providerSize: reconstructedProbe?.width ? `${reconstructedProbe.width}x${reconstructedProbe.height}` : null,
+      resized,
     });
     await noteJobDiagnostic(jobId, {
       propainter: "ok",
       propainter_predict_s: result.predictTimeSeconds,
+      ...(resized ? { propainter_resized: resized } : {}),
     });
-    return outFile;
+    return finalPath;
   } catch (e) {
     console.warn("[ai/finalize] reconstruction threw", { jobId, error: e instanceof Error ? e.name : "unknown" });
     await noteJobDiagnostic(jobId, { propainter: "threw" });

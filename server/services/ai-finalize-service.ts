@@ -12,7 +12,7 @@ import { getJobAsService, transitionJob } from "@/lib/ai/job-store";
 import { AI_RESULT_BUCKET, aiResultKey, pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { notifyAiCleanFailed, notifyAiCleanFinished } from "@/lib/ai/notify";
-import { subjectFromRow } from "@/lib/ai/subject";
+import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
 import { consumeAiUsage, releaseAiUsage } from "@/lib/ai/usage";
 import { AI_CLEAN_LIMITS } from "@/lib/ai/config";
 import {
@@ -242,17 +242,34 @@ async function downloadToFile(url: string, destination: string, limitBytes: numb
   return size;
 }
 
-/** Put the finished MP4 in the private results bucket, at the server's own key. */
+/**
+ * Put the finished MP4 in the private results bucket, at the server's own key.
+ *
+ * 🔴 `ownerId`, NOT `userId`. It is `subjectOwnerId(subject)` — a member's uuid
+ * OR a guest's signed identifier — and the rename is the fix, not decoration.
+ *
+ * This took `userId: string` and was called with `job.user_id`, which is NULL
+ * for an anonymous job. `AiJobRow` typed that column as non-nullable, so the
+ * call compiled, and the failure landed at runtime deep inside `safeSegment`:
+ *
+ *     TypeError: Cannot read properties of null (reading 'toLowerCase')
+ *
+ * …reported as FINAL_UPLOAD_FAILED, after the download, the mux and the
+ * provider bill. Every guest job died there, on the last step. The parameter is
+ * named for what it actually is now so the next caller cannot reach for the
+ * wrong field, and `/api/ai/jobs/[id]/result` already keys off exactly the same
+ * `subjectOwnerId`, so the two halves agree by construction.
+ */
 export async function uploadFinalResult(opts: {
-  userId: string;
+  ownerId: string;
   feature: AiFeature;
   jobId: string;
   filePath: string;
 }): Promise<{ path: string; bytes: number }> {
-  const key = aiResultKey(opts.userId, opts.feature, opts.jobId, "mp4");
+  const key = aiResultKey(opts.ownerId, opts.feature, opts.jobId, "mp4");
   // Belt and braces on a key this function built itself: the value is about to
   // be written to a row that later mints signed URLs from it.
-  if (!pathBelongsTo(key, opts.userId, opts.jobId)) throw new Error("refusing a result path that failed ownership");
+  if (!pathBelongsTo(key, opts.ownerId, opts.jobId)) throw new Error("refusing a result path that failed ownership");
 
   const { readFile } = await import("node:fs/promises");
   const body = await readFile(opts.filePath);
@@ -314,6 +331,31 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     return { ok: false, jobId, code: "AI_FINALIZATION_FAILED", detail: "no source path recorded" };
   }
 
+  /*
+    🔴 THE OWNER, RESOLVED ONCE AND BEFORE THE CLAIM.
+
+    A member or a guest, from the row itself — the browser that started this is
+    long gone. It is read here rather than just before the upload for two
+    reasons: a job with no resolvable owner must fail BEFORE the claim (there is
+    nowhere to put the result, so downloading and muxing it would be work spent
+    to reach the same error), and the same value is needed again at the end for
+    `consumeAiUsage`, which used to recompute it.
+
+    It cannot legitimately be null — `ai_jobs_subject_chk` requires exactly one
+    of the two columns — so this failing means the SELECT is missing a column
+    again, which is precisely how the guest bug happened. The message says so.
+  */
+  const owner = subjectFromRow(job);
+  if (!owner) {
+    return {
+      ok: false,
+      jobId,
+      code: "AI_FINALIZATION_FAILED",
+      detail: "job row has neither user_id nor guest_id — check JOB_COLUMNS",
+    };
+  }
+  const ownerId = subjectOwnerId(owner);
+
   const claimed = await transitionJob(jobId, ["processing"], "finalizing");
   if (!claimed) {
     // Somebody else has it, or it is not in a state that can be finalized.
@@ -322,7 +364,9 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
 
   console.info("[ai/finalize] started", {
     jobId,
-    userId: job.user_id,
+    // The KIND, not the identifier. Which of the two paths a job took is the
+    // useful thing in a log line, and it was the unlogged half of this bug.
+    owner: owner.kind,
     feature: feature.id,
     transition: "processing -> finalizing",
   });
@@ -407,7 +451,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     let stored: { path: string; bytes: number };
     try {
       stored = await uploadFinalResult({
-        userId: job.user_id,
+        ownerId,
         feature: feature.id,
         jobId,
         filePath: finalFile,
@@ -431,7 +475,9 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
       metadata: { ...(job.metadata ?? {}), provider_output_url: null },
     });
 
-    const subject = subjectFromRow(job);
+    // Resolved before the claim; see the note there. Recomputing it here is
+    // how the two could disagree after a future edit.
+    const subject = owner;
     if (completed && subject) {
       await consumeAiUsage(subject, feature.id);
       /*
@@ -453,7 +499,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
 
     console.info("[ai/finalize] completed", {
       jobId,
-      userId: job.user_id,
+      owner: owner.kind,
       feature: feature.id,
       audioRestored: hasAudio && verdict.probe.hasAudio,
       durationSeconds: verdict.probe.durationSeconds,
@@ -501,7 +547,7 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
 
     console.error("[ai/finalize] failed", {
       jobId,
-      userId: job.user_id,
+      owner: owner.kind,
       feature: feature.id,
       code,
       elapsedMs: Date.now() - startedAt,

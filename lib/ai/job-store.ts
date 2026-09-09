@@ -45,9 +45,17 @@ import { createClient } from "@/lib/supabase/server";
  * or waits on a provider.
  */
 
-/** The columns a job read ever needs. `error_message` is deliberately absent. */
+/**
+ * The columns a job read ever needs. `error_message` is deliberately absent.
+ *
+ * 🔴 `guest_id` was missing until 2026-09-08, which meant every service-role
+ * read of an ANONYMOUS job came back with no owner at all — `user_id` null and
+ * `guest_id` simply not selected. `subjectFromRow` then returned null and the
+ * finalizer had nothing to build a storage key from. Adding a column to the
+ * table is not finished until it is in this string.
+ */
 const JOB_COLUMNS =
-  "id, user_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
+  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
 
 /** Postgres unique-violation. The idempotency race lands here. */
 const UNIQUE_VIOLATION = "23505";

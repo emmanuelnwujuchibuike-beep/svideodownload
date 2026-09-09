@@ -298,7 +298,23 @@ export function isValidClientRequestId(value: string): boolean {
 /** The row as it exists in Postgres. Service-role reads only. */
 export interface AiJobRow {
   id: string;
-  user_id: string;
+  /**
+   * 🔴 NULL FOR A GUEST. It was typed `string` until 2026-09-08, and that lie
+   * is what let `uploadFinalResult({ userId: job.user_id })` compile.
+   *
+   * Guest support added the `guest_id` column and `subjectFromRow`, but never
+   * came back to this interface — so every service-role read of an anonymous
+   * job looked to TypeScript like a member job that happened to have a null id,
+   * and the compiler had no way to object. The result was a crash inside
+   * `safeSegment`: "Cannot read properties of null (reading 'toLowerCase')",
+   * thrown AFTER the model had run and been paid for.
+   *
+   * Never read this directly to identify an owner. Use `subjectFromRow(job)`
+   * and `subjectOwnerId(subject)`, which handle both kinds.
+   */
+  user_id: string | null;
+  /** The signed guest identifier. Null for a signed-in member; exactly one of the two is set. */
+  guest_id: string | null;
   feature: AiFeature;
   provider: AiProviderId;
   model: string | null;

@@ -1,6 +1,7 @@
 "use client";
 
 import { Command as CommandIcon, CornerDownLeft, Search, X } from "lucide-react";
+import { signOutClient } from "@/lib/auth/sign-out";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import { useUser } from "@/features/auth/use-user";
 import { toast } from "@/features/ui/toast";
 import { COMMANDS } from "@/lib/navigation/registry";
 import { searchNavigation, type NavViewer } from "@/lib/navigation/queries";
-import { getClient } from "@/lib/supabase/client-lazy";
 
 /**
  * Universal Command Center™ — the palette.
@@ -113,8 +113,18 @@ export function CommandCenter({ open, onClose }: { open: boolean; onClose: () =>
         }
         if (cmd?.action === "sign-out") {
           close();
-          await (await getClient()).auth.signOut();
-          router.refresh();
+          /*
+            🔴 THE SHARED HELPER, NOT A BARE `auth.signOut()`.
+
+            This called Supabase directly and then `router.refresh()`, which is
+            precisely the sign-out `signOutClient` was written to replace: the
+            painted-identity cache survived, the in-memory module caches
+            (`useUser`, `useEntitlements`) survived the soft refresh, and the
+            header kept showing the last avatar and plan. One sign-out path that
+            clears everything and one that clears some of it is how a device
+            stays half signed-in.
+          */
+          await signOutClient();
           return;
         }
         if (cmd?.action === "install-app") {

@@ -1,0 +1,72 @@
+name: Cron - AI retention
+
+# Supplies the clock for app/api/cron/ai-retention/route.ts.
+#
+# ── 🔴 WHY THIS EXISTS ───────────────────────────────────────────────────────
+# The AI result panel has told every member "Kept privately for three days, then
+# deleted" since Part 3. `ai_jobs.expires_at` has been written on every row since
+# Part 2, and `ai_jobs_expires_idx` was created for this sweep in migration 0142.
+#
+# Nothing has ever deleted an object. Every source video and every result any
+# member has uploaded is still in the bucket — a privacy promise unkept, and
+# unbounded growth against a Supabase project that has already hit its 5 GB
+# ceiling through two other doors.
+#
+# ── Hourly, and why that is plenty ───────────────────────────────────────────
+# Retention is a THREE-DAY promise, so the sweep only has to be punctual to
+# within a great deal less than that. Hourly keeps the backlog at one page and
+# costs one small request an hour.
+#
+# ── Not Vercel ───────────────────────────────────────────────────────────────
+# The Hobby plan allows two cron jobs, daily only, and both slots are spent by
+# `trending` and `profile-snapshots` in vercel.json. GitHub Actions is already
+# the clock for three other routes here (cron-digest, cron-streak-reminders,
+# cron-wallpaper-reminder), so this uses the same proven pattern.
+#
+# ── REQUIRES THE ACTIONS SECRET `CRON_SECRET` ────────────────────────────────
+# The same one the other three use — mint with `npm run cron:token`, then
+# GitHub → Settings → Secrets and variables → Actions → CRON_SECRET.
+# Nothing needs adding in Vercel.
+#
+# Verify before trusting it: Actions → this workflow → "Run workflow". A healthy
+# run returns HTTP 200 with a body like
+#   {"expired":0,"sourcesReclaimed":0,"objectsDeleted":0,"errors":0,"ms":120}
+# All zeros is CORRECT on a project with nothing yet past its window — it is the
+# `errors` count that matters, not the deletions.
+on:
+  schedule:
+    - cron: "20 * * * *" # hourly, offset off the hour so it never lands with the others
+  workflow_dispatch: {}
+
+concurrency:
+  # 🔴 Never let two sweeps overlap. Each one deletes objects and then clears the
+  # path that names them, so a second run mid-flight would try to remove files a
+  # first run has already taken — harmless, but it would log errors that mean
+  # nothing and hide ones that do.
+  group: cron-ai-retention
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/ai-retention
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/ai-retention"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — see the header of this workflow for setup steps."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::AI retention cron returned HTTP $status"
+            exit 1
+          fi

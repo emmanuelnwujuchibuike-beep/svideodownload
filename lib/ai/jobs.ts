@@ -191,8 +191,12 @@ export interface AiFeatureDef {
   /** Longest input, in seconds. Provider time is billed by the second. */
   maxDurationSeconds: number;
   /**
-   * How long the job's files may live. Read by a later part's cleanup worker
-   * via `expires_at`; nothing deletes anything today.
+   * How long the job's files may live, enforced by the retention sweep
+   * (lib/ai/retention.ts, hourly via .github/workflows/cron-ai-retention.yml).
+   *
+   * ⚠️ It said "nothing deletes anything today" from Part 2 until Part 7, and
+   * that was true the whole time — the promise on the result screen was kept by
+   * no code at all.
    *
    * 72 hours: long enough that a video cleaned on a Friday can still be
    * collected on a Sunday, short enough that somebody's unpublished footage is

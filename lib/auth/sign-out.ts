@@ -2,6 +2,8 @@
 
 import { getClient } from "@/lib/supabase/client-lazy";
 
+import { clearAiHistoryCache } from "@/lib/ai/history-cache";
+
 import { clearIdentity } from "./identity-cache";
 
 /**
@@ -32,6 +34,21 @@ import { clearIdentity } from "./identity-cache";
  */
 export async function signOutClient(): Promise<void> {
   clearIdentity();
+
+  /*
+    🔴 THE AI HISTORY SNAPSHOT, WHICH IS THIS DEVICE'S NOT THIS ORIGIN'S.
+
+    `localStorage` is per-origin, not per-account, so the last list one member
+    saw stays readable by the next person to sign in on the same phone. The
+    revalidation replaces it within a moment — but "within a moment" is still a
+    frame of somebody else's filenames, and a shared device is the ordinary
+    case on the phones this product is used on.
+
+    The 24h TTL bounds it; this closes it. Same reasoning as `clearIdentity`
+    above: whatever the browser paints from must not outlive the session that
+    put it there.
+  */
+  clearAiHistoryCache();
 
   // Clear the "just signed in" splash cookie so the hard navigation to `/` below
   // can never make BootSplash force its F loader on sign-out (owner, 2026-08-02:

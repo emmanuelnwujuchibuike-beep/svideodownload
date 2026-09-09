@@ -98,8 +98,10 @@ export const AI_HISTORY_EMPTY_COPY: Record<AiHistoryFilter, { title: string; bod
  * error, for a video the product had already told them it deletes.
  *
  * So the row says so BEFORE it is tapped. `expired` is a real status the
- * database can hold, and the timestamp is checked as well, because nothing in
- * this project writes that status yet — see the note in the section component.
+ * database can hold and the retention sweep now writes it (Part 7), but the
+ * TIMESTAMP is still checked too: the sweep runs hourly, so there is always a
+ * window where a file is past its promise and the row has not caught up. The
+ * member should be told the truth in that window, not offered a dead link.
  */
 export type AiResultAvailability = "ready" | "expired" | "pending" | "none";
 

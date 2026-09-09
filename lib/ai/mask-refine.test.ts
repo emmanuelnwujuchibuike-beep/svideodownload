@@ -287,7 +287,10 @@ describe("buildMaskedCompositeArgs", () => {
   it("takes the member's original as the base and the reconstruction as the overlay", () => {
     expect(args.indexOf(plan.sourcePath)).toBeLessThan(args.indexOf(plan.reconstructedPath));
     expect(args.indexOf(plan.reconstructedPath)).toBeLessThan(args.indexOf(plan.maskPath));
-    expect(graph).toContain("[base][fix][m]maskedmerge[out]");
+    // The trailing `format=yuv420p` is the post-merge conversion for the
+    // encoder — see the chroma note in the suite below for why it must be
+    // AFTER the merge and never before it.
+    expect(graph).toContain("[base][fix][m]maskedmerge,format=yuv420p[out]");
     expect(graph).toContain("[0:v]");
     expect(graph).toContain("[1:v]");
     expect(graph).toContain("[2:v]");
@@ -399,5 +402,60 @@ describe("buildTextMaskArgs — extra boxes from the text detector", () => {
     );
     expect(graph).toContain("drawbox=x=10:y=21:w=31:h=41:color=white@1:t=fill");
     expect(graph).not.toContain(".");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE COMPOSITE MUST NOT BLEND COLOUR
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09: "the text still shows through like a transparent Gray and
+ * the left and right edge glitches and show the text color fully."
+ *
+ * `maskedmerge` works PER PLANE. A mask built from grayscale and converted to
+ * yuv420p has Y = 0 or 255 — correct — and U/V flat at 128, because that is
+ * what "no colour" means in YUV. The filter read 128 as a 50% blend and mixed
+ * the CHROMA of the original and the reconstruction across the whole frame.
+ *
+ * Measured with a pure red base and a pure blue overlay under a half mask:
+ *
+ *     yuv420p   left #6b006a   right #931292    (both wrong)
+ *     gbrp      left #0000fc   right #fc0000    (correct)
+ *
+ * The caption's own colour was surviving at half strength — a grey ghost — and
+ * every other colour in the picture was quietly wrong too.
+ */
+describe("buildMaskedCompositeArgs — the chroma bug", () => {
+  const graph = graphOf(
+    buildMaskedCompositeArgs({
+      sourcePath: "/tmp/s.mp4",
+      reconstructedPath: "/tmp/r.mp4",
+      maskPath: "/tmp/m.mp4",
+      outPath: "/tmp/o.mp4",
+      width: 1080,
+      height: 1920,
+      fps: 30,
+    }),
+  );
+
+  it("merges in planar RGB, where a mask value means the same in every plane", () => {
+    expect(graph).toContain("format=gbrp[base]");
+    expect(graph).toContain("format=gbrp[fix]");
+    expect(graph).toContain("format=gbrp[m]");
+  });
+
+  /*
+    🔴 THE REGRESSION GUARD. Any yuv420p on an INPUT to maskedmerge reintroduces
+    the flat-128 chroma plane and the grey ghost with it. The only legitimate
+    yuv420p here is after the merge, for the encoder.
+  */
+  it("never converts an input to yuv420p before the merge", () => {
+    const beforeMerge = graph.slice(0, graph.indexOf("maskedmerge"));
+    expect(beforeMerge).not.toContain("yuv420p");
+  });
+
+  it("converts back to yuv420p only after the merge, for the encoder", () => {
+    expect(graph).toContain("maskedmerge,format=yuv420p[out]");
   });
 });

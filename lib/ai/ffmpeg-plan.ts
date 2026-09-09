@@ -752,18 +752,50 @@ export function buildMaskedCompositeArgs(plan: {
     "-i",
     plan.maskPath,
     "-filter_complex",
-    // yuv420p on all three: maskedmerge refuses a format mismatch, and the
-    // three files have been through three different encoders to get here.
-    `[0:v]scale=${size},format=yuv420p[base];` +
-      `[1:v]scale=${size},format=yuv420p[fix];` +
+    /*
+      ══════════════════════════════════════════════════════════════════════════
+       🔴 gbrp, NOT yuv420p. THIS LINE IS THE WHOLE BUG.
+      ══════════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-09: "the text still shows through like a transparent Gray
+      and the left and right edge glitches and show the text color fully."
+
+      `maskedmerge` works PER PLANE. In yuv420p a mask built from grayscale has
+      Y = 0 or 255 — correct — but its U and V planes are flat 128, because that
+      is what "no colour" means in YUV. So the filter read 128 as a 50% blend
+      and mixed the CHROMA of the original and the reconstruction, everywhere,
+      across the entire frame.
+
+      Measured, with a pure red base and a pure blue overlay under a half mask:
+
+          yuv420p   left #6b006a   right #931292    (both wrong, murky)
+          gbrp      left #0000fc   right #fc0000    (correct)
+
+      That is exactly what the owner described. The caption's own colour was
+      surviving at half strength — a grey ghost of the text — and every other
+      colour in the picture was quietly wrong too.
+
+      gbrp is planar RGB, so the mask's grey value lands identically in all
+      three planes and each is merged with the same 0-or-255 decision. It also
+      removes chroma subsampling from the merge entirely, which is the second
+      half of the report: in 4:2:0 the mask edge could only be sharp to the
+      nearest 2x2 chroma block, so the text's colour bled a pixel or two beyond
+      the repair — "the left and right edge… show the text color fully".
+
+      ⚠️ Converted back to yuv420p AFTER the merge, for the encoder. Never
+      before it.
+    */
+    `[0:v]scale=${size},format=gbrp[base];` +
+      `[1:v]scale=${size},format=gbrp[fix];` +
       /*
         🔴 Thresholded, not just scaled. The mask is lossless h264 but has been
-        resampled, and `maskedmerge` treats a mid-grey pixel as a 50% blend —
+        resampled, and `maskedmerge` treats a mid-grey pixel as a partial blend —
         which at a caption's edge would leave a ghost of the original text
-        showing through the repair. `geq` puts every pixel back to 0 or 255.
+        showing through the repair. `geq` puts every pixel back to 0 or 255,
+        and `format=gbrp` then replicates that into all three planes.
       */
-      `[2:v]scale=${size},format=gray,geq=lum='if(gt(p(X\\,Y)\\,127)\\,255\\,0)',format=yuv420p[m];` +
-      `[base][fix][m]maskedmerge[out]`,
+      `[2:v]scale=${size},format=gray,geq=lum='if(gt(p(X\\,Y)\\,127)\\,255\\,0)',format=gbrp[m];` +
+      `[base][fix][m]maskedmerge,format=yuv420p[out]`,
     "-map",
     "[out]",
     /*

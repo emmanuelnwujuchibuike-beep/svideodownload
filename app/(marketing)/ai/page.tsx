@@ -42,18 +42,39 @@ import { SITE_URL } from "@/lib/site";
  * A signed-in member is never redirected either way: the switch is about
  * ANONYMOUS access, not about the feature.
  */
+/**
+ * ── 🔴 NOINDEX. FRENZ AI IS NOT A PUBLIC PRODUCT ANY MORE ───────────────────
+ *
+ * Owner, 2026-09-09, as a PERMANENT product rule: "AI must NOT be publicly
+ * exposed as a major landing-page feature, indexed standalone page, or publicly
+ * usable tool… Remove AI metadata/title/description from public SEO surfaces."
+ *
+ * This page carried a keyword-shaped title ("remove captions and text from your
+ * videos"), a marketing description ending "no sign-up needed", a canonical and
+ * a full Open Graph block — all of it correct under the previous rule, which
+ * was to be crawlable for the AdSense review, and all of it now exactly what
+ * the new rule forbids.
+ *
+ * What replaces it is the minimum a browser tab needs and nothing a search
+ * engine can use:
+ *
+ *   · `robots: index/follow false` — a `Disallow` in robots.txt stops the
+ *     fetch but NOT a URL-only listing from an external link, so the page has
+ *     to say it itself;
+ *   · no `canonical` — a canonical is an instruction about how to index
+ *     something that should not be indexed;
+ *   · no Open Graph — that block exists to make the page shareable into feeds
+ *     and previews, which is public promotion by another route;
+ *   · a plain, factual title with no keywords in it.
+ *
+ * ⚠️ Removing the metadata is NOT sufficient on its own, and the spec says so:
+ * "Do not simply hide AI visually while leaving publicly indexable content
+ * behind it." The route also has to stop serving content to anonymous
+ * visitors — see the auth gate below.
+ */
 export const metadata: Metadata = {
-  title: "Frenz AI — remove captions and text from your videos",
-  description:
-    "Remove unwanted captions, subtitles and text overlays from your videos while keeping them looking natural. Free to try, no sign-up needed.",
-  alternates: { canonical: `${SITE_URL}/ai` },
-  openGraph: {
-    title: "Frenz AI — remove captions and text from your videos",
-    description:
-      "Remove unwanted captions, subtitles and text overlays from your videos while keeping them looking natural.",
-    url: `${SITE_URL}/ai`,
-    type: "website",
-  },
+  title: "Frenz AI",
+  robots: { index: false, follow: false, nocache: true },
 };
 
 /*

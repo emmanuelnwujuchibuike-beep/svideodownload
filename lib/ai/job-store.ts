@@ -75,6 +75,51 @@ import { createClient } from "@/lib/supabase/server";
 const JOB_COLUMNS =
   "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
 
+/**
+ * Claim the right to announce this job. True exactly once, ever.
+ *
+ * ── 🔴 A COMPARE-AND-SET, FOR THE SAME REASON `transitionJob` IS ONE ────────
+ *
+ * Owner, 2026-09-09: "Never send duplicate 'completed' push notifications
+ * because of duplicate webhook events."
+ *
+ * `.is("notified_at", null)` is part of the UPDATE, not a check before it. Two
+ * callers race — a delayed webhook and a reconcile pass, or the stall sweep and
+ * the finalizer — and the first one moves the row while every later one matches
+ * ZERO rows and is told so. No advisory lock, no read-then-write window.
+ *
+ * Reading `notified_at` first and then writing it would be the bug this avoids:
+ * both callers would read null, both would decide to send, and the member would
+ * get two identical pushes seconds apart.
+ *
+ * 🔴 CLAIMED BEFORE THE PUSH IS SENT, never after. A send that fails after a
+ * successful claim costs one missed notification for a job whose result is
+ * safely in storage and visible in history. Claiming afterwards would leave a
+ * window in which a retry sends a second one — and the failure mode of "the
+ * member was told twice" is worse than "the member was told once, in the app".
+ */
+export async function claimAiNotification(jobId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({ notified_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .is("notified_at", null)
+    .select("id");
+
+  if (error) {
+    /*
+      A failed claim must not silently suppress the notification: the point of
+      this function is to prevent a SECOND one, and an error is not evidence
+      that a first was sent. Fails OPEN — the member hearing twice in the rare
+      case where the database is unhappy beats never hearing at all.
+    */
+    console.error("[ai/jobs] notification claim failed", { jobId, message: error.message });
+    return true;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
 /** Postgres unique-violation. The idempotency race lands here. */
 const UNIQUE_VIOLATION = "23505";
 

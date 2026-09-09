@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { listAiJobs } from "@/lib/ai/client";
 import { AI_JOB_STARTED_EVENT, browserHasUsedAiClean } from "@/lib/ai/history-cache";
+import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -270,6 +271,18 @@ export function AiJobAlert() {
   };
 
   const ready = alert?.kind === "ready";
+  /*
+    The same sentence the push would have used. Built here rather than stored on
+    the alert so it always reflects the current copy module — and so a job whose
+    error code arrives late still reads correctly.
+  */
+  const copy = alert
+    ? aiNotificationCopy({
+        feature: alert.job.feature,
+        outcome: ready ? "completed" : outcomeForErrorCode(alert.job.error?.code),
+        durationMs: alert.job.durationMs,
+      })
+    : null;
 
   return (
     /*
@@ -284,7 +297,7 @@ export function AiJobAlert() {
       back to this component.
     */
     <div className="pointer-events-none fixed inset-x-0 top-[calc(0.75rem+var(--frenz-safe-top))] z-[80] flex justify-center px-3">
-      {alert ? (
+      {alert && copy ? (
           <div
             key={alert.job.id}
             /*
@@ -319,20 +332,23 @@ export function AiJobAlert() {
                 {ready ? <Sparkles className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold leading-snug">
-                  {ready ? "Your video is ready" : "That one didn't finish"}
-                </span>
+                {/*
+                  ── 🔴 THE SAME WORDS THE PUSH USES ──────────────────────────
+
+                  `aiNotificationCopy` is the one place this product decides
+                  what a finished job says. Written separately here, the banner
+                  and the lock screen would drift within a week — and nobody
+                  would notice, because the two are never on screen together.
+
+                  The FILENAME still wins on a ready job when there is one: on
+                  this surface the member is looking at their own library, and
+                  "okkurrr.mp4 is ready" identifies which video far better than
+                  a generic sentence can. The copy is the fallback, not the
+                  exception.
+                */}
+                <span className="block truncate text-sm font-semibold leading-snug">{copy.title}</span>
                 <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                  {ready
-                    ? (alert.job.source.name ?? "Tap to watch and download it")
-                    : /*
-                        🔴 The refund is IN the sentence. Somebody who reads only
-                        "it failed" assumes it cost one of their daily runs, and
-                        on this product it did not — every failure that is ours
-                        releases the reservation. The push says the same thing;
-                        so must this.
-                      */
-                      "Your allowance wasn't used — you can try again."}
+                  {ready ? (alert.job.source.name ?? copy.body) : copy.body}
                 </span>
               </span>
             </button>

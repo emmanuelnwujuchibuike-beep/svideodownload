@@ -149,6 +149,25 @@ export default function sitemap(): MetadataRoute.Sitemap {
       though this file does not.
     */
     { url: `${siteUrl}/wallpapers`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+    /*
+      ── 🔴 NO FRENZ AI ROUTE APPEARS IN THIS FILE. DELIBERATELY. ────────────
+
+      Owner, 2026-09-09 (the permanent Frenz AI product rule): "Remove it from
+      public sitemap generation… Remove AI routes from any public sitemap
+      files… Treat Frenz AI as a private authenticated utility with a
+      controlled usage economy, not as a public landing-page product."
+
+      Earlier the same day I added `/ai` and four hand-written guides here, on
+      the previous rule that Frenz AI should be crawlable for the AdSense
+      review. That rule has been replaced. The guides and their route are gone
+      from the repository entirely — not merely unlisted — because "hide it
+      visually and leave indexable content behind it" is the exact failure the
+      new spec names.
+
+      ⚠️ DO NOT RE-ADD an AI entry here. If a future AI surface genuinely needs
+      to be public, that is a product decision the owner makes explicitly, and
+      it changes §1 of the standing rule rather than this file.
+    */
     { url: `${siteUrl}/help`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/trust`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
     { url: `${siteUrl}/glossary`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },

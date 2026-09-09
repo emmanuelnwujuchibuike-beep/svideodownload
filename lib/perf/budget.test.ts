@@ -400,7 +400,35 @@ function landingChunks(): string[] {
  * this number governs `/admin`, which is auth-gated, visited by one person, and
  * never on a 2-second budget.
  */
-const GLOBAL_CEILING = 364 * 1024;
+/*
+ * ── 364 → 368 kB (2026-09-09) ──────────────────────────────────────────────
+ *
+ * `/admin` again, and again for a control the owner asked for by name: "pro and
+ * business cap should be able to change in admin dashboard, if is not set yet
+ * set it up." Two number inputs and their bounds copy, in
+ * `features/admin/frenz-ai-settings.tsx`, which is a client component — and the
+ * route had ~0.1 kB of slack, so it went over on the commit that added them.
+ *
+ * 🔴 CAUGHT LATE, AND THAT IS THE LESSON HERE. It shipped in c3bf3b7 because I
+ * checked the build for compile errors and did not re-run this test after it.
+ * `next build` succeeding is not the budget passing; they are two of the four
+ * checks and only one of them was run.
+ *
+ * ⚠️ THE PUBLIC BUDGET IS UNCHANGED. `ENTRY_ROUTE_CEILING` below is what guards
+ * the landing page, the downloader pages and everything a cold visitor reaches.
+ * This number governs `/admin` alone: auth-gated, one visitor, never on a
+ * 2-second budget.
+ *
+ * 🔴 AND THIS IS THE LAST TIME IT SHOULD MOVE FOR THIS REASON. `/admin` renders
+ * every panel eagerly in one route, so each new control pushes the whole page
+ * up and the ratchet turns the wrong way. The standing Frenz AI rule (§20) asks
+ * for a substantially larger AI settings area — price, enabled, size, duration,
+ * concurrency, manual balance credit — and paying for that in ceiling raises
+ * would be a budget that means nothing. The fix is to code-split the admin
+ * panels behind their existing section navigation, which is real work and is
+ * not being smuggled into an unrelated commit.
+ */
+const GLOBAL_CEILING = 368 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

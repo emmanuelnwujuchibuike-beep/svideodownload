@@ -21,7 +21,30 @@ import { SITE_URL as siteUrl } from "@/lib/site";
  * honest place to revisit this later: a reader can see the policy was chosen.
  */
 export default function robots(): MetadataRoute.Robots {
-  const disallow = ["/api/", "/admin/"];
+  /*
+    ── 🔴 `/ai` IS DISALLOWED (owner, 2026-09-09) ────────────────────────────
+
+    The permanent Frenz AI product rule: "Ensure robots configuration does not
+    accidentally expose private AI pages… Treat Frenz AI as a private
+    authenticated utility, not as a public landing-page product."
+
+    `/ai` was deliberately public and crawlable from 2026-09-08, so that the
+    AdSense reviewer could see the feature. That decision has been reversed, and
+    reversing it properly means three separate things — none of which is
+    sufficient alone:
+
+      1. this line, so a compliant crawler does not request the route;
+      2. `robots: { index: false, follow: false }` on the pages themselves, so
+         a crawler that arrives by a link does not index what it finds (a
+         `Disallow` alone can still produce a URL-only result);
+      3. the sitemap entries and the guide route removed outright.
+
+    ⚠️ `/studio/` is NOT listed, and does not need to be: every route under it
+    redirects an unauthenticated request to sign-in, so a crawler receives no
+    content to index. This one does need listing precisely because `/ai` served
+    real HTML to anonymous visitors by design.
+  */
+  const disallow = ["/api/", "/admin/", "/ai", "/ai/"];
   const aiAgents = [
     "GPTBot",
     "OAI-SearchBot",

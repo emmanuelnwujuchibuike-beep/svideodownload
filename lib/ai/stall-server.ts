@@ -77,6 +77,9 @@ export async function failStalledJob(
       userId: subject.userId,
       jobId: job.id,
       message: aiErrorMessage("PROVIDER_TIMEOUT"),
+      // Ours, not the member's file — so the copy says "something went wrong"
+      // rather than sending them to find a different video.
+      errorCode: "PROVIDER_TIMEOUT",
     });
   }
 

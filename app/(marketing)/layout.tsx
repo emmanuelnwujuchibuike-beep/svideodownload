@@ -1,6 +1,6 @@
 import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ReelsWarmup } from "@/components/landing/reels-warmup";
-import { AiJobAlert } from "@/features/ai/ai-job-alert";
+import { AiJobAlertMount } from "@/features/ai/ai-job-alert-mount";
 import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
@@ -136,7 +136,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         job is genuinely running. See the note at the top of the component; that
         budget is why it is safe to mount on the landing page.
       */}
-      <AiJobAlert />
+      <AiJobAlertMount />
       <DeferredAdFurniture />
     </>
   );

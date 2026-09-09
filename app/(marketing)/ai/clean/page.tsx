@@ -47,8 +47,17 @@ import { SITE_URL } from "@/lib/site";
  */
 export const metadata: Metadata = {
   title: "AI Clean",
-  robots: { index: false, follow: true },
-  alternates: { canonical: `${SITE_URL}/ai` },
+  /*
+    🔴 nofollow AND no canonical (owner, 2026-09-09, permanent AI rule).
+
+    `index: false` was already right. `follow: true` was not: it invites a
+    crawler that reached this page to walk onward into the rest of the AI
+    surface, which is the thing being taken out of the index. And a canonical
+    is an instruction about HOW to index a page that must not be indexed — it
+    also pointed at /ai, which is itself noindex now, so it consolidated
+    nothing.
+  */
+  robots: { index: false, follow: false, nocache: true },
 };
 
 // A live tool: it reads a session and a guest cookie on every request.

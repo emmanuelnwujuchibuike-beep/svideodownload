@@ -169,7 +169,9 @@ import { listVerificationQueue, verificationCounts } from "@/lib/social/verifica
 import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
+import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 import { FrenzAISettings } from "@/features/admin/frenz-ai-settings";
+import { getAiAdminStats } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
 import { getPlatformStatus } from "@/lib/platform-status-store";
@@ -852,10 +854,14 @@ async function LandingSection() {
     the fields it displays, so neither can clobber the other's — see the note
     in frenz-ai-settings.tsx and the partial-update fix in setLandingSettings.
   */
+  const aiStats = await getAiAdminStats();
+
   return (
     <div className="space-y-6">
       <LandingEditor settings={landing} />
       <FrenzAISettings settings={landing} />
+      {/* Counts only — see lib/ai/admin-stats.ts for why there is no job table. */}
+      <FrenzAIHealth stats={aiStats} />
     </div>
   );
 }

@@ -222,6 +222,8 @@ async function failFrom(job: AiJobRow, code: string, detail: string | null | und
       userId: subject.userId,
       jobId: job.id,
       message: "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
+      // A job reconcile gives up on failed on OUR side, not on the input.
+      errorCode: "PROCESSING_FAILED",
     });
   }
   console.error("[ai/reconcile] failed a job the webhook never reported", { jobId: job.id, code });

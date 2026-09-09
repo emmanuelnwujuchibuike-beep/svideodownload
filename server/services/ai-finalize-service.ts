@@ -750,6 +750,10 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
           userId: subject.userId,
           jobId,
           audioRestored: hasAudio && verdict.probe.hasAudio,
+          // How long the member actually waited, so the copy can choose
+          // between "tap to view" (they are probably still here) and "whenever
+          // you are" (they left minutes ago). See lib/ai/notification-copy.ts.
+          durationMs: Date.now() - startedAt,
         });
       }
     }
@@ -799,6 +803,9 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
         userId: failedSubject.userId,
         jobId,
         message: "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
+        // The stable code, so a member whose FILE was the problem is told to
+        // try a different one rather than to retry the identical thing.
+        errorCode: code,
       });
     }
 

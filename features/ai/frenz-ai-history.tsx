@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   Ban,
-  Clock3,
   Loader2,
   Play,
   RotateCcw,
@@ -26,7 +25,7 @@ import {
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { formatRelative } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
-import { cn, formatBytes, formatDuration } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -53,22 +52,23 @@ import { cn, formatBytes, formatDuration } from "@/lib/utils";
  *
  * ── The whole list is metadata. Not one video is loaded. ────────────────────
  *
- * No posters, no `preload`, no signed urls. A row is text and a chip; the file
+ * No posters, no `preload`, no signed urls. A TILE is a gradient plate and a
+ * chip; the file
  * is only ever signed for when somebody taps Play, and the player itself is
  * `next/dynamic` so its markup, the compare canvases and the sheet's gesture
  * code stay off this page until they are needed. A history list that decoded a
  * frame per row to draw thumbnails would warm the phone of somebody who came
  * here to press one button, which is the rule this feature is held to
- * everywhere else.
+ * everywhere else — and it is why these tiles are brand plates rather than
+ * posters, even though the download gallery beside them shows real frames.
  *
  * ── Honest about expiry ─────────────────────────────────────────────────────
  *
- * ⚠️ Nothing in this project writes the `expired` status or deletes an expired
- * object yet — `expires_at` is set at creation (72h) and no cron reads it. So a
- * row is judged by the TIMESTAMP as well as the status, and one past its window
- * says so and does not offer Play. If a retention job is added later this keeps
- * working unchanged; without one, the alternative was a Play button that opens
- * a spinner and then an error.
+ * The retention sweep writes `expired` and deletes both objects hourly (Part 7,
+ * lib/ai/retention.ts). A tile is still judged by the TIMESTAMP as well as the
+ * status, because the sweep runs on the hour and there is always a window where
+ * a file is past its promise and the row has not caught up — the member should
+ * be told the truth in that window rather than offered a dead link.
  */
 
 /*
@@ -295,24 +295,20 @@ export function FrenzAIHistory({
                   <h3 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
                     {section.label}
                   </h3>
-                  <ul className="flex flex-col gap-2">
+                  <div className={HISTORY_GRID}>
                     {section.items.map((job) => (
-                      <li key={job.id}>
-                        <HistoryRow job={job} now={now} onOpen={() => open(job)} />
-                      </li>
+                      <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} />
                     ))}
-                  </ul>
+                  </div>
                 </section>
               ))}
             </div>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <div className={HISTORY_GRID}>
               {history.jobs.map((job) => (
-                <li key={job.id}>
-                  <HistoryRow job={job} now={now} onOpen={() => open(job)} />
-                </li>
+                <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} />
               ))}
-            </ul>
+            </div>
           )
         )}
       </div>
@@ -338,6 +334,13 @@ export function FrenzAIHistory({
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * 🔴 THREE COLUMNS ON A PHONE, like the download gallery. That is what makes
+ * this read as a wall of work rather than a settings list — and it is the
+ * specific thing the owner was comparing against.
+ */
+const HISTORY_GRID = "grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2";
+
 const TONE_CLASS: Record<AiHistoryTone, string> = {
   active: "bg-primary/12 text-primary ring-primary/25",
   good: "bg-emerald-500/12 text-emerald-600 ring-emerald-500/25 dark:text-emerald-400",
@@ -345,148 +348,159 @@ const TONE_CLASS: Record<AiHistoryTone, string> = {
   warn: "bg-amber-500/12 text-amber-600 ring-amber-500/25 dark:text-amber-400",
 };
 
-function HistoryRow({ job, now, onOpen }: { job: AiJobView; now: number; onOpen: () => void }) {
+/**
+ * One video, as a TILE.
+ *
+ * ── 🔴 THE DOWNLOAD HISTORY'S STRUCTURE, NOT ITS SKIN ──────────────────────
+ *
+ * Owner, 2026-09-09: "I just checked, the AI history is still the same how it
+ * was — I said it should be like the download history."
+ *
+ * They were right and my first answer was half of one: I added day sections but
+ * kept a list of full-width rows, so it still read as a settings list rather
+ * than a library. The download history is a GRID OF SQUARE TILES (
+ * `features/history/media-gallery.tsx` — `aspect-square`, `rounded-2xl`, a
+ * status chip bottom-left, three columns on a phone), and that shape is the
+ * thing being asked for: a wall of your work, scannable at a glance.
+ *
+ * So the STRUCTURE is now the same — square tiles, the same grid rhythm, the
+ * same corner treatment, the same bottom-left chip, the same tap-to-open.
+ *
+ * ── And the skin is deliberately NOT the same ──────────────────────────────
+ *
+ * "they should not carry exactly the same design they should be
+ * differentiated." Download tiles are photographs of media you already own, on
+ * black. These are jobs, and there is no poster to show — so a Frenz AI tile is
+ * a brand-gradient plate with the mark on it, tinted by STATE: gradient when
+ * there is a video to play, flat secondary when there is not. Nobody will
+ * confuse the two walls, and this one still decodes no video.
+ *
+ * 🔴 That is not only aesthetics. A tile per row with a real poster would mean
+ * a signed URL and a decode per item, on a list somebody opens to press one
+ * button. The gradient costs nothing and keeps the promise this feature has
+ * held since it shipped.
+ */
+function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen: () => void }) {
   const chip = historyChip(job, now);
   const availability = resultAvailability(job, now);
   const playable = availability === "ready";
-  const hours = availability === "ready" ? hoursUntilExpiry(job, now) : null;
+  const active = isActiveStatus(job.status);
 
   /*
-    🔴 A ROW IS A BUTTON ONLY WHEN IT DOES SOMETHING.
+    🔴 A TILE IS A BUTTON ONLY WHEN IT DOES SOMETHING.
 
-    A cancelled job has no video, so rendering its row as a `<button>` would put
-    a focusable, pressable-looking control on the page that answers a tap with
-    nothing at all. The playable rows are buttons; the rest are plain `div`s
-    that say why in their own subtitle.
+    A cancelled job has no video, so rendering its tile as a `<button>` would
+    put a focusable, pressable-looking control on the page that answers a tap
+    with nothing. Playable tiles are buttons; the rest are plain `div`s that say
+    why in their own caption.
   */
   const Tag = playable ? "button" : "div";
 
   return (
-    <Tag
-      {...(playable ? { type: "button" as const, onClick: onOpen } : {})}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-3 text-left",
-        playable &&
-          "transition hover:border-primary/30 active:scale-[0.995] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-      )}
-    >
-      <RowTile job={job} playable={playable} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold">
-            {/*
-              🔴 The member's own filename, rendered as they typed it. No
-              `uppercase`, no truncation of the extension — a CSS transform is a
-              silent edit of somebody's copy, and this feature has made that
-              mistake once already with "WebM".
-            */}
-            {job.source.name ?? "Cleaned video"}
-          </p>
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
-              TONE_CLASS[chip.tone],
-            )}
-          >
-            {chip.label}
-          </span>
-        </div>
-
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {[
-            formatRelative(job.createdAt, undefined, new Date(now)),
-            job.source.durationSeconds ? formatDuration(job.source.durationSeconds) : null,
-            job.source.size ? formatBytes(job.source.size) : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-
-        <p className="mt-0.5 truncate text-xs text-muted-foreground/80">
-          <RowSubtitle job={job} availability={availability} hours={hours} />
-        </p>
-      </div>
-
-      {playable ? (
+    <article className="min-w-0">
+      <Tag
+        {...(playable ? { type: "button" as const, onClick: onOpen } : {})}
+        aria-label={playable ? `Play ${job.source.name ?? "cleaned video"}` : undefined}
+        className={cn(
+          "relative block aspect-square w-full overflow-hidden rounded-2xl",
+          playable
+            ? "bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500"
+            : "bg-secondary",
+          playable &&
+            "transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        )}
+      >
+        {/* The mark, centred — this is where a poster would be. */}
         <span
           aria-hidden
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
+          className={cn(
+            "absolute inset-0 flex items-center justify-center",
+            playable ? "text-white/95" : "text-muted-foreground",
+          )}
         >
-          <Play className="h-4 w-4 fill-current" />
+          {active ? (
+            <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" />
+          ) : job.status === "cancelled" ? (
+            <Ban className="h-7 w-7" />
+          ) : job.status === "failed" ? (
+            <AlertTriangle className="h-7 w-7" />
+          ) : playable ? (
+            <Play className="h-8 w-8 fill-current" />
+          ) : (
+            <Trash2 className="h-7 w-7" />
+          )}
         </span>
-      ) : null}
-    </Tag>
+
+        {/* The state chip, bottom-left — the same place the download tile puts
+            its own. On a gradient it needs its own ground to stay legible. */}
+        <span
+          className={cn(
+            "absolute bottom-1.5 left-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+            playable ? "bg-black/45 text-white" : "ring-1 ring-inset",
+            !playable && TONE_CLASS[chip.tone],
+          )}
+        >
+          {chip.label}
+        </span>
+
+        {/* Length, bottom-right, mirroring the download tile's quality badge. */}
+        {job.source.durationSeconds ? (
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/45 px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {formatDuration(job.source.durationSeconds)}
+          </span>
+        ) : null}
+      </Tag>
+
+      {/* The caption, under the tile — same rhythm as `RecentDownloads`. */}
+      <div className="mt-1.5 min-w-0">
+        <p className="truncate text-[12.5px] font-semibold leading-tight" title={job.source.name ?? undefined}>
+          {/*
+            🔴 The member's own filename, as they typed it. No `uppercase`, no
+            truncation of the extension — a CSS transform is a silent edit of
+            somebody's copy, and this feature has made that mistake once already
+            with "WebM".
+          */}
+          {job.source.name ?? "Cleaned video"}
+        </p>
+        <p className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground">
+          <TileCaption job={job} availability={availability} now={now} />
+        </p>
+      </div>
+    </article>
   );
 }
 
-/**
- * The square at the left.
- *
- * Deliberately NOT a thumbnail — see the note at the top of this file. It is a
- * gradient with one icon, which costs nothing and still tells the eye which
- * rows have a video behind them.
- */
-function RowTile({ job, playable }: { job: AiJobView; playable: boolean }) {
-  const active = isActiveStatus(job.status);
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
-        playable
-          ? "bg-gradient-to-br from-blue-600/85 via-indigo-500/85 to-fuchsia-500/85 text-white"
-          : "bg-secondary text-muted-foreground",
-      )}
-    >
-      {active ? (
-        <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" />
-      ) : job.status === "cancelled" ? (
-        <Ban className="h-5 w-5" />
-      ) : job.status === "failed" ? (
-        <AlertTriangle className="h-5 w-5" />
-      ) : playable ? (
-        <Sparkles className="h-5 w-5" />
-      ) : (
-        <Trash2 className="h-5 w-5" />
-      )}
-    </span>
-  );
-}
-
-/** One sentence per row, and never the same one for two different situations. */
-function RowSubtitle({
+/** One line per tile, and never the same one for two different situations. */
+function TileCaption({
   job,
   availability,
-  hours,
+  now,
 }: {
   job: AiJobView;
   availability: ReturnType<typeof resultAvailability>;
-  hours: number | null;
+  now: number;
 }) {
-  if (availability === "pending") return <>Still working. This keeps going even if you close the app.</>;
-  if (availability === "expired")
-    return (
-      <span className="inline-flex items-center gap-1">
-        <Clock3 className="h-3 w-3" aria-hidden />
-        Kept for three days — this one has been deleted.
-      </span>
-    );
-  if (job.status === "cancelled") return <>You stopped this one. Nothing was used from your allowance.</>;
-  if (job.status === "failed") return <>{job.error?.message ?? "This one didn't finish."}</>;
+  const when = formatRelative(job.createdAt, undefined, new Date(now));
+
+  if (availability === "pending") return <>Still working · keeps going if you leave</>;
+  if (availability === "expired") return <>Expired · kept for three days</>;
+  if (job.status === "cancelled") return <>You stopped this one · {when}</>;
+  if (job.status === "failed") return <>Didn&apos;t finish · {when}</>;
   if (availability === "ready") {
+    const hours = hoursUntilExpiry(job, now);
+    const days = hours === null ? null : Math.floor(hours / 24);
     return (
-      <span className="inline-flex items-center gap-1">
-        <Clock3 className="h-3 w-3" aria-hidden />
+      <>
+        {when}
         {hours === null
-          ? "Ready to watch and save."
-          : hours >= 24
-            ? `Available for ${Math.floor(hours / 24)} more ${Math.floor(hours / 24) === 1 ? "day" : "days"}.`
-            : `Available for ${hours} more ${hours === 1 ? "hour" : "hours"}.`}
-      </span>
+          ? ""
+          : days && days >= 1
+            ? ` · ${days} ${days === 1 ? "day" : "days"} left`
+            : ` · ${hours}h left`}
+      </>
     );
   }
-  return <>No video was made.</>;
+  return <>{when}</>;
 }
 
 function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) {
@@ -502,18 +516,18 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
   );
 }
 
+/** The grid's own shape while the first page loads — never a spinner. */
 function HistorySkeleton() {
   return (
-    <ul className="flex flex-col gap-2" aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <li key={i} className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-3">
-          <span className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-secondary motion-reduce:animate-none" />
-          <span className="flex min-w-0 flex-1 flex-col gap-2">
-            <span className="h-3.5 w-2/3 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
-            <span className="h-3 w-1/2 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
-          </span>
-        </li>
+    <div className={cn(HISTORY_GRID)} aria-hidden>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="min-w-0">
+          <div className="aspect-square w-full animate-pulse rounded-2xl bg-secondary motion-reduce:animate-none" />
+          <div className="mt-1.5 h-3 w-3/4 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
+          <div className="mt-1 h-2.5 w-1/2 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
+

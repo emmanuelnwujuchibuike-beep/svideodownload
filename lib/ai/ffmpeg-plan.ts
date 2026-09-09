@@ -435,10 +435,30 @@ export function buildResizeToSourceArgs(plan: {
     plan.outPath,
   ];
 }
-/** The detector's rectangle: painted black, and not black in the source. */
-const MASK_RECT_CHAIN =
+/**
+ * The detector's rectangle: painted black, and not black in the source.
+ *
+ * ── 🔴 TWO MORPHOLOGIES, BECAUSE THE RECTANGLE HAS TWO JOBS ────────────────
+ *
+ * As the FALLBACK it IS the mask, so its holes are surviving text and the full
+ * closing (36 chained ops) has to run.
+ *
+ * As a REGION OF INTEREST for the refined mask it is neither — the glyph
+ * segmentation re-derives the shape inside it, so a hole in the ROI changes
+ * nothing about the result. Running 36 morphology passes per frame to produce
+ * a boundary that is then intersected away is pure cost, and it is charged on
+ * a shared worker CPU at 720x1280 x 286 frames.
+ *
+ * So the ROI gets the light chain (8 ops) and the fallback keeps the heavy one.
+ */
+const MASK_ROI_MORPHOLOGY = [
+  ...Array(2).fill("erosion"),
+  ...Array(6).fill("dilation"),
+].join(",");
+
+const maskRectChain = (morphology: string) =>
   "[1]format=gray[a];[0]format=gray[b];" +
-  `[a][b]blend=all_expr='if(lt(A,16)*gt(B,16),255,0)',${MASK_MORPHOLOGY}`;
+  `[a][b]blend=all_expr='if(lt(A,16)*gt(B,16),255,0)',${morphology}`;
 
 /**
  * The mask ProPainter is given.
@@ -454,7 +474,7 @@ export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string
   const refine = plan.refine !== false;
 
   const filter = refine
-    ? `${MASK_RECT_CHAIN}[rect];` +
+    ? `${maskRectChain(MASK_ROI_MORPHOLOGY)}[rect];` +
       // Very bright OR very dark, anywhere in the frame. `+` is a sum, and
       // `if()` treats any non-zero as true, so this is an OR.
       `[0]format=gray,geq=lum='if(gt(p(X\\,Y)\\,${MASK_BRIGHT})+lt(p(X\\,Y)\\,${MASK_DARK})\\,255\\,0)'[glyph];` +
@@ -462,7 +482,7 @@ export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string
       // shirt, a dark doorway — can never enter the mask.
       `[rect][glyph]blend=all_expr='if(gt(A,127)*gt(B,127),255,0)',` +
       `${Array(MASK_REFINE_GROW).fill("dilation").join(",")},format=yuv420p`
-    : `${MASK_RECT_CHAIN},format=yuv420p`;
+    : `${maskRectChain(MASK_MORPHOLOGY)},format=yuv420p`;
 
   return [
     "-hide_banner",

@@ -26,12 +26,13 @@ import { buildTextMaskArgs, parseProbeOutput } from "./ffmpeg-plan";
  */
 
 describe("the mask filter graph", () => {
-  const args = buildTextMaskArgs({
+  const plan = {
     sourcePath: "/tmp/source.bin",
     blackPath: "/tmp/cleaned.bin",
     outPath: "/tmp/mask.mp4",
     fps: 30,
-  });
+  };
+  const args = buildTextMaskArgs(plan);
   const graph = args[args.indexOf("-filter_complex") + 1] ?? "";
 
   it("🔴 excludes regions that are black in BOTH inputs", () => {
@@ -64,11 +65,24 @@ describe("the mask filter graph", () => {
     quietly turn the closing back into an opening.
   */
   it("opens to drop speckle, then CLOSES to fill the holes gt(B,16) punches", () => {
-    // Annotated: `match()` returns `RegExpMatchArray | null`, and the union
-    // with a bare `[]` narrows the element type to `never` — which makes
-    // `indexOf("dilation")` a compile error that only `tsc` sees. `next build`
-    // does not typecheck test files and vitest does not typecheck at all.
-    const ops: string[] = graph.match(/erosion|dilation/g) ?? [];
+    /*
+      ⚠️ Read from the FALLBACK graph now, not the default one.
+
+      The closing exists because a hole in the mask is surviving text. That is
+      only true when the rectangle IS the mask — which, since the glyph
+      refinement landed, is exactly the fallback case. On the refined path the
+      rectangle is a region of interest whose boundary gets intersected away,
+      so running 36 morphology passes per frame to build it was pure cost on a
+      shared worker CPU.
+
+      Annotated: `match()` returns `RegExpMatchArray | null`, and the union with
+      a bare `[]` narrows the element type to `never` — a compile error only
+      `tsc` sees, because `next build` does not typecheck test files and vitest
+      does not typecheck at all.
+    */
+    const fallbackArgs = buildTextMaskArgs({ ...plan, refine: false });
+    const fallback = fallbackArgs[fallbackArgs.indexOf("-filter_complex") + 1] ?? "";
+    const ops: string[] = fallback.match(/erosion|dilation/g) ?? [];
     // Opening first: the two erosions lead.
     expect(ops[0]).toBe("erosion");
     expect(ops[1]).toBe("erosion");

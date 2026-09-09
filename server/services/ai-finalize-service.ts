@@ -231,14 +231,83 @@ export async function validateFinalVideo(
  * them at once is how a worker gets OOM-killed mid-mux. The bytes go from the
  * socket to the filesystem and are never all in the process at one time.
  */
+/** No bytes for this long and the transfer is dead, not slow. */
+const DOWNLOAD_IDLE_TIMEOUT_MS = Number(process.env.AI_DOWNLOAD_IDLE_TIMEOUT_MS || 60_000);
+/** A ceiling regardless of progress, so one file cannot hold a job forever. */
+const DOWNLOAD_HARD_TIMEOUT_MS = Number(process.env.AI_DOWNLOAD_HARD_TIMEOUT_MS || 10 * 60_000);
+
+/**
+ * Pull a provider's output onto disk.
+ *
+ * ── 🔴 IT HAD NO TIMEOUT AT ALL, AND THAT IS HOW A JOB HANGS FOREVER ───────
+ *
+ * Owner, 2026-09-09: "I tried testing the video editing again and it has been
+ * loading, it glitched around 2 minutes like it finished and then continued
+ * again and since then it has been loading."
+ *
+ * Traced on their job: the detector finished at 14:46:22, ProPainter was
+ * submitted at 14:47:51 and SUCCEEDED at ~14:51 with predict_time 190.6s — and
+ * the row was still `finalizing` eleven minutes later. The provider had done
+ * everything asked of it. The job was stuck on OUR side, on the very next line.
+ *
+ * `await fetch(url)` carried no `AbortSignal`, and `pipeline()` had no idle
+ * timeout. A CDN that accepts the connection and then stalls mid-body leaves
+ * both waiting indefinitely: no error, no retry, no log — the stall guard's
+ * 60-minute `finalizing` deadline was the only thing that could ever end it.
+ *
+ * This project has been bitten by exactly this before, in `proxyDownload`, and
+ * the lesson is written down: a stream needs an IDLE timeout, not just a total
+ * one. A slow 40 MB file on a bad connection must not be killed, and a dead
+ * socket must not be waited on — only "no bytes for a while" tells them apart.
+ *
+ * Two clocks, therefore:
+ *   · IDLE — reset on every chunk. This is the one that catches a stall.
+ *   · HARD — never reset. This is the one that catches a trickle.
+ */
 async function downloadToFile(url: string, destination: string, limitBytes: number): Promise<number> {
-  const res = await fetch(url);
-  if (!res.ok || !res.body) throw new Error(`download failed: ${res.status}`);
+  const controller = new AbortController();
 
-  const declared = Number(res.headers.get("content-length") ?? 0);
-  if (declared > limitBytes) throw new Error(`declared ${declared} bytes, over the ceiling`);
+  let idle: NodeJS.Timeout | undefined;
+  const hard = setTimeout(() => controller.abort(), DOWNLOAD_HARD_TIMEOUT_MS);
+  const bump = () => {
+    clearTimeout(idle);
+    idle = setTimeout(() => controller.abort(), DOWNLOAD_IDLE_TIMEOUT_MS);
+  };
+  bump();
 
-  await pipeline(Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]), createWriteStream(destination));
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok || !res.body) throw new Error(`download failed: ${res.status}`);
+
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > limitBytes) throw new Error(`declared ${declared} bytes, over the ceiling`);
+
+    /*
+      The counter is what resets the idle clock, and it also enforces the
+      ceiling WHILE the bytes arrive rather than after. `content-length` is a
+      claim by the other end — a server that omits or lies about it could
+      otherwise fill the worker's disk before anything measured anything.
+    */
+    let written = 0;
+    const source = Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]);
+    source.on("data", (chunk: Buffer) => {
+      written += chunk.length;
+      if (written > limitBytes) controller.abort();
+      bump();
+    });
+
+    await pipeline(source, createWriteStream(destination));
+  } catch (e) {
+    // An abort is one of ours, and the caller needs to know which clock fired
+    // rather than seeing a bare "AbortError" it cannot act on.
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("the provider's download stalled or exceeded its budget");
+    }
+    throw e;
+  } finally {
+    clearTimeout(idle);
+    clearTimeout(hard);
+  }
 
   const { size } = await stat(destination);
   if (size <= 0) throw new Error("downloaded nothing");
@@ -933,6 +1002,17 @@ async function reconstructWithProPainter(opts: {
       return null;
     }
 
+    /*
+      🔴 A BREADCRUMB BEFORE THE DOWNLOAD, NOT AFTER IT.
+
+      The owner's job sat in `finalizing` for eleven minutes AFTER ProPainter
+      had succeeded, and nothing in the row said which step it was on. Written
+      before the transfer starts, this is what turns "it has been loading" into
+      a named stage next time — the download now has timeouts, but the same
+      blindness would apply to any step that grows one.
+    */
+    await noteJobDiagnostic(jobId, { propainter: "downloading-output", propainter_predict_s: result.predictTimeSeconds });
+    const downloadStartedAt = Date.now();
     const bytes = await downloadToFile(result.outputUrl, outFile, AI_CLEAN_LIMITS.maxResultSize);
 
     /*
@@ -988,6 +1068,7 @@ async function reconstructWithProPainter(opts: {
       predictSeconds: result.predictTimeSeconds,
       elapsedMs: Date.now() - startedAt,
       bytes,
+      downloadMs: Date.now() - downloadStartedAt,
       sourceSize: srcW && srcH ? `${srcW}x${srcH}` : null,
       providerSize: reconstructedProbe?.width ? `${reconstructedProbe.width}x${reconstructedProbe.height}` : null,
       resized,

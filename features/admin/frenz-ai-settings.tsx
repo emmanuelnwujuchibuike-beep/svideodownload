@@ -7,10 +7,14 @@ import { useState, type FormEvent } from "react";
 import {
   FRENZ_AI_MAX_FREE_CREDITS,
   FRENZ_AI_MAX_PAID_CREDITS,
+  FRENZ_AI_MAX_PRICE_CENTS,
+  FRENZ_AI_MAX_WEEKLY_CREDITS,
+  FRENZ_AI_MIN_PRICE_CENTS,
   FRENZ_AI_MIN_PAID_CREDITS,
   type AiCleanEngineSetting,
   type LandingSettings,
 } from "@/lib/landing/settings";
+import { formatCents } from "@/lib/ai/economy";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,6 +51,8 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [credits, setCredits] = useState(String(settings.frenzAiFreeDailyCredits));
   const [proCredits, setProCredits] = useState(String(settings.frenzAiProDailyCredits));
   const [businessCredits, setBusinessCredits] = useState(String(settings.frenzAiBusinessDailyCredits));
+  const [weekly, setWeekly] = useState(String(settings.frenzAiWeeklyFreeCredits));
+  const [price, setPrice] = useState(String(settings.frenzAiVideoPriceCents));
   const [engine, setEngine] = useState<AiCleanEngineSetting>(settings.frenzAiEngine);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -75,6 +81,17 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           frenzAiProDailyCredits: Number(proCredits) || settings.frenzAiProDailyCredits,
           frenzAiBusinessDailyCredits:
             Number(businessCredits) || settings.frenzAiBusinessDailyCredits,
+          /*
+            🔴 Weekly may legitimately be ZERO ("no free AI this week"), so
+            `|| settings…` would silently swallow a deliberate 0 and send the
+            old value back. An empty field is the only thing that means "leave
+            it alone" here.
+          */
+          frenzAiWeeklyFreeCredits:
+            weekly.trim() === "" ? settings.frenzAiWeeklyFreeCredits : Number(weekly),
+          // Price may NOT be zero — the schema refuses it — so here `||` is
+          // guarding an empty field rather than discarding a meaningful 0.
+          frenzAiVideoPriceCents: Number(price) || settings.frenzAiVideoPriceCents,
           frenzAiEngine: engine,
         }),
       });
@@ -146,6 +163,73 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           <span className="ml-2 text-xs text-muted-foreground">
             0&ndash;{FRENZ_AI_MAX_FREE_CREDITS}
           </span>
+        </div>
+
+        {/*
+          ── 🔴 THE WEEKLY CEILING AND THE PRICE ────────────────────────────
+
+          Owner, 2026-09-09: the standing Frenz AI rule (§6/§7/§10/§20), and
+          separately "make the price per video be adjustable from the admin
+          dashboard".
+
+          These two are the whole economy an operator can steer: how much is
+          free, and what the rest costs. Both apply to the NEXT request — they
+          are read server-side per job, so a change here needs no deploy and
+          takes effect immediately.
+
+          🔴 THE PRICE FIELD IS IN CENTS, and it says so on the label rather
+          than in a tooltip. A field measured in cents that looks like it might
+          be dollars is a two-order-of-magnitude mistake waiting to happen —
+          somebody types 50 meaning fifty cents, or types 0.5 meaning the same
+          and gets 0. The live dollar value is rendered beside the input so the
+          operator can see what they have actually set before saving.
+        */}
+        <div>
+          <p className="text-sm font-semibold">Free weekly allowance</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Applies on top of the daily limit — a member gets whichever is lower.
+            Someone on 2 a day and {weekly || FRENZ_AI_MAX_WEEKLY_CREDITS} a week
+            who cleans on three days has used the week, and Thursday&apos;s daily
+            reset does not give them another. The week starts Monday 00:00 UTC.
+          </p>
+          <input
+            id="frenz-ai-weekly"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={FRENZ_AI_MAX_WEEKLY_CREDITS}
+            value={weekly}
+            onChange={(e) => setWeekly(e.target.value)}
+            className="mt-2 w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <span className="ml-2 text-xs text-muted-foreground">0&ndash;{FRENZ_AI_MAX_WEEKLY_CREDITS}</span>
+        </div>
+
+        <div>
+          <label htmlFor="frenz-ai-price" className="block text-sm font-semibold">
+            Price per AI video, in cents
+          </label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Charged only after a member&apos;s free allowance is used. Pro and
+            Business pay this too — a subscription does not include AI.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              id="frenz-ai-price"
+              type="number"
+              inputMode="numeric"
+              min={FRENZ_AI_MIN_PRICE_CENTS}
+              max={FRENZ_AI_MAX_PRICE_CENTS}
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            {/* What they have actually typed, in the units a person thinks in. */}
+            <span className="text-sm font-semibold tabular-nums">
+              = {formatCents(Number(price) || 0)}
+            </span>
+            <span className="text-xs text-muted-foreground">per video</span>
+          </div>
         </div>
 
         {/*

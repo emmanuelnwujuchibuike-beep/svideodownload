@@ -188,6 +188,41 @@ export interface LandingSettings {
   frenzAiProDailyCredits: number;
   frenzAiBusinessDailyCredits: number;
   /**
+   * ── 🔴 THE WEEKLY FREE ALLOWANCE ──────────────────────────────────────────
+   *
+   * Owner, 2026-09-09 (standing Frenz AI rule, §6/§7): "There are two separate
+   * limits… A user cannot bypass the weekly limit by waiting for the daily
+   * counter to reset."
+   *
+   * Both ceilings apply and the LOWER remaining one wins. Daily alone was
+   * gameable by patience: 2 a day is 14 a week, and the point of a weekly floor
+   * is that it is not.
+   *
+   * The reset boundary is documented once, in `lib/ai/economy.ts`, and every
+   * reader of this number must use that definition — a week that means
+   * "rolling 7 days" in one place and "since Monday" in another is two
+   * different products.
+   */
+  frenzAiWeeklyFreeCredits: number;
+  /**
+   * ── 🔴 WHAT ONE AI VIDEO COSTS, IN CENTS ──────────────────────────────────
+   *
+   * Owner, 2026-09-09: "make the price per video be adjustable from the admin
+   * dashboard", and from the standing rule: "This should be represented as a
+   * configurable server-side value rather than hard-coded throughout the
+   * frontend."
+   *
+   * 🔴 CENTS, AS AN INTEGER. Never a float, and never dollars. `0.1 + 0.2` is
+   * not `0.3` in binary floating point, and a balance that drifts by fractions
+   * of a cent per transaction is a ledger that stops reconciling — which is the
+   * one thing a ledger exists to do. Every amount in this system is an integer
+   * number of cents from the database to the button, and dollars exist only in
+   * the final formatting step.
+   *
+   * 50 = $0.50, the price the owner set.
+   */
+  frenzAiVideoPriceCents: number;
+  /**
    * Whether FREE members may run AI Clean at all.
    *
    * Owner, 2026-09-08: "since the replicate says credit first, then before the
@@ -267,6 +302,15 @@ export const DEFAULT_LANDING: LandingSettings = {
   */
   frenzAiProDailyCredits: 5,
   frenzAiBusinessDailyCredits: 15,
+  /*
+    Five a week against two a day: a member who cleans on three days uses the
+    week, which is the shape the owner described (2 + 2 + 1). The numbers are
+    the ones named in the spec and both are operator-settable, so neither is a
+    commitment this file makes on its own.
+  */
+  frenzAiWeeklyFreeCredits: 5,
+  // $0.50, in cents. See the field note on why this is never a float.
+  frenzAiVideoPriceCents: 50,
   // ON by default: switching a feature off is a decision an operator makes, not
   // a state a fresh install falls into.
   frenzAiFreeEnabled: true,
@@ -317,6 +361,54 @@ export function normalizeFreeCredits(value: unknown): number {
  * the operator is making a real decision and the field should let them.
  */
 export const FRENZ_AI_MIN_PAID_CREDITS = 3;
+
+/**
+ * Bounds on the WEEKLY free allowance.
+ *
+ * 🔴 Zero IS allowed, unlike the paid floor: an operator switching the weekly
+ * allowance to 0 is saying "no free AI this week", which is a real business
+ * decision and the same one `frenzAiFreeDailyCredits: 0` expresses for a day.
+ * The ceiling is a spend control — every free job costs the same provider money
+ * a paid one does, it is simply billed to us.
+ */
+export const FRENZ_AI_MAX_WEEKLY_CREDITS = 200;
+
+export function normalizeWeeklyCredits(value: unknown): number {
+  if (value === null || value === undefined || value === "") {
+    return DEFAULT_LANDING.frenzAiWeeklyFreeCredits;
+  }
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_LANDING.frenzAiWeeklyFreeCredits;
+  return Math.max(0, Math.min(FRENZ_AI_MAX_WEEKLY_CREDITS, Math.floor(n)));
+}
+
+/**
+ * Bounds on the price of one AI video, in CENTS.
+ *
+ * ── 🔴 A FLOOR OF 1, NOT 0 ──────────────────────────────────────────────────
+ *
+ * A price of zero would make every paid job free — which sounds harmless and is
+ * the most expensive possible misconfiguration: the free allowance would still
+ * run out, the member would still be sent to the paid path, and every job past
+ * that point would run at our cost with a $0.00 ledger entry recording it.
+ * Turning paid usage off is not a price of zero; it is switching the feature
+ * off, which is a different control.
+ *
+ * ⚠️ The ceiling is $100 a video. Not because anybody would set it, but because
+ * a slipped digit on a field measured in CENTS is two orders of magnitude — an
+ * operator typing "50" meaning dollars would otherwise charge $50 per clean.
+ */
+export const FRENZ_AI_MIN_PRICE_CENTS = 1;
+export const FRENZ_AI_MAX_PRICE_CENTS = 10_000;
+
+export function normalizePriceCents(value: unknown): number {
+  if (value === null || value === undefined || value === "") {
+    return DEFAULT_LANDING.frenzAiVideoPriceCents;
+  }
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_LANDING.frenzAiVideoPriceCents;
+  return Math.max(FRENZ_AI_MIN_PRICE_CENTS, Math.min(FRENZ_AI_MAX_PRICE_CENTS, Math.floor(n)));
+}
 export const FRENZ_AI_MAX_PAID_CREDITS = 500;
 
 /**
@@ -408,6 +500,8 @@ export async function getLandingSettings(): Promise<LandingSettings> {
         raw.frenzAiBusinessDailyCredits,
         DEFAULT_LANDING.frenzAiBusinessDailyCredits,
       ),
+      frenzAiWeeklyFreeCredits: normalizeWeeklyCredits(raw.frenzAiWeeklyFreeCredits),
+      frenzAiVideoPriceCents: normalizePriceCents(raw.frenzAiVideoPriceCents),
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
       frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
@@ -474,6 +568,8 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
       pick("frenzAiBusinessDailyCredits"),
       DEFAULT_LANDING.frenzAiBusinessDailyCredits,
     ),
+    frenzAiWeeklyFreeCredits: normalizeWeeklyCredits(pick("frenzAiWeeklyFreeCredits")),
+    frenzAiVideoPriceCents: normalizePriceCents(pick("frenzAiVideoPriceCents")),
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
     frenzAiEngine: normalizeEngine(pick("frenzAiEngine")),
     frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",

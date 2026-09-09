@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { createClient } from "@/lib/supabase/server";
+
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AIDownloadOverlay } from "@/features/ai/ai-download-overlay";
 import { FrenzAIHistoryPage } from "@/features/ai/frenz-ai-history-page";
-import { getLandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 
 /**
@@ -57,11 +58,37 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function PublicFrenzAIHistoryPage() {
-  const { frenzAiPublicEnabled } = await getLandingSettings();
 
   // Off means the anonymous door is closed; the Studio route sends them to
   // login with a `next` so the journey still completes.
-  if (!frenzAiPublicEnabled) redirect("/studio/ai/history");
+  /*
+    ── 🔴 SIGNED IN, OR NOTHING (owner, 2026-09-09, standing product rule) ───
+
+    "AI must NOT be publicly exposed as a major landing-page feature, indexed
+    standalone page, or publicly usable tool… If an unauthenticated user
+    somehow attempts to access an AI route directly, securely redirect them to
+    the normal authentication flow."
+
+    This route used to render for anonymous visitors whenever
+    `frenzAiPublicEnabled` was on — deliberately, so the AdSense crawler could
+    see the feature. That rule is replaced, and the setting no longer decides
+    anything here: an unauthenticated request is redirected unconditionally.
+
+    🔴 The redirect goes to the SIGNED-IN route rather than straight to
+    /login, because that route already resolves the sign-in journey properly —
+    it sends an anonymous visitor to login with a `next` that brings them back
+    to the AI page afterwards. One implementation of that flow, not two.
+
+    ⚠️ This is the page half. The API half is enforced independently in
+    `resolveAiSubject`, which returns a null subject for anyone without a
+    session — because a page redirect protects nothing from a direct fetch.
+  */
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/studio/ai/history");
+
 
   return (
     <>

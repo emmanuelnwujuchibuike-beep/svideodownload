@@ -46,8 +46,29 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 /** Where a freshly minted identity has to be written by the caller. */
+/**
+ * 🔴 THE STANDING RULE, AS A CONSTANT SO IT CAN BE CITED RATHER THAN RECALLED.
+ *
+ * Owner, 2026-09-09: "Frenz AI is a signed-in-user-only feature… This
+ * distinction must remain true for all future AI features unless explicitly
+ * changed by the product owner."
+ *
+ * Every future AI tool inherits the gate by calling `resolveAiSubject` and
+ * refusing a null subject. There is deliberately no per-feature override.
+ */
+export const AI_REQUIRES_SIGN_IN = true;
+
 export interface AiSubjectResolution {
-  subject: AiSubject;
+  /**
+   * Who is asking, or NULL when nobody is signed in.
+   *
+   * 🔴 Nullable as of 2026-09-09. It was always an `AiSubject` — a member or a
+   * minted guest — and making it nullable is what forces every caller to be
+   * re-examined by the compiler rather than by memory. A route that forgot to
+   * handle the anonymous case now fails the build instead of quietly serving
+   * one.
+   */
+  subject: AiSubject | null;
   /**
    * Set when a new guest identity was minted and the response MUST carry it.
    *
@@ -117,22 +138,50 @@ export async function resolveAiSubject(
   /* ── 2 · a guest we have seen before ── */
   if (guestId) {
     const owner = await linkedOwner(guestId);
-    // 2b — signed out, but this browser belongs to an account. Spend theirs.
+    /*
+      2b — signed out, but this browser belongs to an account.
+
+      🔴 STILL HONOURED, AND IT IS NOT A LOOPHOLE. This does not grant AI access
+      to a signed-out visitor: `subject` is a USER subject, so every route below
+      still requires a session of its own before it will do anything (see the
+      note on `AI_REQUIRES_SIGN_IN`). What it preserves is the LINK, so a
+      member's old guest identifier keeps spending their allowance rather than
+      resurfacing as a fresh one if they sign in again on this browser.
+    */
     if (owner) return { subject: userSubject(owner), ipKey: null };
-    return { subject: guestSubject(guestId), ipKey: ipCeilingKey(clientId(request.headers)) };
   }
 
-  /* ── 3 · brand new ── */
-  const minted = mintGuestToken();
-  return {
-    subject: guestSubject(minted.id),
-    setCookie: {
-      name: AI_SUBJECT_COOKIE,
-      value: minted.token,
-      maxAge: AI_SUBJECT_COOKIE_MAX_AGE,
-    },
-    ipKey: ipCeilingKey(clientId(request.headers)),
-  };
+  /*
+    ── 🔴 3 · NOBODY IS SIGNED IN, AND THAT IS NOW THE END OF IT ──────────────
+
+    Owner, 2026-09-09, as a PERMANENT product rule: "Frenz AI is a
+    signed-in-user-only feature… Only authenticated/signed-in users can access
+    Frenz AI. Logged-out users must not be able to open or use AI tools."
+
+    This branch used to MINT a guest identity, and everything downstream —
+    quota, jobs, storage, history — was built to work for one. That was correct
+    under the previous rule ("Do not force users to sign up before they can try
+    the AI") and it is exactly what the new rule reverses.
+
+    🔴 REFUSED HERE, IN THE ONE PLACE IDENTITY IS DECIDED. Every AI route in the
+    product calls this function before it does anything else, so a single return
+    closes the whole surface — the create route, start, cancel, result, source,
+    poster, the history list and the entitlement read. A gate in the page
+    components would have left every one of those API routes open, and §21 is
+    explicit that "the backend must independently enforce" it.
+
+    ⚠️ THE GUEST MACHINERY IS DELIBERATELY LEFT IN PLACE, not deleted. The
+    signed cookie, `ai_guest_links`, `guestSubject` and the guest columns on
+    `ai_jobs` are all still here and still correct, because rows created under
+    the old rule still exist and must keep resolving to their owner (branch 2b
+    above). Ripping them out would orphan real members' finished videos to save
+    code that costs nothing while unreachable.
+
+    No cookie is minted any more, so a visitor who has never used Frenz AI is
+    given no identifier at all — which is also the right answer for the AdSense
+    crawler and for anyone who simply lands on the page.
+  */
+  return { subject: null, ipKey: null };
 }
 
 /** The account a guest identifier was claimed by, if any. */

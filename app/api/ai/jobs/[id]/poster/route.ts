@@ -59,6 +59,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const { subject } = await resolveAiSubject(request, feat.id);
 
+  /*
+    🔴 SIGNED IN, OR NOTHING (owner, 2026-09-09, standing Frenz AI rule).
+    Enforced per route rather than in a wrapper — see the note in
+    lib/ai/subject-server.ts on why §21 requires that.
+  */
+  if (!subject) {
+    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
+  }
+
   const burst = await aiJobReadLimiter.limit(`ai-poster:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {

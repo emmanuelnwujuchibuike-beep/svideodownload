@@ -7,6 +7,9 @@ import {
   FEED_GRID_SLOTS,
   FRENZ_AI_MAX_FREE_CREDITS,
   FRENZ_AI_MAX_PAID_CREDITS,
+  FRENZ_AI_MAX_PRICE_CENTS,
+  FRENZ_AI_MAX_WEEKLY_CREDITS,
+  FRENZ_AI_MIN_PRICE_CENTS,
   FRENZ_AI_MIN_PAID_CREDITS,
   setLandingSettings,
 } from "@/lib/landing/settings";
@@ -95,6 +98,28 @@ const schema = z.object({
     .int()
     .min(FRENZ_AI_MIN_PAID_CREDITS)
     .max(FRENZ_AI_MAX_PAID_CREDITS)
+    .optional(),
+  /*
+    The WEEKLY free allowance (owner, 2026-09-09, standing rule §6/§7). Zero is
+    allowed here and not on the paid caps: "no free AI this week" is a real
+    decision, where "a paid plan gives less than free" is a typo.
+  */
+  frenzAiWeeklyFreeCredits: z.coerce.number().int().min(0).max(FRENZ_AI_MAX_WEEKLY_CREDITS).optional(),
+  /*
+    🔴 THE PRICE OF ONE AI VIDEO, IN CENTS (owner: "make the price per video be
+    adjustable from the admin dashboard").
+
+    Integer cents, never dollars and never a float — see the field note in
+    lib/landing/settings.ts. The floor is 1 rather than 0 because a price of
+    zero is the most expensive misconfiguration available: the free allowance
+    still runs out, the member is still routed to the paid path, and every job
+    after that runs at our cost with a $0.00 ledger entry recording it.
+  */
+  frenzAiVideoPriceCents: z.coerce
+    .number()
+    .int()
+    .min(FRENZ_AI_MIN_PRICE_CENTS)
+    .max(FRENZ_AI_MAX_PRICE_CENTS)
     .optional(),
   /*
     Turn the free tier off entirely and show "Pro feature" instead. Kept

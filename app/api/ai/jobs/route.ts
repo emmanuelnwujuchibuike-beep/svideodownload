@@ -108,6 +108,20 @@ export async function POST(request: Request) {
   const resolution = await resolveAiSubject(request, feature0.id);
   const { subject } = resolution;
 
+  /*
+    🔴 SIGNED IN, OR NOTHING (owner, 2026-09-09, standing Frenz AI rule).
+
+    "Only authenticated/signed-in users can access Frenz AI. Logged-out users
+    must not be able to open or use AI tools." `resolveAiSubject` returns null
+    for anyone without a session, and the check lives in EVERY route rather
+    than in a shared wrapper because §21 requires the backend to enforce this
+    independently — a wrapper is one refactor away from being bypassed on one
+    route and nobody noticing.
+
+    AUTH_REQUIRED is 401: this is "sign in", not "you may not".
+  */
+  if (!subject) return fail("AUTH_REQUIRED");
+
   // Keyed by SUBJECT, not by IP: this guards a per-account spend, and several
   // people behind one office address are not one abuser.
   const burst = await aiJobCreateLimiter.limit(`ai-job:${subject.key}`);
@@ -331,6 +345,20 @@ export async function GET(request: Request) {
   // see the note on `subjectScope` in lib/ai/job-store.ts.
   const resolution = await resolveAiSubject(request, feat.id);
   const { subject } = resolution;
+
+  /*
+    🔴 SIGNED IN, OR NOTHING (owner, 2026-09-09, standing Frenz AI rule).
+
+    "Only authenticated/signed-in users can access Frenz AI. Logged-out users
+    must not be able to open or use AI tools." `resolveAiSubject` returns null
+    for anyone without a session, and the check lives in EVERY route rather
+    than in a shared wrapper because §21 requires the backend to enforce this
+    independently — a wrapper is one refactor away from being bypassed on one
+    route and nobody noticing.
+
+    AUTH_REQUIRED is 401: this is "sign in", not "you may not".
+  */
+  if (!subject) return fail("AUTH_REQUIRED");
 
   const burst = await aiJobReadLimiter.limit(`ai-read:${subject.key}`);
   if (!burst.success) {

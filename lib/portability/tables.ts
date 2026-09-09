@@ -92,6 +92,8 @@ export const NOT_EXPORTED: Record<string, string> = {
     "Counters recording how many AI jobs you ran on a given day, used only to enforce the daily allowance. It holds no videos, no filenames and nothing about what you cleaned — the jobs themselves are exported through ai_jobs.",
   ai_guest_links:
     "A link between this browser and your account, recorded once if you used the AI tools before signing up. It is a random identifier and nothing else — no address, no device details, nothing about you — and it exists only so the free daily allowance cannot be doubled by signing up or signing out.",
+  ai_balances:
+    "Your current prepaid AI balance. It is a running total of the ledger rather than a separate fact, so it is not exported on its own — every change to it is in ai_balance_ledger, which is.",
 
   /*
     Rows ABOUT you that were written BY someone else. Real personal data, and
@@ -131,6 +133,17 @@ export const OWNER_COLUMN: Record<string, string> = {
 
   /* Frenz AI — the member own record of what they asked for and what happened. */
   ai_jobs: "user_id",
+  /*
+    🔴 THE LEDGER IS EXPORTABLE, and it has to be. It is a record of money the
+    member paid us and what we did with it — the single most legitimate thing
+    anybody could ask to take a copy of. Excluding it would leave a data export
+    that says what they made and not what they were charged.
+
+    `ai_balances` is deliberately NOT here: it is a cache of `sum(delta_cents)`
+    over the ledger, so exporting it would hand somebody the same fact twice
+    and invite the two copies to disagree in their hands.
+  */
+  ai_balance_ledger: "user_id",
 
   /* social */
   posts: "publisher_id",

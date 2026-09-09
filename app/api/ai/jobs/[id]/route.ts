@@ -51,6 +51,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const resolution = await resolveAiSubject(request, feature.id);
   const { subject } = resolution;
 
+  /*
+    🔴 SIGNED IN, OR NOTHING (owner, 2026-09-09, standing Frenz AI rule).
+
+    "Only authenticated/signed-in users can access Frenz AI. Logged-out users
+    must not be able to open or use AI tools." `resolveAiSubject` returns null
+    for anyone without a session, and the check lives in EVERY route rather
+    than in a shared wrapper because §21 requires the backend to enforce this
+    independently — a wrapper is one refactor away from being bypassed on one
+    route and nobody noticing.
+
+    AUTH_REQUIRED is 401: this is "sign in", not "you may not".
+  */
+  if (!subject) {
+    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
+  }
+
   const burst = await aiJobReadLimiter.limit(`ai-read:${subject.key}`);
   if (!burst.success) {
     return NextResponse.json(aiErrorBody("RATE_LIMITED"), {

@@ -49,6 +49,22 @@ export async function GET(request: Request) {
   const { subject } = resolution;
 
   /*
+    🔴 SIGNED IN, OR NOTHING (owner, 2026-09-09, standing Frenz AI rule).
+
+    "Only authenticated/signed-in users can access Frenz AI. Logged-out users
+    must not be able to open or use AI tools." `resolveAiSubject` returns null
+    for anyone without a session, and the check lives in EVERY route rather
+    than in a shared wrapper because §21 requires the backend to enforce this
+    independently — a wrapper is one refactor away from being bypassed on one
+    route and nobody noticing.
+
+    AUTH_REQUIRED is 401: this is "sign in", not "you may not".
+  */
+  if (!subject) {
+    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
+  }
+
+  /*
     Keyed by the SUBJECT, not by IP. Several people behind one office address
     are not one abuser — and a guest's key is their own signed identifier, so
     this still bounds each visitor individually rather than punishing a network.

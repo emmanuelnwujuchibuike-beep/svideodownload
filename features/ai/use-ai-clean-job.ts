@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AI_JOB_STARTED_EVENT } from "@/lib/ai/history-cache";
 import {
   cancelAiJob,
   createAiJob,
@@ -338,6 +339,26 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
               },
         });
         if (!alive.current) return;
+
+        /*
+          ── 🔴 TELL THE APP-WIDE ALERT THERE IS SOMETHING TO WATCH ──────────
+
+          `AiJobAlert` (mounted in both layouts) decides whether to poll from
+          `browserHasUsedAiClean()` — a localStorage check that is FALSE for
+          somebody cleaning their first video, because nothing is cached yet.
+          That is exactly the person most likely to be watching for the result,
+          so without this the first clean would be the one clean that announced
+          itself to nobody.
+
+          A window event rather than shared state: the two components never
+          meet, and a store between them would be a store to keep in sync.
+          Dispatched even if `created` failed further down — the job row may
+          already exist, and watching for a job that never appears costs one
+          request.
+        */
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event(AI_JOB_STARTED_EVENT));
+        }
 
         if (!created.ok) {
           setError({ code: created.code, message: created.error });

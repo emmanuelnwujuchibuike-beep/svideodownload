@@ -333,3 +333,71 @@ describe("buildMaskedCompositeArgs", () => {
     expect(args.some((a) => a.includes("&&") || a.includes(";" + "rm"))).toBe(false);
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE SECOND DETECTOR'S BOXES, UNIONED IN
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09: "fix the detector and wire it. Do this once and for all."
+ *
+ * hjunior29 left "Bus" and 'S"' standing at either end of a caption it had
+ * otherwise removed, at three confidence thresholds. `datalab-to/ocr` returned
+ * both from the same frame. Its boxes are ADDED to the derived mask, which is
+ * what keeps this a mask change rather than a pipeline change — hjunior29 is
+ * still the provider whose webhook drives the job.
+ */
+describe("buildTextMaskArgs — extra boxes from the text detector", () => {
+  const boxes = [
+    { x: 173, y: 1191, w: 140, h: 107 },
+    { x: 821, y: 1205, w: 83, h: 70 },
+  ];
+
+  it("draws each box filled white, after the derived mask", () => {
+    const graph = graphOf(buildTextMaskArgs({ ...plan, extraBoxes: boxes }));
+    expect(graph).toContain("drawbox=x=173:y=1191:w=140:h=107:color=white@1:t=fill");
+    expect(graph).toContain("drawbox=x=821:y=1205:w=83:h=70:color=white@1:t=fill");
+    // After the glyph refinement, never before it.
+    expect(graph.indexOf("drawbox")).toBeGreaterThan(graph.indexOf("[rect][glyph]"));
+  });
+
+  /*
+    🔴 ORDER IS LOAD-BEARING. The refinement shrinks the primary detector's
+    over-large rectangle to its glyphs by keeping only very bright or very dark
+    pixels. Run over a box drawn in flat white it would find no contrast to
+    segment and eat the box entirely — removing the very text this exists to
+    catch.
+  */
+  it("is never subjected to the glyph refinement that would erase it", () => {
+    const graph = graphOf(buildTextMaskArgs({ ...plan, extraBoxes: boxes }));
+    const afterBoxes = graph.slice(graph.indexOf("drawbox"));
+    expect(afterBoxes).not.toContain("geq=lum=");
+    expect(afterBoxes).not.toContain("[glyph]");
+  });
+
+  /*
+    🔴 AN EMPTY LIST MUST CHANGE NOTHING. The detector is off by default and can
+    fail at any point; every one of those paths returns no boxes, and the graph
+    it produces has to be byte-for-byte the one that shipped yesterday.
+  */
+  it("produces the identical graph when nothing was detected", () => {
+    const before = graphOf(buildTextMaskArgs(plan));
+    expect(graphOf(buildTextMaskArgs({ ...plan, extraBoxes: [] }))).toBe(before);
+    expect(graphOf(buildTextMaskArgs({ ...plan, extraBoxes: undefined }))).toBe(before);
+  });
+
+  it("still measures coverage in the same pass", () => {
+    const graph = graphOf(buildTextMaskArgs({ ...plan, extraBoxes: boxes, statsPath: "/tmp/s.txt" }));
+    // The split has to come AFTER the boxes, or the measured mask is not the
+    // mask that was written.
+    expect(graph.indexOf("split=2")).toBeGreaterThan(graph.lastIndexOf("drawbox"));
+  });
+
+  it("rounds coordinates, because drawbox cannot parse a fraction", () => {
+    const graph = graphOf(
+      buildTextMaskArgs({ ...plan, extraBoxes: [{ x: 10.4, y: 20.6, w: 30.5, h: 40.5 }] }),
+    );
+    expect(graph).toContain("drawbox=x=10:y=21:w=31:h=41:color=white@1:t=fill");
+    expect(graph).not.toContain(".");
+  });
+});

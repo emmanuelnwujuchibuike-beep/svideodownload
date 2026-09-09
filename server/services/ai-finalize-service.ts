@@ -35,6 +35,7 @@ import {
   type RestorePlan,
 } from "@/lib/ai/ffmpeg-plan";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { detectTextBoxes } from "@/server/services/ai-text-detect-service";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -1060,6 +1061,42 @@ async function reconstructWithProPainter(opts: {
     encoder, one to `signalstats` — so every frame is decoded, thresholded and
     morphed exactly once and both answers fall out together.
   */
+  /*
+    ── 🔴 THE SECOND DETECTOR, BEFORE THE MASK IS BUILT ──────────────────────
+
+    Owner, 2026-09-09: "It not accurate, some parts shows and glitches… fix the
+    detector and wire it."
+
+    hjunior29 removed a caption on their clip and left "Bus" and 'S"' standing
+    at either end of it — at conf 0.25, 0.15 AND 0.08, so a capability limit
+    rather than a threshold. `datalab-to/ocr` was given the same frame and
+    returned both with pixel-accurate boxes in 13.4s.
+
+    These boxes are UNIONED into the mask below rather than replacing anything.
+    That keeps this a mask change instead of a pipeline change: hjunior29 is
+    still the provider whose webhook drives the job, and an empty list leaves
+    the filter graph byte-for-byte what it was. Off by default
+    (`AI_CLEAN_TEXT_DETECT`), because every frame is a billed prediction.
+  */
+  const detected = await detectTextBoxes({
+    jobId,
+    videoPath: sourceFile,
+    dir,
+    width: opts.sourceProbe?.width ?? 0,
+    height: opts.sourceProbe?.height ?? 0,
+    durationSeconds: opts.sourceProbe?.durationSeconds ?? null,
+  });
+  if (detected.detail !== "disabled") {
+    console.info("[ai/finalize] text detection", {
+      jobId,
+      detail: detected.detail,
+      boxes: detected.boxes.length,
+      framesSampled: detected.framesSampled,
+      framesAnswered: detected.framesAnswered,
+      coveragePercent: Number((detected.coverage * 100).toFixed(2)),
+    });
+  }
+
   const statsFile = path.join(dir, "mask-stats.txt");
   const built = await runFfmpeg(
     buildTextMaskArgs({
@@ -1069,6 +1106,7 @@ async function reconstructWithProPainter(opts: {
       fps,
       refine: true,
       statsPath: statsFile,
+      extraBoxes: detected.boxes,
     }),
     FFMPEG_HARD_TIMEOUT_MS,
   );
@@ -1327,6 +1365,10 @@ async function reconstructWithProPainter(opts: {
       mask_coverage: coverage === null ? null : Number((coverage * 100).toFixed(2)),
       ...(oversized ? { mask_oversized: true } : {}),
       ...(resized ? { propainter_resized: resized } : {}),
+      // What the second detector contributed, so a result can be explained
+      // without re-running anything.
+      text_detect: detected.detail,
+      text_detect_boxes: detected.boxes.length,
       // Which picture the member actually received: the original with a patched
       // region, or the whole reconstruction because the composite could not run.
       propainter_composited: composited,

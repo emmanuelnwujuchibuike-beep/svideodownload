@@ -18,7 +18,20 @@ import { getCachedSoundPrefs } from "@/lib/social/notification-sound-prefs-clien
  * either iOS or Android.
  */
 
-type SoundType = "message" | "mention" | "reaction" | "typing" | "tap" | "wow" | "streak" | "streak-milestone";
+type SoundType =
+  | "message"
+  | "mention"
+  | "reaction"
+  | "typing"
+  | "tap"
+  | "wow"
+  | "streak"
+  | "streak-milestone"
+  /**
+   * A finished Frenz AI video (owner, 2026-09-09: "if the user is in the app or
+   * any pages it be show a visible in page push with sound").
+   */
+  | "ai-ready";
 
 let ctx: AudioContext | null = null;
 function getContext(): AudioContext | null {
@@ -94,6 +107,38 @@ const TONES: Record<SoundType, Note[]> = {
   wow: [
     { freq: 880, at: 0, duration: 0.07, gain: 0.1 },
     { freq: 1320, at: 0.05, duration: 0.12, gain: 0.12 },
+  ],
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     A FINISHED FRENZ AI VIDEO
+    ═══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-09: "if the user is in the app or any pages it be show a
+    visible in page push with sound."
+
+    ── 🔴 IT ANNOUNCES AN ARRIVAL, NOT AN EVENT ────────────────────────────────
+
+    Every tone above this point is an interruption — somebody else did a thing,
+    look at it. This one is the opposite: it is the end of something the member
+    ASKED FOR and has been waiting minutes for, often with the app in another
+    tab. So it resolves upward and settles, the shape of "here it is", rather
+    than blipping for attention.
+
+    Three notes, ~340ms: a fifth (G5) up to the octave (C6) and a soft high
+    shimmer (G6) that fades. Related to the streak family — same C-major world,
+    so it sounds like this product — but a fifth lower and half the length, so
+    nobody confuses a finished video with a celebration.
+
+    🔴 Peak gain 0.10, below `mention` (0.13) and `message` (0.11). It fires at
+    most a couple of times a day and it can arrive while somebody is reading
+    something else entirely, so it must be noticeable without being startling.
+    Loud is not how a good notification earns attention; being the only sound
+    on the page is.
+  */
+  "ai-ready": [
+    { freq: 783.99, at: 0, duration: 0.11, gain: 0.095 }, // G5
+    { freq: 1046.5, at: 0.08, duration: 0.16, gain: 0.1 }, // C6
+    { freq: 1568.0, at: 0.18, duration: 0.22, gain: 0.04 }, // G6, a fading shimmer
   ],
   /*
     The once-a-day streak celebration (owner, 2026-08-24: "make the streak

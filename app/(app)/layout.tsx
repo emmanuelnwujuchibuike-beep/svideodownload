@@ -19,6 +19,7 @@ import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
 import { PinLockGate } from "@/features/account/pin-lock-gate";
 import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
 import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
+import { AiJobAlert } from "@/features/ai/ai-job-alert";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { InboxRealtimeTracker } from "@/features/social/inbox";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
@@ -120,6 +121,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <ReactionFloatLayer />
       {/* Live in-app drop-down notification. */}
       <NotificationLiveToast />
+      {/* And the Frenz AI one, which covers what that cannot: a GUEST (no
+          notifications row to fire on) and a job that finishes while the member
+          is on a page this layout does not own. Idle cost is one request. */}
+      <AiJobAlert />
       {/* Heavy, hidden-until-triggered overlays — code-split out of the initial
           bundle (composer, Story Studio, download player, iOS install nudge). */}
       <AppOverlays />

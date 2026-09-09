@@ -327,6 +327,90 @@ export function aiCleanEngine(): AiCleanEngine {
  * `e5ea7ae0…` was read from the Replicate API on 2026-09-09 and is the model's
  * own `latest_version`; the model is public with ~195k runs.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE SECOND DETECTOR — `datalab-to/ocr` (Surya)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09: "fix the detector and wire it. Do this once and for all."
+ *
+ * ── 🔴 IT AUGMENTS THE MASK. IT DOES NOT REPLACE THE PIPELINE ───────────────
+ *
+ * The tempting move was to drop `hjunior29/video-text-remover` entirely: Surya
+ * is a better text detector by every measurement taken, and removing a model
+ * would save its ~68 seconds. It was the wrong move, for a reason that has
+ * nothing to do with quality.
+ *
+ * hjunior29 is not just a detector here — it is the PROVIDER whose webhook
+ * drives the whole job lifecycle. `/start` submits to it, Replicate calls back,
+ * and that callback is what moves the row to `finalizing` and wakes the worker.
+ * Replacing it means rebuilding job creation, the webhook, the idempotency and
+ * the stall guard, all at once, to fix a mask.
+ *
+ * So Surya runs INSIDE finalization, on frames the worker already has on disk,
+ * and its boxes are unioned into the mask hjunior29's output produced. The
+ * pipeline is unchanged; the mask is better. If Surya fails, times out, or is
+ * switched off, the mask is exactly what it was yesterday.
+ *
+ * ── The measurement ─────────────────────────────────────────────────────────
+ *
+ * On the owner's 1080x1920 clip, hjunior29 removed a caption but left "Bus" and
+ * 'S"' standing at either end of it — at conf 0.25, 0.15 AND 0.08, so a
+ * capability limit rather than a threshold. Surya, given the same frame,
+ * returned both with pixel-accurate boxes in 13.4 seconds.
+ */
+export const AI_CLEAN_DETECTOR = {
+  model: process.env.REPLICATE_TEXT_DETECT_MODEL?.trim() || "datalab-to/ocr",
+  /**
+   * 🔴 PINNED, like every other model here. Read from the model's API tab on
+   * 2026-09-09 and confirmed by a real prediction against a real frame.
+   */
+  version:
+    process.env.REPLICATE_TEXT_DETECT_VERSION?.trim() ||
+    "3e6db0d5311d6fdc232eea333c1e26055ba4e542180043f12acb2967e5c77f4a",
+  /**
+   * ── 🔴 OFF UNTIL AN OPERATOR TURNS IT ON ──────────────────────────────────
+   *
+   * Every frame is a billed prediction, so this multiplies the per-job cost by
+   * a number the owner has not agreed to yet. A safety improvement that
+   * silently changes somebody's provider bill is not a safety improvement.
+   *
+   * It is also the switch that makes this reversible without a deploy: if the
+   * augmented mask ever removes something it should not, one environment
+   * variable puts the pipeline back to exactly its previous behaviour.
+   */
+  enabled: ["1", "true", "yes"].includes((process.env.AI_CLEAN_TEXT_DETECT || "").toLowerCase()),
+  /**
+   * How many frames to sample.
+   *
+   * Six is the number where the marginal frame stops finding new text on the
+   * clips measured here. Captions in social video are static for seconds at a
+   * time, so samples are highly redundant — and each one is a billed call.
+   */
+  frames: envInt("AI_CLEAN_TEXT_DETECT_FRAMES", 6),
+  /**
+   * 🔴 A PER-FRAME deadline. Frames are detected in PARALLEL, so one hung call
+   * would otherwise hold the whole stage — and therefore the job — open until
+   * the worker's own timeout. Losing one sample is a fair price. A measured
+   * run is 13.4s; 90s is generous even for a cold container.
+   */
+  frameTimeoutMs: envInt("AI_CLEAN_TEXT_DETECT_TIMEOUT_MS", 90_000),
+  pollMs: envInt("AI_CLEAN_TEXT_DETECT_POLL_MS", 2_000),
+  /** Surya is confident about real text and hesitant about compression noise. */
+  minConfidence: Number(process.env.AI_CLEAN_TEXT_DETECT_MIN_CONF || "0.4") || 0.4,
+  /**
+   * 🔴 A CEILING ON WHAT THIS MAY ADD. If the detector's boxes would cover more
+   * than this fraction of the frame, they are DISCARDED and the mask is left as
+   * the primary detector made it.
+   *
+   * The failure this guards against is a video that is mostly text — a slide, a
+   * screen recording, a lyric video. Repainting 60% of every frame is not a
+   * clean, it is an invented video, and it is exactly the case where an OCR
+   * model does its job perfectly and the result is worst.
+   */
+  maxAddedCoverage: Number(process.env.AI_CLEAN_TEXT_DETECT_MAX_COVERAGE || "0.25") || 0.25,
+} as const;
+
 export const AI_CLEAN_PROPAINTER = {
   model: process.env.REPLICATE_PROPAINTER_MODEL?.trim() || "jd7h/propainter",
   version:

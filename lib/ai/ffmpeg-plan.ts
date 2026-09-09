@@ -470,7 +470,34 @@ const maskRectChain = (morphology: string) =>
  * ⚠️ Encoded LOSSLESS (`-qp 0`). A lossy encode blurs the hard threshold this
  * graph just computed and hands ProPainter a grey, ambiguous mask.
  */
-export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean; statsPath?: string }): string[] {
+export function buildTextMaskArgs(
+  plan: MaskPlan & {
+    refine?: boolean;
+    statsPath?: string;
+    /**
+     * ── 🔴 WHAT THE PRIMARY DETECTOR MISSED (2026-09-09) ──────────────────
+     *
+     * Boxes from `datalab-to/ocr`, unioned into this mask.
+     *
+     * Owner: "It not accurate, some parts shows and glitches." hjunior29
+     * removed a caption and left "Bus" and 'S"' standing at either end of it,
+     * at three confidence thresholds — a capability limit, not a tuning knob.
+     * Surya returned both, with pixel-accurate boxes, from the same frame.
+     *
+     * They are ADDED to the derived mask rather than replacing it, which is
+     * what keeps this a mask change rather than a pipeline change: hjunior29's
+     * webhook still drives the job, and an empty list leaves the graph byte-
+     * for-byte what it was.
+     *
+     * ⚠️ Appended AFTER the morphology and AFTER the glyph refinement, and
+     * that order is load-bearing. The refinement exists to shrink the primary
+     * detector's over-large rectangle down to its glyphs; running it over
+     * these boxes too would eat them, because a box drawn in flat white has no
+     * bright/dark contrast inside it to segment.
+     */
+    extraBoxes?: readonly { x: number; y: number; w: number; h: number }[];
+  },
+): string[] {
   const refine = plan.refine !== false;
 
   const base = refine
@@ -506,9 +533,30 @@ export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean; statsPath
     with `refine: false`, and a diagnostic can still ask about a file on disk).
     It is simply no longer on the path every job takes.
   */
-  const filter = plan.statsPath
-    ? `${base},split=2[enc][stats];[stats]signalstats,metadata=print:file=${ffEscape(plan.statsPath)}[nul]`
+  /*
+    The second detector's boxes, drawn in flat white on top of everything the
+    graph has computed. `t=fill` because a mask is a solid region — an outlined
+    box would ask the inpainter to repaint a frame around the text and leave the
+    text itself, which is the shape of the bug this is fixing.
+
+    🔴 The coordinates are integers this codebase computed from a provider
+    response and clamped to the frame (`mergeBoxes`). They are interpolated into
+    a filter string, so they are rounded here as well — a fractional value would
+    be a syntax error in `drawbox`, discovered at the end of a job that has
+    already been paid for.
+  */
+  const withBoxes = (plan.extraBoxes ?? []).length
+    ? `${base},${(plan.extraBoxes ?? [])
+        .map(
+          (b) =>
+            `drawbox=x=${Math.round(b.x)}:y=${Math.round(b.y)}:w=${Math.round(b.w)}:h=${Math.round(b.h)}:color=white@1:t=fill`,
+        )
+        .join(",")}`
     : base;
+
+  const filter = plan.statsPath
+    ? `${withBoxes},split=2[enc][stats];[stats]signalstats,metadata=print:file=${ffEscape(plan.statsPath)}[nul]`
+    : withBoxes;
 
   return [
     "-hide_banner",

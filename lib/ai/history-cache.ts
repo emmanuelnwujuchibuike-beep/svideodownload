@@ -98,6 +98,56 @@ export function writeAiHistoryCache(jobs: AiJobView[]): void {
   }
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  HAS THIS BROWSER EVER USED AI CLEAN?
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 The gate on `AiJobAlert`, and the reason that component is safe to mount
+ * in the marketing layout — which means on the LANDING PAGE.
+ *
+ * Without it, every visit to `/` would fire a request at `/api/ai/jobs`: a
+ * `force-dynamic` route with a rate limiter, asked a question whose answer is
+ * "nothing" for the overwhelming majority of visitors, on the one page in this
+ * product with a 1.6-second budget. It would also do that for the AdSense
+ * crawler, on the page being assessed.
+ *
+ * This is the cheapest honest evidence available — a `localStorage` read, no
+ * parse, no network. It is deliberately a WEAKER question than "is a job
+ * running": it only has to be right about "could there be one", and a false
+ * positive costs a single request while a false negative is covered by
+ * `AI_JOB_STARTED_EVENT` below.
+ *
+ * ⚠️ Not authority over anything. It gates a POLL; the server still decides
+ * what the poll is told.
+ */
+export function browserHasUsedAiClean(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(KEY) !== null;
+  } catch {
+    /*
+      Blocked storage answers FALSE, and that is the right way round. A private
+      window that cannot read the cache also cannot have a stale one, and
+      guessing "yes" would turn every such visit into a request for nothing.
+      Somebody who starts a job in that window is still covered by the event.
+    */
+    return false;
+  }
+}
+
+/**
+ * Fired the moment a job is submitted, so the alert starts watching a job that
+ * this browser has no cached history for.
+ *
+ * 🔴 THE FIRST-TIME CASE IS THE ONE THAT MATTERS. `browserHasUsedAiClean` is
+ * false for somebody cleaning their very first video — there is nothing cached
+ * yet — so without this the one member most likely to be watching closely would
+ * be the one who got no announcement. A `window` event costs nothing and needs
+ * no shared store between two components that never meet.
+ */
+export const AI_JOB_STARTED_EVENT = "frenz-ai:job-started";
+
 /** Called on sign-out. A snapshot must not outlive the session that made it. */
 export function clearAiHistoryCache(): void {
   if (typeof window === "undefined") return;

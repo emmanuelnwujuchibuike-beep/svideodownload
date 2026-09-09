@@ -1,5 +1,6 @@
 import { MobileAppNav } from "@/components/landing/mobile-app-nav";
 import { ReelsWarmup } from "@/components/landing/reels-warmup";
+import { AiJobAlert } from "@/features/ai/ai-job-alert";
 import { AdSenseSiteScript } from "@/features/monetization/adsense-site-script";
 import { DeferredAdFurniture } from "@/features/monetization/deferred-ad-furniture";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
@@ -114,6 +115,28 @@ export default async function MarketingLayout({ children }: { children: React.Re
       <MobileAppNav />
       {/* Buffer the first reels ahead of a tap (after idle, good connections only). */}
       <ReelsWarmup urls={reelUrls} />
+      {/*
+        ── 🔴 "YOUR VIDEO IS READY", ON THE MARKETING SIDE TOO ────────────────
+
+        Owner, 2026-09-09: "if the user is in the app or any pages it be show a
+        visible in page push with sound."
+
+        `NotificationLiveToast` — the in-app drop-down the push service worker
+        defers to when a window is visible — is mounted in `app/(app)/layout.tsx`
+        and therefore does not exist on ANY route in this group. That includes
+        `/ai`, `/ai/clean` and `/ai/history`, which is where somebody waiting
+        for a clean is most likely to be sitting.
+
+        So the member on the AI page got neither the system notification (the SW
+        suppresses it while a window is visible) nor a drop-down (not mounted
+        here). This component is what covers that, and it covers guests too —
+        they have no `notifications` row for the realtime toast to fire on.
+
+        ⚠️ Its idle cost is one request per page load and no interval unless a
+        job is genuinely running. See the note at the top of the component; that
+        budget is why it is safe to mount on the landing page.
+      */}
+      <AiJobAlert />
       <DeferredAdFurniture />
     </>
   );

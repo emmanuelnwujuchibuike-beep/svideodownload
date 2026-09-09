@@ -401,6 +401,12 @@ export interface AiJobRow {
   client_request_id: string | null;
   source_path: string | null;
   result_path: string | null;
+  /**
+   * The still frame shown on a history tile (migration 0147). Null while the
+   * job is unfinished, when the poster step failed — which is never fatal — and
+   * on every row that predates the column.
+   */
+  poster_path: string | null;
   source_size: number | null;
   result_size: number | null;
   result_duration: number | string | null;
@@ -464,6 +470,21 @@ export interface AiJobView {
     size: number | null;
     durationSeconds: number | null;
     audioRestored: boolean | null;
+    /**
+     * Whether a still frame exists for this job — NOT where it is.
+     *
+     * 🔴 A boolean rather than a path or a URL, and that is the same rule the
+     * rest of this view follows. The poster lives in a private bucket, so the
+     * only way to it is `/api/ai/jobs/<id>/poster`, which the browser can build
+     * from the id it already has. Sending a path would leak the bucket layout;
+     * sending a signed URL would put an expiring, per-request value into a list
+     * that re-fetches itself every few seconds, and every tile's `<img>` would
+     * re-download on every poll.
+     *
+     * What the interface actually needs to know is only "is there a picture, or
+     * do I draw the plate", and that is one bit.
+     */
+    hasPoster: boolean;
   };
   /** A stable code and a written sentence. Never the provider's own words. */
   error: { code: string; message: string } | null;
@@ -527,6 +548,7 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
       size: row.result_size,
       durationSeconds: numeric(row.result_duration),
       audioRestored: row.audio_restored,
+      hasPoster: !!row.poster_path,
     },
     error: row.error_code ? { code: row.error_code, message: errorMessageFor(row.error_code) } : null,
   };

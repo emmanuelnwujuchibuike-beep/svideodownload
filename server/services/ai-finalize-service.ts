@@ -10,18 +10,20 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
 import { AI_RESULT_BUCKET, AI_SOURCE_BUCKET, aiResultKey, pathBelongsTo } from "@/lib/ai/storage";
-import { signSourceUrl } from "@/lib/ai/storage-server";
+import { signSourceUrl, uploadResultPoster } from "@/lib/ai/storage-server";
 import { notifyAiCleanFailed, notifyAiCleanFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
 import { consumeAiUsage, releaseAiUsage } from "@/lib/ai/usage";
 import { AI_CLEAN_LIMITS, AI_CLEAN_PROPAINTER, aiCleanEngine } from "@/lib/ai/config";
 import { runProPainter } from "@/lib/ai/propainter";
 import {
+  buildPosterArgs,
   buildRestoreArgs,
   buildResizeToSourceArgs,
   buildMaskCoverageArgs,
   buildTextMaskArgs,
   MASK_REFINE_MIN_RATIO,
+  POSTER_FRACTION,
   parseMaskCoverage,
   canStreamCopy,
   checkFinalProbe,
@@ -637,9 +639,30 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
       throw new FinalizeFailure("FINAL_UPLOAD_FAILED", String(e));
     }
 
+    /*
+      5b · the poster (migration 0147)
+
+      🔴 NEVER FATAL, AND THAT IS THE WHOLE DESIGN. The member's video is
+      already in the bucket one line above this. A thumbnail failing to encode
+      is a tile that falls back to a gradient plate — it is not a reason to
+      throw away a video the model has already been paid to make, and a
+      `throw` here would do exactly that by unwinding into the failure path.
+
+      So it returns a path or null, and null is an ordinary answer.
+    */
+    const posterPath = await makeResultPoster({
+      videoPath: finalFile,
+      dir,
+      ownerId,
+      feature: feature.id,
+      jobId,
+      durationSeconds: verdict.probe.durationSeconds,
+    });
+
     /* 6 · and only now is the job finished */
     const completed = await transitionJob(jobId, ["finalizing"], "completed", {
       result_path: stored.path,
+      poster_path: posterPath,
       result_size: stored.bytes,
       result_duration: verdict.probe.durationSeconds,
       result_mime_type: "video/mp4",
@@ -780,6 +803,23 @@ class FinalizeFailure extends Error {
  * 🔴 Null is "unknown", never "empty". An ffprobe that fails to start must not
  * make a good mask look like a failed one and trigger the fallback.
  */
+/**
+ * Coverage from the stats file the mask build wrote alongside itself.
+ *
+ * 🔴 Null on anything unexpected, exactly like `measureMaskCoverage` — the two
+ * are interchangeable answers to the same question, and "unknown" must never
+ * come back as "empty". A file that does not exist is the ordinary case on a
+ * build where ffmpeg lacked the `metadata` filter, not an error.
+ */
+async function readMaskStats(statsPath: string): Promise<number | null> {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    return parseMaskCoverage(await readFile(statsPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 async function measureMaskCoverage(maskPath: string): Promise<number | null> {
   return new Promise((resolve) => {
     let child;
@@ -806,6 +846,69 @@ async function measureMaskCoverage(maskPath: string): Promise<number | null> {
     child.on("close", () => finish(parseMaskCoverage(out)));
   });
 }
+
+/**
+ * Cut a still from the finished video and store it. Returns null on any
+ * trouble; never throws, never fails the job.
+ *
+ * ── 🔴 THE EMPTY-FILE CASE IS THE REAL ONE ──────────────────────────────────
+ *
+ * `-ss` past the end of a clip is not an error to ffmpeg: it decodes nothing,
+ * writes nothing, and EXITS ZERO. So "did it work" cannot be read from the exit
+ * code — it has to be read from the bytes, and the retry at zero is what makes
+ * the poster survive a duration probe that was wrong or absent (a stream with
+ * no duration in its header, a clip shorter than expected). A first frame is a
+ * worse poster than a frame a quarter in; it is a far better one than none.
+ */
+async function makeResultPoster(opts: {
+  videoPath: string;
+  dir: string;
+  ownerId: string;
+  feature: AiFeature;
+  jobId: string;
+  durationSeconds: number | null;
+}): Promise<string | null> {
+  const posterFile = path.join(opts.dir, "poster.jpg");
+  const at =
+    opts.durationSeconds && opts.durationSeconds > 0 ? opts.durationSeconds * POSTER_FRACTION : 0;
+
+  const attempt = async (seconds: number): Promise<Buffer | null> => {
+    const ok = await runFfmpeg(
+      buildPosterArgs({ videoPath: opts.videoPath, outPath: posterFile, seconds }),
+      POSTER_BUDGET_MS,
+    );
+    if (!ok) return null;
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const body = await readFile(posterFile);
+      return body.byteLength > 0 ? body : null;
+    } catch {
+      return null;
+    }
+  };
+
+  try {
+    // The retry only runs when the first attempt asked for a non-zero offset;
+    // re-running the identical command would just fail identically.
+    const body = (await attempt(at)) ?? (at > 0 ? await attempt(0) : null);
+    if (!body) {
+      console.warn("[ai/finalize] no poster frame", { jobId: opts.jobId, at });
+      return null;
+    }
+    return await uploadResultPoster({
+      ownerId: opts.ownerId,
+      feature: opts.feature,
+      jobId: opts.jobId,
+      body,
+    });
+  } catch (e) {
+    console.warn("[ai/finalize] poster failed", { jobId: opts.jobId, error: String(e) });
+    return null;
+  }
+}
+
+/** One keyframe seek and one JPEG. Ten seconds is already generous. */
+const POSTER_BUDGET_MS = 10_000;
 
 /** Run ffmpeg with a fixed argument array. Resolves false rather than throwing. */
 function runFfmpeg(args: string[], budgetMs: number): Promise<boolean> {
@@ -910,8 +1013,28 @@ async function reconstructWithProPainter(opts: {
     back to the rectangle. Too much removal beats none.
   */
   const maskStartedAt = Date.now();
+  /*
+    ── 🔴 THE COVERAGE COMES OUT OF THIS SAME PASS ───────────────────────────
+
+    Owner, 2026-09-09: "the time in my replicate dashboard of each video is
+    lower than the time it actually takes."
+
+    It was, and this was one of the reasons: the mask was written, and then the
+    whole file was DECODED A SECOND TIME purely to average its luminance.
+    `statsPath` forks the filter output with `split` — one branch to the
+    encoder, one to `signalstats` — so every frame is decoded, thresholded and
+    morphed exactly once and both answers fall out together.
+  */
+  const statsFile = path.join(dir, "mask-stats.txt");
   const built = await runFfmpeg(
-    buildTextMaskArgs({ sourcePath: sourceFile, blackPath: detectionFile, outPath: maskFile, fps, refine: true }),
+    buildTextMaskArgs({
+      sourcePath: sourceFile,
+      blackPath: detectionFile,
+      outPath: maskFile,
+      fps,
+      refine: true,
+      statsPath: statsFile,
+    }),
     FFMPEG_HARD_TIMEOUT_MS,
   );
   if (!built) {
@@ -920,7 +1043,15 @@ async function reconstructWithProPainter(opts: {
     return null;
   }
 
-  let coverage = await measureMaskCoverage(maskFile);
+  /*
+    🔴 The second pass is kept as a FALLBACK, not deleted. If the stats file is
+    missing or unreadable — a filter ffmpeg declined, a build without the
+    `metadata` filter — a null coverage would disable the sparse-mask guard
+    entirely and ship whatever the refinement produced. Re-measuring costs a
+    pass on a path nothing normally takes; not measuring costs the member their
+    text.
+  */
+  let coverage = (await readMaskStats(statsFile)) ?? (await measureMaskCoverage(maskFile));
   let maskKind: "refined" | "rectangle" = "refined";
 
   /*
@@ -933,11 +1064,21 @@ async function reconstructWithProPainter(opts: {
     maskKind = "rectangle";
   } else if (coverage !== null) {
     const rectFile = path.join(dir, "mask-rect.mp4");
+    const rectStats = path.join(dir, "mask-rect-stats.txt");
     const rectBuilt = await runFfmpeg(
-      buildTextMaskArgs({ sourcePath: sourceFile, blackPath: detectionFile, outPath: rectFile, fps, refine: false }),
+      buildTextMaskArgs({
+        sourcePath: sourceFile,
+        blackPath: detectionFile,
+        outPath: rectFile,
+        fps,
+        refine: false,
+        statsPath: rectStats,
+      }),
       FFMPEG_HARD_TIMEOUT_MS,
     );
-    const rectCoverage = rectBuilt ? await measureMaskCoverage(rectFile) : null;
+    const rectCoverage = rectBuilt
+      ? ((await readMaskStats(rectStats)) ?? (await measureMaskCoverage(rectFile)))
+      : null;
     if (rectCoverage && coverage / rectCoverage < MASK_REFINE_MIN_RATIO) {
       // The segmentation found almost none of what the detector marked. The
       // caption is not bright-on-dark; use the block.
@@ -995,7 +1136,20 @@ async function reconstructWithProPainter(opts: {
       (await getJobAsService(jobId))?.source_path ?? "",
     );
     const startedAt = Date.now();
-    const result = await runProPainter({ videoUrl: sourceUrl, maskUrl, fps });
+    /*
+      🔴 The source dimensions go WITH the request. ProPainter picks a
+      `resize_ratio` from them so RAFT's optical flow fits in GPU memory — three
+      jobs in a row died of CUDA OOM there while this was omitted and the ratio
+      was hard-coded to 1. The reconstruction is scaled back to the source's
+      exact size below, so the member's video keeps its resolution either way.
+    */
+    const result = await runProPainter({
+      videoUrl: sourceUrl,
+      maskUrl,
+      fps,
+      width: opts.sourceProbe?.width ?? null,
+      height: opts.sourceProbe?.height ?? null,
+    });
     if (!result.ok) {
       console.warn("[ai/finalize] reconstruction declined", { jobId, reason: result.reason });
       await noteJobDiagnostic(jobId, { propainter: `failed: ${result.reason}` });

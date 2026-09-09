@@ -53,9 +53,27 @@ import { createClient } from "@/lib/supabase/server";
  * `guest_id` simply not selected. `subjectFromRow` then returned null and the
  * finalizer had nothing to build a storage key from. Adding a column to the
  * table is not finished until it is in this string.
+ *
+ * ── 🔴 AND IT HAPPENED AGAIN, TO PART 6 (found 2026-09-09) ──────────────────
+ *
+ * Migration 0146 added `source_kind` and `source_url`; `createJob` WRITES both;
+ * nothing ever selected them. The consequences were silent and total:
+ *
+ *   · `ai-acquire-service.ts` opens with `if (job.source_kind !== "url")` and
+ *     bails. `source_kind` was `undefined` on every row it read, so EVERY
+ *     pasted-link job refused itself one line into the worker — the feature
+ *     could not have worked once since it shipped.
+ *   · `jobToView` falls back to `"upload"` when the field is absent, which is
+ *     correct for pre-0146 rows and a lie for every row after, so the interface
+ *     offered "choose the file again" to people who had pasted a link.
+ *
+ * Neither failed loudly, because a column that is not selected is not `null` —
+ * it is missing, and `undefined !== "url"` is a perfectly ordinary comparison.
+ * Reading a column requires naming it in TWO places (`AiJobRow` and here), and
+ * only one of them is checked by the compiler.
  */
 const JOB_COLUMNS =
-  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
+  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
 
 /** Postgres unique-violation. The idempotency race lands here. */
 const UNIQUE_VIOLATION = "23505";
@@ -364,6 +382,9 @@ export interface JobPatch {
   source_size?: number | null;
   source_mime_type?: string | null;
   result_path?: string | null;
+  /** The still frame for the history tile (0147). Null is an ordinary value:
+      the poster step is never allowed to fail the job. */
+  poster_path?: string | null;
   result_size?: number | null;
   replicate_prediction_id?: string | null;
   model?: string | null;

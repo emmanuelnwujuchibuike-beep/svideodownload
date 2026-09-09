@@ -4,7 +4,7 @@ import { Download, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { startAiResultDownload } from "@/features/ai/ai-result-download";
-import { FrenzAICompare } from "@/features/ai/core/frenz-ai-compare";
+import { FrenzAICompareRoll } from "@/features/ai/core/frenz-ai-compare-roll";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { getAiJobResult, getAiJobSource } from "@/lib/ai/client";
 import { hoursUntilExpiry } from "@/lib/ai/history";
@@ -147,7 +147,26 @@ export function FrenzAIHistoryPlayer({
             */}
             {canCompare && sourceUrl ? (
               <div className={view === "compare" ? undefined : "hidden"}>
-                <FrenzAICompare beforeUrl={sourceUrl} afterUrl={previewUrl} />
+                {/*
+                  ── 🔴 THE ROLL, NOT THE SINGLE FRAME (owner, 2026-09-09) ────
+
+                  "have a full understandable before and after roll."
+
+                  The result screen keeps `FrenzAICompare`, which samples one
+                  moment — on the screen where a video has just been made, one
+                  frame and one drag is the proof somebody wants.
+
+                  History is the opposite question. It is opened days later,
+                  about a video whose text may have been removed in one place
+                  and missed in another — which is not hypothetical: the same
+                  week, a clip's overlay caption came out cleanly while a
+                  burned-in subtitle eleven seconds later was never detected.
+                  A comparison pinned to one timestamp would have reported
+                  either "perfect" or "nothing happened" depending on which of
+                  those it landed on. Five moments report what actually
+                  happened.
+                */}
+                <FrenzAICompareRoll beforeUrl={sourceUrl} afterUrl={previewUrl} />
               </div>
             ) : null}
           </>

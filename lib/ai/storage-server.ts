@@ -7,6 +7,7 @@ import {
   AI_RESULT_BUCKET,
   AI_SIGNED_URL_TTL_SECONDS,
   AI_SOURCE_BUCKET,
+  aiPosterKey,
   aiResultKey,
   aiSourceKey,
 } from "@/lib/ai/storage";
@@ -204,6 +205,77 @@ export async function signResultUrl(
     throw new AiJobError("STORAGE_ERROR", error?.message ?? "no signed result url");
   }
   return { url: data.signedUrl, expiresIn: AI_SIGNED_URL_TTL_SECONDS };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE POSTER — one small JPEG per finished job (migration 0147)
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+/**
+ * Store the still frame the worker just cut from the finished video.
+ *
+ * 🔴 A ceiling, on a file WE made. It is here because this is the one function
+ * in this module that uploads something without an independent size guard, and
+ * a poster is a fixed-width JPEG of one frame — a few tens of kilobytes. If one
+ * ever arrives at a megabyte, something upstream is wrong (a filter graph that
+ * wrote frames instead of a frame, an ffmpeg that emitted the whole clip), and
+ * a bucket is the wrong place to discover that.
+ */
+export async function uploadResultPoster(opts: {
+  ownerId: string;
+  feature: AiFeature;
+  jobId: string;
+  body: Buffer;
+}): Promise<string> {
+  if (opts.body.byteLength === 0) throw new AiJobError("STORAGE_ERROR", "poster was empty");
+  if (opts.body.byteLength > AI_POSTER_MAX_BYTES) {
+    throw new AiJobError("STORAGE_ERROR", `poster was ${opts.body.byteLength} bytes, over the ceiling`);
+  }
+
+  const key = aiPosterKey(opts.ownerId, opts.feature, opts.jobId);
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from(AI_RESULT_BUCKET).upload(key, opts.body, {
+    contentType: "image/jpeg",
+    // A retried finalization overwrites its own poster, like everything else
+    // this flow writes.
+    upsert: true,
+  });
+  if (error) throw new AiJobError("STORAGE_ERROR", error.message);
+  return key;
+}
+
+/** 512 KB. A 720-wide JPEG of one frame is ~25 KB; this is two orders of slack. */
+export const AI_POSTER_MAX_BYTES = 512 * 1024;
+
+/**
+ * Read a poster back, as bytes.
+ *
+ * ── 🔴 THE ONE FILE THIS PROJECT PROXIES, AND WHY ───────────────────────────
+ *
+ * `signResultUrl` above carries a standing warning against pulling media
+ * through a serverless function, and that warning is right — for a video. A
+ * poster is the case it does not cover, for two reasons that both come from it
+ * being a LIST:
+ *
+ *   · A signed URL is a NEW URL every time it is minted, and this list polls
+ *     itself while a job is running. Signed posters would mean every tile's
+ *     `<img src>` changing every few seconds, re-downloading a picture the
+ *     browser already had, forever. A route path is stable, so the browser
+ *     caches it once and the poll costs nothing.
+ *   · Signed URLs expire in ten minutes. A history page left open on a phone
+ *     would quietly turn into a wall of broken images.
+ *
+ * The cost of being wrong about that is bounded by physics rather than by
+ * judgement: a poster is tens of kilobytes and the response is immutable for a
+ * day, so it is fetched once per job per browser.
+ */
+export async function readResultPoster(path: string): Promise<Buffer | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(AI_RESULT_BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
 }
 
 /**

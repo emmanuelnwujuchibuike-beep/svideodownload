@@ -1,6 +1,7 @@
 import "server-only";
 
 import { AI_CLEAN_PROPAINTER } from "@/lib/ai/config";
+import { propainterResizeRatio } from "@/lib/ai/propainter-plan";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -42,7 +43,15 @@ export interface ProPainterRequest {
    * Caught in the prototype before it ever ran on a member's file.
    */
   fps: number;
+  /**
+   * The source frame size, used only to pick a `resize_ratio` that fits in GPU
+   * memory. Null when the probe could not read it — see `propainterResizeRatio`
+   * for what happens then.
+   */
+  width?: number | null;
+  height?: number | null;
 }
+
 
 export type ProPainterResult =
   | { ok: true; outputUrl: string; predictTimeSeconds: number | null }
@@ -60,6 +69,16 @@ function authHeaders(): Record<string, string> {
  */
 export async function runProPainter(req: ProPainterRequest): Promise<ProPainterResult> {
   const startedAt = Date.now();
+  const resizeRatio = propainterResizeRatio(req.width, req.height, AI_CLEAN_PROPAINTER.maxPixels);
+  if (resizeRatio < 1) {
+    // Worth a line: it is the difference between "this job was reconstructed at
+    // native size" and "at two thirds", and the row's diagnostics carry it too.
+    console.info("[ai/propainter] reducing for GPU memory", {
+      source: `${req.width}x${req.height}`,
+      resizeRatio,
+      budget: AI_CLEAN_PROPAINTER.maxPixels,
+    });
+  }
 
   let submitted: { id?: string; error?: unknown };
   try {
@@ -74,12 +93,24 @@ export async function runProPainter(req: ProPainterRequest): Promise<ProPainterR
           mode: "video_inpainting",
           save_fps: req.fps,
           mask_dilation: AI_CLEAN_PROPAINTER.maskDilation,
-          resize_ratio: 1,
           /*
-            🔴 NATIVE RESOLUTION, SMALLER CHUNKS. -1/-1 means "leave the size
-            alone"; the three values below cut peak GPU memory instead. Sending
-            the defaults made a 720x1280 clip fail with CUDA OOM — see the note
-            in lib/ai/config.ts for the measurement.
+            🔴 1 FOR ANYTHING THAT FITS, LESS FOR ANYTHING THAT DOES NOT.
+
+            This was a hard-coded 1, and three consecutive jobs died of CUDA OOM
+            inside RAFT because of it. See `propainterResizeRatio` above for the
+            arithmetic — the short version is that optical flow costs area
+            SQUARED and runs outside the chunking `subvideo_length` controls, so
+            the chunk settings below could never have prevented it.
+
+            Small clips are untouched: a 480x854 video is under budget and still
+            gets a ratio of exactly 1.
+          */
+          resize_ratio: resizeRatio,
+          /*
+            🔴 STILL -1/-1. `width`/`height` are an absolute override that would
+            ignore the source's aspect ratio; `resize_ratio` scales both
+            together, which is the only form of reduction that does not distort
+            somebody's video.
           */
           width: -1,
           height: -1,

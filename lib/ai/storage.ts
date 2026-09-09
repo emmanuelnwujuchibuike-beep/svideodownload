@@ -71,6 +71,21 @@ export function aiResultKey(userId: string, feature: AiFeature, jobId: string, e
 }
 
 /**
+ * The still frame shown on the history tile (migration 0147).
+ *
+ * 🔴 It lives in the RESULT bucket, in the job's own folder, beside the video
+ * it was cut from. That is not tidiness: `pathBelongsTo` proves ownership by
+ * reading the first and third segments of the path, the retention sweep deletes
+ * by path from a row, and both work on this key for free. A separate
+ * "thumbnails" bucket would have needed its own policy, its own sweep and its
+ * own ownership proof — three chances to leave one member's frame readable by
+ * somebody else, in exchange for nothing.
+ */
+export function aiPosterKey(userId: string, feature: AiFeature, jobId: string): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/poster.jpg`;
+}
+
+/**
  * Does this stored path really belong to this member and this job?
  *
  * 🔴 The check that has to exist before anything mints a signed URL. A signed

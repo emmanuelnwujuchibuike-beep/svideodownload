@@ -85,14 +85,21 @@ export function FrenzAIHistorySkeleton() {
       {/* The filter tabs. */}
       <div className="mt-6 h-11 w-full animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
 
-      {/* The grid — three across, exactly as the real one renders. */}
-      <div className="mt-5 grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2">
+      {/*
+        The grid — TWO across, exactly as the real one renders, and bare
+        squares because the caption now sits inside the tile.
+
+        🔴 Kept in step with `HISTORY_GRID` in frenz-ai-history.tsx by hand,
+        which is the one thing about this file that can rot: a skeleton drawn
+        at a different column count than the list it stands in for produces a
+        visible jump at the moment the data arrives, and nothing fails.
+      */}
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="min-w-0">
-            <div className="aspect-square w-full animate-pulse rounded-2xl bg-secondary motion-reduce:animate-none" />
-            <div className="mt-1.5 h-3 w-3/4 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
-            <div className="mt-1 h-2.5 w-1/2 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
-          </div>
+          <div
+            key={i}
+            className="aspect-square w-full animate-pulse rounded-2xl bg-secondary motion-reduce:animate-none"
+          />
         ))}
       </div>
     </div>

@@ -335,11 +335,20 @@ export function FrenzAIHistory({
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 /**
- * 🔴 THREE COLUMNS ON A PHONE, like the download gallery. That is what makes
- * this read as a wall of work rather than a settings list — and it is the
- * specific thing the owner was comparing against.
+ * ── 🔴 TWO COLUMNS ON A PHONE. THE SAME NUMBER THE DOWNLOAD GALLERY USES ────
+ *
+ * This was three, and three is the reason the two pages still did not look
+ * alike in the owner's screenshots. `media-gallery.tsx` carries the note that
+ * settled it there in 2026-08: at three columns a tile is a ~110px thumbnail
+ * and "you cannot tell two clips of the same creator apart", so two is the
+ * width at which a thumbnail is actually a preview.
+ *
+ * That argument is not weaker here, it is stronger: a cleaned video differs
+ * from its original in a caption-sized patch, and at 110px that patch is a few
+ * pixels. Two columns is the width at which the tile shows the thing the
+ * feature did.
  */
-const HISTORY_GRID = "grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2";
+const HISTORY_GRID = "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4";
 
 const TONE_CLASS: Record<AiHistoryTone, string> = {
   active: "bg-primary/12 text-primary ring-primary/25",
@@ -366,19 +375,35 @@ const TONE_CLASS: Record<AiHistoryTone, string> = {
  * So the STRUCTURE is now the same — square tiles, the same grid rhythm, the
  * same corner treatment, the same bottom-left chip, the same tap-to-open.
  *
- * ── And the skin is deliberately NOT the same ──────────────────────────────
+ * ── 🔴 AND THEN IT STILL DID NOT LOOK ALIKE (owner, 2026-09-09) ────────────
+ *
+ * A second screenshot, both pages side by side: "they look very different."
+ *
+ * They did, and the reason was not the layout — by then both were grids of
+ * square rounded tiles in day sections. It was that a download tile is a
+ * PHOTOGRAPH OF YOUR VIDEO and this one was a coloured plate. On one page you
+ * recognise your clip; on the other you read a filename. Nothing about corner
+ * radius or column count closes that gap, because the missing thing is an
+ * image.
+ *
+ * The old note here defended the plate on cost, and that argument was sound as
+ * far as it went — a signed URL and a decoded frame per tile, on a list
+ * somebody opens to press one button, is exactly the phone-warming this feature
+ * refuses everywhere else. What it missed is that those were not the only two
+ * options. The WORKER has the finished file on local disk and ffmpeg in its
+ * hand; it now cuts one ~25 KB JPEG there (migration 0147), on a machine that
+ * has just decoded the whole video anyway. The phone downloads a picture. It
+ * still decodes no video, and the promise is intact.
+ *
+ * ── The skin is still deliberately NOT the same ────────────────────────────
  *
  * "they should not carry exactly the same design they should be
- * differentiated." Download tiles are photographs of media you already own, on
- * black. These are jobs, and there is no poster to show — so a Frenz AI tile is
- * a brand-gradient plate with the mark on it, tinted by STATE: gradient when
- * there is a video to play, flat secondary when there is not. Nobody will
- * confuse the two walls, and this one still decodes no video.
- *
- * 🔴 That is not only aesthetics. A tile per row with a real poster would mean
- * a signed URL and a decode per item, on a list somebody opens to press one
- * button. The gradient costs nothing and keeps the promise this feature has
- * held since it shipped.
+ * differentiated." A download tile wears its PLATFORM in the corner — where it
+ * came from is the fact that matters about a file you saved. An AI tile wears
+ * the Frenz mark and a Before / after pill: what matters here is what was DONE
+ * to it. The scrim is indigo rather than neutral black, and a job with no video
+ * to show still falls back to the brand plate, which is now the exception
+ * rather than every tile.
  */
 function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen: () => void }) {
   const chip = historyChip(job, now);
@@ -395,78 +420,217 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
     why in their own caption.
   */
   const Tag = playable ? "button" : "div";
+  const title = job.source.name ?? "Cleaned video";
 
   return (
-    <article className="min-w-0">
+    /*
+      🔴 THE SAME OUTER SHELL AS `GalleryTile`, down to the ground colour.
+      `group` is what lets the hover disc find it, `aspect-square` and
+      `rounded-2xl` are the grid's rhythm, and `bg-black/40` is what a poster
+      that has not decoded yet sits on — so a slow connection shows the same
+      dark tile the download page shows, not a flash of page background.
+    */
+    <article
+      className={cn(
+        "group relative aspect-square overflow-hidden rounded-2xl bg-black/40",
+        playable && "transition active:scale-[0.98]",
+      )}
+    >
       <Tag
         {...(playable ? { type: "button" as const, onClick: onOpen } : {})}
-        aria-label={playable ? `Play ${job.source.name ?? "cleaned video"}` : undefined}
+        aria-label={playable ? `Play ${title}` : undefined}
         className={cn(
-          "relative block aspect-square w-full overflow-hidden rounded-2xl",
-          playable
-            ? "bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500"
-            : "bg-secondary",
+          "absolute inset-0 h-full w-full text-left",
           playable &&
-            "transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/80",
         )}
       >
-        {/* The mark, centred — this is where a poster would be. */}
-        <span
-          aria-hidden
-          className={cn(
-            "absolute inset-0 flex items-center justify-center",
-            playable ? "text-white/95" : "text-muted-foreground",
-          )}
-        >
-          {active ? (
-            <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" />
-          ) : job.status === "cancelled" ? (
-            <Ban className="h-7 w-7" />
-          ) : job.status === "failed" ? (
-            <AlertTriangle className="h-7 w-7" />
-          ) : playable ? (
-            <Play className="h-8 w-8 fill-current" />
-          ) : (
-            <Trash2 className="h-7 w-7" />
-          )}
-        </span>
+        <HistoryPoster job={job} playable={playable} active={active} />
 
-        {/* The state chip, bottom-left — the same place the download tile puts
-            its own. On a gradient it needs its own ground to stay legible. */}
-        <span
-          className={cn(
-            "absolute bottom-1.5 left-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
-            playable ? "bg-black/45 text-white" : "ring-1 ring-inset",
-            !playable && TONE_CLASS[chip.tone],
-          )}
-        >
-          {chip.label}
-        </span>
+        {/*
+          The scrim, and the caption INSIDE it.
 
-        {/* Length, bottom-right, mirroring the download tile's quality badge. */}
-        {job.source.durationSeconds ? (
-          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/45 px-1.5 py-0.5 text-[10px] font-bold text-white">
-            {formatDuration(job.source.durationSeconds)}
+          The caption used to sit under the tile, which is the other half of why
+          the two pages read differently: the download gallery puts its title on
+          the picture, so its rows are a wall of images with no text gutter
+          between them. Same treatment here.
+
+          🔴 INDIGO, not neutral black. The gradient is the one differentiator
+          that survives being seen at a glance from across a room, and it is the
+          brand's own colour rather than a decoration — see the note above the
+          component.
+        */}
+        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-indigo-950/90 via-indigo-950/40 to-transparent px-2 pb-1.5 pt-10">
+          <span className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-white/90">
+            <Sparkles className="h-3.5 w-3.5 drop-shadow" aria-hidden />
+            {job.source.durationSeconds ? formatDuration(job.source.durationSeconds) : null}
           </span>
-        ) : null}
-      </Tag>
-
-      {/* The caption, under the tile — same rhythm as `RecentDownloads`. */}
-      <div className="mt-1.5 min-w-0">
-        <p className="truncate text-[12.5px] font-semibold leading-tight" title={job.source.name ?? undefined}>
           {/*
             🔴 The member's own filename, as they typed it. No `uppercase`, no
             truncation of the extension — a CSS transform is a silent edit of
             somebody's copy, and this feature has made that mistake once already
             with "WebM".
+
+            `line-clamp-1` ALONE. Never paired with `block`: the two are
+            single-class selectors setting the same property, Tailwind emits
+            `.block` later, and the clamp silently loses — the exact bug that
+            let a TikTok caption cover a whole download tile in August.
           */}
-          {job.source.name ?? "Cleaned video"}
-        </p>
-        <p className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground">
-          <TileCaption job={job} availability={availability} now={now} />
-        </p>
-      </div>
+          <span className="line-clamp-1 text-[11.5px] font-semibold text-white/95">{title}</span>
+          <span className="line-clamp-1 text-[10.5px] font-medium text-white/65">
+            <TileCaption job={job} availability={availability} now={now} />
+          </span>
+        </span>
+
+        {/*
+          The play disc, on hover only — and with NO `backdrop-blur`, which is a
+          standing law on anything that repeats per tile. A backdrop filter is a
+          separate GPU pass that promotes its element to a layer even at zero
+          opacity, so on a wall of tiles it is a few hundred passes a frame for
+          chrome a touch device never even shows. The dark fill is what makes
+          the glyph readable; the blur never was.
+        */}
+        {playable ? (
+          <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white">
+              <Play className="ml-0.5 h-5 w-5 fill-white" aria-hidden />
+            </span>
+          </span>
+        ) : null}
+      </Tag>
+
+      {/*
+        Top left: the FRENZ MARK, where a download tile wears its platform
+        badge. Same position, same size, deliberately different meaning — what
+        matters about a saved file is where it came from, and what matters about
+        this one is what was done to it.
+      */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow"
+      >
+        <Sparkles className="h-3.5 w-3.5" />
+      </span>
+
+      {/*
+        Top right: the state, but only when it is not simply "Ready".
+
+        A chip on every tile saying "Ready" is a chip that means nothing — the
+        picture already says the video is there. It earns its place on the rows
+        that are NOT ready, which is the same judgement the download tile makes
+        when it badges only failed and cancelled records.
+      */}
+      {chip.tone !== "good" ? (
+        <span
+          className={cn(
+            "pointer-events-none absolute right-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
+            playable ? "bg-black/60 text-white" : cn("ring-1 ring-inset", TONE_CLASS[chip.tone]),
+          )}
+        >
+          {chip.label}
+        </span>
+      ) : (
+        /*
+          A ready tile gets the Before / after pill instead. It is the one thing
+          this page can promise that the download page cannot, and putting it on
+          the tile is what tells somebody the tap is worth making.
+        */
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white"
+        >
+          Before / after
+        </span>
+      )}
     </article>
+  );
+}
+
+/**
+ * The picture on the tile — or the plate, when there is no picture.
+ *
+ * ── 🔴 A STABLE URL, NOT A SIGNED ONE ───────────────────────────────────────
+ *
+ * `/api/ai/jobs/<id>/poster` is a path the browser can build from the id it
+ * already has, and it never changes. That is the whole reason the route serves
+ * bytes instead of redirecting to a signed URL: this list POLLS ITSELF while a
+ * job runs, so a signed `src` would be a new URL every few seconds and every
+ * tile would re-download a picture the browser already had. A fixed path is
+ * fetched once and cached for a day.
+ *
+ * `hasPoster` gates it, so a job that has no frame never issues a request that
+ * can only 404 — a wall of failed requests is how a list gets slow.
+ */
+function HistoryPoster({
+  job,
+  playable,
+  active,
+}: {
+  job: AiJobView;
+  playable: boolean;
+  active: boolean;
+}) {
+  /*
+    Reset synchronously when the id changes rather than in an effect, so a
+    recycled tile never paints one stale frame of the previous job's poster.
+    Same pattern as `SmartThumb` and `FeedImage`.
+  */
+  const [broken, setBroken] = useState(false);
+  const [lastId, setLastId] = useState(job.id);
+  if (job.id !== lastId) {
+    setLastId(job.id);
+    setBroken(false);
+  }
+
+  if (job.result.hasPoster && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- a private-bucket proxy route; next/image cannot sign for it
+      <img
+        src={`/api/ai/jobs/${job.id}/poster`}
+        alt=""
+        loading="lazy"
+        /*
+          `decoding="async"` alongside the lazy load. They solve different
+          halves: `lazy` defers the FETCH, but decoding still lands on the main
+          thread by default, so a screen of posters arriving together blocks
+          interaction while each is decoded. That is the jank that reads as "the
+          page takes a moment to open".
+        */
+        decoding="async"
+        onError={() => setBroken(true)}
+        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.04]"
+      />
+    );
+  }
+
+  /*
+    No poster: a job still running, one that never produced a video, or a row
+    from before migration 0147. The brand plate, which used to be every tile and
+    is now the exception — tinted by state, because a plate that looked the same
+    for "working" and "cancelled" would be the only thing on the tile saying
+    nothing.
+  */
+  return (
+    <span
+      className={cn(
+        "flex h-full w-full items-center justify-center",
+        playable
+          ? "bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white/95"
+          : "bg-secondary text-muted-foreground",
+      )}
+    >
+      {active ? (
+        <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" aria-hidden />
+      ) : job.status === "cancelled" ? (
+        <Ban className="h-7 w-7" aria-hidden />
+      ) : job.status === "failed" ? (
+        <AlertTriangle className="h-7 w-7" aria-hidden />
+      ) : playable ? (
+        <Play className="h-8 w-8 fill-current" aria-hidden />
+      ) : (
+        <Trash2 className="h-7 w-7" aria-hidden />
+      )}
+    </span>
   );
 }
 
@@ -520,12 +684,17 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
 function HistorySkeleton() {
   return (
     <div className={cn(HISTORY_GRID)} aria-hidden>
+      {/*
+        🔴 The caption is INSIDE the tile now, so the skeleton is a bare square.
+        A skeleton that keeps drawing two grey bars under each tile promises a
+        layout the real list no longer has, and the swap from one to the other
+        is a visible jump on every load.
+      */}
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="min-w-0">
-          <div className="aspect-square w-full animate-pulse rounded-2xl bg-secondary motion-reduce:animate-none" />
-          <div className="mt-1.5 h-3 w-3/4 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
-          <div className="mt-1 h-2.5 w-1/2 animate-pulse rounded bg-secondary motion-reduce:animate-none" />
-        </div>
+        <div
+          key={i}
+          className="aspect-square w-full animate-pulse rounded-2xl bg-secondary motion-reduce:animate-none"
+        />
       ))}
     </div>
   );

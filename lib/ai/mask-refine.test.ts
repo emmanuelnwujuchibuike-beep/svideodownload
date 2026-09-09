@@ -138,3 +138,109 @@ describe("measuring what was actually built", () => {
     expect(parseMaskCoverage("999\n-5\n255")).toBeCloseTo(1, 5);
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  ONE DECODE, TWO ANSWERS — the mask and its coverage together
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09: "the time in my replicate dashboard of each video is lower
+ * than the time it actually takes, could it be it delays on our end?"
+ *
+ * It was. Job eff96da5 measured 347s wall clock against 191s of ProPainter, so
+ * 156s of the wait was our own machine — and one of the four full passes over
+ * the video existed only to average the luminance of a mask we had just
+ * written. `statsPath` forks the filter output with `split` so both fall out of
+ * a single decode.
+ */
+describe("buildTextMaskArgs — the folded coverage measurement", () => {
+  const withStats = buildTextMaskArgs({ ...plan, statsPath: "/tmp/stats.txt" });
+  const graph = withStats[withStats.indexOf("-filter_complex") + 1] ?? "";
+
+  it("forks the finished mask rather than re-reading the file", () => {
+    expect(graph).toContain("split=2[enc][stats]");
+    expect(graph).toContain("[stats]signalstats,metadata=print:file=/tmp/stats.txt[nul]");
+  });
+
+  /*
+    🔴 The encoder must be mapped EXPLICITLY once the graph has two outputs.
+    Without `-map [enc]` ffmpeg picks a stream by its own rules, and the one it
+    picks is not guaranteed to be the branch carrying the mask.
+  */
+  it("maps the encoder branch to the file and the stats branch to null", () => {
+    expect(withStats).toContain("-map");
+    const enc = withStats.indexOf("[enc]");
+    const nul = withStats.indexOf("[nul]");
+    expect(enc).toBeGreaterThan(-1);
+    expect(nul).toBeGreaterThan(enc);
+    expect(withStats.slice(nul)).toEqual(expect.arrayContaining(["-f", "null", "-"]));
+    // The mask file still comes before the discarded second output.
+    expect(withStats.indexOf(plan.outPath)).toBeLessThan(nul);
+  });
+
+  /*
+    🔴 A path lands inside a filter argument, where `:` separates options and
+    `\` escapes. A Windows temp path would otherwise split one option in two.
+  */
+  it("escapes a path that carries filtergraph syntax", () => {
+    /*
+      🔴 `\u005c` rather than a typed backslash. This project has already had a
+      test file arrive with RAW CONTROL BYTES in it — `"C:\tmp"` written through
+      a shell becomes C-colon-TAB-"mp", and the test then asserts something
+      about a path nobody could ever pass. An explicit escape cannot be eaten by
+      whatever wrote the file.
+    */
+    const winPath = "C:\u005ctmp\u005cfrenz\u005cstats.txt";
+    const win = buildTextMaskArgs({ ...plan, statsPath: winPath });
+    const g = win[win.indexOf("-filter_complex") + 1] ?? "";
+    expect(g).toContain("file=C\u005c:/tmp/frenz/stats.txt");
+  });
+
+  it("emits none of it when no stats file was asked for", () => {
+    const plain = buildTextMaskArgs(plan);
+    expect(plain.join(" ")).not.toContain("signalstats");
+    expect(plain.join(" ")).not.toContain("-f null");
+    expect(plain).not.toContain("-map");
+  });
+});
+
+describe("parseMaskCoverage — the metadata=print format", () => {
+  /*
+    What `metadata=print` actually writes, taken from a real run of the graph
+    above rather than from the documentation.
+  */
+  const real = [
+    "frame:0    pts:0       pts_time:0",
+    "lavfi.signalstats.YMIN=16",
+    "lavfi.signalstats.YLOW=16",
+    "lavfi.signalstats.YAVG=70.0165",
+    "lavfi.signalstats.YHIGH=235",
+    "lavfi.signalstats.YMAX=235",
+    "frame:1    pts:1024    pts_time:0.042667",
+    "lavfi.signalstats.YAVG=76.5",
+  ].join("\n");
+
+  it("reads the keyed values", () => {
+    expect(parseMaskCoverage(real)).toBeCloseTo((70.0165 + 76.5) / 2 / 255, 5);
+  });
+
+  /*
+    ── 🔴 THE FAILURE THIS TEST EXISTS FOR ───────────────────────────────────
+
+    `metadata=print` also writes `frame:12 pts:12288 pts_time:0.512`. A parser
+    that fell through to "any float on the line" would average PTS values —
+    numbers in the thousands — into the coverage and report a mask hundreds of
+    times denser than it is. That would sail past `MASK_REFINE_MIN_RATIO`,
+    silently disable the sparse-mask fallback, and ship a video with its text
+    still in it. Keyed lines must win outright, never merge.
+  */
+  it("never lets a pts value reach the average", () => {
+    const coverage = parseMaskCoverage(real);
+    expect(coverage).not.toBeNull();
+    expect(coverage!).toBeLessThan(0.4);
+  });
+
+  it("still reads the ffprobe csv the second pass produces", () => {
+    expect(parseMaskCoverage("25.5\n25.5")).toBeCloseTo(0.1, 5);
+  });
+});

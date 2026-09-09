@@ -337,6 +337,22 @@ export const AI_CLEAN_PROPAINTER = {
    * chunk is simply smaller. Verified: the same clip that OOM'd completed in
    * 191s at full 720x1280 x 286 with these values.
    */
+  /**
+   * ── 🔴 THE PIXEL BUDGET, WHICH IS THE ONE THAT ACTUALLY STOPPED THE OOM ───
+   *
+   * The three values below bound the INPAINTING chunk. They fixed the first
+   * out-of-memory and could never have fixed the second, because the second
+   * happened in RAFT optical flow — which ProPainter computes across the clip
+   * BEFORE it inpaints, and which costs area SQUARED. See the long note on
+   * `propainterResizeRatio` in lib/ai/propainter.ts for the arithmetic and the
+   * three failed predictions it was derived from.
+   *
+   * 409,920 is 480x854: the area of a run that is known to have succeeded on
+   * this account, rather than a round number. A 720x1280 job scales to 0.66 and
+   * is put back to its exact source size afterwards by
+   * `buildResizeToSourceArgs`.
+   */
+  maxPixels: envInt("AI_CLEAN_PROPAINTER_MAX_PIXELS", 409_920),
   subvideoLength: envInt("AI_CLEAN_PROPAINTER_SUBVIDEO", 40),
   /** Local frames each output frame may borrow from. 10 -> 6 for memory. */
   neighborLength: envInt("AI_CLEAN_PROPAINTER_NEIGHBOR", 6),

@@ -470,10 +470,10 @@ const maskRectChain = (morphology: string) =>
  * ⚠️ Encoded LOSSLESS (`-qp 0`). A lossy encode blurs the hard threshold this
  * graph just computed and hands ProPainter a grey, ambiguous mask.
  */
-export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string[] {
+export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean; statsPath?: string }): string[] {
   const refine = plan.refine !== false;
 
-  const filter = refine
+  const base = refine
     ? `${maskRectChain(MASK_ROI_MORPHOLOGY)}[rect];` +
       // Very bright OR very dark, anywhere in the frame. `+` is a sum, and
       // `if()` treats any non-zero as true, so this is an OR.
@@ -483,6 +483,32 @@ export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string
       `[rect][glyph]blend=all_expr='if(gt(A,127)*gt(B,127),255,0)',` +
       `${Array(MASK_REFINE_GROW).fill("dilation").join(",")},format=yuv420p`
     : `${maskRectChain(MASK_MORPHOLOGY)},format=yuv420p`;
+
+  /*
+    ── 🔴 COVERAGE IS MEASURED HERE, NOT IN A SECOND PASS ────────────────────
+
+    Owner, 2026-09-09: "the time in my replicate dashboard of each video is
+    lower than the time it actually takes, could it be it delays on our end?"
+
+    It is. Measured on job eff96da5: 347s wall clock against 191s of ProPainter,
+    so 156s — nearly half the wait — was work on our own machine. Four full
+    passes over the video were the bulk of it, and one of them was this: the
+    mask was written, and then `buildMaskCoverageArgs` DECODED THE WHOLE THING
+    AGAIN just to average its luminance.
+
+    `split` makes that free. The filter output is forked in two — one branch to
+    the encoder, one to `signalstats` writing per-frame `YAVG` to a file — and
+    ffmpeg decodes, thresholds and morphs each frame exactly once for both. The
+    stats branch is muxed to `-f null`, so nothing is written twice.
+
+    The second pass is not deleted, because it is still the only way to measure
+    a mask this function did not just build (the rectangle fallback re-runs this
+    with `refine: false`, and a diagnostic can still ask about a file on disk).
+    It is simply no longer on the path every job takes.
+  */
+  const filter = plan.statsPath
+    ? `${base},split=2[enc][stats];[stats]signalstats,metadata=print:file=${ffEscape(plan.statsPath)}[nul]`
+    : base;
 
   return [
     "-hide_banner",
@@ -496,6 +522,7 @@ export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string
     plan.blackPath,
     "-filter_complex",
     filter,
+    ...(plan.statsPath ? ["-map", "[enc]"] : []),
     "-c:v",
     "libx264",
     "-preset",
@@ -505,7 +532,27 @@ export function buildTextMaskArgs(plan: MaskPlan & { refine?: boolean }): string
     "-r",
     String(plan.fps),
     plan.outPath,
+    /*
+      The stats branch as a SECOND output, discarded. `metadata=print` writes
+      the numbers as a side effect of frames flowing through it, so the branch
+      still has to be pulled by a muxer — and `-f null -` is the muxer that
+      encodes nothing at all.
+    */
+    ...(plan.statsPath ? ["-map", "[nul]", "-f", "null", "-"] : []),
   ];
+}
+
+/**
+ * A path that is about to be interpolated into a filter argument.
+ *
+ * 🔴 In a filtergraph, `:` separates options and `\` escapes — so a Windows
+ * path or any path with a colon would silently split one option into two. These
+ * are always temp paths this codebase built from `tmpdir()` and a uuid, never
+ * anything a member supplied, but the day that stops being true is not the day
+ * to discover it.
+ */
+function ffEscape(p: string): string {
+  return p.replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
 /**
@@ -546,11 +593,108 @@ export function buildMaskCoverageArgs(maskPath: string): string[] {
  * "unknown", never as "empty", or an ffprobe hiccup would discard a good mask.
  */
 export function parseMaskCoverage(raw: string): number | null {
-  const values = raw
-    .split(/\r?\n/)
-    .map((line) => Number.parseFloat(line.trim()))
-    .filter((n) => Number.isFinite(n) && n >= 0 && n <= 255);
+  /*
+    ── 🔴 TWO PRODUCERS, ONE PARSER ──────────────────────────────────────────
+
+    The same number now arrives in two shapes, because it is measured in two
+    places:
+
+      · `metadata=print` (the fast path, folded into the mask build) writes
+        alternating frame headers and `lavfi.signalstats.YAVG=32.4` lines;
+      · `buildMaskCoverageArgs` (ffprobe, `csv=p=0`) writes one bare float per
+        line.
+
+    Keyed lines are looked for FIRST and, when any are found, the bare-float
+    reader is not consulted at all — the `metadata=print` format also carries
+    `frame:12 pts:12288 pts_time:0.512`, and a parser that fell through to
+    "any float on the line" would average pts values into the coverage and
+    report a mask several hundred times denser than it is. That is a failure
+    that would pass the ratio guard and disable the fallback silently, which is
+    the worst way for this particular number to be wrong.
+  */
+  const keyed = [...raw.matchAll(/YAVG=(-?\d+(?:\.\d+)?)/g)].map((m) => Number.parseFloat(m[1]!));
+  const values = (keyed.length > 0
+    ? keyed
+    : raw.split(/\r?\n/).map((line) => Number.parseFloat(line.trim()))
+  ).filter((n) => Number.isFinite(n) && n >= 0 && n <= 255);
+
   if (values.length === 0) return null;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   return mean / 255;
+}
+
+/* ────────────────────────────── the poster ───────────────────────────────── */
+
+/**
+ * How wide a history poster is drawn. 480px on the long edge covers a tile at
+ * 2 columns on a 3x phone (roughly 300 device pixels) with room to spare, and
+ * an upright 9:16 clip lands at 480x854 — around 25 KB of JPEG.
+ */
+export const POSTER_MAX_EDGE = 480;
+
+/** Where in the clip the poster is cut from. */
+export const POSTER_FRACTION = 0.25;
+
+/**
+ * One still frame from the finished video, as a JPEG on disk.
+ *
+ * ── 🔴 `-ss` BEFORE `-i`, AND THE FALLBACK THAT NEEDS IT ────────────────────
+ *
+ * Placed before the input, ffmpeg seeks by keyframe and starts decoding there —
+ * milliseconds on any length of clip. Placed after, it decodes every frame from
+ * zero and throws them away, which on a three-minute video is most of a second
+ * of pointless work on the worker.
+ *
+ * The cost of the fast form is that it lands on the nearest keyframe rather
+ * than the exact timestamp, which for a poster is not a cost at all.
+ *
+ * 🔴 A seek past the end of a clip produces NO frame and exit code 0 — an empty
+ * file and a successful run. That is why the caller must check the bytes and
+ * fall back to `seconds: 0`, and why this takes the timestamp as an argument
+ * instead of computing it: the retry is the same function with a different
+ * number, not a second code path.
+ *
+ * ── Why not the first frame ─────────────────────────────────────────────────
+ *
+ * Video opens on black, a fade or a logo card far more often than it opens on
+ * anything recognisable, and a wall of black tiles is exactly the failure this
+ * poster exists to fix. A quarter of the way in is past every intro this
+ * product sees. It is also the SAME fraction the before/after comparison
+ * samples, so the tile and the comparison show the same moment — which makes
+ * the two read as one video rather than two.
+ */
+export function buildPosterArgs(opts: {
+  videoPath: string;
+  outPath: string;
+  seconds: number;
+}): string[] {
+  return [
+    "-v",
+    "error",
+    "-y",
+    // A negative or non-finite offset would make ffmpeg refuse the whole
+    // command; clamped here so the caller can pass a duration it is unsure of.
+    "-ss",
+    String(Math.max(0, Number.isFinite(opts.seconds) ? opts.seconds : 0)),
+    "-i",
+    opts.videoPath,
+    "-frames:v",
+    "1",
+    /*
+      Fit inside a POSTER_MAX_EDGE box in whichever direction is long, and never
+      scale UP — `min(iw,480)` keeps a small source at its own size rather than
+      inflating it into a blurrier, larger file. `-1` on the other axis holds
+      the aspect ratio, and rounding it to an even number keeps the JPEG encoder
+      from complaining about odd chroma dimensions.
+    */
+    "-vf",
+    `scale='if(gt(iw,ih),min(iw,${POSTER_MAX_EDGE}),-2)':'if(gt(iw,ih),-2,min(ih,${POSTER_MAX_EDGE}))'`,
+    // 4 is visually indistinguishable at this size and roughly half the bytes
+    // of the default 2.
+    "-q:v",
+    "4",
+    "-f",
+    "image2",
+    opts.outPath,
+  ];
 }

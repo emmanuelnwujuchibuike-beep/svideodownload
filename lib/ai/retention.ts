@@ -95,7 +95,7 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
   */
   const { data: expiredRows, error: expiredError } = await admin
     .from("ai_jobs")
-    .select("id, status, source_path, result_path, expires_at")
+    .select("id, status, source_path, result_path, poster_path, expires_at")
     .lte("expires_at", now.toISOString())
     .in("status", [...TERMINAL])
     .order("expires_at", { ascending: true })
@@ -106,10 +106,20 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
     result.errors += 1;
   }
 
-  for (const row of (expiredRows ?? []) as Pick<AiJobRow, "id" | "status" | "source_path" | "result_path">[]) {
+  for (const row of (expiredRows ?? []) as Pick<
+    AiJobRow,
+    "id" | "status" | "source_path" | "result_path" | "poster_path"
+  >[]) {
     const removed = await removeObjects(admin, [
       { bucket: AI_SOURCE_BUCKET, path: row.source_path },
       { bucket: AI_RESULT_BUCKET, path: row.result_path },
+      /*
+        The tile's still frame (migration 0147). It expires WITH the video,
+        because it is a frame of it — a poster outliving the file it was cut
+        from would leave the one recognisable piece of somebody's private video
+        in a bucket after the product told them it had been deleted.
+      */
+      { bucket: AI_RESULT_BUCKET, path: row.poster_path },
     ]);
     result.objectsDeleted += removed.deleted;
     result.errors += removed.errors;
@@ -124,7 +134,7 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
     */
     const { error } = await admin
       .from("ai_jobs")
-      .update({ status: "expired", source_path: null, result_path: null })
+      .update({ status: "expired", source_path: null, result_path: null, poster_path: null })
       .eq("id", row.id)
       .in("status", [...TERMINAL]);
 

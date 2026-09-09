@@ -1,4 +1,5 @@
-import { ChevronRight, Crown, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { ChevronRight, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
@@ -60,13 +61,24 @@ export function FrenzAICrumb({
           {tool}
         </li>
       </ol>
-      {pro ? (
-        <span className="ml-0.5 inline-flex items-center gap-1 rounded-full bg-gradient-to-br from-amber-200 to-amber-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-950">
-          <Crown className="h-3 w-3" aria-hidden />
-          Pro
-        </span>
-      ) : null}
-    </nav>
+      {/*
+        🔴 THE PLATFORM SEAL, AND ONLY FOR SOMEBODY WHO HAS ONE.
+
+        Owner, 2026-09-09: "use the platform own pro and business badge without
+        the text pro or business or max, just with their badge."
+
+        This was a gold PRO pill rendered on every Frenz AI page regardless of
+        who was looking — a free member saw it, and so did a Business member,
+        because it labelled the FEATURE rather than the viewer. The platform
+        already has one mark per tier; a second one invented here is how a
+        product stops looking like one product.
+
+        `AICleanProBadge` now draws the viewer's own seal and renders nothing
+        for a free member, so the `pro` prop is a request to SHOW the slot, not
+        a claim that the viewer has a plan.
+      */}
+      {pro ? <AICleanProBadge className="ml-0.5" /> : null}
+      </nav>
   );
 }
 

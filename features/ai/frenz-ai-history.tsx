@@ -11,7 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAiHistory } from "@/features/ai/use-ai-history";
 import {
@@ -85,8 +85,21 @@ const FrenzAIHistoryPlayer = dynamic(
 export function FrenzAIHistory({
   className,
   showHeading = true,
+  groupByDay = false,
 }: {
   className?: string;
+  /**
+   * Break the list into Today / Yesterday / This week / Last week / Earlier.
+   *
+   * 🔴 The SAME five buckets and the same boundaries as the download history
+   * gallery (features/history/media-gallery.tsx), because the owner asked for
+   * the two pages to be structured alike — and because a product that calls
+   * the same seven days "This week" on one screen and something else on
+   * another is a product that was assembled rather than designed.
+   *
+   * Off for the strip on the welcome page, where four rows need no dividers.
+   */
+  groupByDay?: boolean;
   /**
    * False when this list IS the page and the page already has an H1.
    * Two headings saying "Your videos" on one screen is the duplicate the
@@ -123,6 +136,38 @@ export function FrenzAIHistory({
     working". Re-reading it by id each render is what keeps the two in step.
   */
   const live = openJob ? (history.jobs.find((j) => j.id === openJob.id) ?? openJob) : null;
+
+  /*
+    The buckets. Boundaries copied from the download gallery deliberately —
+    midnight, then 24h, then 6 days, then 13. Empty ones are dropped, so a
+    visitor who cleaned nothing yesterday never sees an empty "Yesterday".
+  */
+  const sections = useMemo(() => {
+    if (!groupByDay) return null;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const today = midnight.getTime();
+    const yesterday = today - 86_400_000;
+    const week = today - 6 * 86_400_000;
+    const lastWeek = today - 13 * 86_400_000;
+
+    const buckets: { key: string; label: string; items: AiJobView[] }[] = [
+      { key: "today", label: "Today", items: [] },
+      { key: "yesterday", label: "Yesterday", items: [] },
+      { key: "week", label: "This week", items: [] },
+      { key: "lastweek", label: "Last week", items: [] },
+      { key: "earlier", label: "Earlier", items: [] },
+    ];
+    for (const job of history.jobs) {
+      const t = Date.parse(job.createdAt);
+      // An unparseable timestamp lands in Earlier rather than crashing a bucket
+      // index — the row is still the member's and still worth showing.
+      const at = Number.isFinite(t) ? t : 0;
+      const i = at >= today ? 0 : at >= yesterday ? 1 : at >= week ? 2 : at >= lastWeek ? 3 : 4;
+      buckets[i]!.items.push(job);
+    }
+    return buckets.filter((b) => b.items.length > 0);
+  }, [groupByDay, history.jobs]);
 
   const close = useCallback(() => setOpenJob(null), []);
 
@@ -225,13 +270,50 @@ export function FrenzAIHistory({
         ) : history.jobs.length === 0 ? (
           <EmptyState filter={history.filter} />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {history.jobs.map((job) => (
-              <li key={job.id}>
-                <HistoryRow job={job} now={now} onOpen={() => open(job)} />
-              </li>
-            ))}
-          </ul>
+          /*
+            ── 🔴 SAME STRUCTURE AS DOWNLOAD HISTORY, DIFFERENT SKIN ──────────
+
+            Owner, 2026-09-09: "structure the AI history, card, and everything
+            exactly, the gesture and all from the download history page to the
+            AI history page but they should not carry exactly the same design
+            they should be differentiated."
+
+            So the SHAPE is borrowed — the same five day buckets on the same
+            boundaries, a sticky-feeling section label, one tappable card per
+            item — and the SKIN is not. Download history is a square-thumbnail
+            grid of media you already own; this is a status list of work that
+            was done to your video, so it stays a full-width row with a state
+            chip, a subtitle that explains itself, and no poster at all.
+
+            Copying the visual treatment would also have cost what that grid
+            costs: a decoded image per tile. This list still loads no video.
+          */
+          sections ? (
+            <div className="flex flex-col gap-5">
+              {sections.map((section) => (
+                <section key={section.key} aria-label={section.label}>
+                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                    {section.label}
+                  </h3>
+                  <ul className="flex flex-col gap-2">
+                    {section.items.map((job) => (
+                      <li key={job.id}>
+                        <HistoryRow job={job} now={now} onOpen={() => open(job)} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {history.jobs.map((job) => (
+                <li key={job.id}>
+                  <HistoryRow job={job} now={now} onOpen={() => open(job)} />
+                </li>
+              ))}
+            </ul>
+          )
         )}
       </div>
 

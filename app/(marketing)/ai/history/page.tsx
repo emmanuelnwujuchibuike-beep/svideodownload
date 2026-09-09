@@ -61,7 +61,7 @@ export default async function PublicFrenzAIHistoryPage() {
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
         style={{ paddingTop: "calc(var(--frenz-header-bottom, 4rem) + 1rem)" }}
       >
-        <FrenzAIHistoryPage cleanHref="/ai/clean" />
+        <FrenzAIHistoryPage />
       </main>
       {/*
         The download card, sound and haptic. The MARKETING group has no

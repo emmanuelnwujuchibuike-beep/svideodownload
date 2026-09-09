@@ -4,7 +4,6 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { FrenzAICleanFab } from "@/features/ai/frenz-ai-clean-fab";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
 
@@ -41,7 +40,7 @@ import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
  *
  * What was missing was, again, a door.
  */
-export function FrenzAIHistoryPage({ cleanHref = "/ai/clean" }: { cleanHref?: string }) {
+export function FrenzAIHistoryPage() {
   return (
     <FrenzAIEnvironment stage="idle" className="relative overflow-hidden rounded-[1.75rem]">
       {/* the room's light — static, and well under the text */}
@@ -55,7 +54,7 @@ export function FrenzAIHistoryPage({ cleanHref = "/ai/clean" }: { cleanHref?: st
         }}
       />
 
-      <div className="px-4 pb-24 pt-5 sm:px-6">
+      <div className="px-4 pb-10 pt-5 sm:px-6">
         <FrenzAICrumb tool="Your videos" />
 
         <h1 className="mt-4 text-[1.9rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[2.2rem]">
@@ -72,7 +71,7 @@ export function FrenzAIHistoryPage({ cleanHref = "/ai/clean" }: { cleanHref?: st
           page and stays quiet when it IS the page — one component, two
           contexts, rather than a second copy of the list.
         */}
-        <FrenzAIHistory className="mt-6" showHeading={false} />
+        <FrenzAIHistory className="mt-6" showHeading={false} groupByDay />
 
         <div className="mt-8">
           <Link
@@ -86,12 +85,7 @@ export function FrenzAIHistoryPage({ cleanHref = "/ai/clean" }: { cleanHref?: st
         </div>
       </div>
 
-      {/*
-        The floating action, on the page it was asked for. `pb-24` above is what
-        keeps the last row clear of it — a fixed widget over the end of a list
-        hides exactly the item somebody scrolled to reach.
-      */}
-      <FrenzAICleanFab href={cleanHref} />
+
     </FrenzAIEnvironment>
   );
 }

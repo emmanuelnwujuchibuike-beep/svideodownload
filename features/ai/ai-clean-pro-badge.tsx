@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
 
 /**
  * The Pro mark used across Frenz AI.
@@ -20,16 +20,28 @@ import { cn } from "@/lib/utils";
  * says "pro feature" instead of spelling out three letters.
  */
 export function AICleanProBadge({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex select-none items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em]",
-        "bg-gold/10 text-gold ring-1 ring-gold/30 dark:bg-gold/[0.12]",
-        className,
-      )}
-    >
-      <span aria-hidden>Pro</span>
-      <span className="sr-only">Pro feature</span>
-    </span>
-  );
+  /*
+    ── 🔴 THE PLATFORM BADGE, NOT A SECOND ONE ────────────────────────────
+
+    Owner, 2026-09-09: "remove this pro badge and use the platform own pro and
+    business badge without the text pro or business or max, just with their
+    badge."
+
+    This was a gold pill reading PRO — a badge invented for Frenz AI while the
+    rest of the product already had one. Two marks for the same fact is how a
+    product stops looking like one product, and the AI pill had a further
+    problem: it said PRO to everybody, including Business members and free
+    ones, because it described the FEATURE rather than the viewer.
+
+    `MyDiamondCrownBadge` resolves the signed-in viewer's own plan and draws
+    the platform seal — a crowned hexagon for Pro, a faceted diamond for
+    Business — with no label, which is the whole request. It renders NOTHING
+    for a free member, which is correct: a badge is a statement about who you
+    are, and free is not a tier to decorate.
+
+    ⚠️ `max_ai` has no seal yet. `BillingPlan` is free/pro/business, so that
+    plan will need its own silhouette in `DiamondCrownBadge` when it ships —
+    borrowing the Business diamond would claim the wrong tier.
+  */
+  return <MyDiamondCrownBadge size="sm" className={className} />;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Crown, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, Crown, Zap } from "lucide-react";
 import Link from "next/link";
 
 import type { AiCleanEntitlement } from "@/lib/ai/client";
@@ -55,13 +55,23 @@ export function FrenzAITierLabel({
   // tier is worse than a beat of nothing.
   if (!entitlement) return null;
 
-  const tier = entitlement.modelTier;
+  const audience = entitlement.audience;
   const briaOffered = entitlement.briaOffered === true;
   const gpuOffered = entitlement.gpuOffered === true;
-  const paid = entitlement.unlimited || (tier !== "standard" && tier !== undefined);
 
-  /* ── Already on Max AI: state it, and sell nothing. ─────────────────────── */
-  if (tier === "bria") {
+  /*
+    ── 🔴 EACH PLAN IS SHOWN THE NEXT ONE, NOT ALWAYS PRO ──────────────────
+
+    Owner, 2026-09-09: "the upgrade to pro prompt in the AI pages should only
+    be in free users, while pro users show upgrade to business for faster
+    generation time, and max ai for cleaner and faster generation."
+
+    Selling Pro to somebody already paying for Pro is the clearest possible
+    signal that a product is not reading its own state — the same rule the
+    input page already follows for its Pro card. So this is a LADDER: every
+    tier is offered the rung above it, and the top rung is offered nothing.
+  */
+  if (audience === "max_ai") {
     return (
       <Chip
         className={cn(
@@ -70,47 +80,43 @@ export function FrenzAITierLabel({
         )}
         icon={<Crown className="h-3.5 w-3.5" aria-hidden />}
       >
-        Max AI · most accurate cleanup
+        {briaOffered ? "Max AI · most accurate cleanup" : "Max AI"}
       </Chip>
     );
   }
 
-  /*
-    ── Pro / Business ──────────────────────────────────────────────────────
-
-    They are told what they have. The Max AI line only appears if BRIA is
-    really deployed — otherwise there is nothing above them worth naming, and
-    inventing one would be selling a plan that cannot yet do anything extra.
-  */
-  if (paid) {
-    if (briaOffered) {
-      return (
-        <UpsellRow
-          className={className}
-          variant={variant}
-          icon={<Crown className="h-3.5 w-3.5" aria-hidden />}
-          title="Max AI cleans more accurately"
-          body="A stronger model for detailed backgrounds and text over faces."
-        />
-      );
-    }
+  if (audience === "business") {
     return (
-      <Chip
-        className={cn("border-primary/25 bg-primary/[0.07] text-primary", className)}
-        icon={gpuOffered ? <Zap className="h-3.5 w-3.5" aria-hidden /> : <Sparkles className="h-3.5 w-3.5" aria-hidden />}
-      >
-        {gpuOffered ? "Running on faster GPU" : "No ads, no daily limit"}
-      </Chip>
+      <UpsellRow
+        className={className}
+        variant={variant}
+        icon={<Crown className="h-3.5 w-3.5" aria-hidden />}
+        title="Max AI cleans more accurately"
+        body={
+          briaOffered
+            ? "A stronger model for detailed backgrounds and text over faces — and the fastest queue."
+            : "The top tier, for detailed backgrounds and text over faces."
+        }
+      />
+    );
+  }
+
+  if (audience === "pro") {
+    return (
+      <UpsellRow
+        className={className}
+        variant={variant}
+        icon={<Zap className="h-3.5 w-3.5" aria-hidden />}
+        title="Business is faster"
+        body="More generations at once, and your videos start sooner."
+      />
     );
   }
 
   /*
-    ── Free and guest: the upgrade ─────────────────────────────────────────
-
-    🔴 The headline follows what is actually deployed, strongest true reason
-    first. Speed is the better sell while somebody is WATCHING A PROGRESS BAR,
-    so it leads whenever a GPU model exists; otherwise the row falls back to the
-    two things Pro genuinely removes today.
+    Free and guest. 🔴 The headline only promises SPEED when a GPU model is
+    really deployed — see the note at the top. Otherwise it sells the two
+    things Pro genuinely removes today, both of which a member can verify.
   */
   return (
     <UpsellRow
@@ -118,15 +124,13 @@ export function FrenzAITierLabel({
       variant={variant}
       icon={<Crown className="h-3.5 w-3.5" aria-hidden />}
       title={
-        briaOffered
-          ? "Upgrade for more accurate cleanup"
-          : gpuOffered
-            ? "Upgrade for faster, higher-quality edits"
-            : "Upgrade to Pro"
+        briaOffered || gpuOffered
+          ? "Upgrade for faster, higher-quality edits"
+          : "Upgrade to Pro"
       }
       body={
         gpuOffered || briaOffered
-          ? "Pro runs on faster GPU hardware — no ads, no daily limit."
+          ? "Pro runs on faster hardware — no ads, no daily limit."
           : "No ads before a clean, and no daily limit."
       }
     />

@@ -26,5 +26,5 @@ export default async function StudioFrenzAIHistoryPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/history");
 
-  return <FrenzAIHistoryPage cleanHref="/studio/ai/clean" />;
+  return <FrenzAIHistoryPage />;
 }

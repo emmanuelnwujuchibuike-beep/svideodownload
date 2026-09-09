@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { listAiJobs } from "@/lib/ai/client";
 import { historyHasActive, statusesForFilter, type AiHistoryFilter } from "@/lib/ai/history";
+import { readAiHistoryCache, writeAiHistoryCache } from "@/lib/ai/history-cache";
 import type { AiJobView } from "@/lib/ai/jobs";
 
 /**
@@ -65,9 +66,20 @@ export interface AiHistoryActions {
 
 export function useAiHistory(initialFilter: AiHistoryFilter = "all"): AiHistoryState & AiHistoryActions {
   const [filter, setFilterState] = useState<AiHistoryFilter>(initialFilter);
-  const [jobs, setJobs] = useState<AiJobView[]>([]);
+  /*
+    🔴 SEEDED SYNCHRONOUSLY, so the page paints a list on its FIRST frame
+    instead of a skeleton. The lazy initialiser runs during the first render —
+    an effect would be one frame too late, which is exactly the flash the owner
+    is comparing against the download history.
+  */
+  const [jobs, setJobs] = useState<AiJobView[]>(() => readAiHistoryCache() ?? []);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  /*
+    Not "loading" when there is already something on screen. The skeleton is
+    for an empty first visit; showing it OVER a cached list would replace real
+    rows with grey boxes, which is worse than the wait it is meant to cover.
+  */
+  const [loading, setLoading] = useState(() => (readAiHistoryCache()?.length ?? 0) === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -115,6 +127,13 @@ export function useAiHistory(initialFilter: AiHistoryFilter = "all"): AiHistoryS
     setCursor(res.nextCursor);
     setLoading(false);
     setLoaded(true);
+    /*
+      Only the "all" tab is remembered. A snapshot taken while "Cancelled" was
+      selected would open the page next time showing a filtered list under an
+      unfiltered heading — the cache exists to make the DEFAULT view instant,
+      not to remember where somebody was.
+    */
+    if (next === "all") writeAiHistoryCache(res.jobs);
   }, []);
 
   useEffect(() => {

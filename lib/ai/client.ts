@@ -209,7 +209,21 @@ export async function startAiJob(
  * fine; deciding from it would be a bug.
  */
 export interface AiCleanEntitlement {
-  plan: string;
+  /**
+   * 🔴 `audience`, and it was declared as `plan` — a field the endpoint has
+   * never returned.
+   *
+   * `/api/ai/clean/entitlement` answers with `entitlementView(...)` verbatim,
+   * and that object has `audience`. So `entitlement.plan` was `undefined`
+   * everywhere, and the one place that read it —
+   * `plan === "free"` in the input page — was permanently false. The Pro card
+   * there has never rendered for anybody, which is why the owner kept reporting
+   * that they could not see an upgrade prompt.
+   *
+   * A type that names a field the server does not send is worse than no type:
+   * it makes the compiler agree with the bug.
+   */
+  audience: "guest" | "free" | "pro" | "business" | "max_ai";
   /** False when an operator has switched free access off — a different state. */
   offered: boolean;
   unlimited: boolean;

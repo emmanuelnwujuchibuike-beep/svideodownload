@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
-import { aiFeature, jobToView } from "@/lib/ai/jobs";
+import { AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView } from "@/lib/ai/jobs";
 import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
 import { releaseAiUsage } from "@/lib/ai/usage";
@@ -70,9 +70,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
     }
 
-    // Already finished. Answering with the job rather than an error keeps a
-    // double tap harmless.
-    if (job.status !== "queued" && job.status !== "processing") {
+    /*
+      ── 🔴 EVERY RUNNING STATE MAY BE CANCELLED, NOT JUST TWO ───────────────
+
+      Owner, 2026-09-09: "the stop anyway in the AI cancel button doesn't
+      cancel."
+
+      This read `status !== "queued" && status !== "processing"` and therefore
+      refused `finalizing` — which is EXACTLY the state their job was stuck in.
+      The button worked, the request was made, and the route answered "already
+      finished" about a job that was still going. It also missed `acquiring`,
+      the state Part 6 added, so a link job could not be stopped either.
+
+      `isActiveStatus` is the registry's own answer to "is this still going to
+      change", and asking it is what stops this list going stale a third time.
+      The TRANSITIONS table already permitted both — only this route disagreed.
+
+      ⚠️ Cancelling during `finalizing` is safe by construction: the worker's own
+      `transitionJob(id, ["finalizing"], "completed")` is a compare-and-set, so a
+      worker that finishes afterwards matches no row and quietly does nothing
+      rather than resurrecting a job the member stopped.
+    */
+    if (!isActiveStatus(job.status)) {
       return NextResponse.json({ job: jobToView(job, storedErrorMessage), cancelled: false });
     }
 
@@ -86,7 +105,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (provider) await provider.cancel(job.replicate_prediction_id).catch(() => false);
     }
 
-    const updated = await transitionJob(job.id, ["queued", "processing"], "cancelled", {
+    const updated = await transitionJob(job.id, [...AI_ACTIVE_STATUSES], "cancelled", {
       completed_at: new Date().toISOString(),
     });
 

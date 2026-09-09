@@ -65,7 +65,8 @@ export function AICleanEmptyState({
     once, so this needs no list of plan names to keep in step with billing —
     and an unknown entitlement counts as "do not show", never as "free".
   */
-  const showUpsell = !!entitlement && !entitlement.unlimited && entitlement.plan === "free";
+  const showUpsell =
+    !!entitlement && !entitlement.unlimited && (entitlement.audience === "free" || entitlement.audience === "guest");
 
   /*
     🔴 `canStart`, not `remainingToday === 0`. The server already folds every

@@ -37,106 +37,186 @@ export function FrenzAICta({ className }: { className?: string }) {
       href="/ai"
       prefetch={false}
       className={cn(
+        /*
+          ⚠️ `min-h` here is a FLOOR THAT CURRENTLY DOES NOTHING, and it is worth
+          knowing that before trusting it.
+
+          Measured on a Pixel 7 against a production build: the tile renders
+          188x168 and `getComputedStyle(tile).minHeight` is `0px` — even though
+          the class is on the element, the selector matches it, and the rule
+          `.min-h-\[11rem\]{min-height:11rem}` is present in the built CSS. The
+          same class list on a plain `<div>` outside the grid computes 188px, so
+          the utility itself is fine. Both tiles in this row behave the same way.
+
+          It is benign: the height is content-driven and nothing overflows
+          (`scrollHeight === clientHeight === 168`). It is left in place because
+          removing it would change nothing either — but do not reach for this
+          value to fix a height problem, because it will not move anything.
+        */
         "group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
-        "bg-gradient-to-br from-[#4f7ef8] via-[#7159f4] to-[#a855f7] text-white",
-        "shadow-[0_10px_30px_-10px_rgba(79,70,229,0.55)] ring-1 ring-inset ring-white/20",
+        /*
+          🔴 THE FIELD, MATCHED TO THE OWNER'S SCREENSHOT.
+
+          Owner, 2026-09-08: "make the frenz ai button to be exactly as it is on
+          this screenshot, exactly."
+
+          Corner for corner in that image: deep indigo bottom-left, electric
+          blue through the middle, magenta at the top-right. `to-tr` is what
+          puts the magenta in the corner it actually occupies — the previous
+          `to-br` ran the pink into the bottom-right, where the screenshot is
+          still blue.
+        */
+        "bg-gradient-to-tr from-[#2a1b9e] via-[#5b3ff0] to-[#d13ad6] text-white",
+        /*
+          The bloom. The tile in the screenshot sits in its own violet light
+          rather than on a flat drop shadow — two shadows, one tight and dark
+          for the lift, one wide and coloured for the glow. Both are painted
+          once and never animate, so the whole effect is free after first paint.
+        */
+        "shadow-[0_10px_30px_-12px_rgba(30,27,75,0.65),0_0_38px_-10px_rgba(192,38,211,0.55)]",
+        "ring-1 ring-inset ring-white/20",
         "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
         className,
       )}
     >
       {/*
-        ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ───────────────────
+        ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ─────────────────────────
 
         Owner, 2026-09-08: "the wallpaper button should be gradient ai ambient
         background that feels alive and move just like gemini, dont use an image
-        in the ai button."
+        in the ai button", then "the ai button blue is too dark, there should be
+        a touch of white background there. and and is just static it doesnt
+        move."
 
-        And, after seeing it: "the ai button blue is too dark, there should be a
-        touch of white background there. and and is just static it doesnt move."
+        Three elements, `transform` ONLY — no filter, no background-position, no
+        `backdrop-blur` anywhere near it. Transform is composited, so the main
+        thread never sees a frame of this; the softness is in each gradient's
+        own falloff, which is painted once. See app/globals.css for why the
+        cycles are 13/17/23s and why one of them has three stops.
 
-        Both were fair. The base was #101744 — near-black navy — so every blob
-        painted on top of it landed as a dark bruise rather than as light, and
-        the two of them were so large and so soft that their real, measured
-        travel was invisible. See app/globals.css for the motion rewrite; what
-        changed HERE is the palette.
-
-        ── THE WHITE IS A LAYER, NOT A TINT ────────────────────────────
-
-        Blob A is white and it MOVES, which is the difference between a tile
-        that has a touch of white in it and a tile that is simply lighter. A
-        static wash would have satisfied the words and missed the ask: light
-        drifting across a surface is the thing that reads as alive.
-
-        ── WHY THE SCRIM EXISTS ──────────────────────────────────
-
-        White text over a field with a white blob wandering through it is
-        unreadable for whatever seconds the blob spends behind the words — and
-        it would pass every review, because a screenshot only catches one frame
-        of a 13-second cycle. The scrim is a STATIC bottom gradient: painted
-        once, never animated, and it guarantees the copy reads at every frame
-        rather than at most of them. It is the same device the Wallpapers tile
-        beside it uses for its label.
+        That budget is the reason this tile can be elaborate at all: it sits on
+        a route held to 1.6 seconds, and this feature has already made the app
+        unresponsive twice.
       */}
       <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* A — the white. Fastest, so the light is what you notice moving. */}
+        {/* A — the gloss. The screenshot's bright diagonal sweep, and the
+            owner's "touch of white", as one moving highlight rather than a
+            static wash. */}
         <span
           className="frenz-ai-ambient-a absolute -left-1/3 -top-1/3 h-[130%] w-[130%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.42) 38%, rgba(255,255,255,0) 72%)",
+              "radial-gradient(closest-side, rgba(255,255,255,0.60) 0%, rgba(255,255,255,0.20) 42%, rgba(255,255,255,0) 74%)",
           }}
         />
-        {/* B — sky, sweeping up from the lower left. */}
+        {/* B — electric blue, sweeping up from the lower left. */}
         <span
           className="frenz-ai-ambient-b absolute -bottom-1/3 -left-1/4 h-[135%] w-[135%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(56,189,248,0.95) 0%, rgba(37,99,235,0.35) 45%, transparent 74%)",
+              "radial-gradient(closest-side, rgba(56,132,255,0.95) 0%, rgba(37,99,235,0.35) 45%, transparent 74%)",
           }}
         />
-        {/* C — fuchsia, on the three-stop circuit. */}
+        {/* C — magenta, on the three-stop circuit, anchored top-right where the
+            screenshot puts it. */}
         <span
           className="frenz-ai-ambient-c absolute -right-1/3 -top-1/4 h-[135%] w-[135%]"
           style={{
             background:
-              "radial-gradient(closest-side, rgba(240,120,255,0.85) 0%, rgba(168,85,247,0.3) 45%, transparent 74%)",
+              "radial-gradient(closest-side, rgba(240,110,255,0.90) 0%, rgba(168,85,247,0.32) 45%, transparent 74%)",
           }}
         />
       </span>
 
-      {/* The scrim. Static, painted once, and the only reason white type is
-          safe over a field with a white blob loose in it. */}
+      {/*
+        The scrim. Static, painted once, and the only reason white type is safe
+        over a field with a bright gloss loose in it — a screenshot only ever
+        catches one frame of a 13-second cycle, so legibility cannot be checked
+        by looking once.
+      */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#1e1650]/75 via-[#1e1650]/22 to-transparent"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#1e1650]/72 via-[#1e1650]/20 to-transparent"
       />
 
       {/*
-        🔴 A WAND, NOT A SPARKLE (owner: "the ai button icon should be something
-        more related to cleaning or ai").
+        ── 🔴 THE NEON RING ────────────────────────────────────────────────────
 
-        A four-pointed sparkle is the generic AI glyph every product uses, and
-        it says "something clever happens" rather than what. A wand is the verb:
-        it is what you point at a thing to remove what you do not want, and it
-        is already the badge on the AI work scene — so the two surfaces now
-        share one symbol for one action.
+        The one thing the screenshot has that the old tile did not: the wand
+        sits inside a glowing cyan-to-magenta circle rather than on a filled
+        disc.
+
+        Built as a two-element gradient border — a conic-gradient background
+        with 2px of padding, and an inner rounded-full that covers all but the
+        rim. That is deliberately NOT a `mask` or a `filter`: both would make
+        this a repainted layer, and it sits on the landing page. The bloom is
+        two `box-shadow`s, which are painted once and cost nothing thereafter.
+
+        The interior is translucent, so the ambient field drifts THROUGH the
+        ring exactly as it does in the screenshot, while staying dark enough
+        that the white glyph keeps its contrast at every frame.
       */}
-      <span className="relative z-[1] flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-fuchsia-600 text-white shadow-lg shadow-indigo-900/30 ring-1 ring-inset ring-white/30">
-        <Wand2 className="h-6 w-6" />
+      <span
+        aria-hidden
+        className="relative z-[1] flex h-[3.1rem] w-[3.1rem] shrink-0 items-center justify-center rounded-full p-[2px] shadow-[0_0_16px_-2px_rgba(217,70,239,0.75),0_0_30px_-4px_rgba(56,189,248,0.5)]"
+        style={{
+          background:
+            "conic-gradient(from 150deg, #22d3ee 0%, #3b82f6 22%, #a855f7 48%, #f0abfc 68%, #38bdf8 86%, #22d3ee 100%)",
+        }}
+      >
+        <span className="flex h-full w-full items-center justify-center rounded-full bg-[#241a6b]/50">
+          <Wand2 className="h-[1.35rem] w-[1.35rem] text-white" />
+        </span>
       </span>
 
-      <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
+      {/*
+        The sparkles, as in the screenshot: three four-point stars scattered
+        around the ring. One inline SVG path each, no animation, no library —
+        decoration that costs three static nodes.
+      */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 z-[1]">
+        <Spark className="absolute left-[4.6rem] top-[1.1rem] h-3.5 w-3.5 opacity-95" />
+        <Spark className="absolute left-[3.9rem] top-[2.9rem] h-2.5 w-2.5 opacity-80" />
+        <Spark className="absolute left-[1.15rem] top-[0.5rem] h-2 w-2 opacity-70" />
+      </span>
+
+      <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-3">
         <span className="min-w-0">
-          <span className="block text-base font-bold leading-tight">Frenz AI</span>
+          {/*
+            "Frenz" white, "AI" in the lighter periwinkle the screenshot uses.
+            One word in two weights of the same colour would have been a
+            different design; the tint is what makes it read as a product name.
+          */}
+          <span className="block text-[1.05rem] font-bold leading-tight tracking-[-0.01em]">
+            Frenz <span className="text-[#a9c4ff]">AI</span>
+          </span>
           <span className="mt-1 block text-xs leading-snug text-white/85">
             Remove captions and text from your videos.
           </span>
         </span>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/30 transition group-hover:bg-white/30">
-          <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
+        <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-inset ring-white/45 shadow-[0_0_14px_-4px_rgba(255,255,255,0.7)] transition group-hover:bg-white/25">
+          <ArrowRight className="h-[1.05rem] w-[1.05rem] text-white transition-transform group-hover:translate-x-0.5" />
         </span>
       </span>
     </Link>
+  );
+}
+
+/**
+ * A four-point sparkle.
+ *
+ * Its own component so the three instances share one path definition, and a
+ * bare `<svg>` rather than a lucide icon because lucide's sparkle is a
+ * three-star composite — at 8px that renders as a smudge. This is one curve.
+ *
+ * `aria-hidden` is on the wrapper, not here: the whole decorative layer is
+ * hidden from assistive technology in one place.
+ */
+function Spark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="white" aria-hidden focusable="false">
+      <path d="M12 0c.6 6.2 5.2 10.8 12 12-6.8 1.2-11.4 5.8-12 12-.6-6.2-5.2-10.8-12-12 6.8-1.2 11.4-5.8 12-12z" />
+    </svg>
   );
 }
 

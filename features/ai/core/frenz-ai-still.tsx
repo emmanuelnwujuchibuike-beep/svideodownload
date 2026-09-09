@@ -75,17 +75,48 @@ import { cn } from "@/lib/utils";
 export const FRENZ_AI_STILL_URL =
   "https://wmimmsrtafazowjperog.supabase.co/storage/v1/object/public/wallpapers/curated/1785785472277-08khse.jpg";
 
+/**
+ * A SECOND frame, for the progress card only.
+ *
+ * Owner, 2026-09-08: "this progress card uses the same image as the ai welcome
+ * page, use a different image for the progress card".
+ *
+ * 736x1448, 124 kB — a red-lit road tunnel cut into a snowy mountain: teal
+ * shadows around one warm glowing arch.
+ *
+ * 🔴 CHOSEN AT THE SIZE IT IS ACTUALLY SHOWN, which is ~140px wide. That ruled
+ * out more than it sounds. A photograph of an apartment block's lit windows —
+ * striking at full size — collapsed into visual noise at that scale. A violet
+ * gradient, the cheapest file of the lot at 30 kB and perfectly on-palette,
+ * read as an empty placeholder, which is the exact complaint ("the progress
+ * animation glass card is too empty") that put an image here in the first
+ * place. This one holds ONE bright focal point dead centre, so it still reads
+ * as a frame of real footage in a thumbnail.
+ *
+ * It is deliberately unlike the welcome still: warm where that one is cool, a
+ * single light source where that one is a silhouette. Two frames that differ
+ * only slightly look like the same picture failing to load twice.
+ *
+ * The extra fetch is real and bounded: one more image, on ONE screen, at 140px
+ * through next/image — a few kB of AVIF, no priority, below the fold.
+ */
+export const FRENZ_AI_PROGRESS_STILL_URL =
+  "https://wmimmsrtafazowjperog.supabase.co/storage/v1/object/public/wallpapers/curated/1785785470910-rlk78v.jpg";
+
 export function FrenzAIStill({
   /** The CSS width this will actually occupy — drives the variant fetched. */
   sizes,
   className,
+  /** "progress" uses the second frame; every other surface shares the first. */
+  variant = "default",
 }: {
   sizes: string;
   className?: string;
+  variant?: "default" | "progress";
 }) {
   return (
     <Image
-      src={FRENZ_AI_STILL_URL}
+      src={variant === "progress" ? FRENZ_AI_PROGRESS_STILL_URL : FRENZ_AI_STILL_URL}
       alt=""
       aria-hidden
       fill

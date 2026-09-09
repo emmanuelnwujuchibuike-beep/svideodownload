@@ -109,51 +109,52 @@ export function FrenzAIWorkScene({ className }: { className?: string }) {
       </svg>
 
       {/*
-        ── the stacked cards ──────────────────────────────────────────────
+        ── ONE card, centred ──────────────────────────────────────────────────
 
-        🔴 All three hold the frame now (owner, 2026-09-08: "this progress card
-        only have one wallpaper in one while the rest 2 crs are empty"). Two
-        empty tinted rectangles behind a filled one read as the image having
-        failed to load twice, which is the opposite of the reassurance this
-        screen exists to give.
+        🔴 Owner, 2026-09-08: "make it just one card, remove the rest, and just
+        leave a card on the middle."
 
-        It costs NOTHING extra: same url, same rendered width, so the browser
-        fetches and decodes ONE image and paints it three times. They are
-        progressively dimmed and desaturated so the front card still reads as
-        the subject rather than the three competing.
+        This went through three versions and the owner was right each time. It
+        began as one empty tinted rectangle with a play button ("the progress
+        animation glass card is too empty"), became three cards of which two
+        were empty ("only have one wallpaper in one while the rest 2 crs are
+        empty"), then three filled ones — at which point the honest read is that
+        a fan of overlapping thumbnails is decoration competing with itself. One
+        card is what the screen is about: THIS video, being worked on.
+
+        Fewer elements is also strictly cheaper: two fewer `next/image` nodes,
+        two fewer decodes, two fewer composited layers on a screen that already
+        broke the performance rule once with nine simultaneous animations.
+
+        ── Centred with a flex wrapper, NOT with -translate-x-1/2 ─────────────
+
+        `frenz-ai-breathe` animates `transform: scale()`. A translate-based
+        centring on the SAME element would be overwritten by the animation's
+        first keyframe and the card would jump to the top-left corner. So the
+        wrapper positions and the child breathes — two elements, one job each.
       */}
-      <span className="absolute left-[13%] top-[24%] h-24 w-28 -rotate-[10deg] overflow-hidden rounded-2xl opacity-45 ring-1 ring-inset ring-white/25">
-        <FrenzAIStill sizes="112px" className="saturate-[0.7]" />
-        <span aria-hidden className="absolute inset-0 bg-indigo-500/25" />
-      </span>
-      <span className="absolute left-[26%] top-[18%] h-28 w-32 -rotate-[4deg] overflow-hidden rounded-2xl opacity-70 ring-1 ring-inset ring-white/30">
-        <FrenzAIStill sizes="128px" className="saturate-[0.85]" />
-        <span aria-hidden className="absolute inset-0 bg-indigo-500/15" />
-      </span>
-
-      {/*
-        The front card, holding a real frame.
-
-        🔴 Owner, 2026-09-08: "the progress animation glass card is too empty."
-        It was — an empty tinted rectangle with a play button floating on it,
-        which read as a placeholder rather than as somebody's video being
-        worked on. The same still the welcome scene uses fills it, so this costs
-        NO extra fetch: one url, already in cache by the time anyone reaches
-        this screen.
-
-        A dark scrim sits over it so the white play button keeps its contrast
-        against whatever the photograph happens to be doing underneath.
-      */}
-      <span className="frenz-ai-breathe absolute left-[38%] top-[26%] flex h-24 w-32 items-center justify-center overflow-hidden rounded-2xl shadow-[0_16px_40px_-18px_rgb(79_70_229/0.8)] ring-1 ring-inset ring-white/40">
-        <FrenzAIStill sizes="128px" />
-        <span
-          aria-hidden
-          className="absolute inset-0 bg-gradient-to-br from-indigo-900/35 via-indigo-800/20 to-violet-900/35"
-        />
-        <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/90 shadow-[0_6px_18px_-4px_rgb(30_27_75/0.55)]">
-          <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5 fill-indigo-600">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="frenz-ai-breathe relative flex h-[6.5rem] w-[9rem] items-center justify-center overflow-hidden rounded-2xl shadow-[0_16px_40px_-18px_rgb(79_70_229/0.8)] ring-1 ring-inset ring-white/40">
+          {/*
+            A different frame from the welcome scene (owner: "use a different
+            image for the progress card"). See FRENZ_AI_PROGRESS_STILL_URL for
+            why this one and not the cheaper, on-palette gradient.
+          */}
+          <FrenzAIStill variant="progress" sizes="144px" />
+          {/*
+            The scrim is what keeps the white play button legible over whatever
+            the photograph is doing underneath — the reason this can carry a
+            real image at all rather than a flat tint.
+          */}
+          <span
+            aria-hidden
+            className="absolute inset-0 bg-gradient-to-br from-indigo-900/35 via-indigo-800/20 to-violet-900/35"
+          />
+          <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-white/90 shadow-[0_6px_18px_-4px_rgb(30_27_75/0.55)]">
+            <svg viewBox="0 0 24 24" className="ml-0.5 h-5 w-5 fill-indigo-600">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
         </span>
       </span>
 

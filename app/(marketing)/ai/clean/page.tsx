@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AICleanWorkspace } from "@/features/ai/ai-clean-workspace";
+import { AIDownloadOverlay } from "@/features/ai/ai-download-overlay";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 
@@ -69,6 +70,14 @@ export default async function PublicAICleanPage() {
       >
         <AICleanWorkspace />
       </main>
+      {/*
+        The download card, sound and haptic. This route is in the MARKETING
+        group, which has no AppOverlays — so an AI download finished here with
+        no card at all, and the visitor met it later on whichever page happened
+        to mount one. See the component for why it is here and not inside the
+        shared workspace.
+      */}
+      <AIDownloadOverlay />
       <SiteFooter />
     </>
   );

@@ -35,7 +35,26 @@ export function FrenzAICta({ className }: { className?: string }) {
   return (
     <Link
       href="/ai"
-      prefetch={false}
+      /*
+        ── 🔴 PREFETCHED, BECAUSE THE OWNER FELT THE COLD FETCH ───────────────
+
+        Owner, 2026-09-09: "the Frenz AI button doesn't respond on one tap, it
+        takes time and it lags when opening, it doesn't open instant smoothly."
+
+        `prefetch={false}` meant the tap was the FIRST time the browser asked
+        for the route: its RSC payload and its JavaScript chunks were fetched
+        after the finger came up, on whatever connection the phone had. That is
+        the delay — the destination is fine, it simply had not started loading.
+
+        Letting Next use its default (prefetch when the card scrolls into view)
+        moves that work to idle time, and it is nearly free here: /ai is ISR
+        with `revalidate = 300`, so the payload comes off the CDN rather than
+        being rendered per visitor.
+
+        ⚠️ Deliberately NOT `prefetch={true}`, which would fetch on mount for
+        everybody including people who never scroll to this tile. The default
+        heuristic is the one that respects the landing budget.
+      */
       className={cn(
         /*
           ⚠️ `min-h` here is a FLOOR THAT CURRENTLY DOES NOTHING, and it is worth

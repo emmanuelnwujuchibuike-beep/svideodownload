@@ -189,7 +189,8 @@ export function FrenzAIVignette() {
 
           <Link
             href="/ai"
-            prefetch={false}
+            // Prefetched by default (no prefetch={false}) — same reason as the
+            // CTA tile: the tap should not be the first request for the route.
             onClick={dismiss}
             className="relative z-[1] mt-3.5 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-500 px-5 py-3 text-sm font-bold text-white shadow-[0_12px_28px_-10px_rgb(37_99_235/0.9)] transition active:scale-[0.99]"
           >

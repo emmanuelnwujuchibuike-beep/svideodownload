@@ -160,6 +160,15 @@ export function AiJobAlert() {
         haptic("medium");
       }
 
+      /*
+        🔴 Tell the dashboard its numbers are stale. A finished job has just
+        spent either a free slot or real money, and the panel showing that
+        balance may be on screen behind this banner — polling it would be the
+        battery rule broken for a number that changes twice a day, so the one
+        component that KNOWS a job ended says so instead.
+      */
+      window.dispatchEvent(new Event("frenz-ai:job-finished"));
+
       if (onWorkspace) return;
 
       // Mounted closed; the effect above opens it on the next frame so the

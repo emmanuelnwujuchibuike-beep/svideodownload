@@ -1,0 +1,250 @@
+import { ChevronRight, History, ImageIcon, Scissors, Sparkles, Wand2 } from "lucide-react";
+import Link from "next/link";
+
+import { cn } from "@/lib/utils";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  MORE AI TOOLS — the 2×2 grid from the reference
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, with a full-page screenshot: "Make the Ai welcome page to
+ * be exactly like this in details no simplifying only make the performance
+ * faster and smoother on all devices, on all devices the Down section should be
+ * grid… replace 1 card that isn't a real feature with the Ai history button.
+ * There should be no cluster."
+ *
+ * ── 🔴 TWO COLUMNS AT EVERY WIDTH, INCLUDING THE SMALLEST PHONE ─────────────
+ *
+ * `grid-cols-2` with no breakpoint. The instruction is explicit ("on all
+ * devices the Down section should be grid"), and the reference is drawn on a
+ * phone showing two across — so a responsive single column would be the
+ * simplification the same sentence rules out.
+ *
+ * That constrains the card: at 2-up on a 360px screen each is ~160px wide, so
+ * the title is one line, the blurb is clamped to three, and nothing else
+ * competes. Getting that budget wrong is precisely the "cluster" being warned
+ * against.
+ *
+ * ── 🔴 THE PREVIEWS ARE PAINTED, NOT FETCHED ────────────────────────────────
+ *
+ * The reference shows a small photo on each card. Four photographs would be
+ * four network requests, four decodes and four layout shifts on a page whose
+ * own instruction is "make the performance faster and smoother on all devices"
+ * — and this page already refuses per-tile images in the history grid for the
+ * same reason.
+ *
+ * So each preview is a CSS gradient with the tool's own glyph over it: the same
+ * shape, the same position, the same weight in the composition, and zero bytes.
+ * It reads as a thumbnail without being one.
+ *
+ * ── 🔴 A SERVER COMPONENT ───────────────────────────────────────────────────
+ *
+ * No `"use client"`, no hooks, no state. Four cards of static markup have no
+ * business in the hydration budget — and this file's neighbour
+ * (frenz-ai-tool-card.tsx) carries a note about what marking one of these a
+ * client component cost last time.
+ */
+
+interface AiTool {
+  id: string;
+  name: string;
+  blurb: string;
+  icon: typeof Wand2;
+  /** Null means "not built yet" — the card says so instead of pretending. */
+  href: string | null;
+  /** The icon tile's gradient, and the preview's tint. */
+  accent: string;
+  preview: string;
+}
+
+/**
+ * ── 🔴 WHICH FOUR, AND WHY ONE IS NOT ON THE REFERENCE ──────────────────────
+ *
+ * The screenshot draws AI Clean, AI Enhance, AI Video Edit and AI Text Remover.
+ * The owner's instruction: "replace 1 card that isn't a real feature with the
+ * Ai history button."
+ *
+ * AI Text Remover is the one to go, and it is not an arbitrary pick — it is the
+ * only card that is BOTH unbuilt and a description of what AI Clean already
+ * does. Two cards on one grid promising to remove text from videos is the
+ * clutter the same message asks to avoid, quite apart from neither of them
+ * being a second product.
+ *
+ * Enhance and Video Edit stay as drawn: they are genuinely different tools, and
+ * a roadmap the owner is showing on purpose. They carry no href, so the card
+ * renders as a plain panel that says "Soon" rather than a control that answers
+ * a tap with nothing.
+ */
+function tools(cleanHref: string, historyHref: string): AiTool[] {
+  return [
+    {
+      id: "clean",
+      name: "AI Clean",
+      blurb: "Remove unwanted text, subtitles and captions.",
+      icon: Wand2,
+      href: cleanHref,
+      accent: "from-blue-600 to-indigo-600",
+      preview: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.10))",
+    },
+    {
+      id: "enhance",
+      name: "AI Enhance",
+      blurb: "Upscale, sharpen and improve your image quality with AI.",
+      icon: ImageIcon,
+      href: null,
+      accent: "from-fuchsia-500 to-pink-600",
+      preview: "linear-gradient(135deg, rgba(217,70,239,0.16), rgba(236,72,153,0.10))",
+    },
+    {
+      id: "video-edit",
+      name: "AI Video Edit",
+      blurb: "Trim, cut, enhance and make your videos look professional.",
+      icon: Scissors,
+      href: null,
+      accent: "from-emerald-500 to-green-600",
+      preview: "linear-gradient(135deg, rgba(16,185,129,0.16), rgba(34,197,94,0.10))",
+    },
+    {
+      /*
+        🔴 The replacement, and it is a REAL destination — which is the whole
+        point of swapping it in. Three cards that cannot be tapped and one that
+        can is a grid that mostly does nothing; two working doors changes what
+        the section is for.
+      */
+      id: "history",
+      name: "Your AI videos",
+      blurb: "Everything you have cleaned, kept for three days.",
+      icon: History,
+      href: historyHref,
+      accent: "from-amber-500 to-orange-600",
+      preview: "linear-gradient(135deg, rgba(245,158,11,0.16), rgba(249,115,22,0.10))",
+    },
+  ];
+}
+
+export function FrenzAIToolGrid({
+  cleanHref,
+  historyHref,
+  className,
+}: {
+  cleanHref: string;
+  historyHref: string;
+  className?: string;
+}) {
+  const items = tools(cleanHref, historyHref);
+
+  return (
+    <section className={cn(className)} aria-labelledby="frenz-ai-tools-heading">
+      {/* ── the section header, as drawn ──────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2
+            id="frenz-ai-tools-heading"
+            className="flex items-center gap-2 text-[1.15rem] font-bold tracking-[-0.02em]"
+          >
+            <Sparkles className="h-[18px] w-[18px] text-primary" aria-hidden />
+            More AI Tools
+          </h2>
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+            Explore other powerful AI tools to edit, enhance and transform your content.
+          </p>
+        </div>
+      </div>
+
+      {/*
+        🔴 `grid-cols-2` with NO breakpoint — the instruction is "on all devices
+        the Down section should be grid". `lg:grid-cols-4` only widens it on a
+        desktop, where two columns would leave the cards absurdly wide; it never
+        narrows below two.
+      */}
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {items.map((tool) => (
+          <ToolCard key={tool.id} tool={tool} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ToolCard({ tool }: { tool: AiTool }) {
+  const { icon: Icon, href, name, blurb, accent, preview } = tool;
+  const open = href !== null;
+
+  const body = (
+    <>
+      {/* Icon tile and preview, side by side — the reference's top row. */}
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className={cn(
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm",
+            accent,
+            !open && "opacity-60 saturate-50",
+          )}
+        >
+          <Icon className="h-[21px] w-[21px]" aria-hidden />
+        </span>
+
+        {/*
+          The "thumbnail". Painted, not fetched — see the note at the top. It is
+          `aria-hidden` because it carries no information a screen reader could
+          use; the title and blurb say what the card is.
+        */}
+        <span
+          aria-hidden
+          className="hidden h-11 w-[52px] shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ring-black/[0.04] dark:ring-white/10 min-[340px]:flex"
+          style={{ background: preview }}
+        >
+          <Icon className="h-4 w-4 text-foreground/35" />
+        </span>
+      </div>
+
+      <h3 className={cn("mt-3 text-[14.5px] font-bold leading-tight", !open && "text-muted-foreground")}>
+        {name}
+      </h3>
+      {/*
+        🔴 Clamped to three lines. At two columns on a 360px phone a card is
+        ~160px wide, and an unclamped blurb pushes one card taller than its
+        row-mate — which is what "cluster" looks like in a grid.
+      */}
+      <p className="mt-1 line-clamp-3 text-[12px] leading-snug text-muted-foreground">{blurb}</p>
+
+      <div className="mt-auto flex items-center justify-end pt-3">
+        {open ? (
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/80 ring-1 ring-inset ring-black/[0.06] transition group-hover:bg-background dark:ring-white/10">
+            <ChevronRight className="h-4 w-4 text-foreground/70" aria-hidden />
+          </span>
+        ) : (
+          /*
+            Not a chevron. A card that cannot be opened must not wear the mark
+            of one that can — this feature has a standing rule against controls
+            that answer a tap with nothing.
+          */
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Soon
+          </span>
+        )}
+      </div>
+    </>
+  );
+
+  const shell = cn(
+    "group flex min-h-[9.5rem] flex-col rounded-[1.25rem] p-3.5",
+    "bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10",
+    open &&
+      "transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99] shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)]",
+  );
+
+  /*
+    🔴 A LINK ONLY WHEN THERE IS SOMEWHERE TO GO. An unbuilt tool renders as a
+    `div`: not focusable, not pressable, and not announced as a link that leads
+    nowhere.
+  */
+  return open ? (
+    <Link href={href!} prefetch={false} className={shell}>
+      {body}
+    </Link>
+  ) : (
+    <div className={shell}>{body}</div>
+  );
+}

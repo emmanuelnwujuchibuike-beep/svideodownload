@@ -7,6 +7,7 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIInputScene } from "@/features/ai/core/frenz-ai-input-scene";
 import { AICleanLimitReached } from "@/features/ai/ai-clean-limit-reached";
 import { AICleanUpload } from "@/features/ai/ai-clean-upload";
+import { FrenzAIDashboard } from "@/features/ai/frenz-ai-dashboard";
 import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import type { AiCleanEntitlement } from "@/lib/ai/client";
 
@@ -134,6 +135,23 @@ export function AICleanEmptyState({
         loaded value, so an unanswered request shows the picker rather than
         locking somebody out of a tool they are entitled to.
       */}
+      {/*
+        ── 🔴 THE DASHBOARD, ON THE PAGE THE OWNER POINTED AT ────────────────
+
+        Owner, 2026-09-09, with a screenshot of THIS screen: "I still don't see
+        the dashboard and all we have been doing about the dashboard, deposit,
+        usage and all, it should be on this page."
+
+        Balance, both free counters, the price per video, the recharge amounts
+        and recent ledger activity — above the drop zone, because how many
+        videos somebody has left is the thing that decides whether they pick a
+        file at all.
+
+        It renders nothing until it has real numbers, so it costs this screen no
+        layout shift and no skeleton. See the component.
+      */}
+      <FrenzAIDashboard historyHref={historyHref} className="mt-5" />
+
       {limitReached && entitlement ? (
         <AICleanLimitReached entitlement={entitlement} className="mt-5" />
       ) : (

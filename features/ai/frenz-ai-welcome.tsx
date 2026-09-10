@@ -8,7 +8,8 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIBeforeAfterScene } from "@/features/ai/core/frenz-ai-before-after-scene";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
-import { FrenzAIHistoryLink } from "@/features/ai/frenz-ai-history-link";
+import { FrenzAIDashboard } from "@/features/ai/frenz-ai-dashboard";
+import { FrenzAIToolGrid } from "@/features/ai/frenz-ai-tool-grid";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
 import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client";
 import { cn } from "@/lib/utils";
@@ -148,6 +149,13 @@ export function FrenzAIWelcome({
 
 
 
+        {/*
+          🔴 KEPT, EXPLICITLY. Owner, 2026-09-09: "Do not remove the existing
+          plan description and the amount left and used." The reference
+          screenshot does not draw these, and building only what it draws would
+          have quietly deleted the one thing on this page that tells somebody
+          what they have left.
+        */}
         <FrenzAIAllowanceBar entitlement={entitlement} className="mt-4" />
 
         {/*
@@ -156,9 +164,44 @@ export function FrenzAIWelcome({
         */}
         <FrenzAITierLabel entitlement={entitlement} variant="row" className="mt-4" />
 
-        <FrenzAIHistoryLink href={historyHref} className="mt-4" />
+        {/*
+          ── 🔴 THE DASHBOARD (owner, 2026-09-09) ──────────────────────────
+
+          "I still don't see the dashboard and all we have been doing about the
+          dashboard, deposit, usage and all, it should be on this page."
+
+          Balance, both free counters, the price per video, the recharge
+          amounts and recent ledger activity. It renders NOTHING until it has
+          real numbers — see the component for why a skeleton of zeroes is a
+          statement about somebody's account rather than a placeholder.
+        */}
+        <FrenzAIDashboard historyHref={historyHref} className="mt-4" />
+
+        {/*
+          ── 🔴 THE HISTORY LINK IS GONE FROM HERE, NOT DELETED ──────────────
+
+          It moved into the tool grid below as a full card, which is what the
+          owner asked for ("replace 1 card that isn't a real feature with the
+          Ai history button"). Leaving this row as well would put the same
+          destination on the page twice, three inches apart — the "cluster" the
+          same instruction warns against.
+        */}
 
         <FrenzAITrustRow className="mt-6" />
+
+        {/*
+          ── 🔴 THE TOOL GRID, AS DRAWN ─────────────────────────────────────
+
+          Owner, 2026-09-09, with a full-page screenshot: "Make the Ai welcome
+          page to be exactly like this in details no simplifying… on all
+          devices the Down section should be grid."
+
+          Two columns at every width, painted previews rather than photographs,
+          and the AI history as one of the four cards. See the component for
+          why the fourth card is history rather than the "AI Text Remover" the
+          reference draws.
+        */}
+        <FrenzAIToolGrid cleanHref={cleanHref} historyHref={historyHref} className="mt-8" />
       </div>
     </FrenzAIEnvironment>
   );

@@ -6,6 +6,7 @@ import {
   buildTextMaskArgs,
   MASK_REFINE_MIN_RATIO,
   maskRefineGrow,
+  maskCompositeFeather,
   parseMaskCoverage,
 } from "@/lib/ai/ffmpeg-plan";
 
@@ -521,5 +522,69 @@ describe("maskRefineGrow", () => {
     const count = (g: string) => (g.slice(g.indexOf("gt(A,127)")).match(/dilation/g) ?? []).length;
     expect(count(at1080)).toBe(5);
     expect(count(at480)).toBe(2);
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE SEAM — "the text area is showing darker than the main picture"
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09. The job row says why: `propainter_resized =
+ * 480x848->1080x1920`. ProPainter clamps its own working resolution, so the
+ * repaired region is a 480p reconstruction upscaled 2.25x and dropped into a
+ * 1080p original. It is genuinely softer and slightly different in tone — and
+ * against a HARD mask edge that difference reads as a visible rectangle, which
+ * is what a hard edge is for.
+ */
+describe("the composite feathers its seam", () => {
+  const graphAt = (w: number, h: number) =>
+    graphOf(
+      buildMaskedCompositeArgs({
+        sourcePath: "/tmp/s.mp4",
+        reconstructedPath: "/tmp/r.mp4",
+        maskPath: "/tmp/m.mp4",
+        outPath: "/tmp/o.mp4",
+        width: w,
+        height: h,
+        fps: 30,
+      }),
+    );
+
+  it("ramps the mask edge instead of cutting it", () => {
+    expect(graphAt(1080, 1920)).toContain("gblur=sigma=");
+  });
+
+  /*
+    🔴 THE ORDER IS THE WHOLE SAFETY PROPERTY. A ramp mixes the ORIGINAL back in
+    at partial strength. Applied straight to a glyph mask that would mix the
+    TEXT back in around every letter — the exact ghost the halo fix removed, at
+    the exact place it was worst. Dilating first puts the ramp in clean
+    background, where mixing the original back is not merely harmless but right.
+  */
+  it("dilates BEFORE it blurs, so the ramp never sits over text", () => {
+    const g = graphAt(1080, 1920);
+    const maskChain = g.slice(g.indexOf("[2:v]"), g.indexOf("[base][fix][m]"));
+    expect(maskChain.indexOf("dilation")).toBeLessThan(maskChain.indexOf("gblur"));
+    // …and the threshold comes before both, or there is nothing crisp to grow.
+    expect(maskChain.indexOf("geq=lum=")).toBeLessThan(maskChain.indexOf("dilation"));
+  });
+
+  it("grows the mask by at least the blur radius", () => {
+    const g = graphAt(1080, 1920);
+    const maskChain = g.slice(g.indexOf("[2:v]"), g.indexOf("[base][fix][m]"));
+    const dilations = (maskChain.match(/dilation/g) ?? []).length;
+    const sigma = Number(/gblur=sigma=(\d+)/.exec(maskChain)?.[1]);
+    expect(sigma).toBeGreaterThan(0);
+    // A blur wider than its dilation is the ghost coming back.
+    expect(dilations).toBeGreaterThanOrEqual(sigma);
+  });
+
+  it("scales with the frame, like the glyph grow it must stay in proportion to", () => {
+    expect(maskCompositeFeather(480, 854)).toBe(3);
+    expect(maskCompositeFeather(1080, 1920)).toBeGreaterThan(3);
+    expect(maskCompositeFeather(4320, 7680)).toBeLessThanOrEqual(10);
+    // Unmeasurable frame → the baseline, never the ceiling.
+    expect(maskCompositeFeather(null, null)).toBe(3);
   });
 });

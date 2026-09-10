@@ -29,7 +29,7 @@ import { propainterResizeRatio } from "@/lib/ai/propainter-plan";
  * "didn't finish" with no hint that the cause was a number in a config file.
  */
 describe("propainterResizeRatio", () => {
-  const budget = 409_920; // 480x854 — an area known to have succeeded.
+  const budget = 614_400; // 640x960 — see the note on AI_CLEAN_PROPAINTER.maxPixels.
 
   it("leaves a clip that already fits completely alone", () => {
     // The owner's Snapchat clip, which is exactly the budget.
@@ -43,9 +43,20 @@ describe("propainterResizeRatio", () => {
     against a 409,920 budget, so it must come down — and to roughly two thirds,
     which is a fifth of the memory because the cost is quadratic.
   */
-  it("brings the 720x1280 clip that OOM'd under budget", () => {
+  it("brings the 1080x1920 clip that OOM'd under budget", () => {
+    const ratio = propainterResizeRatio(1080, 1920, budget);
+    expect(ratio).toBeCloseTo(0.54, 2);
+    expect(1080 * ratio * (1920 * ratio)).toBeLessThanOrEqual(budget);
+  });
+
+  /*
+    🔴 A 720p clip now keeps 81% of its linear resolution, where the old budget
+    cut it to 66%. That is the point of the raise: the repaired patch is closer
+    to the resolution of the picture it sits in.
+  */
+  it("reduces a 720x1280 clip far less than the old budget did", () => {
     const ratio = propainterResizeRatio(720, 1280, budget);
-    expect(ratio).toBeCloseTo(0.66, 2);
+    expect(ratio).toBeCloseTo(0.81, 2);
     expect(720 * ratio * (1280 * ratio)).toBeLessThanOrEqual(budget);
   });
 
@@ -87,6 +98,9 @@ describe("propainterResizeRatio", () => {
   });
 
   it("the shipped budget is the area that was measured, not a round number", () => {
-    expect(AI_CLEAN_PROPAINTER.maxPixels).toBe(480 * 854);
+    // 640x960 — see the long note on `maxPixels`. The budget moved up once the
+    // seam feather made clear that the PATCH resolution, not the edge, was the
+    // remaining complaint.
+    expect(AI_CLEAN_PROPAINTER.maxPixels).toBe(640 * 960);
   });
 });

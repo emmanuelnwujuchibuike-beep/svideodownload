@@ -348,6 +348,25 @@ function WallpaperCard({
         "transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]",
         className,
       )}
+      /*
+        🔴 THE SAME INLINE minHeight ITS ROW-MATE CARRIES.
+
+        Owner, 2026-09-09: "the wallpaper and ai features button in the landing
+        page is still shorter [than] the button in download page."
+
+        `min-h-[11rem]` is on the class list above and computes to `0px` inside
+        this grid — measured on a Pixel 7 against a production build; see the
+        long note in features/downloads/frenz-ai-cta.tsx. So every tile in this
+        row is sized by its CONTENT, and the row ends up as tall as whichever
+        tile holds the most. That is exactly why the pair differs between the
+        landing page and /downloads: the tile beside this one is not the same
+        tile on the two pages.
+
+        The value is identical on all three tiles, so the row is the same height
+        everywhere by construction. Inline rather than a class because the class
+        demonstrably does not apply here.
+      */
+      style={{ minHeight: "11rem" }}
     >
       {/* 🔴 The landing page's LCP element — see WallpaperBackdrop for the
           measurement and for why this stopped being a CSS background.

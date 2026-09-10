@@ -743,6 +743,34 @@ export function parseMaskCoverage(raw: string): number | null {
   return mean / 255;
 }
 
+/**
+ * How wide the composite's seam ramp is, in pixels.
+ *
+ * ── 🔴 IT IS BOTH THE DILATION AND THE BLUR SIGMA ───────────────────────────
+ *
+ * One number drives both because they have to agree: the mask is grown by this
+ * much so that the blur of this much lands entirely OUTSIDE the text. Split
+ * into two constants they would drift, and the failure mode of a blur wider
+ * than its dilation is the ghost coming back around every letter.
+ *
+ * 3px at a 480px short edge, scaling up — measured against the same baseline as
+ * `maskRefineGrow`, so the feather and the glyph grow stay in proportion. The
+ * ceiling matters: a very wide ramp starts mixing the reconstruction into
+ * picture that never needed repairing, which is the opposite failure.
+ */
+const COMPOSITE_FEATHER_BASE = 3;
+const COMPOSITE_FEATHER_MAX = 10;
+
+export function maskCompositeFeather(
+  width: number | null | undefined,
+  height: number | null | undefined,
+): number {
+  const shortEdge = Math.min(width || 0, height || 0);
+  if (!Number.isFinite(shortEdge) || shortEdge <= 0) return COMPOSITE_FEATHER_BASE;
+  const scaled = Math.round((shortEdge / MASK_REFINE_GROW_REFERENCE_EDGE) * COMPOSITE_FEATHER_BASE);
+  return Math.max(COMPOSITE_FEATHER_BASE, Math.min(COMPOSITE_FEATHER_MAX, scaled));
+}
+
 /* ─────────────────────── keeping the untouched picture ───────────────────── */
 
 /**
@@ -811,6 +839,14 @@ export function buildMaskedCompositeArgs(plan: {
   fps: number;
 }): string[] {
   const size = `${plan.width}x${plan.height}`;
+  /*
+    🔴 The seam scales with the frame, exactly as the glyph halo does. A 3px
+    ramp is a soft blend at 480p and a hairline at 1080p — and a hairline
+    between a 480p-upscaled patch and a 1080p original is still a visible edge.
+    Baselined on the same 480px short edge `maskRefineGrow` uses, so the two
+    stay in proportion to each other and to the text.
+  */
+  const feather = maskCompositeFeather(plan.width, plan.height);
   return [
     "-hide_banner",
     "-loglevel",
@@ -866,7 +902,44 @@ export function buildMaskedCompositeArgs(plan: {
         showing through the repair. `geq` puts every pixel back to 0 or 255,
         and `format=gbrp` then replicates that into all three planes.
       */
-      `[2:v]scale=${size},format=gray,geq=lum='if(gt(p(X\\,Y)\\,127)\\,255\\,0)',format=gbrp[m];` +
+      /*
+        ══════════════════════════════════════════════════════════════════════
+         🔴 THRESHOLD, THEN DILATE, THEN FEATHER — IN THAT ORDER
+        ══════════════════════════════════════════════════════════════════════
+
+        Owner, 2026-09-09: "The text area is still showing darker than the main
+        picture making the text visible."
+
+        The patch really IS different from its surroundings, and the job row
+        says why: `propainter_resized = 480x848->1080x1920`. ProPainter clamps
+        its own working resolution, so the repaired region is a 480p
+        reconstruction upscaled 2.25x and dropped into a 1080p original. It is
+        softer and slightly different in tone — and against a HARD mask edge
+        that difference reads as a visible rectangle, which is exactly what a
+        hard edge is for: making two things look like two things.
+
+        Feathering the mask turns that edge into a ramp, so the two blend
+        instead of abutting. `maskedmerge` already blends proportionally on a
+        grey value; it was being denied the chance by the hard threshold.
+
+        ── 🔴 THE DILATION IS WHAT MAKES THE FEATHER SAFE ────────────────────
+
+        A ramp means the ORIGINAL is mixed back in at partial strength. Applied
+        directly to the glyph mask, that would mix the TEXT back in around every
+        letter — reintroducing the exact ghost the halo fix removed, at the
+        exact place it was worst.
+
+        So the mask is grown by roughly the feather radius FIRST. The ramp then
+        lives entirely in the band of clean background just outside the text,
+        where mixing the original back in is not merely harmless but correct:
+        that is where the two images should agree.
+
+        Verified on a synthetic pair (pure red base, pure blue overlay): deep
+        inside each region the output is exactly that colour, and only the seam
+        blends. Order matters — feather before dilate and the ghost comes back.
+      */
+      `[2:v]scale=${size},format=gray,geq=lum='if(gt(p(X\\,Y)\\,127)\\,255\\,0)',` +
+      `${Array(feather).fill("dilation").join(",")},gblur=sigma=${feather},format=gbrp[m];` +
       `[base][fix][m]maskedmerge,format=yuv420p[out]`,
     "-map",
     "[out]",

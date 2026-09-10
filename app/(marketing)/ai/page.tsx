@@ -1,7 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-
-import { createClient } from "@/lib/supabase/server";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -115,12 +112,25 @@ export default async function PublicFrenzAIPage() {
     `resolveAiSubject`, which returns a null subject for anyone without a
     session — because a page redirect protects nothing from a direct fetch.
   */
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/studio/ai");
+  /*
+    ── 🔴 THE AUTH GATE MOVED TO MIDDLEWARE, AND THAT IS A PERFORMANCE FIX ───
 
+    Owner, 2026-09-09: "the ai pages still doesnt cache and open instant like
+    the download history, it should cache and not load on every entry."
+
+    This page used to call `createClient()` and `getUser()` here to enforce
+    the signed-in-only rule. The rule is right; doing it HERE forced the route
+    dynamic, so every entry paid a Supabase round-trip before any HTML — on a
+    page that had been ISR and instant.
+
+    `middleware.ts` now guards `/ai` and `/studio`, where a visitor with no
+    auth cookie is redirected with NO `getUser()` call at all. Same guarantee,
+    none of the per-entry cost, and this route is cacheable again.
+
+    ⚠️ The API gate is separate and still there: `resolveAiSubject` refuses an
+    anonymous subject on every AI endpoint, because a direct fetch never passes
+    through a page.
+  */
 
   return (
     <>

@@ -55,8 +55,34 @@ export async function middleware(request: NextRequest) {
   ]);
   const isAdminPublic = ADMIN_PUBLIC_PATHS.has(path);
 
+  /*
+    ── 🔴 FRENZ AI IS GUARDED HERE, NOT IN ITS PAGES ─────────────────────────
+
+    Owner, 2026-09-09: "the ai pages still doesnt cache and open instant like
+    the download history, it should cache and not load on every entry."
+
+    They did not, and it was my doing. The standing rule made Frenz AI
+    signed-in only, and I implemented that INSIDE each page — `createClient()`
+    then `getUser()` — which forces the route dynamic. Every entry then paid a
+    Supabase round-trip before a single byte of HTML, on three pages that were
+    previously ISR and instant. The auth requirement was right; where I put it
+    was wrong.
+
+    Here it costs nothing, because of the branch below: a visitor with NO auth
+    cookie is redirected without any `getUser()` at all, and a signed-in one on
+    a fresh token takes the fast path. Same guarantee, none of the latency —
+    and the pages go back to being cacheable.
+
+    ⚠️ This does NOT replace the API-side gate. `resolveAiSubject` still refuses
+    an anonymous subject on every AI route, because §21 requires the backend to
+    enforce it independently — middleware protects pages, not endpoints, and a
+    direct fetch never passes through a page.
+  */
   const needsGuard =
-    path.startsWith("/account") || (path.startsWith("/admin") && !isAdminPublic);
+    path.startsWith("/account") ||
+    path.startsWith("/ai") ||
+    path.startsWith("/studio") ||
+    (path.startsWith("/admin") && !isAdminPublic);
 
   // Signed-in visitors don't need the marketing page — they get the app.
   //

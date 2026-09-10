@@ -100,6 +100,25 @@ export function FrenzAICta({ className }: { className?: string }) {
         "transition duration-200 hover:-translate-y-0.5 active:scale-[0.995]",
         className,
       )}
+      /*
+        🔴 AN INLINE minHeight, BECAUSE THE UTILITY CLASS IS INERT HERE.
+
+        Owner, 2026-09-09: "the wallpaper and ai features button in the landing
+        page is still shorter [than] the button in download page."
+
+        The note above records the measurement: `min-h-[11rem]` is on this
+        element, its rule is in the built CSS, the selector matches — and
+        `getComputedStyle(tile).minHeight` is `0px` inside this grid. So every
+        tile in that row has been sized by its CONTENT, and the landing tile is
+        shorter for the honest reason that it holds less.
+
+        An inline style is not a preference over the class; it is the one form
+        of this rule that survives whatever is defeating the utility. All three
+        tiles carry the identical value, so the row is the same height on both
+        pages by construction rather than by whichever happens to have the most
+        words in it.
+      */
+      style={{ minHeight: "11rem" }}
     >
       {/*
         ── 🔴 A LIVING AMBIENT FIELD, NOT A PHOTOGRAPH ─────────────────────────
@@ -302,6 +321,25 @@ export function ExploreFeaturesBar({
           : "flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)]",
         className,
       )}
+      /*
+        🔴 AN INLINE minHeight, BECAUSE THE UTILITY CLASS IS INERT HERE.
+
+        Owner, 2026-09-09: "the wallpaper and ai features button in the landing
+        page is still shorter [than] the button in download page."
+
+        The note above records the measurement: `min-h-[11rem]` is on this
+        element, its rule is in the built CSS, the selector matches — and
+        `getComputedStyle(tile).minHeight` is `0px` inside this grid. So every
+        tile in that row has been sized by its CONTENT, and the landing tile is
+        shorter for the honest reason that it holds less.
+
+        An inline style is not a preference over the class; it is the one form
+        of this rule that survives whatever is defeating the utility. All three
+        tiles carry the identical value, so the row is the same height on both
+        pages by construction rather than by whichever happens to have the most
+        words in it.
+      */
+      style={{ minHeight: "11rem" }}
     >
       {/*
         ── 🔴 THE GRADIENT, AS A STATIC WASH ────────────────────────────────

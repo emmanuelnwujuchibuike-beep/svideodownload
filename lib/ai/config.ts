@@ -463,7 +463,30 @@ export const AI_CLEAN_PROPAINTER = {
    * is put back to its exact source size afterwards by
    * `buildResizeToSourceArgs`.
    */
-  maxPixels: envInt("AI_CLEAN_PROPAINTER_MAX_PIXELS", 409_920),
+  /**
+   * ── 🔴 RAISED 409,920 → 614,400 (2026-09-09) ──────────────────────────────
+   *
+   * Owner: "The text area is still showing darker than the main picture."
+   *
+   * The repaired patch is genuinely lower resolution than the picture around
+   * it. `propainter_resized = 480x848->1080x1920` on every 1080p job: the
+   * reconstruction happens at 480p and is upscaled 2.25x into a full-res
+   * frame, so it is softer and slightly different in tone. Feathering the seam
+   * hides the EDGE; only more pixels fix the patch itself.
+   *
+   * 614,400 is 640x960 — 1.5x the area, so 1.22x the linear resolution. RAFT's
+   * correlation volume is quadratic in area, so this is 2.25x the memory of the
+   * old budget: against the ~3 GiB the 480x854 runs used, roughly 7 GiB on a
+   * 44 GiB card. The failures that set the original number were asking for
+   * 15.64 GiB at full 1080p, so this sits well inside the gap between what
+   * worked and what did not.
+   *
+   * ⚠️ NOT raised to 720p (921,600). That is 5x the old memory — close enough
+   * to the number that actually OOM'd that a busier card would fail, and a
+   * failed job is a far worse outcome than a slightly soft patch. The env var
+   * is there to try it deliberately.
+   */
+  maxPixels: envInt("AI_CLEAN_PROPAINTER_MAX_PIXELS", 614_400),
   subvideoLength: envInt("AI_CLEAN_PROPAINTER_SUBVIDEO", 40),
   /** Local frames each output frame may borrow from. 10 -> 6 for memory. */
   neighborLength: envInt("AI_CLEAN_PROPAINTER_NEIGHBOR", 6),

@@ -1,7 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-
-import { createClient } from "@/lib/supabase/server";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -54,8 +51,29 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
-// A live list: it reads a session and a guest cookie on every request.
-export const dynamic = "force-dynamic";
+/*
+  ── 🔴 STATIC AGAIN, AND THAT IS THE "OPEN INSTANT" FIX ────────────────────
+
+  Owner, 2026-09-09: "all the ai pages should cache and open instant like how
+  other pages does."
+
+  This was `force-dynamic` with the comment "a live tool: it reads a session and
+  a guest cookie on every request". That WAS true, and it is not any more: the
+  session read moved to middleware and the guest cookie no longer exists (Frenz
+  AI is signed-in only). What is left on the server is a header, a footer and
+  two client components — nothing request-scoped at all.
+
+  So the document is prerendered and served from the edge, and everything that
+  actually varies per member is fetched by the client components inside it,
+  which already paint from their own localStorage cache on the first frame
+  (lib/ai/history-cache.ts). That combination is what makes the download
+  history feel instant, and it is now the same combination here.
+
+  ⚠️ Access is unaffected: middleware redirects an unauthenticated request
+  before this document is ever served, and every AI endpoint refuses an
+  anonymous subject independently.
+*/
+export const dynamic = "force-static";
 
 export default async function PublicFrenzAIHistoryPage() {
 
@@ -83,12 +101,25 @@ export default async function PublicFrenzAIHistoryPage() {
     `resolveAiSubject`, which returns a null subject for anyone without a
     session — because a page redirect protects nothing from a direct fetch.
   */
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/studio/ai/history");
+  /*
+    ── 🔴 THE AUTH GATE MOVED TO MIDDLEWARE, AND THAT IS A PERFORMANCE FIX ───
 
+    Owner, 2026-09-09: "the ai pages still doesnt cache and open instant like
+    the download history, it should cache and not load on every entry."
+
+    This page used to call `createClient()` and `getUser()` here to enforce
+    the signed-in-only rule. The rule is right; doing it HERE forced the route
+    dynamic, so every entry paid a Supabase round-trip before any HTML — on a
+    page that had been ISR and instant.
+
+    `middleware.ts` now guards `/ai` and `/studio`, where a visitor with no
+    auth cookie is redirected with NO `getUser()` call at all. Same guarantee,
+    none of the per-entry cost, and this route is cacheable again.
+
+    ⚠️ The API gate is separate and still there: `resolveAiSubject` refuses an
+    anonymous subject on every AI endpoint, because a direct fetch never passes
+    through a page.
+  */
 
   return (
     <>

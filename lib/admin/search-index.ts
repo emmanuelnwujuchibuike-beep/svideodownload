@@ -167,6 +167,40 @@ export const ADMIN_SETTING_ENTRIES: AdminSearchEntry[] = [
     hint: "Landing editor",
     keywords: ["landing", "homepage", "hero", "headline", "front page"],
   },
+  /*
+    ── 🔴 FRENZ AI, FINDABLE BY WHAT AN OPERATOR ACTUALLY TYPES ──────────────
+
+    The section moved out of "Landing page" into its own Products workspace,
+    and a section that exists in the nav but not here is half-reachable — the
+    palette is how anybody finds a control they cannot remember the home of.
+
+    Three entries rather than one, because these are three different errands.
+    Somebody hunting the price does not think "Frenz AI settings"; they think
+    "price". The keywords carry the words people reach for under pressure —
+    "cost", "charge", "credit", "topup", "balance", "limit" — rather than the
+    labels the panel happens to use.
+  */
+  {
+    id: "ai-settings",
+    label: "Frenz AI access and allowances",
+    section: "ai",
+    hint: "Frenz AI → access",
+    keywords: ["ai", "frenz ai", "allowance", "limit", "daily", "weekly", "free", "credits", "clean"],
+  },
+  {
+    id: "ai-pricing",
+    label: "AI price per video, currency and minimum top-up",
+    section: "ai",
+    hint: "Frenz AI → pricing",
+    keywords: ["price", "cost", "charge", "currency", "topup", "top up", "deposit", "balance", "paystack", "ai"],
+  },
+  {
+    id: "ai-health",
+    label: "AI job health — runs, failures, unnotified results",
+    section: "ai",
+    hint: "Frenz AI → health",
+    keywords: ["ai health", "jobs", "failed", "queue", "stuck", "notification", "propainter", "replicate"],
+  },
   {
     id: "announcement",
     label: "Site-wide announcement bar",

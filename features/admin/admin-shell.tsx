@@ -29,6 +29,7 @@ import {
   Rss,
   ShieldAlert,
   ShoppingBag,
+  Sparkles,
   SlidersHorizontal,
   Star,
   Telescope,
@@ -82,6 +83,11 @@ import { cn } from "@/lib/utils";
  */
 
 const ICONS: Record<string, LucideIcon> = {
+  // 🔴 Frenz AI's own mark. `lib/platform/constitution.test.ts` requires every
+  // section icon to be registered here, which is what caught this the moment
+  // the AI section was added — a nav entry with an unresolvable icon silently
+  // falls back to Activity and looks like a mistake nobody made on purpose.
+  Sparkles,
   Activity,
   BadgeCheck,
   Bell,
@@ -262,13 +268,43 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="lg:grid lg:grid-cols-[210px_1fr] lg:gap-10">
         <nav aria-label="Dashboard sections" className="mb-8 px-3 sm:px-0 lg:mb-0">
           <div className="lg:sticky lg:top-28 space-y-6">
-            {ADMIN_CATEGORIES.map((category) => {
+            {ADMIN_CATEGORIES.map((category, i) => {
               const sections = sectionsInCategory(category.id);
               if (sections.length === 0) return null;
 
+              /*
+                ── 🔴 THE GROUP HEADING, AND ONLY WHERE IT EARNS ITS PLACE ────
+
+                Owner, 2026-09-09: the sidebar should read as
+                "PRODUCTS → Wallpaper / Downloader / Frenz AI", with the three
+                products as "the primary organizational anchors".
+
+                So a group heading is drawn once, above the first category in
+                it — but ONLY when the group holds more than one category.
+                Platform, Monetization and Insight are each a single category,
+                and rendering their group would print "PLATFORM" directly above
+                "Platform": a heading that says nothing, twice, three times
+                over. The hierarchy exists to be read, not to be symmetrical.
+              */
+              const groupSize = ADMIN_CATEGORIES.filter((c) => c.group === category.group).length;
+              const firstOfGroup = ADMIN_CATEGORIES.findIndex((c) => c.group === category.group) === i;
+              const showGroup = groupSize > 1 && firstOfGroup;
+
               return (
-                <div key={category.id}>
-                  <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+                <div key={category.id} className={showGroup ? "space-y-3" : undefined}>
+                  {showGroup ? (
+                    <p className="px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/70">
+                      {category.group}
+                    </p>
+                  ) : null}
+                  <p
+                    className={cn(
+                      "mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70",
+                      // Indented under its group heading, so the nesting is
+                      // visible rather than implied by order alone.
+                      groupSize > 1 && "pl-5",
+                    )}
+                  >
                     {category.label}
                   </p>
                   <ul className="flex gap-1.5 overflow-x-auto lg:block lg:space-y-0.5 lg:overflow-visible">

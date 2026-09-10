@@ -598,6 +598,19 @@ export default async function AdminPage() {
             </Suspense>
           </AdminPanel>
 
+          {/*
+            🔴 Frenz AI, in the Products group rather than buried under the
+            landing page. Its own panel id, so the section registry, the nav and
+            the search index all agree — a section that exists in one and not
+            the others is the unreachable-route defect this dashboard's registry
+            was built to prevent.
+          */}
+          <AdminPanel id="ai">
+            <Suspense fallback={<PanelSkeleton />}>
+              <FrenzAISection />
+            </Suspense>
+          </AdminPanel>
+
           <AdminPanel id="discovery">
             <DiscoveryCatalog
               entities={getSearchableEntities()}
@@ -849,16 +862,38 @@ async function PlatformStatusSection() {
 
 async function LandingSection() {
   const landing = await getLandingSettings();
-  /*
-    Two panels, one read. They are separate FORMS on purpose: each POSTs only
-    the fields it displays, so neither can clobber the other's — see the note
-    in frenz-ai-settings.tsx and the partial-update fix in setLandingSettings.
-  */
-  const aiStats = await getAiAdminStats();
+  return <LandingEditor settings={landing} />;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  FRENZ AI — its own workspace at last
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09: "Everything related to AI functionality must live inside
+ * this section… Any future AI tools should automatically belong under Frenz AI
+ * instead of being added to the general dashboard."
+ *
+ * 🔴 These two panels were rendered by `LandingSection`, beside the hero poster
+ * and the feed-grid images. Not because they belonged there — because that is
+ * where the first AI switch happened to be added, and the next four followed
+ * it. An operator looking for the price per AI video found it under "Landing
+ * page", which is exactly the crowding the owner is describing.
+ *
+ * ⚠️ Both still read `getLandingSettings()`, and that is deliberate: the AI
+ * fields live in the same `settings` row, and splitting the STORE to match a
+ * change in the NAV would be rewriting working backend logic to satisfy an
+ * information-architecture decision — which the brief explicitly rules out.
+ * Two reads of one cached settings object is the correct cost.
+ *
+ * They stay separate FORMS for the reason recorded in frenz-ai-settings.tsx:
+ * each POSTs only the fields it displays, so neither can clobber the other's.
+ */
+async function FrenzAISection() {
+  const [landing, aiStats] = await Promise.all([getLandingSettings(), getAiAdminStats()]);
 
   return (
     <div className="space-y-6">
-      <LandingEditor settings={landing} />
       <FrenzAISettings settings={landing} />
       {/* Counts only — see lib/ai/admin-stats.ts for why there is no job table. */}
       <FrenzAIHealth stats={aiStats} />

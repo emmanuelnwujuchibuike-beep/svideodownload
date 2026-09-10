@@ -15,7 +15,11 @@ import { pathBelongsTo } from "@/lib/ai/storage";
 import { statSourceObject } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
-import { peekAiUsage, releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
+import { peekAiUsage, peekAiWeeklyUsage } from "@/lib/ai/usage";
+import { getAiBalanceCents } from "@/lib/ai/balance";
+import { isoDate, weekStartUtc } from "@/lib/ai/economy";
+import { releaseJobFunding, reserveJobFunding } from "@/lib/ai/funding";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -252,17 +256,115 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       carrier NAT is never mistaken for one abuser, because the ceiling is set
       six times a single visitor's allowance.
     */
-    const reservation = await reserveAiUsage(
-      subject,
-      feature.id,
-      entitlement.dailyLimit,
-      entitlement.ipCeiling && resolution.ipKey
-        ? { key: resolution.ipKey, limit: entitlement.ipCeiling }
-        : null,
-    );
-    if (!reservation.allowed) {
-      return fail("DAILY_LIMIT_REACHED", { usage: usageForClient(entitlement, reservation.used) });
+    /*
+      ══════════════════════════════════════════════════════════════════════════
+       🔴 FREE ALLOWANCE FIRST, THEN THE PREPAID BALANCE
+      ══════════════════════════════════════════════════════════════════════════
+
+      Owner, 2026-09-09, standing rule §11: "Check daily free allowance. Check
+      weekly free allowance. If free allowance remains: consume one free AI
+      usage… If the free allowance has been exhausted: check AI balance."
+
+      Both ceilings apply and the lower remaining one wins, so a daily reset
+      cannot buy back a spent week. Neither depends on the plan: §8 forbids
+      `if subscription === pro => unlimited`, and `decideFunding` is never told
+      who is Pro — it takes two numbers and a balance.
+
+      🔴 THE ATOMICITY IS UNCHANGED. `reserveJobFunding` decides which atomic
+      operation to attempt and then attempts it: `reserve_ai_usage` for the free
+      path (one SQL statement, exactly as before) or `charge_ai_balance` for the
+      paid one (a deduction whose WHERE clause requires sufficient funds). The
+      decision never replaces the guarantee.
+    */
+    const settings = await getLandingSettings();
+    const now = new Date();
+    const [usage, usedThisWeek, balanceCents] = await Promise.all([
+      peekAiUsage(subject, feature.id),
+      peekAiWeeklyUsage(subject, feature.id, isoDate(weekStartUtc(now))),
+      /*
+        A balance read that FAILS must not read as zero — that would route a
+        member with credit to the recharge screen and ask them to pay twice. It
+        throws, and the catch below answers honestly.
+      */
+      /*
+        🔴 `subjectOwnerId`, not `subject.userId`. The union still carries a
+        guest shape whose `userId` is null — unreachable here because the auth
+        gate above refuses one, but the compiler is right to insist, and a
+        `!` would have been me overruling it on a line that reads somebody's
+        money.
+      */
+      getAiBalanceCents(subjectOwnerId(subject)).catch(() => null),
+    ]);
+
+    if (balanceCents === null) {
+      console.error("[ai/jobs] balance unreadable", { jobId: job.id, subject: subject.key });
+      return fail("INTERNAL_ERROR");
     }
+
+    const funding = await reserveJobFunding({
+      subject,
+      feature: feature.id,
+      jobId: job.id,
+      dailyLimit: entitlement.dailyLimit,
+      weeklyLimit: settings.frenzAiWeeklyFreeCredits,
+      usedToday: usage.usedToday,
+      usedThisWeek,
+      balanceCents,
+      priceCents: settings.frenzAiVideoPriceCents,
+      /*
+        🔴 THE ADDRESS CEILING RIDES ALONG, IN THE SAME TRANSACTION.
+
+        `ipCeiling` is null for a signed-in member and a number for a guest.
+        Both limits are applied inside one SQL function (migration 0145), so a
+        guest cycling cookies cannot slip between two separate checks — and a
+        shared carrier NAT is never mistaken for one abuser, because the ceiling
+        is six times a single visitor's allowance.
+      */
+      ipCeiling:
+        entitlement.ipCeiling && resolution.ipKey
+          ? { key: resolution.ipKey, limit: entitlement.ipCeiling }
+          : null,
+    });
+
+    if (!funding.ok) {
+      if (funding.reason === "daily_limit") {
+        return fail("DAILY_LIMIT_REACHED", { usage: usageForClient(entitlement, funding.usedToday) });
+      }
+      /*
+        Free allowance spent AND the balance will not cover it. Its own code, so
+        the interface can show the recharge screen rather than the "come back
+        tomorrow" sentence — those are different situations with different
+        actions, and telling somebody to wait when they could pay now is the
+        more annoying of the two mistakes.
+      */
+      return fail("AI_BALANCE_REQUIRED", {
+        balanceCents: funding.balanceCents,
+        priceCents: funding.priceCents,
+        currency: settings.frenzAiCurrency,
+      });
+    }
+
+    /*
+      🔴 RECORDED ON THE ROW, IMMEDIATELY. Four other places undo this job — the
+      failure paths below, the finalizer, reconcile and the stall sweep — and
+      none of them can see this decision otherwise. `releaseJobFunding` reads it
+      back; guessing costs either a free video or somebody's money.
+    */
+    await transitionJob(job.id, [job.status], job.status, {
+      funding_source: funding.source,
+      charged_cents: funding.chargedCents > 0 ? funding.chargedCents : null,
+    });
+
+    // What the rest of this route calls to undo the charge, whichever it was.
+    const undoFunding = () =>
+      releaseJobFunding({
+        job: { id: job.id, user_id: subjectOwnerId(subject), funding_source: funding.source },
+        subject,
+        feature: feature.id,
+        dailyLimit: entitlement.dailyLimit,
+      });
+
+    const reservation = { used: funding.usedToday };
 
     /*
       4b · THE REWARD GATE.
@@ -277,13 +379,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     */
     if (entitlement.requiresReward) {
       if (!rewardSessionId) {
-        await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+        await undoFunding();
         return fail("REWARD_REQUIRED", { usage: usageForClient(entitlement, reservation.used) });
       }
 
       const claim = await claimAiReward({ sessionId: rewardSessionId, subject, feature: feature.id });
       if (!claim.claimed) {
-        await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+        await undoFunding();
         console.warn("[ai/jobs] reward claim refused", {
           jobId: job.id,
           subject: subject.key,
@@ -337,7 +439,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             end the job honestly, and say so. Leaving it in `acquiring` would be
             the stuck-spinner failure this feature has already had twice.
           */
-          await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+          await undoFunding();
           await transitionJob(job.id, ["acquiring"], "failed", {
             error_code: "ACQUISITION_FAILED",
             error_message: handoff.detail?.slice(0, 2000) ?? null,
@@ -409,7 +511,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         provider was unreachable is the single most corrosive thing a metered
         feature can do.
       */
-      await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+      await undoFunding();
       const code = isAiJobError(providerError) ? providerError.code : "PROVIDER_ERROR";
       const detail = isAiJobError(providerError) ? providerError.detail : String(providerError);
 

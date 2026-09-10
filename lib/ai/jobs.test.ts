@@ -236,6 +236,8 @@ describe("jobToView", () => {
     source_path: "user/ai_clean/job/source.mp4",
     result_path: "user/ai_clean/job/result.mp4",
     poster_path: "user/ai_clean/job/poster.jpg",
+    funding_source: "free",
+    charged_cents: null,
     source_size: 1024,
     result_size: 2048,
     result_duration: "12.400",

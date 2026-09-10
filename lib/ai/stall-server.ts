@@ -7,7 +7,7 @@ import { transitionJob } from "@/lib/ai/job-store";
 import { notifyAiCleanFailed } from "@/lib/ai/notify";
 import { AI_STALL_DEADLINE_MS, stalledForMs, type StallableJob } from "@/lib/ai/stall";
 import { subjectFromRow } from "@/lib/ai/subject";
-import { releaseAiUsage } from "@/lib/ai/usage";
+import { releaseJobFunding } from "@/lib/ai/funding";
 
 /**
  * End a job that is past its deadline, and give the allowance back.
@@ -30,7 +30,23 @@ import { releaseAiUsage } from "@/lib/ai/usage";
  * whichever check happened to run first.
  */
 export async function failStalledJob(
-  job: StallableJob & { user_id?: string | null; guest_id?: string | null; feature: string },
+  job: StallableJob & {
+    user_id?: string | null;
+    guest_id?: string | null;
+    feature: string;
+    /**
+     * 🔴 REQUIRED, not optional, and that is deliberate. This decides whether
+     * the undo gives back a daily slot or gives back money, and the two are not
+     * interchangeable — releasing a slot for a paid job creates a free video
+     * (see lib/ai/funding.ts). Making it optional would let a caller omit it
+     * and get the free branch silently; making it required means the compiler
+     * asks every caller whether their query selects the column.
+     *
+     * Null is fine and means "free": every row that predates migration 0150
+     * was funded by the daily allowance.
+     */
+    funding_source: "free" | "balance" | null;
+  },
   now: number = Date.now(),
 ): Promise<boolean> {
   const over = stalledForMs(job, now);
@@ -56,7 +72,14 @@ export async function failStalledJob(
   try {
     if (subject) {
       const entitlement = await getAiEntitlement(subject, def);
-      await releaseAiUsage(subject, def.id as AiFeature, entitlement.dailyLimit);
+      // Money back for a paid job, a daily slot for a free one — the row says
+      // which, because guessing creates free videos (lib/ai/funding.ts).
+      await releaseJobFunding({
+        job: { id: job.id, user_id: job.user_id ?? null, funding_source: job.funding_source },
+        subject,
+        feature: def.id as AiFeature,
+        dailyLimit: entitlement.dailyLimit,
+      });
     }
   } catch (e) {
     // The job is already correctly marked failed. A refund that did not land

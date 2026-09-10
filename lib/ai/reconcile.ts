@@ -7,7 +7,7 @@ import { recordProviderOutput, transitionJob, noteJobDiagnostic } from "@/lib/ai
 import { notifyAiCleanFailed } from "@/lib/ai/notify";
 import { providerFor } from "@/lib/ai/providers";
 import { subjectFromRow } from "@/lib/ai/subject";
-import { releaseAiUsage } from "@/lib/ai/usage";
+import { releaseJobFunding } from "@/lib/ai/funding";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -237,7 +237,12 @@ async function refund(job: AiJobRow): Promise<void> {
   if (!def || !subject) return;
   try {
     const entitlement = await getAiEntitlement(subject, def);
-    await releaseAiUsage(subject, def.id, entitlement.dailyLimit);
+    /*
+      🔴 The row says HOW it was funded. A paid job gets its money back; a free
+      one gets its daily slot back. Releasing a slot for a paid job would create
+      a free video — see lib/ai/funding.ts.
+    */
+    await releaseJobFunding({ job, subject, feature: def.id, dailyLimit: entitlement.dailyLimit });
   } catch (e) {
     console.error("[ai/reconcile] refund failed", { jobId: job.id, error: String(e) });
   }

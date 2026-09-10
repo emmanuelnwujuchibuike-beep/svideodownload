@@ -226,10 +226,23 @@ describe("the engine switch", () => {
     */
     expect(submit).toMatch(/metadata: \{ \.\.\.\(job\.metadata \?\? \{\}\),[^}]*engine: frenzAiEngine/);
 
-    // 🔴 And exactly ONE place still does it, so the two entry points cannot
-    // disagree about which engine a job was started on.
+    /*
+      🔴 And exactly ONE place still resolves the ENGINE, so the two entry
+      points cannot disagree about which engine a job was started on.
+
+      ⚠️ This asserted `start` contained no `getLandingSettings()` AT ALL, which
+      was a fair proxy while the engine was the only reason to read settings
+      there. It stopped being one on 2026-09-09: `/start` now reads the same
+      object for the AI PRICE and the WEEKLY allowance, which are nothing to do
+      with the engine.
+
+      Narrowed to the actual guarantee rather than deleted — banning the whole
+      call would have failed on a change that does not touch the engine, and
+      loosening it to nothing would stop catching the change that does. What
+      must stay true is that `/start` never reads `frenzAiEngine`.
+    */
     const start = readFileSync(join(process.cwd(), "app/api/ai/jobs/[id]/start/route.ts"), "utf8");
-    expect(start).not.toContain("getLandingSettings()");
+    expect(start).not.toContain("frenzAiEngine");
 
     expect(finalize).toContain("job.metadata?.engine");
     expect(finalize).toContain('if (jobEngine === "propainter")');

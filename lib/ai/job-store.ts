@@ -73,7 +73,7 @@ import { createClient } from "@/lib/supabase/server";
  * only one of them is checked by the compiler.
  */
 const JOB_COLUMNS =
-  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
+  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, funding_source, charged_cents, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, metadata";
 
 /**
  * Claim the right to announce this job. True exactly once, ever.
@@ -430,6 +430,13 @@ export interface JobPatch {
   /** The still frame for the history tile (0147). Null is an ordinary value:
       the poster step is never allowed to fail the job. */
   poster_path?: string | null;
+  /**
+   * How the job was funded (0150). Written ONCE, by /start, immediately after
+   * the charge succeeds — every later undo reads it rather than guessing. See
+   * lib/ai/funding.ts for why guessing creates free videos.
+   */
+  funding_source?: "free" | "balance" | null;
+  charged_cents?: number | null;
   result_size?: number | null;
   replicate_prediction_id?: string | null;
   model?: string | null;

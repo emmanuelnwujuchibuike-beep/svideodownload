@@ -13,7 +13,8 @@ import { AI_RESULT_BUCKET, AI_SOURCE_BUCKET, aiResultKey, pathBelongsTo } from "
 import { signSourceUrl, uploadResultPoster } from "@/lib/ai/storage-server";
 import { notifyAiCleanFailed, notifyAiCleanFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
-import { consumeAiUsage, releaseAiUsage } from "@/lib/ai/usage";
+import { consumeAiUsage } from "@/lib/ai/usage";
+import { releaseJobFunding } from "@/lib/ai/funding";
 import { AI_CLEAN_LIMITS, AI_CLEAN_PROPAINTER, aiCleanEngine } from "@/lib/ai/config";
 import { runProPainter } from "@/lib/ai/propainter";
 import {
@@ -793,7 +794,20 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     const failedSubject = subjectFromRow(job);
     if (failedSubject) {
       const entitlement = await getAiEntitlement(failedSubject, feature);
-      await releaseAiUsage(failedSubject, feature.id, entitlement.dailyLimit);
+      /*
+        🔴 `releaseJobFunding`, NOT `releaseAiUsage`. A job funded from the
+        member's BALANCE never took a daily slot, so releasing one here would
+        hand back a free video they did not spend — and on a member with another
+        job running today, `release_ai_usage` would take that slot off the other
+        one. The row's `funding_source` says which undo is correct; see
+        lib/ai/funding.ts.
+      */
+      await releaseJobFunding({
+        job,
+        subject: failedSubject,
+        feature: feature.id,
+        dailyLimit: entitlement.dailyLimit,
+      });
     }
 
     // …and they are told, with the refund stated. A silent failure on a job

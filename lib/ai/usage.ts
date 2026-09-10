@@ -344,3 +344,59 @@ export async function unlockAiDay(subject: AiSubject, feature: AiFeature): Promi
     return false;
   }
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE WEEKLY ALLOWANCE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09, standing rule §7: "A user cannot bypass the weekly limit
+ * by waiting for the daily counter to reset."
+ *
+ * ── 🔴 IT SUMS `reserved_jobs`, THE SAME COLUMN THE DAY READS ───────────────
+ *
+ * `release_ai_usage` DECREMENTS `reserved_jobs` (migration 0141, bounded by the
+ * release cap), so that column is the live count of what a member currently
+ * holds — not a running total of everything they ever started. Summing it
+ * across the week therefore gives the same answer for seven days that
+ * `peekAiUsage` gives for one, and a released job stops counting in both.
+ *
+ * Summing `successful_jobs` instead would have been the obvious alternative and
+ * would be wrong: a job in flight has reserved a slot and not yet succeeded, so
+ * a member could start five at once and have the week read as zero.
+ *
+ * ── Fails to 0, deliberately, and the charge still fails closed ─────────────
+ *
+ * This is one half of a display value and one half of a gate. A counter that
+ * cannot be read must not tell somebody they have spent an allowance they
+ * have not — and it does not have to, because the atomic DAILY reservation is
+ * still the thing that actually holds a slot. The worst a failed read here can
+ * do is let one job through against the weekly ceiling; the worst the opposite
+ * could do is lock out every member for as long as the database is unhappy.
+ */
+export async function peekAiWeeklyUsage(
+  subject: AiSubject,
+  feature: AiFeature,
+  /** `YYYY-MM-DD` for the Monday this week began. See lib/ai/economy.ts. */
+  weekStart: string,
+): Promise<number> {
+  try {
+    const admin = createAdminClient();
+    let q = admin
+      .from("ai_usage_daily")
+      .select("reserved_jobs")
+      .eq("feature", feature)
+      .gte("usage_date", weekStart);
+    q = subject.kind === "user" ? q.eq("user_id", subject.userId) : q.eq("guest_id", subject.guestId);
+
+    const { data, error } = await q;
+    if (error || !data) return 0;
+
+    return (data as { reserved_jobs?: number | null }[]).reduce(
+      (sum, row) => sum + (typeof row.reserved_jobs === "number" ? row.reserved_jobs : 0),
+      0,
+    );
+  } catch {
+    return 0;
+  }
+}

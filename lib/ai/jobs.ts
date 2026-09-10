@@ -407,6 +407,18 @@ export interface AiJobRow {
    * on every row that predates the column.
    */
   poster_path: string | null;
+  /**
+   * How this job was paid for (migration 0150): `free` took a daily allowance
+   * slot, `balance` deducted money. Null on rows that predate the column and on
+   * jobs that never started.
+   *
+   * 🔴 Read by every failure path to decide which undo to run — see
+   * lib/ai/funding.ts for why releasing a slot and refunding money are not
+   * interchangeable, and why guessing wrong creates free videos.
+   */
+  funding_source: "free" | "balance" | null;
+  /** What was deducted, in minor units. Null for a free job. */
+  charged_cents: number | null;
   source_size: number | null;
   result_size: number | null;
   result_duration: number | string | null;

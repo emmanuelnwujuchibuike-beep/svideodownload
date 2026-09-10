@@ -49,6 +49,16 @@ export type AiErrorCode =
    * somebody precisely which word to change.
    */
   | "POLICY_BLOCKED"
+  /**
+   * Free allowance spent, and the prepaid balance will not cover the price.
+   *
+   * 🔴 DISTINCT from DAILY_LIMIT_REACHED, and the difference is what the member
+   * should DO. "Come back tomorrow" and "add credit and carry on now" are
+   * different situations, and telling somebody to wait when they could pay now
+   * is the more annoying of the two mistakes. 402 Payment Required says exactly
+   * this and nothing else.
+   */
+  | "AI_BALANCE_REQUIRED"
   | "PROVIDER_ERROR"
   /**
    * The provider refused for a reason on OUR side of the relationship —
@@ -143,6 +153,10 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   POLICY_BLOCKED: {
     status: 422,
     message: "This request can't be processed. Please make sure you have the rights or permission to edit this media.",
+  },
+  AI_BALANCE_REQUIRED: {
+    status: 402,
+    message: "You have used your free AI videos for now. Add AI credit to keep going.",
   },
   // 502 for a provider that answered badly, 500 for work that genuinely broke.
   // The member sees the same sentence either way; the status is for us.

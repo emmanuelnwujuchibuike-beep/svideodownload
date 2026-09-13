@@ -51,47 +51,37 @@ describe("the daily limits, exactly as briefed", () => {
   });
 });
 
-describe("the rewarded ad, and who owes how many", () => {
-  it("charges guest and free an ad PER GENERATION", () => {
-    for (const a of ["guest", "free"] as const) {
-      const p = policyFor(a, CLEAN);
-      expect(p.requiresReward).toBe(true);
-      expect(p.rewardScope).toBe("job");
-      expect(p.rewardsPerJob).toBe(1);
-    }
-  });
+describe("🔴 no rewarded ad, for anyone (standing rule §6, 2026-09-09)", () => {
+  /*
+    "Do not use reward ads for AI access. Remove all reward-ad AI logic."
 
-  it("🔴 shows NO ad at all to anyone who pays (owner, 2026-09-08)", () => {
-    /*
-      "pro and business plan wont show any reward ad during ai generation, only
-       the free — the pro and business and max ai only use the limit and credit."
-
-      This REPLACED a day-scoped ad. A subscription is itself the exchange, and
-      one ad a day is still one more than none.
-    */
-    for (const a of ["pro", "business", "max_ai"] as const) {
+    This block used to assert the OPPOSITE for guest and free — an ad per
+    generation — and that assertion was the shape of the bug the owner reported
+    on 2026-09-13 as "stuck at queued 58%": the browser opened an ad gate the
+    reward network never filled, and `/start` was never called. The economy is
+    the free allowance and then the prepaid balance, and nothing else.
+  */
+  it("owes no ad on any audience", () => {
+    for (const a of AI_AUDIENCES) {
       const p = policyFor(a, CLEAN);
-      expect(p.requiresReward).toBe(false);
-      expect(p.rewardsPerJob).toBe(0);
+      expect(p.requiresReward, a).toBe(false);
+      expect(p.rewardsPerJob, a).toBe(0);
 
       const view = entitlementView({ audience: a, policy: p, usedToday: 0 });
-      expect(view.rewardRequired).toBe(false);
-      // …and they start immediately. "No ad" is not the same as "no run".
-      expect(view.canStart).toBe(true);
+      expect(view.rewardRequired, a).toBe(false);
     }
   });
 
-  it("keeps ads for the tiers that pay nothing", () => {
-    // Guest and free are the only audiences that cost provider money without
-    // returning a subscription, so they are the only ones an ad applies to.
-    for (const a of ["guest", "free"] as const) {
-      expect(policyFor(a, CLEAN).requiresReward).toBe(true);
+  it("starts immediately with allowance left — no ad is not no run", () => {
+    for (const a of ["free", "pro", "business", "max_ai"] as const) {
+      const view = entitlementView({ audience: a, policy: policyFor(a, CLEAN), usedToday: 0 });
+      expect(view.canStart, a).toBe(true);
     }
   });
 
   it("🔴 never asks for an ad that cannot buy anything", () => {
-    // Spent. An ad here would take somebody's attention for nothing, which is
-    // the worst thing this screen could do.
+    // Spent. Still no ad — and `canStart` is false so the next step is the
+    // balance, not an advert.
     const spent = entitlementView({
       audience: "free",
       policy: policyFor("free", CLEAN),

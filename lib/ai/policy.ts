@@ -118,16 +118,47 @@ const AI_CLEAN: Record<AiAudience, AiPlanPolicy> = {
     identifier with an IP ceiling behind it (lib/ai/subject.ts), never a number
     the browser keeps.
   */
+  /*
+    ══════════════════════════════════════════════════════════════════════════
+     🔴 NO AD FOR ANYONE. NOT FREE, NOT GUEST, NOT EVER — AND IT BROKE THE JOB
+    ══════════════════════════════════════════════════════════════════════════
+
+    Owner, 2026-09-09, standing Frenz AI rule §6: "Do not use reward ads for AI
+    access. Remove all reward-ad AI logic." Free members get the daily and
+    weekly allowance, then the prepaid balance. That is the whole economy.
+
+    Owner, 2026-09-13: "since the last fix the ai clean is stuck at queued 58%
+    for long now."
+
+    Those are the same fact. With `requiresReward: true` here, a free member's
+    submission went: create → upload → OPEN THE REWARDED AD → wait for it to be
+    watched → only then call `/start`. The ad gate is the downloader's real
+    `RewardedAdGate`, and when its network serves nothing — which is the case
+    for a feature it was never keyed for — nothing ever calls `completeReward`,
+    `/start` is never sent, and the job sits in `queued` while the progress
+    bar creeps to the 58% ceiling of that stage and stops. Every job the owner
+    saw stuck has `started_at: null` and `funding_source: null`: the server was
+    never asked.
+
+    The economy commit did not touch this row, which is why it read as "since
+    the last fix": the earlier tests were run on the owner's Business account,
+    which has never owed an ad. The first free-tier test after it met a gate
+    that had been broken for as long as the AI reward network was unconfigured.
+
+    ⚠️ The row is the enforcement point on BOTH ends. `/start` demands a reward
+    only when `entitlement.rewardRequired` is true, and the browser opens the
+    gate only on the same flag — both derive from this value. Setting it here
+    is what makes an ad impossible rather than merely hidden.
+  */
   guest: {
     dailyLimit: 2,
     unlimited: false,
-    requiresReward: true,
-    rewardsPerJob: 1,
-    // An ad per generation: the guest tier costs us provider money and returns
-    // no subscription, so the ad is the exchange.
+    requiresReward: false,
+    rewardsPerJob: 0,
     rewardScope: "job",
     // One at a time. A signed-out visitor with two jobs in flight is automating
-    // us, not using us.
+    // us, not using us. (Guests are refused before this row is read since
+    // 2026-09-09 — see `resolveAiSubject` — but the row must still be sane.)
     maxConcurrent: 1,
   },
   free: {
@@ -137,8 +168,8 @@ const AI_CLEAN: Record<AiAudience, AiPlanPolicy> = {
     // "guest quota + free quota" bypass the brief calls out.
     dailyLimit: 2,
     unlimited: false,
-    requiresReward: true,
-    rewardsPerJob: 1,
+    requiresReward: false,
+    rewardsPerJob: 0,
     rewardScope: "job",
     maxConcurrent: 1,
   },

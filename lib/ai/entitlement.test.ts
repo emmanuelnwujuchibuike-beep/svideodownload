@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 describe("getAiEntitlement", () => {
-  it("gives a free member two a day, behind an ad, one at a time", async () => {
+  it("gives a free member two a day, with no ad, one at a time", async () => {
     getUserPlan.mockResolvedValue("free");
     const e = await getAiEntitlement(member, feature);
     expect(e).toEqual({
@@ -40,15 +40,17 @@ describe("getAiEntitlement", () => {
       dailyLimit: 2,
       unlimited: false,
       maxConcurrent: 1,
-      requiresReward: true,
-      rewardsPerJob: 1,
+      // 🔴 Standing rule §6: no rewarded ad for AI, on any tier. This was
+      // `true`, and it is what held every free member's job at "queued".
+      requiresReward: false,
+      rewardsPerJob: 0,
       rewardScope: "job",
       // 🔴 Null for a member: an office or a campus is not one abuser.
       ipCeiling: null,
     });
   });
 
-  it("gives Pro five a day behind ONE ad for the day", async () => {
+  it("gives Pro five a day, and no ad either", async () => {
     getUserPlan.mockResolvedValue("pro");
     const e = await getAiEntitlement(member, feature);
     expect(e.audience).toBe("pro");
@@ -80,7 +82,7 @@ describe("🔴 a guest never touches the subscription system", () => {
     const e = await getAiEntitlement(guest, feature);
     expect(e.audience).toBe("guest");
     expect(e.dailyLimit).toBe(2);
-    expect(e.requiresReward).toBe(true);
+    expect(e.requiresReward).toBe(false);
     expect(e.rewardScope).toBe("job");
     /*
       There is no account to look up, so there is no lookup. Not just a

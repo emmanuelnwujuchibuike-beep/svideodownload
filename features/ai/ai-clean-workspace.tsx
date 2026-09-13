@@ -74,20 +74,6 @@ import {
  * a modal over an empty screen.
  */
 
-/*
-  The app's REAL rewarded gate — the same component the downloader uses. Nothing
-  in Frenz AI simulates an ad or grants a reward on a timer; this is the actual
-  ad surface, and the server treats its completion as an attestation (see
-  lib/ai/reward.ts for exactly how much that is worth).
-
-  Dynamically imported: a member who never needs an ad — anyone on a paid plan —
-  never downloads it.
-*/
-const RewardedAdGate = dynamic(
-  () => import("@/features/monetization/rewarded-ad").then((m) => m.RewardedAdGate),
-  { ssr: false },
-);
-
 const AICleanTutorial = dynamic(
   () => import("@/features/ai/ai-clean-tutorial").then((m) => m.AICleanTutorial),
   { ssr: false },
@@ -476,20 +462,13 @@ export function AICleanWorkspace({ historyHref = "/ai/history" }: { historyHref?
       {tutorialOpen ? <AICleanTutorial open onClose={closeTutorial} /> : null}
 
       {/*
-        The ad. `onReward` attests it to the server, which then starts the job;
-        `onCancel` simply closes — no allowance was reserved and no reward
-        granted, so an abandoned ad costs the member nothing, which is the
-        brief's rule and falls out of the ordering rather than being handled.
+        🔴 NO AD GATE. One rendered here until 2026-09-13, on
+        `cleanJob.pendingReward`, and it is what held every free member's job
+        at "queued 58%": the gate opened, the network it was never keyed for
+        served nothing, and `/start` — which fired from its `onReward` — was
+        never called. Standing rule §6 removed ads from the AI economy; the
+        hook no longer has a reward state to render, so nothing can open one.
       */}
-      {cleanJob.pendingReward ? (
-        <RewardedAdGate
-          open
-          step={cleanJob.pendingReward.step}
-          totalSteps={cleanJob.pendingReward.total}
-          onReward={() => void cleanJob.completeReward()}
-          onCancel={cleanJob.cancelReward}
-        />
-      ) : null}
     </FrenzAIEnvironment>
   );
 }

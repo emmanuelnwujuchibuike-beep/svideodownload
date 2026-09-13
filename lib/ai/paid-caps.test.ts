@@ -58,12 +58,35 @@ describe("the shipped defaults match the policy that actually applies", () => {
   });
 
   /*
-    🔴 A paid plan may never be configured to give less than the free one. That
-    is what the floor is FOR — it is not a round number, it is one above the
-    free allowance.
+    ── 🔴 THE FLOOR DOES NOT OUTRANK THE OWNER ───────────────────────────────
+
+    This test used to assert the opposite: `FRENZ_AI_MIN_PAID_CREDITS >
+    frenzAiFreeDailyCredits`, on my own reasoning that "a paid plan may never
+    give less than the free one".
+
+    Owner, 2026-09-09: "i tried setting the limit for pro daily to 2 and
+    business to 5 but it showed number must be equal to."
+
+    Those are the values they want, and the standing Frenz AI rule they wrote
+    says a subscription buys no AI at all — so a Pro allowance equal to the free
+    one is that rule, not a slip. The floor's remaining job is only to keep the
+    value POSITIVE, because 0 is read as "not configured" by both
+    `normalizePaidCredits` and `applyConfiguredLimits`.
   */
-  it("the floor sits above the free tier's allowance", () => {
-    expect(FRENZ_AI_MIN_PAID_CREDITS).toBeGreaterThan(DEFAULT_LANDING.frenzAiFreeDailyCredits);
+  it("the floor only excludes zero and below", () => {
+    expect(FRENZ_AI_MIN_PAID_CREDITS).toBe(1);
+  });
+
+  /*
+    🔴 THE EXACT VALUES THE SAVE REFUSED. A regression here is not a cosmetic
+    validation message: the admin panel POSTs every AI setting in one request,
+    so one out-of-range field refuses the weekly allowance, the price, the
+    currency and the minimum deposit along with it.
+  */
+  it("accepts the pro and business caps the owner asked for", () => {
+    for (const n of [2, 5]) {
+      expect(normalizePaidCredits(n, 99), String(n)).toBe(n);
+    }
   });
 });
 

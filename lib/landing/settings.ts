@@ -422,13 +422,32 @@ export function normalizeFreeCredits(value: unknown): number {
  * surprise a month later.
  */
 /**
- * 🔴 THREE, because the free tier gives two. The floor's job is to stop a
- * slipped keystroke, and the sharpest line it can hold is "a paid plan may
- * never be configured to give less than the free one" — a Pro member on 1/day
- * while free members get 2 is not a tuning choice, it is a mistake. Above that
- * the operator is making a real decision and the field should let them.
+ * ── 🔴 ONE. IT WAS THREE, AND THREE WAS MY RULE RATHER THAN THE OWNER'S ─────
+ *
+ * Owner, 2026-09-09: "i tried setting the limit for pro daily to 2 and business
+ * to 5 but it showed number must be equal to, and the button to set the weekly
+ * limit."
+ *
+ * The floor was 3, reasoned as "a paid plan may never give less than the free
+ * one, which gives 2". That is a product opinion I invented and then enforced
+ * against the person whose product it is — and it contradicts the standing
+ * Frenz AI rule the owner wrote themselves: "Pro users do NOT get unlimited AI.
+ * Business users do NOT get unlimited AI." A subscription buys no AI in this
+ * system, so a Pro daily allowance EQUAL to the free one is not a mistake, it
+ * is that rule applied exactly.
+ *
+ * ⚠️ It also cost more than the field it guarded. The admin panel saves every
+ * AI setting in ONE request, so a Pro value of 2 failed the schema and took the
+ * whole payload with it — the weekly allowance, the price, the currency and the
+ * minimum deposit all silently refused to save because of an unrelated field.
+ * That is the second half of the owner's sentence.
+ *
+ * One, not zero, because zero already means something else everywhere in this
+ * system: `normalizePaidCredits` and `applyConfiguredLimits` both read 0 as
+ * "not configured" and fall through to the shipped policy. A floor of 1 keeps
+ * that single meaning intact while letting the operator set any real number.
  */
-export const FRENZ_AI_MIN_PAID_CREDITS = 3;
+export const FRENZ_AI_MIN_PAID_CREDITS = 1;
 
 /**
  * Bounds on the WEEKLY free allowance.
@@ -467,7 +486,34 @@ export function normalizeWeeklyCredits(value: unknown): number {
  * operator typing "50" meaning dollars would otherwise charge $50 per clean.
  */
 export const FRENZ_AI_MIN_PRICE_CENTS = 1;
-export const FRENZ_AI_MAX_PRICE_CENTS = 10_000;
+/**
+ * ── 🔴 RAISED 10,000 → 1,000,000 (2026-09-09) ───────────────────────────────
+ *
+ * Owner: "i set 500 naira per video and 2000 naira minimum deposit and is
+ * showing 50 naira, i dont really understand."
+ *
+ * Two bugs met here and this is the second. The ceiling was 10,000 MINOR units
+ * and I reasoned about it in dollars — "$100 a video, nobody would set that".
+ * In naira 10,000 kobo is ₦100, so the owner's entirely ordinary ₦500 price
+ * (50,000 kobo) was ABOVE the maximum and the save was refused outright.
+ *
+ * A bound expressed in minor units cannot carry a judgement about VALUE unless
+ * it also knows the currency, and this one did not. 1,000,000 minor units is
+ * ₦10,000 or $10,000 — generous enough that no real currency's sensible price
+ * is excluded, tight enough to still catch a slipped digit now that the field
+ * is entered in major units and a typo moves the number by 10x rather than
+ * 100x.
+ */
+export const FRENZ_AI_MAX_PRICE_CENTS = 1_000_000;
+
+/*
+  The money-unit helpers moved to lib/money/units.ts on 2026-09-13 — this file
+  imports the service-role Supabase client, and the member-facing top-up field
+  needed `majorInputToMinor` without dragging that into a browser bundle.
+  Re-exported so the admin form and the tests that already import them from
+  here keep working unchanged.
+*/
+export { MINOR_UNITS_PER_MAJOR, majorInputToMinor, minorToMajorInput } from "@/lib/money/units";
 
 /**
  * Bounds on the smallest top-up.
@@ -484,7 +530,13 @@ export const FRENZ_AI_MAX_PRICE_CENTS = 10_000;
  * charge in front of a member as the smallest option available.
  */
 export const FRENZ_AI_MIN_TOPUP_FLOOR = 100;
-export const FRENZ_AI_MIN_TOPUP_CEILING = 100_000;
+/**
+ * 🔴 RAISED 100,000 → 10,000,000 for the same reason as the price ceiling: in
+ * naira the old value was ₦1,000, so the owner's ₦2,000 minimum deposit was
+ * refused. The ladder multiplies this by ten, so a minimum at this ceiling
+ * still offers a top option a real currency can express.
+ */
+export const FRENZ_AI_MIN_TOPUP_CEILING = 10_000_000;
 
 export function normalizeMinTopup(value: unknown): number {
   if (value === null || value === undefined || value === "") {

@@ -196,10 +196,9 @@ export function FrenzAIWelcome({
           page to be exactly like this in details no simplifying… on all
           devices the Down section should be grid."
 
-          Two columns at every width, painted previews rather than photographs,
-          and the AI history as one of the four cards. See the component for
-          why the fourth card is history rather than the "AI Text Remover" the
-          reference draws.
+          Two columns at every width, painted previews rather than photographs.
+          Two cards now — AI Clean and history — since the owner removed the
+          "Soon" cards on 2026-09-13; see the component.
         */}
         <FrenzAIToolGrid cleanHref={cleanHref} historyHref={historyHref} className="mt-8" />
       </div>

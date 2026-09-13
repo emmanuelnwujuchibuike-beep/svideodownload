@@ -1,11 +1,11 @@
-import { ChevronRight, History, ImageIcon, Scissors, Sparkles, Wand2 } from "lucide-react";
+import { ChevronRight, History, Sparkles, Wand2 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  MORE AI TOOLS — the 2×2 grid from the reference
+ *  MORE AI TOOLS — the grid from the reference, cut to what exists
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Owner, 2026-09-09, with a full-page screenshot: "Make the Ai welcome page to
@@ -28,8 +28,8 @@ import { cn } from "@/lib/utils";
  *
  * ── 🔴 THE PREVIEWS ARE PAINTED, NOT FETCHED ────────────────────────────────
  *
- * The reference shows a small photo on each card. Four photographs would be
- * four network requests, four decodes and four layout shifts on a page whose
+ * The reference shows a small photo on each card. Photographs would be
+ * network requests, decodes and layout shifts on a page whose
  * own instruction is "make the performance faster and smoother on all devices"
  * — and this page already refuses per-tile images in the history grid for the
  * same reason.
@@ -40,7 +40,7 @@ import { cn } from "@/lib/utils";
  *
  * ── 🔴 A SERVER COMPONENT ───────────────────────────────────────────────────
  *
- * No `"use client"`, no hooks, no state. Four cards of static markup have no
+ * No `"use client"`, no hooks, no state. Two cards of static markup have no
  * business in the hydration budget — and this file's neighbour
  * (frenz-ai-tool-card.tsx) carries a note about what marking one of these a
  * client component cost last time.
@@ -51,30 +51,32 @@ interface AiTool {
   name: string;
   blurb: string;
   icon: typeof Wand2;
-  /** Null means "not built yet" — the card says so instead of pretending. */
-  href: string | null;
+  /**
+   * 🔴 Never null. Until 2026-09-13 this was `string | null`, and a null
+   * rendered a flat card that said "Soon". Owner: "remove the soon cards from
+   * the ai page." Making the field required means a card with nowhere to go
+   * cannot be added back by accident — it fails the build instead.
+   */
+  href: string;
   /** The icon tile's gradient, and the preview's tint. */
   accent: string;
   preview: string;
 }
 
 /**
- * ── 🔴 WHICH FOUR, AND WHY ONE IS NOT ON THE REFERENCE ──────────────────────
+ * ── 🔴 TWO CARDS, BOTH REAL ─────────────────────────────────────────────────
  *
- * The screenshot draws AI Clean, AI Enhance, AI Video Edit and AI Text Remover.
- * The owner's instruction: "replace 1 card that isn't a real feature with the
- * Ai history button."
+ * The reference drew four: AI Clean, AI Enhance, AI Video Edit and AI Text
+ * Remover. Two instructions since have cut it to what actually exists:
  *
- * AI Text Remover is the one to go, and it is not an arbitrary pick — it is the
- * only card that is BOTH unbuilt and a description of what AI Clean already
- * does. Two cards on one grid promising to remove text from videos is the
- * clutter the same message asks to avoid, quite apart from neither of them
- * being a second product.
+ *   · 2026-09-09: "replace 1 card that isn't a real feature with the Ai
+ *     history button" — AI Text Remover went, being both unbuilt and a
+ *     description of what AI Clean already does;
+ *   · 2026-09-13: "remove the soon cards from the ai page" — AI Enhance and AI
+ *     Video Edit went, and with them the whole "not built yet" branch of the
+ *     card. A grid of things that cannot be tapped is not a feature list.
  *
- * Enhance and Video Edit stay as drawn: they are genuinely different tools, and
- * a roadmap the owner is showing on purpose. They carry no href, so the card
- * renders as a plain panel that says "Soon" rather than a control that answers
- * a tap with nothing.
+ * What remains is every door this product has, and each one opens.
  */
 function tools(cleanHref: string, historyHref: string): AiTool[] {
   return [
@@ -88,30 +90,6 @@ function tools(cleanHref: string, historyHref: string): AiTool[] {
       preview: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.10))",
     },
     {
-      id: "enhance",
-      name: "AI Enhance",
-      blurb: "Upscale, sharpen and improve your image quality with AI.",
-      icon: ImageIcon,
-      href: null,
-      accent: "from-fuchsia-500 to-pink-600",
-      preview: "linear-gradient(135deg, rgba(217,70,239,0.16), rgba(236,72,153,0.10))",
-    },
-    {
-      id: "video-edit",
-      name: "AI Video Edit",
-      blurb: "Trim, cut, enhance and make your videos look professional.",
-      icon: Scissors,
-      href: null,
-      accent: "from-emerald-500 to-green-600",
-      preview: "linear-gradient(135deg, rgba(16,185,129,0.16), rgba(34,197,94,0.10))",
-    },
-    {
-      /*
-        🔴 The replacement, and it is a REAL destination — which is the whole
-        point of swapping it in. Three cards that cannot be tapped and one that
-        can is a grid that mostly does nothing; two working doors changes what
-        the section is for.
-      */
       id: "history",
       name: "Your AI videos",
       blurb: "Everything you have cleaned, kept for three days.",
@@ -154,11 +132,9 @@ export function FrenzAIToolGrid({
 
       {/*
         🔴 `grid-cols-2` with NO breakpoint — the instruction is "on all devices
-        the Down section should be grid". `lg:grid-cols-4` only widens it on a
-        desktop, where two columns would leave the cards absurdly wide; it never
-        narrows below two.
+        the Down section should be grid". Two cards, two columns, at every width.
       */}
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-3">
         {items.map((tool) => (
           <ToolCard key={tool.id} tool={tool} />
         ))}
@@ -169,17 +145,23 @@ export function FrenzAIToolGrid({
 
 function ToolCard({ tool }: { tool: AiTool }) {
   const { icon: Icon, href, name, blurb, accent, preview } = tool;
-  const open = href !== null;
 
-  const body = (
-    <>
+  return (
+    <Link
+      href={href}
+      prefetch={false}
+      className={cn(
+        "group flex min-h-[9.5rem] flex-col rounded-[1.25rem] p-3.5",
+        "bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10",
+        "transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99] shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)]",
+      )}
+    >
       {/* Icon tile and preview, side by side — the reference's top row. */}
       <div className="flex items-start justify-between gap-2">
         <span
           className={cn(
             "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br text-white shadow-sm",
             accent,
-            !open && "opacity-60 saturate-50",
           )}
         >
           <Icon className="h-[21px] w-[21px]" aria-hidden />
@@ -199,9 +181,7 @@ function ToolCard({ tool }: { tool: AiTool }) {
         </span>
       </div>
 
-      <h3 className={cn("mt-3 text-[14.5px] font-bold leading-tight", !open && "text-muted-foreground")}>
-        {name}
-      </h3>
+      <h3 className="mt-3 text-[14.5px] font-bold leading-tight">{name}</h3>
       {/*
         🔴 Clamped to three lines. At two columns on a 360px phone a card is
         ~160px wide, and an unclamped blurb pushes one card taller than its
@@ -210,41 +190,10 @@ function ToolCard({ tool }: { tool: AiTool }) {
       <p className="mt-1 line-clamp-3 text-[12px] leading-snug text-muted-foreground">{blurb}</p>
 
       <div className="mt-auto flex items-center justify-end pt-3">
-        {open ? (
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/80 ring-1 ring-inset ring-black/[0.06] transition group-hover:bg-background dark:ring-white/10">
-            <ChevronRight className="h-4 w-4 text-foreground/70" aria-hidden />
-          </span>
-        ) : (
-          /*
-            Not a chevron. A card that cannot be opened must not wear the mark
-            of one that can — this feature has a standing rule against controls
-            that answer a tap with nothing.
-          */
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Soon
-          </span>
-        )}
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/80 ring-1 ring-inset ring-black/[0.06] transition group-hover:bg-background dark:ring-white/10">
+          <ChevronRight className="h-4 w-4 text-foreground/70" aria-hidden />
+        </span>
       </div>
-    </>
-  );
-
-  const shell = cn(
-    "group flex min-h-[9.5rem] flex-col rounded-[1.25rem] p-3.5",
-    "bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10",
-    open &&
-      "transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99] shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)]",
-  );
-
-  /*
-    🔴 A LINK ONLY WHEN THERE IS SOMEWHERE TO GO. An unbuilt tool renders as a
-    `div`: not focusable, not pressable, and not announced as a link that leads
-    nowhere.
-  */
-  return open ? (
-    <Link href={href!} prefetch={false} className={shell}>
-      {body}
     </Link>
-  ) : (
-    <div className={shell}>{body}</div>
   );
 }

@@ -168,6 +168,54 @@ export async function initializeAiTopup(opts: {
  */
 export const AI_TOPUP_PURPOSE = "frenz_ai_topup";
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  ASK PAYSTACK WHAT ACTUALLY HAPPENED TO A TRANSACTION
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-09: "i just recharged but it didnt show in the dashboard."
+ *
+ * ── 🔴 WHY A WEBHOOK ALONE WAS NOT ENOUGH ───────────────────────────────────
+ *
+ * The webhook is the authority and stays the authority — but it is delivered to
+ * us out of band, and there are three ordinary ways a member can be looking at
+ * a stale balance thirty seconds after paying:
+ *
+ *   · the redirect back from Paystack RACES the delivery, and usually wins;
+ *   · the webhook URL is not configured on the Paystack dashboard at all, which
+ *     is a settings screen we do not control and cannot detect from here;
+ *   · a delivery failed and is waiting on Paystack's retry schedule.
+ *
+ * In all three the money moved and the member sees nothing. This is the read
+ * that resolves it: the browser tells us a REFERENCE, and we ask Paystack — on
+ * our own server, with our own secret key — what became of it.
+ *
+ * ── 🔴 THE BROWSER SUPPLIES AN IDENTIFIER, NEVER AN OUTCOME ─────────────────
+ *
+ * §13: "Payment confirmation must be verified server-side. Do not credit the
+ * balance based solely on a frontend success callback." That rule is about
+ * TRUSTING the callback, and nothing here does: the status, the amount and the
+ * currency in the returned object are Paystack's own, fetched over TLS with the
+ * secret key. A forged reference verifies as somebody else's transaction or as
+ * nothing at all, and the caller checks the metadata before crediting anybody.
+ */
+export interface PaystackVerifiedCharge {
+  /** "success", "failed", "abandoned"… Paystack's own word for it. */
+  status?: string;
+  /** Minor units, in `currency`. What SETTLED, not what we asked for. */
+  amount?: number;
+  currency?: string;
+  reference?: string;
+  metadata?: { user_id?: string; purpose?: string };
+}
+
+export async function verifyTransaction(reference: string): Promise<PaystackVerifiedCharge> {
+  const data = await paystack<{ data: PaystackVerifiedCharge }>(
+    `/transaction/verify/${encodeURIComponent(reference)}`,
+  );
+  return data.data ?? {};
+}
+
 /** Hosted link for a member to update card / cancel their subscription. */
 export async function subscriptionManageLink(subscriptionCode: string): Promise<string> {
   const data = await paystack<{ data: { link: string } }>(

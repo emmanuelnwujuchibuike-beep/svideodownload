@@ -8,8 +8,6 @@ import {
   createAiJob,
   getAiCleanEntitlement,
   getAiJob,
-  grantAiReward,
-  openAiRewardSession,
   getAiJobResult,
   getAiJobSource,
   listAiJobs,
@@ -82,14 +80,6 @@ export interface AiCleanJobState {
    * lives in a browser the member controls.
    */
   entitlement: AiCleanEntitlement | null;
-  /**
-   * Set while a real rewarded ad must be watched before the job can start.
-   *
-   * The workspace renders the app's existing `RewardedAdGate` on this — the
-   * same component the downloader uses. Nothing here simulates an ad or grants
-   * a reward on a timer.
-   */
-  pendingReward: { sessionId: string; step: number; total: number } | null;
 }
 
 export interface AiCleanJobActions {
@@ -104,10 +94,6 @@ export interface AiCleanJobActions {
   fetchResultUrl: (forDownload?: boolean) => Promise<string | null>;
   /** The same for the ORIGINAL, so the result can be compared against it. */
   fetchSourceUrl: () => Promise<string | null>;
-  /** The ad finished: attest it, then start the job it was earned for. */
-  completeReward: () => Promise<void>;
-  /** The ad was closed early. Nothing is charged and nothing starts. */
-  cancelReward: () => void;
   /** Re-read the allowance — after a job finishes, or on returning to the tab. */
   refreshEntitlement: () => Promise<void>;
 }
@@ -121,11 +107,6 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
   const [restoring, setRestoring] = useState(true);
   const [busy, setBusy] = useState(false);
   const [entitlement, setEntitlement] = useState<AiCleanEntitlement | null>(null);
-  const [pendingReward, setPendingReward] = useState<{ sessionId: string; step: number; total: number } | null>(
-    null,
-  );
-  /** The job waiting on that ad. Held in a ref so the gate can stay dumb. */
-  const awaitingRewardJobId = useRef<string | null>(null);
 
   /*
     Refs, not state, for everything the effects need to READ without being
@@ -297,12 +278,12 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
 
         A File and a link differ in exactly one place — whether the browser
         has bytes to send — and are identical everywhere else: the same
-        idempotency key, the same allowance, the same ad, the same start, the
-        same polling. So this stayed ONE function rather than becoming two.
+        idempotency key, the same allowance, the same start, the same polling.
+        So this stayed ONE function rather than becoming two.
 
-        Two `submit` implementations would be two copies of the reward
-        ordering, and the reward ordering is the part of this flow with real
-        consequences if it drifts (see the note below the upload).
+        Two `submit` implementations would be two copies of the same ordering,
+        and the ordering is the part of this flow with real consequences if it
+        drifts — the allowance is only ever spent inside `/start`.
       */
       const isLink = !(input instanceof File);
 
@@ -406,34 +387,22 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
         }
 
         /*
-          🔴 THE AD GOES HERE — between the upload and the start.
+          ── 🔴 THERE IS NO AD BETWEEN THE UPLOAD AND THE START ────────────────
 
-          Not before the upload: making somebody watch an ad and THEN discover
-          their file is too large is the wrong order. Not after the start: by
-          then the job is already running and the ad has bought nothing.
+          Owner, 2026-09-13: "since the last fix the ai clean is stuck at queued
+          58% for long now."
 
-          `rewardRequired` is the server's answer from the entitlement read. If
-          the browser were wrong about it, the start below would refuse with
-          REWARD_REQUIRED — the flow is a courtesy, the gate is the server.
+          A rewarded-ad gate used to sit exactly here for free members: open a
+          session, show the downloader's `RewardedAdGate`, and call `/start`
+          only from its `onReward`. When the ad network served nothing — it was
+          never keyed for this feature — nothing fired, `/start` was never sent,
+          and the job sat in `queued` while the bar crept to that stage's 58%
+          ceiling. Every stuck row had `started_at: null`.
+
+          The standing Frenz AI rule (§6, 2026-09-09) had already removed ads
+          from the economy: free allowance, then prepaid balance, nothing else.
+          So the upload goes straight to the start, for everyone.
         */
-        if (entitlement?.rewardRequired) {
-          const session = await openAiRewardSession();
-          if (!alive.current) return;
-          if (!session.ok) {
-            setError({ code: session.code, message: session.error });
-            return;
-          }
-          awaitingRewardJobId.current = created.job.id;
-          setPendingReward({
-            sessionId: session.sessionId,
-            step: 1,
-            // One today. Part 10 raises this for the paid plans and the gate
-            // already renders "1 of 3" from these two numbers.
-            total: Math.max(1, entitlement.rewardsPerJob || 1),
-          });
-          return; // completeReward() picks it up from here.
-        }
-
         const started = await startAiJob(created.job.id);
         if (!alive.current) return;
 
@@ -460,61 +429,6 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     },
     [applyJob, busy, entitlement],
   );
-
-  /**
-   * The ad finished. Attest it, then start the job it was earned for.
-   *
-   * A failure at either step leaves the job `queued` and unstarted — nothing is
-   * charged, and the member can try again. That is the brief's rule about a
-   * skipped or failed ad, and it falls out of the ordering rather than needing
-   * to be handled: the allowance is only ever spent inside `start`.
-   */
-  const completeReward = useCallback(async () => {
-    const pending = pendingReward;
-    const jobId = awaitingRewardJobId.current;
-    if (!pending || !jobId) return;
-
-    setPendingReward(null);
-    setBusy(true);
-    try {
-      const granted = await grantAiReward(pending.sessionId);
-      if (!alive.current) return;
-      if (!granted.ok) {
-        setError({ code: granted.code, message: granted.error });
-        return;
-      }
-
-      const started = await startAiJob(jobId, pending.sessionId);
-      if (!alive.current) return;
-      if (!started.ok) {
-        setError({ code: started.code, message: started.error });
-        const refreshed = await getAiJob(jobId);
-        if (refreshed.ok && alive.current) applyJob(refreshed.job);
-        return;
-      }
-
-      applyJob(started.job);
-      if (started.usage) setUsage(started.usage);
-      attempts.current = 0;
-      void refreshEntitlement();
-    } finally {
-      if (alive.current) setBusy(false);
-      awaitingRewardJobId.current = null;
-    }
-  }, [applyJob, pendingReward, refreshEntitlement]);
-
-  /**
-   * The ad was closed early.
-   *
-   * Nothing to undo: no allowance was reserved and no reward was granted, so
-   * this only clears the gate. The job stays `queued` and the member may try
-   * again — the brief is explicit that an abandoned ad must not be punished.
-   */
-  const cancelReward = useCallback(() => {
-    setPendingReward(null);
-    awaitingRewardJobId.current = null;
-    setBusy(false);
-  }, []);
 
   const cancel = useCallback(async () => {
     const current = jobRef.current;
@@ -573,9 +487,6 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
     fetchResultUrl,
     fetchSourceUrl,
     entitlement,
-    pendingReward,
-    completeReward,
-    cancelReward,
     refreshEntitlement,
   };
 }

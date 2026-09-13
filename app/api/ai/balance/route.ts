@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { getAiBalanceCents, listAiLedger } from "@/lib/ai/balance";
-import { aiTopupOptions, freeRemaining, isoDate, weekResetsAt, weekStartUtc } from "@/lib/ai/economy";
+import {
+  aiTopupCeiling,
+  aiTopupFloor,
+  aiTopupOptions,
+  freeRemaining,
+  isoDate,
+  weekResetsAt,
+  weekStartUtc,
+} from "@/lib/ai/economy";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -93,6 +101,18 @@ export async function GET(request: Request) {
       /* The ladder the top-up screen offers — generated from the operator's
          minimum, and re-validated server-side when one is chosen. */
       topupOptionsCents: aiTopupOptions(settings.frenzAiMinTopupCents),
+      /*
+        🔴 THE BOUNDS ON A CUSTOM AMOUNT (owner, 2026-09-09: "the add balance
+        dont have an input field to add a custom amount").
+
+        Sent so the field can say what it will accept BEFORE somebody types an
+        amount and presses a button that fails. They are a courtesy, exactly
+        like `canStart` on the entitlement — `/topup` re-reads both from the
+        operator's settings and refuses anything outside them, so editing these
+        in a browser changes nothing except the message shown locally.
+      */
+      minTopupCents: aiTopupFloor(settings.frenzAiMinTopupCents),
+      maxTopupCents: aiTopupCeiling(settings.frenzAiMinTopupCents),
       usedToday: usage.usedToday,
       dailyLimit,
       usedThisWeek,

@@ -260,3 +260,69 @@ export const AI_MIN_TOPUP_FALLBACK_CENTS = 500;
 export function isValidTopupCents(value: unknown, minCents: number): value is number {
   return typeof value === "number" && aiTopupOptions(minCents).includes(value);
 }
+
+/* ─────────────────────── a custom amount, still bounded ──────────────────── */
+
+/**
+ * The floor a top-up must clear — the operator's minimum, or the fallback when
+ * that setting is missing or nonsense.
+ *
+ * Extracted because three separate checks below have to agree on it exactly,
+ * and a ladder that starts at one number while the validator accepts another is
+ * a button that fails when pressed.
+ */
+export function aiTopupFloor(minCents: number): number {
+  return Number.isFinite(minCents) && minCents > 0 ? Math.round(minCents) : AI_MIN_TOPUP_FALLBACK_CENTS;
+}
+
+/**
+ * The most one payment may add, as a multiple of the minimum.
+ *
+ * ── 🔴 EXPRESSED IN MINIMUMS, NEVER IN A FIXED AMOUNT ───────────────────────
+ *
+ * A hardcoded ceiling is the exact bug that refused the owner's ₦500 price: a
+ * number reasoned about in dollars is meaningless in a currency worth ~1/1500th
+ * as much. Deriving it from the operator's own minimum makes it scale with
+ * whatever currency they configured, without this module ever being told which
+ * one that is.
+ *
+ * 100× is generous — a hundred minimum deposits in one go — while still being a
+ * bound. Its job is not to stop a large customer; it is to make a mistyped
+ * amount (an extra three zeros) fail at our door rather than at their bank's.
+ */
+export const AI_TOPUP_MAX_MULTIPLIER = 100;
+
+export function aiTopupCeiling(minCents: number): number {
+  return aiTopupFloor(minCents) * AI_TOPUP_MAX_MULTIPLIER;
+}
+
+/**
+ * An amount the server is willing to charge — any of them, not just a rung.
+ *
+ * ── 🔴 WHY THE CLOSED SET STOPPED BEING THE RIGHT ANSWER ────────────────────
+ *
+ * Owner, 2026-09-09: "the add balance dont have an input field to add a custom
+ * amount."
+ *
+ * The old `isValidTopupCents` accepted only the four generated rungs, and the
+ * comment beside it said that closed set WAS the security property. It was
+ * overstating its own case. The thing actually being defended against is
+ * somebody topping up for a cent — buying credit below the price of processing
+ * it — and a server-side FLOOR closes that completely. Membership of a ladder
+ * closes nothing extra: every rung is above the floor, so the ladder was only
+ * ever a floor with three arbitrary gaps in it.
+ *
+ * What still matters, and is preserved exactly:
+ *
+ *   · the floor and the ceiling come from the SERVER'S settings, never from
+ *     the request — see the call site, which reads them after the settings
+ *     fetch precisely so a body-supplied minimum cannot travel with the amount;
+ *   · the value must be an INTEGER number of minor units. `19.999` cents is not
+ *     an amount, and a float here would reach the ledger as one;
+ *   · this route still grants nothing. The amount decides what Paystack is
+ *     asked to collect; the credit happens against what Paystack says SETTLED.
+ */
+export function isAcceptableTopupCents(value: unknown, minCents: number): value is number {
+  if (typeof value !== "number" || !Number.isInteger(value)) return false;
+  return value >= aiTopupFloor(minCents) && value <= aiTopupCeiling(minCents);
+}

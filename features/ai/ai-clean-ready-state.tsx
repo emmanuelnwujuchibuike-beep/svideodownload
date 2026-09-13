@@ -175,14 +175,10 @@ export function AICleanReadyState({
  *   · no answer yet → no number, because a wrong number is worse than none;
  *   · unlimited or no cap → no number, because there isn't one;
  *   · a cap → that cap, pluralised;
- *   · and the ad clause appears ONLY when `rewardRequired` is true. The free
- *     plan currently sets `requiresReward: false`, so mentioning an ad gate
- *     would be warning somebody about a toll that was already removed.
- *
- * ⚠️ Wording, for the ad clause: "watch a short ad to unlock" — never anything
- * that asks somebody to CLICK or interact with an advertisement. That is an ad
- * network's line, not a stylistic preference, and the whole sentence is
- * generated here so there is one place it can be got right.
+ *   · and NO ad clause, ever. One existed here on `rewardRequired` until
+ *     2026-09-13; standing rule §6 removed ads from the AI economy and the
+ *     policy rows now all say `requiresReward: false`, so the branch could
+ *     only ever have warned somebody about a toll that does not exist.
  */
 /**
  * The same sentence for a paying member.
@@ -214,16 +210,9 @@ function paidAllowanceLine(entitlement: AiCleanEntitlement | null): string {
 function freeAllowanceLine(entitlement: AiCleanEntitlement | null): string {
   const limit = entitlement?.dailyLimit ?? null;
   const capped = !entitlement?.unlimited && typeof limit === "number" && limit > 0;
-  const reward = entitlement?.rewardRequired === true;
 
-  if (!capped) {
-    return reward
-      ? "Watch a short ad to unlock each AI Clean video. Pro removes the ads."
-      : "Pro adds a bigger daily allowance and faster processing.";
-  }
+  if (!capped) return "Pro adds a bigger daily allowance and faster processing.";
 
   const videos = `${limit} AI Clean ${limit === 1 ? "video" : "videos"} a day`;
-  return reward
-    ? `Free members get ${videos}, each unlocked by watching a short ad. Pro removes both.`
-    : `Free members get ${videos}. Pro adds a bigger allowance and faster processing.`;
+  return `Free members get ${videos}. Pro adds a bigger allowance and faster processing.`;
 }

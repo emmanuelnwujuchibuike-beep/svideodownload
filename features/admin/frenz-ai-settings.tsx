@@ -12,6 +12,9 @@ import {
   FRENZ_AI_MIN_PRICE_CENTS,
   FRENZ_AI_MIN_PAID_CREDITS,
   FRENZ_AI_MIN_TOPUP_CEILING,
+  MINOR_UNITS_PER_MAJOR,
+  majorInputToMinor,
+  minorToMajorInput,
   FRENZ_AI_MIN_TOPUP_FLOOR,
   AI_CURRENCIES,
   aiCurrencySymbol,
@@ -57,9 +60,25 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [proCredits, setProCredits] = useState(String(settings.frenzAiProDailyCredits));
   const [businessCredits, setBusinessCredits] = useState(String(settings.frenzAiBusinessDailyCredits));
   const [weekly, setWeekly] = useState(String(settings.frenzAiWeeklyFreeCredits));
-  const [price, setPrice] = useState(String(settings.frenzAiVideoPriceCents));
+  /*
+    ── 🔴 THESE TWO FIELDS ARE IN MAJOR UNITS NOW (owner, 2026-09-09) ────────
+
+    "i set 500 naira per video and 2000 naira minimum deposit and is showing 50
+    naira, i dont really understand."
+
+    They were in MINOR units — kobo, cents — because that is what Paystack's API
+    takes. That is an implementation detail of a payment provider, and putting
+    it in front of an operator meant typing 500 for ₦500 stored ₦5.00. The
+    comment I wrote beside that field even warned that a minor-unit box looks
+    exactly like a major-unit one; I shipped it in minor units anyway.
+
+    So the operator types money the way they say it — 500 means ₦500 — and the
+    conversion happens on the way out. Storage stays integer minor units,
+    because that is the only representation money may be kept in.
+  */
+  const [price, setPrice] = useState(minorToMajorInput(settings.frenzAiVideoPriceCents));
   const [currency, setCurrency] = useState<AiCurrency>(settings.frenzAiCurrency);
-  const [minTopup, setMinTopup] = useState(String(settings.frenzAiMinTopupCents));
+  const [minTopup, setMinTopup] = useState(minorToMajorInput(settings.frenzAiMinTopupCents));
   // The symbol the operator will actually be charging in — see the currency note.
   const symbol = aiCurrencySymbol(currency);
   const [engine, setEngine] = useState<AiCleanEngineSetting>(settings.frenzAiEngine);
@@ -100,9 +119,10 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
             weekly.trim() === "" ? settings.frenzAiWeeklyFreeCredits : Number(weekly),
           // Price may NOT be zero — the schema refuses it — so here `||` is
           // guarding an empty field rather than discarding a meaningful 0.
-          frenzAiVideoPriceCents: Number(price) || settings.frenzAiVideoPriceCents,
+          // Major to minor, once, here. Math.round inside handles the float.
+          frenzAiVideoPriceCents: majorInputToMinor(price) || settings.frenzAiVideoPriceCents,
           frenzAiCurrency: currency,
-          frenzAiMinTopupCents: Number(minTopup) || settings.frenzAiMinTopupCents,
+          frenzAiMinTopupCents: majorInputToMinor(minTopup) || settings.frenzAiMinTopupCents,
           frenzAiEngine: engine,
         }),
       });
@@ -260,26 +280,28 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
 
         <div>
           <label htmlFor="frenz-ai-price" className="block text-sm font-semibold">
-            Price per AI video, in {currency} minor units
+            Price per AI video ({symbol})
           </label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Charged only after a member&apos;s free allowance is used. Pro and
-            Business pay this too — a subscription does not include AI.
+            In {currency}, the way you say it — type 500 for {symbol}500. Charged
+            only after a member&apos;s free allowance is used; Pro and Business pay it
+            too, because a subscription does not include AI.
           </p>
           <div className="mt-2 flex items-center gap-2">
             <input
               id="frenz-ai-price"
               type="number"
               inputMode="numeric"
-              min={FRENZ_AI_MIN_PRICE_CENTS}
-              max={FRENZ_AI_MAX_PRICE_CENTS}
+              min={FRENZ_AI_MIN_PRICE_CENTS / MINOR_UNITS_PER_MAJOR}
+              max={FRENZ_AI_MAX_PRICE_CENTS / MINOR_UNITS_PER_MAJOR}
+              step="any"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               className="w-28 rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             {/* What they have actually typed, in the units a person thinks in. */}
             <span className="text-sm font-semibold tabular-nums">
-              = {formatCents(Number(price) || 0, symbol)}
+              = {formatCents(majorInputToMinor(price) ?? 0, symbol)} per video
             </span>
             <span className="text-xs text-muted-foreground">per video</span>
           </div>
@@ -303,19 +325,22 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
         */}
         <div>
           <label htmlFor="frenz-ai-min-topup" className="block text-sm font-semibold">
-            Minimum deposit, in {currency} minor units
+            Minimum deposit ({symbol})
           </label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Members are offered this, and 2×, 5× and 10× of it. Anything else is
-            refused server-side, so the ladder is the only thing anybody can buy.
+            In {currency}, the way you say it. Members are offered this and 2×, 5×
+            and 10× of it as one-tap amounts, and may type any custom amount from
+            this up to 100× it. Anything below is refused server-side, so this is
+            genuinely the smallest deposit anybody can make.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
               id="frenz-ai-min-topup"
               type="number"
               inputMode="numeric"
-              min={FRENZ_AI_MIN_TOPUP_FLOOR}
-              max={FRENZ_AI_MIN_TOPUP_CEILING}
+              min={FRENZ_AI_MIN_TOPUP_FLOOR / MINOR_UNITS_PER_MAJOR}
+              max={FRENZ_AI_MIN_TOPUP_CEILING / MINOR_UNITS_PER_MAJOR}
+              step="any"
               value={minTopup}
               onChange={(e) => setMinTopup(e.target.value)}
               className="w-32 rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -325,7 +350,7 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
             <span className="text-xs text-muted-foreground">
               offers{" "}
               <span className="font-semibold text-foreground">
-                {aiTopupOptions(Number(minTopup) || 0)
+                {aiTopupOptions(majorInputToMinor(minTopup) ?? 0)
                   .map((c) => formatCents(c, symbol))
                   .join(" · ")}
               </span>
@@ -343,9 +368,15 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           were "deliberately not settable here" because "an operator raising one
           by mistake is how a stolen session becomes an unbounded bill". That
           risk is real and it has not gone away; it is simply not an argument
-          about who decides. It now lives in the BOUNDS: the floor sits above
-          the free allowance so a slip cannot give a subscriber less than a free
-          member gets, and the ceiling caps what a slipped digit can commit to.
+          about who decides. It lives in the CEILING, which caps what a slipped
+          digit can commit to.
+
+          🔴 The FLOOR was 3, and on 2026-09-09 it refused the owner's own
+          values ("pro daily to 2 and business to 5"). It encoded a rule I
+          invented — "a paid plan may never give less than the free one" — that
+          contradicts the standing Frenz AI rule saying a subscription buys no
+          AI at all. It is 1 now: positive, because 0 means "not configured"
+          everywhere else in this system, and nothing more.
 
           🔴 The numbers are no longer printed anywhere in the product — the
           member's screen shows their live remaining count instead — precisely
@@ -358,8 +389,9 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
             Pro and Business. These are not shown anywhere in the app, so you can
             change them without contradicting something a member has already
             read. Between {FRENZ_AI_MIN_PAID_CREDITS} and {FRENZ_AI_MAX_PAID_CREDITS}
-            &nbsp;— the floor is there so a mistyped value can never leave a
-            paying member with less than a free one.
+            &nbsp;— a subscription buys no AI, so these may sit at or below the
+            free allowance; the ceiling is what stops a slipped digit committing
+            to a provider bill nobody approved.
           </p>
           <div className="mt-2 flex flex-wrap items-end gap-4">
             {(

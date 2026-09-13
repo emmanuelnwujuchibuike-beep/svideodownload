@@ -169,7 +169,33 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid settings payload." }, { status: 400 });
+    /*
+      ── 🔴 SAY WHICH FIELD, BECAUSE THIS PANEL SAVES ALL OF THEM AT ONCE ────
+
+      Owner, 2026-09-09: "i tried setting the limit for pro daily to 2 and
+      business to 5 but it showed number must be equal to, and the button to
+      set the weekly limit."
+
+      One out-of-range number refused the ENTIRE payload — the weekly
+      allowance, the price, the currency and the minimum deposit along with it
+      — and the message said only "Invalid settings payload", so from the
+      operator's side the weekly limit simply would not save. Naming the field
+      is the difference between a two-second fix and an unfalsifiable bug.
+
+      🔴 Safe to return: this route is behind `getAdminUser`, and a Zod issue
+      here carries a field name and a bound we chose, never a value the request
+      sent and never anything about the database. It is not the `aiErrorBody`
+      rule about hiding provider internals from members — it is an operator
+      being told which of their own boxes is wrong.
+    */
+    const fields = parsed.error.issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .slice(0, 4)
+      .join("; ");
+    return NextResponse.json(
+      { error: fields ? `Couldn't save — ${fields}` : "Invalid settings payload." },
+      { status: 400 },
+    );
   }
 
   try {

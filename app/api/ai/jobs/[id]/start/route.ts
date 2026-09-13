@@ -374,8 +374,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       a reward has not had a clean.
 
       `entitlement.requiresReward` comes from the plan policy, never from the
-      request. Part 10 turns it on for the paid plans by editing a row in
-      lib/ai/policy.ts; not a line of this changes.
+      request.
+
+      🔴 IT IS FALSE ON EVERY ROW since 2026-09-13 (standing rule §6: "Do not
+      use reward ads for AI access"), and lib/ai/policy.test.ts asserts that
+      for every audience. This branch is therefore unreachable by policy, and
+      it stays that way by the test rather than by anybody remembering. The
+      day it was reachable, a free member's browser waited on an ad that
+      never came and `/start` was never called — "stuck at queued 58%".
     */
     if (entitlement.requiresReward) {
       if (!rewardSessionId) {

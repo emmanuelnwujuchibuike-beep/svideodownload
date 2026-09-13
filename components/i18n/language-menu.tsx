@@ -4,6 +4,7 @@ import { Check, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { writeCookie } from "@/lib/dom/cookie";
 import { languageNote, languageStatus, isRtlCode as isRtl } from "@/lib/i18n/language-status";
 import { LANGUAGE_COOKIE, LANGUAGES } from "@/lib/i18n/languages";
 import { haptic } from "@/lib/motion/haptics";
@@ -59,7 +60,7 @@ export function LanguageMenu({
     playSound("tap");
     try {
       const secure = location.protocol === "https:" ? "; secure" : "";
-      document.cookie = `${LANGUAGE_COOKIE}=${code}; path=/; max-age=31536000; samesite=lax${secure}`;
+      writeCookie(`${LANGUAGE_COOKIE}=${code}; path=/; max-age=31536000; samesite=lax${secure}`);
       localStorage.setItem(LANGUAGE_COOKIE, code);
       document.documentElement.setAttribute("lang", code);
       /*

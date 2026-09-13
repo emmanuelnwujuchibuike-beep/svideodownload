@@ -75,6 +75,8 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   news_recommended: Newspaper,
   subscription_activated: Crown,
   payment_successful: CreditCard,
+  ai_deposit_successful: CreditCard,
+  ai_deposit_failed: XCircle,
   renewal_reminder: CreditCard,
   premium_expiring: Crown,
   security_login: ShieldAlert,
@@ -195,6 +197,10 @@ export function verbFor(type: NotificationType): string {
       return "Your subscription is active";
     case "payment_successful":
       return "Payment successful";
+    case "ai_deposit_successful":
+      return "Deposit received";
+    case "ai_deposit_failed":
+      return "Deposit didn't go through";
     case "renewal_reminder":
       return "Renewal reminder";
     case "premium_expiring":
@@ -251,6 +257,8 @@ export function isActorType(type: NotificationType): boolean {
     !type.startsWith("news") &&
     type !== "subscription_activated" &&
     type !== "payment_successful" &&
+    type !== "ai_deposit_successful" &&
+    type !== "ai_deposit_failed" &&
     type !== "renewal_reminder" &&
     type !== "premium_expiring" &&
     type !== "processing_finished" &&

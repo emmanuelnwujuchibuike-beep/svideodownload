@@ -53,11 +53,14 @@ export function AICleanEmptyState({
   onPasteLink,
   entitlement,
   historyHref = "/ai/history",
+  usageHref = "/ai/usage",
 }: {
   onFile: (file: File) => void;
   onPasteLink: () => void;
   /** Which door this page is behind — the public history or the Studio one. */
   historyHref?: string;
+  /** The dashboard row's destination (owner, 2026-09-13: usage, not history). */
+  usageHref?: string;
   /** Null until the server answers; the bar renders nothing until then. */
   entitlement?: AiCleanEntitlement | null;
 }) {
@@ -150,7 +153,7 @@ export function AICleanEmptyState({
         It renders nothing until it has real numbers, so it costs this screen no
         layout shift and no skeleton. See the component.
       */}
-      <FrenzAIDashboard historyHref={historyHref} className="mt-5" />
+      <FrenzAIDashboard usageHref={usageHref} className="mt-5" />
 
       {limitReached && entitlement ? (
         <AICleanLimitReached entitlement={entitlement} className="mt-5" />

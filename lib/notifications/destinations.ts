@@ -81,6 +81,8 @@ const BY_TYPE: Partial<Record<NotificationType, string>> = {
 
   /* premium */
   payment_successful: "/account/plan",
+  ai_deposit_successful: "/ai/usage",
+  ai_deposit_failed: "/ai",
   subscription_activated: "/account/plan",
   renewal_reminder: "/account/plan",
   premium_expiring: "/account/plan",

@@ -178,3 +178,135 @@ export function sendProductEmail(
 
   return send(to, opts.subject, html, text);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ *  Frenz AI deposit receipt / invoice
+ *  Owner, 2026-09-13: "they should receive a push notification and an email
+ *  notification of the successful or failed deposit, with an invoice."
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** The minimum an HTML email may not trust: provider text and addresses. */
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+}
+
+export interface TopupReceipt {
+  /** "success" renders an invoice; "failed" renders the decline and a retry. */
+  outcome: "success" | "failed";
+  /** Our invoice number, derived from the reference — see lib/ai/topup-notify.ts. */
+  invoiceNumber: string;
+  /** Paystack's reference, for support conversations. */
+  reference: string;
+  /** Already formatted with its currency symbol, e.g. "₦2,000.00". */
+  amount: string;
+  currency: string;
+  /** Already formatted. Only on success. */
+  balanceAfter?: string | null;
+  /** Human date, e.g. "13 Sep 2026, 09:14". */
+  when: string;
+  /** "card", "bank_transfer", "ussd"… as Paystack names it, or null. */
+  channel?: string | null;
+  /** Paystack's customer-facing status line on failure ("Insufficient Funds"). */
+  reason?: string | null;
+  /** Where "View your statement" / "Try again" goes. */
+  ctaHref: string;
+}
+
+function channelLabel(channel: string | null | undefined): string {
+  if (!channel) return "Paystack";
+  const map: Record<string, string> = {
+    card: "Card",
+    bank: "Bank",
+    bank_transfer: "Bank transfer",
+    ussd: "USSD",
+    qr: "QR",
+    mobile_money: "Mobile money",
+    eft: "EFT",
+    apple_pay: "Apple Pay",
+  };
+  return map[channel] ?? channel.replace(/_/g, " ");
+}
+
+/**
+ * The receipt, as a real itemised table — invoice number, date, what was
+ * bought, how it was paid, the reference, and the balance it left — inside
+ * the same branded shell as every other email the product sends.
+ */
+export function sendTopupReceiptEmail(to: string, r: TopupReceipt): Promise<boolean> {
+  const year = new Date().getFullYear();
+  const ok = r.outcome === "success";
+  const heading = ok ? "Deposit received" : "Deposit didn't go through";
+  const intro = ok
+    ? `${r.amount} was added to your Frenz AI balance.`
+    : `We couldn't complete your ${r.amount} deposit${r.reason ? ` — ${esc(r.reason)}` : ""}. Nothing was charged to your balance.`;
+  const rows: [string, string][] = [
+    [ok ? "Invoice" : "Attempt", esc(r.invoiceNumber)],
+    ["Date", esc(r.when)],
+    ["Item", "Frenz AI balance top-up"],
+    ["Amount", esc(r.amount)],
+    ["Paid via", esc(channelLabel(r.channel))],
+    ["Reference", esc(r.reference)],
+  ];
+  if (ok && r.balanceAfter) rows.push(["Balance after", esc(r.balanceAfter)]);
+  if (!ok && r.reason) rows.push(["Reason", esc(r.reason)]);
+  const status = ok
+    ? `<span style="display:inline-block;background:#e8f7ee;color:#137a3a;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;">PAID</span>`
+    : `<span style="display:inline-block;background:#fdecec;color:#b42318;font-size:12px;font-weight:700;padding:4px 10px;border-radius:999px;">FAILED</span>`;
+  const table = rows
+    .map(
+      ([k, v], i) =>
+        `<tr>
+          <td style="padding:10px 0;border-top:${i === 0 ? "0" : "1px solid #ececf2"};font-family:${FONT};font-size:13px;color:#6b6b76;">${k}</td>
+          <td style="padding:10px 0;border-top:${i === 0 ? "0" : "1px solid #ececf2"};font-family:${k === "Reference" ? MONO : FONT};font-size:13px;color:#17171c;text-align:right;font-weight:${k === "Amount" || k === "Balance after" ? "700" : "500"};">${v}</td>
+        </tr>`,
+    )
+    .join("");
+  const ctaLabel = ok ? "View your statement" : "Try again";
+  const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${heading}</title></head>
+<body style="margin:0;padding:0;background:#eef0f7;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef0f7;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px;background:#ffffff;border-radius:24px;border:1px solid #ececf2;overflow:hidden;">
+        <tr><td style="height:5px;background:linear-gradient(90deg,#0A84FF,#6C4DFF,#c026d3);font-size:0;line-height:0;">&nbsp;</td></tr>
+        <tr><td style="padding:40px 40px 0;text-align:center;">
+          <img src="${SITE_URL}/brand/frenz-logo.png" width="52" height="52" alt="Frenz" style="display:block;margin:0 auto 14px;border-radius:13px;">
+          <span style="font-family:${FONT};font-size:20px;font-weight:800;letter-spacing:-0.02em;"><span style="color:#17171c;">Frenz</span><span style="color:#0A84FF;">Save</span></span>
+        </td></tr>
+        <tr><td style="padding:26px 40px 0;text-align:center;font-family:${FONT};">
+          <p style="margin:0 0 10px;">${status}</p>
+          <p style="margin:0;font-size:19px;font-weight:800;color:#111116;">${heading}</p>
+          <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#6b6b76;">${intro}</p>
+        </td></tr>
+        <tr><td style="padding:22px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f6ff;border:1px solid #ece9fb;border-radius:14px;">
+            <tr><td style="padding:6px 18px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${table}</table>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="padding:24px 40px 0;text-align:center;">
+          <a href="${r.ctaHref}" style="display:inline-block;background:#0A84FF;color:#ffffff;font-family:${FONT};font-size:14px;font-weight:700;text-decoration:none;padding:12px 26px;border-radius:12px;">${ctaLabel}</a>
+        </td></tr>
+        <tr><td style="padding:28px 40px 32px;font-family:${FONT};">
+          <p style="margin:0;border-top:1px solid #ececf2;padding-top:16px;font-size:12px;line-height:1.6;color:#a0a0aa;">
+            Questions about this ${ok ? "invoice" : "payment"}? Contact <a href="mailto:${SUPPORT_EMAIL}" style="color:#6C4DFF;text-decoration:none;">${SUPPORT_EMAIL}</a> and quote the reference above.<br>
+            Payments are processed by Paystack. Frenz never sees or stores your card details.<br>
+            &copy; ${year} Frenz. All rights reserved.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+  const text =
+    `${heading}\n\n${ok ? `${r.amount} was added to your Frenz AI balance.` : `We couldn't complete your ${r.amount} deposit${r.reason ? ` — ${r.reason}` : ""}. Nothing was charged to your balance.`}\n\n` +
+    rows.map(([k, v]) => `${k}: ${v.replace(/&[a-z#0-9]+;/g, "")}`).join("\n") +
+    `\n\n${ctaLabel}: ${r.ctaHref}\n\nQuestions? ${SUPPORT_EMAIL} — quote the reference above.\nPayments are processed by Paystack. Frenz never sees or stores your card details.\n(c) ${year} Frenz.`;
+  const subject = ok
+    ? `Receipt ${r.invoiceNumber} — ${r.amount} added to your Frenz AI balance`
+    : `Your ${r.amount} Frenz AI deposit didn't go through`;
+  return send(to, subject, html, text);
+}

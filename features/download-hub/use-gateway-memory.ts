@@ -40,8 +40,16 @@ const isId = (v: unknown): v is string => typeof v === "string" && v.length > 0 
 
 function readCount(): number {
   if (typeof window === "undefined") return 0;
-  const n = Number(window.localStorage.getItem(COUNT_KEY));
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  // Guarded like readMemory above: in a sandboxed embed (AdSense's site
+  // preview, 2026-09-13) `localStorage` THROWS rather than returning null,
+  // and this ran inside an effect on the landing page — the throw reached the
+  // root boundary and the whole site rendered as "Something went wrong".
+  try {
+    const n = Number(window.localStorage.getItem(COUNT_KEY));
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
 }
 
 export function useGatewayMemory() {

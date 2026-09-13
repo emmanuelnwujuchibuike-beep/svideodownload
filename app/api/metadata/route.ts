@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getMetadata } from "@/server/extractors";
+import { ContentUnavailableError } from "@/server/extractors/types";
+import { LINK_NOT_SERVABLE_MESSAGE } from "@/lib/downloads/failure-copy";
 import { detectPlatform } from "@/lib/platforms";
 import { metadataLimiter, clientId } from "@/lib/rate-limit";
 import { parseTelegramUrl, telegramMtprotoConfigured } from "@/server/services/telegram-mtproto";
@@ -80,6 +82,15 @@ export async function POST(request: Request) {
         );
       }
     }
+    /*
+      The platform itself said the content is gone (a Snapchat 404 with its own
+      page shell, for one). That is a fact about the link, and the member gets
+      the fact — not the generic sentence, and not an upgrade that could not
+      help: no plan downloads a deleted Snap.
+    */
+    if (err instanceof ContentUnavailableError) {
+      return fail(err.userMessage, "EXTRACTION_FAILED", 422);
+    }
     if (err instanceof YtDlpError) {
       if (err.code === "TIMEOUT") {
         return fail("The site took too long to respond.", "TIMEOUT", 504);
@@ -101,11 +112,10 @@ export async function POST(request: Request) {
           422,
         );
       }
-      return fail(
-        "Couldn't fetch this video — it may be private, region-locked, removed, or require sign-in. Some platforms (Instagram, Facebook) need cookies or a proxy configured on the server.",
-        "EXTRACTION_FAILED",
-        422,
-      );
+      // Owner, 2026-09-13: the old "may be private, region-locked… Instagram,
+      // Facebook need cookies" sentence is gone. The copy lives in
+      // lib/downloads/failure-copy.ts, next to the download card's 502 line.
+      return fail(LINK_NOT_SERVABLE_MESSAGE, "EXTRACTION_FAILED", 422);
     }
     return fail("Something went wrong.", "INTERNAL", 500);
   }

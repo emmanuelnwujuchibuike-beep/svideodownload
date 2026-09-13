@@ -1,4 +1,4 @@
-import { ChevronRight, History, Sparkles, Wand2 } from "lucide-react";
+import { ChevronRight, History, Wand2 } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -113,28 +113,22 @@ export function FrenzAIToolGrid({
   const items = tools(cleanHref, historyHref);
 
   return (
-    <section className={cn(className)} aria-labelledby="frenz-ai-tools-heading">
-      {/* ── the section header, as drawn ──────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2
-            id="frenz-ai-tools-heading"
-            className="flex items-center gap-2 text-[1.15rem] font-bold tracking-[-0.02em]"
-          >
-            <Sparkles className="h-[18px] w-[18px] text-primary" aria-hidden />
-            More AI Tools
-          </h2>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Explore other powerful AI tools to edit, enhance and transform your content.
-          </p>
-        </div>
-      </div>
+    /*
+      ── 🔴 NO HEADER (owner, 2026-09-13) ──────────────────────────────────
 
+      The reference drew a "More AI Tools" title with a blurb above the grid.
+      Owner, with a screenshot of exactly that block: "Remove this section
+      from the Ai welcome page." The cards stay — they are the only doors to
+      AI Clean and to history — so the section keeps an accessible name via
+      `aria-label` now that there is no heading for `aria-labelledby` to point
+      at.
+    */
+    <section className={cn(className)} aria-label="AI tools">
       {/*
         🔴 `grid-cols-2` with NO breakpoint — the instruction is "on all devices
         the Down section should be grid". Two cards, two columns, at every width.
       */}
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {items.map((tool) => (
           <ToolCard key={tool.id} tool={tool} />
         ))}
@@ -181,7 +175,8 @@ function ToolCard({ tool }: { tool: AiTool }) {
         </span>
       </div>
 
-      <h3 className="mt-3 text-[14.5px] font-bold leading-tight">{name}</h3>
+      {/* `h2`: the page has an h1 and, since 2026-09-13, no section heading between. */}
+      <h2 className="mt-3 text-[14.5px] font-bold leading-tight">{name}</h2>
       {/*
         🔴 Clamped to three lines. At two columns on a 360px phone a card is
         ~160px wide, and an unclamped blurb pushes one card taller than its

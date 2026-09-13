@@ -3,7 +3,7 @@ import type { MediaFormat, PlatformId, VideoMetadata } from "@/types";
 
 import { extractorFetch } from "./http";
 import { metaContent, unescapeJsonUrl } from "./parse";
-import { ExtractionError, type Extractor } from "./types";
+import { ContentUnavailableError, ExtractionError, type Extractor } from "./types";
 
 /**
  * Snapchat custom extractor — handles **Spotlight** clips AND public **Story**
@@ -377,7 +377,41 @@ export const snapchatExtractor: Extractor = {
         },
         "snapchat",
       );
-      if (!res.ok) throw new ExtractionError(`Snapchat responded ${res.status}`);
+      if (!res.ok) {
+        /*
+          ── 🔴 A 404 FROM SNAPCHAT'S OWN PAGE IS A VERDICT, NOT A MISS ──────
+          Owner, 2026-09-13: "https://snapchat.com/t/ypfUOJ0m — this link is
+          showing this" (the generic could-not-fetch sentence).
+
+          Probed: the share link resolves through four redirects to a real
+          Spotlight route, and Snapchat answers it with status 404 while still
+          rendering its Next.js shell — `__NEXT_DATA__` present, every
+          `videoMetadata` field empty, and the page's own string for it is
+          "This Snap is no longer available". The creator's public Spotlight
+          rail was empty too. That clip is deleted or private.
+
+          Before this, the 404 threw a plain ExtractionError, the chain fell
+          back to yt-dlp (same 404), then re-ran both through the residential
+          proxy, and the member read "may be private, region-locked… Instagram,
+          Facebook need cookies" ten seconds later. The first response had
+          already said everything.
+
+          The signal is deliberately narrow: status 404 AND Snapchat's app
+          shell in the body. A 404 with no shell — an edge, a wall, a CDN —
+          stays a plain ExtractionError and keeps every fallback, because that
+          one might genuinely look different from another IP.
+        */
+        if (res.status === 404) {
+          const body = await res.text().catch(() => "");
+          if (body.includes('id="__NEXT_DATA__"')) {
+            throw new ContentUnavailableError(
+              "Snapchat responded 404 with its own page shell (snap removed or private)",
+              "This Snap is no longer available — Snapchat says it was removed or made private.",
+            );
+          }
+        }
+        throw new ExtractionError(`Snapchat responded ${res.status}`);
+      }
       html = await res.text();
     } finally {
       clearTimeout(timer);

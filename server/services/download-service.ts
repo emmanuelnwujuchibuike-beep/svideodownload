@@ -214,6 +214,43 @@ const CODEC_CACHE_MAX = 500;
 export interface ProbedCodecs {
   video: string | null;
   audio: string | null;
+  /**
+   * The AAC profile ffmpeg printed in parentheses — "LC", "HE-AAC",
+   * "HE-AACv2" — or null when it printed none / the audio is not AAC. Read
+   * for one decision: HE-AAC is never delivered as-is (see `isHeAac`).
+   */
+  audioProfile: string | null;
+}
+
+/**
+ * ── 🔴 HE-AAC IS NOT "ALREADY FINE" (owner, 2026-09-13) ─────────────────────
+ *
+ * "Some downloads' audio is altered halfway and stops and continues,
+ * especially TikTok video."
+ *
+ * Measured on the owner's link (vt.tiktok.com/ZSqyp7REt): the rendition every
+ * member gets — TikWM's H.264 re-encode, streamed byte-for-byte — carries
+ * `aac (HE-AACv2) 44100 Hz stereo 16 kb/s`; the HEVC one carries HE-AACv2 at
+ * 32 kb/s. Decoded with ffmpeg, both are continuous — no gaps, no silence, the
+ * high band present in every second. The dropouts are not in the file. They
+ * are what a phone's gallery player does with HE-AACv2: SBR (the top octave is
+ * reconstructed from side data) plus parametric stereo, and often signalled
+ * implicitly, so a decoder that does not detect them plays the muffled
+ * half-rate core, then switches when it does — "altered halfway, stops and
+ * continues", in the owner's words.
+ *
+ * So HE-AAC audio is re-encoded to plain AAC-LC on delivery, with the video
+ * copied untouched. That costs one audio pass — under a second for a
+ * TikTok clip — and buys a file every decoder plays the same way. It does NOT
+ * raise the quality ceiling: 16 kb/s in is 16 kb/s of information out. The
+ * ceiling only rises with TikTok's own renditions, which need the page's
+ * session cookie at the CDN and a residential IP — a separate change.
+ *
+ * The 2026-08-31 rule below ("do not re-encode audio that is already fine")
+ * still holds for AAC-LC. HE-AAC is the case it did not know about.
+ */
+function isHeAac(probed: Pick<ProbedCodecs, "audio" | "audioProfile">): boolean {
+  return probed.audio === "aac" && /he-aac/i.test(probed.audioProfile ?? "");
 }
 
 const codecCache = new Map<string, { codecs: ProbedCodecs; at: number }>();
@@ -267,10 +304,6 @@ async function probeUrlCodecs(format: MediaFormat): Promise<ProbedCodecs> {
   return codecs;
 }
 
-/** Just the video codec — the answer most callers want. */
-async function probeUrlCodec(format: MediaFormat): Promise<string | null> {
-  return (await probeUrlCodecs(format)).video;
-}
 
 function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
   return new Promise((resolve) => {
@@ -282,7 +315,7 @@ function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
         { windowsHide: true },
       );
     } catch {
-      resolve({ video: null, audio: null });
+      resolve({ video: null, audio: null, audioProfile: null });
       return;
     }
     let err = "";
@@ -295,14 +328,14 @@ function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
       if (settled) return;
       settled = true;
       child.kill("SIGKILL");
-      resolve({ video: null, audio: null });
+      resolve({ video: null, audio: null, audioProfile: null });
     }, FFMPEG_PROBE_TIMEOUT_MS);
     child.stderr?.on("data", (c: Buffer) => (err += c.toString()));
     child.on("error", () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ video: null, audio: null });
+      resolve({ video: null, audio: null, audioProfile: null });
     });
     child.on("close", () => {
       if (settled) return;
@@ -311,10 +344,13 @@ function runCodecProbe(format: MediaFormat): Promise<ProbedCodecs> {
       const v = err.match(/Video:\s*([a-z0-9]+)/i);
       // Read from the SAME ffmpeg output the video codec comes from, so
       // knowing the audio codec costs nothing extra — see transcodeToH264.
-      const a = err.match(/Audio:\s*([a-z0-9]+)/i);
+      // The profile is the parenthesised token right after it:
+      //   Audio: aac (HE-AACv2) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 16 kb/s
+      const a = err.match(/Audio:\s*([a-z0-9]+)(?:\s*\(([^)]+)\))?/i);
       resolve({
         video: v ? v[1]!.toLowerCase() : null,
         audio: a ? a[1]!.toLowerCase() : null,
+        audioProfile: a?.[2] ? a[2]!.trim() : null,
       });
     });
   });
@@ -403,8 +439,11 @@ async function transcodeToH264(format: MediaFormat, knownCodec?: string | null):
     a transcode of unknown-quality source audio should not also be the
     narrowest one on offer.
   */
-  const audioArgs =
-    probed.audio === "aac"
+  const audioArgs = isHeAac(probed)
+    ? // HE-AAC → AAC-LC. See isHeAac. 128k is ample for a source that is
+      // 16-32 kb/s of information; the point is the profile, not the rate.
+      ["-c:a", "aac", "-b:a", "128k"]
+    : probed.audio === "aac"
       ? ["-c:a", "copy"]
       : ["-c:a", "aac", "-b:a", "192k"];
 
@@ -656,8 +695,16 @@ export async function resolveDownload(
       anything else (HEVC, TikTok's bytevc1, a source with no video track at
       all) still goes the long way round and is re-encoded.
     */
-    const probed = (await probeUrlCodec(format!))?.toLowerCase() ?? null;
-    if (probed === "h264") {
+    const probedCodecs = await probeUrlCodecs(format!);
+    const probed = probedCodecs.video?.toLowerCase() ?? null;
+    /*
+      🔴 The raw fast path is for a file that plays as-is. H.264 video with
+      HE-AAC audio is not one (see isHeAac): it takes the remux below instead,
+      where the video is still copied and only the audio is re-encoded. The
+      probe already read the audio line, so this decision costs nothing.
+    */
+    const heAac = isHeAac(probedCodecs);
+    if (probed === "h264" && !heAac) {
       try {
         return { ...(await proxyDownload(format!)), title };
       } catch {
@@ -694,7 +741,12 @@ export async function resolveDownload(
            else still take the long, validated road.
     */
     const HEVC = new Set(["hevc", "h265", "hvc1", "hev1"]);
-    if (caps.clientPlaysHevc && probed && HEVC.has(probed)) {
+    // Raw HEVC only when its audio is not HE-AAC either — the same rule as the
+    // H.264 fast path. An HE-AAC HEVC source for an HEVC-capable client is the
+    // one case that now costs a video encode (transcodeToH264 re-encodes
+    // non-H.264 video). Rare — TikWM's HD tier — and a correct file beats a
+    // fast one that plays wrong.
+    if (caps.clientPlaysHevc && probed && HEVC.has(probed) && !heAac) {
       try {
         return { ...(await proxyDownload(format!)), title };
       } catch {

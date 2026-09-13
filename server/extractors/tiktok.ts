@@ -113,7 +113,12 @@ function extractStateJson(html: string): unknown {
   const marker =
     '<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">';
   const start = html.indexOf(marker);
-  if (start === -1) throw new ExtractionError("TikTok state not found");
+  if (start === -1) {
+    // Name what came back instead — a login wall, a verify page and an empty
+    // shell need different fixes, and "not found" hid which one it was.
+    const title = (html.match(/<title>([^<]{0,80})/i)?.[1] ?? "").trim();
+    throw new ExtractionError(`TikTok state not found [html:${html.length}b title:"${title}"]`);
+  }
   const from = start + marker.length;
   const end = html.indexOf("</script>", from);
   if (end === -1) throw new ExtractionError("TikTok state not terminated");
@@ -717,10 +722,22 @@ export const tiktokExtractor: Extractor = {
 
     try {
       return await Promise.any([viaApi, viaNative]);
-    } catch {
-      // Both routes failed — the registry falls back to yt-dlp from here,
-      // same as before.
-      throw new ExtractionError("TikTok extraction failed on all direct routes");
+    } catch (err) {
+      /*
+        Both routes failed — the registry falls back to yt-dlp from here, same
+        as before. Say WHY each one failed (2026-09-13): `Promise.any` hands
+        back an AggregateError whose `errors` hold the two rejections, and
+        this message used to drop both. The native route was failing silently
+        for days behind a TikWM that answered; the first time anybody could
+        see the reason was when TikWM stopped answering too.
+      */
+      const reasons =
+        err instanceof AggregateError
+          ? err.errors.map((e) => (e instanceof Error ? e.message : String(e))).join(" | ")
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      throw new ExtractionError(`TikTok extraction failed on all direct routes [tikwm/native: ${reasons}]`);
     }
   },
 };

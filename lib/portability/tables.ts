@@ -144,6 +144,13 @@ export const OWNER_COLUMN: Record<string, string> = {
     and invite the two copies to disagree in their hands.
   */
   ai_balance_ledger: "user_id",
+  /*
+    Every deposit you attempted — the amount, the currency, and whether it
+    succeeded, failed or was abandoned, with the provider's one-line reason.
+    Ours to hand over because it is about you and written on your behalf; it
+    holds no card details (0151).
+  */
+  ai_topup_attempts: "user_id",
 
   /* social */
   posts: "publisher_id",

@@ -96,6 +96,91 @@ SWX.staleWhileRevalidate = async function staleWhileRevalidate(request, cacheNam
 // was online the entire time. 20s gives every page's own timeout budget
 // room to actually resolve (and show its own Retry state) before this
 // outer one ever has to step in.
+/*
+  ═══════════════════════════════════════════════════════════════════════════
+   🔴 "NETWORK-FIRST" WAS HTTP-CACHE-FIRST FOR TWO HOURS (owner, 2026-09-13)
+  ═══════════════════════════════════════════════════════════════════════════
+  Same screenshot as 2026-09-07 — the landing as raw serif text, bullets and
+  an unscaled image — six days after the timeout fallback below was removed.
+  "It shows this colourless almost blank page when I enter the browser on
+  cold start."
+
+  Measured on production:
+    · Vercel sends the document as `public, max-age=0, must-revalidate`;
+    · Cloudflare rewrites that to `public, max-age=7200` (the same rewrite
+      that once held an admin ad switch for two hours);
+    · so the PHONE's HTTP cache keeps a document for two hours, and every
+      `<link>` in it names `/_next/static/…?dpl=<that deploy>`;
+    · a deploy later, those hashes are gone: an unknown hash answers 404 and
+      the `dpl` pin is not honoured. The old document paints with no CSS.
+
+  Both `event.preloadResponse` and a plain `fetch(request)` are satisfied from
+  that HTTP cache while the 7200 s hold, so this strategy never asked the
+  network at all in the case that mattered. It only LOOKED network-first.
+
+  The tell: a response that came from the HTTP cache carries the `Date` the
+  server stamped when it was first fetched. A document more than a few
+  minutes old cannot be "the network's answer" to a request made just now,
+  so it is revalidated with `cache: "no-cache"` — a conditional request that
+  costs one ETag round-trip when nothing changed and returns the live
+  document when a deploy did. Preload keeps its head start in the fresh case,
+  which is every case except the two hours after a deploy.
+
+  A second, smaller path to the same screenshot: on a cold start iOS often
+  REJECTS the very first request while the radio wakes, and a rejection went
+  straight to the cached document (whose assets may not be cached at all).
+  One retry, when the browser says it is online, before falling back.
+
+  The Cloudflare rewrite itself is not fixable from this repository:
+  Caching → Configuration → Browser Cache TTL → "Respect Existing Headers".
+  Until that is set, a browser WITHOUT this worker still holds a document
+  for two hours; with it, every navigation this worker sees is honest.
+*/
+const STALE_DOCUMENT_MS = 5 * 60 * 1000;
+
+function documentLooksStale(res) {
+  if (!res || !res.ok) return false;
+  const stamped = Date.parse(res.headers.get("date") || "");
+  return Number.isFinite(stamped) && Date.now() - stamped > STALE_DOCUMENT_MS;
+}
+
+// A revalidating copy of a navigation request. Constructed from the URL rather
+// than the Request so the browser accepts it: a "navigate"-mode Request cannot
+// be re-issued from a worker, but a same-origin GET for the same document can.
+function revalidatingRequest(request) {
+  return new Request(request.url, {
+    method: "GET",
+    cache: "no-cache",
+    credentials: "same-origin",
+    redirect: "follow",
+    headers: { Accept: request.headers.get("accept") || "text/html,application/xhtml+xml" },
+  });
+}
+
+async function fetchDocument(request, preload) {
+  let res = null;
+  try {
+    res = (preload && (await preload)) || (await fetch(request));
+  } catch (err) {
+    // The radio-wake rejection: one retry while the browser still says online.
+    if (request.mode === "navigate" && self.navigator?.onLine !== false) {
+      await new Promise((r) => setTimeout(r, 400));
+      res = await fetch(revalidatingRequest(request));
+    } else {
+      throw err;
+    }
+  }
+  if (request.mode === "navigate" && documentLooksStale(res)) {
+    try {
+      const fresh = await fetch(revalidatingRequest(request));
+      if (fresh && fresh.ok) res = fresh;
+    } catch {
+      // Revalidation failed outright: the copy we have is still a document.
+    }
+  }
+  return res;
+}
+
 SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 20000 }) {
   /*
     ═══════════════════════════════════════════════════════════════════════════
@@ -127,7 +212,7 @@ SWX.networkFirst = async function networkFirst(request, { cacheName, preload, of
     from holding the page forever when we ARE offline and the failure has not
     surfaced as a rejection yet.
   */
-  const fromNetwork = (async () => (preload && (await preload)) || (await fetch(request)))();
+  const fromNetwork = fetchDocument(request, preload);
   /* Nothing may observe this as an unhandled rejection while we wait on the race. */
   fromNetwork.catch(() => {});
 

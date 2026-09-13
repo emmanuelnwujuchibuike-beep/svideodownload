@@ -23,12 +23,20 @@ import { NOTIFICATIONS } from "@/lib/platform/notifications-registry";
 */
 
 const MIGRATION = readFileSync("supabase/migrations/0132_streak_notifications.sql", "utf8");
+/*
+  🔴 The constraint's CURRENT statement. 0132 introduced the parity check;
+  0152 (2026-09-13) restated the whole list to add the Frenz AI deposit types.
+  Whichever migration restated it LAST is the one production enforces, so that
+  is the one the registry is checked against. Bump this when the next
+  migration restates the list.
+*/
+const LATEST_TYPE_CHECK = readFileSync("supabase/migrations/0152_ai_deposit_notification_types.sql", "utf8");
 const STREAK_TYPES = ["streak_reminder", "streak_milestone", "streak_lost"] as const;
 const META = readFileSync("features/notifications/meta.tsx", "utf8");
 
-/** The type list inside 0132's CHECK constraint. */
+/** The type list inside the CURRENT CHECK constraint (see LATEST_TYPE_CHECK). */
 function allowedTypes(): string[] {
-  const block = /notifications_type_chk check \(\s*type in \(([\s\S]*?)\)\s*\);/.exec(MIGRATION)?.[1];
+  const block = /notifications_type_chk check \(\s*type in \(([\s\S]*?)\)\s*\);/.exec(LATEST_TYPE_CHECK)?.[1];
   return [...(block ?? "").matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]!);
 }
 

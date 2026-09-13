@@ -2,6 +2,7 @@
 
 import { getClient } from "@/lib/supabase/client-lazy";
 
+import { clearAiBalanceCache } from "@/lib/ai/balance-cache";
 import { clearAiHistoryCache } from "@/lib/ai/history-cache";
 
 import { clearIdentity } from "./identity-cache";
@@ -49,6 +50,7 @@ export async function signOutClient(): Promise<void> {
     put it there.
   */
   clearAiHistoryCache();
+  clearAiBalanceCache(); // the same rule, for the balance snapshot (2026-09-13)
 
   // Clear the "just signed in" splash cookie so the hard navigation to `/` below
   // can never make BootSplash force its F loader on sign-out (owner, 2026-08-02:

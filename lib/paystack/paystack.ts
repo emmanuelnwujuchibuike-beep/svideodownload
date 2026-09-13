@@ -207,6 +207,14 @@ export interface PaystackVerifiedCharge {
   currency?: string;
   reference?: string;
   metadata?: { user_id?: string; purpose?: string };
+  /**
+   * The receipt fields (2026-09-13). `gateway_response` is Paystack's
+   * CUSTOMER-FACING status line — "Approved", "Insufficient Funds",
+   * "Declined" — and is the only provider text that ever reaches a member.
+   */
+  gateway_response?: string | null;
+  channel?: string | null;
+  paid_at?: string | null;
 }
 
 export async function verifyTransaction(reference: string): Promise<PaystackVerifiedCharge> {
@@ -260,4 +268,8 @@ export interface PaystackEventData {
   currency?: string;
   /** Our own reference, echoed back. The idempotency key for the credit. */
   reference?: string;
+  /** Receipt fields — see PaystackVerifiedCharge. */
+  gateway_response?: string | null;
+  channel?: string | null;
+  paid_at?: string | null;
 }

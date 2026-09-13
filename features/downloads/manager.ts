@@ -11,6 +11,7 @@ import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media"
 import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
+import { DOWNLOAD_502_MESSAGE } from "@/lib/downloads/failure-copy";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
 
@@ -460,6 +461,12 @@ function extFor(type: string): string {
  * response with no JSON body, or one whose body does not name a reason.
  */
 async function failureMessage(res: Response): Promise<string> {
+  // Owner, 2026-09-13: "failed error 502 download shows this error message
+  // instead". Named BEFORE the body is read — the server's 502 body says
+  // "Download failed. Please try again.", and the owner wants this sentence,
+  // not that one. Still retried first: isRetryable() does not treat 502 as
+  // final, and the automatic attempts run before this is ever shown.
+  if (res.status === 502) return DOWNLOAD_502_MESSAGE;
   try {
     const body = (await res.clone().json()) as { error?: unknown };
     if (typeof body.error === "string" && body.error.trim().length > 0) return body.error;

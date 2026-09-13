@@ -6,6 +6,7 @@ import { useEffect } from "react";
 import { isCriticalActivityInProgress, onCriticalActivityIdle } from "@/lib/pwa/activity-lock";
 import { BAKED_APP_BUILD, fetchServerBuild } from "@/lib/pwa/app-version";
 import { isStandalone } from "@/lib/pwa/platform";
+import { serviceWorkerContainer } from "@/lib/pwa/service-worker-container";
 
 /** Reloads now, or — if a critical section (e.g. an in-flight upload) is
  * open — waits for it to end first. Never skips the reload outright, since
@@ -113,23 +114,32 @@ export function RegisterServiceWorker() {
   // mid-navigation. A normal client-side router push is the same fast,
   // robust path a Link click already takes.
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
+    /*
+      🔴 `serviceWorkerContainer()`, not `"serviceWorker" in navigator`
+      (2026-09-13). In a sandboxed embed — AdSense's site preview — the `in`
+      check is TRUE and the property READ throws, and this effect runs on
+      every page; the throw reached the root boundary and the whole site
+      rendered as "Something went wrong". See lib/pwa/service-worker-container.ts.
+    */
+    const sw = serviceWorkerContainer();
+    if (!sw) return;
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === "frenz-navigate" && typeof event.data.url === "string") {
         router.push(event.data.url);
       }
     };
-    navigator.serviceWorker.addEventListener("message", onMessage);
-    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+    sw.addEventListener("message", onMessage);
+    return () => sw.removeEventListener("message", onMessage);
   }, [router]);
 
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
+    const sw = serviceWorkerContainer(); // guarded — see the effect above
+    if (!sw) return;
 
     let reg: ServiceWorkerRegistration | null = null;
     // Only reload for an UPDATE (a worker replacing an existing one) — never on
     // the very first install (there's no stale UI to replace then).
-    const hadController = !!navigator.serviceWorker.controller;
+    const hadController = !!sw.controller;
     let reloaded = false;
 
     // Tell a worker that has finished installing to activate immediately instead
@@ -138,7 +148,7 @@ export function RegisterServiceWorker() {
       if (r.waiting) r.waiting.postMessage("SKIP_WAITING");
     };
 
-    navigator.serviceWorker
+    sw
       .register("/sw.js", { updateViaCache: "none" })
       .then((r) => {
         reg = r;
@@ -149,7 +159,7 @@ export function RegisterServiceWorker() {
           const installing = r.installing;
           if (!installing) return;
           installing.addEventListener("statechange", () => {
-            if (installing.state === "installed" && navigator.serviceWorker.controller) promote(r);
+            if (installing.state === "installed" && sw.controller) promote(r);
           });
         });
       })
@@ -175,7 +185,7 @@ export function RegisterServiceWorker() {
       reloaded = true;
       void reloadIfNewDeploy();
     };
-    navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
+    sw.addEventListener("controllerchange", onControllerChange);
 
     // Actively re-check for a new deploy — the piece that fixes an always-open
     // laptop tab that never navigates, and a resumed home-screen app.
@@ -215,7 +225,7 @@ export function RegisterServiceWorker() {
     const initial = window.setTimeout(() => void reloadIfNewDeploy(), 4_000);
 
     return () => {
-      navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
+      sw.removeEventListener("controllerchange", onControllerChange);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
       window.clearInterval(interval);

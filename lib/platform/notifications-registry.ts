@@ -92,6 +92,16 @@ export const NOTIFICATIONS = [
   /* ── premium ── */
   { id: "subscription_activated", label: "Subscription activated", category: "premium" },
   { id: "payment_successful", label: "Payment successful", category: "premium" },
+  /*
+    Frenz AI deposits (2026-09-13). Their OWN types, not `payment_successful`
+    borrowed: a borrowed event type inherits its label AND its destination —
+    "Payment successful" is a subscription event that deep-links to
+    /account/plan, and a top-up belongs on /ai/usage. A failure gets its own
+    type for the same reason: "Payment successful" announcing a decline is
+    exactly the bug that rule exists for.
+  */
+  { id: "ai_deposit_successful", label: "AI deposit received", category: "premium" },
+  { id: "ai_deposit_failed", label: "AI deposit failed", category: "premium" },
   { id: "renewal_reminder", label: "Renewal reminder", category: "premium" },
   { id: "premium_expiring", label: "Premium expiring", category: "premium" },
   /* ── security ── */

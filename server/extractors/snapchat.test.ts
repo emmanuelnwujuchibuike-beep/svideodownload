@@ -298,3 +298,54 @@ describe("wrapped {value} fields — the real page shape", () => {
     expect(f.ext).toBe("jpg");
   });
 });
+
+/*
+  ── A Snapchat 404 that carries Snapchat's own page is a VERDICT ──────────────
+
+  Owner, 2026-09-13: "https://snapchat.com/t/ypfUOJ0m — this link is showing
+  this" (the generic could-not-fetch sentence). Probed live: status 404, the
+  Next.js shell rendered with every `videoMetadata` field empty, Snapchat's own
+  string "This Snap is no longer available". These pin the two halves of the
+  fix — the verdict is thrown for exactly that shape, and NOT for a bare 404.
+*/
+describe("a 404 from Snapchat's own page is ContentUnavailableError", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  async function extractWith(status: number, body: string) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(body, { status, headers: { "content-type": "text/html" } })),
+    );
+    const { snapchatExtractor } = await import("./snapchat");
+    return snapchatExtractor.extract("https://www.snapchat.com/spotlight/W7_EDlXWTBiXAEEniNoMPwAAYanhzdmFiaWtxAZsoynkvAZsox1CWAAAAAQ");
+  }
+
+  const SHELL_404 =
+    '<html><body><script id="__NEXT_DATA__" type="application/json">' +
+    JSON.stringify({ props: { pageProps: { videoMetadata: { name: "", contentUrl: "" } } } }) +
+    "</script></body></html>";
+
+  it("🔴 throws the verdict, with a member-facing message, for 404 + Snapchat's shell", async () => {
+    const { ContentUnavailableError } = await import("./types");
+    await expect(extractWith(404, SHELL_404)).rejects.toBeInstanceOf(ContentUnavailableError);
+    await expect(extractWith(404, SHELL_404)).rejects.toMatchObject({
+      userMessage: expect.stringContaining("no longer available"),
+    });
+  });
+
+  it("a bare 404 with no shell stays a plain ExtractionError, so the fallbacks still run", async () => {
+    const { ContentUnavailableError, ExtractionError } = await import("./types");
+    const p = extractWith(404, "not found");
+    await expect(p).rejects.toBeInstanceOf(ExtractionError);
+    await expect(p).rejects.not.toBeInstanceOf(ContentUnavailableError);
+  });
+
+  it("a 403 or 503 is never a verdict — those are what a wall looks like", async () => {
+    const { ContentUnavailableError } = await import("./types");
+    await expect(extractWith(403, SHELL_404)).rejects.not.toBeInstanceOf(ContentUnavailableError);
+    await expect(extractWith(503, SHELL_404)).rejects.not.toBeInstanceOf(ContentUnavailableError);
+  });
+});

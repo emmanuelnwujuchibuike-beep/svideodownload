@@ -54,9 +54,12 @@ import { cn } from "@/lib/utils";
 export function FrenzAIWelcome({
   cleanHref = "/studio/ai/clean",
   historyHref = "/studio/ai/history",
+  usageHref = "/studio/ai/usage",
 }: {
   cleanHref?: string;
   historyHref?: string;
+  /** The dashboard row's destination — see FrenzAIDashboard (2026-09-13). */
+  usageHref?: string;
 }) {
   const [entitlement, setEntitlement] = useState<AiCleanEntitlement | null>(null);
 
@@ -175,7 +178,7 @@ export function FrenzAIWelcome({
           real numbers — see the component for why a skeleton of zeroes is a
           statement about somebody's account rather than a placeholder.
         */}
-        <FrenzAIDashboard historyHref={historyHref} className="mt-4" />
+        <FrenzAIDashboard usageHref={usageHref} className="mt-4" />
 
         {/*
           ── 🔴 THE HISTORY LINK IS GONE FROM HERE, NOT DELETED ──────────────
@@ -198,7 +201,8 @@ export function FrenzAIWelcome({
 
           Two columns at every width, painted previews rather than photographs.
           Two cards now — AI Clean and history — since the owner removed the
-          "Soon" cards on 2026-09-13; see the component.
+          "Soon" cards on 2026-09-13, and no "More AI Tools" header above them
+          since the same day ("Remove this section"); see the component.
         */}
         <FrenzAIToolGrid cleanHref={cleanHref} historyHref={historyHref} className="mt-8" />
       </div>

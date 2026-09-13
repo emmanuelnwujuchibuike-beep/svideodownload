@@ -69,8 +69,17 @@ export function ErrorFallback({
   useEffect(() => {
     if (!chunkError) return;
     const key = "frenz:chunk-error-reload";
-    if (sessionStorage.getItem(key)) return; // already tried once this tab — show the real screen
-    sessionStorage.setItem(key, "1");
+    // The fallback itself must never throw — a boundary that throws re-enters
+    // the boundary. `sessionStorage` throws in a sandboxed embed (2026-09-13),
+    // so a refused read means "do not auto-reload", and the real screen shows.
+    let triedAlready = true;
+    try {
+      triedAlready = !!sessionStorage.getItem(key);
+      if (!triedAlready) sessionStorage.setItem(key, "1");
+    } catch {
+      triedAlready = true;
+    }
+    if (triedAlready) return; // already tried once this tab — show the real screen
     setAutoRecovering(true);
     window.location.reload();
   }, [chunkError]);

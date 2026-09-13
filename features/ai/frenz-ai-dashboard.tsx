@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { AnimatedAmount } from "@/features/ai/animated-amount";
+import { readAiBalanceCache, writeAiBalanceCache } from "@/lib/ai/balance-cache";
 import { formatCents } from "@/lib/ai/economy";
 import { majorInputToMinor } from "@/lib/money/units";
 import { haptic } from "@/lib/motion/haptics";
@@ -105,10 +107,16 @@ interface DashboardState {
  * after a verified payment. The panel inside is display and actions only.
  */
 export function FrenzAIDashboard({
-  historyHref,
+  usageHref,
   className,
 }: {
-  historyHref: string;
+  /**
+   * Where "Usage & history" goes. Owner, 2026-09-13: "the usage and history
+   * button in the AI page should open the usage page, not the history page,
+   * because there is already a history card button below." It used to take
+   * `historyHref`; the tool grid's card owns that destination now.
+   */
+  usageHref: string;
   className?: string;
 }) {
   const [state, setState] = useState<DashboardState | null>(null);
@@ -123,18 +131,51 @@ export function FrenzAIDashboard({
   /** A sentence about a payment that just verified — shown once, in the sheet. */
   const [notice, setNotice] = useState<string | null>(null);
 
+  /*
+    ── 🔴 THE ROW EXISTS FROM THE FIRST FRAME (owner, 2026-09-13) ──────────
+
+    "The balance doesn't load when the page opens; there should be a strip
+    loading that shows loading dashboard when the page opens, and the
+    dashboard should load more faster."
+
+    Two things, in order of how much they are worth:
+
+      1. A returning member's last dashboard is painted from the device
+         (lib/ai/balance-cache.ts) before the network is asked, and replaced
+         the moment the fresh read lands. That is what "faster" is, most of
+         the time: not a faster request, but no request in the way.
+      2. When there is nothing cached — a first open on this device — the row
+         still renders, in its own shape, saying "Loading dashboard". A page
+         with a hole in it that fills in later is what "doesn't load" looks
+         like from a phone.
+
+    `loading` is true until the first answer, success or failure, so the
+    strip cannot outlive the request that it stands in for.
+  */
+  const [loading, setLoading] = useState(true);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/ai/balance", { cache: "no-store" });
       if (!res.ok) return;
       const json = (await res.json()) as DashboardState;
-      if (typeof json.balanceCents === "number") setState(json);
+      if (typeof json.balanceCents === "number") {
+        setState(json);
+        writeAiBalanceCache(json);
+      }
     } catch {
       // Left absent rather than wrong. See the note at the top.
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Paint the last known dashboard first — see the note above `loading`.
+    const cached = readAiBalanceCache<DashboardState>();
+    if (cached && typeof cached.balanceCents === "number") {
+      setState((current) => current ?? cached);
+    }
     void load();
     /*
       A finished job changes both counters and, for a paid one, the balance —
@@ -212,7 +253,12 @@ export function FrenzAIDashboard({
     setNotice(null);
   }, []);
 
-  if (!state) return null;
+  if (!state) {
+    // Nothing cached and nothing answered yet: the strip, in the row's shape.
+    if (loading) return <LoadingStrip className={className} />;
+    // The read failed and there is nothing to paint from. Absent, not wrong.
+    return null;
+  }
 
   const freeLine =
     state.freeRemaining > 0
@@ -241,9 +287,12 @@ export function FrenzAIDashboard({
             <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               AI balance
             </span>
-            <span className="text-[15px] font-bold leading-none tabular-nums">
-              {formatCents(state.balanceCents, state.symbol)}
-            </span>
+            {/* Counts to a new balance rather than jumping — see AnimatedAmount. */}
+            <AnimatedAmount
+              cents={state.balanceCents}
+              symbol={state.symbol}
+              className="text-[15px] font-bold leading-none tabular-nums"
+            />
           </span>
           <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{freeLine}</span>
         </span>
@@ -259,22 +308,61 @@ export function FrenzAIDashboard({
       {/* ── the sheet ──────────────────────────────────────────────────────── */}
       {sheetMounted ? (
         <GlassSheetShell open={open} onClose={closeSheet} title="AI dashboard" fitContent defaultHeightVh={90}>
-          <DashboardPanel historyHref={historyHref} state={state} reload={load} notice={notice} />
+          <DashboardPanel usageHref={usageHref} state={state} reload={load} notice={notice} />
         </GlassSheetShell>
       ) : null}
     </>
   );
 }
 
+/**
+ * The row while the first read is in flight — same tile, same height, same
+ * border, so nothing moves when the numbers arrive. The bar along the bottom
+ * is the only motion — the product's own indeterminate stripe
+ * (`frenz-loader-bar` in globals.css, the one PageLoader uses), `transform`
+ * only, slowed under reduced motion.
+ */
+function LoadingStrip({ className }: { className?: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className={cn(
+        "relative flex w-full items-center gap-3 overflow-hidden rounded-[1.25rem] border border-border/70 bg-card/95 px-3.5 py-3 text-left",
+        className,
+      )}
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white opacity-80 shadow-sm">
+        <Wallet className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          AI balance
+        </span>
+        <span className="mt-0.5 block text-[12.5px] text-muted-foreground">Loading dashboard…</span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-muted-foreground">
+        Dashboard
+        <ChevronRight className="h-4 w-4" aria-hidden />
+      </span>
+      {/* the strip itself — the stripe along the bottom edge */}
+      <span aria-hidden className="absolute inset-x-0 bottom-0 h-[2px] overflow-hidden bg-primary/10">
+        <span className="frenz-loader-bar block h-full w-2/5 bg-gradient-to-r from-blue-500 via-violet-500 to-fuchsia-500" />
+      </span>
+    </div>
+  );
+}
+
 /* ═══════════════════════════ the panel inside the sheet ════════════════════ */
 
 function DashboardPanel({
-  historyHref,
+  usageHref,
   state,
   reload,
   notice,
 }: {
-  historyHref: string;
+  usageHref: string;
   state: DashboardState;
   reload: () => void;
   notice: string | null;
@@ -359,7 +447,12 @@ function DashboardPanel({
             AI balance
           </p>
           <p className="mt-0.5 text-[1.75rem] font-bold leading-none tabular-nums">
-            {formatCents(state.balanceCents, state.symbol)}
+            {/*
+              The figure a member watches after a deposit (owner, 2026-09-13:
+              "balance update in a premium fast count animation"). A verified
+              payment sets a new `balanceCents` and this counts up to it.
+            */}
+            <AnimatedAmount cents={state.balanceCents} symbol={state.symbol} />
           </p>
         </div>
 
@@ -503,7 +596,7 @@ function DashboardPanel({
         </div>
       ) : null}
 
-      {/* ── recent activity, and the way to the full list ───────────────── */}
+      {/* ── recent activity, and the way to the full statement ──────────── */}
       {state.ledger.length > 0 ? (
         <div className="mt-4 border-t border-border/60 pt-3">
           <ul className="space-y-1.5">
@@ -527,7 +620,7 @@ function DashboardPanel({
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <Link
-          href={historyHref}
+          href={usageHref}
           prefetch={false}
           className="flex items-center gap-2 rounded-xl px-1 py-1.5 text-[13px] font-semibold transition hover:text-primary"
         >

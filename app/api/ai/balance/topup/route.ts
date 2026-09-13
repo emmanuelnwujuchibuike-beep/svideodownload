@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { aiTopupCeiling, aiTopupFloor, formatCents, isAcceptableTopupCents } from "@/lib/ai/economy";
+import { recordTopupAttempt } from "@/lib/ai/topup-attempts";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { AI_TOPUP_PURPOSE, initializeAiTopup, paystackEnabled } from "@/lib/paystack/paystack";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
@@ -155,6 +156,14 @@ export async function POST(request: Request) {
       */
       callbackUrl: `${SITE_URL}${safeReturnTo((body as { returnTo?: unknown })?.returnTo)}`,
     });
+    /*
+      The attempt, on record BEFORE the member reaches Paystack (0151). A
+      declined card leaves no ledger row, so this is the only place a failed
+      deposit can be described from — its amount, its currency, and later
+      Paystack's reason. Best-effort: a refused insert logs and the checkout
+      still opens.
+    */
+    after(() => recordTopupAttempt({ reference, userId: user.id, amountCents: amount, currency: frenzAiCurrency }));
     return NextResponse.json({ url });
   } catch (e) {
     // 🔴 Never the provider's message. It can carry the request back, and the

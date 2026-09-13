@@ -4,6 +4,7 @@ import { Globe } from "lucide-react";
 import { type ComponentType, useEffect, useState } from "react";
 
 import { IconTile } from "@/components/icons/icon-tile";
+import { readCookie } from "@/lib/dom/cookie";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 
@@ -26,8 +27,8 @@ type MenuComponent = ComponentType<{ current: string; onChoose: (code: string) =
 
 function readLang(): string {
   if (typeof document === "undefined") return "en";
-  const m = document.cookie.match(/(?:^|;\s*)frenz_lang=([^;]+)/);
-  if (m?.[1]) return m[1];
+  const fromCookie = readCookie(LANG_COOKIE); // guarded — see lib/dom/cookie.ts
+  if (fromCookie) return fromCookie;
   try {
     return localStorage.getItem(LANG_COOKIE) ?? "en";
   } catch {

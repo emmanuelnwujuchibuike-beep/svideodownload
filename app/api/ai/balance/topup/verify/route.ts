@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { creditAiBalance, getAiBalanceCents } from "@/lib/ai/balance";
+import { markTopupAttempt } from "@/lib/ai/topup-attempts";
+import { notifyTopupFailed, notifyTopupSuccess } from "@/lib/ai/topup-notify";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { AI_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -102,6 +104,48 @@ export async function POST(request: Request) {
       to keep its existing balance on screen rather than show a failure.
     */
     if (charge.status !== "success") {
+      /*
+        ── A DECLINE IS A FACT THE MEMBER IS OWED (owner, 2026-09-13) ─────────
+
+        "failed" is Paystack's word for a charge that was attempted and
+        refused — a declined card, insufficient funds. It is recorded on the
+        attempt row and announced ONCE (push + email), with Paystack's own
+        customer-facing reason line and nothing else of theirs.
+
+        "abandoned" is a member who closed the checkout without paying; it is
+        recorded so the statement is complete, and NOT announced — nobody
+        needs an email about a page they closed. "pending" is left alone: the
+        dashboard keeps polling it.
+
+        Ownership is checked the same way as the success path below — the
+        session's id against what Paystack echoed from initialisation.
+      */
+      if (
+        (charge.status === "failed" || charge.status === "abandoned") &&
+        charge.metadata?.purpose === AI_TOPUP_PURPOSE &&
+        charge.metadata?.user_id === user.id
+      ) {
+        const outcome = charge.status;
+        const amountCents = Number(charge.amount);
+        // `after()`: kept alive past the response — see the webhook for why.
+        after(async () => {
+          await markTopupAttempt(reference, {
+            status: outcome,
+            gatewayResponse: charge.gateway_response ?? null,
+            channel: charge.channel ?? null,
+          });
+          if (outcome === "failed" && Number.isFinite(amountCents) && amountCents > 0) {
+            await notifyTopupFailed({
+              userId: user.id,
+              reference,
+              amountCents,
+              currency: charge.currency ?? "",
+              reason: charge.gateway_response ?? null,
+              channel: charge.channel ?? null,
+            });
+          }
+        });
+      }
       return NextResponse.json({ credited: false, pending: charge.status === "pending" });
     }
 
@@ -155,6 +199,25 @@ export async function POST(request: Request) {
       amountCents: amount,
       kind: "topup",
       reference,
+    });
+    // Off the money path, once, and kept alive past the response — see the
+    // webhook for the same two calls and why `after()` rather than `void`.
+    after(async () => {
+      await markTopupAttempt(reference, {
+        status: "success",
+        gatewayResponse: charge.gateway_response ?? null,
+        channel: charge.channel ?? null,
+        paidAt: charge.paid_at ?? null,
+      });
+      await notifyTopupSuccess({
+        userId: user.id,
+        reference,
+        amountCents: amount,
+        currency: frenzAiCurrency,
+        balanceAfterCents: balanceCents,
+        channel: charge.channel ?? null,
+        paidAt: charge.paid_at ?? null,
+      });
     });
 
     return NextResponse.json({ credited: true, balanceCents });

@@ -38,6 +38,10 @@ const PRIORITY_BY_TYPE: Partial<Record<NotificationType, PushPriority>> = {
   security_passkey_removed: "critical",
   payment_successful: "critical",
   subscription_activated: "critical",
+  // A deposit outcome is money the member is waiting on — worth the lock
+  // screen — but not worth overriding Do Not Disturb the way security is.
+  ai_deposit_successful: "high",
+  ai_deposit_failed: "high",
 
   // high — the spec's own "Highest Priority" bucket
   message: "high",

@@ -161,14 +161,23 @@ describe("Meta versioned-media payloads", () => {
 describe("no silent quality degradation in the download pipeline", () => {
   const service = read("server", "services", "download-service.ts");
 
-  it("🔴 never re-encodes audio that is already AAC", () => {
+  it("🔴 never re-encodes audio that is already AAC-LC", () => {
     /*
       The remux path is documented as lossless and was re-encoding audio to
       128 kbps on every download. Measured on a 240 kbps source: -47%.
+
+      2026-09-13: ONE exception, and it must stay guarded. HE-AAC (v1/v2 — the
+      SBR/parametric-stereo profiles TikWM ships at 16-32 kb/s) IS re-encoded
+      to AAC-LC, because phone decoders mishandle it ("audio altered halfway,
+      stops and continues"). So the 128k branch may exist exactly once, and
+      only as the `isHeAac(...)` arm of the audio-args ternary; plain AAC-LC
+      still copies. See the note above `isHeAac` in download-service.ts.
     */
     expect(service).toMatch(/probed\.audio === "aac"\s*\?\s*\["-c:a", "copy"\]/);
-    expect(service, "the unconditional 128k audio re-encode is back").not.toMatch(
-      /"-c:a",\s*\n?\s*"aac",\s*\n?\s*"-b:a",\s*\n?\s*"128k"/,
+    const reencodes = service.match(/"-c:a",\s*\n?\s*"aac",\s*\n?\s*"-b:a",\s*\n?\s*"128k"/g) ?? [];
+    expect(reencodes, "a second 128k audio re-encode appeared").toHaveLength(1);
+    expect(service, "the 128k re-encode must be the HE-AAC arm, nothing broader").toMatch(
+      /const audioArgs = isHeAac\(probed\)\s*\?[\s\S]{0,240}?"-b:a",\s*"128k"\]\s*:\s*probed\.audio === "aac"/,
     );
   });
 

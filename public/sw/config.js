@@ -72,7 +72,12 @@ var SWX = (self.SWX = self.SWX || {});
 // v13 (2026-08-11): PRECACHE_URLS gained /launch + the splash logo — the cache
 // CONTENTS changed, so the bucket must be new or an installed client keeps a v12
 // cache that has neither.
-SWX.VERSION = "v20";
+//
+// v21 (2026-09-13): strategies.js now revalidates a navigation whose document
+// came from the browser's HTTP cache (Cloudflare's 7200 s rewrite) — the
+// "colourless blank page on cold start" after a deploy. A submodule change
+// ships to nobody installed without a bump.
+SWX.VERSION = "v21";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

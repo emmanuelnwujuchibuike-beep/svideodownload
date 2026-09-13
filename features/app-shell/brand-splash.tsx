@@ -5,6 +5,7 @@ import { Space_Grotesk } from "next/font/google";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { readCookieJar, writeCookie } from "@/lib/dom/cookie";
 
 // A distinctive display face for the wordmark ONLY — the app's one body/UI
 // font stays Plus Jakarta Sans everywhere else (see app/layout.tsx). Scoped
@@ -83,15 +84,20 @@ export function BrandSplash() {
   // mount, so only the genuine first-ever open plays it. (`typeof document`
   // guard: during SSR/hydration of the true first open the cookie isn't set
   // yet, so server and client agree on `true` — no hydration mismatch.)
+  //
+  // 🔴 `readCookieJar`, never `document.cookie` (2026-09-13): inside a
+  // sandboxed embed — AdSense's site preview — the raw read THROWS, and a
+  // throw in a state initializer took the whole root layout down to the
+  // "Something went wrong" boundary. See lib/dom/cookie.ts.
   const [visible, setVisible] = useState(
-    () => typeof document === "undefined" || !document.cookie.includes("frenz_welcomed="),
+    () => typeof document === "undefined" || !readCookieJar().includes("frenz_welcomed="),
   );
 
   useEffect(() => {
     if (!visible) return;
     // Mark as welcomed immediately so it can't reappear mid-session, and lock
     // scroll while the splash is up.
-    document.cookie = "frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax";
+    writeCookie("frenz_welcomed=1; path=/; max-age=31536000; SameSite=Lax");
     // overflowY only — the `overflow` shorthand also resets overflow-x, undoing
     // the `overflow-x: clip` on <body> that keeps the app sidebar sticky.
     document.body.style.overflowY = "hidden";

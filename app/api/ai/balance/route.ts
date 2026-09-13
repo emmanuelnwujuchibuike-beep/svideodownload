@@ -73,12 +73,31 @@ export async function GET(request: Request) {
     });
   }
 
+  /*
+    How much of the statement to send. The dashboard sheet shows five rows
+    and asks for the default; the usage page (owner, 2026-09-13: "the usage
+    and history button in the AI page should open the usage page") shows the
+    whole thing and asks for 100. Clamped here AND in `listAiLedger`, so a
+    hand-edited query cannot turn one read into a table scan.
+  */
+  const ledgerParam = Number(new URL(request.url).searchParams.get("ledger") ?? "");
+  const ledgerLimit = Number.isFinite(ledgerParam) && ledgerParam > 0 ? Math.min(100, Math.floor(ledgerParam)) : 12;
+
   try {
     const now = new Date();
-    const settings = await getLandingSettings();
-    const entitlement = await getAiEntitlement(subject, feat);
+    /*
+      ── 🔴 ONE WAVE, NOT THREE (owner, 2026-09-13: "the dashboard should load
+      more faster") ─────────────────────────────────────────────────────────
 
-    const [usage, usedThisWeek, balanceCents, ledger] = await Promise.all([
+      This was `await settings`, then `await entitlement`, then the four reads
+      in parallel — three round-trips end to end for six reads that do not
+      depend on each other. The entitlement needs the settings, and reads them
+      itself through the same TTL cache, so asking for both at once costs one
+      settings read either way. Everything now leaves together.
+    */
+    const [settings, entitlement, usage, usedThisWeek, balanceCents, ledger] = await Promise.all([
+      getLandingSettings(),
+      getAiEntitlement(subject, feat),
       peekAiUsage(subject, feat.id),
       peekAiWeeklyUsage(subject, feat.id, isoDate(weekStartUtc(now))),
       /*
@@ -87,11 +106,30 @@ export async function GET(request: Request) {
         request fails instead and the panel says it could not load.
       */
       getAiBalanceCents(subject.userId ?? ""),
-      listAiLedger(subject.userId ?? "", 12),
+      listAiLedger(subject.userId ?? "", ledgerLimit),
     ]);
 
     const dailyLimit = entitlement.dailyLimit;
     const weeklyLimit = settings.frenzAiWeeklyFreeCredits;
+    /*
+      ── 🔴 A COUNTER NEVER DISPLAYS ABOVE ITS LIMIT (owner, 2026-09-13) ────
+
+      "Some account shows more weekly free than the one allowed" — a
+      screenshot reading "THIS WEEK 16 / 5 free".
+
+      The weekly figure sums `reserved_jobs` over the week's rows. Until
+      2026-09-09 (ee2add0) EVERY job reserved a slot and there was no weekly
+      ceiling, so an account that ran sixteen jobs earlier this week carries
+      them into a five-a-week world; the ceiling itself is also a soft,
+      non-atomic brake (lib/ai/funding.ts), and an operator can lower either
+      limit mid-period. The GATE has always been right — `freeRemaining`
+      floors at zero — but the display repeated the raw sum.
+
+      An allowance that is spent reads as spent: "5 / 5". The raw figures
+      still feed `freeRemaining` below, unchanged.
+    */
+    const usedTodayShown = Math.min(usage.usedToday, dailyLimit);
+    const usedThisWeekShown = Math.min(usedThisWeek, weeklyLimit);
 
     return NextResponse.json({
       balanceCents,
@@ -113,9 +151,9 @@ export async function GET(request: Request) {
       */
       minTopupCents: aiTopupFloor(settings.frenzAiMinTopupCents),
       maxTopupCents: aiTopupCeiling(settings.frenzAiMinTopupCents),
-      usedToday: usage.usedToday,
+      usedToday: usedTodayShown,
       dailyLimit,
-      usedThisWeek,
+      usedThisWeek: usedThisWeekShown,
       weeklyLimit,
       freeRemaining: freeRemaining({
         usedToday: usage.usedToday,

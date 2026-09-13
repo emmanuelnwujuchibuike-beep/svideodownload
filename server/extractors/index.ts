@@ -17,7 +17,7 @@ import { telegramExtractor } from "./telegram";
 import { threadsExtractor } from "./threads";
 import { tiktokExtractor } from "./tiktok";
 import { twitterExtractor } from "./twitter";
-import type { Extractor } from "./types";
+import { ContentUnavailableError, type Extractor } from "./types";
 import { vimeoExtractor } from "./vimeo";
 
 /**
@@ -89,6 +89,12 @@ async function runChain(url: string): Promise<VideoMetadata> {
       const meta = await extractor.extract(url);
       if (meta.formats.length > 0) return meta;
     } catch (err) {
+      /*
+        🔴 A platform VERDICT ends the chain (2026-09-13). The platform's own
+        page said the content is gone; yt-dlp would fetch that same page and
+        the proxy would fetch it again from another IP. See ContentUnavailableError.
+      */
+      if (err instanceof ContentUnavailableError) throw err;
       if (err instanceof PinterestImageOnlyError) {
         imageOnlyFallback = err.imageOnlyMeta;
       }
@@ -129,6 +135,9 @@ async function extractFresh(url: string): Promise<VideoMetadata> {
   try {
     return await runChain(url);
   } catch (err) {
+    // A verdict from the platform itself: no Apify, no proxy retry — both
+    // would spend money re-reading a page that already said "gone".
+    if (err instanceof ContentUnavailableError) throw err;
     // Instagram/Threads: go straight to the Apify scraper (image posts,
     // carousels, dead sessions) — more reliable than the proxy retry for these.
     // Dormant unless APIFY_TOKEN is configured.

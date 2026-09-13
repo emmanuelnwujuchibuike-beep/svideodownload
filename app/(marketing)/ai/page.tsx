@@ -145,7 +145,7 @@ export default async function PublicFrenzAIPage() {
           serve both doors — the signed-in page passes nothing and gets the
           Studio route.
         */}
-        <FrenzAIWelcome cleanHref="/ai/clean" historyHref="/ai/history" />
+        <FrenzAIWelcome cleanHref="/ai/clean" historyHref="/ai/history" usageHref="/ai/usage" />
       </main>
       <SiteFooter />
     </>

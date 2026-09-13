@@ -3,6 +3,7 @@
 import { ChevronRight, Globe } from "lucide-react";
 import { type ComponentType, useEffect, useState } from "react";
 
+import { readCookie } from "@/lib/dom/cookie";
 import { findLanguage, LANGUAGE_COOKIE } from "@/lib/i18n/languages";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -19,8 +20,8 @@ import { LanguageMenu } from "./language-menu";
  */
 function readLang(): string {
   if (typeof document === "undefined") return "en";
-  const m = document.cookie.match(/(?:^|;\s*)frenz_lang=([^;]+)/);
-  if (m?.[1]) return m[1];
+  const fromCookie = readCookie(LANGUAGE_COOKIE); // guarded — see lib/dom/cookie.ts
+  if (fromCookie) return fromCookie;
   try {
     return localStorage.getItem(LANGUAGE_COOKIE) ?? "en";
   } catch {

@@ -87,7 +87,10 @@ type Source =
 /** Which panel the stage is showing. */
 type Stage = "choose" | "link" | "ready";
 
-export function AICleanWorkspace({ historyHref = "/ai/history" }: { historyHref?: string } = {}) {
+export function AICleanWorkspace({
+  historyHref = "/ai/history",
+  usageHref = "/ai/usage",
+}: { historyHref?: string; usageHref?: string } = {}) {
   const { isPremium, ready: planKnown } = useEntitlements();
   /*
     Everything about a running job: creating it, uploading, starting, watching,
@@ -455,6 +458,7 @@ export function AICleanWorkspace({ historyHref = "/ai/history" }: { historyHref?
             onPasteLink={() => setStage("link")}
             entitlement={cleanJob.entitlement}
             historyHref={historyHref}
+            usageHref={usageHref}
           />
         )}
       </AICleanHero>

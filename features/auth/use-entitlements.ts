@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { readIdentity, writeIdentity } from "@/lib/auth/identity-cache";
+import { readCookieJar } from "@/lib/dom/cookie";
 import type { BillingPlan } from "@/lib/monetization/types";
 
 /**
@@ -76,7 +77,9 @@ export function readEntitlements(): Omit<Entitlements, "ready"> | null {
  */
 function hasAuthCookie(): boolean {
   if (typeof document === "undefined") return true; // assume signed-in on the server; the effect re-checks
-  return /(^|;\s*)sb-[^=]*-auth-token/.test(document.cookie);
+  // Guarded read: a sandboxed embed throws on `document.cookie`, and "no
+  // cookies" must read as signed-out, not as a crash (lib/dom/cookie.ts).
+  return /(^|;\s*)sb-[^=]*-auth-token/.test(readCookieJar());
 }
 
 export function useEntitlements(): Entitlements {

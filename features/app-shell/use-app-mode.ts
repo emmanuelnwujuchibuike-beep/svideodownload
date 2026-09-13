@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 import { APP_MODE_COOKIE, type AppMode, normalizeMode } from "@/lib/app-mode";
+import { readCookie, writeCookie as writeRawCookie } from "@/lib/dom/cookie";
 
 /** Durable localStorage backup of the mode, so it survives a lost/expired cookie
  *  across cold entries (owner: "save last mode to local storage so … cold entry
@@ -11,9 +12,12 @@ const MODE_LS_KEY = "frenz_mode";
 
 function readModeCookie(): AppMode | null {
   if (typeof document === "undefined") return null;
-  const m = document.cookie.match(/(?:^|;\s*)frenz_mode=([^;]+)/);
-  const val = m?.[1];
-  return val ? normalizeMode(decodeURIComponent(val)) : null;
+  // 🔴 Guarded read (2026-09-13). This runs at MODULE LOAD (below) and inside
+  // `useSyncExternalStore`'s snapshot — a raw `document.cookie` that throws
+  // in a sandboxed embed (AdSense's site preview) killed the chunk before
+  // React ever mounted. See lib/dom/cookie.ts.
+  const val = readCookie(APP_MODE_COOKIE);
+  return val ? normalizeMode(val) : null;
 }
 function readModeLS(): AppMode | null {
   try {
@@ -24,12 +28,8 @@ function readModeLS(): AppMode | null {
   }
 }
 function writeCookie(mode: AppMode): void {
-  try {
-    const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; secure" : "";
-    document.cookie = `${APP_MODE_COOKIE}=${mode}; path=/; max-age=31536000; samesite=lax${secure}`;
-  } catch {
-    /* cookies blocked */
-  }
+  const secure = typeof location !== "undefined" && location.protocol === "https:" ? "; secure" : "";
+  writeRawCookie(`${APP_MODE_COOKIE}=${mode}; path=/; max-age=31536000; samesite=lax${secure}`);
 }
 
 // On load, if the cookie is gone but localStorage remembers a non-default mode,

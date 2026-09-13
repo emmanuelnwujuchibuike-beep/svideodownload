@@ -62,8 +62,9 @@ export function useCharacterReplaceWorkspace() {
     config: null,
     available: null,
     configError: null,
-    // The last figure this browser saw paints first; the network replaces it.
-    balance: typeof window === "undefined" ? null : readCachedCharacterReplaceBalance(),
+    // The last figure this browser saw paints first (from the effect below,
+    // not here — the prerendered markup has no balance); the network replaces it.
+    balance: null,
     balanceError: null,
     topupNotice: null,
   });
@@ -119,6 +120,8 @@ export function useCharacterReplaceWorkspace() {
   }, []);
 
   useEffect(() => {
+    const cached = readCachedCharacterReplaceBalance();
+    if (cached) setLoads((l) => (l.balance ? l : { ...l, balance: cached }));
     void (async () => {
       const res = await getCharacterReplaceConfig();
       if (!alive.current) return;

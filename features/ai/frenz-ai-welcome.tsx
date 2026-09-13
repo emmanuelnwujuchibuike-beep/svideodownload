@@ -8,6 +8,7 @@ import { FrenzAIAllowanceBar, FrenzAITrustRow } from "@/features/ai/frenz-ai-chr
 import { FrenzAIToolGrid } from "@/features/ai/frenz-ai-tool-grid";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
+import { readAiEntitlementCache, writeAiEntitlementCache } from "@/lib/ai/entitlement-cache";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -64,14 +65,32 @@ export function FrenzAIWelcome({
   historyHref?: string;
   usageHref?: string;
 }) {
+  /*
+    🔴 PAINTED FROM THE LAST ANSWER FIRST (owner, 2026-09-13: "this section
+    reloads every time I enter the page or backswipe to the AI pages"). The
+    network still replaces it on every mount; what the cache buys is that the
+    plan chip and the bar are on screen at the first frame instead of
+    arriving a beat later on every entry. See lib/ai/entitlement-cache.ts.
+  */
   const [entitlement, setEntitlement] = useState<AiMemberEntitlement | null>(null);
 
   useEffect(() => {
     let alive = true;
+    // In the effect, not the initial state: the prerendered markup has no
+    // entitlement, and an initial state that differs from it is a hydration
+    // mismatch. The cached paint lands one frame after hydration, before any
+    // network answer — the same order the balance dashboard uses.
+    const cached = readAiEntitlementCache();
+    if (cached) setEntitlement((current) => current ?? cached);
     void getAiEntitlement().then((res) => {
       // A refusal is not an error worth showing here: the bar simply stays
       // hidden and the page is still entirely usable.
-      if (alive && res.ok) setEntitlement(res as unknown as AiMemberEntitlement);
+      if (alive && res.ok) {
+        const { ok: _ok, ...view } = res;
+        const next = view as unknown as AiMemberEntitlement;
+        setEntitlement(next);
+        writeAiEntitlementCache(next);
+      }
     });
     return () => {
       alive = false;

@@ -152,6 +152,13 @@ export async function getAiEntitlementSnapshot(
     // The entitlement already carries the configured numbers; rebuilding the
     // policy from scratch here would quietly ignore them.
     offered: entitlement.allowed,
+    /*
+      🔴 CARRIED, NOT DROPPED. This rebuilt object omitted `paidOnly`, so the
+      view the browser received for Character Replace read "0 of 0 free videos
+      left today" — the allowance bar for a tool that has no allowance (owner,
+      2026-09-13, screenshot). The test beside this pins it.
+    */
+    paidOnly: entitlement.paidOnly,
   };
 
   return {

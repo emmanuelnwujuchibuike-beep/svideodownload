@@ -15,7 +15,7 @@ import type { BillingPlan } from "@/lib/monetization/types";
 const getUserPlan = vi.fn<(userId: string | null | undefined) => Promise<BillingPlan>>();
 vi.mock("@/lib/monetization/plan", () => ({ getUserPlan: (id: string) => getUserPlan(id) }));
 
-const { getAiEntitlement, usageForClient } = await import("./entitlement");
+const { getAiEntitlement, getAiEntitlementSnapshot, usageForClient } = await import("./entitlement");
 const { guestSubject, userSubject } = await import("./subject");
 const { aiFeature } = await import("./jobs");
 
@@ -143,5 +143,22 @@ describe("usageForClient", () => {
     getUserPlan.mockResolvedValue("free");
     const e = await getAiEntitlement(member, freeTool);
     expect(usageForClient(e, 99).remaining).toBe(0);
+  });
+});
+
+describe("getAiEntitlementSnapshot", () => {
+  it("🔴 carries paidOnly into the view the browser reads — the allowance bar hides on it", async () => {
+    getUserPlan.mockResolvedValue("business");
+    const { view } = await getAiEntitlementSnapshot(member, feature, { usedToday: 0, dayUnlocked: false });
+    expect(view.paidOnly).toBe(true);
+    expect(view.canStart).toBe(true);
+    expect(view.dailyLimit).toBe(0);
+  });
+
+  it("reports paidOnly false for a free-allowance tool", async () => {
+    getUserPlan.mockResolvedValue("free");
+    const { view } = await getAiEntitlementSnapshot(member, freeTool, { usedToday: 1, dayUnlocked: false });
+    expect(view.paidOnly).toBe(false);
+    expect(view.remainingToday).toBe(1);
   });
 });

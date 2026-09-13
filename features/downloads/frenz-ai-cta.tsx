@@ -232,7 +232,7 @@ export function FrenzAICta({ className }: { className?: string }) {
             Frenz <span className="text-gradient">AI</span>
           </span>
           <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/70">
-            Remove captions and text from your videos.
+            Put yourself into your video.
           </span>
         </span>
         <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/80 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { aiFeature } from "@/lib/ai/jobs";
+import { primaryAiFeature } from "@/lib/ai/jobs";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { pathBelongsTo } from "@/lib/ai/storage";
@@ -50,7 +50,7 @@ export const dynamic = "force-dynamic";
  * job. Somebody else's job answers 404, identically to one that does not exist.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const feat = aiFeature("ai_clean");
+  const feat = primaryAiFeature();
   if (!feat) {
     return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
       status: aiErrorStatus("FEATURE_UNAVAILABLE"),

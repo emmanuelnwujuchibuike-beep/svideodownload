@@ -49,6 +49,8 @@ export interface AiEntitlement {
   feature: AiFeatureDef["id"];
   /** Whether this audience may use this feature at all. */
   allowed: boolean;
+  /** See AiPlanPolicy.paidOnly: no free allowance, funded at checkout. */
+  paidOnly: boolean;
   /** Jobs admitted per UTC day for this feature. */
   dailyLimit: number;
   unlimited: boolean;
@@ -103,12 +105,21 @@ export async function getAiEntitlement(
     freeEnabled: settings.frenzAiFreeEnabled,
     proDailyCredits: settings.frenzAiProDailyCredits,
     businessDailyCredits: settings.frenzAiBusinessDailyCredits,
+    // The tool's own switch, for a paid-only row. One place maps a feature
+    // to its switch, so a second paid tool is one line here.
+    toolEnabled: feature.id === "ai_character_replace" ? settings.frenzAiCharacterReplace.enabled : undefined,
   });
 
   return {
     audience,
     feature: feature.id,
-    allowed: policy.offered !== false && policy.dailyLimit > 0,
+    /*
+      A paid-only tool is allowed whenever it is offered: there is no daily
+      number to be above zero, and whether the balance covers a job is the
+      funding step's decision at /start, against the server's own price.
+    */
+    allowed: policy.offered !== false && (policy.paidOnly === true || policy.dailyLimit > 0),
+    paidOnly: policy.paidOnly === true,
     dailyLimit: policy.dailyLimit,
     unlimited: policy.unlimited,
     maxConcurrent: policy.maxConcurrent,

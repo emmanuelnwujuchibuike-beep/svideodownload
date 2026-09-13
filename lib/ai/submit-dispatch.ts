@@ -30,7 +30,7 @@ import { SITE_URL } from "@/lib/site";
  * ── The address it calls ────────────────────────────────────────────────────
  *
  * `SITE_URL`, which already resolves to the production frontend and is what
- * `notifyAiCleanFinished` builds push links from. `FRENZ_FRONTEND_URL`
+ * `notifyAiJobFinished` builds push links from. `FRENZ_FRONTEND_URL`
  * overrides it for the case where the worker should talk to a preview deploy —
  * optional, so nothing breaks when it is unset.
  *

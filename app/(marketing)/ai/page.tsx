@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FrenzAIWelcome } from "@/features/ai/frenz-ai-welcome";
-import { SITE_URL } from "@/lib/site";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -140,12 +139,11 @@ export default async function PublicFrenzAIPage() {
         style={{ paddingTop: "calc(var(--frenz-header-bottom, 4rem) + 1rem)" }}
       >
         {/*
-          `cleanHref` points at the PUBLIC workspace. Passing it rather than
-          hard-coding one inside the component is what lets a single design
-          serve both doors — the signed-in page passes nothing and gets the
-          Studio route.
+          The hrefs point at the PUBLIC-group routes. Passing them rather than
+          hard-coding inside the component is what lets a single design serve
+          both doors — the Studio page passes nothing and gets the Studio routes.
         */}
-        <FrenzAIWelcome cleanHref="/ai/clean" historyHref="/ai/history" />
+        <FrenzAIWelcome characterReplaceHref="/ai/character-replace" historyHref="/ai/history" usageHref="/ai/usage" />
       </main>
       {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
       <SiteFooterMinimal />

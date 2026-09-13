@@ -125,7 +125,7 @@ export const SETTINGS: readonly SettingEntry[] = [
     SCREEN — it exists and opens today — and the note is what keeps that honest
     about the tool behind it, which is still interface-only.
   */
-  { id: "creator.frenz-ai", category: "creator", label: "Frenz AI", description: "AI tools for your videos in Studio, starting with AI Clean.", keywords: ["ai", "frenz ai", "ai clean", "clean", "remove text", "captions", "subtitles", "watermark", "overlay"], href: "/studio/ai", status: "live", note: "The hub and AI Clean's interface are live; the cleanup pipeline itself is a later part — see lib/ai/studio-tools.ts for each tool's real status." },
+  { id: "creator.frenz-ai", category: "creator", label: "Frenz AI", description: "AI tools for your videos, starting with Character Replace.", keywords: ["ai", "frenz ai", "character replace", "replace", "likeness", "wan", "voice", "lip sync"], href: "/studio/ai", status: "live", note: "Character Replace's workspace is live (Part 1: the interface, settings, pricing states and consent); the Wan 2.2 pipeline, the pricing engine and the lip-sync model are later parts. AI Clean was removed on 2026-09-13." },
   {
     id: "creator.monetisation",
     category: "creator",

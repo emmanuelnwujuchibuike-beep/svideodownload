@@ -6,7 +6,6 @@ import Link from "next/link";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
-import nextDynamic from "next/dynamic";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
@@ -62,18 +61,6 @@ import type { PlatformStatusMap } from "@/lib/platform-status";
  * so this component renders it too, immediately after Recent downloads,
  * keyed by `showDisclaimer` so `/downloads` doesn't end up with two copies.
  */
-/*
-  🔴 NOT in the first load. The landing page holds a 1.6-second budget measured
-  in kilobytes of JavaScript, and this panel does not exist until two seconds
-  after the page is already usable — so it must not be part of what makes the
-  page usable. `ssr: false` because it reads localStorage to decide whether it
-  has been seen, which the server cannot know.
-*/
-const FrenzAIVignette = nextDynamic(
-  () => import("@/features/ai/frenz-ai-vignette").then((m) => m.FrenzAIVignette),
-  { ssr: false },
-);
-
 export function DownloadPageCore({
   platformStatus,
   ctaWallpaperUrl = null,
@@ -286,21 +273,10 @@ export function DownloadPageCore({
       ) : null}
 
       {/*
-        ── 🔴 THE VIGNETTE IS AN AI PROMOTION, SO IT FOLLOWS THE SAME GATE ────
-
-        It shipped on 2026-09-08 to appear on BOTH this page and the landing,
-        two seconds in, once ever — correct while Frenz AI was a public feature.
-
-        Under the standing rule it is exactly what §2 names: "AI calls-to-action
-        intended for anonymous users", and "AI-related feature sections that
-        make AI appear to be a public product". A signed-out visitor must not
-        meet it, and neither must the AdSense crawler.
-
-        🔴 Gated on the SAME flag as the tile rather than a second one. Two
-        switches governing "is AI visible here" is two things to get out of
-        step, and the failure mode is the promotion surviving the button.
+        The AI Clean vignette that used to follow here — a once-only promotion
+        two seconds in — went with AI Clean (owner, 2026-09-13). The tile above
+        is the one door to Frenz AI on this page.
       */}
-      {showFrenzAi ? <FrenzAIVignette /> : null}
     </>
   );
 }

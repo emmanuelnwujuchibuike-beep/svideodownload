@@ -1,6 +1,7 @@
 import "server-only";
 
 import { claimAiNotification } from "@/lib/ai/job-store";
+import type { AiFeature } from "@/lib/ai/jobs";
 import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
@@ -45,11 +46,24 @@ import { SITE_URL } from "@/lib/site";
  */
 
 /** Where the member lands when they tap. Straight back to the workspace. */
-const AI_CLEAN_URL = `${SITE_URL}/studio/ai/clean`;
+/**
+ * Where a tap on the push lands: the tool's workspace, which adopts `?job=`
+ * whatever its status (the member was sent to LOOK at that job). One URL per
+ * feature, so an old AI Clean row — still announced by the safety nets until
+ * retention expires it — opens history rather than a workspace that no longer
+ * exists.
+ */
+function workspaceUrlFor(feature: string, jobId: string): string {
+  const q = `?job=${encodeURIComponent(jobId)}`;
+  if (feature === "ai_character_replace") return `${SITE_URL}/studio/ai/character-replace${q}`;
+  return `${SITE_URL}/studio/ai/history${q}`;
+}
 
-export async function notifyAiCleanFinished(opts: {
+export async function notifyAiJobFinished(opts: {
   userId: string;
   jobId: string;
+  /** Which tool made it. Absent means the current tool. */
+  feature?: AiFeature;
   /** False when the source had no audio — still a success, just worth saying. */
   audioRestored?: boolean | null;
   /** Shapes the sentence: a job somebody waited out reads differently. */
@@ -64,7 +78,7 @@ export async function notifyAiCleanFinished(opts: {
   if (!(await claimAiNotification(opts.jobId))) return;
 
   const copy = aiNotificationCopy({
-    feature: "ai_clean",
+    feature: opts.feature ?? "ai_character_replace",
     outcome: "completed",
     durationMs: opts.durationMs ?? null,
   });
@@ -82,7 +96,7 @@ export async function notifyAiCleanFinished(opts: {
           `/api/ai/jobs/[id]/result` for the ownership check that actually
           decides.
         */
-        url: `${AI_CLEAN_URL}?job=${encodeURIComponent(opts.jobId)}`,
+        url: workspaceUrlFor(opts.feature ?? "ai_character_replace", opts.jobId),
         // What a lock screen shows when "hide push preview" is on. Still names
         // the product: that toggle hides the content, and "your result" is the
         // category rather than the content.
@@ -103,9 +117,10 @@ export async function notifyAiCleanFinished(opts: {
   }
 }
 
-export async function notifyAiCleanFailed(opts: {
+export async function notifyAiJobFailed(opts: {
   userId: string;
   jobId: string;
+  feature?: AiFeature;
   /**
    * What the MEMBER may read. Never a provider string, never an ffmpeg dump —
    * callers pass a sentence from lib/ai/errors.ts, which is the only vocabulary
@@ -143,7 +158,7 @@ export async function notifyAiCleanFailed(opts: {
     fail identically is worse than saying nothing.
   */
   const copy = aiNotificationCopy({
-    feature: "ai_clean",
+    feature: opts.feature ?? "ai_character_replace",
     outcome: outcomeForErrorCode(opts.errorCode),
   });
 
@@ -154,7 +169,7 @@ export async function notifyAiCleanFailed(opts: {
         title: copy.title,
         body: copy.body,
         genericBody: copy.genericBody,
-        url: AI_CLEAN_URL,
+        url: workspaceUrlFor(opts.feature ?? "ai_character_replace", opts.jobId),
         tag: copy.tag,
       },
       "high",

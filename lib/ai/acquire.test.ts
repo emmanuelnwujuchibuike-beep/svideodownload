@@ -21,7 +21,7 @@ import { AI_STALL_DEADLINE_MS } from "@/lib/ai/stall";
  * reach `completed` without the provider ever running.
  */
 
-const feature = aiFeature("ai_clean")!;
+const feature = aiFeature("ai_character_replace")!;
 
 describe("the acquiring status", () => {
   it("is a real status the database can hold", () => {

@@ -106,13 +106,13 @@ export function aiNotificationCopy(input: {
           title: "Frenz AI finished processing",
           body: "Your result is ready whenever you are.",
           genericBody: "Your Frenz AI result is ready.",
-          tag: "ai-clean-done",
+          tag: "frenz-ai-done",
         }
       : {
           title: `${SPARKLE} Frenz AI is ready`,
           body: `Your ${noun} is finished. Tap to view your result.`,
           genericBody: "Your Frenz AI result is ready.",
-          tag: "ai-clean-done",
+          tag: "frenz-ai-done",
         };
   }
 
@@ -127,7 +127,7 @@ export function aiNotificationCopy(input: {
       title: "Frenz AI couldn't process this file",
       body: `Try another ${noun} and give it another go.`,
       genericBody: "A Frenz AI job needs your attention.",
-      tag: "ai-clean-failed",
+      tag: "frenz-ai-failed",
     };
   }
 
@@ -140,9 +140,14 @@ export function aiNotificationCopy(input: {
       cost them one of their runs, and on this product it did not. Saying so is
       the difference between a bad minute and a lost customer.
     */
-    body: "Something went wrong while processing your file. Your allowance wasn't used — tap to try again.",
+    /*
+      Since 2026-09-13 the only tool is paid from the balance, and the charge
+      is refunded on every failure path (lib/ai/funding.ts) — so "you weren't
+      charged" is as true now as "your allowance wasn't used" was before.
+    */
+    body: "Something went wrong while processing your file. You weren't charged — tap to try again.",
     genericBody: "A Frenz AI job needs your attention.",
-    tag: "ai-clean-failed",
+    tag: "frenz-ai-failed",
   };
 }
 
@@ -155,6 +160,7 @@ export function aiNotificationCopy(input: {
  */
 const MEDIA_NOUN: Record<AiFeature, string> = {
   ai_clean: "video",
+  ai_character_replace: "video",
   /*
     🔴 THE COMPILER FOUND THESE, WHICH IS WHY THE RECORD IS TOTAL. The first
     draft of this file listed `ai_clean` alone and typechecked as an object

@@ -19,9 +19,9 @@ import {
   AI_CURRENCIES,
   aiCurrencySymbol,
   type AiCurrency,
-  type AiCleanEngineSetting,
   type LandingSettings,
 } from "@/lib/landing/settings";
+import type { CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { aiTopupOptions, formatCents } from "@/lib/ai/economy";
 import { cn } from "@/lib/utils";
 
@@ -81,7 +81,27 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [minTopup, setMinTopup] = useState(minorToMajorInput(settings.frenzAiMinTopupCents));
   // The symbol the operator will actually be charging in — see the currency note.
   const symbol = aiCurrencySymbol(currency);
-  const [engine, setEngine] = useState<AiCleanEngineSetting>(settings.frenzAiEngine);
+  /*
+    ── CHARACTER REPLACE (2026-09-13) ─────────────────────────────────────────
+
+    The tool's own knobs, posted as ONE nested object the route validates and
+    the settings module merges over what is stored. Money fields are in MAJOR
+    units on screen (the same rule as the price and the minimum deposit) and
+    converted once on the way out. Only the knobs an operator needs day to day
+    are here; the full schema (qualities and multipliers, languages, voices,
+    trim rules, ceilings) lives in lib/ai/character-replace/config.ts and is
+    the next panel to build when the pricing engine lands.
+  */
+  const cr: CharacterReplaceConfig = settings.frenzAiCharacterReplace;
+  const [crEnabled, setCrEnabled] = useState(cr.enabled);
+  const [crPerSecond, setCrPerSecond] = useState(minorToMajorInput(cr.pricePerSecondCents));
+  const [crMinimum, setCrMinimum] = useState(minorToMajorInput(cr.minimumChargeCents));
+  const [crMaxSeconds, setCrMaxSeconds] = useState(String(cr.maximumDurationSeconds));
+  const [crLipSync, setCrLipSync] = useState(cr.lipSyncEnabled);
+  const lipStandard = cr.lipSync.find((l) => l.id === "standard");
+  const lipStudio = cr.lipSync.find((l) => l.id === "studio");
+  const [crLipStandard, setCrLipStandard] = useState(minorToMajorInput(lipStandard?.perSecondCents ?? 0));
+  const [crLipStudio, setCrLipStudio] = useState(minorToMajorInput(lipStudio?.perSecondCents ?? 0));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -123,7 +143,24 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           frenzAiVideoPriceCents: majorInputToMinor(price) || settings.frenzAiVideoPriceCents,
           frenzAiCurrency: currency,
           frenzAiMinTopupCents: majorInputToMinor(minTopup) || settings.frenzAiMinTopupCents,
-          frenzAiEngine: engine,
+          /*
+            The nested object. Money may legitimately be ZERO here (a free
+            lip-sync tier, no minimum), so an EMPTY box is the only thing that
+            means "leave it alone" — `majorInputToMinor("")` is null and the
+            stored value is sent back in its place.
+          */
+          frenzAiCharacterReplace: {
+            enabled: crEnabled,
+            pricePerSecondCents: majorInputToMinor(crPerSecond) ?? cr.pricePerSecondCents,
+            minimumChargeCents: majorInputToMinor(crMinimum) ?? cr.minimumChargeCents,
+            maximumDurationSeconds:
+              crMaxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(crMaxSeconds)),
+            lipSyncEnabled: crLipSync,
+            lipSync: [
+              { id: "standard", perSecondCents: majorInputToMinor(crLipStandard) ?? lipStandard?.perSecondCents ?? 0 },
+              { id: "studio", perSecondCents: majorInputToMinor(crLipStudio) ?? lipStudio?.perSecondCents ?? 0 },
+            ],
+          },
         }),
       });
       const json = await res.json();
@@ -146,8 +183,10 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
         <Sparkles className="h-5 w-5 text-primary" /> Frenz AI access
       </h2>
       <p className="mb-6 text-sm text-muted-foreground">
-        Who may use AI Clean, and how much they get. Every job costs real provider
-        credit, so these are the levers that bound that spend.
+        Who may use Frenz AI, and what it costs them. Every job costs real provider
+        credit, so these are the levers that bound that spend. Character Replace is
+        paid from the member&apos;s balance on every run — the free allowances below
+        apply to free-allowance tools only, and there are none right now.
       </p>
 
       <form onSubmit={save} className="space-y-6">
@@ -159,9 +198,9 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
         />
 
         <Toggle
-          label="Free members can use AI Clean"
+          label="Free members get a free allowance"
           hint={
-            'Off shows "AI Clean is a Pro feature right now" instead of a counter. Deliberately not the same as setting credits to zero — zero would say "you have used your 0 free cleans today", which is nonsense. Paid plans are unaffected either way.'
+            'For tools with a free allowance. Off shows "a Pro feature right now" instead of a counter. Deliberately not the same as setting credits to zero — zero would say "you have used your 0 free runs today", which is nonsense. Paid plans are unaffected either way. Character Replace has no free allowance and ignores this.'
           }
           checked={freeEnabled}
           onChange={setFreeEnabled}
@@ -169,12 +208,12 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
 
         <div>
           <label htmlFor="frenz-ai-credits" className="block text-sm font-semibold">
-            Free cleans per day
+            Free runs per day
           </label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            For guests and free members. Zero is allowed and means nobody gets a
-            free clean; use the switch above if you want the interface to say
-            &ldquo;Pro feature&rdquo; instead of showing a counter.
+            For free members, on tools with a free allowance. Zero is allowed and
+            means nobody gets a free run; use the switch above if you want the
+            interface to say &ldquo;Pro feature&rdquo; instead of showing a counter.
           </p>
           <input
             id="frenz-ai-credits"
@@ -384,7 +423,7 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           would turn this field into a promise the product had already made.
         */}
         <div>
-          <p className="text-sm font-semibold">Paid cleans per day</p>
+          <p className="text-sm font-semibold">Paid runs per day</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Pro and Business. These are not shown anywhere in the app, so you can
             change them without contradicting something a member has already
@@ -426,43 +465,109 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
         </div>
 
         {/*
-          ── 🔴 THE ENGINE ──────────────────────────────────────────────────
+          ── CHARACTER REPLACE ───────────────────────────────────────────────
 
-          Owner, 2026-09-09: "i dont see a switch in admin dashboard to switch
-          the propainter off or on."
-
-          It shipped as an environment variable, which means a deploy and me.
-          This is the control, and the setting is now the authority — the env
-          var survives only as the fallback for a deploy with no settings row.
-
-          The hint states the trade honestly in both directions. Quality is not
-          free here: the second engine adds a GPU call and roughly 210s, and it
-          has a genuine weakness that a screenshot of a good result would hide.
+          The AI Clean engine choice (Fast / Best quality) stood here until
+          2026-09-13; it went with the tool. What replaces it is the first
+          operator surface for the Wan 2.2 tool: on/off, the rate, the floor,
+          the ceiling on length, and the lip-sync tiers. None of these numbers
+          is quoted to a member yet — the pricing engine is a later part — but
+          they are stored, clamped and ready for it.
         */}
-        <div>
-          <p className="text-sm font-semibold">Background reconstruction</p>
+        <div className="rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5">
+          <p className="text-sm font-semibold">Character Replace</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            What rebuilds the picture behind removed captions. Measured on a real
-            clip: the fast engine leaves a visible rectangular smear on every
-            setting it has — including the tightest mask it can make — because it
-            fills from a single frame and cannot know what was behind the text.
+            The Wan 2.2 tool. Paid from the member&apos;s balance on every run; the
+            price is per second of video, in {currency}, the way you say it. The
+            quote itself is not calculated yet — these are the inputs it will read.
           </p>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <EngineChoice
-              value="classical"
-              selected={engine}
-              onSelect={setEngine}
-              title="Fast"
-              body="One CPU call, ~25s of inference. Cheapest. Leaves a smeared band where the caption was."
+          <div className="mt-4">
+            <Toggle
+              label="Character Replace is available"
+              hint="Off hides the entry card's action and the workspace says the tool is unavailable right now. Nothing already running is affected."
+              checked={crEnabled}
+              onChange={setCrEnabled}
             />
-            <EngineChoice
-              value="propainter"
-              selected={engine}
-              onSelect={setEngine}
-              title="Best quality"
-              body="Adds a GPU pass (~210s) that rebuilds the region from frames where it was not covered. No rectangular edge. Costs more per job, and a caption that never moves over a background that never moves gives it nothing to borrow from."
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <label htmlFor="frenz-ai-cr-per-second" className="block">
+              <span className="block text-xs font-semibold text-muted-foreground">Price per second</span>
+              <input
+                id="frenz-ai-cr-per-second"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                value={crPerSecond}
+                onChange={(e) => setCrPerSecond(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+            <label htmlFor="frenz-ai-cr-minimum" className="block">
+              <span className="block text-xs font-semibold text-muted-foreground">Minimum charge</span>
+              <input
+                id="frenz-ai-cr-minimum"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                value={crMinimum}
+                onChange={(e) => setCrMinimum(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+            <label htmlFor="frenz-ai-cr-max-seconds" className="block">
+              <span className="block text-xs font-semibold text-muted-foreground">Longest video (seconds)</span>
+              <input
+                id="frenz-ai-cr-max-seconds"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={120}
+                value={crMaxSeconds}
+                onChange={(e) => setCrMaxSeconds(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+          </div>
+
+          <div className="mt-5">
+            <Toggle
+              label="Offer a new voice with lip sync"
+              hint="Off hides the Voice & Language section entirely; members keep their original audio. The lip-sync model is not connected yet either way."
+              checked={crLipSync}
+              onChange={setCrLipSync}
             />
+          </div>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <label htmlFor="frenz-ai-cr-lip-standard" className="block">
+              <span className="block text-xs font-semibold text-muted-foreground">Standard lip sync, per second</span>
+              <input
+                id="frenz-ai-cr-lip-standard"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                value={crLipStandard}
+                onChange={(e) => setCrLipStandard(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
+            <label htmlFor="frenz-ai-cr-lip-studio" className="block">
+              <span className="block text-xs font-semibold text-muted-foreground">Studio lip sync, per second</span>
+              <input
+                id="frenz-ai-cr-lip-studio"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                value={crLipStudio}
+                onChange={(e) => setCrLipStudio(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
           </div>
         </div>
 
@@ -504,55 +609,6 @@ function Toggle({
       <span className="min-w-0">
         <span className="block text-sm font-semibold">{label}</span>
         <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{hint}</span>
-      </span>
-    </label>
-  );
-}
-
-/**
- * One engine option, as a radio card rather than a toggle.
- *
- * A two-state switch would have to be labelled for one of them ("use
- * ProPainter"), which makes the other the unnamed default and hides what it
- * actually does. Two cards let both sides state their cost and their weakness,
- * which is the information an operator needs to choose — this is a money
- * decision, not a preference.
- *
- * A real `<input type="radio">` under a label, so it is keyboard reachable and
- * announced as a group, rather than a div with a click handler.
- */
-function EngineChoice({
-  value,
-  selected,
-  onSelect,
-  title,
-  body,
-}: {
-  value: "classical" | "propainter";
-  selected: string;
-  onSelect: (v: "classical" | "propainter") => void;
-  title: string;
-  body: string;
-}) {
-  const active = selected === value;
-  return (
-    <label
-      className={cn(
-        "flex cursor-pointer gap-3 rounded-2xl border p-3 transition",
-        active ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
-      )}
-    >
-      <input
-        type="radio"
-        name="frenz-ai-engine"
-        value={value}
-        checked={active}
-        onChange={() => onSelect(value)}
-        className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
-      />
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold">{title}</span>
-        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{body}</span>
       </span>
     </label>
   );

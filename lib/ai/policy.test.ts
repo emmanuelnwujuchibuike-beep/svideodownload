@@ -11,43 +11,74 @@ import {
 import { FRENZ_AI_DAILY_CREDITS } from "./quota";
 
 /**
- * The Video Text Remover access rules, as the owner wrote them (2026-09-08).
+ * The Frenz AI access rules, as the owner wrote them.
  *
- * These tests exist because the numbers are a PRODUCT decision that has already
- * moved twice, and each move was meant to be a data edit. A test per row is what
- * makes the next move visible rather than silent.
+ * These tests exist because the numbers are a PRODUCT decision that has moved
+ * three times, and each move was meant to be a data edit. A test per row is
+ * what makes the next move visible rather than silent.
+ *
+ * 2026-09-13: AI Clean and its table are gone. Character Replace is paid from
+ * the balance on every plan, so its table is all zeros with `paidOnly` — and
+ * the platform rules that were about FREE allowances (the operator switches,
+ * the counter a member reads) are pinned against a tool that still has one:
+ * an unlisted feature on the default table.
  */
 
-const CLEAN = "ai_clean" as const;
+const CR = "ai_character_replace" as const;
+/** A feature with no table of its own — the default rows, which carry a free allowance. */
+const FREE_TOOL = "ai_upscale" as const;
 
-describe("the daily limits, exactly as briefed", () => {
-  it.each([
-    ["guest", 2],
-    ["free", 2],
-    ["pro", 5],
-    ["business", 15],
-    ["max_ai", 30],
-  ] as const)("%s gets %i AI Clean runs a day", (audience, limit) => {
-    expect(policyFor(audience, CLEAN).dailyLimit).toBe(limit);
-  });
-
-  it("🔴 gives a guest the SAME allowance as a free member", () => {
-    /*
-      Not a coincidence and not tidiness. If guests got more, signing up would
-      be a downgrade; if they got fewer, "sign up for more" plus the sign-up
-      fold would let somebody bank both. Identical is the only number that makes
-      the reconciliation rule in migration 0145 airtight.
-    */
-    expect(policyFor("guest", CLEAN).dailyLimit).toBe(policyFor("free", CLEAN).dailyLimit);
-  });
-
-  it("meters EVERY audience — nothing is uncapped any more", () => {
+describe("Character Replace is paid-only, on every plan", () => {
+  it("has a zero daily allowance for every audience", () => {
     for (const a of AI_AUDIENCES) {
-      const p = policyFor(a, CLEAN);
-      expect(p.unlimited).toBe(false);
-      expect(p.dailyLimit).toBeGreaterThan(0);
-      expect(p.maxConcurrent).toBeGreaterThan(0);
+      const p = policyFor(a, CR);
+      expect(p.dailyLimit, a).toBe(0);
+      expect(p.paidOnly, a).toBe(true);
+      expect(p.unlimited, a).toBe(false);
+      expect(p.maxConcurrent, a).toBeGreaterThan(0);
     }
+  });
+
+  it("is offered to every signed-in plan and NOT to a guest", () => {
+    for (const a of ["free", "pro", "business", "max_ai"] as const) expect(featureOfferedTo(a, CR), a).toBe(true);
+    expect(featureOfferedTo("guest", CR)).toBe(false);
+  });
+
+  it("🔴 a zero allowance does not read as 'spent': the paid tool can start", () => {
+    for (const a of ["free", "pro", "business", "max_ai"] as const) {
+      const view = entitlementView({ audience: a, policy: policyFor(a, CR), usedToday: 0 });
+      expect(view.paidOnly, a).toBe(true);
+      expect(view.canStart, a).toBe(true);
+      expect(view.dailyLimit, a).toBe(0);
+      expect(view.remainingToday, a).toBe(0);
+    }
+  });
+
+  it("🔴 the operator's free-credit fields never touch it", () => {
+    for (const a of AI_AUDIENCES) {
+      const original = policyFor(a, CR);
+      const configured = applyConfiguredLimits(original, a, {
+        freeDailyCredits: 999,
+        freeEnabled: true,
+        proDailyCredits: 50,
+        businessDailyCredits: 50,
+      });
+      // "2 free a day" applied to a tool whose every run costs GPU money
+      // would be the bill the zero exists to prevent.
+      expect(configured, a).toEqual(original);
+    }
+  });
+
+  it("the tool's own switch turns it off for everybody", () => {
+    for (const a of ["free", "pro", "business", "max_ai"] as const) {
+      const off = applyConfiguredLimits(policyFor(a, CR), a, { toolEnabled: false });
+      expect(off.offered, a).toBe(false);
+      const view = entitlementView({ audience: a, policy: off, usedToday: 0 });
+      expect(view.canStart, a).toBe(false);
+      expect(view.offered, a).toBe(false);
+    }
+    const on = applyConfiguredLimits(policyFor("free", CR), "free", { toolEnabled: true });
+    expect(on).toEqual(policyFor("free", CR));
   });
 });
 
@@ -55,79 +86,65 @@ describe("🔴 no rewarded ad, for anyone (standing rule §6, 2026-09-09)", () =
   /*
     "Do not use reward ads for AI access. Remove all reward-ad AI logic."
 
-    This block used to assert the OPPOSITE for guest and free — an ad per
-    generation — and that assertion was the shape of the bug the owner reported
-    on 2026-09-13 as "stuck at queued 58%": the browser opened an ad gate the
-    reward network never filled, and `/start` was never called. The economy is
-    the free allowance and then the prepaid balance, and nothing else.
+    This block once asserted the OPPOSITE for guest and free — an ad per
+    generation — and that assertion was the shape of the bug the owner
+    reported on 2026-09-13 as "stuck at queued 58%": the browser opened an ad
+    gate the reward network never filled, and `/start` was never called. The
+    reward module and its route were deleted the same day; this is what keeps
+    them from coming back by data.
   */
-  it("owes no ad on any audience", () => {
-    for (const a of AI_AUDIENCES) {
-      const p = policyFor(a, CLEAN);
-      expect(p.requiresReward, a).toBe(false);
-      expect(p.rewardsPerJob, a).toBe(0);
-
-      const view = entitlementView({ audience: a, policy: p, usedToday: 0 });
-      expect(view.rewardRequired, a).toBe(false);
-    }
-  });
-
-  it("starts immediately with allowance left — no ad is not no run", () => {
-    for (const a of ["free", "pro", "business", "max_ai"] as const) {
-      const view = entitlementView({ audience: a, policy: policyFor(a, CLEAN), usedToday: 0 });
-      expect(view.canStart, a).toBe(true);
+  it("owes no ad on any audience, on the paid tool or the default table", () => {
+    for (const feature of [CR, FREE_TOOL] as const) {
+      for (const a of AI_AUDIENCES) {
+        const p = policyFor(a, feature);
+        expect(p.requiresReward, `${feature}/${a}`).toBe(false);
+        expect(p.rewardsPerJob, `${feature}/${a}`).toBe(0);
+        const view = entitlementView({ audience: a, policy: p, usedToday: 0 });
+        expect(view.rewardRequired, `${feature}/${a}`).toBe(false);
+      }
     }
   });
 
   it("🔴 never asks for an ad that cannot buy anything", () => {
-    // Spent. Still no ad — and `canStart` is false so the next step is the
-    // balance, not an advert.
-    const spent = entitlementView({
-      audience: "free",
-      policy: policyFor("free", CLEAN),
-      usedToday: 2,
-    });
+    const spent = entitlementView({ audience: "free", policy: policyFor("free", FREE_TOOL), usedToday: 99 });
     expect(spent.canStart).toBe(false);
     expect(spent.rewardRequired).toBe(false);
     expect(spent.rewardsPerJob).toBe(0);
   });
 });
 
-describe("the counter a member reads", () => {
-  it("counts down across a guest's day", () => {
-    const p = policyFor("guest", CLEAN);
-    const fresh = entitlementView({ audience: "guest", policy: p, usedToday: 0 });
-    expect(fresh).toMatchObject({ dailyLimit: 2, usedToday: 0, remainingToday: 2, canStart: true });
-
-    const one = entitlementView({ audience: "guest", policy: p, usedToday: 1 });
-    expect(one).toMatchObject({ usedToday: 1, remainingToday: 1, canStart: true });
-
-    const done = entitlementView({ audience: "guest", policy: p, usedToday: 2 });
-    expect(done).toMatchObject({ usedToday: 2, remainingToday: 0, canStart: false });
+describe("the counter a member reads (free-allowance tools)", () => {
+  it("counts down across a day", () => {
+    const p = policyFor("free", FREE_TOOL);
+    const limit = p.dailyLimit;
+    expect(limit).toBeGreaterThan(0);
+    const fresh = entitlementView({ audience: "free", policy: p, usedToday: 0 });
+    expect(fresh).toMatchObject({ dailyLimit: limit, usedToday: 0, remainingToday: limit, canStart: true, paidOnly: false });
+    const done = entitlementView({ audience: "free", policy: p, usedToday: limit });
+    expect(done).toMatchObject({ usedToday: limit, remainingToday: 0, canStart: false });
   });
 
   it("never reports a negative remaining, even if the counter overshoots", () => {
-    const view = entitlementView({ audience: "free", policy: policyFor("free", CLEAN), usedToday: 99 });
+    const view = entitlementView({ audience: "free", policy: policyFor("free", FREE_TOOL), usedToday: 99 });
     expect(view.remainingToday).toBe(0);
     expect(view.canStart).toBe(false);
   });
 
   it("exposes only the allow-listed fields — never the policy object", () => {
-    const view = entitlementView({ audience: "pro", policy: policyFor("pro", CLEAN), usedToday: 3 });
+    const view = entitlementView({ audience: "pro", policy: policyFor("pro", CR), usedToday: 3 });
     expect(Object.keys(view).sort()).toEqual(
       [
         "audience",
         "canStart",
         "dailyLimit",
-        // Part 6+: which silicon this member gets, and whether the product
-        // offers a faster tier at all. Both are booleans about capability —
-        // neither leaks a model name, a version or a threshold.
         "gpuAccelerated",
         "gpuOffered",
-        // Max AI: whether BRIA exists here, and which tier this member runs on.
         "briaOffered",
         "modelTier",
         "offered",
+        // 2026-09-13: whether this tool is funded at checkout rather than
+        // from a counter. A boolean, not a rate.
+        "paidOnly",
         "remainingToday",
         "rewardRequired",
         "rewardScope",
@@ -142,18 +159,18 @@ describe("the counter a member reads", () => {
   });
 });
 
-describe("🔴 §9 — a future AI tool must NOT inherit AI Clean's limits", () => {
+describe("🔴 §9 — a future AI tool must NOT inherit another tool's limits", () => {
   it("gives an unlisted feature its own numbers", () => {
-    const clean = policyFor("max_ai", CLEAN);
-    const other = policyFor("max_ai", "ai_upscale");
-    expect(other.dailyLimit).not.toBe(clean.dailyLimit);
+    const paid = policyFor("max_ai", CR);
+    const other = policyFor("max_ai", FREE_TOOL);
+    expect(other.dailyLimit).not.toBe(paid.dailyLimit);
+    expect(other.paidOnly).toBeUndefined();
   });
 
   it("does not silently offer an unbuilt tool to guests", () => {
     // A tool nobody has costed should not be free to anonymous visitors the
     // moment its id appears in the registry.
     expect(featureOfferedTo("guest", "ai_generate")).toBe(false);
-    expect(featureOfferedTo("guest", CLEAN)).toBe(true);
   });
 
   it("does not make an unlisted tool require an ad it has no flow for", () => {
@@ -161,26 +178,13 @@ describe("🔴 §9 — a future AI tool must NOT inherit AI Clean's limits", () 
   });
 });
 
-describe("🔴 §8 — Max AI's 15 AI credits stay separate from its 30 runs", () => {
-  it("keeps the two numbers different, in different systems", () => {
-    // The credits are a Redis counter (lib/ai/quota.ts); the runs are a Postgres
-    // row keyed by feature. Spending one cannot move the other — this asserts
-    // they were never conflated into one figure.
-    expect(policyFor("max_ai", CLEAN).dailyLimit).toBe(30);
+describe("🔴 §8 — Max AI's 15 AI credits stay a separate system", () => {
+  it("keeps the credit figure out of the job policy entirely", () => {
+    // The credits are a Redis counter (lib/ai/quota.ts); the runs are a
+    // Postgres row keyed by feature. Spending one cannot move the other.
     expect(FRENZ_AI_DAILY_CREDITS.max_ai).toBe(15);
-    expect(policyFor("max_ai", CLEAN).dailyLimit).not.toBe(FRENZ_AI_DAILY_CREDITS.max_ai);
-  });
-
-  it("🔴 caps Video Text Remover at 30 regardless of the credit figure", () => {
-    // The brief's sharpest line: "The existing 15 AI credits must NEVER allow
-    // Max AI to exceed 30 generations per day." The cap is not derived from the
-    // credits, so no credit value can raise it.
-    const view = entitlementView({
-      audience: "max_ai",
-      policy: policyFor("max_ai", CLEAN),
-      usedToday: 30,
-    });
-    expect(view.canStart).toBe(false);
+    expect(policyFor("max_ai", CR).dailyLimit).not.toBe(FRENZ_AI_DAILY_CREDITS.max_ai);
+    expect(policyFor("max_ai", FREE_TOOL).dailyLimit).not.toBe(FRENZ_AI_DAILY_CREDITS.max_ai);
   });
 });
 
@@ -193,8 +197,6 @@ describe("audience resolution", () => {
   });
 
   it("🔴 falls to FREE for anything it does not recognise, never to the top tier", () => {
-    // A typo, a hand-edited row, or a plan from a newer deploy. The safe
-    // reading of all three is the smallest allowance.
     for (const bad of ["max-ai", "MAX_AI", "enterprise", "", null, undefined, 7, {}]) {
       expect(audienceFromPlan(bad as never)).toBe("free");
     }
@@ -205,25 +207,20 @@ describe("audience resolution", () => {
   });
 });
 
-describe("the operator switches", () => {
-  const free = () => policyFor("free", CLEAN);
+describe("the operator switches (free-allowance tools)", () => {
+  const free = () => policyFor("free", FREE_TOOL);
 
   it("lets an operator set the guest and free allowance", () => {
     for (const a of ["guest", "free"] as const) {
-      const p = applyConfiguredLimits(policyFor(a, CLEAN), a, { freeDailyCredits: 5 });
+      const p = applyConfiguredLimits(policyFor(a, FREE_TOOL), a, { freeDailyCredits: 5 });
       expect(p.dailyLimit).toBe(5);
     }
   });
 
-  it("🔴 never lets a configured number touch a PAID plan", () => {
+  it("🔴 never lets a FREE-credit number touch a PAID plan", () => {
     for (const a of ["pro", "business", "max_ai"] as const) {
-      const original = policyFor(a, CLEAN);
-      const configured = applyConfiguredLimits(original, a, {
-        freeDailyCredits: 999,
-        freeEnabled: false,
-      });
-      // Somebody is paying for this number. An operator lowering it by accident
-      // is a silent breach; raising it is an unapproved provider bill.
+      const original = policyFor(a, FREE_TOOL);
+      const configured = applyConfiguredLimits(original, a, { freeDailyCredits: 999, freeEnabled: false });
       expect(configured).toEqual(original);
     }
   });
@@ -237,9 +234,7 @@ describe("the operator switches", () => {
     const off = applyConfiguredLimits(free(), "free", { freeEnabled: false });
     expect(off.offered).toBe(false);
     expect(off.dailyLimit).toBe(0);
-    // 🔴 And it must not ask for an ad for a tier that cannot run anything.
     expect(off.requiresReward).toBe(false);
-
     const view = entitlementView({ audience: "free", policy: off, usedToday: 0 });
     expect(view.offered).toBe(false);
     expect(view.canStart).toBe(false);
@@ -254,7 +249,7 @@ describe("the operator switches", () => {
 
   it("ignores a value that is not a usable number", () => {
     for (const bad of [NaN, Infinity, undefined, "3" as unknown as number]) {
-      expect(applyConfiguredLimits(free(), "free", { freeDailyCredits: bad }).dailyLimit).toBe(2);
+      expect(applyConfiguredLimits(free(), "free", { freeDailyCredits: bad }).dailyLimit).toBe(free().dailyLimit);
     }
   });
 
@@ -267,17 +262,15 @@ describe("the operator switches", () => {
   });
 });
 
-describe("the shape Part 10 will need", () => {
+describe("the shape a future rewarded flow would need — kept as data, never wired", () => {
   it("expresses the ad requirement as a COUNT, not a boolean the flow branches on", () => {
-    // The owner has said paid plans move to "up to 3 rewarded ads each
-    // generation". That must stay a number change, not a rewrite.
-    const p: AiPlanPolicy = policyFor("pro", CLEAN);
+    const p: AiPlanPolicy = policyFor("pro", CR);
     expect(typeof p.rewardsPerJob).toBe("number");
   });
 
   it("keeps requiresReward and rewardsPerJob consistent", () => {
     for (const a of AI_AUDIENCES) {
-      const p = policyFor(a as AiAudience, CLEAN);
+      const p = policyFor(a as AiAudience, CR);
       expect(p.requiresReward).toBe(p.rewardsPerJob > 0);
     }
   });

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { AI_CLEAN_PATH, nextPollDelayMs, pathState, stageFor } from "./job-stages";
+import { AI_JOB_PATH, nextPollDelayMs, pathState, stageFor } from "./job-stages";
 import type { AiJobStatus, AiJobView } from "./jobs";
 
 const job = (status: AiJobStatus, extra: Partial<AiJobView> = {}): AiJobView => ({
   id: "11111111-2222-3333-4444-555555555555",
-  feature: "ai_clean",
+  feature: "ai_character_replace",
   status,
   createdAt: "2026-09-07T10:00:00.000Z",
   startedAt: null,
@@ -92,17 +92,18 @@ describe("pathState", () => {
   it("shows the whole journey at every stage", () => {
     for (const stage of ["uploading", "queued", "processing", "finalizing", "completed"] as const) {
       const state = pathState(stage);
-      expect(Object.keys(state).sort(), stage).toEqual(AI_CLEAN_PATH.map((p) => p.key).sort());
+      expect(Object.keys(state).sort(), stage).toEqual(AI_JOB_PATH.map((p) => p.key).sort());
     }
   });
 
   it("🔴 never announces a step we cannot observe as the current one", () => {
     /*
-      "Analyzing video" is not a separate signal — the model does detection and
-      inpainting inside one prediction reporting a single `processing` state.
-      It appears in the path so the member sees the journey, and lights up
-      TOGETHER with "Removing text" rather than before it, because choosing
-      between them would mean deciding by a timer.
+      "Analyzing your video" is not a separate signal — the model does its
+      analysis and the replacement inside one prediction reporting a single
+      `processing` state. It appears in the path so the member sees the
+      journey, and lights up TOGETHER with "Replacing the character" rather
+      than before it, because choosing between them would mean deciding by a
+      timer.
     */
     const processing = pathState("processing");
     expect(processing.analyzing).toBe("doing");

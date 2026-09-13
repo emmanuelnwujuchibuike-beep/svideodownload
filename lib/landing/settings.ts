@@ -1,4 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  normalizeCharacterReplaceConfig,
+  type CharacterReplaceConfig,
+} from "@/lib/ai/character-replace/config";
 
 /**
  * Admin-configurable pieces of the public landing page, stored in the `settings`
@@ -332,6 +336,21 @@ export interface LandingSettings {
    * gives a temporal model nothing to borrow from, and it hallucinates.
    */
   frenzAiEngine: AiCleanEngineSetting;
+  /**
+   * ── CHARACTER REPLACE, AS ONE OBJECT (2026-09-13, Part 1 §15) ─────────────
+   *
+   * The whole tool's operator configuration — on/off, the qualities and their
+   * multipliers, the rate per second, the minimum, the lip-sync tiers and
+   * their prices, the languages, the ceilings, the trim rules — nested under
+   * ONE key rather than spread across a dozen flat fields. The type and its
+   * normaliser live with the tool (lib/ai/character-replace/config.ts); this
+   * row only stores and returns it. Adding a knob is one field there, and
+   * nothing here changes.
+   *
+   * ⚠️ Normalised on the way in AND on the way out, like every other field:
+   * several of these values become money.
+   */
+  frenzAiCharacterReplace: CharacterReplaceConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -387,6 +406,8 @@ export const DEFAULT_LANDING: LandingSettings = {
   // The cheap one. Turning on the GPU engine costs money per job and is the
   // operator’s call.
   frenzAiEngine: "classical",
+  // The tool's own defaults — see lib/ai/character-replace/config.ts.
+  frenzAiCharacterReplace: normalizeCharacterReplaceConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -653,6 +674,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiFreeEnabled: raw.frenzAiFreeEnabled !== false,
       frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
+      frenzAiCharacterReplace: normalizeCharacterReplaceConfig(raw.frenzAiCharacterReplace),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -687,12 +709,20 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * field to this object can never again be a way to lose a different one. The
  * caller sends what it edited; nothing else moves.
  */
-export async function setLandingSettings(s: Partial<LandingSettings>): Promise<void> {
+/**
+ * What a caller may send: any flat field, and for the nested Character Replace
+ * object a PARTIAL of it — the admin panel posts only the knobs it shows.
+ */
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace">> & {
+  frenzAiCharacterReplace?: Record<string, unknown>;
+};
+
+export async function setLandingSettings(s: LandingSettingsPatch): Promise<void> {
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends keyof LandingSettings>(key: K): LandingSettings[K] =>
-    s[key] === undefined ? current[key] : (s[key] as LandingSettings[K]);
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace">>(key: K): LandingSettings[K] =>
+    s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
     reelsPosterUrl: isAllowedImageUrl(pick("reelsPosterUrl")) ? pick("reelsPosterUrl") : "",
@@ -723,6 +753,16 @@ export async function setLandingSettings(s: Partial<LandingSettings>): Promise<v
     frenzAiFreeEnabled: pick("frenzAiFreeEnabled") !== false,
     frenzAiEngine: normalizeEngine(pick("frenzAiEngine")),
     frenzAiTileImageUrl: isAllowedImageUrl(pick("frenzAiTileImageUrl")) ? pick("frenzAiTileImageUrl") : "",
+    /*
+      The nested object is MERGED, not replaced: a panel that posts only
+      `{ enabled: false }` keeps every rate the operator already typed. The
+      normaliser then clamps the merged result, so a partial write can never
+      leave a field the reader would refuse.
+    */
+    frenzAiCharacterReplace: normalizeCharacterReplaceConfig({
+      ...(current.frenzAiCharacterReplace as unknown as Record<string, unknown>),
+      ...((s.frenzAiCharacterReplace ?? {}) as Record<string, unknown>),
+    }),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

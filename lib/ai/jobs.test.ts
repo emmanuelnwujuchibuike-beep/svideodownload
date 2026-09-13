@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AI_CLEAN_MAX_BYTES } from "./clean-media";
+import { AI_VIDEO_MAX_BYTES } from "./media";
 import {
   AI_FEATURES,
   decodeCursor,
@@ -13,6 +13,7 @@ import {
   isActiveStatus,
   isValidClientRequestId,
   jobToView,
+  primaryAiFeature,
   validateJobInput,
   type AiJobRow,
   type AiJobStatus,
@@ -27,21 +28,30 @@ import {
  * feature that reports itself runnable when nothing can run it.
  */
 
-const feature = aiFeature("ai_clean")!;
+const feature = aiFeature("ai_character_replace")!;
 
 describe("the feature registry", () => {
-  it("has AI Clean, and it is the only feature built", () => {
-    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_clean"]);
+  it("has Character Replace, and it is the only feature built", () => {
+    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace"]);
+    expect(primaryAiFeature().id).toBe("ai_character_replace");
   });
 
-  it("gives the free tier the owner's three jobs a day", () => {
-    expect(feature.freeDailyJobs).toBe(3);
+  it("🔴 AI Clean is gone from the registry — nothing can create one (owner, 2026-09-13)", () => {
+    expect(aiFeature("ai_clean")).toBeNull();
+  });
+
+  it("🔴 has NO free allowance: every run is paid from the balance", () => {
+    expect(feature.freeDailyJobs).toBe(0);
+  });
+
+  it("caps a video at two minutes — the price is per second", () => {
+    expect(feature.maxDurationSeconds).toBe(120);
   });
 
   it("🔴 accepts exactly what the picker accepts", () => {
     // A file the interface took must never be refused by the server for a rule
     // the interface did not know about. Both read the same constant.
-    expect(feature.maxBytes).toBe(AI_CLEAN_MAX_BYTES);
+    expect(feature.maxBytes).toBe(AI_VIDEO_MAX_BYTES);
     for (const mime of ["video/mp4", "video/quicktime", "video/webm", "video/x-msvideo"]) {
       expect(feature.mimeTypes, `${mime} missing`).toContain(mime);
     }
@@ -225,7 +235,7 @@ describe("jobToView", () => {
     id: "11111111-2222-3333-4444-555555555555",
     user_id: "99999999-8888-7777-6666-555555555555",
     guest_id: null,
-    feature: "ai_clean",
+    feature: "ai_character_replace",
     provider: "replicate",
     model: "some-org/video-text-remover",
     model_version: "abc123def456",
@@ -275,7 +285,7 @@ describe("jobToView", () => {
   it("returns the facts a member is entitled to", () => {
     const view = jobToView(row, () => "x");
     expect(view.id).toBe(row.id);
-    expect(view.feature).toBe("ai_clean");
+    expect(view.feature).toBe("ai_character_replace");
     expect(view.status).toBe("completed");
     expect(view.source).toEqual({
       size: 1024,
@@ -358,7 +368,7 @@ describe("pagination cursors", () => {
 
 describe("the create-job request schema", () => {
   const valid = {
-    feature: "ai_clean",
+    feature: "ai_character_replace",
     clientRequestId: "9f2c1b8e4a7d4f0e",
     source: { size: 1024, mimeType: "video/mp4" },
   };

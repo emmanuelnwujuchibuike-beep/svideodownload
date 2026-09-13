@@ -1,4 +1,4 @@
-import { ChevronRight, History, Wand2 } from "lucide-react";
+import { ChevronRight, History, Wallet } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -50,7 +50,7 @@ interface AiTool {
   id: string;
   name: string;
   blurb: string;
-  icon: typeof Wand2;
+  icon: typeof History;
   /**
    * 🔴 Never null. Until 2026-09-13 this was `string | null`, and a null
    * rendered a flat card that said "Soon". Owner: "remove the soon cards from
@@ -78,39 +78,48 @@ interface AiTool {
  *
  * What remains is every door this product has, and each one opens.
  */
-function tools(cleanHref: string, historyHref: string): AiTool[] {
+/*
+  ── 🔴 THE TOOL ITSELF IS NOT A CARD HERE (2026-09-13) ─────────────────────
+
+  AI Clean's card went with AI Clean. Character Replace has the entry card
+  above this grid — the hero slot — and putting it here as well would be the
+  same door on the page twice, three inches apart: the "cluster" the owner's
+  standing instruction rules out. So the grid holds the two doors that are
+  not the tool: history, and the balance/usage statement.
+*/
+function tools(historyHref: string, usageHref: string): AiTool[] {
   return [
-    {
-      id: "clean",
-      name: "AI Clean",
-      blurb: "Remove unwanted text, subtitles and captions.",
-      icon: Wand2,
-      href: cleanHref,
-      accent: "from-blue-600 to-indigo-600",
-      preview: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.10))",
-    },
     {
       id: "history",
       name: "Your AI videos",
-      blurb: "Everything you have cleaned, kept for three days.",
+      blurb: "Everything you have made, kept for three days.",
       icon: History,
       href: historyHref,
       accent: "from-amber-500 to-orange-600",
       preview: "linear-gradient(135deg, rgba(245,158,11,0.16), rgba(249,115,22,0.10))",
     },
+    {
+      id: "usage",
+      name: "Balance & usage",
+      blurb: "Your balance, deposits and every charge.",
+      icon: Wallet,
+      href: usageHref,
+      accent: "from-blue-600 to-indigo-600",
+      preview: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.10))",
+    },
   ];
 }
 
 export function FrenzAIToolGrid({
-  cleanHref,
   historyHref,
+  usageHref,
   className,
 }: {
-  cleanHref: string;
   historyHref: string;
+  usageHref: string;
   className?: string;
 }) {
-  const items = tools(cleanHref, historyHref);
+  const items = tools(historyHref, usageHref);
 
   return (
     /*

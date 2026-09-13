@@ -18,6 +18,7 @@ import {
   AI_HISTORY_FILTERS,
   AI_HISTORY_FILTER_LABELS,
   historyChip,
+  historyTitleFor,
   hoursUntilExpiry,
   resultAvailability,
   type AiHistoryTone,
@@ -420,7 +421,7 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
     why in their own caption.
   */
   const Tag = playable ? "button" : "div";
-  const title = job.source.name ?? "Cleaned video";
+  const title = job.source.name ?? historyTitleFor(job.feature);
 
   return (
     /*

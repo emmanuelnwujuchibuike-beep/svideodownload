@@ -1,4 +1,4 @@
-import { isActiveStatus, type AiJobStatus, type AiJobView } from "@/lib/ai/jobs";
+import { isActiveStatus, type AiFeature, type AiJobStatus, type AiJobView } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -74,11 +74,11 @@ export const AI_HISTORY_FILTER_LABELS: Record<AiHistoryFilter, string> = {
 export const AI_HISTORY_EMPTY_COPY: Record<AiHistoryFilter, { title: string; body: string }> = {
   all: {
     title: "Nothing here yet",
-    body: "Videos you clean with Frenz AI show up here, so you can come back for them later.",
+    body: "Videos you make with Frenz AI show up here, so you can come back for them later.",
   },
   completed: {
     title: "No finished videos yet",
-    body: "Once a video finishes cleaning, it waits here for three days.",
+    body: "Once a video finishes processing, it waits here for three days.",
   },
   cancelled: {
     title: "Nothing was stopped",
@@ -164,3 +164,45 @@ export function historyChip(job: AiJobView, now: number): { label: string; tone:
   return TONES[job.status];
 }
 
+/* ───────────────── what a row is, in the member's words ────────────────── */
+
+/**
+ * The fallback title when a job has no source name. Keyed by the tool that
+ * made the row, because history outlives tools: an AI Clean row from before
+ * 2026-09-13 is still a cleaned video, and calling it anything else would be a
+ * lie about the member's own file.
+ */
+export function historyTitleFor(feature: AiFeature): string {
+  switch (feature) {
+    case "ai_character_replace":
+      return "Character Replace video";
+    case "ai_clean":
+      return "Cleaned video";
+    default:
+      return "Frenz AI video";
+  }
+}
+
+/**
+ * The one sentence under the player: what happened to this video.
+ *
+ * `audioRestored` is three different truths — the sound is back, the source
+ * never had any, or the row predates the column — and they are not
+ * interchangeable: "no audio" and "we could not restore your audio" are
+ * different claims and a member can tell.
+ */
+export function historyResultSentence(job: AiJobView): string {
+  if (job.feature === "ai_character_replace") {
+    return job.result.audioRestored === false
+      ? "Character replaced. This video had no sound to keep."
+      : "Character replaced, with the original movement and scene kept.";
+  }
+  if (job.feature === "ai_clean") {
+    return job.result.audioRestored === true
+      ? "Text removed, original audio back on it."
+      : job.result.audioRestored === false
+        ? "Text removed. This video had no sound to restore."
+        : "Text removed.";
+  }
+  return "Finished with Frenz AI.";
+}

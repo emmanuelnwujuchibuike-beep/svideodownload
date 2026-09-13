@@ -1,4 +1,4 @@
-import { parseVideoUrl } from "@/lib/ai/clean-media";
+import { parseVideoUrl } from "@/lib/ai/media";
 import { detectPlatform } from "@/lib/platforms";
 import type { PlatformId } from "@/types";
 

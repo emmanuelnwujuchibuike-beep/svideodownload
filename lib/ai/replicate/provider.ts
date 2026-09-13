@@ -109,6 +109,24 @@ export const replicateProvider: AiProvider = {
     return aiCleanMisconfiguration() === null;
   },
 
+  /*
+    ── 🔴 THIS ADAPTER SUBMITS AI CLEAN, AND NOTHING ELSE YET ─────────────────
+
+    `submit` below builds an AI Clean prediction — `buildAiCleanInput`, the
+    text-remover model pin — and that is the only submission it knows. AI
+    Clean itself is no longer in the feature registry (owner, 2026-09-13), so
+    this answers false for every feature a member can actually create, and
+    `hasProviderFor` reports Character Replace as not connected.
+
+    Part 2 adds the Wan 2.2 submission (its own model pin, its own input —
+    the reference image AND the video — and its own webhook handling) and
+    lists `ai_character_replace` here. Until it does, no Character Replace
+    job can reach `/predictions`, and no provider spend can happen from it.
+  */
+  supports(feature) {
+    return feature === "ai_clean";
+  },
+
   async submit(input: AiProviderSubmission): Promise<AiProviderState> {
     const misconfigured = aiCleanMisconfiguration();
     if (misconfigured) throw new AiJobError("FEATURE_UNAVAILABLE", misconfigured);

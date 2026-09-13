@@ -19,7 +19,9 @@ const { getAiEntitlement, usageForClient } = await import("./entitlement");
 const { guestSubject, userSubject } = await import("./subject");
 const { aiFeature } = await import("./jobs");
 
-const feature = aiFeature("ai_clean")!;
+const feature = aiFeature("ai_character_replace")!;
+/** A feature with no policy table of its own — the default rows carry a free allowance. */
+const freeTool = { ...feature, id: "ai_upscale" as const };
 const member = userSubject("u1");
 const guest = guestSubject("aaaaaaaaaaaaaaaaaaaaaa");
 
@@ -28,16 +30,17 @@ beforeEach(() => {
 });
 
 describe("getAiEntitlement", () => {
-  it("gives a free member two a day, with no ad, one at a time", async () => {
+  it("🔴 gives a free member Character Replace with NO free allowance, allowed, one at a time", async () => {
     getUserPlan.mockResolvedValue("free");
     const e = await getAiEntitlement(member, feature);
     expect(e).toEqual({
       audience: "free",
-      feature: "ai_clean",
+      feature: "ai_character_replace",
+      // Allowed although the daily number is zero: the tool is funded at
+      // checkout from the balance, and `paidOnly` is what says so.
       allowed: true,
-      // With no Supabase in the test env the settings read returns defaults,
-      // which is the same 2 the policy table carries.
-      dailyLimit: 2,
+      paidOnly: true,
+      dailyLimit: 0,
       unlimited: false,
       maxConcurrent: 1,
       // 🔴 Standing rule §6: no rewarded ad for AI, on any tier. This was
@@ -50,28 +53,42 @@ describe("getAiEntitlement", () => {
     });
   });
 
-  it("gives Pro five a day, and no ad either", async () => {
+  it("gives Pro the same paid-only row, and no ad either", async () => {
     getUserPlan.mockResolvedValue("pro");
     const e = await getAiEntitlement(member, feature);
     expect(e.audience).toBe("pro");
-    expect(e.dailyLimit).toBe(5);
+    expect(e.dailyLimit).toBe(0);
+    expect(e.paidOnly).toBe(true);
+    expect(e.allowed).toBe(true);
+    expect(e.requiresReward).toBe(false);
     expect(e.rewardScope).toBe("day");
     expect(e.ipCeiling).toBeNull();
   });
 
-  it("resolves max_ai to 30 without any billing change", async () => {
+  it("applies the operator's free allowance to a tool that HAS one", async () => {
+    getUserPlan.mockResolvedValue("free");
+    const e = await getAiEntitlement(member, freeTool);
+    // With no Supabase in the test env the settings read returns defaults,
+    // which is the same 2 the default policy row carries.
+    expect(e.dailyLimit).toBe(2);
+    expect(e.paidOnly).toBe(false);
+    expect(e.allowed).toBe(true);
+  });
+
+  it("resolves max_ai without any billing change", async () => {
     // `getUserPlan` returns whatever string the subscriptions row holds; the AI
     // layer is where it is checked against a real list. Nothing in billing had
     // to learn a new plan for this to work.
     getUserPlan.mockResolvedValue("max_ai" as BillingPlan);
     const e = await getAiEntitlement(member, feature);
     expect(e.audience).toBe("max_ai");
-    expect(e.dailyLimit).toBe(30);
+    expect(e.maxConcurrent).toBe(3);
+    expect(e.allowed).toBe(true);
   });
 
   it("🔴 falls to free for an unrecognised plan, never to the top tier", async () => {
     getUserPlan.mockResolvedValue("enterprise" as BillingPlan);
-    const e = await getAiEntitlement(member, feature);
+    const e = await getAiEntitlement(member, freeTool);
     expect(e.audience).toBe("free");
     expect(e.dailyLimit).toBe(2);
   });
@@ -79,7 +96,7 @@ describe("getAiEntitlement", () => {
 
 describe("🔴 a guest never touches the subscription system", () => {
   it("resolves without asking for a plan at all", async () => {
-    const e = await getAiEntitlement(guest, feature);
+    const e = await getAiEntitlement(guest, freeTool);
     expect(e.audience).toBe("guest");
     expect(e.dailyLimit).toBe(2);
     expect(e.requiresReward).toBe(false);
@@ -93,8 +110,14 @@ describe("🔴 a guest never touches the subscription system", () => {
     expect(getUserPlan).not.toHaveBeenCalled();
   });
 
-  it("carries an address ceiling, and it is well above one visitor's allowance", async () => {
+  it("🔴 is never offered Character Replace — a paid tool needs an account to pay from", async () => {
     const e = await getAiEntitlement(guest, feature);
+    expect(e.allowed).toBe(false);
+    expect(getUserPlan).not.toHaveBeenCalled();
+  });
+
+  it("carries an address ceiling, and it is well above one visitor's allowance", async () => {
+    const e = await getAiEntitlement(guest, freeTool);
     expect(e.ipCeiling).not.toBeNull();
     // Carrier-grade NAT means thousands of unrelated people share an address in
     // this product's biggest markets. A ceiling near the per-visitor allowance
@@ -106,19 +129,19 @@ describe("🔴 a guest never touches the subscription system", () => {
 describe("usageForClient", () => {
   it("reports a real count for a capped audience", async () => {
     getUserPlan.mockResolvedValue("pro");
-    const e = await getAiEntitlement(member, feature);
+    const e = await getAiEntitlement(member, freeTool);
     expect(usageForClient(e, 3)).toEqual({
       plan: "pro",
       unlimited: false,
-      limit: 5,
+      limit: e.dailyLimit,
       used: 3,
-      remaining: 2,
+      remaining: Math.max(0, e.dailyLimit - 3),
     });
   });
 
   it("never reports a negative remaining", async () => {
     getUserPlan.mockResolvedValue("free");
-    const e = await getAiEntitlement(member, feature);
+    const e = await getAiEntitlement(member, freeTool);
     expect(usageForClient(e, 99).remaining).toBe(0);
   });
 });

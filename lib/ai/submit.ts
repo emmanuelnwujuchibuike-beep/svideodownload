@@ -71,7 +71,7 @@ export async function submitJobToProvider(
   opts: { from: readonly AiJobStatus[]; origin?: string },
 ): Promise<{ submission: ProviderSubmission; row: AiJobRow | null }> {
   const provider = providerFor(feature.provider);
-  if (!provider || !provider.isConfigured()) {
+  if (!provider || !provider.isConfigured() || !provider.supports(feature.id)) {
     throw new AiJobError("FEATURE_UNAVAILABLE", "no configured provider for this feature");
   }
 

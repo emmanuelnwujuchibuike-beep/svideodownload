@@ -1,6 +1,6 @@
 import type { AiHardware, AiModelTier } from "@/lib/ai/hardware";
 import type { AiCleanEngine } from "@/lib/ai/config";
-import type { AiFeatureDef, AiJobStatus, AiProviderId } from "@/lib/ai/jobs";
+import type { AiFeature, AiFeatureDef, AiJobStatus, AiProviderId } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -86,6 +86,23 @@ export interface AiProvider {
   readonly id: AiProviderId;
   /** Whether this deployment holds the credentials it needs. */
   isConfigured(): boolean;
+  /**
+   * ── 🔴 WHETHER THIS ADAPTER KNOWS HOW TO SUBMIT *THIS* TOOL ────────────────
+   *
+   * Added 2026-09-13 with Character Replace. Until then "configured" meant
+   * "holds a Replicate token and the AI Clean model pin", and every feature in
+   * the registry was assumed to be one the adapter could submit — true while
+   * AI Clean was the only feature. The day a second feature was registered,
+   * that assumption would have sent a Character Replace job into the AI Clean
+   * submission builder and paid the provider for it.
+   *
+   * So availability now asks two questions: are the credentials there, and
+   * does the adapter carry a submission for this feature. `hasProviderFor`
+   * combines them, and the create route, /start and the worker's submit all
+   * read that one answer. A feature the adapter does not support is "not
+   * connected yet" — honest, and free.
+   */
+  supports(feature: AiFeature): boolean;
   /** Start work. Returns a reference immediately — never the result. */
   submit(input: AiProviderSubmission): Promise<AiProviderState>;
   /** Ask about work already submitted. */
@@ -124,5 +141,5 @@ export function providerFor(id: AiProviderId): AiProvider | null {
 /** Whether anything can actually run a given feature right now. */
 export function hasProviderFor(feature: AiFeatureDef): boolean {
   const provider = providerFor(feature.provider);
-  return !!provider && provider.isConfigured();
+  return !!provider && provider.isConfigured() && provider.supports(feature.id);
 }

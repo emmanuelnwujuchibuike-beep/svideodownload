@@ -4,7 +4,7 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
-import { notifyAiCleanFailed } from "@/lib/ai/notify";
+import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { AI_STALL_DEADLINE_MS, stalledForMs, type StallableJob } from "@/lib/ai/stall";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -96,9 +96,10 @@ export async function failStalledJob(
   // answer from the page when they come back, which is the honest limit of not
   // asking anyone to sign up.
   if (subject?.kind === "user") {
-    await notifyAiCleanFailed({
+    await notifyAiJobFailed({
       userId: subject.userId,
       jobId: job.id,
+      feature: def.id,
       message: aiErrorMessage("PROVIDER_TIMEOUT"),
       // Ours, not the member's file — so the copy says "something went wrong"
       // rather than sending them to find a different video.

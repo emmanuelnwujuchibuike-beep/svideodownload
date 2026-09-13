@@ -1,0 +1,77 @@
+import { NextResponse } from "next/server";
+
+import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { getAiEntitlement } from "@/lib/ai/entitlement";
+import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
+import { aiFeature } from "@/lib/ai/jobs";
+import { resolveAiSubject } from "@/lib/ai/subject-server";
+import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
+import { aiJobReadLimiter } from "@/lib/rate-limit";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/ai/character-replace/config — what the workspace may offer.
+ *
+ * Owner, 2026-09-13 (Part 1, §7): "The actual availability of these options
+ * should eventually come from backend/admin configuration. Do NOT hard-code
+ * business rules into the frontend." This is the one place the browser learns
+ * which qualities, lip-sync tiers, languages and voices exist, the ceilings a
+ * file is checked against before an upload, the currency, and whether the
+ * tool is on for this member.
+ *
+ * ── 🔴 THE RATES DO NOT LEAVE THE SERVER ─────────────────────────────────────
+ *
+ * `publicCharacterReplaceConfig` strips every price field. A browser that held
+ * the per-second rate could compute a price, and §10 forbids the interface
+ * from producing one: the only price a member ever sees is the server's quote
+ * (Part 2's engine). `pricingAvailable: false` is the honest Part 1 answer and
+ * the interface draws its pending state on it.
+ *
+ * Signed in only, like every AI endpoint — `resolveAiSubject` refuses an
+ * anonymous request regardless of what the page did.
+ */
+export async function GET(request: Request) {
+  const feature = aiFeature("ai_character_replace");
+  if (!feature) {
+    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), { status: aiErrorStatus("FEATURE_UNAVAILABLE") });
+  }
+
+  const { subject } = await resolveAiSubject(request, feature.id);
+  if (!subject) {
+    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
+  }
+
+  const burst = await aiJobReadLimiter.limit(`ai-cr-config:${subject.key}`);
+  if (!burst.success) {
+    return NextResponse.json(aiErrorBody("RATE_LIMITED"), {
+      status: aiErrorStatus("RATE_LIMITED"),
+      headers: { "Retry-After": String(Math.max(1, Math.ceil((burst.reset - Date.now()) / 1000))) },
+    });
+  }
+
+  try {
+    const [settings, entitlement] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
+    const config = publicCharacterReplaceConfig(
+      settings.frenzAiCharacterReplace,
+      { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
+      // 🔴 No pricing engine exists yet. Flipped by Part 2, in one place.
+      false,
+    );
+    return NextResponse.json({
+      config,
+      /*
+       * The operator's switch AND the plan policy, folded into one boolean the
+       * entry card and the workspace both read. A tool that is on but not
+       * offered to this audience is "unavailable" to them, with the entitlement
+       * carrying the why.
+       */
+      available: config.enabled && entitlement.allowed,
+      audience: entitlement.audience,
+    });
+  } catch (e) {
+    console.error("[ai/character-replace/config] read failed", { subject: subject.key, error: String(e) });
+    return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
+  }
+}

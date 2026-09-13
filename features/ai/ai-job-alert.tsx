@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { listAiJobs } from "@/lib/ai/client";
-import { AI_JOB_STARTED_EVENT, browserHasUsedAiClean } from "@/lib/ai/history-cache";
+import { AI_JOB_STARTED_EVENT, browserHasUsedFrenzAi } from "@/lib/ai/history-cache";
 import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { haptic } from "@/lib/motion/haptics";
@@ -134,7 +134,7 @@ export function AiJobAlert() {
       /*
         ── 🔴 NOT WHILE THE WORKSPACE IS ALREADY SHOWING IT ──────────────────
 
-        `/ai/clean` and `/studio/ai/clean` run their own state machine and paint
+        `/ai/character-replace` and its Studio twin run their own state machine and paint
         the finished video with a reveal animation. A banner announcing "your
         video is ready" on top of the video, which is already on screen, is the
         same thing said twice — the exact duplication the push service worker
@@ -144,7 +144,7 @@ export function AiJobAlert() {
         with the tab in the background hears the arrival, comes back, and the
         result is simply there. It is the visual half that would be redundant.
       */
-      const onWorkspace = /\/ai\/clean(\/|$|\?)/.test(window.location.pathname + window.location.search);
+      const onWorkspace = /\/ai\/character-replace(\/|$|\?)/.test(window.location.pathname + window.location.search);
       const kind: Alert["kind"] = job.status === "completed" ? "ready" : "failed";
 
       /*
@@ -187,7 +187,8 @@ export function AiJobAlert() {
       timer.current = null;
       if (cancelled || document.visibilityState !== "visible") return;
 
-      const res = await listAiJobs({ feature: "ai_clean", limit: 5 });
+      // Every tool's jobs: the alert announces a finished job whatever made it.
+      const res = await listAiJobs({ limit: 5 });
       if (cancelled || !res.ok) {
         // A failed poll is not a finished job. Keep watching if we were.
         if (watching.current.size > 0) schedule();
@@ -238,14 +239,14 @@ export function AiJobAlert() {
       everyone. Including the AdSense crawler, on the page being assessed, on a
       page with a 1.6-second budget.
 
-      `browserHasUsedAiClean()` is a `localStorage` key check: no parse, no
-      network. A browser that has never touched AI Clean does nothing at all
+      `browserHasUsedFrenzAi()` is a `localStorage` key check: no parse, no
+      network. A browser that has never touched Frenz AI does nothing at all
       here — not one request, not one timer.
     */
-    if (browserHasUsedAiClean()) void tick();
+    if (browserHasUsedFrenzAi()) void tick();
 
     /*
-      And the first-timer, who by definition has no cache. `useAiCleanJob`
+      And the first-timer, who by definition has no cache. The workspace hook
       fires this the moment a job is submitted, which is the exact case the
       gate above cannot see — and the case where somebody is most likely to be
       watching for the result.

@@ -387,22 +387,28 @@ async function ProfileData({
   const appearance = await getProfileAppearance(profile.id);
   const theme = resolveProfileTheme({ ...appearance, accent: accentHex(profileExtras.accent) });
   const heroAccent = theme.accent;
-  // The accent wraps the whole Identity Card as a premium glowing STRIPE + shadow
-  // (owner: "make the accent colour go round the hero card like a stripe premium
-  // luxury glow and shadow"). The first two shadows mirror .glass-strong's own base
-  // shadow so the glass look is preserved (inline box-shadow would otherwise replace
-  // it); then an accent ring, a soft accent glow and an accent-tinted drop shadow.
-  const heroCardStyle = heroAccent
-    ? {
-        boxShadow: [
-          "inset 0 1px 0 hsl(0 0% 100% / 0.08)",
-          "0 24px 60px -24px hsl(229 55% 3% / 0.5)",
-          `0 0 0 1.5px ${heroAccent}b3`,
-          `0 0 30px -2px ${heroAccent}59`,
-          `0 22px 55px -18px ${heroAccent}4d`,
-        ].join(", "),
-      }
-    : undefined;
+  /*
+    ── 🔴 THE HERO CARD HAS NO SHADOW ANY MORE (owner, 2026-09-13) ───────────
+
+    "Remove the shadow from the profile hero card and make it lap on top."
+
+    Until now the accent wrapped the Identity Card as a glowing stripe PLUS
+    three shadows — the glass base shadow, a soft accent glow and an
+    accent-tinted drop shadow (owner, earlier: "like a stripe premium luxury
+    glow and shadow"). Every shadow layer is gone. What survives is the
+    frame: one 1.5px line in the member's accent, which is the "colour set by
+    the user" the same day's instruction names for the avatar ring too. With
+    no accent the card gets `box-shadow: none` explicitly, because `.lux-card`
+    carries its own default shadow and an undefined style would leave it on.
+
+    The card also laps FURTHER over the cover (`-mt-16 sm:-mt-20`, was
+    `-mt-10 sm:-mt-14`) — flat on top of the artwork like a sheet, which is
+    how a card with no drop shadow reads as sitting on something rather than
+    floating above it.
+  */
+  const heroCardStyle = {
+    boxShadow: heroAccent ? `0 0 0 1.5px ${heroAccent}b3` : "none",
+  };
 
   // Reputation — computed from real signals (no fabrication; see reputation.ts),
   // in the shared scope so both the owner's rail and the PUBLIC reputation chip use
@@ -599,7 +605,7 @@ async function ProfileData({
 
                 {/* Identity Card™ — the premium glass surface */}
                 <div className="relative z-10 px-3 sm:px-4">
-                  <div className="relative lux-card lux-header lux-halo lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
+                  <div className="relative lux-card lux-header lux-halo lux-enter -mt-16 rounded-3xl px-4 pb-6 pt-0 sm:-mt-20 sm:px-7" style={heroCardStyle}>
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     {/*
@@ -654,12 +660,37 @@ async function ProfileData({
 
                       </div>
 
-                      {/* Avatar + mode pill — the RIGHT edge, right-aligned as a column. */}
-                      <div className="flex shrink-0 flex-col items-end">
-                        <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
-                    {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
-                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
-                          <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
+                      {/*
+                        ── 🔴 INSIDE THE CARD, NOT OVER IT (owner, 2026-09-13, 3rd pass)
+
+                        "Bring this section in profile down more, so it doesn't go
+                        over the profile hero card, so it sticks on top and remove
+                        the shadow and shadow colour, it should only use gold Frame
+                        ring or any color set by the user."
+
+                        The column used to pull itself up with `-mt-14 sm:-mt-[4.5rem]`
+                        so the ring straddled the card's top edge and the cover behind
+                        it. Now it starts where the name column starts (`pt-3
+                        sm:pt-4`), fully inside the card, at its top.
+
+                        The accent blur halo that sat behind the ring is gone, and the
+                        ring is asked for NO glow: no breathing box-shadow, no
+                        accent-tinted shadow. What is left is the frame itself — gold
+                        for a paid plan, otherwise the member's own accent colour when
+                        they have chosen one. The online-green ring is not shown here
+                        either: this is the member's OWN header, and the two frame
+                        colours the owner named are the only ones it may take.
+                      */}
+                      <div className="flex shrink-0 flex-col items-end pt-3 sm:pt-4">
+                        <div className="relative w-fit">
+                          <IdentityRing
+                            userId={profile.id}
+                            verified={profile.isVerified}
+                            premium={plan !== "free"}
+                            accent={heroAccent}
+                            glow={false}
+                            presence={false}
+                          >
                             <IdentityMediaViewer
                               mode={profileMedia.identityMode}
                               photo={profile.avatarUrl}
@@ -737,7 +768,20 @@ async function ProfileData({
                     {/* 5 live stats — one divided glass panel; Followers/Following
                         link through. Same `StatCell` as the visitor hero, so the
                         two rows breathe identically. */}
-                    <div className="mt-5 grid grid-cols-5 divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline">
+                    {/*
+                      🔴 FOUR COLUMNS FOR FOUR STATS (owner, 2026-09-13: "shorten the
+                      engagement card width so there won't be an empty space beside").
+                      This was `grid-cols-5` over a four-item array, so the panel
+                      always drew an empty fifth cell. The column count now follows
+                      the array — the same rule the visitor panel already applies
+                      with `show_views`.
+                    */}
+                    <div
+                      className={cn(
+                        "mt-5 grid divide-x divide-border/50 overflow-hidden rounded-2xl border border-border/60 bg-card/50 ring-hairline",
+                        stats.length >= 5 ? "grid-cols-5" : "grid-cols-4",
+                      )}
+                    >
                       {stats.map((s) => (
                         <StatCell
                           key={s.label}

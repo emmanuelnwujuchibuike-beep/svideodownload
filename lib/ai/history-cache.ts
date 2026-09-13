@@ -121,7 +121,7 @@ export function writeAiHistoryCache(jobs: AiJobView[]): void {
  * ⚠️ Not authority over anything. It gates a POLL; the server still decides
  * what the poll is told.
  */
-export function browserHasUsedAiClean(): boolean {
+export function browserHasUsedFrenzAi(): boolean {
   if (typeof window === "undefined") return false;
   try {
     return window.localStorage.getItem(KEY) !== null;

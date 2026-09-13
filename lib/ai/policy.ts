@@ -95,6 +95,18 @@ export interface AiPlanPolicy {
    * off.
    */
   offered?: boolean;
+  /**
+   * ── 🔴 A TOOL WITH NO FREE ALLOWANCE AT ALL ──────────────────────────────
+   *
+   * True for Character Replace (2026-09-13): every run is paid from the
+   * member's balance, so `dailyLimit` is 0 for every audience and that zero
+   * does NOT mean "not offered". The entitlement reads this to say "allowed,
+   * funded at checkout" where it would otherwise say "no allowance today",
+   * and the allowance bar draws nothing for it. `applyConfiguredLimits`
+   * leaves a paid-only row alone — the operator's free-credit fields are
+   * about free allowances, and this tool has none to configure.
+   */
+  paidOnly?: boolean;
 }
 
 /**
@@ -106,126 +118,86 @@ export interface AiPlanPolicy {
  * different code path, that path stops being exercised, and the day a Pro
  * session is stolen there is nothing between it and an unbounded provider bill.
  */
-const AI_CLEAN: Record<AiAudience, AiPlanPolicy> = {
-  /*
-    🔴 A GUEST CAN ACTUALLY RUN THIS. That is the point of the row.
+/*
+  ── 🔴 AI CLEAN'S TABLE IS GONE WITH THE TOOL (owner, 2026-09-13) ──────────
 
-    "The 2/day guest allowance must work without requiring account creation or
-    login… Do not force users to sign up before they can try the AI."
+  "Just remove the AI Clean features and leave only the new character
+  replace." The table that stood here carried the free/guest 2-a-day rows,
+  the paid tiers' caps and the long history of the rewarded-ad gate. Two of
+  its rules survive as facts about the platform rather than about a tool:
 
-    So this is a real allowance backed by a real server-side counter, not a
-    teaser. What makes it safe is that the subject is a server-issued signed
-    identifier with an IP ceiling behind it (lib/ai/subject.ts), never a number
-    the browser keeps.
-  */
-  /*
-    ══════════════════════════════════════════════════════════════════════════
-     🔴 NO AD FOR ANYONE. NOT FREE, NOT GUEST, NOT EVER — AND IT BROKE THE JOB
-    ══════════════════════════════════════════════════════════════════════════
+    · NO AD FOR ANYONE, EVER (standing rule §6). `requiresReward` is false on
+      every row of every table, and policy.test.ts asserts it. The reward
+      module and route were deleted the same day.
+    · EVERY AUDIENCE IS METERED, including the paid ones, because a class of
+      member on a different code path is a path nothing tests.
+*/
 
-    Owner, 2026-09-09, standing Frenz AI rule §6: "Do not use reward ads for AI
-    access. Remove all reward-ad AI logic." Free members get the daily and
-    weekly allowance, then the prepaid balance. That is the whole economy.
-
-    Owner, 2026-09-13: "since the last fix the ai clean is stuck at queued 58%
-    for long now."
-
-    Those are the same fact. With `requiresReward: true` here, a free member's
-    submission went: create → upload → OPEN THE REWARDED AD → wait for it to be
-    watched → only then call `/start`. The ad gate is the downloader's real
-    `RewardedAdGate`, and when its network serves nothing — which is the case
-    for a feature it was never keyed for — nothing ever calls `completeReward`,
-    `/start` is never sent, and the job sits in `queued` while the progress
-    bar creeps to the 58% ceiling of that stage and stops. Every job the owner
-    saw stuck has `started_at: null` and `funding_source: null`: the server was
-    never asked.
-
-    The economy commit did not touch this row, which is why it read as "since
-    the last fix": the earlier tests were run on the owner's Business account,
-    which has never owed an ad. The first free-tier test after it met a gate
-    that had been broken for as long as the AI reward network was unconfigured.
-
-    ⚠️ The row is the enforcement point on BOTH ends. `/start` demands a reward
-    only when `entitlement.rewardRequired` is true, and the browser opens the
-    gate only on the same flag — both derive from this value. Setting it here
-    is what makes an ad impossible rather than merely hidden.
-  */
+/**
+ * Character Replace — the Wan 2.2 tool.
+ *
+ * ── 🔴 FUNDED FROM THE BALANCE, NEVER FROM A FREE ALLOWANCE ─────────────────
+ *
+ * The owner's flow is "show the exact price → confirm payment from balance →
+ * start". One run is minutes of GPU time on a paid provider; a free allowance
+ * here would be the owner buying every curious tap. So `dailyLimit` is 0 on
+ * every row and `paidOnly` says that zero is the design, not a switch-off.
+ *
+ * The daily ceiling that still applies is `maxConcurrent` — how many jobs one
+ * member may have in flight — and an abuse ceiling on paid runs is Part 2's
+ * funding step (it charges per job; a stolen session can only spend what the
+ * balance holds).
+ *
+ * `offered: false` for a guest: the whole AI surface is signed-in only since
+ * 2026-09-09 and `resolveAiSubject` refuses a guest before this row is read,
+ * but the row must still be sane on its own.
+ */
+const CHARACTER_REPLACE: Record<AiAudience, AiPlanPolicy> = {
   guest: {
-    dailyLimit: 2,
+    dailyLimit: 0,
     unlimited: false,
     requiresReward: false,
     rewardsPerJob: 0,
     rewardScope: "job",
-    // One at a time. A signed-out visitor with two jobs in flight is automating
-    // us, not using us. (Guests are refused before this row is read since
-    // 2026-09-09 — see `resolveAiSubject` — but the row must still be sane.)
     maxConcurrent: 1,
+    offered: false,
+    paidOnly: true,
   },
   free: {
-    // Deliberately IDENTICAL to guest. Signing up must not hand somebody a
-    // second allowance for the same day — see the reconciliation rule in
-    // lib/ai/subject.ts. Making the numbers differ would create exactly the
-    // "guest quota + free quota" bypass the brief calls out.
-    dailyLimit: 2,
+    dailyLimit: 0,
     unlimited: false,
     requiresReward: false,
     rewardsPerJob: 0,
     rewardScope: "job",
     maxConcurrent: 1,
+    paidOnly: true,
   },
-  /*
-    ── 🔴 NO ADS FOR ANYONE WHO PAYS (owner, 2026-09-08) ──────────────────────
-
-      "pro and business plan wont show any reward ad during ai generation, only
-       the free — the pro and business and max ai only use the limit and credit."
-
-    A day-scoped ad was the previous answer and this replaces it outright. The
-    reasoning is sound and worth keeping written down: a subscription IS the
-    exchange. Asking somebody who already paid to also watch an advert makes the
-    subscription feel like it bought nothing, and one ad a day is still one more
-    than none.
-
-    ⚠️ `rewardScope` stays `day` on these rows even though nothing reads it while
-    `requiresReward` is false. It is the shape Part 10 may want back, and a
-    field that is merely inert is cheaper than one that has to be re-derived.
-  */
   pro: {
-    dailyLimit: 5,
+    dailyLimit: 0,
     unlimited: false,
     requiresReward: false,
     rewardsPerJob: 0,
     rewardScope: "day",
     maxConcurrent: 2,
+    paidOnly: true,
   },
   business: {
-    dailyLimit: 15,
+    dailyLimit: 0,
     unlimited: false,
     requiresReward: false,
     rewardsPerJob: 0,
     rewardScope: "day",
     maxConcurrent: 3,
+    paidOnly: true,
   },
   max_ai: {
-    /*
-      ⚠️ 30 is a CEILING ON THIS FEATURE, and it is not the same thing as Max
-      AI's 15 daily AI credits.
-
-      "The existing 15 AI credits must NEVER allow Max AI to exceed 30 Video
-      Text Remover generations per day."
-
-      The two live in different systems and cannot reach each other: credits are
-      a Redis counter keyed `ai:u:<id>` (lib/ai/quota.ts), this is a Postgres
-      row in `ai_usage_daily` keyed by feature. Spending one does not move the
-      other in either direction — asserted by a test, because "they happen not
-      to be connected" is a property that decays silently.
-    */
-    dailyLimit: 30,
+    dailyLimit: 0,
     unlimited: false,
-    // Paid, so no ad. See the block on `pro` above.
     requiresReward: false,
     rewardsPerJob: 0,
     rewardScope: "day",
     maxConcurrent: 3,
+    paidOnly: true,
   },
 };
 
@@ -253,7 +225,7 @@ const DEFAULT_BY_AUDIENCE: Record<AiAudience, AiPlanPolicy> = {
  * construction rather than by remembering.
  */
 const FEATURE_POLICY: Partial<Record<AiFeature, Record<AiAudience, AiPlanPolicy>>> = {
-  ai_clean: AI_CLEAN,
+  ai_character_replace: CHARACTER_REPLACE,
 };
 
 /** The policy for one audience and one feature. Never throws. */
@@ -297,6 +269,12 @@ export function applyConfiguredLimits(
     freeEnabled?: boolean;
     proDailyCredits?: number;
     businessDailyCredits?: number;
+    /**
+     * The tool's own on/off switch (Character Replace → enabled). Read only
+     * for a paid-only row, where there is no free-credit field to carry the
+     * "off" meaning; `false` turns the row to `offered: false`.
+     */
+    toolEnabled?: boolean;
   } = {},
 ): AiPlanPolicy {
   /*
@@ -304,6 +282,18 @@ export function applyConfiguredLimits(
     free/guest fields below and answers false for these, so folding them into
     the same branch would have made the gate wrong for one of its two callers.
   */
+  /*
+    🔴 A PAID-ONLY TOOL HAS NO FREE ALLOWANCE TO CONFIGURE. The operator's
+    daily-credit fields describe free runs, and applying "2 free a day" to a
+    tool whose every run costs the owner GPU money would be the exact bill the
+    zero in its table exists to prevent. The row is returned untouched; the
+    on/off switch for the tool is its own setting (Character Replace → enabled),
+    applied by the entitlement, not here.
+  */
+  if (policy.paidOnly) {
+    return config.toolEnabled === false ? { ...policy, offered: false } : policy;
+  }
+
   if (audience === "pro" || audience === "business") {
     const configured = audience === "pro" ? config.proDailyCredits : config.businessDailyCredits;
     if (typeof configured !== "number" || !Number.isFinite(configured) || configured <= 0) {
@@ -369,7 +359,9 @@ export interface AiEntitlementView {
   rewardScope: AiRewardScope;
   /** True once a day-scoped reward has already unlocked today. */
   rewardUnlocked: boolean;
-  /** False when the allowance is spent — an ad cannot buy past the cap. */
+  /** See AiPlanPolicy.paidOnly. The interface hides the allowance bar on it. */
+  paidOnly: boolean;
+  /** False when the allowance is spent; always true for a paid-only tool that is offered. */
   canStart: boolean;
   /**
    * Whether THIS subject already runs on the faster hardware.
@@ -430,7 +422,13 @@ export function entitlementView(input: {
     again, which is what stops SPA navigation or a second tab re-triggering an
     ad the member already watched.
   */
-  const spendable = offered && remaining > 0;
+  /*
+    A paid-only tool is spendable whenever it is offered: there is no counter
+    to run out of, and whether the BALANCE covers a given job is decided at
+    checkout by the funding step against the server's own price — never here.
+  */
+  const paidOnly = policy.paidOnly === true;
+  const spendable = offered && (paidOnly || remaining > 0);
   const owesReward = spendable && policy.requiresReward && !(policy.rewardScope === "day" && dayUnlocked);
 
   return {
@@ -444,6 +442,7 @@ export function entitlementView(input: {
     rewardsPerJob: owesReward ? policy.rewardsPerJob : 0,
     rewardScope: policy.rewardScope,
     rewardUnlocked: policy.rewardScope === "day" && dayUnlocked,
+    paidOnly,
     canStart: spendable,
     // Entitlement AND capability. A paid tier is entitled whether or not a GPU
     // model is deployed; this says what is actually happening.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { AiCleanStage } from "./job-stages";
+import type { AiJobStage } from "./job-stages";
 import { PRESENCE, presenceFor, presenceSpec, presenceVars, type PresenceLevel } from "./presence";
 
 /**
@@ -12,7 +12,7 @@ import { PRESENCE, presenceFor, presenceSpec, presenceVars, type PresenceLevel }
  * six months from now.
  */
 
-const ALL_STAGES: AiCleanStage[] = [
+const ALL_STAGES: AiJobStage[] = [
   "idle",
   "uploading",
   "queued",

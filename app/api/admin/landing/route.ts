@@ -154,6 +154,69 @@ const schema = z.object({
     controlling nothing. This codebase has had six of those.
   */
   frenzAiEngine: z.enum(["classical", "propainter"]).optional(),
+  /*
+    ── CHARACTER REPLACE (2026-09-13, Part 1 §15) ──────────────────────────────
+
+    The tool's configuration travels as ONE nested object. The shape is
+    validated loosely here — the keys the panel may send, each optional — and
+    then clamped by the tool's own normaliser inside `setLandingSettings`,
+    which is the single authority on bounds (lib/ai/character-replace/config.ts).
+    Two validators with two sets of bounds would drift; this one only refuses
+    the wrong TYPE so the operator gets a field name back.
+  */
+  frenzAiCharacterReplace: z
+    .object({
+      enabled: z.boolean().optional(),
+      pricePerSecondCents: z.number().int().min(0).max(10_000_000).optional(),
+      basePriceCents: z.number().int().min(0).max(100_000_000).optional(),
+      minimumChargeCents: z.number().int().min(0).max(100_000_000).optional(),
+      maximumDurationSeconds: z.number().int().min(1).max(120).optional(),
+      maximumUploadBytes: z.number().int().min(1024 * 1024).optional(),
+      maximumPixels: z.number().int().min(640 * 360).optional(),
+      qualities: z
+        .array(
+          z.object({
+            id: z.enum(["480p", "720p", "1080p"]),
+            label: z.string().max(12).optional(),
+            hint: z.string().max(24).optional(),
+            multiplier: z.number().min(0.05).max(20).optional(),
+            enabled: z.boolean().optional(),
+          }),
+        )
+        .max(3)
+        .optional(),
+      lipSyncEnabled: z.boolean().optional(),
+      lipSync: z
+        .array(
+          z.object({
+            id: z.enum(["standard", "studio"]),
+            label: z.string().max(20).optional(),
+            blurb: z.string().max(120).optional(),
+            perSecondCents: z.number().int().min(0).max(1_000_000).optional(),
+            enabled: z.boolean().optional(),
+          }),
+        )
+        .max(2)
+        .optional(),
+      languages: z
+        .array(z.object({ code: z.string().max(40), label: z.string().max(40), native: z.string().max(40).optional() }))
+        .max(60)
+        .optional(),
+      voices: z
+        .array(
+          z.object({
+            id: z.string().max(40),
+            label: z.string().max(40),
+            blurb: z.string().max(80).optional(),
+            languages: z.array(z.string().max(40)).max(60).optional(),
+          }),
+        )
+        .max(40)
+        .optional(),
+      trim: z.object({ enabled: z.boolean().optional(), minimumSeconds: z.number().min(0.5).max(30).optional() }).optional(),
+    })
+    .strict()
+    .optional(),
 });
 
 /** Admin-only: set the landing page's reels poster and 2×2 feed-grid images. */

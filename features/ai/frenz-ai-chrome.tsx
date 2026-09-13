@@ -1,9 +1,9 @@
 import { ChevronRight, ShieldCheck, Sparkles, Zap } from "lucide-react";
-import { AICleanProBadge } from "@/features/ai/ai-clean-pro-badge";
+import { FrenzAIPlanBadge } from "@/features/ai/frenz-ai-plan-badge";
 import Link from "next/link";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
-import type { AiCleanEntitlement } from "@/lib/ai/client";
+import type { AiMemberEntitlement } from "@/lib/ai/client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
  * pill, but the meaning is a trail.
  */
 export function FrenzAICrumb({
-  tool = "AI Clean",
+  tool = "Character Replace",
   pro = true,
   className,
 }: {
@@ -73,11 +73,11 @@ export function FrenzAICrumb({
         already has one mark per tier; a second one invented here is how a
         product stops looking like one product.
 
-        `AICleanProBadge` now draws the viewer's own seal and renders nothing
+        `FrenzAIPlanBadge` now draws the viewer's own seal and renders nothing
         for a free member, so the `pro` prop is a request to SHOW the slot, not
         a claim that the viewer has a plan.
       */}
-      {pro ? <AICleanProBadge className="ml-0.5" /> : null}
+      {pro ? <FrenzAIPlanBadge className="ml-0.5" /> : null}
       </nav>
   );
 }
@@ -101,11 +101,19 @@ export function FrenzAIAllowanceBar({
   href = "/account/plan",
   className,
 }: {
-  entitlement: AiCleanEntitlement | null;
+  entitlement: AiMemberEntitlement | null;
   href?: string;
   className?: string;
 }) {
   if (!entitlement) return null;
+
+  /*
+    🔴 A PAID-ONLY TOOL HAS NO ALLOWANCE TO DRAW (2026-09-13). Character
+    Replace is funded from the balance on every run; a bar reading "0 of 0
+    free videos left today" would announce a limit nobody is under. The
+    balance card in the workspace is the figure that matters for it.
+  */
+  if (entitlement.paidOnly) return null;
 
   // A plan with no product cap has no bar to draw — quoting a ceiling nobody
   // reaches would invent a restriction they are not under.
@@ -118,7 +126,7 @@ export function FrenzAIAllowanceBar({
         )}
       >
         <Mark />
-        <p className="text-[13px] font-semibold">Unlimited AI Clean</p>
+        <p className="text-[13px] font-semibold">Unlimited Frenz AI</p>
       </div>
     );
   }
@@ -144,7 +152,7 @@ export function FrenzAIAllowanceBar({
         <span className="block text-[13px] leading-tight">
           <span className="font-bold">{remaining}</span>{" "}
           <span className="text-muted-foreground">
-            of {limit} free {limit === 1 ? "clean" : "cleans"} left today
+            of {limit} free {limit === 1 ? "video" : "videos"} left today
           </span>
         </span>
         {/*
@@ -157,7 +165,7 @@ export function FrenzAIAllowanceBar({
           aria-valuenow={remaining}
           aria-valuemin={0}
           aria-valuemax={limit}
-          aria-label={`${remaining} of ${limit} free cleans left today, ${used} used`}
+          aria-label={`${remaining} of ${limit} free videos left today, ${used} used`}
           className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-secondary"
         >
           <span

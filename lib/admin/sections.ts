@@ -213,7 +213,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     category: "ai",
     icon: "Sparkles",
     blurb:
-      "Who may use Frenz AI and what it costs them: the free daily and weekly allowances, the price per video, the billing currency and the smallest top-up, plus job health — how many ran today, how many finished, and whether anybody is sitting on a finished video they were never told about. Every number here applies to the next job anybody starts; nothing needs a deploy.",
+      "Who may use Frenz AI and what it costs them: Character Replace's switch, rate per second, minimum, longest video and lip-sync tiers; the billing currency and the smallest top-up; the free allowances for any free-allowance tool; plus job health — how many ran today, how many finished, and whether anybody is sitting on a finished video they were never told about. Every number here applies to the next job anybody starts; nothing needs a deploy.",
   },
 
   /* ── Content ── */

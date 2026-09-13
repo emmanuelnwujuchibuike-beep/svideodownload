@@ -40,25 +40,33 @@ export function FrenzAIPageSkeleton() {
   );
 }
 
-/** AI Clean: header, then the stage with its drop zone. */
-export function AICleanSkeleton() {
+/**
+ * Character Replace: the crumb and headline, the stepper, then the first
+ * step's picker — the shape the workspace opens in, so the swap is silent.
+ */
+export function CharacterReplaceSkeleton() {
   return (
-    <SkeletonSection label="Loading AI Clean">
+    <SkeletonSection label="Loading Character Replace">
       <div className="mb-5">
-        <Skeleton className="h-4 w-32 rounded-full" />
-        <Skeleton className="mt-3 h-8 w-64 max-w-full" />
+        <Skeleton className="h-8 w-40 rounded-full" />
+        <Skeleton className="mt-4 h-9 w-72 max-w-full" />
         <Skeleton className="mt-2.5 h-4 w-80 max-w-full" />
       </div>
 
+      <div className="mb-5 flex items-center gap-2" aria-hidden>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className={i === 0 ? "h-2 flex-[2] rounded-full" : "h-2 flex-1 rounded-full opacity-60"} />
+        ))}
+      </div>
+
       <div className="rounded-3xl border border-border/70 p-4 sm:p-6" aria-hidden>
-        <div className="mx-auto mb-5 flex flex-col items-center">
-          <Skeleton className="h-4 w-20 rounded-full" />
-          <Skeleton className="mt-2 h-3.5 w-56 max-w-full" />
-        </div>
-        <Skeleton className="h-56 w-full rounded-3xl sm:h-64" />
-        <div className="mt-4 flex justify-center">
-          <Skeleton className="h-5 w-36 rounded-full" />
-        </div>
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="mt-2 h-3.5 w-64 max-w-full" />
+        <Skeleton className="mt-5 h-52 w-full rounded-3xl sm:h-60" />
+      </div>
+
+      <div className="mt-5 flex justify-end" aria-hidden>
+        <Skeleton className="h-12 w-36 rounded-full" />
       </div>
     </SkeletonSection>
   );

@@ -1,4 +1,4 @@
-import { AI_CLEAN_FORMATS, AI_CLEAN_MAX_BYTES } from "@/lib/ai/clean-media";
+import { AI_VIDEO_FORMATS as AI_CLEAN_FORMATS, AI_VIDEO_MAX_BYTES as AI_CLEAN_MAX_BYTES } from "@/lib/ai/media";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

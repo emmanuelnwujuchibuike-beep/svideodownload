@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { presenceFor, presenceVars, type PresenceLevel } from "@/lib/ai/presence";
-import type { AiCleanStage } from "@/lib/ai/job-stages";
+import type { AiJobStage } from "@/lib/ai/job-stages";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,7 +41,7 @@ export function FrenzAIEnvironment({
   className,
   children,
 }: {
-  stage?: AiCleanStage;
+  stage?: AiJobStage;
   armed?: boolean;
   bare?: boolean;
   className?: string;

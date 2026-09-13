@@ -111,7 +111,6 @@ export function useAiHistory(initialFilter: AiHistoryFilter = "all"): AiHistoryS
     setError(null);
 
     const res = await listAiJobs({
-      feature: "ai_clean",
       limit: PAGE_SIZE,
       statuses: statusesForFilter(next),
     });
@@ -157,7 +156,6 @@ export function useAiHistory(initialFilter: AiHistoryFilter = "all"): AiHistoryS
     setLoadingMore(true);
     void (async () => {
       const res = await listAiJobs({
-        feature: "ai_clean",
         limit: PAGE_SIZE,
         cursor,
         statuses: statusesForFilter(filter),
@@ -215,7 +213,6 @@ export function useAiHistory(initialFilter: AiHistoryFilter = "all"): AiHistoryS
       }
       const token = requestToken.current;
       const res = await listAiJobs({
-        feature: "ai_clean",
         limit: PAGE_SIZE,
         statuses: statusesForFilter(filter),
       });

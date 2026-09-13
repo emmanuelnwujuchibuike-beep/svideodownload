@@ -4,13 +4,12 @@ import { z } from "zod";
 import { AI_CLEAN_CONFIG, AI_CLEAN_LIMITS } from "@/lib/ai/config";
 import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
-import { aiFeature, jobToView } from "@/lib/ai/jobs";
+import { aiFeature, jobToView, primaryAiFeature } from "@/lib/ai/jobs";
 import { getOwnJob, recordUploadedSource, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
 import { dispatchAcquisition } from "@/lib/ai/acquire-dispatch";
 import { submitJobToProvider } from "@/lib/ai/submit";
 import { hasWorker } from "@/lib/worker";
-import { claimAiReward } from "@/lib/ai/reward";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { statSourceObject } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
@@ -55,9 +54,9 @@ export const dynamic = "force-dynamic";
  *            arrives, and the provider is submitted afterwards through
  *            `/api/internal/ai/submit`.
  *
- * Everything BETWEEN those two — the reservation, the reward gate, and the
- * release on every failure — is identical, which is the point: a link and a
- * file cost the same and are gated the same way.
+ * Everything BETWEEN those two — the funding step and the release on every
+ * failure — is identical, which is the point: a link and a file cost the same
+ * and are gated the same way.
  *
  * ── 🔴 WHY VALIDATION COMES BEFORE THE CHARGE ────────────────────────────────
  *
@@ -66,29 +65,17 @@ export const dynamic = "force-dynamic";
  * one of three daily runs. Everything that can fail for OUR reasons happens
  * after it, and every one of those paths releases.
  *
- * ── The body carries an authorization, and nothing else ──────────────────────
+ * ── The body carries nothing ─────────────────────────────────────────────────
  *
- * One optional field: `rewardSessionId`. The path is still the server's, the
- * size and type are still read from storage, the model and its parameters are
- * still configuration — none of that is negotiable from a request.
+ * The path is the server's, the size and type are read from storage, the
+ * model and its parameters are configuration — none of that is negotiable from
+ * a request. The schema is an EMPTY `.strict()` object, so a body carrying
+ * `plan`, `remaining`, a user id or the retired `rewardSessionId` is REFUSED —
+ * a rejected field is easier to reason about than a silently dropped one.
  *
- * A reward id is not a parameter that changes what happens; it is a token the
- * database either honours or refuses, and it is worthless on its own. The
- * schema is `.strict()`, so a body carrying `plan`, `skipAd`, `remaining` or a
- * user id is REFUSED — the brief names exactly those, and a rejected field is
- * easier to reason about than a silently dropped one.
- *
- * ── 🔴 RESERVE FIRST, THEN CLAIM THE REWARD ──────────────────────────────────
- *
- * The order is deliberate and it is not interchangeable.
- *
- * Claiming first would mean that a member whose allowance ran out in another
- * tab burns their ad on a job that is then refused — attention spent for
- * nothing, which is the one outcome this flow must never produce. Reserving
- * first means the daily cap is the outer gate (an ad can never buy a fourth
- * clean), and a reward that turns out to be invalid simply releases the slot it
- * was holding. Both operations are single atomic statements, so two tabs racing
- * cannot both win either one.
+ * (Until 2026-09-13 the one accepted field was a rewarded-ad session id. The
+ * gate, its module and its route were removed with AI Clean; standing rule §6
+ * forbids reward ads for AI in any case.)
  */
 
 /** A job left `queued` this long with nothing uploaded is abandoned, not busy. */
@@ -98,11 +85,10 @@ function fail(code: Parameters<typeof aiErrorBody>[0], extra?: Record<string, un
   return NextResponse.json(aiErrorBody(code, extra), { status: aiErrorStatus(code) });
 }
 
-const bodySchema = z.object({ rewardSessionId: z.string().uuid().optional() }).strict();
+const bodySchema = z.object({}).strict();
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const feat = aiFeature("ai_clean");
-  if (!feat) return fail("FEATURE_UNAVAILABLE");
+  const feat = primaryAiFeature();
 
   /*
     🔴 THE ONE ENDPOINT THAT SPENDS MONEY, AND IT NO LONGER REQUIRES A SESSION.
@@ -147,13 +133,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   if (!/^[0-9a-fA-F-]{36}$/.test(id)) return fail("JOB_NOT_FOUND");
 
-  // An absent body is fine — it is how a plan that owes no ad starts a job.
-  let rewardSessionId: string | undefined;
+  /*
+    The body is empty or `{}`. It used to carry an optional `rewardSessionId`
+    for the rewarded-ad gate; that gate and its module are gone (owner,
+    2026-09-13 — AI Clean removed, and standing rule §6 forbids reward ads for
+    AI). `.strict()` on an empty schema means a client still sending the old
+    field is refused rather than silently ignored.
+  */
   try {
     const raw = await _request.json();
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) return fail("INVALID_INPUT");
-    rewardSessionId = parsed.data.rewardSessionId;
   } catch {
     /* no body at all */
   }
@@ -173,8 +163,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ job: jobToView(job, storedErrorMessage), started: false });
     }
 
+    // 🔴 Credentials AND a submission for THIS tool — see AiProvider.supports.
+    // Refused here, before the object is stat'd and long before funding.
     const provider = providerFor(feature.provider);
-    if (!provider || !provider.isConfigured()) return fail("FEATURE_UNAVAILABLE");
+    if (!provider || !provider.isConfigured() || !provider.supports(feature.id)) {
+      return fail("FEATURE_UNAVAILABLE");
+    }
 
     /*
       ── 🔴 WHICH KIND OF SOURCE IS THIS? (Part 6) ────────────────────────────
@@ -367,49 +361,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const reservation = { used: funding.usedToday };
 
     /*
-      4b · THE REWARD GATE.
-
-      🔴 The slot is already held, so nothing here can be bypassed by racing —
-      and every refusal below releases it, because a member who could not spend
-      a reward has not had a clean.
-
-      `entitlement.requiresReward` comes from the plan policy, never from the
-      request.
-
-      🔴 IT IS FALSE ON EVERY ROW since 2026-09-13 (standing rule §6: "Do not
-      use reward ads for AI access"), and lib/ai/policy.test.ts asserts that
-      for every audience. This branch is therefore unreachable by policy, and
-      it stays that way by the test rather than by anybody remembering. The
-      day it was reachable, a free member's browser waited on an ad that
-      never came and `/start` was never called — "stuck at queued 58%".
+      4b · There is no reward gate any more. The rewarded-ad step that used to
+      sit here — and once left free members waiting on an ad that never came,
+      "stuck at queued 58%" — was removed with AI Clean (owner, 2026-09-13).
+      Funding is the free allowance or the balance, decided above, nothing else.
     */
-    if (entitlement.requiresReward) {
-      if (!rewardSessionId) {
-        await undoFunding();
-        return fail("REWARD_REQUIRED", { usage: usageForClient(entitlement, reservation.used) });
-      }
-
-      const claim = await claimAiReward({ sessionId: rewardSessionId, subject, feature: feature.id });
-      if (!claim.claimed) {
-        await undoFunding();
-        console.warn("[ai/jobs] reward claim refused", {
-          jobId: job.id,
-          subject: subject.key,
-          feature: feature.id,
-          reason: claim.reason,
-          released: true,
-        });
-        // One sentence whatever the reason — see REWARD_INVALID's copy.
-        return fail("REWARD_INVALID");
-      }
-
-      console.info("[ai/jobs] reward claimed", {
-        jobId: job.id,
-        subject: subject.key,
-        feature: feature.id,
-        rewardSessionId,
-      });
-    }
 
     /* 5 · THE WORK BEGINS. Everything from here releases on failure. */
     try {

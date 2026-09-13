@@ -4,7 +4,7 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { aiFeature, type AiJobRow, type AiJobStatus } from "@/lib/ai/jobs";
 import { recordProviderOutput, transitionJob, noteJobDiagnostic } from "@/lib/ai/job-store";
-import { notifyAiCleanFailed } from "@/lib/ai/notify";
+import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { providerFor } from "@/lib/ai/providers";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -218,9 +218,10 @@ async function failFrom(job: AiJobRow, code: string, detail: string | null | und
 
   const subject = subjectFromRow(job);
   if (subject?.kind === "user") {
-    await notifyAiCleanFailed({
+    await notifyAiJobFailed({
       userId: subject.userId,
       jobId: job.id,
+      feature: job.feature,
       message: "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
       // A job reconcile gives up on failed on OUR side, not on the input.
       errorCode: "PROCESSING_FAILED",

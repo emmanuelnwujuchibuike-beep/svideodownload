@@ -12,7 +12,7 @@ import {
 } from "@/lib/ai/economy";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
-import { aiFeature } from "@/lib/ai/jobs";
+import { primaryAiFeature } from "@/lib/ai/jobs";
 import { peekAiUsage, peekAiWeeklyUsage } from "@/lib/ai/usage";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -53,12 +53,9 @@ export const dynamic = "force-dynamic";
  * the same module the reservation uses, and sent as a number.
  */
 export async function GET(request: Request) {
-  const feat = aiFeature("ai_clean");
-  if (!feat) {
-    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
-      status: aiErrorStatus("FEATURE_UNAVAILABLE"),
-    });
-  }
+  // The balance is the platform's, not a tool's; the feature only names the
+  // bucket the counters are read against. See PRIMARY_AI_FEATURE.
+  const feat = primaryAiFeature();
 
   const { subject } = await resolveAiSubject(request, feat.id);
   if (!subject) {

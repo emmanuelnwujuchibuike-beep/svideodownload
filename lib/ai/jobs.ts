@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { AI_CLEAN_FORMATS, AI_CLEAN_MAX_BYTES } from "@/lib/ai/clean-media";
+import { AI_VIDEO_FORMATS, AI_VIDEO_MAX_BYTES } from "@/lib/ai/media";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -32,9 +32,20 @@ import { AI_CLEAN_FORMATS, AI_CLEAN_MAX_BYTES } from "@/lib/ai/clean-media";
  * knows what is configured.
  */
 
-/** Every feature the job system can ever store. Mirrors `ai_jobs_feature_chk`. */
+/**
+ * Every feature the job system can ever store. Mirrors `ai_jobs_feature_chk`
+ * (0141, extended by 0153).
+ *
+ * 🔴 `ai_clean` STAYS IN THE TYPE AND IS GONE FROM THE REGISTRY. Owner,
+ * 2026-09-13: "Just remove the AI Clean features and leave only the new
+ * character replace." Rows with that feature exist in production and the
+ * history page still lists them until retention expires them, so the value
+ * must remain readable; but with no registry row nothing can CREATE one —
+ * `aiFeature("ai_clean")` answers null and the create route refuses.
+ */
 export type AiFeature =
   | "ai_clean"
+  | "ai_character_replace"
   | "ai_image_clean"
   | "ai_upscale"
   | "ai_caption"
@@ -206,23 +217,52 @@ export interface AiFeatureDef {
   retentionHours: number;
 }
 
+/**
+ * ── 🔴 ONE TOOL, AND IT IS CHARACTER REPLACE ────────────────────────────────
+ *
+ * Owner, 2026-09-13: Wan 2.2 is the main Frenz AI model, AI Clean is removed,
+ * and Character Replace is the first (and only) tool. Part 1 registers the
+ * feature so the interface, the price quote and the entitlement all resolve
+ * it; the provider submission — the model, its version, the input it takes —
+ * is Part 2, and until then `hasProviderFor` answers false for this row and
+ * creation is refused with FEATURE_UNAVAILABLE. Nothing expensive can run.
+ */
 export const AI_FEATURES: readonly AiFeatureDef[] = [
   {
-    id: "ai_clean",
-    label: "AI Clean",
+    id: "ai_character_replace",
+    label: "Character Replace",
     provider: "replicate",
     requires: "replicate",
+    /*
+      The model returns picture only, and the member's settings may ask for
+      the original voice to be kept — either way OUR worker has the last word
+      on the file before it is handed over. Kept true so a deployment without
+      the worker refuses up front rather than after the provider has been
+      paid; Part 2 decides what the finalizer actually does for this tool.
+    */
     needsFinalizer: true,
-    // Owner's rule: 3 successful AI Clean jobs per calendar day for free members.
-    freeDailyJobs: 3,
-    mimeTypes: AI_CLEAN_FORMATS.flatMap((f) => f.mimeTypes),
-    // The same ceiling the picker already enforces (lib/ai/clean-media.ts), so a
-    // file the interface accepted can never be refused by the server for a
-    // reason the interface did not know about.
-    maxBytes: AI_CLEAN_MAX_BYTES,
-    // Ten minutes. Text removal is per-frame work: a long clip is not a bigger
-    // request, it is a hundred of them, and the bill scales with it.
-    maxDurationSeconds: 600,
+    /*
+      🔴 ZERO. This is a paid tool funded from the member's balance — steps
+      5 and 6 of the owner's flow are "show the exact price" and "confirm
+      payment from balance". There is no free run: a single job is minutes of
+      GPU time, and a free allowance here would be the owner paying the
+      provider for every curious tap. `policyFor` carries the same zero for
+      every audience, and the entitlement reads `paidOnly` to still allow it.
+    */
+    freeDailyJobs: 0,
+    mimeTypes: AI_VIDEO_FORMATS.flatMap((f) => f.mimeTypes),
+    // The same ceiling the picker already enforces (lib/ai/media.ts), so a file
+    // the interface accepted can never be refused by the server for a reason
+    // the interface did not know about.
+    maxBytes: AI_VIDEO_MAX_BYTES,
+    /*
+      Two minutes. The model works frame by frame at a fixed rate, and the
+      price is per second of video — so this is a cost ceiling first and a
+      wait-time ceiling second. The operator can lower it in the admin
+      (Character Replace → longest video); this is the hard upper bound the
+      setting is clamped to.
+    */
+    maxDurationSeconds: 120,
     retentionHours: 72,
   },
 ] as const;
@@ -231,6 +271,25 @@ const FEATURES_BY_ID = new Map(AI_FEATURES.map((f) => [f.id, f]));
 
 export function aiFeature(id: string): AiFeatureDef | null {
   return FEATURES_BY_ID.get(id as AiFeature) ?? null;
+}
+
+/**
+ * The tool every feature-agnostic surface stands on.
+ *
+ * 🔴 The balance, the entitlement, the job read/cancel/result routes and the
+ * subject resolver all need *a* feature to resolve a member against — for the
+ * guest-cookie name, the rate-limit bucket, the capability check — and every
+ * one of them used to spell `aiFeature("ai_clean")`. With that row gone, each
+ * of those eleven lookups would have answered null and 503'd the whole AI
+ * surface, balance and history included. They ask here instead, so the next
+ * tool is one edit rather than eleven.
+ */
+export const PRIMARY_AI_FEATURE: AiFeature = "ai_character_replace";
+
+export function primaryAiFeature(): AiFeatureDef {
+  const feature = FEATURES_BY_ID.get(PRIMARY_AI_FEATURE);
+  if (!feature) throw new Error(`primary AI feature ${PRIMARY_AI_FEATURE} is not registered`);
+  return feature;
 }
 
 /**
@@ -308,7 +367,7 @@ export type AiInputVerdict =
  * The server's own check on what the client says it has.
  *
  * 🔴 This repeats the browser's check on purpose. The picker's validation
- * (lib/ai/clean-media.ts) is there to give someone a fast, kind answer; it is
+ * (lib/ai/media.ts) is there to give someone a fast, kind answer; it is
  * not a control, because the thing enforcing it is running on their machine.
  * The numbers come from the same registry so the two can never disagree about
  * what is allowed — only about who is trusted to say so.

@@ -7,7 +7,7 @@ import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
-import { notifyAiCleanFailed } from "@/lib/ai/notify";
+import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { subjectFromRow, type AiSubject } from "@/lib/ai/subject";
 import { releaseAiUsage } from "@/lib/ai/usage";
 
@@ -257,9 +257,10 @@ async function failJob(
     */
     // A guest has nowhere to receive a push; they see it when they return.
     if (subject?.kind === "user") {
-      await notifyAiCleanFailed({
+      await notifyAiJobFailed({
         userId: subject.userId,
         jobId,
+        feature,
         message: aiErrorMessage(code === "PROVIDER_UNAVAILABLE" ? "PROVIDER_UNAVAILABLE" : "PROCESSING_FAILED"),
       });
     }

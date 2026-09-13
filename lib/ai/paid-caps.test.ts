@@ -40,11 +40,19 @@ describe("the shipped defaults match the policy that actually applies", () => {
     gives 5 and 15, and an operator saving the form without touching it would
     have doubled both allowances — and the provider bill — by accident.
   */
-  it("pro and business defaults equal AI Clean's own policy", () => {
-    expect(DEFAULT_LANDING.frenzAiProDailyCredits).toBe(policyFor("pro", "ai_clean").dailyLimit);
-    expect(DEFAULT_LANDING.frenzAiBusinessDailyCredits).toBe(
-      policyFor("business", "ai_clean").dailyLimit,
-    );
+  /*
+    2026-09-13: AI Clean's table is gone and the only registered tool is paid
+    from the balance (its rows are zero and `paidOnly`, untouched by these
+    fields). The shipped defaults are therefore the operator's numbers for
+    the NEXT free-allowance tool, and what this test can still pin is that
+    they are within the form's bounds and that a paid-only row ignores them.
+  */
+  it("a paid-only tool ignores the paid caps entirely", () => {
+    for (const a of ["pro", "business"] as const) {
+      const row = policyFor(a, "ai_character_replace");
+      expect(row.paidOnly).toBe(true);
+      expect(applyConfiguredLimits(row, a, { proDailyCredits: 40, businessDailyCredits: 40 })).toEqual(row);
+    }
   });
 
   it("a default is itself within the bounds the form enforces", () => {
@@ -91,8 +99,9 @@ describe("the shipped defaults match the policy that actually applies", () => {
 });
 
 describe("applyConfiguredLimits — paid audiences", () => {
-  const pro = policyFor("pro", "ai_clean");
-  const business = policyFor("business", "ai_clean");
+  // A feature with no table of its own: the default rows, which the paid caps apply to.
+  const pro = policyFor("pro", "ai_upscale");
+  const business = policyFor("business", "ai_upscale");
 
   it("applies a configured pro cap", () => {
     expect(applyConfiguredLimits(pro, "pro", { proDailyCredits: 12 }).dailyLimit).toBe(12);
@@ -155,7 +164,7 @@ describe("applyConfiguredLimits — paid audiences", () => {
   });
 
   it("still leaves guest and free to the existing free-tier rules", () => {
-    const free = policyFor("free", "ai_clean");
+    const free = policyFor("free", "ai_upscale");
     expect(applyConfiguredLimits(free, "free", { freeDailyCredits: 7 }).dailyLimit).toBe(7);
     // A paid field must be inert on a free member.
     expect(applyConfiguredLimits(free, "free", { proDailyCredits: 99 }).dailyLimit).toBe(

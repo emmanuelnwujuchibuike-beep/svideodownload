@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { CharacterReplaceEntry } from "@/features/ai/character-replace/character-replace-entry";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAIAllowanceBar, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIToolGrid } from "@/features/ai/frenz-ai-tool-grid";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
-import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client";
+import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -55,20 +56,22 @@ import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client"
  * who has not reached one.
  */
 export function FrenzAIWelcome({
-  cleanHref = "/studio/ai/clean",
+  characterReplaceHref = "/studio/ai/character-replace",
   historyHref = "/studio/ai/history",
+  usageHref = "/studio/ai/usage",
 }: {
-  cleanHref?: string;
+  characterReplaceHref?: string;
   historyHref?: string;
+  usageHref?: string;
 }) {
-  const [entitlement, setEntitlement] = useState<AiCleanEntitlement | null>(null);
+  const [entitlement, setEntitlement] = useState<AiMemberEntitlement | null>(null);
 
   useEffect(() => {
     let alive = true;
-    void getAiCleanEntitlement().then((res) => {
+    void getAiEntitlement().then((res) => {
       // A refusal is not an error worth showing here: the bar simply stays
       // hidden and the page is still entirely usable.
-      if (alive && res.ok) setEntitlement(res as unknown as AiCleanEntitlement);
+      if (alive && res.ok) setEntitlement(res as unknown as AiMemberEntitlement);
     });
     return () => {
       alive = false;
@@ -112,6 +115,24 @@ export function FrenzAIWelcome({
         <h1 className="text-[1.6rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[1.9rem]">
           Frenz <span className="text-gradient">AI</span>
         </h1>
+
+        {/*
+          ── THE HERO SLOT, FILLED (2026-09-13) ───────────────────────────────
+
+          The block above the allowance bar is where the AI Clean hero stood
+          and was cleared "to make room" for Wan 2.2. Character Replace's
+          entry card (Part 1, §5) is what it was cleared for: the product's
+          mark, the owner's three lines, one action. `offered` comes from the
+          server's entitlement — when the operator switches the tool off the
+          action becomes a sentence, and until the entitlement answers the
+          card is drawn as available (a flash of "not available" would be a
+          claim about a switch nobody has read yet).
+        */}
+        <CharacterReplaceEntry
+          href={characterReplaceHref}
+          available={entitlement ? entitlement.offered : true}
+          className="mt-5"
+        />
 
         {/*
           🔴 KEPT, EXPLICITLY. Owner, 2026-09-09: "Do not remove the existing
@@ -165,7 +186,7 @@ export function FrenzAIWelcome({
           "Soon" cards on 2026-09-13, and no "More AI Tools" header above them
           since the same day ("Remove this section"); see the component.
         */}
-        <FrenzAIToolGrid cleanHref={cleanHref} historyHref={historyHref} className="mt-8" />
+        <FrenzAIToolGrid historyHref={historyHref} usageHref={usageHref} className="mt-8" />
       </div>
     </FrenzAIEnvironment>
   );

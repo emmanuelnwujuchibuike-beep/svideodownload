@@ -185,7 +185,7 @@ export const ADMIN_SETTING_ENTRIES: AdminSearchEntry[] = [
     label: "Frenz AI access and allowances",
     section: "ai",
     hint: "Frenz AI → access",
-    keywords: ["ai", "frenz ai", "allowance", "limit", "daily", "weekly", "free", "credits", "clean"],
+    keywords: ["ai", "frenz ai", "allowance", "limit", "daily", "weekly", "free", "credits", "character replace", "lip sync", "per second"],
   },
   {
     id: "ai-pricing",

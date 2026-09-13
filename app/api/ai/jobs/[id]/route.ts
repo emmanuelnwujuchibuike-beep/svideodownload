@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
-import { aiFeature, jobToView } from "@/lib/ai/jobs";
+import { jobToView, primaryAiFeature } from "@/lib/ai/jobs";
 import { reconcileWithProvider } from "@/lib/ai/reconcile";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
  * whatever a provider chose to say, which is not fit to be shown to anyone.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const feature = aiFeature("ai_clean");
+  const feature = primaryAiFeature();
   if (!feature) {
     return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
       status: aiErrorStatus("FEATURE_UNAVAILABLE"),

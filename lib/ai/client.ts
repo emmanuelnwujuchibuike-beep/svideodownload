@@ -217,12 +217,13 @@ export function uploadSource(opts: {
  */
 export async function startAiJob(
   id: string,
-  rewardSessionId?: string,
 ): Promise<AiJobResult<{ job: AiJobView; started: boolean; usage?: AiJobUsage }>> {
+  // An empty body: the reward-session field this used to carry went with the
+  // rewarded-ad gate (2026-09-13), and the route's schema now refuses it.
   return request(`/api/ai/jobs/${encodeURIComponent(id)}/start`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(rewardSessionId ? { rewardSessionId } : {}),
+    body: JSON.stringify({}),
   });
 }
 
@@ -233,24 +234,15 @@ export async function startAiJob(
  * is actually started — a plan can change, another tab can spend the last slot,
  * and this object lives in a browser the member controls. Rendering from it is
  * fine; deciding from it would be a bug.
+ *
+ * `/api/ai/entitlement` answers with `entitlementView(...)` verbatim, so
+ * every field here is one that object actually carries. (It was once typed with
+ * a `plan` field the server never sent, and the compiler agreed with the bug
+ * for a week — see the git history of this comment.)
  */
-export interface AiCleanEntitlement {
-  /**
-   * 🔴 `audience`, and it was declared as `plan` — a field the endpoint has
-   * never returned.
-   *
-   * `/api/ai/clean/entitlement` answers with `entitlementView(...)` verbatim,
-   * and that object has `audience`. So `entitlement.plan` was `undefined`
-   * everywhere, and the one place that read it —
-   * `plan === "free"` in the input page — was permanently false. The Pro card
-   * there has never rendered for anybody, which is why the owner kept reporting
-   * that they could not see an upgrade prompt.
-   *
-   * A type that names a field the server does not send is worse than no type:
-   * it makes the compiler agree with the bug.
-   */
+export interface AiMemberEntitlement {
   audience: "guest" | "free" | "pro" | "business" | "max_ai";
-  /** False when an operator has switched free access off — a different state. */
+  /** False when an operator has switched the tool off — a different state. */
   offered: boolean;
   unlimited: boolean;
   dailyLimit: number | null;
@@ -258,6 +250,13 @@ export interface AiCleanEntitlement {
   remainingToday: number | null;
   rewardRequired: boolean;
   rewardsPerJob: number;
+  /**
+   * True for a tool funded from the balance rather than a free allowance
+   * (Character Replace). The allowance bar draws nothing for it — there is no
+   * daily count to show — and `canStart` is decided by the balance at
+   * checkout, not by a counter.
+   */
+  paidOnly?: boolean;
   canStart: boolean;
   /** True only when this member really is on the faster hardware today. */
   gpuAccelerated?: boolean;
@@ -269,37 +268,8 @@ export interface AiCleanEntitlement {
   modelTier?: string;
 }
 
-export async function getAiCleanEntitlement(): Promise<AiJobResult<AiCleanEntitlement>> {
-  return request("/api/ai/clean/entitlement");
-}
-
-/** Open a short-lived reward session. The server binds it to this member. */
-export async function openAiRewardSession(): Promise<
-  AiJobResult<{ sessionId: string; expiresAt: string; verifiable: boolean }>
-> {
-  return request("/api/ai/clean/reward", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "open" }),
-  });
-}
-
-/**
- * Report that the ad finished.
- *
- * ⚠️ This is an ATTESTATION, not proof — no ad network wired to this site can
- * verify a web rewarded ad (see lib/ai/reward.ts). The server treats it as such:
- * the grant it produces is single-use, expiring, bound to this member and this
- * feature, and cannot buy a session the daily allowance does not already hold.
- */
-export async function grantAiReward(
-  sessionId: string,
-): Promise<AiJobResult<{ granted: boolean; sessionId: string }>> {
-  return request("/api/ai/clean/reward", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "grant", sessionId }),
-  });
+export async function getAiEntitlement(): Promise<AiJobResult<AiMemberEntitlement>> {
+  return request("/api/ai/entitlement");
 }
 
 /** Stop a job that is still queued or processing. */

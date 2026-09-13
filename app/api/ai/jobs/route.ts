@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
-import { extensionForUpload } from "@/lib/ai/clean-media";
+import { extensionForUpload } from "@/lib/ai/media";
 import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import {
@@ -11,6 +11,7 @@ import {
   featureAvailability,
   isValidClientRequestId,
   jobToView,
+  primaryAiFeature,
   validateJobInput,
   type AiCapabilities,
   type AiFeature,
@@ -68,12 +69,12 @@ export const dynamic = "force-dynamic";
  */
 
 const capabilities = (): AiCapabilities => {
-  const clean = aiFeature("ai_clean");
+  const primary = primaryAiFeature();
   return {
     // One truth: a feature is runnable when a registered adapter says it holds
     // its credentials. `hasProviderFor` reads the same registry the start route
     // dispatches through, so the answer here cannot differ from the answer there.
-    replicate: !!clean && hasProviderFor(clean),
+    replicate: hasProviderFor(primary),
     // The ffmpeg worker. A job that cannot be finalized must never be started —
     // see the note on AiCapabilities.finalizer.
     finalizer: hasWorker,
@@ -96,8 +97,7 @@ function fail(code: Parameters<typeof aiErrorBody>[0], extra?: Record<string, un
 }
 
 export async function POST(request: Request) {
-  const feature0 = aiFeature("ai_clean");
-  if (!feature0) return fail("FEATURE_UNAVAILABLE");
+  const feature0 = primaryAiFeature();
 
   /*
     🔴 NO SESSION REQUIRED (owner, 2026-09-08: "Do not force users to sign up
@@ -338,7 +338,7 @@ const MAX_PAGE = 50;
  * to reach one.
  */
 export async function GET(request: Request) {
-  const feat = aiFeature("ai_clean");
+  const feat = primaryAiFeature();
   if (!feat) return fail("FEATURE_UNAVAILABLE");
 
   // A guest's history is their own jobs, scoped by their signed identifier —

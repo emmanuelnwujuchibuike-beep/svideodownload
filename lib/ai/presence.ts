@@ -1,4 +1,4 @@
-import type { AiCleanStage } from "@/lib/ai/job-stages";
+import type { AiJobStage } from "@/lib/ai/job-stages";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -92,7 +92,7 @@ export const PRESENCE: Record<PresenceLevel, PresenceSpec> = {
  * job machine without a presence would be a TypeScript error rather than a
  * surface that silently stops responding.
  */
-const BY_STAGE: Record<AiCleanStage, PresenceLevel> = {
+const BY_STAGE: Record<AiJobStage, PresenceLevel> = {
   idle: "calm",
   uploading: "focused",
   queued: "working",
@@ -108,7 +108,7 @@ const BY_STAGE: Record<AiCleanStage, PresenceLevel> = {
 };
 
 export interface PresenceInput {
-  stage: AiCleanStage;
+  stage: AiJobStage;
   /** True when the member has chosen something but not started it. */
   armed?: boolean;
   /** The viewer asked for less motion. Overrides everything below. */

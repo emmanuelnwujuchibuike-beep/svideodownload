@@ -11,7 +11,7 @@ import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
 import { AI_RESULT_BUCKET, AI_SOURCE_BUCKET, aiResultKey, pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl, uploadResultPoster } from "@/lib/ai/storage-server";
-import { notifyAiCleanFailed, notifyAiCleanFinished } from "@/lib/ai/notify";
+import { notifyAiJobFailed, notifyAiJobFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
 import { consumeAiUsage } from "@/lib/ai/usage";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -747,9 +747,10 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
         so it cannot hang the finalizer.
       */
       if (subject.kind === "user") {
-        await notifyAiCleanFinished({
+        await notifyAiJobFinished({
           userId: subject.userId,
           jobId,
+          feature: job.feature,
           audioRestored: hasAudio && verdict.probe.hasAudio,
           // How long the member actually waited, so the copy can choose
           // between "tap to view" (they are probably still here) and "whenever
@@ -813,10 +814,11 @@ export async function finalizeAICleanJob(jobId: string): Promise<FinalizeOutcome
     // …and they are told, with the refund stated. A silent failure on a job
     // somebody stopped watching is indistinguishable from one still running.
     if (failedSubject?.kind === "user") {
-      await notifyAiCleanFailed({
+      await notifyAiJobFailed({
         userId: failedSubject.userId,
         jobId,
-        message: "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
+        feature: job.feature,
+        message: "The video didn't finish. You weren't charged — you can try again.",
         // The stable code, so a member whose FILE was the problem is told to
         // try a different one rather than to retry the identical thing.
         errorCode: code,

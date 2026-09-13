@@ -1,9 +1,13 @@
-import type { AiJobStatus, AiJobView, AiSourceKind } from "@/lib/ai/jobs";
+import { isActiveStatus, type AiJobStatus, type AiJobView, type AiSourceKind } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  AI CLEAN — what the member is told is happening, and why it is only that
+ *  FRENZ AI — what the member is told is happening, and why it is only that
  * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * ⚠️ Written for AI Clean; kept for Character Replace (2026-09-13) with the
+ * path and the labels changed and every rule about honesty unchanged. The
+ * type is `AiJobStage` now — it was `AiCleanStage`, and there is no AI Clean.
  *
  * One mapping from a job's real state to a stage on screen. Pure, so the whole
  * progress display can be tested without a browser, and singular, so the
@@ -32,7 +36,7 @@ import type { AiJobStatus, AiJobView, AiSourceKind } from "@/lib/ai/jobs";
  * is what would make it real, and this file is where it would turn on.
  */
 
-export type AiCleanStage =
+export type AiJobStage =
   | "idle"
   | "uploading"
   /** Our worker is fetching a pasted link (Part 6). Not the same as uploading. */
@@ -46,7 +50,7 @@ export type AiCleanStage =
   | "expired";
 
 export interface StageView {
-  stage: AiCleanStage;
+  stage: AiJobStage;
   /** The line under the heading. Present tense, no jargon, no percentages. */
   label: string;
   /** A second line, when there is something worth adding. */
@@ -57,12 +61,19 @@ export interface StageView {
   active: boolean;
 }
 
-/** The journey, shown in full so somebody waiting knows what is left. */
-export const AI_CLEAN_PATH: readonly { key: string; label: string }[] = [
+/**
+ * The journey, shown in full so somebody waiting knows what is left.
+ *
+ * Character Replace's six: the upload is ours, `queued` and `processing` come
+ * from the job row, `finalizing` is our worker, `completed` is the webhook.
+ * "Analyzing" and "Replacing" are the two halves of one prediction and light
+ * up TOGETHER — see `pathState`.
+ */
+export const AI_JOB_PATH: readonly { key: string; label: string }[] = [
   { key: "uploading", label: "Uploading" },
   { key: "queued", label: "Queued" },
-  { key: "analyzing", label: "Analyzing video" },
-  { key: "removing", label: "Removing text" },
+  { key: "analyzing", label: "Analyzing your video" },
+  { key: "removing", label: "Replacing the character" },
   { key: "finalizing", label: "Finalizing" },
   { key: "ready", label: "Ready" },
 ] as const;
@@ -76,9 +87,9 @@ export const AI_CLEAN_PATH: readonly { key: string; label: string }[] = [
  * the member sent nothing from their device — and a tracker that says it while
  * our server downloads from TikTok is describing work that is not happening.
  */
-export function aiCleanPath(sourceKind: AiSourceKind): readonly { key: string; label: string }[] {
-  if (sourceKind !== "url") return AI_CLEAN_PATH;
-  return AI_CLEAN_PATH.map((step) =>
+export function aiJobPath(sourceKind: AiSourceKind): readonly { key: string; label: string }[] {
+  if (sourceKind !== "url") return AI_JOB_PATH;
+  return AI_JOB_PATH.map((step) =>
     step.key === "uploading" ? { key: step.key, label: "Getting your video" } : step,
   );
 }
@@ -94,13 +105,13 @@ export function aiCleanPath(sourceKind: AiSourceKind): readonly { key: string; l
  * `finalizing` IS its own step as of Part 4: the audio mux runs in our worker
  * and the row says so while it does.
  */
-export function pathState(stage: AiCleanStage): Record<string, "done" | "doing" | "todo"> {
+export function pathState(stage: AiJobStage): Record<string, "done" | "doing" | "todo"> {
   const state: Record<string, "done" | "doing" | "todo"> = {};
   const mark = (keys: string[], value: "done" | "doing" | "todo") => {
     for (const k of keys) state[k] = value;
   };
 
-  mark(AI_CLEAN_PATH.map((p) => p.key), "todo");
+  mark(AI_JOB_PATH.map((p) => p.key), "todo");
 
   if (stage === "uploading" || stage === "acquiring") {
     // The same slot: "your video is arriving". Which of the two words the
@@ -119,7 +130,7 @@ export function pathState(stage: AiCleanStage): Record<string, "done" | "doing" 
     mark(["uploading", "queued", "analyzing", "removing"], "done");
     mark(["finalizing"], "doing");
   } else if (stage === "completed") {
-    mark(AI_CLEAN_PATH.map((p) => p.key), "done");
+    mark(AI_JOB_PATH.map((p) => p.key), "done");
   }
 
   return state;
@@ -172,7 +183,7 @@ function creepToward(floor: number, ceiling: number, elapsedMs: number, halfLife
 }
 
 function progressFor(
-  stage: AiCleanStage,
+  stage: AiJobStage,
   uploadFraction: number | null,
   /** How long the CURRENT stage has been running. Null when unknown. */
   elapsedMs: number | null,
@@ -264,19 +275,19 @@ const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
     detail: "Fetching it from the link you pasted. Nothing is sent from your device.",
   },
   processing: {
-    label: "Removing text",
-    detail: "Frenz AI is finding the text and rebuilding what was behind it.",
+    label: "Replacing the character",
+    detail: "Frenz AI is placing your likeness into every frame, keeping the movement and the scene.",
   },
   finalizing: {
-    label: "Restoring your audio",
-    // Said in the member's terms. "Muxing an AAC track with stream copy" is
-    // true and is not for them.
-    detail: "Putting the original sound back on your cleaned video.",
+    label: "Finishing your video",
+    // Said in the member's terms. What the worker does here — audio, poster,
+    // the final container — is ours to know.
+    detail: "Putting the final touches on your video.",
   },
   completed: { label: "Ready", detail: null },
   failed: { label: "Didn't finish", detail: null },
   cancelled: { label: "Cancelled", detail: null },
-  expired: { label: "No longer available", detail: "Cleaned videos are kept for three days." },
+  expired: { label: "No longer available", detail: "Finished videos are kept for three days." },
 };
 
 /** The whole display state, from the job and the upload. */
@@ -298,7 +309,7 @@ export function stageFor(input: StageInput): StageView {
   }
 
   const copy = LABELS[job.status];
-  const stage = job.status as AiCleanStage;
+  const stage = job.status as AiJobStage;
 
   /*
     How long this stage has been running, for the creep above.
@@ -319,7 +330,10 @@ export function stageFor(input: StageInput): StageView {
     // already a written sentence rather than a provider's error.
     detail: job.status === "failed" ? (job.error?.message ?? null) : copy.detail,
     progress: progressFor(stage, null, elapsedMs),
-    active: job.status === "queued" || job.status === "processing" || job.status === "finalizing",
+    // 🔴 The registry's answer, never a hand-written list. The previous line
+    // here named three statuses and forgot `acquiring` — a link job read as
+    // idle while our worker fetched it.
+    active: isActiveStatus(job.status),
   };
 }
 

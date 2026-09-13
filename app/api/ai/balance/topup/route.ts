@@ -191,14 +191,17 @@ export async function POST(request: Request) {
  */
 const RETURN_PATHS = new Set([
   "/ai",
-  "/ai/clean",
+  "/ai/character-replace",
   "/ai/history",
+  "/ai/usage",
   "/studio/ai",
-  "/studio/ai/clean",
+  "/studio/ai/character-replace",
   "/studio/ai/history",
+  "/studio/ai/usage",
 ]);
 
-const DEFAULT_RETURN = "/ai/clean";
+// The workspace: where somebody who ran out mid-flow was standing.
+const DEFAULT_RETURN = "/ai/character-replace";
 
 function safeReturnTo(value: unknown): string {
   return typeof value === "string" && RETURN_PATHS.has(value) ? value : DEFAULT_RETURN;

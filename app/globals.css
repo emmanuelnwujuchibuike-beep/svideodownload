@@ -3911,3 +3911,58 @@ html.dark .streak-recover {
       animation: none !important;
     }
   }
+
+/* ── Character Replace trim handles ─────────────────────────────────────────
+   Two <input type="range"> elements share one track. The inputs themselves
+   are transparent and ignore the pointer; only the THUMBS take it, so the two
+   can overlap without the top one swallowing every drag. The thumbs are
+   26px — a finger-sized target on a phone — and the visible track is drawn
+   by the component underneath them. Keyboard: each input is a real range,
+   so arrows step it and focus rings the thumb. */
+.frenz-trim-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  height: 100%;
+  margin: 0;
+  outline: none;
+}
+.frenz-trim-range::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 100%;
+}
+.frenz-trim-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 26px;
+  height: 26px;
+  margin-top: 9px;
+  border-radius: 9999px;
+  background: hsl(var(--card));
+  border: 2px solid hsl(var(--foreground));
+  box-shadow: 0 2px 8px -2px rgb(15 23 42 / 0.35);
+  cursor: grab;
+}
+.frenz-trim-range::-moz-range-track {
+  background: transparent;
+  height: 100%;
+}
+.frenz-trim-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: hsl(var(--card));
+  border: 2px solid hsl(var(--foreground));
+  box-shadow: 0 2px 8px -2px rgb(15 23 42 / 0.35);
+  cursor: grab;
+}
+.frenz-trim-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.frenz-trim-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

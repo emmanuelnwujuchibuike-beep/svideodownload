@@ -170,7 +170,8 @@ import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
-import { FrenzAISettings } from "@/features/admin/frenz-ai-settings";
+// Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
+import { FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiAdminStats } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";

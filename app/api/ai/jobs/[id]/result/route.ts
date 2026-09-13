@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { cleanedFileName } from "@/lib/ai/clean-media";
-import { aiFeature } from "@/lib/ai/jobs";
+import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
+import { primaryAiFeature } from "@/lib/ai/jobs";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { pathBelongsTo } from "@/lib/ai/storage";
@@ -38,7 +38,7 @@ export const dynamic = "force-dynamic";
  * `no-store`, because a cached signed URL outlives the reason it was issued.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const feat = aiFeature("ai_clean");
+  const feat = primaryAiFeature();
   if (!feat) {
     return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
       status: aiErrorStatus("FEATURE_UNAVAILABLE"),
@@ -119,7 +119,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       typeof job.metadata?.source_name === "string" ? job.metadata.source_name : null;
     const signed = await signResultUrl(
       job.result_path,
-      wantsDownload ? cleanedFileName(sourceName) : undefined,
+      wantsDownload ? resultFileName(sourceName, resultSuffixFor(job.feature)) : undefined,
     );
 
     /*

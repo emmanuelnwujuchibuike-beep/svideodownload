@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
-import { AI_JOB_STARTED_EVENT, browserHasUsedAiClean } from "@/lib/ai/history-cache";
+import { AI_JOB_STARTED_EVENT, browserHasUsedFrenzAi } from "@/lib/ai/history-cache";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -35,7 +35,7 @@ import { AI_JOB_STARTED_EVENT, browserHasUsedAiClean } from "@/lib/ai/history-ca
  * and a parse, on every visit, for a component that does nothing at all for
  * somebody who has never used Frenz AI.
  *
- * So `browserHasUsedAiClean()` — a single `localStorage` key check, no parse,
+ * So `browserHasUsedFrenzAi()` — a single `localStorage` key check, no parse,
  * no network — decides whether the chunk is ever asked for. A first-time
  * visitor, and the AdSense crawler on the page being assessed, download nothing
  * and run nothing.
@@ -65,7 +65,7 @@ export function AiJobAlertMount() {
   const [armed, setArmed] = useState(false);
 
   useEffect(() => {
-    if (browserHasUsedAiClean()) {
+    if (browserHasUsedFrenzAi()) {
       setArmed(true);
       return;
     }

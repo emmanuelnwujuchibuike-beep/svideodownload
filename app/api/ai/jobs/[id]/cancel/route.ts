@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
-import { AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView } from "@/lib/ai/jobs";
+import { AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView, primaryAiFeature } from "@/lib/ai/jobs";
 import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
 import { releaseAiUsage } from "@/lib/ai/usage";
@@ -40,7 +40,7 @@ export const dynamic = "force-dynamic";
  * generosity becoming a loop.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const feat = aiFeature("ai_clean");
+  const feat = primaryAiFeature();
   if (!feat) {
     return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), {
       status: aiErrorStatus("FEATURE_UNAVAILABLE"),

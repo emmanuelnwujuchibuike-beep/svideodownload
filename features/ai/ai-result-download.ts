@@ -1,7 +1,7 @@
 "use client";
 
 import { startDownload } from "@/features/downloads/manager";
-import { cleanedFileName } from "@/lib/ai/clean-media";
+import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
 import type { AiJobView } from "@/lib/ai/jobs";
 import { haptic } from "@/lib/motion/haptics";
 
@@ -45,11 +45,11 @@ export function startAiResultDownload(job: AiJobView): void {
     directUrl: href,
     platform: "generic",
     platformName: "Frenz AI",
-    title: cleanedFileName(job.source.name),
+    title: resultFileName(job.source.name, resultSuffixFor(job.feature)),
     thumbnail: null,
-    formatId: "ai-clean",
+    formatId: "frenz-ai",
     kind: "video",
-    qualityLabel: "AI Clean",
+    qualityLabel: job.feature === "ai_character_replace" ? "Character Replace" : "Frenz AI",
     durationSeconds: job.source.durationSeconds ?? null,
   });
 }

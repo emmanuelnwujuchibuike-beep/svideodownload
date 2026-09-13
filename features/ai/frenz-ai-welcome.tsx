@@ -1,17 +1,12 @@
 "use client";
 
-import { ArrowRight, HelpCircle } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { FrenzLogo } from "@/components/brand/frenz-logo";
-import { FrenzAIBeforeAfterScene } from "@/features/ai/core/frenz-ai-before-after-scene";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
+import { FrenzAIAllowanceBar, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIToolGrid } from "@/features/ai/frenz-ai-tool-grid";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
 import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client";
-import { cn } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -25,6 +20,15 @@ import { cn } from "@/lib/utils";
  * Top to bottom, as drawn: the breadcrumb pill, the headline with "videos" in
  * brand gradient and the mark set into it, the subhead, the before/after scene,
  * How it works + Try AI Clean, the allowance bar, and the trust row.
+ *
+ * ── 🔴 2026-09-13: THE HERO IS GONE ─────────────────────────────────────────
+ *
+ * Owner: "Remove this AI welcome hero, the images and all — a new AI model,
+ * Wan 2.2, will be introduced part by part in the next session and it will be
+ * the main AI model and tools, not AI Clean, although AI Clean will still
+ * exist." Everything above the allowance bar was that hero. The page now
+ * opens with a plain title and keeps the allowance bar, the tier row, the
+ * trust row and the tool grid. See the note at the top of the JSX.
  *
  * ── 🔴 THE PERFORMANCE RULE IS AN INSTRUCTION, NOT A PREFERENCE ─────────────
  *
@@ -85,68 +89,29 @@ export function FrenzAIWelcome({
       />
 
       <div className="px-4 pb-6 pt-5 sm:px-6">
-        <FrenzAICrumb tool="AI Clean" />
-
-        <h1 className="mt-4 text-[2.05rem] font-bold leading-[1.06] tracking-[-0.04em] sm:text-[2.5rem]">
-          Clean your{" "}
-          {/*
-            The mark set into the headline, as drawn. `align-middle` with a
-            negative top nudge keeps it on the cap height rather than the
-            baseline, which is where the reference puts it.
-          */}
-          <span className="relative -top-1 mx-0.5 inline-block align-middle">
-            <FrenzLogo size={34} alt="" />
-          </span>
-          <br className="hidden sm:block" />
-          <span className="text-gradient">videos</span> with AI.
-        </h1>
-
-        <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
-          Remove unwanted captions, subtitles and text overlays while keeping your video looking
-          natural.
-        </p>
-
-        <FrenzAIBeforeAfterScene className="mt-7" />
-
-        {/* ── the two actions ─────────────────────────────────────────────── */}
         {/*
-          Side by side on EVERY width, as the reference draws them on a phone.
-          Stacking them made "How it works" a full-width button of equal weight
-          to the primary action, which is the opposite of the intended hierarchy.
+          ── 🔴 THE HERO IS GONE, ON PURPOSE (owner, 2026-09-13) ──────────────
+
+          "Remove this AI welcome hero, the images and all, because a new AI
+          model, Wan 2.2, will be introduced part by part in the next session
+          and it will be the main AI model and tools — not AI Clean, although
+          AI Clean will still exist."
+
+          What stood here: the "Frenz AI / AI Clean" crumb, the "Clean your
+          videos with AI." headline with the mark set into it, the subhead, the
+          before/after mountain scene (FrenzAIBeforeAfterScene) and the two
+          actions (How it works / Try AI Clean). All of it described ONE tool,
+          and that tool is about to stop being the headline act.
+
+          What remains is deliberately plain: a page title, then the things the
+          owner kept by name on 09-09 (the allowance bar, the tier row), the
+          trust row, and the tool grid — which is still every door this product
+          has, AI Clean included. The next session puts Wan 2.2's own hero here.
+          Nothing was moved to make that easier; nothing should be.
         */}
-        <div className="mt-7 flex items-center gap-2.5">
-          <Link
-            href={`${cleanHref}?tutorial=1`}
-            prefetch={false}
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-border/70 bg-card/95 px-4 py-3.5 sm:px-6",
-              "text-[13.5px] font-semibold transition hover:border-foreground/20 active:scale-[0.99] sm:text-sm",
-            )}
-          >
-            <HelpCircle className="h-4 w-4 text-muted-foreground" aria-hidden />
-            How it works
-          </Link>
-
-          <Link
-            href={cleanHref}
-            prefetch
-            className={cn(
-              "group inline-flex flex-1 items-center justify-center gap-2 rounded-full",
-              "bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 px-4 py-3.5 sm:px-6",
-              "text-[13.5px] font-bold text-white shadow-[0_14px_34px_-12px_rgb(99_102_241/0.95)] sm:text-sm",
-              "transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
-            )}
-          >
-            <FrenzLogo size={18} alt="" />
-            Try AI Clean
-            <ArrowRight
-              className="h-4 w-4 transition-transform duration-200 motion-safe:group-hover:translate-x-0.5"
-              aria-hidden
-            />
-          </Link>
-        </div>
-
-
+        <h1 className="text-[1.6rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[1.9rem]">
+          Frenz <span className="text-gradient">AI</span>
+        </h1>
 
         {/*
           🔴 KEPT, EXPLICITLY. Owner, 2026-09-09: "Do not remove the existing

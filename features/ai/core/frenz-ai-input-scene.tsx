@@ -18,7 +18,10 @@ import { cn } from "@/lib/utils";
  * one place this page has to be perfect.
  *
  * Drawn in CSS. No photograph on a screen whose whole job is to get somebody to
- * pick a file quickly; see the note in frenz-ai-before-after-scene.tsx.
+ * pick a file quickly — a photograph is a network request, a decode and a
+ * layout shift on the one page that must open instantly. (The welcome hero
+ * that used to make the same argument, frenz-ai-before-after-scene.tsx, was
+ * removed on 2026-09-13 ahead of the Wan 2.2 hero replacing it.)
  *
  * Only the arc and the sparkle move, on long cycles, stopping under
  * `prefers-reduced-motion` and on a hidden tab.

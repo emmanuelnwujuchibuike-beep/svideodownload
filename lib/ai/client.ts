@@ -1,6 +1,7 @@
 "use client";
 
 import type { AiErrorCode } from "@/lib/ai/errors";
+import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { AiFeature, AiJobSourceInput, AiJobStatus, AiJobView } from "@/lib/ai/jobs";
 
 /**
@@ -160,7 +161,29 @@ export function uploadSource(opts: {
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
 }): Promise<boolean> {
-  return new Promise((resolve) => {
+  /*
+    ── 🔴 THE UPLOAD HOLDS THE CRITICAL-ACTIVITY LOCK (owner, 2026-09-13:
+    "the AI clean now is stuck on 58%") ────────────────────────────────────
+
+    Two jobs, two different members, both minutes after a deploy: the job row
+    was opened (201), the page then POLLED it every few seconds, and /start
+    was never called. Their folders in the source bucket are EMPTY — the PUT
+    below never finished. 58% is what `queued` creeps toward while nothing
+    happens (lib/ai/job-stages.ts).
+
+    What killed the PUT: a new deploy makes the service worker update, and
+    register-sw.tsx reloads the page for the new build — waiting first for any
+    critical activity to finish. Post/story uploads and downloads take that
+    lock (lib/storage/client-upload.ts, downloads/manager.ts). This upload
+    never did, so the reload landed mid-transfer and the file died with the
+    page. Held for the bytes only, released on every outcome.
+  */
+  const endCriticalActivity = beginCriticalActivity();
+  return new Promise<boolean>((resolve) => {
+    const settle = (ok: boolean) => {
+      endCriticalActivity();
+      resolve(ok);
+    };
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", opts.ticket.uploadUrl, true);
     // Storage stores what it is told; without this every object would land as
@@ -173,12 +196,15 @@ export function uploadSource(opts: {
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0) opts.onProgress?.(e.loaded / e.total);
     };
-    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
-    xhr.onerror = () => resolve(false);
-    xhr.onabort = () => resolve(false);
-
+    xhr.onload = () => settle(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => settle(false);
+    xhr.onabort = () => settle(false);
     opts.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
-    xhr.send(opts.file);
+    try {
+      xhr.send(opts.file);
+    } catch {
+      settle(false);
+    }
   });
 }
 

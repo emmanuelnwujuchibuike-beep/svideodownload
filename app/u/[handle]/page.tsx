@@ -5,16 +5,13 @@ import {
   Eye,
   Grid3x3,
   Heart,
-  Image as ImageIcon,
   Link as LinkIcon,
   Lock,
   Mail,
   MessageCircle,
   Phone,
-  Sparkles,
   UserPlus,
   Users,
-  Video,
   type LucideIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -56,6 +53,7 @@ import { viewableCollectionsCount } from "@/lib/social/collections";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
 import { IdentityMedia } from "@/features/profile/identity-media";
+import { IdentityModeGlyph } from "@/features/profile/identity-mode-glyphs";
 import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
 import type { ProfileHealth } from "@/lib/profile/health";
@@ -605,86 +603,28 @@ async function ProfileData({
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     {/*
-                      ── 🔴 THE HEADER IS A ROW ON EVERY WIDTH (owner, 2026-09-13) ──
+                      ── 🔴 THE HEADER ROW, AS ASKED THE SECOND TIME (owner, 2026-09-13)
 
-                      "Make this profile picture ring and the photo, videos and avatar
-                      card to flex opposite the name and username… the bio won't touch
-                      the profile and photo, video and avatar card, rather when it reaches
-                      close to 3 padding the bio should continue below."
+                      First pass put the avatar on the LEFT. Owner: "I said flex the
+                      profile ring and description card (photo, video and avatar) to
+                      go to the right edge, padding 2 or 3, and the name and username
+                      should be at the left end with the same padding 2 or 3."
 
-                      This was `flex-col sm:flex-row`: on a phone the avatar column
-                      stacked ABOVE the name, and the bio lived inside the identity
-                      column beside the avatar on wider screens. Now:
+                      So: the name and handle sit at the card's LEFT edge, the avatar
+                      ring with the mode pill under it sits at the RIGHT edge, and the
+                      row pulls in with `-mx-1 sm:-mx-4` against the card's own
+                      `px-4 sm:px-7` so both land at padding-3 from the card edge.
+                      Everything long — bio, links, actions — stays BELOW the row at
+                      full width, so nothing ever squeezes in beside the avatar.
 
-                        · one row at every width — avatar + mode picker on the left,
-                          name / handle / chips on the right;
-                        · the picker is icons only, in a small pill (a bold glyph
-                          each; the word is the accessible name);
-                        · the bio, the links row and the actions sit BELOW the row at
-                          full width, `mt-3` off it — they never squeeze in beside the
-                          avatar, however long they are.
+                      The pill's glyphs are the filled, lit ones in
+                      identity-mode-glyphs.tsx ("3D, Snapchat-style"); the avatar
+                      mode is a person, never a sparkle.
                     */}
-                    <div className="flex items-start gap-3 sm:gap-6">
-                      <div className="shrink-0">
-                        <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
-                    {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
-                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
-                          <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
-                            <IdentityMediaViewer
-                              mode={profileMedia.identityMode}
-                              photo={profile.avatarUrl}
-                              video={profileMedia.videoUrl}
-                              avatar={profileMedia.avatarUrl}
-                              name={profile.displayName}
-                            >
-                              <IdentityMedia
-                                mode={profileMedia.identityMode}
-                                photo={profile.avatarUrl}
-                                video={profileMedia.videoUrl}
-                                avatar={profileMedia.avatarUrl}
-                                name={profile.displayName}
-                                className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
-                              />
-                            </IdentityMediaViewer>
-                          </IdentityRing>
-                          <Link href="/account/identity" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
-                            <Camera className="h-4 w-4" />
-                          </Link>
-                        </div>
-
-                        {/* Identity mode — icons only, as small as it can be while
-                            still tappable (32px targets). The active mode is the
-                            brand-filled one; every glyph is bold and bare. */}
-                        <div className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-card/70 p-0.5 shadow-sm backdrop-blur">
-                          {(
-                            [
-                              { mode: "photo", label: "Photo", Icon: ImageIcon },
-                              { mode: "video", label: "Video", Icon: Video },
-                              { mode: "avatar", label: "Avatar", Icon: Sparkles },
-                            ] as const
-                          ).map(({ mode, label, Icon }) => (
-                            <Link
-                              key={mode}
-                              href="/account/identity"
-                              aria-label={label}
-                              title={label}
-                              aria-current={profileMedia.identityMode === mode ? "true" : undefined}
-                              className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
-                                profileMedia.identityMode === mode
-                                  ? "bg-brand text-white shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground"
-                              }`}
-                            >
-                              <Icon className="h-4 w-4" strokeWidth={2.5} aria-hidden />
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Identity — opposite the avatar: name, handle, and the chips
-                          that describe the profile. Nothing here is allowed to be
-                          long; the long things live below the row. */}
-                      <div className="min-w-0 flex-1 pt-1 sm:pt-2">
+                    <div className="-mx-1 flex items-start justify-between gap-3 sm:-mx-4 sm:gap-6">
+                      {/* Identity — the LEFT edge: name, handle, and the chips that
+                          describe the profile. */}
+                      <div className="min-w-0 flex-1 pt-3 sm:pt-4">
                         <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                           {profile.displayName}
                           {/* Verified · plan (Pro/Business) · Creator, one cluster */}
@@ -712,6 +652,61 @@ async function ProfileData({
                           </div>
                         ) : null}
 
+                      </div>
+
+                      {/* Avatar + mode pill — the RIGHT edge, right-aligned as a column. */}
+                      <div className="flex shrink-0 flex-col items-end">
+                        <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
+                    {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
+                    {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
+                          <IdentityRing userId={profile.id} verified={profile.isVerified} premium={plan !== "free"}>
+                            <IdentityMediaViewer
+                              mode={profileMedia.identityMode}
+                              photo={profile.avatarUrl}
+                              video={profileMedia.videoUrl}
+                              avatar={profileMedia.avatarUrl}
+                              name={profile.displayName}
+                            >
+                              <IdentityMedia
+                                mode={profileMedia.identityMode}
+                                photo={profile.avatarUrl}
+                                video={profileMedia.videoUrl}
+                                avatar={profileMedia.avatarUrl}
+                                name={profile.displayName}
+                                className="h-24 w-24 ring-4 ring-background sm:h-28 sm:w-28"
+                              />
+                            </IdentityMediaViewer>
+                          </IdentityRing>
+                          <Link href="/account/identity" aria-label="Change photo" className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border transition hover:bg-secondary">
+                            <Camera className="h-4 w-4" />
+                          </Link>
+                        </div>
+
+                        <div className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-card/80 p-0.5 shadow-sm backdrop-blur">
+                          {(
+                            [
+                              { mode: "photo", label: "Photo" },
+                              { mode: "video", label: "Video" },
+                              { mode: "avatar", label: "Avatar" },
+                            ] as const
+                          ).map(({ mode, label }) => {
+                            const active = profileMedia.identityMode === mode;
+                            return (
+                              <Link
+                                key={mode}
+                                href="/account/identity"
+                                aria-label={label}
+                                title={label}
+                                aria-current={active ? "true" : undefined}
+                                className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
+                                  active ? "bg-white shadow-[0_2px_8px_-2px_rgba(91,61,245,0.55)] ring-1 ring-violet-500/30" : "hover:bg-secondary/70"
+                                }`}
+                              >
+                                <IdentityModeGlyph name={mode} active={active} className="h-5 w-5" />
+                              </Link>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 

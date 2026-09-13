@@ -252,7 +252,36 @@ export function useAiCleanJob(): AiCleanJobState & AiCleanJobActions {
         url.searchParams.delete("job");
         window.history.replaceState({}, "", url.toString());
       } else if (jobs.ok && jobs.jobs.length > 0) {
-        applyJob(jobs.jobs[0]!);
+        const restored = jobs.jobs[0]!;
+        applyJob(restored);
+        /*
+          ── 🔴 A RESTORED `queued` JOB IS ASKED, NOT WATCHED (2026-09-13) ──
+
+          This page restores the member's active job on every open. A job that
+          is `queued` here — after a reload, a closed tab, a phone that slept —
+          has an upload that either finished (and /start was interrupted) or
+          never did (the transfer died with the page; see `uploadSource`).
+          Either way nothing on this page is uploading it now, so watching the
+          row is watching a number creep toward 58% for as long as anyone
+          cares to look — the owner's "stuck on 58%".
+
+          /start already knows the difference and says so: it finds the object
+          and starts the job, or it answers "The upload hasn't finished yet." /
+          "That upload didn't finish. Choose the video again." (INVALID_INPUT,
+          nothing charged, the row left `queued`). So the restore asks once.
+          A job named in the url takes the branch above and is left alone: the
+          member was sent to LOOK at it.
+        */
+        if (restored.status === "queued" && !uploadAbort.current) {
+          const started = await startAiJob(restored.id);
+          if (!alive.current) return;
+          if (started.ok) {
+            applyJob(started.job);
+            if (started.usage) setUsage(started.usage);
+          } else {
+            setError({ code: started.code, message: started.error });
+          }
+        }
       }
       setRestoring(false);
     })();

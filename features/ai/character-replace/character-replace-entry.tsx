@@ -76,18 +76,31 @@ export function CharacterReplaceEntry({
         the original performance.
       </p>
 
+      {/*
+          ── 🔴 A NATIVE-SIZED ACTION (owner, 2026-09-13: "make the Start
+          Creating button have more height and look more premium like an iOS
+          native app") ─────────────────────────────────────────────────────
+
+          56 px tall, full width on a phone, a 16 px label and a squarer
+          corner than the pill chips around it — the proportions of a large
+          iOS button rather than a web link dressed as one. From `sm` up it
+          sizes to its label, since a bar stretched across a desktop card
+          reads as a banner. One quiet shadow under it, no gradient.
+      */}
       {available ? (
         <Link
           href={href}
           prefetch={false}
           className={cn(
-            "group mt-5 inline-flex min-h-[48px] items-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background",
-            "transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
+            "group mt-6 flex min-h-[56px] w-full items-center justify-center gap-2.5 rounded-[1.1rem] bg-foreground px-6",
+            "text-[16px] font-semibold tracking-[-0.01em] text-background sm:w-auto sm:min-w-[13rem]",
+            "shadow-[0_10px_24px_-14px_rgba(15,23,42,0.55)] transition duration-200",
+            "motion-safe:hover:-translate-y-0.5 active:scale-[0.985] active:shadow-none",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           )}
         >
           Start Creating
-          <ArrowRight className="h-4 w-4 transition-transform motion-safe:group-hover:translate-x-0.5" aria-hidden />
+          <ArrowRight className="h-[18px] w-[18px] transition-transform motion-safe:group-hover:translate-x-0.5" aria-hidden />
         </Link>
       ) : (
         <p className="mt-5 text-[13px] font-semibold text-muted-foreground">Not available right now. Check back soon.</p>

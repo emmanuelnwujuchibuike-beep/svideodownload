@@ -17,16 +17,15 @@ import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import type { CharacterReplaceResult } from "@/lib/ai/character-replace/types";
+import { inputReadiness } from "@/lib/ai/character-replace/validate";
 import {
   canEnterStep,
   canStart,
   furthestStep,
   stepIndex,
-  videoFits,
   WORKSPACE_STEPS,
   type WorkspaceStep,
 } from "@/lib/ai/character-replace/workspace";
-import type { AiMediaErrorCode } from "@/lib/ai/media";
 import { cn } from "@/lib/utils";
 
 /**
@@ -110,8 +109,13 @@ export function CharacterReplaceWorkspace({
     const next = WORKSPACE_STEPS[index + 1]?.id;
     if (!next) return false;
     if (!canEnterStep(project, next)) return false;
-    // The settings step holds the member until the kept range fits the tool.
-    if (step === "settings" && config && !videoFits(project, config)) return false;
+    /*
+      🔴 THE READINESS LAYER IS THE GATE (Part 2, §15). From the video step
+      onward, Continue waits for both files to be valid and the kept range to
+      fit — one function, lib/ai/character-replace/validate.ts, that the
+      summary card reads too, so the button and the card never disagree.
+    */
+    if ((step === "video" || step === "settings") && !inputReadiness(project, config).ready) return false;
     // The voice step holds until a new voice is fully described.
     if (step === "voice" && project.voice.mode === "new_voice" && (!project.voice.languageCode || !project.voice.voiceId || !project.lipSync.tier)) return false;
     return true;
@@ -193,17 +197,15 @@ export function CharacterReplaceWorkspace({
                 {step === "photo" ? (
                   <CharacterReplacePhotoStep
                     asset={project.character}
-                    busy={state.decoding === "photo"}
-                    error={state.errors.photo as AiMediaErrorCode | null}
+                    slot={state.photo}
                     onPick={(f) => void ws.pickPhoto(f)}
                     onClear={ws.clearPhoto}
                   />
                 ) : step === "video" ? (
                   <CharacterReplaceVideoStep
-                    video={project.video}
-                    busy={state.decoding === "video"}
-                    error={state.errors.video as AiMediaErrorCode | null}
-                    maxDurationSeconds={config?.maximumDurationSeconds ?? null}
+                    project={project}
+                    slot={state.video}
+                    config={config}
                     onPick={(f) => void ws.pickVideo(f)}
                     onClear={ws.clearVideo}
                   />
@@ -397,7 +399,7 @@ function devPreview(name: string | null): { processing?: import("@/lib/ai/charac
     completedAt: name === "result" ? new Date().toISOString() : null,
     expiresAt: null,
     durationMs: null,
-    source: { size: 6_165_585, mimeType: "video/mp4", durationSeconds: 18.4, name: "beach-walk.mp4", kind: "upload" },
+    source: { size: 6_165_585, mimeType: "video/mp4", durationSeconds: 18.437, name: "beach-walk.mp4", kind: "upload" },
     result: { size: null, durationSeconds: 10, audioRestored: null, hasPoster: false },
     error: null,
   };

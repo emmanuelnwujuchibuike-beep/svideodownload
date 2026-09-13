@@ -349,7 +349,38 @@ async function ProfileData({
   // The profile header renders immediately; the (heavier) posts grid streams in
   // behind a skeleton so the page never blocks on the post query.
   const isViewer = !!me && !profile.isOwner;
-  const [plan, friendState, mutuals, friendTotal, postsTotal, privacy, collectionsN, followsYou, profileExtras, totals, repBonus] = await Promise.all([
+  /*
+    ── 🔴 ONE WAVE, NOT FOUR (owner, 2026-09-13: "the profile page takes time
+    to open on cold entry") ────────────────────────────────────────────────
+
+    After this wave the page used to `await getProfileMedia`, then
+    `await getProfileAppearance`, then a second `Promise.all` of the five
+    profile-engine reads — three more round trips to Supabase in sequence,
+    each waiting on the one before for no reason: every one of them needs
+    only `profile.id`, which is known here. On a cold lambda from cdg1 that
+    was three extra network hops before a byte of HTML. They are in this one
+    wave now; the owner-only wave further down still depends on `me`.
+  */
+  const [
+    plan,
+    friendState,
+    mutuals,
+    friendTotal,
+    postsTotal,
+    privacy,
+    collectionsN,
+    followsYou,
+    profileExtras,
+    totals,
+    repBonus,
+    profileMedia,
+    appearance,
+    identity,
+    storedModules,
+    details,
+    credentials,
+    offerings,
+  ] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
     isViewer ? mutualFriendsCount(me!, profile.id) : Promise.resolve(0),
@@ -363,9 +394,19 @@ async function ProfileData({
     // can use the same real totals — reputation is shown publicly by default.
     creatorTotals(profile.id),
     getReputationBonus(profile.id),
+    // Digital Identity media (migration 0098) — the identity the profile displays.
+    getProfileMedia(profile.id),
+    // The Layout Studio theme (see the note below where it is resolved).
+    getProfileAppearance(profile.id),
+    // Universal Profile Engine™ (Feature 18 · Part 14, migration 0107) — what
+    // this profile IS, which sections it offers, and the content those
+    // sections read. Every reader degrades to empty/defaults.
+    getProfileIdentity(profile.id),
+    getProfileModules(profile.id),
+    getProfileDetails(profile.id),
+    listCredentials(profile.id),
+    listOfferings(profile.id),
   ]);
-  // Digital Identity media (migration 0098) — the identity the profile displays.
-  const profileMedia = await getProfileMedia(profile.id);
   /*
     ── The Layout Studio theme now reaches the profile ─────────────────────
     Owner (2026-08-04): "the profile layout settings doesn't change how the
@@ -384,9 +425,25 @@ async function ProfileData({
     the WCAG correction from Part 16 applied — so picking a theme finally
     changes the card, and picking an accent still wins over it.
   */
-  const appearance = await getProfileAppearance(profile.id);
   const theme = resolveProfileTheme({ ...appearance, accent: accentHex(profileExtras.accent) });
-  const heroAccent = theme.accent;
+  /*
+    ── 🔴 NO ACCENT BY DEFAULT (owner, 2026-09-13) ─────────────────────────
+
+    "Make profile default accent colour to be no colour and not blue; it
+    should be plain white on default, and all new accounts should be created
+    as default white."
+
+    `resolveProfileTheme` always answers WITH a colour — the classic theme's
+    electric blue when nothing is stored — and this used to be read straight
+    into the frame line, the avatar ring, the mood colour and the badges. So
+    every new account wore blue it never chose. The colour is now only taken
+    when the member has actually chosen something: their own accent (0096)
+    wins, then the accent of a theme they picked in the Layout Studio, and
+    with neither stored there is no accent at all. Nothing is written to the
+    database for this: a new account's `accent` and `theme` are already
+    null, which is what "default white" reads as here.
+  */
+  const heroAccent: string | null = accentHex(profileExtras.accent) ?? (appearance.theme ? theme.accent : null);
   /*
     ── 🔴 THE HERO CARD HAS NO SHADOW ANY MORE (owner, 2026-09-13) ───────────
 
@@ -428,17 +485,9 @@ async function ProfileData({
   });
 
   // ── Universal Profile Engine™ (Feature 18 · Part 14, migration 0107) ──────
-  // What this profile IS, which sections it offers, and the content those
-  // sections read. Every one of these readers degrades to empty/defaults, so
-  // before 0107 is applied the engine simply resolves every profile as a
-  // personal profile with its default sections — today's behaviour exactly.
-  const [identity, storedModules, details, credentials, offerings] = await Promise.all([
-    getProfileIdentity(profile.id),
-    getProfileModules(profile.id),
-    getProfileDetails(profile.id),
-    listCredentials(profile.id),
-    listOfferings(profile.id),
-  ]);
+  // The five reads joined the first wave above; before 0107 is applied the
+  // engine simply resolves every profile as a personal profile with its
+  // default sections — today's behaviour exactly.
   const typeSpec = profileType(identity.type);
 
   // Visitor Adaptive Experience™ — the viewer's role is DERIVED from real
@@ -605,7 +654,7 @@ async function ProfileData({
 
                 {/* Identity Card™ — the premium glass surface */}
                 <div className="relative z-10 px-3 sm:px-4">
-                  <div className="relative lux-card lux-header lux-halo lux-enter -mt-16 rounded-3xl px-4 pb-6 pt-0 sm:-mt-20 sm:px-7" style={heroCardStyle}>
+                  <div className={cn("relative lux-card lux-header lux-enter -mt-16 rounded-3xl px-4 pb-6 pt-0 sm:-mt-20 sm:px-7", heroAccent && "lux-halo")} style={heroCardStyle}>
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                     {/*
@@ -630,7 +679,18 @@ async function ProfileData({
                     <div className="-mx-1 flex items-start justify-between gap-3 sm:-mx-4 sm:gap-6">
                       {/* Identity — the LEFT edge: name, handle, and the chips that
                           describe the profile. */}
-                      <div className="min-w-0 flex-1 pt-3 sm:pt-4">
+                      {/*
+                        🔴 CENTRED AGAINST THE AVATAR COLUMN (owner, 2026-09-13:
+                        "There is too much space between the name, username and
+                        the bio… The name and username should come down a bit to
+                        occupy the space below"). The avatar column on the right
+                        is ~170 px tall (ring + mode pill) and the row stretches
+                        to it; the name and handle were pinned to its top, so the
+                        space showed up under them. `self-center` sits the
+                        identity in the middle of that height instead — the bio
+                        and the rest still follow below the row at full width.
+                      */}
+                      <div className="min-w-0 flex-1 self-center py-3 sm:py-4">
                         <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                           {profile.displayName}
                           {/* Verified · plan (Pro/Business) · Creator, one cluster */}
@@ -911,7 +971,7 @@ async function ProfileData({
 
             {/* Identity Card™ — the premium glass surface */}
             <div className="relative z-10 px-3 sm:px-4">
-              <div className="relative lux-card lux-header lux-halo lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
+              <div className={cn("relative lux-card lux-header lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7", heroAccent && "lux-halo")} style={heroCardStyle}>
                 {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                 {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
                 {/* Avatar · identity · adaptive action bar — three columns across the

@@ -64,6 +64,7 @@ function navigation(): RequestLike {
 
 interface Harness {
   networkFirst: (req: RequestLike, o: Record<string, unknown>) => Promise<ResponseLike>;
+  fetchRevalidated: (req: RequestLike) => Promise<ResponseLike>;
   fetchCalls: RequestLike[];
   store: Map<string, ResponseLike>;
 }
@@ -86,12 +87,22 @@ function loadStrategies(script: (req: RequestLike, n: number) => ResponseLike | 
     method: string;
     cache?: string;
     headers: { get: (k: string) => string | null };
-    constructor(url: string, init: { method?: string; cache?: string; headers?: Record<string, string> } = {}) {
-      this.url = url;
-      this.method = init.method ?? "GET";
+    constructor(input: string | RequestLike, init: { method?: string; cache?: string; headers?: Record<string, string> } = {}) {
+      // `new Request(request, init)` — the copy the worker makes for an RSC
+      // fetch — keeps the original's url, method and headers.
+      if (typeof input === "string") {
+        this.url = input;
+        this.method = init.method ?? "GET";
+        const h = init.headers ?? {};
+        this.headers = { get: (k) => h[k] ?? h[k.toLowerCase()] ?? null };
+      } else {
+        this.url = input.url;
+        this.method = init.method ?? input.method;
+        this.mode = input.mode;
+        const h = init.headers;
+        this.headers = h ? { get: (k) => h[k] ?? h[k.toLowerCase()] ?? null } : input.headers;
+      }
       this.cache = init.cache;
-      const h = init.headers ?? {};
-      this.headers = { get: (k) => h[k] ?? h[k.toLowerCase()] ?? null };
     }
   }
   const sandbox: Record<string, unknown> = {
@@ -120,8 +131,8 @@ function loadStrategies(script: (req: RequestLike, n: number) => ResponseLike | 
   for (const file of ["log.js", "config.js", "cache-utils.js", "strategies.js"]) {
     runInNewContext(readFileSync(path.join(SW_DIR, file), "utf8"), sandbox, { filename: file });
   }
-  const SWX = sandbox.SWX as { networkFirst: Harness["networkFirst"] };
-  return { networkFirst: SWX.networkFirst, fetchCalls, store };
+  const SWX = sandbox.SWX as { networkFirst: Harness["networkFirst"]; fetchRevalidated: Harness["fetchRevalidated"] };
+  return { networkFirst: SWX.networkFirst, fetchRevalidated: SWX.fetchRevalidated, fetchCalls, store };
 }
 
 describe("networkFirst — a document from the HTTP cache is not the network's answer", () => {
@@ -180,6 +191,40 @@ describe("networkFirst — a document from the HTTP cache is not the network's a
     h.store.set(`${ORIGIN}/`, doc("cached", 0));
     const res = await h.networkFirst(navigation(), { cacheName: "pages", offlineFallback: () => doc("offline", 0) });
     expect(res.body).toBe("cached");
+  });
+
+  it("🔴 v23: an RSC payload fetch is re-issued with cache: no-cache, headers intact", async () => {
+    /*
+      The "A new version is ready" screen (owner, 2026-09-13): a <Link> fetches
+      the destination's RSC payload, the phone's HTTP cache answered with the
+      two-hour-old one, and its chunk references were gone. The worker now
+      revalidates that request. The copy must keep Next's routing headers, or
+      the server answers with a full document instead of a payload.
+    */
+    const h = loadStrategies((req) => (req.cache === "no-cache" ? doc("live-rsc", 0) : doc("stale-rsc", 2 * 60 * 60 * 1000)));
+    const rsc: RequestLike = {
+      url: `${ORIGIN}/ai?_rsc=abc`,
+      mode: "cors",
+      method: "GET",
+      headers: { get: (k) => (k.toLowerCase() === "rsc" ? "1" : k.toLowerCase() === "next-router-state-tree" ? "%5B%22%22%5D" : null) },
+    };
+    const res = await h.fetchRevalidated(rsc);
+    expect(res.body).toBe("live-rsc");
+    expect(h.fetchCalls).toHaveLength(1);
+    expect(h.fetchCalls[0]!.cache).toBe("no-cache");
+    expect(h.fetchCalls[0]!.headers.get("rsc")).toBe("1");
+    expect(h.fetchCalls[0]!.headers.get("next-router-state-tree")).toBe("%5B%22%22%5D");
+  });
+
+  it("v23: falls back to the plain fetch when the revalidating one is rejected", async () => {
+    const h = loadStrategies((req) => {
+      if (req.cache === "no-cache") throw new TypeError("Load failed");
+      return doc("plain", 0);
+    });
+    const rsc: RequestLike = { url: `${ORIGIN}/ai?_rsc=abc`, mode: "cors", method: "GET", headers: { get: () => null } };
+    const res = await h.fetchRevalidated(rsc);
+    expect(res.body).toBe("plain");
+    expect(h.fetchCalls).toHaveLength(2);
   });
 
   it("leaves non-navigation requests alone — no retry, no Date check", async () => {

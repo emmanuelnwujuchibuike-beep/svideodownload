@@ -136,7 +136,7 @@ export default async function PublicFrenzAIPage() {
       <SiteHeader landing />
       <main
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
-        style={{ paddingTop: "calc(var(--frenz-header-bottom, 4rem) + 1rem)" }}
+        style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
         {/*
           The hrefs point at the PUBLIC-group routes. Passing them rather than

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { CHARACTER_REPLACE_DEFAULTS, publicCharacterReplaceConfig } from "./config";
-import type { CharacterAsset, PricingSnapshot, SourceVideo } from "./types";
+import type { CharacterAsset, PricingSnapshot, SourceVideo, VideoMetadata } from "./types";
+import { aspectRatioOf, buildJobInput, inputReadiness, resolutionLabelOf } from "./validate";
 import {
   INITIAL_STATE,
   canEnterStep,
   canStart,
+  formatClock,
   formatSeconds,
   furthestStep,
   selectedDurationSeconds,
@@ -21,8 +23,9 @@ import {
  *
  * Every rule the interface enforces — which step may open, whether the kept
  * range fits, whether Start may be pressed — is a pure function here, so the
- * gate that keeps §20 true ("no paid inference in Part 1") is asserted rather
- * than trusted.
+ * gate that keeps §20 true ("no paid inference") is asserted rather than
+ * trusted. Part 2 added the two asset slots and their invariant; the STATE
+ * block below is §24's matrix.
  */
 
 const config = publicCharacterReplaceConfig(CHARACTER_REPLACE_DEFAULTS, { code: "NGN", symbol: "₦" }, false);
@@ -37,20 +40,33 @@ const photo = (): CharacterAsset => ({
   name: "me.jpg",
 });
 
-const video = (duration: number | null = 18.4): SourceVideo => ({
-  file: new File(["x"], "clip.mp4", { type: "video/mp4" }),
-  objectUrl: "blob:video",
-  durationSeconds: duration,
-  width: 1080,
-  height: 1920,
-  size: 1,
+const meta = (durationMs: number | null, width = 1080, height = 1920): VideoMetadata => ({
+  durationMs,
+  width,
+  height,
+  aspect: aspectRatioOf(width, height),
+  resolutionLabel: resolutionLabelOf(width, height),
+  sizeBytes: 1,
   mimeType: "video/mp4",
-  name: "clip.mp4",
+  container: "mp4",
+  frameRate: null,
+  videoCodec: null,
+  hasAudio: null,
+  audioDurationMs: null,
 });
 
-function withBoth(duration: number | null = 18.4): WorkspaceState {
-  let s = workspaceReducer(INITIAL_STATE, { type: "photo/set", asset: photo() });
-  s = workspaceReducer(s, { type: "video/set", video: video(duration), maxDurationSeconds: config.maximumDurationSeconds });
+const video = (durationMs: number | null = 18_437, url = "blob:video"): SourceVideo => ({
+  file: new File(["x"], "clip.mp4", { type: "video/mp4" }),
+  objectUrl: url,
+  name: "clip.mp4",
+  size: 1,
+  mimeType: "video/mp4",
+  metadata: meta(durationMs),
+});
+
+function withBoth(durationMs: number | null = 18_437): WorkspaceState {
+  let s = workspaceReducer(INITIAL_STATE, { type: "photo/ready", asset: photo() });
+  s = workspaceReducer(s, { type: "video/ready", video: video(durationMs), maxDurationMs: config.maximumDurationSeconds * 1000 });
   return s;
 }
 
@@ -71,6 +87,60 @@ describe("steps", () => {
     const moved = workspaceReducer(withBoth(), { type: "go", step: "voice" });
     expect(moved.step).toBe("voice");
   });
+});
+
+describe("the asset slots (§20/§21)", () => {
+  it("photo + video ready", () => {
+    const s = withBoth();
+    expect(s.photo).toEqual({ status: "ready" });
+    expect(s.video).toEqual({ status: "ready" });
+    expect(inputReadiness(s.project, config).ready).toBe(true);
+  });
+
+  it("🔴 'ready' is impossible without the file — the slot and the asset move together", () => {
+    const s = workspaceReducer(withBoth(), { type: "video/clear" });
+    expect(s.video).toEqual({ status: "empty" });
+    expect(s.project.video).toBeNull();
+    expect(inputReadiness(s.project, config).issues).toContain("video-missing");
+    const p = workspaceReducer(s, { type: "photo/clear" });
+    expect(p.photo).toEqual({ status: "empty" });
+    expect(p.project.character).toBeNull();
+    expect(furthestStep(p.project)).toBe("photo");
+  });
+
+  it("a refused file leaves the slot invalid, with the code, and no asset", () => {
+    const s = workspaceReducer(withBoth(), { type: "video/invalid", code: "file-too-large" });
+    expect(s.video).toEqual({ status: "invalid", code: "file-too-large" });
+    expect(s.project.video).toBeNull();
+    expect(s.project.settings.trim).toBeNull();
+    const p = workspaceReducer(s, { type: "photo/error", code: "invalid-image" });
+    expect(p.photo).toEqual({ status: "error", code: "invalid-image" });
+    expect(p.project.character).toBeNull();
+  });
+
+  it("replacing a video clears its metadata, trim and price BEFORE the new one is read", () => {
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "trim", start: 2, end: 8 });
+    s = workspaceReducer(s, { type: "pricing", pricing: { status: "pending" } });
+    s = workspaceReducer(s, { type: "video/validating" });
+    expect(s.video).toEqual({ status: "validating" });
+    expect(s.project.video).toBeNull();
+    expect(s.project.settings.trim).toBeNull();
+    expect(s.pricing).toEqual({ status: "idle" });
+    s = workspaceReducer(s, { type: "video/ready", video: video(5_000, "blob:next"), maxDurationMs: 60_000 });
+    expect(s.project.video?.objectUrl).toBe("blob:next");
+    expect(s.project.video?.metadata.durationMs).toBe(5_000);
+    expect(s.project.settings.trim).toBeNull();
+  });
+
+  it("replacing a photo clears the old one while the new one is validating", () => {
+    let s = withBoth();
+    s = workspaceReducer(s, { type: "photo/validating" });
+    expect(s.photo).toEqual({ status: "validating" });
+    expect(s.project.character).toBeNull();
+    // The video is untouched by a photo change.
+    expect(s.project.video).not.toBeNull();
+  });
 
   it("clearing the video drops the trim and the price with it", () => {
     let s = withBoth();
@@ -83,37 +153,70 @@ describe("steps", () => {
   });
 });
 
-describe("trim arithmetic", () => {
-  it("selected = the kept range; the whole video when there is no trim", () => {
-    const s = withBoth(18.4);
-    expect(selectedDurationSeconds(s.project)).toBeCloseTo(18.4);
-    const t = workspaceReducer(s, { type: "trim", start: 4, end: 14 });
-    expect(selectedDurationSeconds(t.project)).toBe(10);
-    expect(trimmedSeconds(t.project)).toBeCloseTo(8.4);
+describe("trim arithmetic (§7/§9)", () => {
+  it("selected = the kept range; the whole video when there is no trim — from integer ms", () => {
+    const s = withBoth(18_437);
+    expect(selectedDurationSeconds(s.project)).toBeCloseTo(18.437, 3);
+    expect(formatSeconds(selectedDurationSeconds(s.project))).toBe("18.4 sec");
+    const t = workspaceReducer(s, { type: "trim", start: 3.2, end: 13.2 });
+    expect(selectedDurationSeconds(t.project)).toBeCloseTo(10, 3);
+    expect(trimmedSeconds(t.project)).toBeCloseTo(8.437, 3);
+    expect(formatClock(3.2)).toBe("00:03.2");
+    expect(formatClock(13.2)).toBe("00:13.2");
+    expect(formatClock(75.06)).toBe("01:15.1");
+  });
+
+  it("the job input carries the range as integer milliseconds, not a rounded display", () => {
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "trim", start: 3.2, end: 13.2 });
+    const input = buildJobInput(s.project)!;
+    expect(input.trim).toEqual({ startMs: 3200, endMs: 13200, selectedDurationMs: 10000, whole: false });
+    expect(input.video.originalDurationMs).toBe(18_437);
+    const whole = buildJobInput(withBoth(18_437).project)!;
+    expect(whole.trim).toEqual({ startMs: 0, endMs: 18_437, selectedDurationMs: 18_437, whole: true });
   });
 
   it("a range covering everything is 'no trim', not a trim of everything", () => {
-    const s = workspaceReducer(withBoth(18.4), { type: "trim", start: 0, end: 18.4 });
+    const s = workspaceReducer(withBoth(18_437), { type: "trim", start: 0, end: 18.437 });
     expect(s.project.settings.trim).toBeNull();
   });
 
   it("clamps a range to the video and never lets end precede start", () => {
-    const s = workspaceReducer(withBoth(18.4), { type: "trim", start: 30, end: 5 });
+    const s = workspaceReducer(withBoth(18_437), { type: "trim", start: 30, end: 5 });
     expect(s.project.settings.trim).toEqual({ start: 5, end: 5 });
+    expect(inputReadiness(s.project, config).issues).toContain("trim-too-short");
   });
 
   it("🔴 pre-trims a video longer than the tool's ceiling, rather than refusing it", () => {
-    const s = withBoth(200);
+    const s = withBoth(200_000);
     expect(s.project.settings.trim).toEqual({ start: 0, end: config.maximumDurationSeconds });
     expect(videoFits(s.project, config)).toBe(true);
   });
 
   it("refuses a kept range over the ceiling, under the minimum, or unmeasured", () => {
-    const over = workspaceReducer(withBoth(200), { type: "trim/clear" });
+    const over = workspaceReducer(withBoth(200_000), { type: "trim/clear" });
     expect(videoFits(over.project, config)).toBe(false);
-    const tiny = workspaceReducer(withBoth(18.4), { type: "trim", start: 0, end: 0.2 });
+    expect(inputReadiness(over.project, config).issues).toContain("trim-too-long");
+    const tiny = workspaceReducer(withBoth(18_437), { type: "trim", start: 0, end: 0.2 });
     expect(videoFits(tiny.project, config)).toBe(false);
     expect(videoFits(withBoth(null).project, config)).toBe(false);
+    expect(inputReadiness(withBoth(null).project, config).issues).toContain("video-unmeasured");
+  });
+
+  it("minimum allowed duration passes exactly", () => {
+    const s = workspaceReducer(withBoth(18_437), { type: "trim", start: 0, end: config.trim.minimumSeconds });
+    expect(videoFits(s.project, config)).toBe(true);
+  });
+
+  it("start and end handle moves each land where they were sent", () => {
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "trim", start: 4, end: 18.437 });
+    expect(s.project.settings.trim).toEqual({ start: 4, end: 18.437 });
+    s = workspaceReducer(s, { type: "trim", start: 4, end: 12 });
+    expect(s.project.settings.trim).toEqual({ start: 4, end: 12 });
+    s = workspaceReducer(s, { type: "trim/clear" });
+    expect(s.project.settings.trim).toBeNull();
+    expect(selectedDurationSeconds(s.project)).toBeCloseTo(18.437, 3);
   });
 
   it("writes seconds with one decimal, always", () => {
@@ -143,8 +246,8 @@ describe("pricing state", () => {
   });
 
   it("summary lines carry the choices and NEVER an amount", () => {
-    let s = withBoth(18.4);
-    s = workspaceReducer(s, { type: "trim", start: 4, end: 14 });
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "trim", start: 3.2, end: 13.2 });
     s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "en", voiceId: "warm", tier: "standard" } });
     const lines = summaryLines(s.project, config);
     expect(lines.map((l) => [l.key, l.value])).toEqual([
@@ -160,24 +263,26 @@ describe("pricing state", () => {
     expect(original.find((l) => l.key === "lipSync")?.value).toBe("Not selected");
   });
 
-  it("🔴 Start is impossible without a server quote — the Part 1 guarantee", () => {
-    let s = withBoth(18.4);
+  it("🔴 Start is impossible without a server quote — the no-inference guarantee", () => {
+    let s = withBoth(18_437);
     s = workspaceReducer(s, { type: "consent", value: true });
     const base = { project: s.project, config, available: true, balanceCents: 1_000_000 };
     expect(canStart({ ...base, pricing: { status: "idle" } })).toBe(false);
     expect(canStart({ ...base, pricing: { status: "pending" } })).toBe(false);
     expect(canStart({ ...base, pricing: { status: "stale", snapshot } })).toBe(false);
     expect(canStart({ ...base, pricing: { status: "error", message: "x" } })).toBe(false);
-    // And with a quote: consent, availability and the balance all still gate.
+    // And with a quote: consent, availability, readiness and the balance all still gate.
     expect(canStart({ ...base, pricing: { status: "quoted", snapshot } })).toBe(true);
     expect(canStart({ ...base, pricing: { status: "quoted", snapshot }, balanceCents: 100 })).toBe(false);
     expect(canStart({ ...base, pricing: { status: "quoted", snapshot }, available: false })).toBe(false);
     const noConsent = workspaceReducer(s, { type: "consent", value: false });
     expect(canStart({ ...base, project: noConsent.project, pricing: { status: "quoted", snapshot } })).toBe(false);
+    const noVideo = workspaceReducer(s, { type: "video/clear" });
+    expect(canStart({ ...base, project: noVideo.project, pricing: { status: "quoted", snapshot } })).toBe(false);
   });
 
   it("a new voice must be fully described before Start", () => {
-    let s = withBoth(18.4);
+    let s = withBoth(18_437);
     s = workspaceReducer(s, { type: "consent", value: true });
     s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: null, voiceId: null, tier: null } });
     expect(canStart({ project: s.project, config, available: true, balanceCents: 1_000_000, pricing: { status: "quoted", snapshot } })).toBe(false);
@@ -193,5 +298,27 @@ describe("pricing state", () => {
     s = workspaceReducer(s, { type: "voice/mode", mode: "original", defaults: { languageCode: null, voiceId: null, tier: null } });
     expect(s.project.voice).toEqual({ mode: "original", languageCode: null, voiceId: null });
     expect(s.project.lipSync.tier).toBeNull();
+  });
+});
+
+describe("the job input (§14)", () => {
+  it("is plain JSON with no File, no object URL and no price", () => {
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "yo", voiceId: "deep", tier: "studio" } });
+    s = workspaceReducer(s, { type: "consent", value: true });
+    const input = buildJobInput(s.project)!;
+    const json = JSON.stringify(input);
+    expect(json).not.toContain("blob:");
+    expect(json).not.toMatch(/price|cents|total/i);
+    expect(JSON.parse(json)).toEqual(input);
+    expect(input.video).toMatchObject({ sourceWidth: 1080, sourceHeight: 1920, sourceResolution: "1080p", aspect: "9:16", hasAudio: null, container: "mp4" });
+    expect(input.audio).toEqual({ voiceMode: "new_voice", languageCode: "yo", voiceId: "deep", lipSyncMode: "studio" });
+    expect(input.output.requestedQuality).toBe("720p");
+    expect(input.consent).toBe(true);
+  });
+
+  it("is null while the draft is incomplete", () => {
+    expect(buildJobInput(INITIAL_STATE.project)).toBeNull();
+    expect(buildJobInput(workspaceReducer(INITIAL_STATE, { type: "photo/ready", asset: photo() }).project)).toBeNull();
   });
 });

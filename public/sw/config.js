@@ -81,7 +81,12 @@ var SWX = (self.SWX = self.SWX || {});
 // v22 (2026-09-13): push.js always shows a notification — the "in the app"
 // suppression was swallowing pushes on a locked iPhone and getting the
 // subscription revoked as silent pushes. A submodule change; must bump.
-SWX.VERSION = "v22";
+//
+// v23 (2026-09-13): strategies.js/routes.js revalidate a client-side
+// navigation's RSC payload the way v21 revalidates a document — the "A new
+// version is ready" screen that stuck for two hours after a deploy. A
+// submodule change; must bump.
+SWX.VERSION = "v23";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

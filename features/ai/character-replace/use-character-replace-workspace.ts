@@ -12,12 +12,19 @@ import {
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
 import {
+  characterReplaceLimits,
+  validatePhotoFile,
+  validatePhotoPixels,
+  validateVideoFile,
+  validateVideoMetadata,
+} from "@/lib/ai/character-replace/validate";
+import {
   INITIAL_STATE,
   workspaceReducer,
   type WorkspaceAction,
   type WorkspaceState,
 } from "@/lib/ai/character-replace/workspace";
-import { inspectImageFile, inspectVideoFile } from "@/lib/ai/media";
+import { readImageSize, readVideoMetadata } from "@/features/ai/character-replace/read-media";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -31,11 +38,11 @@ import { inspectImageFile, inspectVideoFile } from "@/lib/ai/media";
  *
  * ── 🔴 NOTHING LEAVES THE DEVICE ─────────────────────────────────────────────
  *
- * Part 1, §6: "Do not actually send the files to the AI model yet." Neither
- * file is uploaded, previewed by a server, or hashed. A picked file is decoded
- * by the browser's own `<img>` / `<video>` for its width, height and duration
- * — facts the interface shows and the trim needs — and held as an object URL
- * for the preview. Closing the page releases it.
+ * Part 1, §6 and Part 2, §25: nothing is uploaded, previewed by a server, or
+ * hashed. A picked file is decoded ONCE by the browser's own `<img>` /
+ * `<video>` (features/ai/character-replace/read-media.ts) for its facts, and
+ * held as an object URL for the preview. Replacing or removing a file revokes
+ * its URL immediately; closing the page revokes whatever is left.
  */
 
 export interface WorkspaceLoads {
@@ -73,9 +80,21 @@ export function useCharacterReplaceWorkspace() {
     urls.current.add(url);
     return url;
   }, []);
+  /*
+    🔴 REVOKED AFTER REACT HAS LET GO OF IT. A player that still references
+    the URL when it is revoked logs a network error (`ERR_FILE_NOT_FOUND`)
+    and, on some engines, blanks — the Playwright walk caught exactly that on
+    a replace. The state change that unmounts the element is dispatched
+    first; the revocation waits a second, by which time the commit has
+    happened AND any metadata fetch the outgoing player had in flight has
+    settled (a replace within a beat of a mount still raced a zero-delay
+    revoke in the walk). A blob URL held one second longer costs nothing;
+    the unmount cleanup below still revokes everything at once.
+  */
   const release = useCallback((url: string | null | undefined) => {
-    if (!url) return;
-    if (urls.current.delete(url)) URL.revokeObjectURL(url);
+    if (!url || !urls.current.has(url)) return;
+    urls.current.delete(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, []);
 
   useEffect(() => {
@@ -135,74 +154,92 @@ export function useCharacterReplaceWorkspace() {
 
   /* ───────────────────────── the pickers ───────────────────────────────── */
 
+  /*
+    Every rule comes from ONE limits object derived from the server's config
+    (lib/ai/character-replace/validate.ts). The platform defaults apply until
+    the config answers; the server re-checks everything either way.
+  */
+  const limits = characterReplaceLimits(loads.config);
+
   const pickPhoto = useCallback(
     async (file: File) => {
-      const verdict = inspectImageFile(file);
+      // The old photo goes first — state, then its URL — so a replace never
+      // holds two decoded images and never revokes one still on screen.
+      const previous = state.project.character?.objectUrl;
+      const verdict = validatePhotoFile(file, limits);
       if (!verdict.ok) {
-        dispatch({ type: "photo/error", code: verdict.code });
+        dispatch({ type: "photo/invalid", code: verdict.code });
+        release(previous);
         return;
       }
-      dispatch({ type: "decoding", which: "photo" });
-      release(state.project.character?.objectUrl);
+      dispatch({ type: "photo/validating" });
+      release(previous);
       const objectUrl = mint(file);
-      const size = await decodeImage(objectUrl);
+      const size = await readImageSize(objectUrl);
       if (!alive.current) return;
-      if (!size) {
+      const pixels = validatePhotoPixels(size, limits);
+      if (!pixels.ok || !size) {
         release(objectUrl);
-        dispatch({ type: "photo/error", code: "invalid-image" });
+        dispatch({ type: pixels.ok ? "photo/error" : pixels.code === "invalid-image" ? "photo/error" : "photo/invalid", code: pixels.ok ? "invalid-image" : pixels.code });
         return;
       }
       dispatch({
-        type: "photo/set",
+        type: "photo/ready",
         asset: { file, objectUrl, width: size.width, height: size.height, size: file.size, mimeType: file.type, name: file.name },
       });
     },
-    [mint, release, state.project.character?.objectUrl],
+    [limits, mint, release, state.project.character?.objectUrl],
   );
 
   const clearPhoto = useCallback(() => {
-    release(state.project.character?.objectUrl);
+    const previous = state.project.character?.objectUrl;
     dispatch({ type: "photo/clear" });
+    release(previous);
   }, [release, state.project.character?.objectUrl]);
 
   const pickVideo = useCallback(
     async (file: File) => {
-      const verdict = inspectVideoFile(file);
+      // Replacing: the old preview, metadata and trim all go before the new
+      // file is read (§21). The reducer clears the state; the URL it pointed
+      // at is revoked once the player is gone.
+      const previous = state.project.video?.objectUrl;
+      const verdict = validateVideoFile(file, limits);
       if (!verdict.ok) {
-        dispatch({ type: "video/error", code: verdict.code });
+        dispatch({ type: "video/invalid", code: verdict.code });
+        release(previous);
         return;
       }
-      dispatch({ type: "decoding", which: "video" });
-      release(state.project.video?.objectUrl);
+      dispatch({ type: "video/validating" });
+      release(previous);
       const objectUrl = mint(file);
-      const facts = await decodeVideo(objectUrl);
+      const metadata = await readVideoMetadata(objectUrl, file);
       if (!alive.current) return;
-      if (facts === "invalid") {
+      if (metadata === "invalid") {
         release(objectUrl);
+        // Not the file's rule-breaking, the decoder's refusal: an `error`,
+        // with the "we couldn't read this video" sentence.
         dispatch({ type: "video/error", code: "invalid-video" });
         return;
       }
+      const facts = validateVideoMetadata(metadata, limits);
+      if (!facts.ok) {
+        release(objectUrl);
+        dispatch({ type: "video/invalid", code: facts.code });
+        return;
+      }
       dispatch({
-        type: "video/set",
-        video: {
-          file,
-          objectUrl,
-          durationSeconds: facts.duration,
-          width: facts.width,
-          height: facts.height,
-          size: file.size,
-          mimeType: file.type,
-          name: file.name,
-        },
-        maxDurationSeconds: loads.config?.maximumDurationSeconds ?? Number.POSITIVE_INFINITY,
+        type: "video/ready",
+        video: { file, objectUrl, name: file.name, size: file.size, mimeType: file.type, metadata },
+        maxDurationMs: limits.video.maxDurationMs,
       });
     },
-    [loads.config?.maximumDurationSeconds, mint, release, state.project.video?.objectUrl],
+    [limits, mint, release, state.project.video?.objectUrl],
   );
 
   const clearVideo = useCallback(() => {
-    release(state.project.video?.objectUrl);
+    const previous = state.project.video?.objectUrl;
     dispatch({ type: "video/clear" });
+    release(previous);
   }, [release, state.project.video?.objectUrl]);
 
   const send = useCallback((action: WorkspaceAction) => dispatch(action), []);
@@ -220,59 +257,4 @@ export function useCharacterReplaceWorkspace() {
     reloadBalance: loadBalance,
     dismissTopupNotice,
   };
-}
-
-/* ───────────────────────────── decoders ──────────────────────────────────── */
-
-/** The browser's own decoder, for the two numbers the preview and the trim need. */
-function decodeImage(url: string): Promise<{ width: number; height: number } | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const done = (value: { width: number; height: number } | null) => {
-      img.onload = null;
-      img.onerror = null;
-      resolve(value);
-    };
-    img.onload = () => done(img.naturalWidth > 0 ? { width: img.naturalWidth, height: img.naturalHeight } : null);
-    img.onerror = () => done(null);
-    img.src = url;
-  });
-}
-
-/**
- * Duration and frame size, or "invalid" when the browser cannot open the file
- * at all. A container that hides its metadata answers with nulls after a
- * bounded wait rather than hanging the picker — "unmeasured" and "invalid"
- * are different claims, and the interface says which.
- */
-function decodeVideo(url: string): Promise<{ duration: number | null; width: number | null; height: number | null } | "invalid"> {
-  return new Promise((resolve) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    video.playsInline = true;
-    let settled = false;
-    const timer = window.setTimeout(() => finish({ duration: null, width: null, height: null }), 8_000);
-    const finish = (value: { duration: number | null; width: number | null; height: number | null } | "invalid") => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      video.onloadedmetadata = null;
-      video.onerror = null;
-      // Let go of the decoder: the preview element makes its own.
-      video.removeAttribute("src");
-      video.load();
-      resolve(value);
-    };
-    video.onloadedmetadata = () => {
-      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
-      finish({
-        duration,
-        width: video.videoWidth > 0 ? video.videoWidth : null,
-        height: video.videoHeight > 0 ? video.videoHeight : null,
-      });
-    };
-    video.onerror = () => finish("invalid");
-    video.src = url;
-  });
 }

@@ -88,8 +88,12 @@ export type AiMediaErrorCode =
   | "unsupported-file"
   | "file-too-large"
   | "invalid-video"
+  | "video-too-short"
+  | "video-resolution-too-large"
+  | "video-resolution-too-small"
   | "unsupported-image"
   | "image-too-large"
+  | "image-too-small"
   | "invalid-image"
   | "invalid-url"
   | "upload-failed"
@@ -113,8 +117,23 @@ export const AI_MEDIA_ERRORS: Record<AiMediaErrorCode, AiMediaErrorCopy> = {
     action: "Choose another video",
   },
   "invalid-video": {
-    title: "We couldn't read that video",
-    body: "The file looks like a video but your device couldn't open it. It may be damaged or only partly downloaded.",
+    title: "We couldn't read this video",
+    body: "The file looks like a video but your device couldn't open it. Try another MP4 or MOV file.",
+    action: "Choose another video",
+  },
+  "video-too-short": {
+    title: "That video is too short",
+    body: "There isn't enough footage to work with. Choose a video that runs for at least a second.",
+    action: "Choose another video",
+  },
+  "video-resolution-too-large": {
+    title: "That video is too large to process",
+    body: "Videos above 4K resolution can't be processed yet. A 1080p export of the same clip will work.",
+    action: "Choose another video",
+  },
+  "video-resolution-too-small": {
+    title: "That video is too small",
+    body: "The picture is too low-resolution for a convincing result. Choose a clearer export, at least 240 pixels on the shorter side.",
     action: "Choose another video",
   },
   "unsupported-image": {
@@ -125,6 +144,11 @@ export const AI_MEDIA_ERRORS: Record<AiMediaErrorCode, AiMediaErrorCopy> = {
   "image-too-large": {
     title: "That photo is too large",
     body: `Photos need to be under ${Math.round(AI_IMAGE_MAX_BYTES / (1024 * 1024))} MB. A normal camera photo is well within that.`,
+    action: "Choose another photo",
+  },
+  "image-too-small": {
+    title: "That photo is too small",
+    body: "The face would be too small to carry across. Choose a photo at least 256 pixels on the shorter side.",
     action: "Choose another photo",
   },
   "invalid-image": {

@@ -40,7 +40,7 @@ export default function PublicCharacterReplacePage() {
       <SiteHeader landing />
       <main
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
-        style={{ paddingTop: "calc(var(--frenz-header-bottom, 4rem) + 1rem)" }}
+        style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
         <CharacterReplaceWorkspace basePath="/ai/character-replace" aiHref="/ai" historyHref="/ai/history" />
       </main>

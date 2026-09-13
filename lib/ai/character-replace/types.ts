@@ -51,18 +51,97 @@ export interface CharacterAsset {
   name: string;
 }
 
+/* ───────────────────────────── video metadata (Part 2, §6–§7) ────────────── */
+
+/**
+ * A reduced aspect ratio, and the name a member knows it by. "9:16" for a
+ * phone video; the raw pair stays beside it for anything that needs the
+ * numbers.
+ */
+export interface AspectRatio {
+  w: number;
+  h: number;
+  /** "9:16", "16:9", "1:1", "4:5" — or "w:h" reduced when it is none of those. */
+  label: string;
+  orientation: "portrait" | "landscape" | "square";
+}
+
+/**
+ * Everything the browser can honestly read off a picked video, in one object
+ * the trim, the validation, the summary and — later — the pricing engine and
+ * the result history all read from.
+ *
+ * ── 🔴 DURATION IS CARRIED IN MILLISECONDS, AS AN INTEGER ───────────────────
+ *
+ * Part 2, §7: "Keep an accurate numeric value internally… Avoid floating-point
+ * mistakes when converting duration into billing units." `durationMs` is
+ * `Math.round(seconds × 1000)` — exact, addable, comparable — and every
+ * display rounds from it at the last moment. The billing unit is decided by
+ * the server (Part 3); it will receive milliseconds and never a "18.4".
+ *
+ * ── What is null, and why ───────────────────────────────────────────────────
+ *
+ * A browser exposes duration and frame size on `loadedmetadata` and nothing
+ * else. Frame rate and codec are not readable without decoding frames or a
+ * container parser, and audio presence is only reported by some engines
+ * (Safari's `audioTracks`, Firefox's `mozHasAudio`). Those fields are
+ * `null` for "not known", never a guessed value: the server's ffprobe is the
+ * authority on all of them, and a null here is what tells it to look.
+ */
+export interface VideoMetadata {
+  /** Integer milliseconds. Null when the container hid its duration. */
+  durationMs: number | null;
+  width: number | null;
+  height: number | null;
+  aspect: AspectRatio | null;
+  /** "720p", "1080p", "4K" — from the shorter edge; null when unmeasured. */
+  resolutionLabel: string | null;
+  sizeBytes: number;
+  mimeType: string;
+  /** "mp4" | "mov" | "webm" — from the name, then the type. */
+  container: string;
+  /** Frames per second, when the browser can say. Null otherwise. */
+  frameRate: number | null;
+  /** The video codec, when the browser can say. Null otherwise. */
+  videoCodec: string | null;
+  /** True/false only from an engine that reports it; null means unknown. */
+  hasAudio: boolean | null;
+  /** Integer milliseconds, when an audio track's own length is known. */
+  audioDurationMs: number | null;
+}
+
 /** The video to transform, once picked, decoded for its facts, and validated. */
 export interface SourceVideo {
   file: File;
   objectUrl: string;
-  /** Seconds, from the browser's decoder. Null when the container hid it. */
-  durationSeconds: number | null;
-  width: number | null;
-  height: number | null;
+  name: string;
   size: number;
   mimeType: string;
-  name: string;
+  metadata: VideoMetadata;
 }
+
+/* ───────────────────────────── the asset slots (Part 2, §20) ─────────────── */
+
+/**
+ * What one picker is doing, as a discriminated union — so the interface can
+ * never be "ready" while the file is gone, or "uploading" with nothing to
+ * send. The asset itself lives on the project; the slot says what is true
+ * about it. `selecting` is the file dialog being open, which a browser does
+ * not report, so it is a state the interface may set but never depends on.
+ */
+export type AssetSlotStatus = "empty" | "selecting" | "validating" | "uploading" | "ready" | "invalid" | "error";
+
+export type AssetSlot =
+  | { status: "empty" }
+  | { status: "selecting" }
+  | { status: "validating" }
+  /** The bytes are on their way to storage (a later part). 0–1. */
+  | { status: "uploading"; progress: number }
+  | { status: "ready" }
+  /** The file was refused by a rule — format, size, length — in the media error vocabulary. */
+  | { status: "invalid"; code: string }
+  /** Something failed that was not the file's fault — the decoder, storage. */
+  | { status: "error"; code: string };
 
 /** Output settings. Every value is one the server's public config offered. */
 export interface VideoSettings {
@@ -288,3 +367,59 @@ export interface CharacterReplaceResult {
 
 /** §19's last name is the config module's type; re-exported so the vocabulary is complete here. */
 export type PricingConfiguration = CharacterReplaceConfig;
+
+/* ───────────────────────────── the job input (Part 2, §14) ───────────────── */
+
+/**
+ * What the browser will hand the server when Start is pressed: the member's
+ * choices and the facts the browser read, as plain JSON — no File, no object
+ * URL, nothing a structured clone would refuse.
+ *
+ * ── 🔴 EVERY NUMBER HERE IS A CLAIM ─────────────────────────────────────────
+ *
+ * §14/§19: "Never trust client-provided pricing information. The client only
+ * prepares input." The server re-measures the uploaded file (ffprobe on the
+ * worker), re-checks every ceiling, and prices from ITS numbers; these are
+ * carried so the two can be compared and so the job row can record what the
+ * member saw. There is no price field and there never will be.
+ */
+export interface CharacterReplaceJobInput {
+  photo: {
+    name: string;
+    sizeBytes: number;
+    mimeType: string;
+    width: number | null;
+    height: number | null;
+  };
+  video: {
+    name: string;
+    sizeBytes: number;
+    mimeType: string;
+    container: string;
+    originalDurationMs: number | null;
+    sourceWidth: number | null;
+    sourceHeight: number | null;
+    sourceResolution: string | null;
+    aspect: string | null;
+    hasAudio: boolean | null;
+    frameRate: number | null;
+  };
+  trim: {
+    /** Integer milliseconds from the start of the source; end exclusive. */
+    startMs: number;
+    endMs: number;
+    selectedDurationMs: number;
+    /** True when the kept range is the whole video. */
+    whole: boolean;
+  };
+  output: {
+    requestedQuality: CharacterReplaceQualityId;
+  };
+  audio: {
+    voiceMode: CharacterReplaceAudioMode;
+    languageCode: string | null;
+    voiceId: string | null;
+    lipSyncMode: CharacterReplaceLipSyncTier | null;
+  };
+  consent: boolean;
+}

@@ -3,7 +3,7 @@
 import { RefreshCw, Trash2, UserRound } from "lucide-react";
 
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
-import type { CharacterAsset } from "@/lib/ai/character-replace/types";
+import type { AssetSlot, CharacterAsset } from "@/lib/ai/character-replace/types";
 import { AI_IMAGE_ACCEPT, AI_IMAGE_FORMAT_LINE, formatResolution, type AiMediaErrorCode } from "@/lib/ai/media";
 import { formatBytes } from "@/lib/utils";
 
@@ -16,17 +16,18 @@ import { formatBytes } from "@/lib/utils";
  */
 export function CharacterReplacePhotoStep({
   asset,
-  busy,
-  error,
+  slot,
   onPick,
   onClear,
 }: {
   asset: CharacterAsset | null;
-  busy: boolean;
-  error: AiMediaErrorCode | null;
+  /** The picker's state machine (Part 2, §2): empty · validating · uploading · ready · invalid · error. */
+  slot: AssetSlot;
   onPick: (file: File) => void;
   onClear: () => void;
 }) {
+  const busy = slot.status === "validating" || slot.status === "uploading";
+  const error = slot.status === "invalid" || slot.status === "error" ? (slot.code as AiMediaErrorCode) : null;
   if (!asset) {
     return (
       <div>
@@ -97,12 +98,17 @@ export function CharacterReplacePhotoStep({
   );
 }
 
+/** Part 2, §3 — concise, no guarantees. */
 function Guidance() {
   return (
     <ul className="mt-4 space-y-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
       <li className="flex gap-2">
         <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />
-        One person, facing the camera, in even light. Sunglasses and heavy filters make a likeness harder to carry across.
+        Use a clear, well-lit photo where the person is clearly visible.
+      </li>
+      <li className="flex gap-2">
+        <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />
+        Front-facing or three-quarter images generally produce better results.
       </li>
       <li className="flex gap-2">
         <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />

@@ -2,47 +2,55 @@
 
 import { RefreshCw, Trash2 } from "lucide-react";
 
+import { CharacterReplaceInputSummary } from "@/features/ai/character-replace/input-summary";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
-import type { SourceVideo } from "@/lib/ai/character-replace/types";
-import { AI_VIDEO_ACCEPT, AI_VIDEO_FORMAT_LINE, formatDuration, formatResolution, type AiMediaErrorCode } from "@/lib/ai/media";
+import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import type { AssetSlot, CharacterReplaceProject } from "@/lib/ai/character-replace/types";
+import { CHARACTER_REPLACE_VIDEO_ACCEPT, CHARACTER_REPLACE_VIDEO_FORMAT_LINE } from "@/lib/ai/character-replace/validate";
+import { formatDuration, formatResolution, type AiMediaErrorCode } from "@/lib/ai/media";
 import { formatBytes } from "@/lib/utils";
 
 /**
  * Step 2 — the video to transform.
  *
- * Chosen: a native player (controls, never autoplay, `playsInline` so a phone
- * does not hijack the screen), the three facts the owner named — duration,
- * resolution, file size — and change/remove. An unmeasured fact renders as an
- * em-dash rather than a zero; "not measured" and "measured as nothing" are
- * different claims.
+ * Empty / invalid / error: the picker, with the refusal under it in the media
+ * module's words. Validating: the picker, busy. Ready: a native player
+ * (controls, never autoplay, `playsInline` so a phone does not hijack the
+ * screen), the facts the owner named — duration, resolution, aspect, size —
+ * and change/remove. An unmeasured fact renders as an em-dash rather than a
+ * zero; "not measured" and "measured as nothing" are different claims.
+ *
+ * Once both files are in, the input summary (§15) follows so the member sees
+ * what they are about to continue with.
  */
 export function CharacterReplaceVideoStep({
-  video,
-  busy,
-  error,
-  maxDurationSeconds,
+  project,
+  slot,
+  config,
   onPick,
   onClear,
 }: {
-  video: SourceVideo | null;
-  busy: boolean;
-  error: AiMediaErrorCode | null;
-  /** From the server's config; null until it answers. */
-  maxDurationSeconds: number | null;
+  project: CharacterReplaceProject;
+  slot: AssetSlot;
+  config: CharacterReplacePublicConfig | null;
   onPick: (file: File) => void;
   onClear: () => void;
 }) {
+  const video = project.video;
+  const maxDurationSeconds = config?.maximumDurationSeconds ?? null;
+
   if (!video) {
+    const refusal = slot.status === "invalid" || slot.status === "error" ? (slot.code as AiMediaErrorCode) : null;
     return (
       <div>
         <CharacterReplaceMediaPicker
           kind="video"
-          accept={AI_VIDEO_ACCEPT}
+          accept={CHARACTER_REPLACE_VIDEO_ACCEPT}
           title="Upload your video"
           hint="Choose the video you want to transform."
-          formats={AI_VIDEO_FORMAT_LINE}
-          busy={busy}
-          error={error}
+          formats={CHARACTER_REPLACE_VIDEO_FORMAT_LINE}
+          busy={slot.status === "validating" || slot.status === "uploading"}
+          error={refusal}
           onPick={onPick}
         />
         <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
@@ -54,13 +62,18 @@ export function CharacterReplaceVideoStep({
     );
   }
 
-  const tooLong = maxDurationSeconds !== null && video.durationSeconds !== null && video.durationSeconds > maxDurationSeconds;
+  const meta = video.metadata;
+  const durationSeconds = meta.durationMs === null ? null : meta.durationMs / 1000;
+  const tooLong = maxDurationSeconds !== null && durationSeconds !== null && durationSeconds > maxDurationSeconds;
+  const resolution =
+    meta.resolutionLabel && meta.width && meta.height ? `${meta.resolutionLabel}` : (formatResolution(meta.width, meta.height) ?? "—");
 
   return (
     <div>
       <div className="overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="bg-[#0b0f1a]">
           <video
+            key={video.objectUrl}
             src={video.objectUrl}
             controls
             playsInline
@@ -68,9 +81,10 @@ export function CharacterReplaceVideoStep({
             className="mx-auto block max-h-[min(60vh,28rem)] w-full object-contain"
           />
         </div>
-        <dl className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60">
-          <Fact label="Duration" value={formatDuration(video.durationSeconds) ?? "—"} />
-          <Fact label="Resolution" value={formatResolution(video.width, video.height) ?? "—"} />
+        <dl className="grid grid-cols-2 divide-x divide-y divide-border/60 border-t border-border/60 sm:grid-cols-4 sm:divide-y-0">
+          <Fact label="Duration" value={formatDuration(durationSeconds) ?? "—"} />
+          <Fact label="Resolution" value={resolution} sub={meta.resolutionLabel ? formatResolution(meta.width, meta.height) : null} />
+          <Fact label="Aspect" value={meta.aspect?.label ?? "—"} sub={meta.aspect ? meta.aspect.orientation : null} />
           <Fact label="Size" value={formatBytes(video.size)} />
         </dl>
       </div>
@@ -90,9 +104,8 @@ export function CharacterReplaceVideoStep({
           Change video
           <input
             type="file"
-            accept={AI_VIDEO_ACCEPT}
+            accept={CHARACTER_REPLACE_VIDEO_ACCEPT}
             className="sr-only"
-            disabled={busy}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) onPick(f);
@@ -108,19 +121,22 @@ export function CharacterReplaceVideoStep({
           <Trash2 className="h-4 w-4" aria-hidden />
           Remove
         </button>
+        <span className="ml-auto min-w-0 max-w-[50%] truncate text-[12px] text-muted-foreground" title={video.name}>
+          {video.name}
+        </span>
       </div>
-      <p className="mt-3 truncate text-[12px] text-muted-foreground" title={video.name}>
-        {video.name}
-      </p>
+
+      <CharacterReplaceInputSummary project={project} config={config} className="mt-5" />
     </div>
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
   return (
     <div className="min-w-0 px-3 py-2.5 text-center">
       <dt className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">{label}</dt>
       <dd className="mt-0.5 text-[13px] font-semibold tabular-nums">{value}</dd>
+      {sub ? <dd className="text-[10.5px] capitalize text-muted-foreground">{sub}</dd> : null}
     </div>
   );
 }

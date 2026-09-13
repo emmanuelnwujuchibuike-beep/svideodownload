@@ -181,6 +181,38 @@ async function fetchDocument(request, preload) {
   return res;
 }
 
+/*
+  ── 🔴 THE SAME STALE-CACHE HOLE, ARRIVING BY CLIENT-SIDE NAVIGATION (v23) ──
+
+  Owner, 2026-09-13: tapping "Frenz AI" (a <Link>) on the Character Replace
+  page showed "A new version is ready", and kept showing it after going back,
+  coming again, and relaunching the app.
+
+  A <Link> does not navigate; it fetch()es the destination's RSC payload
+  (`?_rsc=…`, header `RSC: 1`). That request is NOT `mode: "navigate"`, so
+  the router above let it pass "straight to network" — where the phone's HTTP
+  cache answered with the payload Cloudflare had stamped `max-age=7200` two
+  hours earlier, from BEFORE the deploy. Its client-chunk references no longer
+  existed, the chunk load threw, and the error boundary drew that screen. The
+  document itself was stale for the same two hours, which is why relaunching
+  did not help either (that half is v21's Date check, above).
+
+  So an RSC fetch is re-issued with `cache: "no-cache"`: a conditional request
+  that costs one ETag round-trip when nothing changed — which is exactly what
+  the origin's own `max-age=0, must-revalidate` asked for before Cloudflare
+  rewrote it — and returns the live payload after a deploy. The original
+  request's headers (RSC, Next-Router-State-Tree, Next-Url) ride along, since
+  the copy is made FROM the request. A rejection falls back to the plain
+  fetch so an offline member sees Next's own recovery, not a blank.
+*/
+SWX.fetchRevalidated = async function fetchRevalidated(request) {
+  try {
+    return await fetch(new Request(request, { cache: "no-cache" }));
+  } catch {
+    return fetch(request);
+  }
+};
+
 SWX.networkFirst = async function networkFirst(request, { cacheName, preload, offlineFallback, timeoutMs = 20000 }) {
   /*
     ═══════════════════════════════════════════════════════════════════════════

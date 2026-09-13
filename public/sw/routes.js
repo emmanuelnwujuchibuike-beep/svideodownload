@@ -242,6 +242,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  /*
+    A client-side navigation's RSC payload (v23). Same origin, GET, carrying
+    Next's `RSC: 1` header or the `_rsc` search param it adds for cache
+    busting. Revalidated rather than trusted to the HTTP cache — see
+    `fetchRevalidated` in strategies.js for the two-hour hole this closes.
+  */
+  if (url.origin === self.location.origin && (req.headers.get("rsc") === "1" || url.searchParams.has("_rsc"))) {
+    event.respondWith(SWX.fetchRevalidated(req));
+    return;
+  }
+
   // A narrow, explicit allowlist only — see config.js for why it starts empty.
   if (url.origin === self.location.origin && SWX.API_CACHE_ALLOWLIST.includes(url.pathname)) {
     event.respondWith(SWX.staleWhileRevalidate(req, SWX.API_CACHE));

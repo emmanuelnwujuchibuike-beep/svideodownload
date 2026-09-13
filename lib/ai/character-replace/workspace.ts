@@ -1,11 +1,13 @@
 import type { CharacterReplacePublicConfig, CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
 import type {
+  AssetSlot,
   CharacterAsset,
   CharacterReplaceProject,
   PricingLine,
   PricingState,
   SourceVideo,
 } from "@/lib/ai/character-replace/types";
+import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/validate";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -27,6 +29,16 @@ import type {
  * the price, the balance, the consent line and the one button live together
  * on the screen where a member decides, because separating a price from the
  * button that spends it is how people get surprised.
+ *
+ * ── 🔴 TWO SLOTS, ONE INVARIANT (Part 2, §20) ───────────────────────────────
+ *
+ * Each picker has a slot — empty / validating / uploading / ready / invalid /
+ * error — and the asset on the project is non-null EXACTLY when its slot is
+ * `ready` or `uploading`. The reducer is the only writer of both, and every
+ * transition sets them together, so "video ready" with no file, or a trim on
+ * a video that was removed, cannot be represented. Replacing a file runs the
+ * same clear as removing it first: the old metadata, trim and preview are
+ * gone before the new file's facts arrive.
  */
 
 export type WorkspaceStep = "photo" | "video" | "settings" | "voice" | "review";
@@ -47,10 +59,8 @@ export interface WorkspaceState {
   step: WorkspaceStep;
   project: CharacterReplaceProject;
   pricing: PricingState;
-  /** Which picker is decoding a file right now, if any. */
-  decoding: "photo" | "video" | null;
-  /** The last refusal, per picker, in the media error vocabulary. */
-  errors: { photo: string | null; video: string | null };
+  photo: AssetSlot;
+  video: AssetSlot;
 }
 
 export const EMPTY_PROJECT: CharacterReplaceProject = {
@@ -66,19 +76,22 @@ export const INITIAL_STATE: WorkspaceState = {
   step: "photo",
   project: EMPTY_PROJECT,
   pricing: { status: "idle" },
-  decoding: null,
-  errors: { photo: null, video: null },
+  photo: { status: "empty" },
+  video: { status: "empty" },
 };
 
 export type WorkspaceAction =
   | { type: "go"; step: WorkspaceStep }
-  | { type: "decoding"; which: "photo" | "video" }
-  | { type: "photo/set"; asset: CharacterAsset }
-  | { type: "photo/clear" }
+  | { type: "photo/validating" }
+  | { type: "photo/ready"; asset: CharacterAsset }
+  | { type: "photo/invalid"; code: string }
   | { type: "photo/error"; code: string }
-  | { type: "video/set"; video: SourceVideo; maxDurationSeconds: number }
-  | { type: "video/clear" }
+  | { type: "photo/clear" }
+  | { type: "video/validating" }
+  | { type: "video/ready"; video: SourceVideo; maxDurationMs: number }
+  | { type: "video/invalid"; code: string }
   | { type: "video/error"; code: string }
+  | { type: "video/clear" }
   | { type: "quality"; quality: CharacterReplaceQualityId }
   | { type: "trim"; start: number; end: number }
   | { type: "trim/clear" }
@@ -94,50 +107,76 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
   switch (action.type) {
     case "go":
       return canEnterStep(state.project, action.step) ? { ...state, step: action.step } : state;
-    case "decoding":
-      return { ...state, decoding: action.which, errors: { ...state.errors, [action.which]: null } };
-    case "photo/set":
+
+    /* ── the photo slot ─────────────────────────────────────────────────── */
+    case "photo/validating":
+      // A pick replaces whatever was there: the project's asset is cleared
+      // NOW, so a slow decode can never show the old photo as "ready".
+      return { ...state, photo: { status: "validating" }, project: { ...state.project, character: null } };
+    case "photo/ready":
+      return { ...state, photo: { status: "ready" }, project: { ...state.project, character: action.asset } };
+    case "photo/invalid":
+      return { ...state, photo: { status: "invalid", code: action.code }, project: { ...state.project, character: null } };
+    case "photo/error":
+      return { ...state, photo: { status: "error", code: action.code }, project: { ...state.project, character: null } };
+    case "photo/clear":
+      return { ...state, photo: { status: "empty" }, project: { ...state.project, character: null } };
+
+    /* ── the video slot ─────────────────────────────────────────────────── */
+    case "video/validating":
+      // Same rule, and the trim goes with the old video: a kept range is a
+      // fact about ONE file's timeline and means nothing on the next.
       return {
         ...state,
-        decoding: null,
-        errors: { ...state.errors, photo: null },
-        project: { ...state.project, character: action.asset },
+        video: { status: "validating" },
+        pricing: { status: "idle" },
+        project: { ...state.project, video: null, settings: { ...state.project.settings, trim: null } },
       };
-    case "photo/clear":
-      return { ...state, decoding: null, project: { ...state.project, character: null } };
-    case "photo/error":
-      return { ...state, decoding: null, errors: { ...state.errors, photo: action.code }, project: { ...state.project, character: null } };
-    case "video/set": {
+    case "video/ready": {
       /*
         A video longer than the tool allows is not refused — it is accepted
         with the kept range pre-trimmed to the ceiling, so the member sees
         their video, sees the limit, and chooses which part to keep. The
-        "continue" gate below holds until the kept range fits.
+        "continue" gate holds until the kept range fits.
       */
-      const duration = action.video.durationSeconds;
+      const duration = action.video.metadata.durationMs;
       const trim =
-        duration !== null && duration > action.maxDurationSeconds ? { start: 0, end: action.maxDurationSeconds } : null;
+        duration !== null && duration > action.maxDurationMs ? { start: 0, end: action.maxDurationMs / 1000 } : null;
       return {
         ...state,
-        decoding: null,
-        errors: { ...state.errors, video: null },
+        video: { status: "ready" },
         pricing: markStale(state.pricing),
         project: { ...state.project, video: action.video, settings: { ...state.project.settings, trim } },
       };
     }
-    case "video/clear":
+    case "video/invalid":
       return {
         ...state,
-        decoding: null,
+        video: { status: "invalid", code: action.code },
         pricing: { status: "idle" },
         project: { ...state.project, video: null, settings: { ...state.project.settings, trim: null } },
       };
     case "video/error":
-      return { ...state, decoding: null, errors: { ...state.errors, video: action.code }, project: { ...state.project, video: null } };
+      return {
+        ...state,
+        video: { status: "error", code: action.code },
+        pricing: { status: "idle" },
+        project: { ...state.project, video: null, settings: { ...state.project.settings, trim: null } },
+      };
+    case "video/clear":
+      return {
+        ...state,
+        video: { status: "empty" },
+        pricing: { status: "idle" },
+        project: { ...state.project, video: null, settings: { ...state.project.settings, trim: null } },
+      };
+
+    /* ── settings ───────────────────────────────────────────────────────── */
     case "quality":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, settings: { ...state.project.settings, quality: action.quality } } };
     case "trim": {
-      const duration = state.project.video?.durationSeconds ?? null;
+      const durationMs = state.project.video?.metadata.durationMs ?? null;
+      const duration = durationMs === null ? null : durationMs / 1000;
       const start = Math.max(0, Math.min(action.start, action.end));
       const end = duration === null ? Math.max(action.end, start) : Math.min(duration, Math.max(action.end, start));
       // Keeping the whole video is "no trim", not a trim of everything.
@@ -150,6 +189,8 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
     }
     case "trim/clear":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, settings: { ...state.project.settings, trim: null } } };
+
+    /* ── voice ──────────────────────────────────────────────────────────── */
     case "voice/mode":
       return {
         ...state,
@@ -169,6 +210,7 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return { ...state, project: { ...state.project, voice: { ...state.project.voice, voiceId: action.id } } };
     case "lipsync/tier":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, lipSync: { tier: action.tier } } };
+
     case "consent":
       return { ...state, project: { ...state.project, consent: action.value } };
     case "pricing":
@@ -186,13 +228,16 @@ function markStale(pricing: PricingState): PricingState {
 
 /* ───────────────────────────── derived facts ─────────────────────────────── */
 
+/** The source's length in seconds, from the integer milliseconds it is stored as. */
+export function originalDurationSeconds(project: CharacterReplaceProject): number | null {
+  const ms = project.video?.metadata.durationMs ?? null;
+  return ms === null ? null : ms / 1000;
+}
+
 /** Seconds the job would process: the kept range, or the whole video. */
 export function selectedDurationSeconds(project: CharacterReplaceProject): number | null {
-  const duration = project.video?.durationSeconds ?? null;
-  if (duration === null) return null;
-  const trim = project.settings.trim;
-  if (!trim) return duration;
-  return Math.max(0, Math.min(duration, trim.end) - Math.max(0, trim.start));
+  const range = selectedRangeMs(project);
+  return range === null ? null : (range.endMs - range.startMs) / 1000;
 }
 
 /**
@@ -201,24 +246,20 @@ export function selectedDurationSeconds(project: CharacterReplaceProject): numbe
  * would save in money is the pricing engine's sentence (§10), not this one's.
  */
 export function trimmedSeconds(project: CharacterReplaceProject): number | null {
-  const duration = project.video?.durationSeconds ?? null;
+  const duration = originalDurationSeconds(project);
   const selected = selectedDurationSeconds(project);
   if (duration === null || selected === null) return null;
   return Math.max(0, duration - selected);
 }
 
 /**
- * Whether the kept range fits the tool. A video longer than the ceiling is
- * fine once trimmed; one that cannot be measured is refused here rather than
- * at the server, because the ceiling is a cost control and "unknown" must not
- * pass it.
+ * Whether the kept range fits the tool — the readiness layer's answer for
+ * the trim alone. Kept as a name because the settings step colours the
+ * selected duration by it.
  */
-export function videoFits(project: CharacterReplaceProject, config: Pick<CharacterReplacePublicConfig, "maximumDurationSeconds" | "trim">): boolean {
-  const selected = selectedDurationSeconds(project);
-  if (selected === null) return false;
-  if (selected > config.maximumDurationSeconds + 0.05) return false;
-  if (selected < config.trim.minimumSeconds - 0.05) return false;
-  return true;
+export function videoFits(project: CharacterReplaceProject, config: CharacterReplacePublicConfig | null): boolean {
+  const { issues } = inputReadiness(project, config);
+  return !issues.some((i) => i === "trim-too-long" || i === "trim-too-short" || i === "trim-invalid" || i === "video-unmeasured");
 }
 
 /** Whether a step may be opened, given what has been provided so far. */
@@ -245,8 +286,8 @@ export function furthestStep(project: CharacterReplaceProject): WorkspaceStep {
 /**
  * Whether Start may be pressed. Every clause is a fact the interface can
  * verify locally; the SERVER re-verifies all of them and the balance at
- * /start. In Part 1 `pricing` is never `quoted`, so this is false everywhere
- * — deliberately, and the review step says why.
+ * /start. In Part 1 and Part 2 `pricing` is never `quoted`, so this is false
+ * everywhere — deliberately, and the review step says why.
  */
 export function canStart(input: {
   project: CharacterReplaceProject;
@@ -257,8 +298,8 @@ export function canStart(input: {
 }): boolean {
   const { project, pricing, config } = input;
   if (!config || !input.available) return false;
-  if (!project.character || !project.video || !project.consent) return false;
-  if (!videoFits(project, config)) return false;
+  if (!project.consent) return false;
+  if (!inputReadiness(project, config).ready) return false;
   if (project.voice.mode === "new_voice" && (!project.voice.languageCode || !project.voice.voiceId || !project.lipSync.tier)) return false;
   if (pricing.status !== "quoted") return false;
   if (input.balanceCents === null || input.balanceCents < pricing.snapshot.totalCents) return false;
@@ -271,6 +312,16 @@ export function canStart(input: {
 export function formatSeconds(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds)) return "—";
   return `${(Math.round(seconds * 10) / 10).toFixed(1)} sec`;
+}
+
+/** "00:03.2" — minutes, seconds, tenths. The trim's own clock. */
+export function formatClock(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return "--:--.-";
+  const tenths = Math.round(seconds * 10);
+  const m = Math.floor(tenths / 600);
+  const s = Math.floor((tenths % 600) / 10);
+  const t = tenths % 10;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${t}`;
 }
 
 /**

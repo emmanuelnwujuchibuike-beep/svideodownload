@@ -10,6 +10,7 @@ import { IconTile } from "@/components/icons/icon-tile";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { NotificationBell } from "@/features/app-shell/notification-bell";
+import { InstallHeaderCta } from "@/features/pwa/install-button";
 import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
 import { setTopbarHidden } from "@/features/app-shell/topbar-visibility";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
@@ -425,6 +426,21 @@ export function AppTopbar() {
         <span className={searchActive ? "hidden" : ""}>
           {searchActive ? null : <StreakHeaderChip />}
         </span>
+
+        {/*
+          ── THE INSTALL CTA, ON /downloads (owner, 2026-09-13) ─────────────────
+
+          "It's supposed to have the install CTA at the top header like the
+          browser landing page." The landing's `SiteHeader` carries
+          `InstallHeaderCta` (icon + "Install Frenz" + button); the signed-in
+          download page renders under THIS bar, which had none, so its hero
+          kept the old banner under the paste box. The banner is off there now
+          and the same CTA sits here — on that route only, where the bar has
+          the room and the page has the reason. It renders nothing once the
+          app is installed or running standalone, so it can never be a dead
+          control, and it hides while the search field has the row.
+        */}
+        {pathname === "/downloads" && !searchActive ? <InstallHeaderCta className="h-9 px-3.5 text-[13px]" /> : null}
 
         <span className={searchActive ? "hidden" : "lg:hidden"}>
           {searchActive ? null : <NotificationBell />}

@@ -180,6 +180,16 @@ export function DownloadsPage({
         page renders the same component without it and gets Explore Features in
         that slot instead.
       */}
+      {/*
+        🔴 NO INSTALL BANNER UNDER THE PASTE BOX (owner, 2026-09-13: "the
+        browser signed-in Download page still shows the old download hero
+        card that has the install CTA below the placeholder; it's supposed to
+        have the install CTA at the top header like the browser landing
+        page"). The landing made exactly this move on 2026-08-25; this page
+        kept the banner because its header "had no room". The app topbar
+        carries `InstallHeaderCta` on this route now (app-topbar.tsx), so the
+        hero is the paste box and nothing else — the same shape as the landing.
+      */}
       <DownloadPageCore
         platformStatus={platformStatus}
         ctaWallpaperUrl={ctaWallpaperUrl}
@@ -187,6 +197,7 @@ export function DownloadsPage({
         rotateUrls={rotateUrls}
         multiLink={multiLink}
         showFrenzAi
+        installBanner={false}
       />
 
       <DownloadQuickActions />

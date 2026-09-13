@@ -96,3 +96,55 @@ export async function uploadPostMedia(opts: {
   const plan = await presignUpload(opts.kind, opts.ext);
   return uploadWithPlan(plan, opts.data, opts.contentType);
 }
+
+/**
+ * `uploadWithPlan`, with PROGRESS and CANCELLATION.
+ *
+ * ── Owner, 2026-09-13: "posting a video takes too long" ────────────────────
+ *
+ * Half of "too long" is a spinner: a 60 MB upload on mobile data is a minute
+ * of nothing moving. `fetch()` cannot report upload progress, so the R2 PUT
+ * goes through XMLHttpRequest here — same URL, same headers, same bytes —
+ * and `onProgress` gets a 0..1 fraction as they leave the phone. The other
+ * half is WHEN it starts; see features/create/upload-ahead.ts.
+ *
+ * `signal` aborts the transfer (a removed item, an unmounted composer). The
+ * Supabase fallback has no progress API and takes the plain path.
+ */
+export async function uploadWithPlanProgress(
+  plan: UploadPlan,
+  data: Blob | File,
+  contentType: string,
+  opts: { onProgress?: (fraction: number) => void; signal?: AbortSignal } = {},
+): Promise<string> {
+  if (plan.backend !== "r2") return uploadWithPlan(plan, data, contentType);
+  if (opts.signal?.aborted) throw new Error("Upload cancelled.");
+  const endCriticalActivity = beginCriticalActivity();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", plan.uploadUrl, true);
+      // Mirrors uploadWithPlan exactly — see the note there on Cache-Control.
+      xhr.setRequestHeader("Content-Type", contentType);
+      xhr.setRequestHeader("Cache-Control", MEDIA_CACHE_CONTROL);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && opts.onProgress) opts.onProgress(Math.max(0, Math.min(1, e.loaded / e.total)));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          opts.onProgress?.(1);
+          resolve();
+        } else {
+          reject(new Error("Upload failed. Please try again."));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Upload failed. Please try again."));
+      xhr.onabort = () => reject(new Error("Upload cancelled."));
+      opts.signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+      xhr.send(data);
+    });
+    return plan.publicUrl;
+  } finally {
+    endCriticalActivity();
+  }
+}

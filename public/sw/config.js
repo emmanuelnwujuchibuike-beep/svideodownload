@@ -77,7 +77,11 @@ var SWX = (self.SWX = self.SWX || {});
 // came from the browser's HTTP cache (Cloudflare's 7200 s rewrite) — the
 // "colourless blank page on cold start" after a deploy. A submodule change
 // ships to nobody installed without a bump.
-SWX.VERSION = "v21";
+//
+// v22 (2026-09-13): push.js always shows a notification — the "in the app"
+// suppression was swallowing pushes on a locked iPhone and getting the
+// subscription revoked as silent pushes. A submodule change; must bump.
+SWX.VERSION = "v22";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

@@ -32,6 +32,7 @@ import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { CAPTION_MAX_CHARS, CAPTION_MAX_WORDS, clampWords, countWords } from "@/lib/social/caption";
 import { cn } from "@/lib/utils";
+import { UploadAheadStrip } from "@/features/create/upload-ahead-strip";
 
 /**
  * /create/post — the POST surface.
@@ -309,6 +310,8 @@ export function PostComposer({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img key={active.id} src={active.display} alt="" className="max-h-[42vh] w-full object-contain" />
                   ) : null}
+                  {/* A video is already uploading — see upload-ahead.ts. */}
+                  <UploadAheadStrip itemId={active?.kind === "video" ? active.id : null} />
 
                   {active?.kind === "image" ? (
                     <button

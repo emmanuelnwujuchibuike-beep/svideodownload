@@ -213,6 +213,34 @@ html,body{height:100%;background:#fff;color:#0f172a}
       an OS that throttles the first frame — the hand-off still happens. It is
       cancelled by whichever path runs first, so this can never navigate twice.
     */
+    /*
+      ── The cold-entry record (2026-09-13) ──────────────────────────────
+
+      Owner: "the PWA takes time to start on cold start after opening once
+      that day, it still shows more of white screen before showing the F
+      loader." Nothing in this project could SEE that phase: the app's vitals
+      begin with the app, and this document is what the white precedes. So
+      the loader writes its own navigation timing — did a worker serve it
+      (workerStart), when did its first byte arrive (responseStart), was it a
+      cache hit (transferSize 0) — and the app beacons that to /api/vitals as
+      LAUNCH on its first mount (features/perf/web-vitals.tsx). One line per
+      cold start, in the same log the other vitals land in.
+    */
+    try {
+      var nav = performance.getEntriesByType("navigation")[0];
+      if (nav) {
+        sessionStorage.setItem(
+          "frenz:launch-timing",
+          JSON.stringify({
+            ws: Math.round(nav.workerStart),
+            rs: Math.round(nav.responseStart),
+            ts: Math.round(nav.transferSize),
+            type: nav.type,
+            at: Date.now(),
+          })
+        );
+      }
+    } catch (e) {}
     var went = false;
     var go = function () {
       if (went) return;

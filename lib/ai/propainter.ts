@@ -50,6 +50,11 @@ export interface ProPainterRequest {
    */
   width?: number | null;
   height?: number | null;
+  /**
+   * The source frame count (duration x fps), for the frame budget. Null when
+   * the probe could not read a duration — see `propainterResizeRatio`.
+   */
+  frames?: number | null;
 }
 
 
@@ -69,14 +74,22 @@ function authHeaders(): Record<string, string> {
  */
 export async function runProPainter(req: ProPainterRequest): Promise<ProPainterResult> {
   const startedAt = Date.now();
-  const resizeRatio = propainterResizeRatio(req.width, req.height, AI_CLEAN_PROPAINTER.maxPixels);
+  const resizeRatio = propainterResizeRatio(
+    req.width,
+    req.height,
+    AI_CLEAN_PROPAINTER.maxPixels,
+    req.frames,
+    AI_CLEAN_PROPAINTER.maxPixelFrames,
+  );
   if (resizeRatio < 1) {
     // Worth a line: it is the difference between "this job was reconstructed at
     // native size" and "at two thirds", and the row's diagnostics carry it too.
     console.info("[ai/propainter] reducing for GPU memory", {
       source: `${req.width}x${req.height}`,
+      frames: req.frames ?? null,
       resizeRatio,
       budget: AI_CLEAN_PROPAINTER.maxPixels,
+      frameBudget: AI_CLEAN_PROPAINTER.maxPixelFrames,
     });
   }
 
@@ -190,7 +203,19 @@ export async function runProPainter(req: ProPainterRequest): Promise<ProPainterR
       return { ok: true, outputUrl: url, predictTimeSeconds: poll.metrics?.predict_time ?? null };
     }
     if (poll.status === "failed" || poll.status === "canceled") {
-      return { ok: false, reason: `provider ${poll.status}` };
+      /*
+        The provider's own reason, on the job row (2026-09-13). Four jobs
+        said "failed: provider failed" and nothing else; the answer — CUDA
+        out of memory, 1049 frames — was only in Replicate's dashboard. The
+        `error` field is the model's message, not our request echoed back,
+        but anything URL-shaped is stripped anyway before it is stored.
+      */
+      const detail = String(poll.error ?? "")
+        .replace(/https?:\/\/\S+/g, "<url>")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160);
+      return { ok: false, reason: `provider ${poll.status}${detail ? `: ${detail}` : ""}` };
     }
   }
 }

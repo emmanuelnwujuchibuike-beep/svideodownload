@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteFooter } from "@/components/layout/site-footer";
+import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FrenzAIUsagePage } from "@/features/ai/frenz-ai-usage-page";
 
@@ -37,7 +37,8 @@ export default function PublicFrenzAIUsagePage() {
       >
         <FrenzAIUsagePage aiHref="/ai" />
       </main>
-      <SiteFooter />
+      {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
+      <SiteFooterMinimal />
     </>
   );
 }

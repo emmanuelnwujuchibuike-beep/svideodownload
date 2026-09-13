@@ -487,6 +487,16 @@ export const AI_CLEAN_PROPAINTER = {
    * is there to try it deliberately.
    */
   maxPixels: envInt("AI_CLEAN_PROPAINTER_MAX_PIXELS", 614_400),
+  /**
+   * ── 🔴 THE FRAME BUDGET (2026-09-13) — pixels x frames, for the whole clip ─
+   *
+   * The area budget above stopped the second OOM; the third came from the
+   * flow fields ProPainter keeps for EVERY frame, which scale with length.
+   * 300 M pixel-frames is calibrated on this account's own runs — a 273-frame
+   * 592x1040 success (~168 M) and a 1049-frame OOM (~634 M). See
+   * `propainterResizeRatio` in lib/ai/propainter-plan.ts for the arithmetic.
+   */
+  maxPixelFrames: envInt("AI_CLEAN_PROPAINTER_MAX_PIXEL_FRAMES", 300_000_000),
   subvideoLength: envInt("AI_CLEAN_PROPAINTER_SUBVIDEO", 40),
   /** Local frames each output frame may borrow from. 10 -> 6 for memory. */
   neighborLength: envInt("AI_CLEAN_PROPAINTER_NEIGHBOR", 6),

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteFooter } from "@/components/layout/site-footer";
+import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AICleanWorkspace } from "@/features/ai/ai-clean-workspace";
 import { AIDownloadOverlay } from "@/features/ai/ai-download-overlay";
@@ -145,7 +145,8 @@ export default async function PublicAICleanPage() {
         shared workspace.
       */}
       <AIDownloadOverlay />
-      <SiteFooter />
+      {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
+      <SiteFooterMinimal />
     </>
   );
 }

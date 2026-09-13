@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { RichText } from "@/components/social/rich-text";
@@ -168,6 +168,18 @@ function receiptLabel(m: MessageItem): { label: string; read: boolean; delivered
 }
 
 /** "9:14 AM" — the mockup's under-bubble time label. */
+/**
+ * The soft dark gradient in the bottom-right corner of a frameless photo or
+ * video, so the time and ticks read on any picture — WhatsApp's own device.
+ */
+function MediaMetaScrim({ children }: { children: ReactNode }) {
+  return (
+    <span className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-end bg-gradient-to-t from-black/55 to-transparent px-2.5 pb-1.5 pt-6">
+      {children}
+    </span>
+  );
+}
+
 function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
@@ -1779,6 +1791,75 @@ export function ConversationRoom({
             const shared = !deleted ? extractSharedPost(m.body) : null;
             // Image/video attachments go edge-to-edge in the bubble.
             const hasMediaAttachment = m.attachments.some((a) => a.kind === "image" || a.kind === "video");
+            /*
+              ── 🔴 THE BUBBLE IS WHATSAPP'S (owner, 2026-09-13) ──────────────
+
+              "The media sent and received shouldn't have a border and it
+              should be as clean and smooth, blending with any background
+              wallpaper. And the chat shouldn't be in a vertical line no matter
+              how short the word or sentence is — chats should always be in
+              flex horizontal just like WhatsApp, and animate when sent."
+
+              Two facts about the old bubble:
+                · the time / ticks were a SEPARATE ROW under every bubble, so
+                  "Ok" became two stacked lines — the vertical line;
+                · a photo or video sat inside a 4px "hairline frame" with the
+                  bubble's background, ring and shadow around it — the border.
+
+              Now the meta lives INSIDE the bubble, floated to the end of the
+              last line of text (it drops under the text only when the line is
+              full — exactly WhatsApp's behaviour), a media-only bubble is
+              frameless with the meta on a soft scrim over the media, and every
+              other kind (voice, document, poll, a shared post) carries the meta
+              as a right-aligned row at its foot. The one thing still UNDER a
+              bubble is a problem — "Failed to send" / "Waiting to send…".
+
+              The send animation is unchanged: an optimistic bubble already
+              carries `animate-message-send` + `animate-scale-in` (see
+              welcomedIds), and this layout keeps it.
+            */
+            const frameless =
+              !deleted &&
+              hasMediaAttachment &&
+              !m.body &&
+              !shared &&
+              m.attachments.every((a) => a.kind === "image" || a.kind === "video");
+            const bubbleMeta = deleted ? null : (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 whitespace-nowrap text-[10px] font-medium leading-none",
+                  frameless ? "text-white" : m.mine ? "text-white/75" : "text-neutral-500",
+                )}
+                suppressHydrationWarning
+              >
+                {m.editedAt ? <span>edited ·</span> : null}
+                <span>{timeLabel(m.createdAt)}</span>
+                {m.mine && r ? (
+                  // Owner receipt spec (2026-07-16): one grey tick = sent, two
+                  // blue = delivered, two green = seen. Only the colour changes.
+                  <span
+                    className={cn(
+                      "inline-flex",
+                      r.read
+                        ? "text-emerald-300"
+                        : r.delivered
+                          ? frameless
+                            ? "text-sky-300"
+                            : "text-sky-200"
+                          : frameless
+                            ? "text-white/80"
+                            : "text-white/70",
+                    )}
+                  >
+                    {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                  </span>
+                ) : null}
+              </span>
+            );
+            /* Floated to the end of the last line — the WhatsApp trick. */
+            const inlineMeta = bubbleMeta ? <span className="float-right ml-2 mt-1.5 -mb-0.5 pl-1">{bubbleMeta}</span> : null;
+            /* A right-aligned foot row, for bubbles whose content is not text. */
+            const footMeta = bubbleMeta ? <span className="mt-1 flex justify-end px-2.5 pb-1">{bubbleMeta}</span> : null;
             // ANY attachment gets the hairline frame (owner, 2026-07-16: "make
             // the bubble in chat that covers media and voice note and others to
             // be a tiny line not a fat line"). Voice notes and documents used to
@@ -1909,10 +1990,15 @@ export function ConversationRoom({
                       bubbleShape.protrudingTail && !deleted && (m.mine ? "chat-bubble-tail-mine" : "chat-bubble-tail-theirs"),
                       // `p-1` (4px), not the old `p-1.5` (6px): a hairline frame
                       // around media/voice/documents rather than a fat band.
-                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : shared || hasAttachmentFrame ? "p-1" : "px-4 py-2.5",
+                      deleted ? "px-4 py-2.5 italic text-muted-foreground" : frameless ? "p-0" : shared || hasAttachmentFrame ? "p-1" : "px-4 py-2.5",
                       deleted
                         ? "border border-dashed border-border/60 bg-transparent"
-                        : m.mine
+                        : frameless
+                          ? // No background, no ring, no shadow: the media IS the
+                            // bubble, and it blends with whatever wallpaper is
+                            // behind it. The media element carries its own radius.
+                            "bg-transparent shadow-none"
+                          : m.mine
                           ? cn(
                               // A personal bubble-color preference (set via the
                               // `style` prop above, `background-color`) beats
@@ -2001,13 +2087,13 @@ export function ConversationRoom({
                         ) : null}
                         {m.attachments.length > 0 ? (
                           <div className={cn("flex flex-col gap-1.5", hasMediaAttachment ? "" : "px-0", m.body && "mb-1.5")}>
-                            {m.attachments.map((att) =>
+                            {m.attachments.map((att, attIdx) =>
                               att.kind === "image" ? (
+                                <span key={att.id} className="relative block overflow-hidden rounded-2xl">
                                 <button
-                                  key={att.id}
                                   type="button"
                                   onClick={() => setViewingImage({ url: att.url, alt: att.filename ?? "Image" })}
-                                  className="block overflow-hidden rounded-2xl"
+                                  className="block w-full overflow-hidden rounded-2xl"
                                 >
                                   {/* width/height are LOAD-BEARING, not metadata:
                                       without them the browser reserves ZERO
@@ -2035,8 +2121,13 @@ export function ConversationRoom({
                                     className="max-h-80 w-full max-w-full object-cover"
                                   />
                                 </button>
+                                {frameless && attIdx === m.attachments.length - 1 ? <MediaMetaScrim>{bubbleMeta}</MediaMetaScrim> : null}
+                                </span>
                               ) : att.kind === "video" ? (
-                                <VideoComment key={att.id} url={att.url} thumbnailUrl={att.thumbnailUrl} durationMs={att.durationMs} width={att.width} height={att.height} />
+                                <span key={att.id} className="relative block overflow-hidden rounded-2xl">
+                                  <VideoComment url={att.url} thumbnailUrl={att.thumbnailUrl} durationMs={att.durationMs} width={att.width} height={att.height} />
+                                  {frameless && attIdx === m.attachments.length - 1 ? <MediaMetaScrim>{bubbleMeta}</MediaMetaScrim> : null}
+                                </span>
                               ) : att.kind === "audio" ? (
                                 <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} />
                               ) : (
@@ -2049,19 +2140,26 @@ export function ConversationRoom({
                           <>
                             {shared.text ? <span className="block px-2.5 pb-1.5 pt-1">{shared.text}</span> : null}
                             <MessagePostEmbed postId={shared.postId} mine={m.mine} />
+                            {footMeta}
                           </>
                         ) : m.body ? (
                           // A caption sitting under an attachment needs its own
                           // inset now that the bubble itself is only a hairline
                           // frame — without this the text would sit 4px off the
-                          // bubble edge.
-                          <span className={cn(hasAttachmentFrame && "block px-2.5 pb-1 pt-0.5")}>
+                          // bubble edge. The meta floats at the end of the last
+                          // line, inside this same box (see `inlineMeta`).
+                          <span className={cn("block", hasAttachmentFrame && "px-2.5 pb-1 pt-0.5")}>
                             <RichText
                               text={m.body}
                               linkClassName={cn("font-semibold underline underline-offset-2", m.mine ? "text-white" : "text-primary")}
                             />
+                            {inlineMeta}
                           </span>
-                        ) : null}
+                        ) : frameless ? null : (
+                          // Voice, document, location, contact, poll — no words
+                          // to float beside, so the meta is a foot row.
+                          footMeta
+                        )}
                       </>
                     )}
                   </div>
@@ -2254,55 +2352,26 @@ export function ConversationRoom({
                   </div>
                 ) : null}
 
-                {/* Under-bubble meta, mockup format: "9:14 AM" under every
-                    message; my most recent message shows "Seen 9:17 AM ✓"
-                    instead (the receipt's own timestamp + a check). */}
-                {/* Owner ask (2026-07-15): the status here — Sent, then
-                    Delivered, then Seen — must stay laid out the exact same
-                    way at every stage, never a plain inline span at one
-                    stage and a flex row at another (a real risk before: the
-                    very first "no receipt yet" instant had no flex classes
-                    at all, unlike every other branch). `flex-row` is now
-                    explicit (not just `flex`'s own default) on every single
-                    branch so a state change is a pure content swap, never a
-                    layout-direction change. */}
-                <span className={cn("mt-0.5 flex flex-row items-center gap-1 px-1 text-[10px] text-muted-foreground")} suppressHydrationWarning>
-                  {m.editedAt && !deleted ? <span>edited ·</span> : null}
-                  {isFailed ? (
-                    <span className="flex flex-row items-center gap-1 font-medium text-rose-500">
-                      <AlertTriangle className="h-3 w-3" /> Failed to send
-                    </span>
-                  ) : isQueued ? (
-                    <span className="flex flex-row items-center gap-1 font-medium text-muted-foreground">
-                      <Clock className="h-3 w-3" /> Waiting to send…
-                    </span>
-                  ) : r ? (
-                    // Owner receipt spec (2026-07-16), confirmed exactly:
-                    //   Sent      -> ONE grey tick   (left our server, not yet on their device)
-                    //   Delivered -> TWO BLUE ticks  ("when the user is online or just received it")
-                    //   Seen      -> TWO GREEN ticks (they actually opened it)
-                    // Only the colour changes between delivered and seen, so the
-                    // state reads at a glance without counting ticks. Deliberately
-                    // NOT `text-primary` for read (what it used to be): primary IS
-                    // the same blue as delivered, so "delivered" and "seen" were
-                    // literally indistinguishable before.
-                    <span
-                      className={cn(
-                        "flex flex-row items-center gap-1 font-medium",
-                        r.read
-                          ? "text-emerald-500 dark:text-emerald-400"
-                          : r.delivered
-                            ? "text-blue-500 dark:text-blue-400"
-                            : "text-muted-foreground",
-                      )}
-                    >
-                      {r.label} {timeLabel(r.at)}
-                      {r.delivered ? <CheckCheck className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-                    </span>
-                  ) : (
-                    <span className="flex flex-row items-center gap-1">{timeLabel(m.createdAt)}</span>
-                  )}
-                </span>
+                {/*
+                  Under the bubble: ONLY a problem (2026-09-13). The time and
+                  the ticks moved inside the bubble — see `bubbleMeta` above.
+                  A queued or failed send still needs a line the member cannot
+                  miss, and it keeps the owner's 2026-07-15 rule: the same
+                  flex-row layout in every state, never a layout change.
+                */}
+                {isFailed || isQueued ? (
+                  <span className="mt-0.5 flex flex-row items-center gap-1 px-1 text-[10px] text-muted-foreground" suppressHydrationWarning>
+                    {isFailed ? (
+                      <span className="flex flex-row items-center gap-1 font-medium text-rose-500">
+                        <AlertTriangle className="h-3 w-3" /> Failed to send
+                      </span>
+                    ) : (
+                      <span className="flex flex-row items-center gap-1 font-medium text-muted-foreground">
+                        <Clock className="h-3 w-3" /> Waiting to send…
+                      </span>
+                    )}
+                  </span>
+                ) : null}
               </div>
             );
           })

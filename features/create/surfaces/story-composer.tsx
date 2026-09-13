@@ -19,6 +19,7 @@ import { fetchStoryGroups } from "@/lib/social/story-cache";
 import { PhotoEditor } from "@/features/create/photo-editor";
 import { openStudio } from "@/features/create/studio/studio-store";
 import { haptic } from "@/lib/motion/haptics";
+import { UploadAheadStrip } from "@/features/create/upload-ahead-strip";
 
 /**
  * /create/story — the STORY surface.
@@ -127,6 +128,8 @@ export function StoryComposer({ avatarUrl }: { avatarUrl: string | null }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img key={active.id} src={active.display} alt="" className="h-full w-full object-contain" />
             )}
+            {/* A video is already uploading — see upload-ahead.ts. */}
+            <UploadAheadStrip itemId={active.kind === "video" ? active.id : null} />
 
             <div className="absolute right-2.5 top-2.5 flex gap-1.5">
               {active.kind === "image" ? (

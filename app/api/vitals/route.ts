@@ -17,12 +17,15 @@ export async function POST(request: Request): Promise<Response> {
       cores?: number;
       memGb?: number;
       conn?: string;
+      /** The cold-entry record — see features/perf/web-vitals.tsx. */
+      launch?: { ws?: number; ts?: number; type?: string; age?: number | null };
     };
     if (d?.name) {
       // Device context is opportunistic (Chrome/Edge/Android-only fields may
       // be absent) — grep "[vitals]" in logs to correlate scores with device
       // capability once enough real-user samples land.
       const ctx = [
+        d.launch ? `ws=${d.launch.ws ?? 0} ts=${d.launch.ts ?? 0} type=${d.launch.type ?? "?"} age=${d.launch.age ?? "?"}` : null,
         d.cores !== undefined ? `cores=${d.cores}` : null,
         d.memGb !== undefined ? `mem=${d.memGb}GB` : null,
         d.conn ? `conn=${d.conn}` : null,

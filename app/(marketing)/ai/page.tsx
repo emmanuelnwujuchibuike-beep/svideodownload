@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteFooter } from "@/components/layout/site-footer";
+import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FrenzAIWelcome } from "@/features/ai/frenz-ai-welcome";
 import { SITE_URL } from "@/lib/site";
@@ -145,9 +145,10 @@ export default async function PublicFrenzAIPage() {
           serve both doors — the signed-in page passes nothing and gets the
           Studio route.
         */}
-        <FrenzAIWelcome cleanHref="/ai/clean" historyHref="/ai/history" usageHref="/ai/usage" />
+        <FrenzAIWelcome cleanHref="/ai/clean" historyHref="/ai/history" />
       </main>
-      <SiteFooter />
+      {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
+      <SiteFooterMinimal />
     </>
   );
 }

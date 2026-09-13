@@ -8,6 +8,8 @@ import { readImageSize } from "@/lib/media/read-image-size";
 import { uploadPostMedia } from "@/lib/storage/client-upload";
 import { createClient } from "@/lib/supabase/client";
 
+import { cancelUploadAhead, getUploadAhead, releaseUploadAhead, startUploadAhead } from "./upload-ahead";
+
 /**
  * Shared MECHANICS for the three create surfaces (/create/post, /create/reel,
  * /create/story) — file validation, object-URL lifecycle, poster capture,
@@ -93,7 +95,15 @@ export function useComposerMedia(rules: MediaRules) {
   // without this each visit would leak every preview it ever created.
   const itemsRef = useRef(items);
   itemsRef.current = items;
-  useEffect(() => () => itemsRef.current.forEach(revoke), []);
+  useEffect(
+    () => () => {
+      itemsRef.current.forEach(revoke);
+      // A composer left mid-upload must not keep sending in the background
+      // with nobody to publish it.
+      itemsRef.current.forEach((it) => cancelUploadAhead(it.id));
+    },
+    [],
+  );
 
   const accept = useCallback(
     (files: FileList | File[] | null | undefined) => {
@@ -136,6 +146,9 @@ export function useComposerMedia(rules: MediaRules) {
 
       setErr(localErr);
       if (fresh.length === 0) return;
+      // Owner, 2026-09-13: "posting a video takes too long". A video's upload
+      // begins HERE, the moment it is picked — see upload-ahead.ts.
+      for (const it of fresh) if (it.kind === "video") startUploadAhead(it.id, it.file);
       setItems((prev) => {
         setActiveIdx(prev.length); // jump to the first newly added item
         return [...prev, ...fresh];
@@ -149,6 +162,7 @@ export function useComposerMedia(rules: MediaRules) {
       const idx = prev.findIndex((i) => i.id === id);
       if (idx === -1) return prev;
       revoke(prev[idx]!);
+      cancelUploadAhead(id);
       const next = prev.filter((i) => i.id !== id);
       setActiveIdx((a) => Math.max(0, Math.min(a > idx ? a - 1 : a, next.length - 1)));
       return next;
@@ -188,6 +202,7 @@ export function useComposerMedia(rules: MediaRules) {
 
   const reset = useCallback(() => {
     itemsRef.current.forEach(revoke);
+    itemsRef.current.forEach((it) => cancelUploadAhead(it.id));
     setItems([]);
     setActiveIdx(0);
     setErr(null);
@@ -242,7 +257,38 @@ export async function publishComposition({
   }[] = [];
   for (let i = 0; i < items.length; i++) {
     const it = items[i]!;
-    onProgress?.(items.length > 1 ? `Uploading ${i + 1} of ${items.length}…` : "Uploading…");
+    const label = items.length > 1 ? `Uploading ${i + 1} of ${items.length}…` : "Uploading…";
+    onProgress?.(label);
+
+    /*
+      ── The head start (owner, 2026-09-13) ─────────────────────────────────
+      A video began uploading when it was picked (upload-ahead.ts). If that
+      job is still running, wait for it and show its real progress; if it is
+      done, this costs nothing; if it failed for any reason, fall through to
+      the upload below exactly as before.
+    */
+    const ahead = it.kind === "video" ? getUploadAhead(it.id) : undefined;
+    if (ahead && ahead.status !== "failed") {
+      try {
+        const tick = setInterval(() => {
+          const pct = Math.round(ahead.progress * 100);
+          onProgress?.(pct >= 100 ? "Finishing upload…" : `${label.replace("…", "")} ${pct}%`);
+        }, 250);
+        let done: Awaited<typeof ahead.result>;
+        try {
+          done = await ahead.result;
+        } finally {
+          clearInterval(tick);
+        }
+        releaseUploadAhead(it.id);
+        uploaded.push({ url: done.url, kind: it.kind, thumbnailUrl: done.thumbnailUrl, width: done.width, height: done.height });
+        continue;
+      } catch {
+        // The early upload did not make it — upload now, the old way.
+        releaseUploadAhead(it.id);
+      }
+    }
+
     const ext = (it.file.name.split(".").pop() || (it.kind === "video" ? "mp4" : "jpg"))
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "");
@@ -268,6 +314,10 @@ export async function publishComposition({
       height = size?.h ?? null;
     }
 
+    // The poster is small; it uploads BESIDE the media, not after it.
+    const posterUpload: Promise<string | null> = posterBlob
+      ? uploadPostMedia({ data: posterBlob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(() => null)
+      : Promise.resolve(null);
     let mediaUrl: string;
     try {
       mediaUrl = await uploadPostMedia({
@@ -281,16 +331,7 @@ export async function publishComposition({
         e instanceof Error ? e.message : `Upload failed on item ${i + 1}. Try a smaller file.`,
       );
     }
-
-    let thumbnailUrl: string | null = null;
-    if (posterBlob) {
-      thumbnailUrl = await uploadPostMedia({
-        data: posterBlob,
-        kind: "image",
-        ext: "jpg",
-        contentType: "image/jpeg",
-      }).catch(() => null);
-    }
+    const thumbnailUrl = await posterUpload;
     uploaded.push({ url: mediaUrl, kind: it.kind, thumbnailUrl, width, height });
   }
 

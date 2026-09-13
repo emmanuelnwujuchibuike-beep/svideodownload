@@ -1250,6 +1250,12 @@ async function reconstructWithProPainter(opts: {
       fps,
       width: opts.sourceProbe?.width ?? null,
       height: opts.sourceProbe?.height ?? null,
+      // The clip's length in frames, for the frame budget (third OOM,
+      // 2026-09-13). Null when the probe had no duration.
+      frames:
+        opts.sourceProbe?.durationSeconds && opts.sourceProbe.durationSeconds > 0
+          ? Math.round(opts.sourceProbe.durationSeconds * fps)
+          : null,
     });
     if (!result.ok) {
       console.warn("[ai/finalize] reconstruction declined", { jobId, reason: result.reason });

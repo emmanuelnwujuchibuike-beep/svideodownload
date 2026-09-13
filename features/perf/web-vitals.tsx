@@ -31,7 +31,38 @@ function deviceContext(): { cores?: number; memGb?: number; conn?: string } {
  * regressions surface without a heavyweight analytics dependency. Also watches
  * for long tasks (>50ms main-thread blocks) in development.
  */
+/**
+ * The loader's own timing, written by public/launch.html on a cold entry
+ * (see the note there) and sent once, un-sampled: a cold start is the rare
+ * event the owner is asking about, and one beacon per app open is nothing.
+ *   `LAUNCH=<responseStart ms> <good|needs-improvement|poor> /launch.html
+ *    ws=<workerStart ms|0> ts=<bytes|0 = cache> type=<navigate|reload> age=<ms since>`
+ */
+function beaconLaunchTiming() {
+  try {
+    const raw = sessionStorage.getItem("frenz:launch-timing");
+    if (!raw) return;
+    sessionStorage.removeItem("frenz:launch-timing");
+    const t = JSON.parse(raw) as { ws?: number; rs?: number; ts?: number; type?: string; at?: number };
+    if (typeof t.rs !== "number") return;
+    const body = JSON.stringify({
+      name: "LAUNCH",
+      value: t.rs,
+      rating: t.rs < 300 ? "good" : t.rs < 1000 ? "needs-improvement" : "poor",
+      path: "/launch.html",
+      launch: { ws: t.ws ?? 0, ts: t.ts ?? 0, type: t.type ?? "?", age: t.at ? Date.now() - t.at : null },
+      ...deviceContext(),
+    });
+    navigator.sendBeacon?.("/api/vitals", body);
+  } catch {
+    /* never let monitoring throw */
+  }
+}
+
 export function WebVitals() {
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") beaconLaunchTiming();
+  }, []);
   useReportWebVitals((metric) => {
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console

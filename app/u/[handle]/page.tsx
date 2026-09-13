@@ -5,13 +5,16 @@ import {
   Eye,
   Grid3x3,
   Heart,
+  Image as ImageIcon,
   Link as LinkIcon,
   Lock,
   Mail,
   MessageCircle,
   Phone,
+  Sparkles,
   UserPlus,
   Users,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -601,13 +604,28 @@ async function ProfileData({
                   <div className="relative lux-card lux-header lux-halo lux-enter -mt-10 rounded-3xl px-4 pb-6 pt-0 sm:-mt-14 sm:px-7" style={heroCardStyle}>
                     {/* Profile accent (Part · Appearance) — a subtle "your colour" tab. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-0 h-1.5 w-24 -translate-x-1/2 rounded-b-full" style={{ background: heroAccent }} /> : null}
-                    {/* Facebook/Instagram arrangement (owner): three columns across the
-                        FULL card width — avatar, then the identity growing into the middle,
-                        then the actions pinned right. The identity used to sit BELOW the
-                        avatar, which left the whole right half of the card empty. */}
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
-                      <div className="min-w-0 sm:shrink-0">
-                        {/* Avatar straddling the cover edge — Identity Ring shows live presence + verification */}
+                    {/*
+                      ── 🔴 THE HEADER IS A ROW ON EVERY WIDTH (owner, 2026-09-13) ──
+
+                      "Make this profile picture ring and the photo, videos and avatar
+                      card to flex opposite the name and username… the bio won't touch
+                      the profile and photo, video and avatar card, rather when it reaches
+                      close to 3 padding the bio should continue below."
+
+                      This was `flex-col sm:flex-row`: on a phone the avatar column
+                      stacked ABOVE the name, and the bio lived inside the identity
+                      column beside the avatar on wider screens. Now:
+
+                        · one row at every width — avatar + mode picker on the left,
+                          name / handle / chips on the right;
+                        · the picker is icons only, in a small pill (a bold glyph
+                          each; the word is the accessible name);
+                        · the bio, the links row and the actions sit BELOW the row at
+                          full width, `mt-3` off it — they never squeeze in beside the
+                          avatar, however long they are.
+                    */}
+                    <div className="flex items-start gap-3 sm:gap-6">
+                      <div className="shrink-0">
                         <div className="relative -mt-14 w-fit sm:-mt-[4.5rem]">
                     {/* Accent glow — the member's theme colour as a soft halo behind the avatar. */}
                     {heroAccent ? <span aria-hidden className="pointer-events-none absolute -inset-2.5 rounded-full opacity-50 blur-xl" style={{ background: heroAccent }} /> : null}
@@ -634,30 +652,39 @@ async function ProfileData({
                           </Link>
                         </div>
 
-                        {/* Identity mode — Photo is live; Video & Avatar arrive with the
-                            media pipeline and Avatar Studio (marked, never faked). */}
-                        {/* Identity mode — reflects the active mode; tap to set it up in Settings. */}
-                        <div className="mt-3 inline-flex items-center gap-1 rounded-2xl border border-border/60 bg-card/60 p-1 backdrop-blur">
-                          {(["photo", "video", "avatar"] as const).map((m) => (
+                        {/* Identity mode — icons only, as small as it can be while
+                            still tappable (32px targets). The active mode is the
+                            brand-filled one; every glyph is bold and bare. */}
+                        <div className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-border/60 bg-card/70 p-0.5 shadow-sm backdrop-blur">
+                          {(
+                            [
+                              { mode: "photo", label: "Photo", Icon: ImageIcon },
+                              { mode: "video", label: "Video", Icon: Video },
+                              { mode: "avatar", label: "Avatar", Icon: Sparkles },
+                            ] as const
+                          ).map(({ mode, label, Icon }) => (
                             <Link
-                              key={m}
+                              key={mode}
                               href="/account/identity"
-                              aria-current={profileMedia.identityMode === m ? "true" : undefined}
-                              className={`rounded-xl px-3 py-1.5 text-xs capitalize transition ${
-                                profileMedia.identityMode === m
-                                  ? "bg-brand font-bold text-white"
-                                  : "font-semibold text-muted-foreground hover:text-foreground"
+                              aria-label={label}
+                              title={label}
+                              aria-current={profileMedia.identityMode === mode ? "true" : undefined}
+                              className={`flex h-8 w-8 items-center justify-center rounded-full transition ${
+                                profileMedia.identityMode === mode
+                                  ? "bg-brand text-white shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground"
                               }`}
                             >
-                              {m}
+                              <Icon className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                             </Link>
                           ))}
                         </div>
                       </div>
 
-                      {/* Identity — the middle column, grows into the space the
-                          actions don't need so the card is filled edge to edge. */}
-                      <div className="min-w-0 flex-1 sm:pt-2">
+                      {/* Identity — opposite the avatar: name, handle, and the chips
+                          that describe the profile. Nothing here is allowed to be
+                          long; the long things live below the row. */}
+                      <div className="min-w-0 flex-1 pt-1 sm:pt-2">
                         <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                           {profile.displayName}
                           {/* Verified · plan (Pro/Business) · Creator, one cluster */}
@@ -685,31 +712,31 @@ async function ProfileData({
                           </div>
                         ) : null}
 
-                        {profile.bio ? <p className="mt-3 leading-relaxed">{profile.bio}</p> : null}
-
-                        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                          {profile.website ? (
-                            <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
-                              <LinkIcon className="h-4 w-4" />
-                              {profile.website.replace(/^https?:\/\//, "")}
-                            </a>
-                          ) : null}
-                          <span className="inline-flex items-center gap-1.5">
-                            <CalendarDays className="h-4 w-4" />
-                            {joined}
-                          </span>
-                        </div>
                       </div>
+                    </div>
 
-                      {/* Actions — pinned to the card's right edge on sm+, full-width
-                          buttons on a phone (nothing half-filling a row). */}
-                      <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0 sm:pt-2">
-                        <Link href="/account/identity" className="btn-lux btn-lux-secondary flex-1 justify-center sm:flex-none">
-                          Edit Profile
-                        </Link>
-                        <ShareProfileButton handle={profile.handle} name={profile.displayName} />
-                        <ProfileCardLink handle={profile.handle} />
-                      </div>
+                    {/* Below the row, full width — see the note above. */}
+                    {profile.bio ? <p className="mt-3 leading-relaxed">{profile.bio}</p> : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                      {profile.website ? (
+                        <a href={profile.website} target="_blank" rel="nofollow noopener" className="inline-flex items-center gap-1.5 text-primary hover:underline">
+                          <LinkIcon className="h-4 w-4" />
+                          {profile.website.replace(/^https?:\/\//, "")}
+                        </a>
+                      ) : null}
+                      <span className="inline-flex items-center gap-1.5">
+                        <CalendarDays className="h-4 w-4" />
+                        {joined}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex w-full items-center gap-2">
+                      <Link href="/account/identity" className="btn-lux btn-lux-secondary flex-1 justify-center">
+                        Edit Profile
+                      </Link>
+                      <ShareProfileButton handle={profile.handle} name={profile.displayName} />
+                      <ProfileCardLink handle={profile.handle} />
                     </div>
 
                     {/* 5 live stats — one divided glass panel; Followers/Following

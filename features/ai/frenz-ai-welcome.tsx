@@ -8,7 +8,6 @@ import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIBeforeAfterScene } from "@/features/ai/core/frenz-ai-before-after-scene";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAIAllowanceBar, FrenzAICrumb, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
-import { FrenzAIDashboard } from "@/features/ai/frenz-ai-dashboard";
 import { FrenzAIToolGrid } from "@/features/ai/frenz-ai-tool-grid";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
 import { getAiCleanEntitlement, type AiCleanEntitlement } from "@/lib/ai/client";
@@ -54,12 +53,9 @@ import { cn } from "@/lib/utils";
 export function FrenzAIWelcome({
   cleanHref = "/studio/ai/clean",
   historyHref = "/studio/ai/history",
-  usageHref = "/studio/ai/usage",
 }: {
   cleanHref?: string;
   historyHref?: string;
-  /** The dashboard row's destination — see FrenzAIDashboard (2026-09-13). */
-  usageHref?: string;
 }) {
   const [entitlement, setEntitlement] = useState<AiCleanEntitlement | null>(null);
 
@@ -168,17 +164,17 @@ export function FrenzAIWelcome({
         <FrenzAITierLabel entitlement={entitlement} variant="row" className="mt-4" />
 
         {/*
-          ── 🔴 THE DASHBOARD (owner, 2026-09-09) ──────────────────────────
+          ── 🔴 THE BALANCE CARD IS NOT ON THIS PAGE ANY MORE (2026-09-13) ──
 
-          "I still don't see the dashboard and all we have been doing about the
-          dashboard, deposit, usage and all, it should be on this page."
-
-          Balance, both free counters, the price per video, the recharge
-          amounts and recent ledger activity. It renders NOTHING until it has
-          real numbers — see the component for why a skeleton of zeroes is a
-          statement about somebody's account rather than a placeholder.
+          Owner, 2026-09-09: "I still don't see the dashboard… it should be on
+          this page." It was added here AND on the AI Clean page. Owner,
+          2026-09-13, with the AI Clean page on screen: "the balance card
+          should only be in the AI page main input page, not on the welcome
+          too." So it lives on AI Clean (ai-clean-empty-state.tsx) — the page
+          where a video is chosen and a price is about to matter — and not
+          here. The allowance bar and tier row above stay: they are the plan
+          description and the amount left, kept explicitly on 09-09.
         */}
-        <FrenzAIDashboard usageHref={usageHref} className="mt-4" />
 
         {/*
           ── 🔴 THE HISTORY LINK IS GONE FROM HERE, NOT DELETED ──────────────

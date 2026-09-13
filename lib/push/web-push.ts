@@ -80,6 +80,8 @@ interface SendOutcome {
   ok: boolean;
   code?: number;
   message?: string;
+  /** The push service's response body, when the library exposed one. */
+  body?: string;
 }
 
 /*
@@ -170,8 +172,33 @@ async function sendOnce(s: SubRow, body: string, topic: string | undefined): Pro
   } catch (err) {
     const code = (err as { statusCode?: number }).statusCode;
     const message = (err as { message?: string }).message?.slice(0, 300);
-    return { ok: false, code, message };
+    // The push service's own body — Apple puts its reason here
+    // (`{"reason":"BadDeviceToken"}`); the library's message is only
+    // "Received unexpected response code". Kept short: it is a log field.
+    const body = (err as { body?: unknown }).body;
+    return { ok: false, code, message, body: typeof body === "string" ? body.slice(0, 200) : undefined };
   }
+}
+
+/**
+ * ── 🔴 APPLE SAYS 400, NOT 410, FOR A DEAD SUBSCRIPTION (2026-09-13) ─────
+ *
+ * The owner's account carried an old iPhone subscription that answered
+ * `400 Received unexpected response code` on every single send, twice per
+ * push (first try + retry), for days — and was never pruned, because only 404
+ * and 410 count as "gone" below. Apple's web push reports a token it no
+ * longer recognises as 400 with a reason in the body, so those reasons are
+ * treated exactly like a 410. Any other 400 (a bad VAPID key, a malformed
+ * payload — things that are OUR fault and would hit every device at once) is
+ * still retried and logged, never pruned.
+ */
+const APPLE_PERMANENT_REASONS = /BadDeviceToken|DeviceTokenNotForTopic|Unregistered/i;
+function isApplePermanentReject(endpoint: string, outcome: SendOutcome): boolean {
+  return (
+    outcome.code === 400 &&
+    /^https:\/\/web\.push\.apple\.com\//.test(endpoint) &&
+    APPLE_PERMANENT_REASONS.test(outcome.body ?? "")
+  );
 }
 
 /**
@@ -254,9 +281,19 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
         logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "sent", status_code: 201, error: null, attempt: 1 });
         return;
       }
-      if (first.code === 404 || first.code === 410) {
+      if (first.code === 404 || first.code === 410 || isApplePermanentReject(s.endpoint, first)) {
         dead.push(s.id); // gone — prune it, no retry
-        logRows.push({ user_id: userId, anon_id: anonId, subscription_id: s.id, tag, status: "pruned", status_code: first.code, error: first.message ?? null, attempt: 1 });
+        logRows.push({
+          user_id: userId,
+          anon_id: anonId,
+          subscription_id: s.id,
+          tag,
+          status: "pruned",
+          status_code: first.code ?? null,
+          // The reason travels with the row so the admin monitor can say WHY.
+          error: [first.message, first.body].filter(Boolean).join(" — ").slice(0, 300) || null,
+          attempt: 1,
+        });
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 400));
@@ -271,7 +308,7 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
           tag,
           status: "failed",
           status_code: retry.code ?? first.code ?? null,
-          error: (retry.message ?? first.message ?? null),
+          error: [retry.message ?? first.message, retry.body ?? first.body].filter(Boolean).join(" — ").slice(0, 300) || null,
           attempt: 2,
         });
       }

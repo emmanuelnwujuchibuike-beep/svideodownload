@@ -70,6 +70,29 @@ type Translate = ReturnType<typeof translator>;
  * path prefix, prerendered per language) and is passed down; this signature does
  * not change.
  */
+/**
+ * The closing line on its own — copyright, the terms reminder, "Built with
+ * precision & care." — for pages that are a tool, not a doorway.
+ *
+ * Owner, 2026-09-13: "remove the footer except from this section © 2026
+ * Frenz. Please respect platform terms and copyright… Built with precision &
+ * care. From the AI signed-in pages." The four AI pages are behind sign-in;
+ * a newsletter box, three link columns and the social row underneath a
+ * member's private tool are furniture from another room. Same strings, same
+ * translator, so the line reads identically to the full footer's last row.
+ */
+export function SiteFooterMinimal({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } = {}) {
+  const t = translator(locale);
+  return (
+    <footer className="relative border-t border-border/40 pb-10 pt-6">
+      <div className="container flex flex-col items-start justify-between gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center">
+        <p>{t("footer.copyright", { year: new Date().getFullYear() })}</p>
+        <p className="shrink-0">{t("footer.builtWith")}</p>
+      </div>
+    </footer>
+  );
+}
+
 export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } = {}) {
   const t = translator(locale);
 

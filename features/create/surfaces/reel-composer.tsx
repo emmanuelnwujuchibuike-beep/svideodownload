@@ -16,6 +16,7 @@ import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { CAPTION_MAX_CHARS, CAPTION_MAX_WORDS, clampWords, countWords } from "@/lib/social/caption";
 import { cn } from "@/lib/utils";
+import { UploadAheadStrip } from "@/features/create/upload-ahead-strip";
 
 /**
  * /create/reel — the REEL surface.
@@ -162,6 +163,8 @@ export function ReelComposer() {
           <div className="relative flex h-full w-full max-w-[min(100%,calc((100vh-13rem)*9/16))] items-center justify-center overflow-hidden rounded-2xl bg-neutral-950 ring-1 ring-white/10">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video key={active.id} src={active.display} className="h-full w-full object-contain" autoPlay muted loop playsInline controls />
+            {/* A video is already uploading — see upload-ahead.ts. */}
+            <UploadAheadStrip itemId={active.id} />
             <button
               type="button"
               onClick={() => media.remove(active.id)}

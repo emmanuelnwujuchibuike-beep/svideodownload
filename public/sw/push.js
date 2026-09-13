@@ -68,15 +68,48 @@ self.addEventListener("push", (event) => {
   // Only /api/cron/notification-test sets this, and that route is behind the
   // cron credential — no product code path can turn a normal notification
   // into one that double-shows.
+  /*
+    ═══════════════════════════════════════════════════════════════════════════
+     🔴 EVERY PUSH ENDS IN A VISIBLE NOTIFICATION (owner, 2026-09-13)
+    ═══════════════════════════════════════════════════════════════════════════
+    "The AI doesn't send a push notification when I'm outside the app and lock
+    my phone screen — it only sends the in-page push, and I noticed it stopped
+    working when I leave the app."
+
+    The delivery log says the server was never the problem: the owner's iPhone
+    subscription answers 201 from Apple on every send. The push ARRIVED, and
+    the line this replaced — `if (appIsOpen) return;` — threw it away, because:
+
+      1. iOS reports a home-screen web app as `visibilityState: "visible"` for a
+         while after it is backgrounded or the screen locks. The check read
+         "in the app" for a phone in a pocket.
+      2. A push event that shows no notification is a SILENT PUSH. iOS revokes
+         the subscription after a few of them; Chrome shows its own "this site
+         was updated in the background" instead. Waiting in the app for an AI
+         job to finish — the normal case — produced exactly those silent
+         pushes, and afterwards nothing arrived even from the lock screen.
+         That is the "stopped working when I leave the app".
+
+    So a notification is always shown. The July rule ("when they are in the
+    app, send the drop-down, not a push") is kept as far as the platform
+    allows: when a window is visible AND focused the notification is shown
+    `silent` — no sound, no vibration on the platforms that honour it — and
+    carries the same tag, so it collapses rather than stacks. The in-app
+    drop-down still fires from the realtime row. A banner that quietly
+    duplicates a drop-down is the price of pushes that reach a locked phone;
+    the platform offers no third option.
+  */
   async function show() {
-    if (data.force) {
-      await self.registration.showNotification(title, options);
-      return;
+    let inApp = false;
+    if (!data.force) {
+      try {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        inApp = clients.some((c) => c.visibilityState === "visible" && c.focused);
+      } catch (e) {
+        inApp = false;
+      }
     }
-    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    const appIsOpen = clients.some((c) => c.visibilityState === "visible");
-    if (appIsOpen) return; // the in-app drop-down owns this one
-    await self.registration.showNotification(title, options);
+    await self.registration.showNotification(title, inApp ? { ...options, silent: true, renotify: false } : options);
   }
 
   event.waitUntil(

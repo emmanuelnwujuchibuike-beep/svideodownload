@@ -57,10 +57,51 @@
  * (480x854 = 409,920 px, the owner's Snapchat clip), not a number chosen for
  * how it reads. A 720x1280 job lands at ratio 0.66.
  */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE THIRD CUDA OOM — LINEAR IN FRAMES, AND THE AREA BUDGET NEVER SAW IT
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-13: "the AI clean has been showing not finished." Four jobs
+ * in a row that day, the same 720x1280 source each time, all
+ * `AI_FINALIZATION_FAILED` with the provider's own reason:
+ *
+ *     torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate
+ *     1.77 GiB (GPU 0; 44.39 GiB total capacity; 36.47 GiB already allocated)
+ *       at torch._C._nn.upsample_bilinear2d(...)
+ *     Processing: source [1049 frames]...
+ *
+ * with `resize_ratio: 0.81` already applied — the area budget above had done
+ * its job, and it was not enough, because this is a THIRD allocation: the
+ * completed flow fields and frames for the WHOLE clip, which ProPainter holds
+ * on the GPU before the chunked inpainting begins. That grows with
+ *
+ *     frames x (W x H)  — linear in both
+ *
+ * so a 35-second clip at 30 fps costs four times what a 9-second one does at
+ * the same size, and no per-frame budget can see that coming.
+ *
+ * ── Calibrated on this account's own runs, not chosen ───────────────────────
+ *
+ *   succeeded  9.1 s x 30 fps = ~273 frames at 592x1040  = ~168 M pixel-frames
+ *   OOM        1049 frames at 0.81 x 720x1280 (~604k px)  = ~634 M pixel-frames
+ *
+ * 300 M sits under half the run that died and comfortably over the one that
+ * lived. Clips that fit the area budget AND this one are untouched — the 9 s
+ * 1080p job above still lands at exactly the ratio it has today. Only a long
+ * clip is reduced further, and for it the choice is a softer patch or no
+ * video at all.
+ *
+ * Unknown frame count (no duration or fps from the probe) means no frame
+ * budget — the same rule as an unknown size: absence of evidence is not
+ * evidence of a large clip.
+ */
 export function propainterResizeRatio(
   width: number | null | undefined,
   height: number | null | undefined,
   maxPixels: number,
+  frames?: number | null,
+  maxPixelFrames?: number | null,
 ): number {
   /*
     🔴 An unknown size gets the FULL ratio, not a guessed reduction. A probe
@@ -71,12 +112,18 @@ export function propainterResizeRatio(
   */
   if (!width || !height || width <= 0 || height <= 0) return 1;
   const pixels = width * height;
-  if (pixels <= maxPixels) return 1;
+  // The two budgets, each as the ratio that would meet it; the smaller wins.
+  const byArea = pixels <= maxPixels ? 1 : Math.sqrt(maxPixels / pixels);
+  const byFrames =
+    frames && frames > 0 && maxPixelFrames && maxPixelFrames > 0 && pixels * frames > maxPixelFrames
+      ? Math.sqrt(maxPixelFrames / (pixels * frames))
+      : 1;
+  const ratio = Math.min(byArea, byFrames);
+  if (ratio >= 1) return 1;
   /*
     Rounded DOWN to two decimals so the result is always at or under budget —
     rounding to nearest could land a borderline clip back over the line, which
     is the one direction that costs a whole failed GPU run.
   */
-  const ratio = Math.sqrt(maxPixels / pixels);
   return Math.max(0.1, Math.floor(ratio * 100) / 100);
 }

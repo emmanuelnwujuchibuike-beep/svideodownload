@@ -7,6 +7,7 @@ import {
   AI_RESULT_BUCKET,
   AI_SIGNED_URL_TTL_SECONDS,
   AI_SOURCE_BUCKET,
+  aiCharacterKey,
   aiPosterKey,
   aiResultKey,
   aiSourceKey,
@@ -70,8 +71,13 @@ export async function createSourceUploadTicket(opts: {
   feature: AiFeature;
   jobId: string;
   extension: string;
+  /** Which object in the job folder: the video (default) or the character image. */
+  role?: "source" | "character";
 }): Promise<UploadTicket> {
-  const path = aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
+  const path =
+    opts.role === "character"
+      ? aiCharacterKey(opts.userId, opts.feature, opts.jobId, opts.extension)
+      : aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
   const admin = createAdminClient();
   const { data, error } = await admin.storage.from(AI_SOURCE_BUCKET).createSignedUploadUrl(path);
 

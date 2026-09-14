@@ -66,6 +66,17 @@ export function aiSourceKey(userId: string, feature: AiFeature, jobId: string, e
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/source.${safeExt(ext)}`;
 }
 
+/*
+  Character Replace (Part 4): a job folder holds TWO inputs and the worker's
+  prepared file — all under the same `<user>/<feature>/<job>/` prefix, so
+  `pathBelongsTo` answers for every one of them the same way.
+*/
+export function aiCharacterKey(userId: string, feature: AiFeature, jobId: string, ext: string): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/character.${safeExt(ext)}`;
+}
+export function aiPreparedKey(userId: string, feature: AiFeature, jobId: string): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/prepared.mp4`;
+}
 export function aiResultKey(userId: string, feature: AiFeature, jobId: string, ext: string): string {
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/result.${safeExt(ext)}`;
 }

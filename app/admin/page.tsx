@@ -169,14 +169,15 @@ import { listVerificationQueue, verificationCounts } from "@/lib/social/verifica
 import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
+import { CharacterReplaceJobsTable } from "@/features/admin/character-replace-jobs";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
 import { AiBalanceAdjustLazy, CharacterReplacePricingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
-import { getAiAdminStats } from "@/lib/ai/admin-stats";
+import { getAiAdminStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
 import { getPlatformStatus } from "@/lib/platform-status-store";
-import { getLandingSettings } from "@/lib/landing/settings";
+import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { getPlanLimits } from "@/lib/monetization/plan";
 import { getPricing } from "@/lib/monetization/pricing";
 import { getPromoSettings } from "@/lib/monetization/promo";
@@ -891,7 +892,7 @@ async function LandingSection() {
  * each POSTs only the fields it displays, so neither can clobber the other's.
  */
 async function FrenzAISection() {
-  const [landing, aiStats] = await Promise.all([getLandingSettings(), getAiAdminStats()]);
+  const [landing, aiStats, crJobs] = await Promise.all([getLandingSettings(), getAiAdminStats(), listCharacterReplaceAdminJobs(30)]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -904,7 +905,17 @@ async function FrenzAISection() {
     <AdminSubsections
       unmountInactive
       groups={[
-        { id: "health", label: "Overview", content: <FrenzAIHealth stats={aiStats} /> },
+        {
+          id: "health",
+          label: "Overview",
+          content: (
+            <div className="space-y-6">
+              <FrenzAIHealth stats={aiStats} />
+              {/* Part 4, §29: the jobs, the provider state, the money — under the AI grouping. */}
+              <CharacterReplaceJobsTable jobs={crJobs} symbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
+            </div>
+          ),
+        },
         { id: "pricing", label: "Character Replace pricing", content: <CharacterReplacePricingLazy settings={landing} /> },
         { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },
         { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },

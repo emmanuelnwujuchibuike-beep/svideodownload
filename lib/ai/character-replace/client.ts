@@ -4,6 +4,7 @@ import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/co
 import type { CharacterReplaceQuote, QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import type { AiErrorCode } from "@/lib/ai/errors";
+import type { AiJobView } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -66,9 +67,56 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<Chara
 
 /** What the tool offers, and whether it is on for this member. */
 export async function getCharacterReplaceConfig(): Promise<
-  CharacterReplaceClientResult<{ config: CharacterReplacePublicConfig; available: boolean; audience: string }>
+  CharacterReplaceClientResult<{ config: CharacterReplacePublicConfig; available: boolean; audience: string; processingAvailable?: boolean }>
 > {
   return request("/api/ai/character-replace/config");
+}
+
+/* ───────────────────────────── the job (Part 4) ─────────────────────────── */
+
+export interface CharacterReplaceUploadTicket {
+  path: string;
+  uploadUrl: string;
+  expiresIn: number;
+}
+
+/**
+ * Open a job and receive two upload tickets. Nothing is charged; nothing is
+ * sent to a provider. Idempotent on `clientRequestId` — a retry returns the
+ * same job with fresh tickets.
+ */
+export async function createCharacterReplaceJob(input: {
+  clientRequestId: string;
+  photo: { name: string; mimeType: string; size: number; width: number; height: number };
+  video: { name: string; mimeType: string; size: number; durationMs: number; width: number; height: number; hasAudio: boolean };
+}): Promise<CharacterReplaceClientResult<{ job: AiJobView; created: boolean; uploads: { video: CharacterReplaceUploadTicket; photo: CharacterReplaceUploadTicket } | null }>> {
+  return request("/api/ai/character-replace/jobs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Start a job whose two files are in place: hands back the SIGNED quote (its
+ * signed fields only), the trim and the consent. The server re-verifies the
+ * quote, reserves the charge from this tool's wallet, and hands the job to
+ * the worker. Pressing twice is safe: the second call finds the job already
+ * started and changes nothing.
+ */
+export async function startCharacterReplaceJob(
+  jobId: string,
+  input: {
+    quote: Pick<CharacterReplaceQuote, "id" | "product" | "currency" | "pricingConfigVersion" | "durationMs" | "quality" | "voiceMode" | "lipSyncMode" | "totalCents" | "expiresAt">;
+    trim: { startMs: number; endMs: number } | null;
+    consent: true;
+  },
+): Promise<CharacterReplaceClientResult<{ job: AiJobView; started: boolean; balanceCents?: number; shortfallCents?: number; requiredCents?: number }>> {
+  return request(`/api/ai/character-replace/jobs/${encodeURIComponent(jobId)}/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 /** The shape `/api/ai/character-replace/balance` answers with. */

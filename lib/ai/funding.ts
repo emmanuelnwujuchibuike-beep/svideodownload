@@ -1,6 +1,7 @@
 import "server-only";
 
 import { chargeAiBalance, refundAiCharge } from "@/lib/ai/balance";
+import { refundCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { decideFunding, type AiFundingSource } from "@/lib/ai/economy";
 import type { AiFeature, AiJobRow } from "@/lib/ai/jobs";
 import type { AiSubject } from "@/lib/ai/subject";
@@ -162,6 +163,20 @@ export async function releaseJobFunding(opts: {
   feature: AiFeature;
   dailyLimit: number;
 }): Promise<void> {
+  /*
+    ── 🔴 CHARACTER REPLACE IS FUNDED FROM THE PRODUCT WALLET (Part 4, §13) ──
+    Its charge is a RESERVATION on `ai_product_ledger` (0154), and
+    `refund_product_charge` is idempotent per job: the first call flips the
+    row to `refunded` and credits the balance, every later call finds no
+    reserved row and returns the balance unchanged. So the six places that
+    undo a job — /start's catch, the webhook, the reconciler, the stall
+    sweep, the finalizer and cancel — can all call this without ever
+    refunding twice. It never touches the daily allowance: this tool has none.
+  */
+  if (opts.feature === "ai_character_replace") {
+    if (opts.job.user_id) await refundCharacterReplaceCharge(opts.job.user_id, opts.job.id);
+    return;
+  }
   const source = opts.job.funding_source;
 
   if (source === "balance") {

@@ -50,6 +50,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
 
   /* ── general ── */
   const [enabled, setEnabled] = useState(cr.enabled);
+  const [goFast, setGoFast] = useState(cr.providerGoFast);
   const [basePrice, setBasePrice] = useState(minorToMajorInput(cr.basePriceCents));
   const [minimum, setMinimum] = useState(minorToMajorInput(cr.minimumChargeCents));
 
@@ -99,6 +100,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     const perSecondCents = majorInputToMinor(perSecond) ?? cr.pricePerSecondCents;
     return {
       enabled,
+      providerGoFast: goFast,
       basePriceCents: majorInputToMinor(basePrice) ?? cr.basePriceCents,
       minimumChargeCents: majorInputToMinor(minimum) ?? cr.minimumChargeCents,
       pricePerSecondCents: perSecondCents,
@@ -125,7 +127,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [basePrice, cr, enabled, lipSyncEnabled, lipTiers, maxSeconds, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, trimMin, voiceSurcharge]);
+  }, [basePrice, cr, enabled, goFast, lipSyncEnabled, lipTiers, maxSeconds, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, trimMin, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -256,6 +258,14 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             checked={enabled}
             onChange={setEnabled}
           />
+          <div className="mt-4">
+            <Toggle
+              label="Faster provider mode"
+              hint="The model's go_fast switch. Quicker runs, possibly a little less detail. Internal — members never see or choose this, and it does not change the price."
+              checked={goFast}
+              onChange={setGoFast}
+            />
+          </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <Field id="cr-base-price" label="Base price per video" hint="Added once to every video. Zero is fine.">
               <input id="cr-base-price" type="number" inputMode="decimal" min={0} step="any" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} className={input} />

@@ -3,6 +3,7 @@ import "server-only";
 import { AI_CLEAN_CONFIG, aiCleanBriaConfigured, aiCleanGpuConfigured, aiCleanModelFor } from "@/lib/ai/config";
 import type { AiAudience } from "@/lib/ai/audience";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
+import { submitCharacterReplaceJob } from "@/lib/ai/character-replace/submit";
 import { hardwareFor, modelTierFor, type AiHardware, type AiModelTier } from "@/lib/ai/hardware";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { AiJobError } from "@/lib/ai/errors";
@@ -73,6 +74,29 @@ export async function submitJobToProvider(
   const provider = providerFor(feature.provider);
   if (!provider || !provider.isConfigured() || !provider.supports(feature.id)) {
     throw new AiJobError("FEATURE_UNAVAILABLE", "no configured provider for this feature");
+  }
+
+  /*
+    ── CHARACTER REPLACE HAS ITS OWN SUBMISSION (Part 4) ─────────────────────
+    Two inputs, a prepared file, the Wan 2.2 payload — none of the AI Clean
+    shape below applies. Its provider seam lives in
+    lib/ai/character-replace/provider.ts; the transition and the claim are
+    the same compare-and-set this function makes.
+  */
+  if (feature.id === "ai_character_replace") {
+    const { submission, row } = await submitCharacterReplaceJob(job, opts);
+    return {
+      submission: {
+        reference: submission.reference,
+        modelVersion: submission.modelVersion,
+        engine: "wan-2.2-animate-replace",
+        hardware: "gpu",
+        modelTier: "standard",
+        audience: "free",
+        model: submission.model,
+      },
+      row,
+    };
   }
 
   const sourcePath = job.source_path;

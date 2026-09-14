@@ -6,6 +6,7 @@ import { AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView, primaryAiFeat
 import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
 import { providerFor } from "@/lib/ai/providers";
 import { releaseAiUsage } from "@/lib/ai/usage";
+import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 
@@ -127,7 +128,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (updated && feature) {
       const entitlement = await getAiEntitlement(subject, feature);
-      await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+      // Character Replace: the reserved charge goes back to the product wallet, once (lib/ai/funding.ts).
+      if (feature.id === "ai_character_replace") {
+        await releaseJobFunding({ job: updated, subject, feature: feature.id, dailyLimit: entitlement.dailyLimit });
+      } else {
+        await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
+      }
       console.info("[ai/jobs] cancelled", {
         jobId: job.id,
                 feature: feature.id,

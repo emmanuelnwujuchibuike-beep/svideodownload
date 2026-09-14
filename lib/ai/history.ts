@@ -172,6 +172,37 @@ export function historyChip(job: AiJobView, now: number): { label: string; tone:
  * 2026-09-13 is still a cleaned video, and calling it anything else would be a
  * lie about the member's own file.
  */
+/**
+ * "720p · 12.4 s · ₦310.00" — the facts a member may see about their own job
+ * (Part 4, §24: thumbnail, date, duration, quality, status, cost). Never a
+ * provider id, never a path. Null for any other tool.
+ */
+export function characterReplaceFacts(job: AiJobView): string | null {
+  const cr = job.characterReplace;
+  if (!cr) return null;
+  const parts: string[] = [cr.quality];
+  const seconds = cr.selectedDurationMs !== null ? cr.selectedDurationMs / 1000 : (job.result.durationSeconds ?? null);
+  if (seconds !== null) parts.push(`${(Math.round(seconds * 10) / 10).toFixed(1)} s`);
+  if (cr.chargedCents !== null && cr.chargedCents > 0) {
+    const money = `${symbolFor(cr.currency)}${(cr.chargedCents / 100).toFixed(2)}`;
+    parts.push(cr.refunded ? `${money} refunded` : money);
+  }
+  return parts.join(" · ");
+}
+
+function symbolFor(currency: string | null): string {
+  switch (currency) {
+    case "NGN":
+      return "₦";
+    case "USD":
+      return "$";
+    case "GHS":
+      return "GH₵";
+    default:
+      return currency ? `${currency} ` : "";
+  }
+}
+
 export function historyTitleFor(feature: AiFeature): string {
   switch (feature) {
     case "ai_character_replace":
@@ -193,9 +224,12 @@ export function historyTitleFor(feature: AiFeature): string {
  */
 export function historyResultSentence(job: AiJobView): string {
   if (job.feature === "ai_character_replace") {
-    return job.result.audioRestored === false
-      ? "Character replaced. This video had no sound to keep."
-      : "Character replaced, with the original movement and scene kept.";
+    const facts = characterReplaceFacts(job);
+    const sentence =
+      job.result.audioRestored === false
+        ? "Character replaced. This video had no sound to keep."
+        : "Character replaced, with the original movement and scene kept.";
+    return facts ? `${sentence} ${facts}.` : sentence;
   }
   if (job.feature === "ai_clean") {
     return job.result.audioRestored === true

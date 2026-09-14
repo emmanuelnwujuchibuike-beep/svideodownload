@@ -276,7 +276,7 @@ const DOWNLOAD_HARD_TIMEOUT_MS = Number(process.env.AI_DOWNLOAD_HARD_TIMEOUT_MS 
  *   · IDLE — reset on every chunk. This is the one that catches a stall.
  *   · HARD — never reset. This is the one that catches a trickle.
  */
-async function downloadToFile(url: string, destination: string, limitBytes: number): Promise<number> {
+export async function downloadToFile(url: string, destination: string, limitBytes: number): Promise<number> {
   const controller = new AbortController();
 
   let idle: NodeJS.Timeout | undefined;
@@ -919,7 +919,7 @@ async function measureMaskCoverage(maskPath: string): Promise<number | null> {
  * no duration in its header, a clip shorter than expected). A first frame is a
  * worse poster than a frame a quarter in; it is a far better one than none.
  */
-async function makeResultPoster(opts: {
+export async function makeResultPoster(opts: {
   videoPath: string;
   dir: string;
   ownerId: string;
@@ -970,7 +970,7 @@ async function makeResultPoster(opts: {
 const POSTER_BUDGET_MS = 10_000;
 
 /** Run ffmpeg with a fixed argument array. Resolves false rather than throwing. */
-function runFfmpeg(args: string[], budgetMs: number): Promise<boolean> {
+export function runFfmpeg(args: string[], budgetMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     let child;
     try {

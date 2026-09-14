@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getJobAsService } from "@/lib/ai/job-store";
+import { finalizeCharacterReplaceJob } from "@/server/services/ai-character-replace-finalize-service";
 import { finalizeAICleanJob } from "@/server/services/ai-finalize-service";
 import { WORKER_SECRET } from "@/lib/worker";
 
@@ -119,7 +121,15 @@ export async function POST(request: Request) {
   */
   const REPORT_BUDGET_MS = 6_000;
 
-  const work = finalizeAICleanJob(jobId).catch((e) => {
+  /*
+    Which finalizer: the row's feature decides (Part 4). Character Replace
+    verifies and keeps the provider's file; AI Clean muxes the audio back.
+    A row that cannot be read falls through to the AI Clean path, whose own
+    first check reports "no such job".
+  */
+  const featureId = (await getJobAsService(jobId).catch(() => null))?.feature ?? null;
+  const finalize = featureId === "ai_character_replace" ? finalizeCharacterReplaceJob : finalizeAICleanJob;
+  const work = finalize(jobId).catch((e) => {
     // Anything reaching here escaped the service's own try/catch, which would
     // be a bug in the service rather than a failed job. Logged loudly.
     console.error("[ai/finalize] escaped the service", { jobId, error: String(e) });

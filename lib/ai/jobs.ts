@@ -559,7 +559,25 @@ export interface AiJobView {
   };
   /** A stable code and a written sentence. Never the provider's own words. */
   error: { code: string; message: string } | null;
+  /**
+   * Character Replace (Part 4): what the result screen and the history show.
+   * Read from the row's metadata contract; absent for any other tool. Never
+   * a storage path, a provider id or a URL — those stay on the server.
+   */
+  characterReplace?: {
+    quality: string;
+    /** The kept range that was priced/processed, integer ms; null before the worker measured it. */
+    selectedDurationMs: number | null;
+    trimmed: boolean;
+    chargedCents: number | null;
+    currency: string | null;
+    /** True for a failed/cancelled job whose charge went back — the ledger's refund is guaranteed on those paths. */
+    refunded: boolean;
+    voiceMode: "original" | "new_voice";
+    lipSyncMode: "standard" | "studio" | null;
+  } | null;
 }
+/* `characterReplace` is optional on the type so fixtures and other tools' views need not name it; the mapper always sets it. */
 
 /**
  * The row, reduced to what may leave the server.
@@ -622,6 +640,28 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
       hasPoster: !!row.poster_path,
     },
     error: row.error_code ? { code: row.error_code, message: errorMessageFor(row.error_code) } : null,
+    characterReplace: characterReplaceView(row),
+  };
+}
+
+function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
+  const m = row.metadata;
+  if (!m || m.tool !== "character_replace") return null;
+  const settings = (m.settings ?? {}) as { quality?: unknown; voiceMode?: unknown; lipSyncMode?: unknown };
+  const prepared = (m.prepared ?? null) as { durationMs?: unknown; trimmed?: unknown } | null;
+  const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown } | null;
+  const trim = m.trim ?? null;
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const charged = row.charged_cents ?? null;
+  return {
+    quality: typeof settings.quality === "string" ? settings.quality : "720p",
+    selectedDurationMs: num(prepared?.durationMs) ?? num(quote?.durationMs),
+    trimmed: typeof prepared?.trimmed === "boolean" ? prepared.trimmed : !!trim,
+    chargedCents: charged,
+    currency: typeof quote?.currency === "string" ? quote.currency : null,
+    refunded: (row.status === "failed" || row.status === "cancelled" || row.status === "expired") && (charged ?? 0) > 0,
+    voiceMode: settings.voiceMode === "new_voice" ? "new_voice" : "original",
+    lipSyncMode: settings.lipSyncMode === "standard" || settings.lipSyncMode === "studio" ? settings.lipSyncMode : null,
   };
 }
 

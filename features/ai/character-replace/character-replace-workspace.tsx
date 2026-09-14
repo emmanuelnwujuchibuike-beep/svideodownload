@@ -16,7 +16,7 @@ import { useCharacterReplaceWorkspace } from "@/features/ai/character-replace/us
 import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
-import type { CharacterReplaceResult } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceResult, ProcessingJob } from "@/lib/ai/character-replace/types";
 import { inputReadiness } from "@/lib/ai/character-replace/validate";
 import {
   canEnterStep,
@@ -27,12 +27,6 @@ import {
   type WorkspaceStep,
 } from "@/lib/ai/character-replace/workspace";
 import { cn } from "@/lib/utils";
-
-/**
- * Part 4 flips this when /start exists. Until then Start stays disabled after
- * everything else is green, and the sentence under it says so.
- */
-const PROCESSING_AVAILABLE = false;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -54,12 +48,12 @@ const PROCESSING_AVAILABLE = false;
  *
  * ── 🔴 START DOES NOTHING EXPENSIVE, AND SAYS SO ────────────────────────────
  *
- * Since Part 3 `canStart` can be true — a signed quote, enough balance,
- * consent — but Part 3 forbids processing ("Do NOT process AI jobs"), so the
- * button is ALSO gated on `PROCESSING_AVAILABLE`, false here and flipped by
- * Part 4 when the pipeline exists. The sentence under the button says which
- * of the two is holding it. No request leaves the browser when it is pressed,
- * because it cannot be pressed. §20 is kept structurally, not by remembering.
+ * `canStart` is true only with a signed quote, enough balance and consent,
+ * and the button is ALSO gated on `loads.processingAvailable` — the server's
+ * word that a provider token and a worker exist on this deployment (Part 4).
+ * The sentence under the button says which of the two is holding it. What a
+ * press does is the hook's `start`: open the job, upload both files, hand the
+ * signed quote to /start. The browser never prices, charges or submits.
  *
  * ── The action bar is sticky and safe-area aware ────────────────────────────
  *
@@ -135,16 +129,43 @@ export function CharacterReplaceWorkspace({
     available: loads.available === true,
     balanceCents: loads.balance?.balanceCents ?? null,
   });
-  const startAllowed = readyToStart && PROCESSING_AVAILABLE;
+  const processingAvailable = loads.processingAvailable === true;
+  const launching = ws.launch.phase !== "idle" && ws.launch.phase !== "error";
+  const startAllowed = readyToStart && processingAvailable && !launching;
+
+  const onStart = useCallback(async () => {
+    const id = await ws.start();
+    if (id) setWatchedJobId(id);
+  }, [ws]);
 
   /* ─────────────────────────── which screen ───────────────────────────── */
 
   const previewJob = process.env.NODE_ENV !== "production" ? devPreview(preview) : null;
-  const processing = previewJob?.processing ?? watch.processing;
+  /*
+    The browser's own phases come first: while the files are still leaving
+    the device there is no row to watch, and the two of them are the only
+    measured progress this screen ever shows (§21: no invented percentages).
+  */
+  const launchJob: ProcessingJob | null =
+    ws.launch.phase === "preparing"
+      ? { status: "preparing", job: null, progress: null, estimatedSecondsRemaining: null, canCancel: false, message: null }
+      : ws.launch.phase === "uploading"
+        ? { status: "uploading", job: null, progress: ws.launch.progress, estimatedSecondsRemaining: null, canCancel: false, message: null }
+        : ws.launch.phase === "starting"
+          ? { status: "queued", job: null, progress: null, estimatedSecondsRemaining: null, canCancel: false, message: null }
+          : null;
+  const processing = previewJob?.processing ?? launchJob ?? watch.processing;
   const result: CharacterReplaceResult | null =
     previewJob?.result ??
     (watch.job && watch.job.status === "completed"
-      ? { job: watch.job, previewUrl: watch.previewUrl, durationSeconds: watch.job.result.durationSeconds ?? watch.job.source.durationSeconds, quality: null, voice: null, lipSync: null }
+      ? {
+          job: watch.job,
+          previewUrl: watch.previewUrl,
+          durationSeconds: watch.job.result.durationSeconds ?? (watch.job.characterReplace?.selectedDurationMs ? watch.job.characterReplace.selectedDurationMs / 1000 : null) ?? watch.job.source.durationSeconds,
+          quality: (watch.job.characterReplace?.quality as CharacterReplaceResult["quality"]) ?? null,
+          voice: watch.job.characterReplace ? { mode: watch.job.characterReplace.voiceMode, languageCode: null, voiceId: null } : null,
+          lipSync: watch.job.characterReplace?.lipSyncMode ? { tier: watch.job.characterReplace.lipSyncMode } : null,
+        }
       : null);
 
   const leaveJob = useCallback(() => {
@@ -304,6 +325,7 @@ export function CharacterReplaceWorkspace({
                 <button
                   type="button"
                   disabled={!startAllowed}
+                  onClick={() => void onStart()}
                   className={cn(
                     "inline-flex min-h-[48px] items-center gap-2 rounded-full px-6 text-[14px] font-bold text-white",
                     "bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 shadow-[0_14px_34px_-14px_rgb(99_102_241/0.9)]",
@@ -332,12 +354,14 @@ export function CharacterReplaceWorkspace({
             </div>
 
             {step === "review" ? (
-              <p className="mt-3 text-center text-[12.5px] leading-relaxed text-muted-foreground" aria-live="polite">
+              <p className={cn("mt-3 text-center text-[12.5px] leading-relaxed", ws.launch.phase === "error" ? "font-semibold text-rose-500" : "text-muted-foreground")} aria-live="polite">
                 {!project.consent
                   ? "Confirm you have the right to use this likeness to continue."
                   : config && !config.pricingAvailable
                     ? "Processing isn't switched on yet. Your files stay on your device and nothing is charged."
-                    : readyToStart && !PROCESSING_AVAILABLE
+                    : ws.launch.phase === "error"
+                    ? ws.launch.message
+                  : readyToStart && !processingAvailable
                       ? "Processing isn't switched on yet. Your price is confirmed and nothing has been charged."
                     : state.pricing.status === "error"
                       ? "We couldn't price this video yet."

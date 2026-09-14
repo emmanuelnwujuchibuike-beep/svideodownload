@@ -4,6 +4,8 @@ import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config"
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
+import { hasProviderFor } from "@/lib/ai/providers";
+import { hasWorker } from "@/lib/worker";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -70,6 +72,12 @@ export async function GET(request: Request) {
        */
       available: config.enabled && entitlement.allowed,
       audience: entitlement.audience,
+      /*
+        Part 4: whether a job can actually be RUN on this deployment — the
+        provider token is present and the worker that trims is reachable. The
+        workspace enables Start on this, never on a constant.
+      */
+      processingAvailable: hasProviderFor(feature) && hasWorker,
     });
   } catch (e) {
     console.error("[ai/character-replace/config] read failed", { subject: subject.key, error: String(e) });

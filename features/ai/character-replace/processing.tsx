@@ -60,7 +60,7 @@ export function CharacterReplaceProcessing({
           {cancelled ? <XCircle className="h-6 w-6" aria-hidden /> : <AlertTriangle className="h-6 w-6" aria-hidden />}
         </span>
         <h2 className="mt-4 text-[19px] font-bold tracking-[-0.02em]">
-          {cancelled ? "Cancelled" : refunded ? "Didn't finish — refunded" : "Didn't finish"}
+          {cancelled ? "Cancelled" : refunded ? "We couldn't complete this video — refunded" : "We couldn't complete this video"}
         </h2>
         <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">
           {job.message ??
@@ -169,14 +169,15 @@ export function CharacterReplaceProcessing({
 
 function headline(job: ProcessingJob): string {
   switch (job.status) {
+    // §21's words, verbatim. The only percentage is the upload's — measured, never invented.
     case "preparing":
-      return "Getting your files ready";
+      return "Preparing your video";
     case "uploading":
-      return job.progress !== null ? `Uploading · ${Math.round(job.progress * 100)}%` : "Uploading";
+      return job.progress !== null ? `Uploading your media · ${Math.round(job.progress * 100)}%` : "Uploading your media";
     case "queued":
-      return "In line";
+      return "Your creation is in the queue";
     case "processing":
-      return "Placing your likeness into every frame";
+      return "Replacing the character";
     case "finalizing":
       return "Finishing your video";
     default:

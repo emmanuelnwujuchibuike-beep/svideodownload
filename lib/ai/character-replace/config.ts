@@ -152,6 +152,14 @@ export interface CharacterReplaceConfig {
   pricingVersion: number;
   pricingUpdatedAt: string | null;
   pricingHistory: readonly { version: number; replacedAt: string; config: Record<string, unknown> }[];
+  /**
+   * The provider's `go_fast` switch (Part 4, §10): "Expose go_fast as an
+   * internal provider setting rather than a confusing customer-facing
+   * option… Admin configuration may later control this." Never shown to a
+   * member; never priced. Off by default — the model's own default — until
+   * the owner has compared the two on real footage.
+   */
+  providerGoFast: boolean;
   /** The "New voice" option (Part 3, §11): offered or not, and its surcharge. */
   voice: {
     newVoiceEnabled: boolean;
@@ -258,6 +266,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   pricingVersion: 1,
   pricingUpdatedAt: null,
   pricingHistory: [],
+  providerGoFast: false,
   // Offered, with no surcharge until the operator sets one — TTS is a later
   // part and its cost is not known yet (§11: "Do not invent a final price").
   voice: { newVoiceEnabled: true, surchargePerSecondCents: 0 },
@@ -442,6 +451,7 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
     pricingVersion: int(raw.pricingVersion, d.pricingVersion, 1, 1_000_000),
     pricingUpdatedAt: typeof raw.pricingUpdatedAt === "string" ? raw.pricingUpdatedAt.slice(0, 40) : null,
     pricingHistory: history,
+    providerGoFast: bool(raw.providerGoFast, d.providerGoFast),
     voice: {
       newVoiceEnabled: bool(voiceRaw.newVoiceEnabled, d.voice.newVoiceEnabled),
       surchargePerSecondCents: int(voiceRaw.surchargePerSecondCents, d.voice.surchargePerSecondCents, 0, 100_000_000),

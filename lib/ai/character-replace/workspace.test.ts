@@ -240,6 +240,9 @@ describe("pricing state", () => {
     minimumChargeCents: 100,
     minimumApplied: false,
     pricingConfigVersion: 1,
+    quality: "720p",
+    voiceMode: "original",
+    lipSyncMode: null,
   };
 
   it("a quote goes stale when any priced input moves, and survives an unpriced one", () => {

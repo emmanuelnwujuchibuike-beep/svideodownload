@@ -121,6 +121,17 @@ export type AiErrorCode =
   | "STORAGE_ERROR"
   | "RATE_LIMITED"
   /*
+    ── Character Replace (Part 4) ──────────────────────────────────────────
+    The money and the media checks /start makes before anything is spent.
+    Each names the way out; none names a provider.
+  */
+  | "CR_BALANCE_REQUIRED"
+  | "QUOTE_EXPIRED"
+  | "PRICE_CHANGED"
+  | "PREPARATION_FAILED"
+  | "DURATION_MISMATCH"
+  | "QUALITY_UNAVAILABLE"
+  /*
     Not in the owner's list, which was written as examples. It is here because
     without it the create path has no honest code for "the database refused to
     record your job": `PROCESSING_FAILED` would claim work was attempted,
@@ -143,10 +154,10 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   FEATURE_UNAVAILABLE: { status: 503, message: "This tool isn't available yet." },
   DAILY_LIMIT_REACHED: { status: 429, message: "You've used today's free AI videos. They reset at midnight UTC." },
   INVALID_INPUT: { status: 400, message: "We couldn't use that request. Try again." },
-  FILE_TOO_LARGE: { status: 413, message: "That video is too large for AI Clean." },
-  UNSUPPORTED_FORMAT: { status: 415, message: "AI Clean takes MP4, MOV, WebM and AVI videos." },
+  FILE_TOO_LARGE: { status: 413, message: "That file is too large." },
+  UNSUPPORTED_FORMAT: { status: 415, message: "Use an MP4, MOV or WebM video, and a JPG, PNG or WebP photo." },
   JOB_NOT_FOUND: { status: 404, message: "We couldn't find that job." },
-  JOB_ALREADY_PROCESSING: { status: 409, message: "You already have a video being cleaned. Wait for it to finish." },
+  JOB_ALREADY_PROCESSING: { status: 409, message: "You already have a video being made. Wait for it to finish." },
   // 🔴 The sentence is AI_POLICY_MESSAGE, and it is written out here rather
   // than imported so this module stays free of dependencies — the two are held
   // together by a test in acceptable-use.test.ts instead of by an import.
@@ -183,7 +194,7 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   },
   PROVIDER_UNAVAILABLE: {
     status: 503,
-    message: "AI Clean is temporarily unavailable. Nothing was charged — please try again later.",
+    message: "Frenz AI is temporarily unavailable. Nothing was charged — please try again later.",
   },
   PROVIDER_TIMEOUT: {
     status: 504,
@@ -197,7 +208,7 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
     // not blame them or the video — this one is entirely on us.
     message: "We couldn't finish this video. Your allowance wasn't used — please try again shortly.",
   },
-  PROCESSING_FAILED: { status: 500, message: "The cleanup didn't finish. Nothing was changed — you can try again." },
+  PROCESSING_FAILED: { status: 500, message: "We couldn't complete this video. Your balance wasn't charged — you can try again." },
   /*
     422, not 500: the request was fine and our side did not break — the video
     at the other end could not be collected. And the sentence names the way
@@ -210,10 +221,16 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   },
   UNSUPPORTED_SOURCE: {
     status: 422,
-    message: "That link doesn't lead to a video AI Clean can take.",
+    message: "That link doesn't lead to a video Frenz AI can take.",
   },
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },
   RATE_LIMITED: { status: 429, message: "You're going a bit fast — give it a moment." },
+  CR_BALANCE_REQUIRED: { status: 402, message: "Your balance doesn't cover this video. Recharge to continue." },
+  QUOTE_EXPIRED: { status: 409, message: "That price has expired. Check the new price and try again." },
+  PRICE_CHANGED: { status: 409, message: "The price changed while you were reviewing. Check the new price and try again." },
+  PREPARATION_FAILED: { status: 422, message: "We couldn't prepare that video. Choose it again and try once more." },
+  DURATION_MISMATCH: { status: 422, message: "The video's length didn't match what was priced. Nothing was charged — choose it again." },
+  QUALITY_UNAVAILABLE: { status: 422, message: "That quality isn't available right now. Choose another and try again." },
   INTERNAL_ERROR: { status: 500, message: "Something went wrong. Nothing was charged — try again in a moment." },
 };
 

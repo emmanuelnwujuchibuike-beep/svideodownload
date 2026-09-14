@@ -43,7 +43,13 @@ function token(): string {
 }
 
 /** One place that talks to Replicate, so the auth header exists once. */
-async function call(
+/**
+ * The one HTTP client for api.replicate.com. Exported (2026-09-14) so the
+ * Character Replace provider (lib/ai/character-replace/provider.ts) shares
+ * the token, the timeout and the shape — one credential system, as Part 4
+ * §2 asks — without this adapter learning that model's inputs.
+ */
+export async function replicateCall(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
 ): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
@@ -72,7 +78,7 @@ async function call(
   }
 }
 
-interface ReplicatePrediction {
+export interface ReplicatePrediction {
   id?: string;
   status?: string;
   output?: unknown;
@@ -82,7 +88,7 @@ interface ReplicatePrediction {
 }
 
 /** One prediction body turned into our vocabulary. */
-function toState(body: ReplicatePrediction, fallbackReference: string): AiProviderState {
+export function toState(body: ReplicatePrediction, fallbackReference: string): AiProviderState {
   return {
     reference: typeof body.id === "string" && body.id ? body.id : fallbackReference,
     // An unrecognised status maps to null and the caller leaves the job alone —
@@ -105,8 +111,15 @@ function toState(body: ReplicatePrediction, fallbackReference: string): AiProvid
 export const replicateProvider: AiProvider = {
   id: "replicate",
 
+  /*
+    The TOKEN is what makes this adapter configured (2026-09-14). AI Clean's
+    own pins are checked by `submit` below, at the moment they are needed;
+    Character Replace has its own pin in lib/ai/character-replace/model.ts.
+    Requiring AI Clean's env here reported the whole provider as absent on
+    a deployment that only runs Character Replace.
+  */
   isConfigured() {
-    return aiCleanMisconfiguration() === null;
+    return !!process.env.REPLICATE_API_TOKEN?.trim();
   },
 
   /*
@@ -124,7 +137,7 @@ export const replicateProvider: AiProvider = {
     job can reach `/predictions`, and no provider spend can happen from it.
   */
   supports(feature) {
-    return feature === "ai_clean";
+    return feature === "ai_clean" || feature === "ai_character_replace";
   },
 
   async submit(input: AiProviderSubmission): Promise<AiProviderState> {
@@ -142,7 +155,7 @@ export const replicateProvider: AiProvider = {
       every progress line the model prints — dozens of invocations per job, all
       doing nothing.
     */
-    const res = await call("/predictions", {
+    const res = await replicateCall("/predictions", {
       method: "POST",
       body: JSON.stringify({
         // 🔴 The model AND its version come from one function keyed on the
@@ -189,7 +202,7 @@ export const replicateProvider: AiProvider = {
   },
 
   async poll(reference: string): Promise<AiProviderState> {
-    const res = await call(`/predictions/${encodeURIComponent(reference)}`, { method: "GET" });
+    const res = await replicateCall(`/predictions/${encodeURIComponent(reference)}`, { method: "GET" });
     if (!res.ok) {
       throw new AiJobError("PROVIDER_ERROR", `replicate poll ${res.status}: ${res.text.slice(0, 300)}`);
     }
@@ -198,7 +211,7 @@ export const replicateProvider: AiProvider = {
 
   async cancel(reference: string): Promise<boolean> {
     try {
-      const res = await call(`/predictions/${encodeURIComponent(reference)}/cancel`, { method: "POST" });
+      const res = await replicateCall(`/predictions/${encodeURIComponent(reference)}/cancel`, { method: "POST" });
       // A prediction that already finished cannot be cancelled, and that is not
       // an error worth surfacing — the caller marks the job cancelled either
       // way, because the member's intent is what the status records.

@@ -13,6 +13,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
+      // `server-only` throws outside an RSC build; under test it is a no-op
+      // so server modules (the quote verifier, the funding router) can be
+      // exercised directly. See lib/testing/server-only-stub.ts.
+      "server-only": path.resolve(__dirname, "lib/testing/server-only-stub.ts"),
     },
   },
   test: {

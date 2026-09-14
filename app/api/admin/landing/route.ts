@@ -186,6 +186,7 @@ const schema = z.object({
         )
         .max(3)
         .optional(),
+      providerGoFast: z.boolean().optional(),
       lipSyncEnabled: z.boolean().optional(),
       lipSync: z
         .array(

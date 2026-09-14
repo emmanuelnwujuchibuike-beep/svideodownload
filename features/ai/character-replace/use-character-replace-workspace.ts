@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import {
+  createCharacterReplaceJob,
   getCharacterReplaceBalance,
   getCharacterReplaceConfig,
   getCharacterReplaceQuote,
   readCachedCharacterReplaceBalance,
+  startCharacterReplaceJob,
   takeTopupReturnReference,
   verifyCharacterReplaceTopup,
 } from "@/lib/ai/character-replace/client";
+import { newClientRequestId, uploadSource } from "@/lib/ai/client";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
@@ -61,10 +64,20 @@ import { readImageSize, readVideoMetadata } from "@/features/ai/character-replac
  * its URL immediately; closing the page revokes whatever is left.
  */
 
+/** The browser's own phases before the server has a row — the only measured progress there is. */
+export type LaunchState =
+  | { phase: "idle" }
+  | { phase: "preparing" }
+  | { phase: "uploading"; progress: number }
+  | { phase: "starting" }
+  | { phase: "error"; code: string; message: string };
+
 export interface WorkspaceLoads {
   config: CharacterReplacePublicConfig | null;
   /** The tool is on for this member. Null until the config answers. */
   available: boolean | null;
+  /** A job can actually run on this deployment (provider + worker). Null until the config answers. */
+  processingAvailable: boolean | null;
   configError: string | null;
   balance: CharacterReplaceBalance | null;
   balanceError: string | null;
@@ -77,6 +90,7 @@ export function useCharacterReplaceWorkspace() {
   const [loads, setLoads] = useState<WorkspaceLoads>({
     config: null,
     available: null,
+    processingAvailable: null,
     configError: null,
     // The last figure this browser saw paints first (from the effect below,
     // not here — the prerendered markup has no balance); the network replaces it.
@@ -141,7 +155,7 @@ export function useCharacterReplaceWorkspace() {
     void (async () => {
       const res = await getCharacterReplaceConfig();
       if (!alive.current) return;
-      if (res.ok) setLoads((l) => ({ ...l, config: res.config, available: res.available, configError: null }));
+      if (res.ok) setLoads((l) => ({ ...l, config: res.config, available: res.available, processingAvailable: res.processingAvailable === true, configError: null }));
       else setLoads((l) => ({ ...l, configError: res.error, available: false }));
     })();
 
@@ -338,7 +352,128 @@ export function useCharacterReplaceWorkspace() {
     release(previous);
   }, [release, state.project.video?.objectUrl]);
 
-  const send = useCallback((action: WorkspaceAction) => dispatch(action), []);
+  const send = useCallback((action: WorkspaceAction) => {
+    // A new draft mints a new request id (see `start`).
+    if (action.type === "reset") requestId.current = null;
+    dispatch(action);
+  }, []);
+
+  /* ───────────────────────── Start (Part 4) ────────────────────────────── */
+
+  /*
+    The browser's side of steps 7–9: open the job, put both files in the
+    private bucket (a PUT straight to storage, with real progress), and hand
+    the SIGNED quote back at /start. Nothing here decides a price or moves
+    money — the server re-verifies the quote and reserves the charge — and
+    the two browser phases (preparing, uploading) are the only "progress"
+    that is ever measured; from the server's first row on, the job watch
+    owns the screen.
+
+    🔴 ONE clientRequestId PER DRAFT. A retry after a dropped connection
+    reuses it, so the server answers with the job it already opened rather
+    than a second one; a new draft (reset) mints a new one.
+  */
+  const requestId = useRef<string | null>(null);
+  const [launch, setLaunch] = useState<LaunchState>({ phase: "idle" });
+
+  const start = useCallback(async (): Promise<string | null> => {
+    const photo = state.project.character;
+    const video = state.project.video;
+    if (!photo || !video || !state.project.consent || state.pricing.status !== "quoted") return null;
+    const snapshot = state.pricing.snapshot;
+    // Dimensions the browser could not read are refused here rather than sent as zeros; the worker measures the real ones anyway.
+    if (!photo.width || !photo.height || !video.metadata.width || !video.metadata.height || !video.metadata.durationMs) {
+      setLaunch({ phase: "error", code: "INVALID_INPUT", message: "We couldn't read the size of your files. Choose them again." });
+      return null;
+    }
+    if (launch.phase !== "idle" && launch.phase !== "error") return null;
+    requestId.current ??= newClientRequestId();
+
+    setLaunch({ phase: "preparing" });
+    const created = await createCharacterReplaceJob({
+      clientRequestId: requestId.current,
+      photo: { name: photo.name, mimeType: photo.mimeType, size: photo.size, width: photo.width, height: photo.height },
+      video: {
+        name: video.name,
+        mimeType: video.mimeType,
+        size: video.size,
+        durationMs: Math.round(video.metadata.durationMs),
+        width: video.metadata.width,
+        height: video.metadata.height,
+        hasAudio: video.metadata.hasAudio === true,
+      },
+    });
+    if (!alive.current) return null;
+    if (!created.ok) {
+      setLaunch({ phase: "error", code: created.code, message: created.error });
+      return null;
+    }
+    // The job exists but is past `queued` (a retry after /start already ran): just watch it.
+    if (!created.uploads) {
+      setLaunch({ phase: "idle" });
+      return created.job.id;
+    }
+
+    /* the two uploads — the photo is small and first, the video carries the bar */
+    setLaunch({ phase: "uploading", progress: 0 });
+    const photoOk = await uploadSource({ ticket: created.uploads.photo, file: photo.file });
+    if (!alive.current) return null;
+    if (!photoOk) {
+      setLaunch({ phase: "error", code: "NETWORK", message: "The photo didn't upload. Check your connection and try again." });
+      return null;
+    }
+    const videoOk = await uploadSource({
+      ticket: created.uploads.video,
+      file: video.file,
+      onProgress: (fraction) => {
+        if (alive.current) setLaunch({ phase: "uploading", progress: Math.max(0, Math.min(1, fraction)) });
+      },
+    });
+    if (!alive.current) return null;
+    if (!videoOk) {
+      setLaunch({ phase: "error", code: "NETWORK", message: "The video didn't upload. Check your connection and try again." });
+      return null;
+    }
+
+    /* the start — the signed quote, the trim, the consent; the server does the rest */
+    setLaunch({ phase: "starting" });
+    const range = selectedRangeMs(state.project);
+    const sourceMs = Math.round(video.metadata.durationMs);
+    const trimmed = !!state.project.settings.trim && range !== null && (range.startMs > 0 || range.endMs < sourceMs);
+    const started = await startCharacterReplaceJob(created.job.id, {
+      quote: {
+        id: snapshot.id,
+        product: "character_replace",
+        currency: snapshot.currency,
+        pricingConfigVersion: snapshot.pricingConfigVersion,
+        durationMs: snapshot.durationMs,
+        quality: snapshot.quality,
+        voiceMode: snapshot.voiceMode,
+        lipSyncMode: snapshot.lipSyncMode,
+        totalCents: snapshot.totalCents,
+        expiresAt: snapshot.expiresAt,
+      },
+      trim: trimmed && range ? { startMs: range.startMs, endMs: range.endMs } : null,
+      consent: true,
+    });
+    if (!alive.current) return null;
+    if (!started.ok) {
+      // A price that moved or expired: fetch the new one and let the member look again.
+      if (started.code === "PRICE_CHANGED" || started.code === "QUOTE_EXPIRED") {
+        dispatch({ type: "pricing", pricing: { status: "pending" } });
+        setRetry((n) => n + 1);
+      }
+      if (started.code === "CR_BALANCE_REQUIRED") void loadBalance();
+      setLaunch({ phase: "error", code: started.code, message: started.error });
+      return null;
+    }
+    requestId.current = null;
+    void loadBalance();
+    setLaunch({ phase: "idle" });
+    return started.job.id;
+  }, [launch.phase, loadBalance, state.pricing, state.project]);
+
+  const clearLaunchError = useCallback(() => setLaunch((l) => (l.phase === "error" ? { phase: "idle" } : l)), []);
 
   const dismissTopupNotice = useCallback(() => setLoads((l) => ({ ...l, topupNotice: null })), []);
 
@@ -353,5 +488,8 @@ export function useCharacterReplaceWorkspace() {
     reloadBalance: loadBalance,
     requote,
     dismissTopupNotice,
+    launch,
+    start,
+    clearLaunchError,
   };
 }

@@ -227,6 +227,10 @@ export interface PricingSnapshot {
   minimumApplied: boolean;
   /** Which pricing configuration produced this; the server checks it at confirm. */
   pricingConfigVersion: number;
+  /** The inputs it was priced for — handed back, signed, at /start (Part 4). */
+  quality: CharacterReplaceQualityId;
+  voiceMode: CharacterReplaceAudioMode;
+  lipSyncMode: CharacterReplaceLipSyncTier | null;
 }
 
 export interface PricingLine {

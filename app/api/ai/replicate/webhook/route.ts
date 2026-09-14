@@ -10,6 +10,7 @@ import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { subjectFromRow, type AiSubject } from "@/lib/ai/subject";
 import { releaseAiUsage } from "@/lib/ai/usage";
+import { releaseJobFunding } from "@/lib/ai/funding";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
       if (updated) {
         // A cancelled run still consumed provider time, but the member asked for
         // it to stop and got nothing — the slot goes back.
-        await refund(subjectFromRow(job), feature.id);
+        await refund(subjectFromRow(job), feature.id, updated);
       }
       return NextResponse.json({ ok: true }, { status: 200 });
     }
@@ -248,7 +249,7 @@ async function failJob(
   });
 
   if (updated) {
-    await refund(subject, feature);
+    await refund(subject, feature, updated);
     /*
       The provider gave up on a job the member is probably no longer watching —
       this model runs for minutes, so a silent failure is indistinguishable
@@ -283,9 +284,14 @@ async function failJob(
  * daily allowance, and a webhook has no session to read it from. `getUserPlan`
  * is a single indexed read and this path runs at most once per job.
  */
-async function refund(subject: AiSubject | null, feature: AiFeature) {
+async function refund(subject: AiSubject | null, feature: AiFeature, job?: { id: string; user_id: string | null; funding_source: "free" | "balance" | null }) {
   const def = aiFeature(feature);
   if (!def || !subject) return;
   const entitlement = await getAiEntitlement(subject, def);
+  // Character Replace: the product-wallet refund, exactly once (lib/ai/funding.ts).
+  if (job && feature === "ai_character_replace") {
+    await releaseJobFunding({ job, subject, feature, dailyLimit: entitlement.dailyLimit });
+    return;
+  }
   await releaseAiUsage(subject, feature, entitlement.dailyLimit);
 }

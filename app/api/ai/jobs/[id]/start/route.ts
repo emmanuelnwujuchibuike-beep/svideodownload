@@ -155,6 +155,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     const feature = aiFeature(job.feature);
     if (!feature) return fail("FEATURE_UNAVAILABLE");
+    // Character Replace starts through its own route (Part 4): two inputs, a
+    // signed quote, the product wallet. This route's funding path is the
+    // retired AI wallet and must never be reached for it.
+    if (feature.id === "ai_character_replace") return fail("INVALID_INPUT", { error: "Use the Character Replace workspace to start this job." });
 
     // Already running or finished. Returning the job rather than an error makes
     // a double-tap on "Continue" harmless — the second call is a no-op that

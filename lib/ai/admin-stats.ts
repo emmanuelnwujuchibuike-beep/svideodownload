@@ -141,3 +141,98 @@ export async function getAiAdminStats(): Promise<AiAdminStats | null> {
     return null;
   }
 }
+
+/* ───────────────────── Character Replace jobs (Part 4, §29) ─────────────────── */
+
+/**
+ * One row per recent Character Replace job, for the operator: status, the
+ * provider's state as we recorded it, duration, quality, what was charged,
+ * whether it came back, the prediction id, the timestamps. Read with the
+ * service role, shaped here so the panel never sees a storage path.
+ */
+export interface CharacterReplaceAdminJob {
+  id: string;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  status: AiJobStatus;
+  userId: string | null;
+  quality: string | null;
+  durationMs: number | null;
+  trimmed: boolean;
+  chargedCents: number | null;
+  currency: string | null;
+  refunded: boolean;
+  predictionId: string | null;
+  modelVersion: string | null;
+  errorCode: string | null;
+  failureCategory: string | null;
+}
+
+export async function listCharacterReplaceAdminJobs(limit = 30): Promise<CharacterReplaceAdminJob[]> {
+  try {
+    const db = createAdminClient();
+    const { data, error } = await db
+      .from("ai_jobs")
+      .select("id, user_id, status, charged_cents, replicate_prediction_id, model_version, error_code, created_at, started_at, completed_at, metadata")
+      .eq("feature", "ai_character_replace")
+      .order("created_at", { ascending: false })
+      .limit(Math.max(1, Math.min(100, limit)));
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as {
+      id: string;
+      user_id: string | null;
+      status: AiJobStatus;
+      charged_cents: number | null;
+      replicate_prediction_id: string | null;
+      model_version: string | null;
+      error_code: string | null;
+      created_at: string;
+      started_at: string | null;
+      completed_at: string | null;
+      metadata: Record<string, unknown> | null;
+    }[];
+    const jobIds = rows.map((r) => r.id);
+    // Which of these charges came back — the ledger is the truth, not the status.
+    const refundedIds = new Set<string>();
+    if (jobIds.length > 0) {
+      const { data: ledger } = await db
+        .from("ai_product_ledger")
+        .select("job_id, status")
+        .eq("product", "character_replace")
+        .eq("kind", "processing_charge")
+        .in("job_id", jobIds);
+      for (const l of (ledger ?? []) as { job_id: string | null; status: string }[]) {
+        if (l.job_id && l.status === "refunded") refundedIds.add(l.job_id);
+      }
+    }
+    return rows.map((r) => {
+      const m = r.metadata ?? {};
+      const settings = (m.settings ?? {}) as { quality?: unknown };
+      const prepared = (m.prepared ?? null) as { durationMs?: unknown; trimmed?: unknown } | null;
+      const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown } | null;
+      const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      return {
+        id: r.id,
+        createdAt: r.created_at,
+        startedAt: r.started_at,
+        completedAt: r.completed_at,
+        status: r.status,
+        userId: r.user_id,
+        quality: typeof settings.quality === "string" ? settings.quality : null,
+        durationMs: num(prepared?.durationMs) ?? num(quote?.durationMs),
+        trimmed: prepared?.trimmed === true || !!m.trim,
+        chargedCents: r.charged_cents,
+        currency: typeof quote?.currency === "string" ? quote.currency : null,
+        refunded: refundedIds.has(r.id),
+        predictionId: r.replicate_prediction_id,
+        modelVersion: r.model_version,
+        errorCode: r.error_code,
+        failureCategory: typeof m.failure_category === "string" ? m.failure_category : null,
+      };
+    });
+  } catch (e) {
+    console.error("[ai/admin] character replace jobs failed", { error: String(e) });
+    return [];
+  }
+}

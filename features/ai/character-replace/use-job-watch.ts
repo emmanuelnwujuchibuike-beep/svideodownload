@@ -120,15 +120,16 @@ export function useJobWatch(jobId: string | null) {
 
   const processing: ProcessingJob | null = job
     ? {
-        status: processingStatusFor(job.status),
+        status: job.characterReplace?.refunded && job.status === "failed" ? "refunded" : processingStatusFor(job.status),
         job,
         progress: null,
         estimatedSecondsRemaining: null,
-        // Safe while nothing has been handed to the provider: the row is still
-        // `queued`, and cancelling it releases the funding. Once processing has
-        // begun the provider has been paid for, and the platform's cancel refuses.
-        canCancel: job.status === "queued",
-        message: job.status === "failed" ? (job.error?.message ?? null) : null,
+        // Safe while nothing has been handed to the provider: `queued` (no
+        // charge yet) and `acquiring` (our worker is still trimming; the
+        // reservation goes back in full). Once processing has begun the
+        // provider has been paid for.
+        canCancel: job.status === "queued" || job.status === "acquiring",
+        message: job.status === "failed" || job.status === "cancelled" ? (job.error?.message ?? null) : null,
       }
     : null;
 

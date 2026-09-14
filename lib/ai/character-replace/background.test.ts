@@ -351,11 +351,22 @@ describe("migration 0156 — plain DDL, the audit table locked to the service ro
 /* ───────────────────────── Video Ready (owner, 2026-09-14) ──────────────── */
 
 describe("Video Ready — the master is the model's output, shown and saved without a transform", () => {
-  it("the finalizer never re-encodes the master: two stream copies for the colour tags, no eq/lut/scale", () => {
+  /*
+    ── 🔴 PURELY NATURAL (owner, 2026-09-14) ──────────────────────────────
+    "The result and filter should be purely natural from replicate." The
+    finalizer stores the file it downloaded: no ffmpeg pass of any kind on
+    the master, and the prepare service runs one plan with no tone-map.
+  */
+  it("the finalizer stores the provider's file byte for byte — no ffmpeg pass, no colour tags, no re-encode", () => {
     const s = src("server/services/ai-character-replace-finalize-service.ts");
-    expect(s).toContain("buildColorTagArgs(plan)");
-    expect(s).toContain("buildContainerTagArgs(plan2)");
+    expect(s).toContain("const finalFile = outputFile;");
+    expect(s).not.toMatch(/buildColorTagArgs|buildContainerTagArgs|runFfmpegQuiet|h264_metadata|isColorTagged/);
     expect(s).not.toMatch(/eq=saturation|saturationMatch|buildColorMatchArgs|-crf/);
+  });
+  it("the prepare service tone-maps nothing and tags nothing", () => {
+    const s = src("server/services/ai-character-replace-prepare-service.ts");
+    expect(s).not.toMatch(/isHdrSource|toneMapped|hdr:/);
+    expect(s).toContain("const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null };");
   });
   it("the download route redirects to the stored bytes — no video passes through a function", () => {
     const s = src("app/api/ai/jobs/[id]/result/route.ts");

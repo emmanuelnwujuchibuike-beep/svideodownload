@@ -10,7 +10,7 @@ import { characterReplaceLimits } from "@/lib/ai/character-replace/validate";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
-import { isHdrSource, probeColor } from "@/server/services/ai-color-probe";
+import { probeColor } from "@/server/services/ai-color-probe";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
 import { AI_IMAGE_MAX_BYTES } from "@/lib/ai/media";
@@ -169,28 +169,18 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     /* ── 4. cut and normalise ────────────────────────────────────────────── */
     const trimmed = range.startMs > 0 || range.endMs < sourceMs;
     /*
-      HDR in → SDR out, properly (owner, 2026-09-14: "extra colour"). An HLG/PQ
-      or 10-bit BT.2020 source is tone-mapped to BT.709 before the model sees
-      it. If this ffmpeg build lacks zscale/tonemap the encode is retried
-      without the chain — a plain conversion beats no video, and the row says
-      which one ran.
+      🔴 THE TRIM AND THE SIZE, NOTHING ELSE (owner, 2026-09-14: "the result
+      and filter should be purely natural from replicate"). The colour probe
+      is recorded on the row as a diagnostic and changes nothing about the
+      file the model receives — see lib/ai/character-replace/ffmpeg.ts.
     */
     const color = await probeColor(videoFile);
-    const hdr = isHdrSource(color);
-    let plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null, hdr };
-    let args = buildPrepareArgs(plan);
+    const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null };
+    const args = buildPrepareArgs(plan);
     for (const arg of args) {
       if (!isKnownPrepareArg(arg, plan)) throw new PrepareFailure("PREPARATION_FAILED", `refusing an unknown ffmpeg argument`, "system");
     }
-    let cut = await runPrepare(args);
-    let toneMapped = hdr;
-    if (!cut.ok && hdr) {
-      console.warn("[cr/prepare] HDR tone-map failed, retrying as a plain conversion", { jobId, detail: cut.detail.slice(0, 200) });
-      plan = { ...plan, hdr: false };
-      args = buildPrepareArgs(plan);
-      cut = await runPrepare(args);
-      toneMapped = false;
-    }
+    const cut = await runPrepare(args);
     if (!cut.ok) throw new PrepareFailure("PREPARATION_FAILED", cut.detail || "ffmpeg failed", "system");
 
     /* ── 5. the result is what was priced, or nothing ────────────────────── */
@@ -228,7 +218,7 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
             hasAudio: videoProbe.hasAudio,
           },
           character: { ...meta.character, size: imageBytes, width: imageProbe.width, height: imageProbe.height },
-          color: { source: color, hdr, toneMapped },
+          color: { source: color },
           prepared: {
             path: key,
             durationMs: preparedMs,

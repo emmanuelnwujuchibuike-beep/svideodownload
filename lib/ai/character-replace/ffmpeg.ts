@@ -31,30 +31,23 @@ export const PREPARE_MAX_LONG_EDGE = 1920;
 const SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(iw,${PREPARE_MAX_LONG_EDGE})/2)*2,-2)':h='if(gt(iw,ih),-2,trunc(min(ih,${PREPARE_MAX_LONG_EDGE})/2)*2)'`;
 
 /*
-  ── 🔴 COLOUR STAYS NATURAL (owner, 2026-09-14: "it gives it extra color more
-  than the original video, it supposed to stay natural") ─────────────────────
+  ── 🔴 NOTHING TOUCHES THE PICTURE BUT THE TRIM AND THE SIZE (owner, 2026-09-14) ──
 
-  Two things can make a result look "more colourful" than the source, and
-  neither is the member's fault:
+  "The result and filter should be purely natural from replicate." Two
+  results made after the Part 5 deploy came back with the replacement placed
+  wrongly, and the owner traced it to that deploy. What that deploy had
+  added to THIS plan was an HDR tone-map on the model's INPUT (zscale →
+  hable → BT.709) and BT.709 colour tags on every prepared file; the
+  finalizer had gained two colour-tag rewrite passes on the OUTPUT. All of
+  it is gone. The prepared file is the member's own frames, cut to the kept
+  range and scaled to the model's ceiling, in the pixel format the model
+  takes — exactly Part 4's plan, the one the owner's good results were made
+  with. The finalizer stores what the provider returned, byte for byte.
 
-    1. An HDR source (an iPhone's HLG / PQ, 10-bit, BT.2020). Converting that to
-       8-bit yuv420p WITHOUT tone-mapping hands the model wrong primaries and a
-       crushed transfer — every colour reads hotter. `HDR_TO_SDR_FILTER` maps it
-       to BT.709 SDR properly (zscale → linear → hable tonemap → bt709) before
-       the model sees a frame.
-    2. The model's output carries NO colour tags. A player then guesses, and
-       for a 480p-class file the usual guess is BT.601 — reds and greens shift
-       and the clip reads as "more colour" beside a tagged source. The
-       finalizer writes the BT.709 tags INTO the stream without re-encoding
-       (`buildColorTagArgs`: `-c copy` + a metadata bitstream filter), so the
-       master's pixels are the model's pixels and the player stops guessing.
-
-  Nothing measures or lowers saturation (Video Ready brief, 2026-09-14: "do
-  not simply reduce saturation blindly… the final master should remain
-  visually accurate"). Every output is tagged BT.709 / limited range.
+  No tone-map, no colour tags, no saturation, brightness or LUT filter,
+  here or anywhere on this pipeline. pipeline.test.ts and background.test.ts
+  pin that.
 */
-const HDR_TO_SDR_FILTER = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p";
-const COLOR_TAG_ARGS = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"] as const;
 
 export const PREPARE_CONSTANT_ARGS = new Set<string>([
   "-y",
@@ -70,8 +63,6 @@ export const PREPARE_CONSTANT_ARGS = new Set<string>([
   "0:a?",
   "-vf",
   SCALE_FILTER,
-  `${HDR_TO_SDR_FILTER},${SCALE_FILTER}`,
-  ...COLOR_TAG_ARGS,
   "-c:v",
   "libx264",
   "-preset",
@@ -102,8 +93,6 @@ export interface PreparePlan {
   /** The kept range, integer milliseconds. `null` end = to the end of the file. */
   startMs: number;
   endMs: number | null;
-  /** True when the source is HDR (HLG/PQ transfer, BT.2020 primaries or 10-bit): it is tone-mapped to SDR first. */
-  hdr?: boolean;
 }
 
 /** Milliseconds → the seconds string ffmpeg reads, three decimals, no locale. */
@@ -123,8 +112,7 @@ export function buildPrepareArgs(plan: PreparePlan): string[] {
   args.push(
     "-map", "0:v:0",
     "-map", "0:a?",
-    "-vf", plan.hdr ? `${HDR_TO_SDR_FILTER},${SCALE_FILTER}` : SCALE_FILTER,
-    ...COLOR_TAG_ARGS,
+    "-vf", SCALE_FILTER,
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-crf", "20",
@@ -151,62 +139,3 @@ export function isKnownPrepareArg(arg: string, plan: PreparePlan): boolean {
   return /^\d+\.\d{3}$/.test(arg);
 }
 
-/* ─────────────────── the master's colour tags, without a re-encode ────────── */
-
-/**
- * The H.264 / HEVC VUI colour description, written by a bitstream filter:
- * primaries 1 (BT.709), transfer 1 (BT.709), matrix 1 (BT.709), limited range.
- * A stream copy — not one pixel is decoded or encoded — and `+faststart` so
- * the moov atom leads for the player.
- *
- * TWO passes, both copies (measured 2026-09-14 on ffmpeg 8): the pass that
- * rewrites the SPS cannot also write the container's `colr` atom, because
- * the muxer takes colour from what the DEMUXER read, which was "unspecified".
- * A second plain copy of the now-tagged stream reads the VUI and writes
- * `colr nclx 1/1/1`. Players that trust the container (MediaCodec on
- * Android) and players that trust the bitstream (Safari, ffmpeg-based) then
- * agree. Bytes of video and audio are untouched in both.
- */
-const COLOR_TAG_BSF: Record<"h264" | "hevc", string> = {
-  h264: "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
-  hevc: "hevc_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
-};
-
-export type ColorTagCodec = keyof typeof COLOR_TAG_BSF;
-
-export function colorTagCodecFor(codecName: string | null | undefined): ColorTagCodec | null {
-  const c = (codecName ?? "").toLowerCase();
-  if (c === "h264") return "h264";
-  if (c === "hevc" || c === "h265") return "hevc";
-  return null;
-}
-
-export function buildColorTagArgs(plan: { input: string; output: string; codec: ColorTagCodec }): string[] {
-  return [
-    "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
-    "-i", plan.input,
-    "-map", "0:v:0", "-map", "0:a?",
-    "-c", "copy",
-    "-bsf:v", COLOR_TAG_BSF[plan.codec],
-    "-movflags", "+faststart", "-f", "mp4",
-    plan.output,
-  ];
-}
-
-/** Pass 2: a plain copy of the tagged stream, so the container gets its `colr` atom. */
-export function buildContainerTagArgs(plan: { input: string; output: string }): string[] {
-  return [
-    "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
-    "-i", plan.input,
-    "-map", "0:v:0", "-map", "0:a?",
-    "-c", "copy",
-    "-movflags", "+faststart", "-f", "mp4",
-    plan.output,
-  ];
-}
-
-export function isKnownColorTagArg(arg: string, plan: { input: string; output: string }): boolean {
-  if (PREPARE_CONSTANT_ARGS.has(arg) || arg === "-c" || arg === "copy" || arg === "-bsf:v") return true;
-  if (arg === COLOR_TAG_BSF.h264 || arg === COLOR_TAG_BSF.hevc) return true;
-  return arg === plan.input || arg === plan.output;
-}

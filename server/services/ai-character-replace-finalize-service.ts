@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { FINALIZE_LEASE_SECONDS, FINALIZE_MAX_ATTEMPTS, finalizeBackoffMs, isTransientFinalizeFailure } from "@/lib/ai/character-replace/finalize-policy";
 import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
-import { buildColorTagArgs, buildContainerTagArgs, colorTagCodecFor, isKnownColorTagArg } from "@/lib/ai/character-replace/ffmpeg";
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -14,7 +12,7 @@ import { recordJobEvent } from "@/lib/ai/job-events";
 import { claimFinalization, getJobAsService, noteJobDiagnostic, scheduleFinalizationRetry, transitionJob } from "@/lib/ai/job-store";
 import { notifyAiJobFailed, notifyAiJobFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
-import { isColorTagged, probeColor } from "@/server/services/ai-color-probe";
+import { probeColor } from "@/server/services/ai-color-probe";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import {
   cleanupFinalizationFiles,
@@ -100,8 +98,6 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
 
   const dir = path.join(tmpdir(), "frenz-ai-cr-out", jobId.replace(/[^0-9a-fA-F-]/g, ""));
   const outputFile = path.join(dir, "output.mp4");
-  const taggedFile = path.join(dir, "tagged.mp4");
-  const masterFile = path.join(dir, "master.mp4");
   try {
     await mkdir(dir, { recursive: true });
     // The provider's file, with the ceiling enforced as the bytes arrive.
@@ -129,52 +125,19 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     }
 
     /*
-      ── THE COLOUR AUDIT (owner, 2026-09-14: "extra colour… supposed to stay
-      natural"; Video Ready brief: "fix the underlying cause, do not blindly
-      add another filter") ────────────────────────────────────────────────
+      ── 🔴 THE MASTER IS THE PROVIDER'S FILE, BYTE FOR BYTE (owner, 2026-09-14:
+      "The result and filter should be purely natural from replicate") ─────
 
-      Where the "extra colour" came from, layer by layer:
-        · CSS on the result page — none (no filter, object-contain on black).
-        · The poster — one frame, display only, never the download.
-        · The download route — a signed URL to the stored bytes, no transform.
-        · PREPARE — an HDR phone source was converted to 8-bit SDR without a
-          tone-map: wrong transfer, hotter colour, clipped highlights. Fixed
-          there (zscale → hable → BT.709) and every prepared file is tagged.
-        · THE MODEL'S OUTPUT — Wan returns yuv420p with NO colour tags. A
-          player guesses; for a 480p-class file (the owner's tests) the usual
-          guess is BT.601, which shifts reds and greens and reads as "more
-          colour" beside the BT.709-tagged source.
-
-      So the master is the model's output, byte for byte, with the BT.709
-      description written into the stream by a metadata bitstream filter —
-      a stream copy, no decode, no encode, no second colour conversion. An
-      output that is already tagged, or in a codec the filter does not
-      cover, is stored untouched. This step can never fail the job.
+      No colour-tag rewrite, no re-mux, no re-encode, no filter of any kind
+      between the download above and the upload below. The colour probe is
+      kept as a diagnostic on the row — it changes nothing. Two results made
+      while the finalizer rewrote the stream's colour description came back
+      wrong, and whatever the cause, the rule is now simple enough to pin in
+      a test: the file we store is the file the provider returned.
     */
-    let finalFile = outputFile;
-    const outputColor = await probeColor(outputFile);
-    let colorNote: Record<string, unknown> = { output: outputColor, tagged: false, reencoded: false };
-    try {
-      const codec = colorTagCodecFor(outputColor?.codec);
-      if (outputColor && !isColorTagged(outputColor) && codec) {
-        // Pass 1 writes the VUI; pass 2 copies again so the container carries `colr` (see ffmpeg.ts).
-        const plan = { input: outputFile, output: taggedFile, codec };
-        const plan2 = { input: taggedFile, output: masterFile };
-        const args = buildColorTagArgs(plan);
-        const args2 = buildContainerTagArgs(plan2);
-        if (args.every((a) => isKnownColorTagArg(a, plan)) && args2.every((a) => isKnownColorTagArg(a, plan2))) {
-          const ok = (await runFfmpegQuiet(args, 5 * 60_000)) && (await runFfmpegQuiet(args2, 5 * 60_000));
-          const reprobe = ok ? await probeMedia(masterFile) : null;
-          if (reprobe?.hasVideo && reprobe.durationSeconds && Math.abs(reprobe.durationSeconds - probe.durationSeconds) < 0.5 && reprobe.hasAudio === probe.hasAudio) {
-            finalFile = masterFile;
-            colorNote = { ...colorNote, tagged: true, master: await probeColor(masterFile) };
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[cr/finalize] colour tagging skipped", { jobId, error: String(e).slice(0, 200) });
-    }
-    const finalProbe = finalFile === outputFile ? probe : ((await probeMedia(finalFile)) ?? probe);
+    const finalFile = outputFile;
+    const colorNote: Record<string, unknown> = { output: await probeColor(outputFile), tagged: false, reencoded: false };
+    const finalProbe = probe;
 
     let stored: { path: string; bytes: number };
     try {
@@ -255,14 +218,6 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
 
 /** A 60 s 720p output from the model is a few tens of MB; a ceiling well above that. */
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024;
-
-const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
-
-function runFfmpegQuiet(args: string[], timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile(FFMPEG, args, { windowsHide: true, timeout: timeoutMs, maxBuffer: 1024 * 1024 }, (err) => resolve(!err));
-  });
-}
 
 class CrFinalizeFailure extends Error {
   constructor(

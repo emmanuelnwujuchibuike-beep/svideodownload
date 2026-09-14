@@ -37,18 +37,14 @@ export interface ColorSignal {
   pixFmt: string | null;
 }
 
-export function isHdrSource(c: ColorSignal | null): boolean {
-  if (!c) return false;
-  const t = (c.transfer ?? "").toLowerCase();
-  const p = (c.primaries ?? "").toLowerCase();
-  const f = (c.pixFmt ?? "").toLowerCase();
-  return t === "arib-std-b67" || t === "smpte2084" || p === "bt2020" || /10le|10be|12le|12be/.test(f);
-}
-
-/** True when the stream already tells a player which primaries/transfer/matrix to use. */
-export function isColorTagged(c: ColorSignal | null): boolean {
-  return !!c && !!c.transfer && !!c.primaries && !!c.matrix;
-}
+/*
+  ── 2026-09-14: `isHdrSource` and `isColorTagged` are GONE. They drove a
+  tone-map on the model input and a colour-tag rewrite on its output, and
+  the owner asked for the result to be purely natural from Replicate. The
+  probe stays as a diagnostic recorded on the row (`metadata.color`) so the
+  next colour question can be answered from data rather than by adding a
+  filter.
+*/
 
 const FFPROBE = process.env.FFPROBE_PATH || "ffprobe";
 

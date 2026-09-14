@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { normalizeCharacterReplaceConfig } from "./config";
-import { buildColorTagArgs, buildContainerTagArgs, buildPrepareArgs, colorTagCodecFor, isKnownColorTagArg, isKnownPrepareArg, PREPARE_CONSTANT_ARGS, secondsArg } from "./ffmpeg";
+import { buildPrepareArgs, isKnownPrepareArg, PREPARE_CONSTANT_ARGS, secondsArg } from "./ffmpeg";
 import { durationWithinTolerance, readCharacterReplaceMeta, selectedRangeOf } from "./job-meta";
 import { buildWanAnimateReplaceInput, isTrustedProviderOutputUrl, WAN_ANIMATE_REPLACE, WAN_INPUT_FIELDS, wanResolutionFor } from "./model";
 import { quoteCharacterReplace } from "./pricing";
@@ -113,60 +113,27 @@ describe("the prepare plan — trim on the frame, nothing foreign in the array",
     for (const c of PREPARE_CONSTANT_ARGS) expect(c).not.toMatch(/\.(mp4|mov|webm|jpg)$/i);
   });
 
-  it("an SDR plan is tagged BT.709; an HDR plan is tone-mapped first — and both stay fully known", () => {
-    const sdr = buildPrepareArgs(plan);
-    const vf = sdr[sdr.indexOf("-vf") + 1] ?? "";
+  /*
+    ── 🔴 PURELY NATURAL (owner, 2026-09-14) ──────────────────────────────
+    "The result and filter should be purely natural from replicate." The
+    prepared file is the trim and the size and nothing else: no tone-map, no
+    colour tags, no colour-space conversion. This test is the guard.
+  */
+  it("the model's input is the trim and the size only — no tone-map, no colour tags, no filter", () => {
+    const args = buildPrepareArgs(plan);
+    const vf = args[args.indexOf("-vf") + 1] ?? "";
     expect(vf.startsWith("scale=")).toBe(true);
-    expect(sdr).toContain("-color_primaries");
-    expect(sdr).toContain("bt709");
-    const hdrPlan = { ...plan, hdr: true };
-    const hdr = buildPrepareArgs(hdrPlan);
-    const hvf = hdr[hdr.indexOf("-vf") + 1] ?? "";
-    expect(hvf).toMatch(/^zscale=t=linear.*tonemap=.*,scale=/);
-    for (const arg of hdr) expect(isKnownPrepareArg(arg, hdrPlan), arg).toBe(true);
-  });
-});
-
-/* ─────────────── colour stays natural — the master is tagged, never re-encoded (09-14) ─────────────── */
-
-describe("the colour-tag plan — a stream copy that tells the player which colours these are", () => {
-  const plan = { input: "/tmp/frenz-ai-cr-out/abc/output.mp4", output: "/tmp/frenz-ai-cr-out/abc/master.mp4", codec: "h264" as const };
-
-  it("copies both streams, writes the BT.709 VUI through the metadata filter, and decodes nothing", () => {
-    const args = buildColorTagArgs(plan);
-    expect(args.slice(args.indexOf("-c"), args.indexOf("-c") + 2)).toEqual(["-c", "copy"]);
-    expect(args[args.indexOf("-bsf:v") + 1]).toBe("h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0");
-    expect(args).not.toContain("-vf");
-    expect(args).not.toContain("libx264");
-    expect(args).not.toContain("-crf");
-    expect(args).toContain("+faststart");
-    expect(args[args.length - 1]).toBe(plan.output);
-    for (const arg of args) expect(isKnownColorTagArg(arg, plan), arg).toBe(true);
+    expect(vf).not.toMatch(/zscale|tonemap|eq=|lut|colorspace|format=gbrp/);
+    for (const flag of ["-color_primaries", "-color_trc", "-colorspace", "-color_range", "-bsf:v"]) expect(args).not.toContain(flag);
+    expect(args.filter((a) => a === "-vf")).toHaveLength(1);
+    for (const arg of args) expect(isKnownPrepareArg(arg, plan), arg).toBe(true);
   });
 
-  it("HEVC gets its own filter; anything else is left alone", () => {
-    expect(colorTagCodecFor("h264")).toBe("h264");
-    expect(colorTagCodecFor("hevc")).toBe("hevc");
-    expect(colorTagCodecFor("vp9")).toBeNull();
-    expect(colorTagCodecFor(null)).toBeNull();
-    const hevc = buildColorTagArgs({ ...plan, codec: "hevc" });
-    expect(hevc[hevc.indexOf("-bsf:v") + 1]).toMatch(/^hevc_metadata=/);
-    for (const arg of hevc) expect(isKnownColorTagArg(arg, plan), arg).toBe(true);
-  });
-
-  it("the second pass is a bare copy — it exists only so the container gets a colr atom", () => {
-    const p2 = { input: "/tmp/frenz-ai-cr-out/abc/tagged.mp4", output: "/tmp/frenz-ai-cr-out/abc/master.mp4" };
-    const args = buildContainerTagArgs(p2);
-    expect(args).toContain("copy");
-    expect(args).not.toContain("-bsf:v");
-    expect(args).not.toContain("-vf");
-    for (const arg of args) expect(isKnownColorTagArg(arg, p2), arg).toBe(true);
-  });
-
-  it("no saturation, brightness or LUT filter exists anywhere in the plan module", () => {
+  it("no saturation, brightness, LUT, tone-map or colour-tag code exists anywhere in the plan module", () => {
     const text = readFileSync(join(process.cwd(), "lib/ai/character-replace/ffmpeg.ts"), "utf8");
     expect(text).not.toMatch(/eq=saturation/);
     expect(text).not.toMatch(/lut3d|vibrance|unsharp/);
+    expect(text).not.toMatch(/HDR_TO_SDR|tonemap=|h264_metadata|hevc_metadata|COLOR_TAG/);
   });
 });
 

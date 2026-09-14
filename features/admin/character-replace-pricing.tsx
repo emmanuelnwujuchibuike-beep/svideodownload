@@ -1,0 +1,545 @@
+"use client";
+
+import { AlertTriangle, Coins, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, type FormEvent } from "react";
+
+import type { CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { formatCents } from "@/lib/ai/economy";
+import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput, type LandingSettings } from "@/lib/landing/settings";
+import { cn } from "@/lib/utils";
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  CHARACTER REPLACE — pricing, limits, recharge, and a member's balance
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-13 (Part 3, §19): "Add a Character Replace pricing section
+ * under the AI grouping… GENERAL / VIDEO PRICING / VOICE / LIP SYNC / LIMITS /
+ * RECHARGE… validation… confirmation for dangerous values… show the current
+ * pricing version."
+ *
+ * ── 🔴 ITS OWN FORM ─────────────────────────────────────────────────────────
+ *
+ * A save here POSTs ONE key, `frenzAiCharacterReplace`, and nothing else —
+ * the same rule the Frenz AI access panel keeps for its fields — so this
+ * panel can never clobber an allowance it does not display, and that panel
+ * can never clobber a rate it does not display. The route merges the nested
+ * object field by field; an EMPTY box means "leave it alone" (money may be
+ * legitimately zero here, so `||` would be wrong — see `majorInputToMinor`).
+ *
+ * ── 🔴 DANGEROUS VALUES ASK TWICE ───────────────────────────────────────────
+ *
+ * A per-second rate that would price a 60-second video above ₦50,000, a
+ * minimum or base price above ₦10,000, a recharge ceiling above ₦10,000,000,
+ * a package outside its own bounds — these are almost always a slipped
+ * decimal, and a slipped decimal here is a price a member sees. The form
+ * names what looks wrong and asks for a second press. Nothing is refused:
+ * the operator may mean it.
+ *
+ * ── The version is the server's ─────────────────────────────────────────────
+ *
+ * `pricingVersion` and `pricingUpdatedAt` are shown, never sent: the route
+ * refuses them (`.strict()`), and the server bumps the version itself when a
+ * saved price differs from the stored one (`versionCharacterReplacePricing`).
+ */
+export function CharacterReplacePricingPanel({ settings }: { settings: LandingSettings }) {
+  const router = useRouter();
+  const cr: CharacterReplaceConfig = settings.frenzAiCharacterReplace;
+  const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
+
+  /* ── general ── */
+  const [enabled, setEnabled] = useState(cr.enabled);
+  const [basePrice, setBasePrice] = useState(minorToMajorInput(cr.basePriceCents));
+  const [minimum, setMinimum] = useState(minorToMajorInput(cr.minimumChargeCents));
+
+  /* ── video pricing ── */
+  const [perSecond, setPerSecond] = useState(minorToMajorInput(cr.pricePerSecondCents));
+  const [qualities, setQualities] = useState(
+    cr.qualities.map((q) => ({
+      id: q.id,
+      label: q.label,
+      enabled: q.enabled,
+      multiplier: String(q.multiplier),
+      perSecond: q.perSecondCents === null ? "" : minorToMajorInput(q.perSecondCents),
+      useOwnRate: q.perSecondCents !== null,
+    })),
+  );
+
+  /* ── voice ── */
+  const [newVoice, setNewVoice] = useState(cr.voice.newVoiceEnabled);
+  const [voiceSurcharge, setVoiceSurcharge] = useState(minorToMajorInput(cr.voice.surchargePerSecondCents));
+
+  /* ── lip sync ── */
+  const [lipSyncEnabled, setLipSyncEnabled] = useState(cr.lipSyncEnabled);
+  const [lipTiers, setLipTiers] = useState(
+    cr.lipSync.map((l) => ({ id: l.id, label: l.label, enabled: l.enabled, perSecond: minorToMajorInput(l.perSecondCents) })),
+  );
+
+  /* ── limits ── */
+  const [maxSeconds, setMaxSeconds] = useState(String(cr.maximumDurationSeconds));
+  const [trimMin, setTrimMin] = useState(String(cr.trim.minimumSeconds));
+
+  /* ── recharge ── */
+  const [minTopup, setMinTopup] = useState(minorToMajorInput(cr.recharge.minCents));
+  const [maxTopup, setMaxTopup] = useState(minorToMajorInput(cr.recharge.maxCents));
+  const [packages, setPackages] = useState(
+    [...cr.recharge.packages]
+      .sort((a, b) => a.order - b.order)
+      .map((p) => ({ amount: minorToMajorInput(p.amountCents), enabled: p.enabled })),
+  );
+
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirming, setConfirming] = useState<string[] | null>(null);
+
+  /* ─────────────────────── what will be sent ──────────────────────────── */
+
+  const payload = useMemo(() => {
+    const perSecondCents = majorInputToMinor(perSecond) ?? cr.pricePerSecondCents;
+    return {
+      enabled,
+      basePriceCents: majorInputToMinor(basePrice) ?? cr.basePriceCents,
+      minimumChargeCents: majorInputToMinor(minimum) ?? cr.minimumChargeCents,
+      pricePerSecondCents: perSecondCents,
+      qualities: qualities.map((q) => ({
+        id: q.id,
+        enabled: q.enabled,
+        multiplier: Number(q.multiplier) > 0 ? Number(q.multiplier) : (cr.qualities.find((c) => c.id === q.id)?.multiplier ?? 1),
+        perSecondCents: q.useOwnRate ? (majorInputToMinor(q.perSecond) ?? 0) : null,
+      })),
+      voice: { newVoiceEnabled: newVoice, surchargePerSecondCents: majorInputToMinor(voiceSurcharge) ?? cr.voice.surchargePerSecondCents },
+      lipSyncEnabled,
+      lipSync: lipTiers.map((l) => ({
+        id: l.id,
+        enabled: l.enabled,
+        perSecondCents: majorInputToMinor(l.perSecond) ?? cr.lipSync.find((c) => c.id === l.id)?.perSecondCents ?? 0,
+      })),
+      maximumDurationSeconds: maxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(maxSeconds)),
+      trim: { minimumSeconds: trimMin.trim() === "" ? cr.trim.minimumSeconds : Number(trimMin) },
+      recharge: {
+        minCents: majorInputToMinor(minTopup) ?? cr.recharge.minCents,
+        maxCents: majorInputToMinor(maxTopup) ?? cr.recharge.maxCents,
+        packages: packages
+          .map((p, i) => ({ amountCents: majorInputToMinor(p.amount) ?? 0, enabled: p.enabled, order: i }))
+          .filter((p) => p.amountCents > 0),
+      },
+    };
+  }, [basePrice, cr, enabled, lipSyncEnabled, lipTiers, maxSeconds, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, trimMin, voiceSurcharge]);
+
+  /* ─────────────────────── validation, in words ───────────────────────── */
+
+  const problems = useMemo(() => {
+    const out: string[] = [];
+    if (!Number.isInteger(payload.maximumDurationSeconds) || payload.maximumDurationSeconds < 1 || payload.maximumDurationSeconds > 120) {
+      out.push("Longest video must be between 1 and 120 seconds.");
+    }
+    if (!(payload.trim.minimumSeconds >= 0.5 && payload.trim.minimumSeconds <= 30)) out.push("Shortest kept range must be between 0.5 and 30 seconds.");
+    if (payload.trim.minimumSeconds > payload.maximumDurationSeconds) out.push("Shortest kept range cannot exceed the longest video.");
+    if (!payload.qualities.some((q) => q.enabled)) out.push("At least one quality must be on.");
+    if (payload.recharge.minCents < 100) out.push(`Minimum recharge must be at least ${formatCents(100, symbol)}.`);
+    if (payload.recharge.maxCents < payload.recharge.minCents) out.push("Maximum recharge must be at least the minimum.");
+    for (const p of payload.recharge.packages) {
+      if (p.amountCents < payload.recharge.minCents || p.amountCents > payload.recharge.maxCents) {
+        out.push(`Package ${formatCents(p.amountCents, symbol)} is outside the recharge bounds.`);
+      }
+    }
+    if (payload.recharge.packages.length === 0) out.push("Keep at least one recharge package.");
+    if (payload.lipSyncEnabled && !payload.lipSync.some((l) => l.enabled)) out.push("Lip sync is on but no tier is on.");
+    return out;
+  }, [payload, symbol]);
+
+  const warnings = useMemo(() => {
+    const out: string[] = [];
+    const sixty = 60;
+    const effectiveRates = payload.qualities
+      .filter((q) => q.enabled)
+      .map((q) => ({ id: q.id, rate: q.perSecondCents ?? Math.ceil(payload.pricePerSecondCents * q.multiplier) }));
+    for (const r of effectiveRates) {
+      if (r.rate * sixty > 5_000_000) out.push(`${r.id} prices a 60-second video at ${formatCents(r.rate * sixty, symbol)}.`);
+      if (r.rate === 0) out.push(`${r.id} is free — its rate is zero.`);
+    }
+    if (payload.pricePerSecondCents === 0 && effectiveRates.some((r) => r.rate === 0)) out.push("The base per-second rate is zero.");
+    if (payload.minimumChargeCents > 1_000_000) out.push(`Minimum charge is ${formatCents(payload.minimumChargeCents, symbol)}.`);
+    if (payload.basePriceCents > 1_000_000) out.push(`Base price per video is ${formatCents(payload.basePriceCents, symbol)}.`);
+    if (payload.voice.surchargePerSecondCents * sixty > 5_000_000) out.push(`The new-voice surcharge adds ${formatCents(payload.voice.surchargePerSecondCents * sixty, symbol)} to a 60-second video.`);
+    for (const l of payload.lipSync) {
+      if (l.enabled && l.perSecondCents * sixty > 5_000_000) out.push(`${l.id} lip sync adds ${formatCents(l.perSecondCents * sixty, symbol)} to a 60-second video.`);
+    }
+    if (payload.recharge.maxCents > 1_000_000_000) out.push(`Maximum recharge is ${formatCents(payload.recharge.maxCents, symbol)}.`);
+    if (!payload.enabled && cr.enabled) out.push("This switches Character Replace OFF for every member.");
+    return out;
+  }, [cr.enabled, payload, symbol]);
+
+  const priceChanged = useMemo(() => {
+    const before = cr;
+    return (
+      payload.pricePerSecondCents !== before.pricePerSecondCents ||
+      payload.basePriceCents !== before.basePriceCents ||
+      payload.minimumChargeCents !== before.minimumChargeCents ||
+      payload.voice.surchargePerSecondCents !== before.voice.surchargePerSecondCents ||
+      payload.qualities.some((q) => {
+        const b = before.qualities.find((x) => x.id === q.id);
+        return !b || b.multiplier !== q.multiplier || b.perSecondCents !== q.perSecondCents || b.enabled !== q.enabled;
+      }) ||
+      payload.lipSync.some((l) => {
+        const b = before.lipSync.find((x) => x.id === l.id);
+        return !b || b.perSecondCents !== l.perSecondCents || b.enabled !== l.enabled;
+      })
+    );
+  }, [cr, payload]);
+
+  /* ─────────────────────── the save ───────────────────────────────────── */
+
+  const submit = async () => {
+    setBusy(true);
+    setMsg(null);
+    setConfirming(null);
+    try {
+      const res = await fetch("/api/admin/landing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // 🔴 One key. The route merges the nested object; nothing else is touched.
+        body: JSON.stringify({ frenzAiCharacterReplace: payload }),
+      });
+      const json = await res.json();
+      setMsg(
+        res.ok
+          ? { ok: true, text: priceChanged ? "Saved. Pricing version bumped — applies to the next quote." : "Saved. Applies to the next quote." }
+          : { ok: false, text: json.error ?? "Failed to save." },
+      );
+      if (res.ok) router.refresh();
+    } catch {
+      setMsg({ ok: false, text: "Network error." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    if (problems.length > 0) {
+      setMsg({ ok: false, text: problems[0]! });
+      return;
+    }
+    if (warnings.length > 0 && confirming === null) {
+      setConfirming(warnings);
+      return;
+    }
+    void submit();
+  };
+
+  const input =
+    "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
+      <h2 className="mb-1 flex items-center gap-2 font-semibold">
+        <Coins className="h-5 w-5 text-primary" /> Character Replace pricing
+      </h2>
+      <p className="mb-2 text-sm text-muted-foreground">
+        What the Wan 2.2 tool costs a member, in {settings.frenzAiCurrency}. Every quote is calculated on the server from
+        these numbers; nothing here is read by the browser.
+      </p>
+      <p className="mb-6 text-xs text-muted-foreground">
+        Pricing version <strong className="tabular-nums">v{cr.pricingVersion}</strong>
+        {cr.pricingUpdatedAt ? <> · last price change {new Date(cr.pricingUpdatedAt).toLocaleString()}</> : null}
+        {cr.pricingHistory.length ? <> · {cr.pricingHistory.length} earlier version{cr.pricingHistory.length === 1 ? "" : "s"} kept</> : null}
+      </p>
+
+      <form onSubmit={save} className="space-y-6">
+        {/* ── GENERAL ── */}
+        <Group title="General">
+          <Toggle
+            label="Character Replace is available"
+            hint="Off hides the entry card's action and the workspace says the tool is unavailable right now. Nothing already running is affected."
+            checked={enabled}
+            onChange={setEnabled}
+          />
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field id="cr-base-price" label="Base price per video" hint="Added once to every video. Zero is fine.">
+              <input id="cr-base-price" type="number" inputMode="decimal" min={0} step="any" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-minimum" label="Minimum charge" hint="The floor a very short video is billed at.">
+              <input id="cr-minimum" type="number" inputMode="decimal" min={0} step="any" value={minimum} onChange={(e) => setMinimum(e.target.value)} className={input} />
+            </Field>
+          </div>
+        </Group>
+
+        {/* ── VIDEO PRICING ── */}
+        <Group title="Video pricing">
+          <Field id="cr-per-second" label="Base rate per second" hint="Each quality bills this × its multiplier, unless it has a rate of its own.">
+            <input id="cr-per-second" type="number" inputMode="decimal" min={0} step="any" value={perSecond} onChange={(e) => setPerSecond(e.target.value)} className={cn(input, "sm:max-w-xs")} />
+          </Field>
+          <div className="mt-4 space-y-3">
+            {qualities.map((q, i) => {
+              const effective = q.useOwnRate ? (majorInputToMinor(q.perSecond) ?? 0) : Math.ceil((majorInputToMinor(perSecond) ?? cr.pricePerSecondCents) * (Number(q.multiplier) || 0));
+              return (
+                <div key={q.id} className="rounded-2xl border border-border/70 bg-background/60 p-3 sm:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                      <input type="checkbox" checked={q.enabled} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                      {q.label}
+                      {q.id === "1080p" ? <span className="text-xs font-normal text-muted-foreground">(the provider documents 480 and 720 only)</span> : null}
+                    </label>
+                    <span className="text-xs tabular-nums text-muted-foreground">= {formatCents(effective, symbol)} per second</span>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <Field id={`cr-q-mult-${q.id}`} label="Multiplier">
+                      <input id={`cr-q-mult-${q.id}`} type="number" inputMode="decimal" min={0.05} max={20} step="any" value={q.multiplier} disabled={q.useOwnRate} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, multiplier: e.target.value } : x)))} className={cn(input, "disabled:opacity-50")} />
+                    </Field>
+                    <label className="flex items-end gap-2 pb-2 text-xs font-semibold text-muted-foreground">
+                      <input type="checkbox" checked={q.useOwnRate} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, useOwnRate: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                      Own rate instead
+                    </label>
+                    <Field id={`cr-q-rate-${q.id}`} label="Rate per second">
+                      <input id={`cr-q-rate-${q.id}`} type="number" inputMode="decimal" min={0} step="any" value={q.perSecond} disabled={!q.useOwnRate} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)))} className={cn(input, "disabled:opacity-50")} />
+                    </Field>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Group>
+
+        {/* ── VOICE ── */}
+        <Group title="Voice">
+          <Toggle
+            label="Offer a new voice"
+            hint="Off keeps every member on their original audio and hides the Voice & Language choices. The voice model is not connected yet either way."
+            checked={newVoice}
+            onChange={setNewVoice}
+          />
+          <div className="mt-4">
+            <Field id="cr-voice-surcharge" label="New-voice surcharge per second" hint="Added per second when a new voice is chosen. Zero means the voice is included.">
+              <input id="cr-voice-surcharge" type="number" inputMode="decimal" min={0} step="any" value={voiceSurcharge} onChange={(e) => setVoiceSurcharge(e.target.value)} className={cn(input, "sm:max-w-xs")} />
+            </Field>
+          </div>
+        </Group>
+
+        {/* ── LIP SYNC ── */}
+        <Group title="Lip sync">
+          <Toggle
+            label="Offer lip sync with a new voice"
+            hint="Off hides the tiers. A tier can only be chosen together with a new voice."
+            checked={lipSyncEnabled}
+            onChange={setLipSyncEnabled}
+          />
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            {lipTiers.map((l, i) => (
+              <div key={l.id} className="rounded-2xl border border-border/70 bg-background/60 p-3 sm:p-4">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" checked={l.enabled} onChange={(e) => setLipTiers((ts) => ts.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                  {l.label}
+                </label>
+                <Field id={`cr-lip-${l.id}`} label="Per second" className="mt-3">
+                  <input id={`cr-lip-${l.id}`} type="number" inputMode="decimal" min={0} step="any" value={l.perSecond} onChange={(e) => setLipTiers((ts) => ts.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)))} className={input} />
+                </Field>
+              </div>
+            ))}
+          </div>
+        </Group>
+
+        {/* ── LIMITS ── */}
+        <Group title="Limits">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="cr-max-seconds" label="Longest video (seconds)" hint="Longer uploads are trimmed to this before they can continue. 1 to 120.">
+              <input id="cr-max-seconds" type="number" inputMode="numeric" min={1} max={120} value={maxSeconds} onChange={(e) => setMaxSeconds(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-trim-min" label="Shortest kept range (seconds)" hint="A trim cannot keep less than this. 0.5 to 30.">
+              <input id="cr-trim-min" type="number" inputMode="decimal" min={0.5} max={30} step="any" value={trimMin} onChange={(e) => setTrimMin(e.target.value)} className={input} />
+            </Field>
+          </div>
+        </Group>
+
+        {/* ── RECHARGE ── */}
+        <Group title="Recharge">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="cr-topup-min" label="Minimum recharge">
+              <input id="cr-topup-min" type="number" inputMode="decimal" min={1} step="any" value={minTopup} onChange={(e) => setMinTopup(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-topup-max" label="Maximum recharge">
+              <input id="cr-topup-max" type="number" inputMode="decimal" min={1} step="any" value={maxTopup} onChange={(e) => setMaxTopup(e.target.value)} className={input} />
+            </Field>
+          </div>
+          <p className="mt-4 text-xs font-semibold text-muted-foreground">Packages, in the order the sheet shows them</p>
+          <div className="mt-2 space-y-2">
+            {packages.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input type="checkbox" aria-label={`Package ${i + 1} on`} checked={p.enabled} onChange={(e) => setPackages((ps) => ps.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
+                <span className="text-sm text-muted-foreground">{symbol}</span>
+                <input type="number" inputMode="decimal" min={1} step="any" aria-label={`Package ${i + 1} amount`} value={p.amount} onChange={(e) => setPackages((ps) => ps.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} className={cn(input, "mt-0 max-w-[10rem]")} />
+                <button type="button" onClick={() => setPackages((ps) => ps.filter((_, j) => j !== i))} className="text-xs font-semibold text-muted-foreground hover:text-rose-500">
+                  Remove
+                </button>
+              </div>
+            ))}
+            {packages.length < 12 ? (
+              <button type="button" onClick={() => setPackages((ps) => [...ps, { amount: "", enabled: true }])} className="text-xs font-semibold text-primary">
+                + Add a package
+              </button>
+            ) : null}
+          </div>
+        </Group>
+
+        {problems.length > 0 ? (
+          <ul className="space-y-1 rounded-2xl border border-rose-500/30 bg-rose-500/[0.06] px-4 py-3 text-sm text-rose-600">
+            {problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        ) : null}
+
+        {confirming ? (
+          <div role="alertdialog" aria-labelledby="cr-confirm-title" className="rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] px-4 py-3">
+            <p id="cr-confirm-title" className="flex items-center gap-2 text-sm font-bold">
+              <AlertTriangle className="h-4 w-4 text-amber-500" aria-hidden /> Please check these before saving
+            </p>
+            <ul className="mt-2 space-y-1 text-sm">
+              {confirming.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-2">
+              <button type="button" disabled={busy} onClick={() => void submit()} className="btn-lux btn-lux-primary">
+                {busy ? "Saving…" : "Save anyway"}
+              </button>
+              <button type="button" onClick={() => setConfirming(null)} className="btn-lux border border-border bg-background text-foreground">
+                Go back
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex items-center gap-3">
+          <button type="submit" disabled={busy || problems.length > 0} className="btn-lux btn-lux-primary disabled:opacity-50">
+            {busy ? "Saving…" : "Save pricing"}
+          </button>
+          {msg ? <p className={cn("text-sm", msg.ok ? "text-emerald-600" : "text-rose-500")}>{msg.text}</p> : null}
+        </div>
+      </form>
+
+      <AdjustBalance symbol={symbol} />
+    </section>
+  );
+}
+
+/* ───────────────────────── a member's balance ────────────────────────────── */
+
+/**
+ * Part 3, §22: "Admin manual balance adjustment (credit/debit with reason)".
+ * POSTs to /api/admin/ai/character-replace/adjust, which writes ONE
+ * `adjustment` row on the product ledger with the operator's id and reason,
+ * and never touches the AI wallet. A debit that would take the balance
+ * below zero is refused by the database function, and the message says so.
+ */
+function AdjustBalance({ symbol }: { symbol: string }) {
+  const [email, setEmail] = useState("");
+  const [amount, setAmount] = useState("");
+  const [direction, setDirection] = useState<"credit" | "debit">("credit");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const cents = majorInputToMinor(amount);
+  const valid = email.trim().length > 3 && cents !== null && cents > 0 && note.trim().length > 0;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!valid || cents === null) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/ai/character-replace/adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), amountCents: direction === "credit" ? cents : -cents, note: note.trim() }),
+      });
+      const json = (await res.json()) as { error?: string; balanceCents?: number };
+      setMsg(
+        res.ok && typeof json.balanceCents === "number"
+          ? { ok: true, text: `Done. Their Character Replace balance is now ${formatCents(json.balanceCents, symbol)}.` }
+          : { ok: false, text: json.error ?? "Failed." },
+      );
+      if (res.ok) {
+        setAmount("");
+        setNote("");
+      }
+    } catch {
+      setMsg({ ok: false, text: "Network error." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const input =
+    "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+  return (
+    <form onSubmit={submit} className="mt-8 rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5">
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <UserRound className="h-4 w-4 text-primary" aria-hidden /> Adjust a member&apos;s Character Replace balance
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        A credit or a debit on THIS wallet only, recorded with your id and the reason. Use it for goodwill, a manual refund, or
+        to reverse a mistaken recharge. Every press is a new adjustment.
+      </p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Field id="cr-adjust-email" label="Member email">
+          <input id="cr-adjust-email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
+        </Field>
+        <Field id="cr-adjust-amount" label={`Amount (${symbol})`}>
+          <div className="mt-1 flex gap-2">
+            <select value={direction} onChange={(e) => setDirection(e.target.value as "credit" | "debit")} aria-label="Direction" className="rounded-xl border border-border bg-background px-3 py-2 text-sm">
+              <option value="credit">Credit</option>
+              <option value="debit">Debit</option>
+            </select>
+            <input id="cr-adjust-amount" type="number" inputMode="decimal" min={0} step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={cn(input, "mt-0")} />
+          </div>
+        </Field>
+      </div>
+      <Field id="cr-adjust-note" label="Reason" className="mt-4">
+        <input id="cr-adjust-note" type="text" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Goodwill after a failed run on 13 Sep" className={input} />
+      </Field>
+      <div className="mt-4 flex items-center gap-3">
+        <button type="submit" disabled={busy || !valid} className="btn-lux border border-border bg-background text-foreground disabled:opacity-50">
+          {busy ? "Applying…" : direction === "credit" ? "Credit balance" : "Debit balance"}
+        </button>
+        {msg ? <p className={cn("text-sm", msg.ok ? "text-emerald-600" : "text-rose-500")}>{msg.text}</p> : null}
+      </div>
+    </form>
+  );
+}
+
+/* ───────────────────────────── pieces ────────────────────────────────────── */
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="rounded-2xl border border-border/70 bg-background/40 p-4 sm:p-5">
+      <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{title}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+function Field({ id, label, hint, className, children }: { id: string; label: string; hint?: string; className?: string; children: React.ReactNode }) {
+  return (
+    <label htmlFor={id} className={cn("block", className)}>
+      <span className="block text-xs font-semibold text-muted-foreground">{label}</span>
+      {children}
+      {hint ? <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground/80">{hint}</span> : null}
+    </label>
+  );
+}
+
+function Toggle({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{label}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{hint}</span>
+      </span>
+    </label>
+  );
+}

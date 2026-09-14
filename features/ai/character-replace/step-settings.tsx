@@ -4,8 +4,9 @@ import { Info, RotateCcw, Scissors } from "lucide-react";
 import { useCallback, useEffect, useId, useRef } from "react";
 
 import { CharacterReplaceInputSummary } from "@/features/ai/character-replace/input-summary";
+import { CharacterReplacePricingSummary } from "@/features/ai/character-replace/pricing-summary";
 import type { CharacterReplacePublicConfig, CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
-import type { CharacterReplaceProject } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceProject, PricingState } from "@/lib/ai/character-replace/types";
 import { qualityGuidance } from "@/lib/ai/character-replace/validate";
 import {
   formatClock,
@@ -53,11 +54,16 @@ import { cn } from "@/lib/utils";
 export function CharacterReplaceSettingsStep({
   project,
   config,
+  pricing,
+  onRetryQuote,
   onQuality,
   onTrim,
   onTrimClear,
 }: {
   project: CharacterReplaceProject;
+  /** The live price (Part 3, §12): it moves with the trim and the quality. */
+  pricing: PricingState;
+  onRetryQuote: () => void;
   config: CharacterReplacePublicConfig;
   onQuality: (quality: CharacterReplaceQualityId) => void;
   onTrim: (start: number, end: number) => void;
@@ -283,15 +289,24 @@ export function CharacterReplaceSettingsStep({
       {/* ── the input summary (§15), with the output line that now means something ── */}
       <CharacterReplaceInputSummary project={project} config={config} />
 
-      {/* ── the price area, as a placeholder ─────────────────────────────── */}
-      <section aria-label="Estimated cost" className="rounded-[1.25rem] border border-dashed border-border bg-card/60 px-4 py-3.5">
-        <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Estimated cost</p>
-        <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-          {config.pricingAvailable
-            ? "Calculated on the review step from these settings."
-            : "The exact price is calculated by Frenz AI before you confirm. Pricing isn't switched on yet, so nothing is charged."}
-        </p>
-      </section>
+      {/* ── the live price (Part 3, §12): the server's figure for THESE settings ── */}
+      {config.pricingAvailable ? (
+        <CharacterReplacePricingSummary
+          compact
+          lines={[]}
+          pricing={pricing}
+          trimmed={trimmedSeconds(project)}
+          symbol={config.symbol}
+          onRetry={onRetryQuote}
+        />
+      ) : (
+        <section aria-label="Estimated cost" className="rounded-[1.25rem] border border-dashed border-border bg-card/60 px-4 py-3.5">
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Estimated cost</p>
+          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+            The exact price is calculated by Frenz AI before you confirm. Pricing isn&apos;t switched on yet, so nothing is charged.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

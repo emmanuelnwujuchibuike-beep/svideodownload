@@ -195,9 +195,10 @@ export interface CharacterReplaceProject {
  * not its numbers — when the member confirms, so the server can check the
  * price it quoted is the price it charges.
  *
- * In Part 1 no engine exists, and the interface holds a `PricingState` of
- * `pending` for the whole flow. The shape is here so Part 2's engine has a
- * contract to fill.
+ * Since Part 3 the engine exists: POST /api/ai/character-replace/quote
+ * answers with a signed `CharacterReplaceQuote`, which the interface stores
+ * here unchanged. `pending` is now only the beat between a change of inputs
+ * and the server's answer.
  */
 export interface PricingSnapshot {
   /** Opaque; issued by the server, echoed back on confirm. */
@@ -211,6 +212,21 @@ export interface PricingSnapshot {
   savings: readonly PricingSaving[];
   /** The server's quote is only good for so long; after this, ask again. */
   expiresAt: string;
+  /*
+    Part 3: the breakdown behind the total, as the server computed it, so
+    "Price details" can print the arithmetic without repeating it. The
+    server's `CharacterReplaceQuote` (lib/ai/character-replace/pricing.ts)
+    carries all of these and is what the interface stores here.
+  */
+  /** The kept duration the price is for, integer milliseconds. */
+  durationMs: number;
+  /** The sum of the lines before the floor. */
+  subtotalCents: number;
+  /** The operator's floor, and whether it was the total. */
+  minimumChargeCents: number;
+  minimumApplied: boolean;
+  /** Which pricing configuration produced this; the server checks it at confirm. */
+  pricingConfigVersion: number;
 }
 
 export interface PricingLine {

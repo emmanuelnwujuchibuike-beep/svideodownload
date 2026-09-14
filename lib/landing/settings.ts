@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   normalizeCharacterReplaceConfig,
+  versionCharacterReplacePricing,
   type CharacterReplaceConfig,
 } from "@/lib/ai/character-replace/config";
 
@@ -759,11 +760,15 @@ export async function setLandingSettings(s: LandingSettingsPatch): Promise<void>
       normaliser then clamps the merged result, so a partial write can never
       leave a field the reader would refuse.
     */
-    frenzAiCharacterReplace: normalizeCharacterReplaceConfig({
-      ...(current.frenzAiCharacterReplace as unknown as Record<string, unknown>),
-      ...((s.frenzAiCharacterReplace ?? {}) as Record<string, unknown>),
-    }),
+    frenzAiCharacterReplace: versionCharacterReplacePricing(
+      current.frenzAiCharacterReplace,
+      normalizeCharacterReplaceConfig({
+        ...(current.frenzAiCharacterReplace as unknown as Record<string, unknown>),
+        ...((s.frenzAiCharacterReplace ?? {}) as Record<string, unknown>),
+      }),
+    ),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;
 }
+

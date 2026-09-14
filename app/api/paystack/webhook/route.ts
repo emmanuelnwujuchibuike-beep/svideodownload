@@ -3,7 +3,8 @@ import { after, NextResponse } from "next/server";
 import { creditAiBalance } from "@/lib/ai/balance";
 import { markTopupAttempt } from "@/lib/ai/topup-attempts";
 import { notifyTopupSuccess } from "@/lib/ai/topup-notify";
-import { AI_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
+import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 
 export const runtime = "nodejs";
@@ -72,6 +73,54 @@ export async function POST(request: Request) {
     `charge.success` only on success, but the field exists and reading it costs
     nothing next to crediting a failed payment.
   */
+  /*
+    ── A CHARACTER REPLACE RECHARGE (Part 3, §3) ───────────────────────────────
+
+    The signature above has already been verified. Its own purpose routes it
+    to the PRODUCT wallet — `ai_product_balances`, never `ai_balances` — and
+    the credit is idempotent on the reference, so a redelivery, or the
+    verify-on-return route landing first, writes nothing twice. Same answers
+    as the AI branch below: missing fields are a logged 200 (a retry would
+    fail identically), a failed credit is a 500 (a retry can succeed).
+  */
+  if (event.event === "charge.success" && event.data?.metadata?.purpose === CHARACTER_REPLACE_TOPUP_PURPOSE) {
+    const userId = event.data.metadata.user_id;
+    const amount = Number(event.data.amount);
+    const reference = event.data.reference;
+    if (!userId || !reference || !Number.isFinite(amount) || amount <= 0) {
+      console.error("[paystack] cr topup missing fields", { hasUser: !!userId, hasReference: !!reference, amount });
+      return NextResponse.json({ received: true });
+    }
+    try {
+      const currency = event.data.currency ?? "NGN";
+      const balanceAfterCents = await creditVerifiedCharacterReplaceRecharge({
+        userId,
+        reference,
+        amountCents: amount,
+        currency,
+        channel: event.data.channel ?? null,
+        paidAt: event.data.paid_at ?? null,
+        gatewayResponse: event.data.gateway_response ?? null,
+      });
+      after(() =>
+        announceCharacterReplaceRecharge({
+          userId,
+          reference,
+          amountCents: amount,
+          currency,
+          balanceAfterCents,
+          channel: event.data.channel ?? null,
+          paidAt: event.data.paid_at ?? null,
+          gatewayResponse: event.data.gateway_response ?? null,
+        }),
+      );
+    } catch (e) {
+      console.error("[paystack] cr topup credit failed", { reference, error: String(e) });
+      return NextResponse.json({ error: "credit failed" }, { status: 500 });
+    }
+    return NextResponse.json({ received: true });
+  }
+
   if (event.event === "charge.success" && event.data?.metadata?.purpose === AI_TOPUP_PURPOSE) {
     const userId = event.data.metadata.user_id;
     const amount = Number(event.data.amount);

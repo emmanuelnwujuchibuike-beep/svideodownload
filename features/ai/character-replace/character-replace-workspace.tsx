@@ -29,6 +29,12 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
+ * Part 4 flips this when /start exists. Until then Start stays disabled after
+ * everything else is green, and the sentence under it says so.
+ */
+const PROCESSING_AVAILABLE = false;
+
+/**
  * ═══════════════════════════════════════════════════════════════════════════
  *  CHARACTER REPLACE — the workspace
  * ═══════════════════════════════════════════════════════════════════════════
@@ -48,11 +54,12 @@ import { cn } from "@/lib/utils";
  *
  * ── 🔴 START DOES NOTHING EXPENSIVE, AND SAYS SO ────────────────────────────
  *
- * `canStart` is false on every Part 1 deployment because no pricing snapshot
- * can exist (`pricingAvailable` is false). The button is disabled and the
- * sentence under it says why in plain words. No request leaves the browser
- * when it is pressed, because it cannot be pressed. §20 is kept structurally,
- * not by remembering.
+ * Since Part 3 `canStart` can be true — a signed quote, enough balance,
+ * consent — but Part 3 forbids processing ("Do NOT process AI jobs"), so the
+ * button is ALSO gated on `PROCESSING_AVAILABLE`, false here and flipped by
+ * Part 4 when the pipeline exists. The sentence under the button says which
+ * of the two is holding it. No request leaves the browser when it is pressed,
+ * because it cannot be pressed. §20 is kept structurally, not by remembering.
  *
  * ── The action bar is sticky and safe-area aware ────────────────────────────
  *
@@ -121,13 +128,14 @@ export function CharacterReplaceWorkspace({
     return true;
   }, [config, index, project, step]);
 
-  const startAllowed = canStart({
+  const readyToStart = canStart({
     project,
     pricing: state.pricing,
     config,
     available: loads.available === true,
     balanceCents: loads.balance?.balanceCents ?? null,
   });
+  const startAllowed = readyToStart && PROCESSING_AVAILABLE;
 
   /* ─────────────────────────── which screen ───────────────────────────── */
 
@@ -215,6 +223,8 @@ export function CharacterReplaceWorkspace({
                   <CharacterReplaceSettingsStep
                     project={project}
                     config={config}
+                    pricing={state.pricing}
+                    onRetryQuote={ws.requote}
                     onQuality={(quality) => send({ type: "quality", quality })}
                     onTrim={(start, end) => send({ type: "trim", start, end })}
                     onTrimClear={() => send({ type: "trim/clear" })}
@@ -242,11 +252,12 @@ export function CharacterReplaceWorkspace({
                   <CharacterReplaceReviewStep
                     project={project}
                     config={config}
-                    pricing={state.pricing.status === "idle" && project.video ? { status: "pending" } : state.pricing}
+                    pricing={state.pricing}
                     balance={loads.balance}
                     balanceError={loads.balanceError}
                     topupNotice={loads.topupNotice}
                     onDismissTopupNotice={ws.dismissTopupNotice}
+                    onRetryQuote={ws.requote}
                     returnTo={basePath}
                     onConsent={(value) => send({ type: "consent", value })}
                   />
@@ -326,11 +337,15 @@ export function CharacterReplaceWorkspace({
                   ? "Confirm you have the right to use this likeness to continue."
                   : config && !config.pricingAvailable
                     ? "Processing isn't switched on yet. Your files stay on your device and nothing is charged."
-                    : state.pricing.status !== "quoted"
-                      ? "Waiting for the exact price."
-                      : loads.balance && loads.balance.balanceCents < state.pricing.snapshot.totalCents
-                        ? "Recharge your balance to start."
-                        : "You'll be charged the amount shown when processing starts."}
+                    : readyToStart && !PROCESSING_AVAILABLE
+                      ? "Processing isn't switched on yet. Your price is confirmed and nothing has been charged."
+                    : state.pricing.status === "error"
+                      ? "We couldn't price this video yet."
+                      : state.pricing.status !== "quoted"
+                        ? "Getting the exact price…"
+                        : loads.balance && loads.balance.balanceCents < state.pricing.snapshot.totalCents
+                          ? "Recharge your balance to start."
+                          : "You'll be charged the amount shown when processing starts."}
               </p>
             ) : null}
           </>

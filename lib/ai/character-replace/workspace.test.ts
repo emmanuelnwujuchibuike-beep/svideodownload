@@ -235,6 +235,11 @@ describe("pricing state", () => {
     totalCents: 25_000,
     savings: [],
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    durationMs: 10_000,
+    subtotalCents: 25_000,
+    minimumChargeCents: 100,
+    minimumApplied: false,
+    pricingConfigVersion: 1,
   };
 
   it("a quote goes stale when any priced input moves, and survives an unpriced one", () => {

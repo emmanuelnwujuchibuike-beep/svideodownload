@@ -94,6 +94,8 @@ export const NOT_EXPORTED: Record<string, string> = {
     "A link between this browser and your account, recorded once if you used the AI tools before signing up. It is a random identifier and nothing else — no address, no device details, nothing about you — and it exists only so the free daily allowance cannot be doubled by signing up or signing out.",
   ai_balances:
     "Your current prepaid AI balance. It is a running total of the ledger rather than a separate fact, so it is not exported on its own — every change to it is in ai_balance_ledger, which is.",
+  ai_product_balances:
+    "Your current balance for one paid AI product (Character Replace). Like ai_balances, a running total of its ledger and not a separate fact — every change is in ai_product_ledger, which is exported.",
 
   /*
     Rows ABOUT you that were written BY someone else. Real personal data, and
@@ -151,6 +153,12 @@ export const OWNER_COLUMN: Record<string, string> = {
     holds no card details (0151).
   */
   ai_topup_attempts: "user_id",
+  /*
+    Every movement of a product wallet (0154): a recharge, the charge for a
+    job, its refund, an operator's adjustment — with the pricing snapshot the
+    charge was made under. About you, written on your behalf, ours to hand over.
+  */
+  ai_product_ledger: "user_id",
 
   /* social */
   posts: "publisher_id",

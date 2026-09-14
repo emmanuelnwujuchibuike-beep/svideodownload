@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CHARACTER_REPLACE_DEFAULTS, publicCharacterReplaceConfig } from "./config";
+import { CHARACTER_REPLACE_DEFAULTS, normalizeCharacterReplaceConfig, publicCharacterReplaceConfig } from "./config";
 import type { VideoMetadata } from "./types";
 import {
   CHARACTER_REPLACE_VIDEO_ACCEPT,
@@ -183,6 +183,12 @@ describe("metadata helpers", () => {
 
 describe("quality guidance (§13)", () => {
   it("says when the output asks for more detail than the source holds — and only then", () => {
+    // Every tier on, so the 1080p sentence can be seen; the default ships 1080p off.
+    const config = publicCharacterReplaceConfig(
+      normalizeCharacterReplaceConfig({ qualities: [{ id: "1080p", enabled: true }] }),
+      { code: "NGN", symbol: "₦" },
+      false,
+    );
     const source720 = meta({ width: 720, height: 1280, resolutionLabel: "720p" });
     expect(qualityGuidance(source720, "1080p", config.qualities)).toBe("Your source video is 720p. 1080p output may not add real detail.");
     expect(qualityGuidance(source720, "720p", config.qualities)).toBeNull();

@@ -26,8 +26,8 @@ export const dynamic = "force-dynamic";
  * `publicCharacterReplaceConfig` strips every price field. A browser that held
  * the per-second rate could compute a price, and §10 forbids the interface
  * from producing one: the only price a member ever sees is the server's quote
- * (Part 2's engine). `pricingAvailable: false` is the honest Part 1 answer and
- * the interface draws its pending state on it.
+ * (POST /api/ai/character-replace/quote, Part 3). `pricingAvailable` says the
+ * engine is there; the interface asks it for every change of inputs.
  *
  * Signed in only, like every AI endpoint — `resolveAiSubject` refuses an
  * anonymous request regardless of what the page did.
@@ -56,8 +56,9 @@ export async function GET(request: Request) {
     const config = publicCharacterReplaceConfig(
       settings.frenzAiCharacterReplace,
       { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
-      // 🔴 No pricing engine exists yet. Flipped by Part 2, in one place.
-      false,
+      // Part 3: the engine exists (lib/ai/character-replace/pricing.ts) and
+      // POST /api/ai/character-replace/quote answers with the server's price.
+      true,
     );
     return NextResponse.json({
       config,

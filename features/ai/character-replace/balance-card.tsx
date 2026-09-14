@@ -1,24 +1,11 @@
 "use client";
 
 import { Plus, Wallet, X } from "lucide-react";
-import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
 
 import { AnimatedAmount } from "@/features/ai/animated-amount";
-import { beginCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
-import { formatCents, isAcceptableTopupCents } from "@/lib/ai/economy";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
-
-/*
-  The sheet is the product's own (framer-motion inside), and it is fetched
-  only when Recharge is pressed — the same split the AI dashboard uses, for
-  the same reason: the workspace must not carry a sheet nobody has opened.
-*/
-const GlassSheetShell = dynamic(() => import("@/features/ui/glass-sheet-shell").then((m) => m.GlassSheetShell), {
-  ssr: false,
-});
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -36,16 +23,17 @@ const GlassSheetShell = dynamic(() => import("@/features/ui/glass-sheet-shell").
  * known, and says so in a sentence when the read failed — a balance that
  * cannot be read is NOT zero, and this card never prints one.
  *
- * Recharge opens a sheet with the operator's amounts and a custom field, and
- * hands the chosen amount to the platform top-up route, which answers with
- * Paystack's page. Nothing on this card moves money (§11).
+ * The figure is THIS tool's wallet (Part 3, §2 — `ai_product_balances`,
+ * product `character_replace`), never the platform's. Recharge is a callback:
+ * the step owns the sheet (recharge-sheet.tsx) because the insufficient
+ * panel opens the same one. Nothing on this card moves money (§11).
  */
 export function CharacterReplaceBalanceCard({
   balance,
   error,
   notice,
   onDismissNotice,
-  returnTo,
+  onRecharge,
   className,
 }: {
   balance: CharacterReplaceBalance | null;
@@ -53,42 +41,9 @@ export function CharacterReplaceBalanceCard({
   /** What a finished recharge said, shown once. */
   notice: string | null;
   onDismissNotice: () => void;
-  /** Where Paystack should send the member back. Allow-listed server-side. */
-  returnTo: string;
+  onRecharge: () => void;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [sheetError, setSheetError] = useState<string | null>(null);
-  const [custom, setCustom] = useState("");
-
-  const openSheet = useCallback(() => {
-    haptic("selection");
-    setMounted(true);
-    setOpen(true);
-  }, []);
-  const closeSheet = useCallback(() => setOpen(false), []);
-
-  const topup = useCallback(
-    async (amountCents: number) => {
-      setBusy(true);
-      setSheetError(null);
-      const res = await beginCharacterReplaceTopup(amountCents, returnTo);
-      if (!res.ok) {
-        setSheetError(res.error);
-        setBusy(false);
-        return;
-      }
-      // A full navigation to the hosted payment page — never a popup.
-      window.location.assign(res.url);
-    },
-    [returnTo],
-  );
-
-  const customCents = custom.trim() === "" ? null : Math.round(Number(custom) * 100);
-  const customValid = balance !== null && customCents !== null && isAcceptableTopupCents(customCents, balance.minTopupCents);
-
   return (
     <div className={cn("rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5", className)}>
       <div className="flex items-center gap-3">
@@ -107,7 +62,10 @@ export function CharacterReplaceBalanceCard({
         </div>
         <button
           type="button"
-          onClick={openSheet}
+          onClick={() => {
+            haptic("selection");
+            onRecharge();
+          }}
           disabled={!balance}
           className={cn(
             "inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-foreground px-4 text-[13px] font-bold text-background",
@@ -132,71 +90,6 @@ export function CharacterReplaceBalanceCard({
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
-      ) : null}
-
-      {mounted && balance ? (
-        <GlassSheetShell open={open} onClose={closeSheet} title="Add balance" fitContent defaultHeightVh={70}>
-          <div className="px-4 pb-6">
-            <p className="text-[13px] leading-relaxed text-muted-foreground">
-              Choose an amount. You&apos;ll pay on a secure page and come straight back here.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {balance.topupOptionsCents.map((cents) => (
-                <button
-                  key={cents}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void topup(cents)}
-                  className={cn(
-                    "min-h-[52px] rounded-2xl border border-border/70 bg-background px-2 text-[15px] font-bold tabular-nums",
-                    "transition hover:border-foreground/25 active:scale-[0.97] disabled:opacity-60",
-                  )}
-                >
-                  {formatCents(cents, balance.symbol)}
-                </button>
-              ))}
-            </div>
-
-            <form
-              className="mt-3 flex items-stretch gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (customValid && customCents !== null) void topup(customCents);
-              }}
-            >
-              <label className="relative min-w-0 flex-1">
-                <span className="sr-only">Custom amount</span>
-                <span aria-hidden className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[14px] font-bold text-muted-foreground">
-                  {balance.symbol}
-                </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  placeholder="Any amount"
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value.replace(/[^\d.]/g, ""))}
-                  className="h-[52px] w-full rounded-2xl border border-border/70 bg-background pl-9 pr-3 text-[15px] font-bold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={busy || !customValid}
-                className="btn-lux bg-foreground text-background disabled:opacity-50"
-              >
-                Continue
-              </button>
-            </form>
-            <p className="mt-2 text-[11.5px] text-muted-foreground">
-              From {formatCents(balance.minTopupCents, balance.symbol)} to {formatCents(balance.maxTopupCents, balance.symbol)}.
-            </p>
-            {sheetError ? (
-              <p role="alert" className="mt-3 text-[12.5px] font-semibold text-rose-500">
-                {sheetError}
-              </p>
-            ) : null}
-          </div>
-        </GlassSheetShell>
       ) : null}
     </div>
   );

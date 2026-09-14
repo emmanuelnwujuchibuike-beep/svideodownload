@@ -28,6 +28,22 @@ const FrenzAISettings = dynamic(() => import("@/features/admin/frenz-ai-settings
   loading: () => <div aria-busy="true" aria-label="Loading Frenz AI settings" className="min-h-[40rem] rounded-3xl border border-border bg-card" />,
 });
 
+/*
+  Part 3 (2026-09-13): the Character Replace pricing panel — its own form,
+  its own chunk, under the same AI grouping. Same reasoning, same split.
+*/
+const CharacterReplacePricingPanel = dynamic(
+  () => import("@/features/admin/character-replace-pricing").then((m) => m.CharacterReplacePricingPanel),
+  {
+    loading: () => <div aria-busy="true" aria-label="Loading Character Replace pricing" className="min-h-[40rem] rounded-3xl border border-border bg-card" />,
+  },
+);
+
 export function FrenzAISettingsLazy({ settings }: { settings: LandingSettings }) {
-  return <FrenzAISettings settings={settings} />;
+  return (
+    <div className="space-y-6">
+      <FrenzAISettings settings={settings} />
+      <CharacterReplacePricingPanel settings={settings} />
+    </div>
+  );
 }

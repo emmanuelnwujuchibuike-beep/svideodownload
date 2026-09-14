@@ -70,6 +70,18 @@ let firstMount = true;
 const navStack: string[] = [];
 
 /**
+ * How many pages THIS document has navigated through, including the current
+ * one. Read by EdgeSwipeBack at the moment a gesture commits: 2 or more means
+ * `router.back()` stays inside this document and is instant; fewer means the
+ * previous history entry is another document (a reload, an eviction, a deep
+ * link) and "back" must be a client navigation instead — see
+ * lib/dom/back-fallback.ts. Client-only, like the stack it reads.
+ */
+export function navigationDepth(): number {
+  return navStack.length;
+}
+
+/**
  * The whole `/messages` subtree opts out of the WRAPPER slide — for two different
  * reasons that share one mechanism (a transformed wrapper is a containing block).
  *

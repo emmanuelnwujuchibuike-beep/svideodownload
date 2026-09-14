@@ -21,7 +21,6 @@ import {
   type AiCurrency,
   type LandingSettings,
 } from "@/lib/landing/settings";
-import type { CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { aiTopupOptions, formatCents } from "@/lib/ai/economy";
 import { cn } from "@/lib/utils";
 
@@ -81,27 +80,6 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
   const [minTopup, setMinTopup] = useState(minorToMajorInput(settings.frenzAiMinTopupCents));
   // The symbol the operator will actually be charging in — see the currency note.
   const symbol = aiCurrencySymbol(currency);
-  /*
-    ── CHARACTER REPLACE (2026-09-13) ─────────────────────────────────────────
-
-    The tool's own knobs, posted as ONE nested object the route validates and
-    the settings module merges over what is stored. Money fields are in MAJOR
-    units on screen (the same rule as the price and the minimum deposit) and
-    converted once on the way out. Only the knobs an operator needs day to day
-    are here; the full schema (qualities and multipliers, languages, voices,
-    trim rules, ceilings) lives in lib/ai/character-replace/config.ts and is
-    the next panel to build when the pricing engine lands.
-  */
-  const cr: CharacterReplaceConfig = settings.frenzAiCharacterReplace;
-  const [crEnabled, setCrEnabled] = useState(cr.enabled);
-  const [crPerSecond, setCrPerSecond] = useState(minorToMajorInput(cr.pricePerSecondCents));
-  const [crMinimum, setCrMinimum] = useState(minorToMajorInput(cr.minimumChargeCents));
-  const [crMaxSeconds, setCrMaxSeconds] = useState(String(cr.maximumDurationSeconds));
-  const [crLipSync, setCrLipSync] = useState(cr.lipSyncEnabled);
-  const lipStandard = cr.lipSync.find((l) => l.id === "standard");
-  const lipStudio = cr.lipSync.find((l) => l.id === "studio");
-  const [crLipStandard, setCrLipStandard] = useState(minorToMajorInput(lipStandard?.perSecondCents ?? 0));
-  const [crLipStudio, setCrLipStudio] = useState(minorToMajorInput(lipStudio?.perSecondCents ?? 0));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -143,24 +121,6 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           frenzAiVideoPriceCents: majorInputToMinor(price) || settings.frenzAiVideoPriceCents,
           frenzAiCurrency: currency,
           frenzAiMinTopupCents: majorInputToMinor(minTopup) || settings.frenzAiMinTopupCents,
-          /*
-            The nested object. Money may legitimately be ZERO here (a free
-            lip-sync tier, no minimum), so an EMPTY box is the only thing that
-            means "leave it alone" — `majorInputToMinor("")` is null and the
-            stored value is sent back in its place.
-          */
-          frenzAiCharacterReplace: {
-            enabled: crEnabled,
-            pricePerSecondCents: majorInputToMinor(crPerSecond) ?? cr.pricePerSecondCents,
-            minimumChargeCents: majorInputToMinor(crMinimum) ?? cr.minimumChargeCents,
-            maximumDurationSeconds:
-              crMaxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(crMaxSeconds)),
-            lipSyncEnabled: crLipSync,
-            lipSync: [
-              { id: "standard", perSecondCents: majorInputToMinor(crLipStandard) ?? lipStandard?.perSecondCents ?? 0 },
-              { id: "studio", perSecondCents: majorInputToMinor(crLipStudio) ?? lipStudio?.perSecondCents ?? 0 },
-            ],
-          },
         }),
       });
       const json = await res.json();
@@ -461,113 +421,6 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
                 />
               </label>
             ))}
-          </div>
-        </div>
-
-        {/*
-          ── CHARACTER REPLACE ───────────────────────────────────────────────
-
-          The AI Clean engine choice (Fast / Best quality) stood here until
-          2026-09-13; it went with the tool. What replaces it is the first
-          operator surface for the Wan 2.2 tool: on/off, the rate, the floor,
-          the ceiling on length, and the lip-sync tiers. None of these numbers
-          is quoted to a member yet — the pricing engine is a later part — but
-          they are stored, clamped and ready for it.
-        */}
-        <div className="rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5">
-          <p className="text-sm font-semibold">Character Replace</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            The Wan 2.2 tool. Paid from the member&apos;s balance on every run; the
-            price is per second of video, in {currency}, the way you say it. The
-            quote itself is not calculated yet — these are the inputs it will read.
-          </p>
-
-          <div className="mt-4">
-            <Toggle
-              label="Character Replace is available"
-              hint="Off hides the entry card's action and the workspace says the tool is unavailable right now. Nothing already running is affected."
-              checked={crEnabled}
-              onChange={setCrEnabled}
-            />
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <label htmlFor="frenz-ai-cr-per-second" className="block">
-              <span className="block text-xs font-semibold text-muted-foreground">Price per second</span>
-              <input
-                id="frenz-ai-cr-per-second"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                value={crPerSecond}
-                onChange={(e) => setCrPerSecond(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <label htmlFor="frenz-ai-cr-minimum" className="block">
-              <span className="block text-xs font-semibold text-muted-foreground">Minimum charge</span>
-              <input
-                id="frenz-ai-cr-minimum"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                value={crMinimum}
-                onChange={(e) => setCrMinimum(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <label htmlFor="frenz-ai-cr-max-seconds" className="block">
-              <span className="block text-xs font-semibold text-muted-foreground">Longest video (seconds)</span>
-              <input
-                id="frenz-ai-cr-max-seconds"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={120}
-                value={crMaxSeconds}
-                onChange={(e) => setCrMaxSeconds(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-          </div>
-
-          <div className="mt-5">
-            <Toggle
-              label="Offer a new voice with lip sync"
-              hint="Off hides the Voice & Language section entirely; members keep their original audio. The lip-sync model is not connected yet either way."
-              checked={crLipSync}
-              onChange={setCrLipSync}
-            />
-          </div>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <label htmlFor="frenz-ai-cr-lip-standard" className="block">
-              <span className="block text-xs font-semibold text-muted-foreground">Standard lip sync, per second</span>
-              <input
-                id="frenz-ai-cr-lip-standard"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                value={crLipStandard}
-                onChange={(e) => setCrLipStandard(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
-            <label htmlFor="frenz-ai-cr-lip-studio" className="block">
-              <span className="block text-xs font-semibold text-muted-foreground">Studio lip sync, per second</span>
-              <input
-                id="frenz-ai-cr-lip-studio"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="any"
-                value={crLipStudio}
-                onChange={(e) => setCrLipStudio(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            </label>
           </div>
         </div>
 

@@ -132,6 +132,13 @@ export async function initializeAiTopup(opts: {
   currency: string;
   reference: string;
   callbackUrl: string;
+  /**
+   * Which wallet this deposit is for. Defaults to the AI (Clean) wallet the
+   * function has always credited; Character Replace passes its own purpose
+   * (Part 3, §3) so the webhook and verify-on-return route the credit to the
+   * product balance and never to the AI one.
+   */
+  purpose?: typeof AI_TOPUP_PURPOSE | typeof CHARACTER_REPLACE_TOPUP_PURPOSE;
 }): Promise<string> {
   const data = await paystack<{ data: { authorization_url: string } }>(
     "/transaction/initialize",
@@ -151,7 +158,7 @@ export async function initializeAiTopup(opts: {
         */
         metadata: {
           user_id: opts.userId,
-          purpose: AI_TOPUP_PURPOSE,
+          purpose: opts.purpose ?? AI_TOPUP_PURPOSE,
           ai_topup_cents: opts.amount,
         },
       },
@@ -167,6 +174,8 @@ export async function initializeAiTopup(opts: {
  * the initializer have to agree exactly and they are never read together.
  */
 export const AI_TOPUP_PURPOSE = "frenz_ai_topup";
+/** A Character Replace recharge. Its own purpose, so no branch can confuse the two wallets. */
+export const CHARACTER_REPLACE_TOPUP_PURPOSE = "frenz_cr_topup";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

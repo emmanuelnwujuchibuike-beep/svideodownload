@@ -83,9 +83,20 @@ export async function notifyTopupSuccess(opts: {
   balanceAfterCents: number;
   channel?: string | null;
   paidAt?: string | null;
+  /**
+   * Character Replace (Part 3) reuses this announcement for its own wallet:
+   * the claim lives on ITS ledger, and the sentence names ITS balance. Both
+   * default to the AI wallet, so every existing caller is unchanged.
+   */
+  claim?: () => Promise<boolean>;
+  productLabel?: string;
+  ctaUrl?: string;
 }): Promise<void> {
   try {
-    if (!(await claimTopupSuccessNotification(opts.userId, opts.reference))) return;
+    const claimed = opts.claim ? await opts.claim() : await claimTopupSuccessNotification(opts.userId, opts.reference);
+    if (!claimed) return;
+    const label = opts.productLabel ?? "Frenz AI";
+    const cta = opts.ctaUrl ?? USAGE_URL;
 
     const amount = money(opts.amountCents, opts.currency);
     const balance = money(opts.balanceAfterCents, opts.currency);
@@ -95,9 +106,9 @@ export async function notifyTopupSuccess(opts: {
       opts.userId,
       {
         title: "Deposit received",
-        body: `${amount} added. Your Frenz AI balance is now ${balance}.`,
-        url: USAGE_URL,
-        genericBody: "Your Frenz AI deposit went through.",
+        body: `${amount} added. Your ${label} balance is now ${balance}.`,
+        url: cta,
+        genericBody: `Your ${label} deposit went through.`,
         tag: `ai-topup-${opts.reference}`,
       },
       "high",
@@ -116,7 +127,7 @@ export async function notifyTopupSuccess(opts: {
         balanceAfter: balance,
         when: when(opts.paidAt),
         channel: opts.channel ?? null,
-        ctaHref: USAGE_URL,
+        ctaHref: cta,
       });
     }
   } catch (e) {

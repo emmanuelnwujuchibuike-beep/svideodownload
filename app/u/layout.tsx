@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { FrenzAiFab } from "@/features/ai/frenz-ai-fab";
 import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { AppSidebar } from "@/features/app-shell/app-sidebar";
 import { AppTopbar } from "@/features/app-shell/app-topbar";
@@ -28,6 +29,8 @@ export default function ProfileSectionLayout({ children }: { children: ReactNode
         {children}
       </div>
       <MobileNav />
+      {/* Same floating Frenz AI circle as the (app) shell — profiles are signed-in pages too. */}
+      <FrenzAiFab />
       <AppOverlays />
     </div>
   );

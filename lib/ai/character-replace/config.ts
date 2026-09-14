@@ -21,13 +21,15 @@
  * holds is always the server's answer — the browser never computes what is
  * allowed, only renders it.
  *
- * ── 🔴 NOTHING HERE IS A PRICE ───────────────────────────────────────────────
+ * ── 🔴 THE RATES HERE ARE INPUTS, AND ONLY THE SERVER TURNS THEM INTO A PRICE ─
  *
- * The rates are inputs to a pricing engine that does not exist yet (§8, §10:
- * "DO NOT implement the actual pricing calculation yet… Do NOT fake dynamic
- * calculations"). The interface renders a clearly marked PENDING state until
- * the server quotes; the fields are here so the engine has somewhere to read
- * from when it arrives, and so the admin has a schema to write into.
+ * Part 3 added the engine (pricing.ts) and the quote route. The rates never
+ * leave the server — `publicCharacterReplaceConfig` strips them — so a
+ * browser can render what is offered and the ceilings, and can only ever
+ * SHOW a price the server computed. A change to any price-bearing field
+ * bumps `pricingVersion` (settings writer) and the old configuration is kept
+ * in `pricingHistory`; every charge snapshot names the version it was made
+ * under.
  */
 
 /* ───────────────────────────── qualities ─────────────────────────────────── */
@@ -43,6 +45,12 @@ export interface CharacterReplaceQuality {
   longEdge: number;
   /** Price multiplier relative to the base rate. 1 = the base. */
   multiplier: number;
+  /**
+   * A per-second rate of this tier's own, in minor units. When set it REPLACES
+   * `base × multiplier` — Part 3 §9 asks for both models, and this is the
+   * switch between them: null means "use the multiplier".
+   */
+  perSecondCents: number | null;
   enabled: boolean;
 }
 
@@ -133,6 +141,29 @@ export interface CharacterReplaceConfig {
     enabled: boolean;
     minimumSeconds: number;
   };
+  /**
+   * ── PRICING VERSION (Part 3, §21) ─────────────────────────────────────────
+   * Incremented by the settings writer whenever a price-bearing field changes
+   * (lib/landing/settings.ts). Every quote and every charge snapshot carries
+   * the version it was made under, and `pricingHistory` keeps the last few
+   * superseded configurations, so a change tomorrow never rewrites what was
+   * charged today.
+   */
+  pricingVersion: number;
+  pricingUpdatedAt: string | null;
+  pricingHistory: readonly { version: number; replacedAt: string; config: Record<string, unknown> }[];
+  /** The "New voice" option (Part 3, §11): offered or not, and its surcharge. */
+  voice: {
+    newVoiceEnabled: boolean;
+    /** Added per second of video when a new voice is generated. Zero is allowed. */
+    surchargePerSecondCents: number;
+  };
+  /** The recharge experience (Part 3, §3/§23): bounds and the packages offered. */
+  recharge: {
+    minCents: number;
+    maxCents: number;
+    packages: readonly { amountCents: number; enabled: boolean; order: number }[];
+  };
 }
 
 /* ───────────────────────────── defaults ──────────────────────────────────── */
@@ -189,10 +220,18 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   maximumDurationSeconds: 60,
   maximumUploadBytes: PLATFORM_MAX_UPLOAD_BYTES,
   maximumPixels: PLATFORM_MAX_PIXELS,
+  /*
+    🔴 1080p SHIPS DISABLED. The provider the owner named for Part 4 (Wan 2.2
+    Animate Replace on Replicate) documents 480 and 720 processing resolutions
+    and nothing above. Part 4's brief: "Do NOT silently downgrade 1080p to
+    720p… Prefer configuration-driven supported qualities." So the tier exists
+    in the schema, the renderer knows how to draw it, and the operator can
+    switch it on the day a provider supports it — until then it is not offered.
+  */
   qualities: [
-    { id: "480p", label: "480p", hint: "Fast", longEdge: 854, multiplier: 0.6, enabled: true },
-    { id: "720p", label: "720p", hint: "Balanced", longEdge: 1280, multiplier: 1, enabled: true },
-    { id: "1080p", label: "1080p", hint: "Best", longEdge: 1920, multiplier: 1.6, enabled: true },
+    { id: "480p", label: "480p", hint: "Fast", longEdge: 854, multiplier: 0.6, perSecondCents: null, enabled: true },
+    { id: "720p", label: "720p", hint: "Balanced", longEdge: 1280, multiplier: 1, perSecondCents: null, enabled: true },
+    { id: "1080p", label: "1080p", hint: "Best", longEdge: 1920, multiplier: 1.6, perSecondCents: null, enabled: false },
   ],
   lipSyncEnabled: true,
   lipSync: [
@@ -216,6 +255,27 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   languages: CHARACTER_REPLACE_DEFAULT_LANGUAGES,
   voices: CHARACTER_REPLACE_DEFAULT_VOICES,
   trim: { enabled: true, minimumSeconds: 1 },
+  pricingVersion: 1,
+  pricingUpdatedAt: null,
+  pricingHistory: [],
+  // Offered, with no surcharge until the operator sets one — TTS is a later
+  // part and its cost is not known yet (§11: "Do not invent a final price").
+  voice: { newVoiceEnabled: true, surchargePerSecondCents: 0 },
+  /*
+    ₦500 … ₦10,000 in kobo — the owner's example ladder (§23), as DEFAULTS an
+    operator edits, not as final values. The bounds clamp a custom amount.
+  */
+  recharge: {
+    minCents: 50_000,
+    maxCents: 5_000_000,
+    packages: [
+      { amountCents: 50_000, enabled: true, order: 1 },
+      { amountCents: 100_000, enabled: true, order: 2 },
+      { amountCents: 250_000, enabled: true, order: 3 },
+      { amountCents: 500_000, enabled: true, order: 4 },
+      { amountCents: 1_000_000, enabled: true, order: 5 },
+    ],
+  },
 };
 
 /* ───────────────────────────── normaliser ────────────────────────────────── */
@@ -274,11 +334,14 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
   const qualities = d.qualities.map((base) => {
     const o = qualityOverrides.get(base.id);
     if (!o) return base;
+    const rate = o.perSecondCents === null ? null : int(o.perSecondCents, -1, 0, 100_000_000);
     return {
       ...base,
       label: text(o.label, base.label, 12),
       hint: text(o.hint, base.hint, 24),
       multiplier: num(o.multiplier, base.multiplier, 0.05, 20),
+      // A missing or malformed rate falls back to the multiplier model, never to zero.
+      perSecondCents: rate === null || rate < 0 ? (o.perSecondCents === undefined ? base.perSecondCents : null) : rate,
       enabled: bool(o.enabled, base.enabled),
     };
   });
@@ -331,6 +394,33 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
     : [...d.voices];
 
   const trimRaw = isRecord(raw.trim) ? raw.trim : {};
+  const voiceRaw = isRecord(raw.voice) ? raw.voice : {};
+  const rechargeRaw = isRecord(raw.recharge) ? raw.recharge : {};
+  const minCents = int(rechargeRaw.minCents, d.recharge.minCents, 100, 1_000_000_000);
+  const maxCents = Math.max(minCents, int(rechargeRaw.maxCents, d.recharge.maxCents, 100, 10_000_000_000));
+  const packages = Array.isArray(rechargeRaw.packages)
+    ? rechargeRaw.packages
+        .filter(isRecord)
+        .map((pkg, i) => ({
+          amountCents: int(pkg.amountCents, 0, 0, 10_000_000_000),
+          enabled: bool(pkg.enabled, true),
+          order: int(pkg.order, i + 1, 0, 1000),
+        }))
+        .filter((pkg) => pkg.amountCents > 0)
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 12)
+    : [...d.recharge.packages];
+  const history = Array.isArray(raw.pricingHistory)
+    ? raw.pricingHistory
+        .filter(isRecord)
+        .map((h) => ({
+          version: int(h.version, 0, 0, 1_000_000),
+          replacedAt: text(h.replacedAt, "", 40),
+          config: isRecord(h.config) ? h.config : {},
+        }))
+        .filter((h) => h.version > 0 && h.replacedAt)
+        .slice(-20)
+    : [];
 
   return {
     enabled: bool(raw.enabled, d.enabled),
@@ -349,7 +439,32 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       enabled: bool(trimRaw.enabled, d.trim.enabled),
       minimumSeconds: num(trimRaw.minimumSeconds, d.trim.minimumSeconds, 0.5, 30),
     },
+    pricingVersion: int(raw.pricingVersion, d.pricingVersion, 1, 1_000_000),
+    pricingUpdatedAt: typeof raw.pricingUpdatedAt === "string" ? raw.pricingUpdatedAt.slice(0, 40) : null,
+    pricingHistory: history,
+    voice: {
+      newVoiceEnabled: bool(voiceRaw.newVoiceEnabled, d.voice.newVoiceEnabled),
+      surchargePerSecondCents: int(voiceRaw.surchargePerSecondCents, d.voice.surchargePerSecondCents, 0, 100_000_000),
+    },
+    recharge: { minCents, maxCents, packages: packages.length ? packages : [...d.recharge.packages] },
   };
+}
+
+/**
+ * The fields a quote depends on. Two configs that agree on all of these price
+ * every job identically; a change to any of them is a new pricing version.
+ * Used by the settings writer to decide when to bump.
+ */
+export function pricingFingerprint(config: CharacterReplaceConfig): string {
+  return JSON.stringify({
+    base: config.basePriceCents,
+    perSecond: config.pricePerSecondCents,
+    minimum: config.minimumChargeCents,
+    qualities: config.qualities.map((q) => [q.id, q.multiplier, q.perSecondCents, q.enabled]),
+    lipSync: config.lipSync.map((l) => [l.id, l.perSecondCents, l.enabled]),
+    lipSyncEnabled: config.lipSyncEnabled,
+    voice: [config.voice.newVoiceEnabled, config.voice.surchargePerSecondCents],
+  });
 }
 
 /* ───────────────────────────── what the browser gets ─────────────────────── */
@@ -379,11 +494,16 @@ export interface CharacterReplacePublicConfig {
   languages: readonly CharacterReplaceLanguage[];
   voices: readonly CharacterReplaceVoice[];
   trim: { enabled: boolean; minimumSeconds: number };
+  /** Whether "New voice" may be chosen. The surcharge itself stays server-side. */
+  newVoiceEnabled: boolean;
+  /** The recharge ladder and bounds, in minor units. */
+  recharge: { minCents: number; maxCents: number; packages: readonly number[] };
+  /** Printed on the summary so a member can see which price list quoted them. */
+  pricingVersion: number;
   /**
-   * Whether the pricing engine exists on this deployment. False in Part 1,
-   * and the interface draws the PENDING state for every total while it is.
-   * When Part 2 ships the engine this flips and nothing in the components
-   * needs to change — the state model already has both branches.
+   * Whether the pricing engine exists on this deployment. False through
+   * Part 2 (the interface drew the PENDING state for every total); true from
+   * Part 3, when `POST /api/ai/character-replace/quote` answers.
    */
   pricingAvailable: boolean;
 }
@@ -409,6 +529,57 @@ export function publicCharacterReplaceConfig(
     languages: config.languages,
     voices: config.voices,
     trim: config.trim,
+    newVoiceEnabled: config.voice.newVoiceEnabled,
+    recharge: {
+      minCents: config.recharge.minCents,
+      maxCents: config.recharge.maxCents,
+      packages: config.recharge.packages.filter((p) => p.enabled).map((p) => p.amountCents),
+    },
+    pricingVersion: config.pricingVersion,
     pricingAvailable,
+  };
+}
+
+/**
+ * ── CHARACTER REPLACE PRICING VERSIONS (Part 3, §21) ────────────────────────
+ *
+ * When a save changes any price-bearing field, the version increments, the
+ * moment is stamped, and the superseded price fields are appended to the
+ * history (the last twenty). A save that touches only copy, languages or
+ * ceilings leaves the version alone. Every quote and every charge snapshot
+ * names the version it was made under, so nothing historical is ever
+ * recomputed with today's numbers.
+ *
+ * 🔴 The version and the history are the SERVER's to write: a panel that
+ * posted `pricingVersion` is ignored here, because the merged draft is
+ * re-stamped from `current` before the comparison.
+ */
+export function versionCharacterReplacePricing(current: CharacterReplaceConfig, next: CharacterReplaceConfig): CharacterReplaceConfig {
+  const stamped: CharacterReplaceConfig = {
+    ...next,
+    pricingVersion: current.pricingVersion,
+    pricingUpdatedAt: current.pricingUpdatedAt,
+    pricingHistory: current.pricingHistory,
+  };
+  if (pricingFingerprint(current) === pricingFingerprint(stamped)) return stamped;
+  const now = new Date().toISOString();
+  const superseded = {
+    version: current.pricingVersion,
+    replacedAt: now,
+    config: {
+      basePriceCents: current.basePriceCents,
+      pricePerSecondCents: current.pricePerSecondCents,
+      minimumChargeCents: current.minimumChargeCents,
+      qualities: current.qualities.map((q) => ({ id: q.id, multiplier: q.multiplier, perSecondCents: q.perSecondCents, enabled: q.enabled })),
+      lipSyncEnabled: current.lipSyncEnabled,
+      lipSync: current.lipSync.map((l) => ({ id: l.id, perSecondCents: l.perSecondCents, enabled: l.enabled })),
+      voice: current.voice,
+    },
+  };
+  return {
+    ...stamped,
+    pricingVersion: current.pricingVersion + 1,
+    pricingUpdatedAt: now,
+    pricingHistory: [...current.pricingHistory, superseded].slice(-20),
   };
 }

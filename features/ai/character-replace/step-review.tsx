@@ -1,14 +1,18 @@
 "use client";
 
-import { Check, ShieldCheck } from "lucide-react";
-import { useId } from "react";
+import { AlertTriangle, Check, Plus, ShieldCheck } from "lucide-react";
+import { useCallback, useId, useState } from "react";
 
 import { CharacterReplaceBalanceCard } from "@/features/ai/character-replace/balance-card";
 import { CharacterReplacePricingSummary } from "@/features/ai/character-replace/pricing-summary";
+import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import { affordability } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance, CharacterReplaceProject, PricingState } from "@/lib/ai/character-replace/types";
 import { formatSeconds, selectedDurationSeconds, summaryLines, trimmedSeconds } from "@/lib/ai/character-replace/workspace";
+import { formatCents } from "@/lib/ai/economy";
 import { formatResolution } from "@/lib/ai/media";
+import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,6 +20,21 @@ import { cn } from "@/lib/utils";
  * the exact price (§8), the balance it comes from, the consent line (§12),
  * and the one button. Separating a price from the button that spends it is
  * how people get surprised, so they are together.
+ *
+ * ── Part 3, §14 — insufficient balance, as facts ────────────────────────────
+ *
+ *     Insufficient balance
+ *     Required   ₦1,250
+ *     Available  ₦800
+ *     Short by   ₦450
+ *     [Recharge]
+ *
+ * The three figures are the server's total and the server's balance put side
+ * by side by `affordability` — the same pure function the quote route used
+ * to answer `sufficient`. Nothing is deducted here (§11); the row under the
+ * balance card that reads "After processing" is arithmetic on two numbers
+ * the server gave, shown so a member knows what is left before they press
+ * Start, and the server does that subtraction itself, later, atomically.
  *
  * The two files are shown small, side by side, so the member confirms WHAT
  * they are about to make and not only how much it costs.
@@ -28,6 +47,7 @@ export function CharacterReplaceReviewStep({
   balanceError,
   topupNotice,
   onDismissTopupNotice,
+  onRetryQuote,
   returnTo,
   onConsent,
 }: {
@@ -38,6 +58,7 @@ export function CharacterReplaceReviewStep({
   balanceError: string | null;
   topupNotice: string | null;
   onDismissTopupNotice: () => void;
+  onRetryQuote: () => void;
   returnTo: string;
   onConsent: (value: boolean) => void;
 }) {
@@ -45,6 +66,19 @@ export function CharacterReplaceReviewStep({
   const lines = summaryLines(project, config);
   const character = project.character;
   const video = project.video;
+  const symbol = balance?.symbol ?? config.symbol;
+
+  const snapshot = pricing.status === "quoted" || pricing.status === "stale" ? pricing.snapshot : null;
+  const money = snapshot && balance ? affordability(snapshot.totalCents, balance.balanceCents) : null;
+  const short = pricing.status === "quoted" && money !== null && !money.sufficient;
+
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetMounted, setSheetMounted] = useState(false);
+  const openSheet = useCallback(() => {
+    setSheetMounted(true);
+    setSheetOpen(true);
+  }, []);
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
 
   return (
     <div className="space-y-4">
@@ -61,20 +95,52 @@ export function CharacterReplaceReviewStep({
         </div>
       ) : null}
 
+      <CharacterReplacePricingSummary lines={lines} pricing={pricing} trimmed={trimmedSeconds(project)} symbol={symbol} onRetry={onRetryQuote} />
+
       <CharacterReplaceBalanceCard
         balance={balance}
         error={balanceError}
         notice={topupNotice}
         onDismissNotice={onDismissTopupNotice}
-        returnTo={returnTo}
+        onRecharge={openSheet}
       />
 
-      <CharacterReplacePricingSummary
-        lines={lines}
-        pricing={pricing}
-        trimmed={trimmedSeconds(project)}
-        symbol={balance?.symbol ?? config.symbol}
-      />
+      {/* ── the money, side by side (§14) ──────────────────────────────── */}
+      {short && money && snapshot && balance ? (
+        <div role="status" className="rounded-[1.25rem] border border-amber-500/35 bg-amber-500/[0.07] px-4 py-3.5">
+          <p className="flex items-center gap-2 text-[13.5px] font-bold">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+            Insufficient balance
+          </p>
+          <dl className="mt-2.5 space-y-1.5 text-[13.5px]">
+            <Row label="Required" value={formatCents(snapshot.totalCents, snapshot.symbol)} />
+            <Row label="Available" value={formatCents(balance.balanceCents, balance.symbol)} />
+            <Row label="Short by" value={formatCents(money.shortfallCents, balance.symbol)} strong />
+          </dl>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("selection");
+              openSheet();
+            }}
+            className={cn(
+              "mt-3 inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background",
+              "transition motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
+            )}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            Recharge {formatCents(money.shortfallCents, balance.symbol)} or more
+          </button>
+        </div>
+      ) : money && snapshot && balance && pricing.status === "quoted" ? (
+        <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3">
+          <dl className="space-y-1.5 text-[13.5px]">
+            <Row label="Balance" value={formatCents(balance.balanceCents, balance.symbol)} />
+            <Row label="This video" value={`− ${formatCents(snapshot.totalCents, snapshot.symbol)}`} />
+            <Row label="After processing" value={formatCents(money.afterCents, balance.symbol)} strong />
+          </dl>
+        </div>
+      ) : null}
 
       {/* ── consent (§12): professional, unobtrusive, and required ─────────── */}
       <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5">
@@ -104,6 +170,25 @@ export function CharacterReplaceReviewStep({
           <span className="text-[13.5px] font-medium leading-snug">I confirm that I have the right to use this likeness and content.</span>
         </label>
       </div>
+
+      {sheetMounted && balance ? (
+        <CharacterReplaceRechargeSheet
+          open={sheetOpen}
+          onClose={closeSheet}
+          balance={balance}
+          returnTo={returnTo}
+          suggestedCents={short && money ? money.shortfallCents : null}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4">
+      <dt className={cn("text-muted-foreground", strong && "font-semibold text-foreground")}>{label}</dt>
+      <dd className={cn("tabular-nums", strong ? "text-[15px] font-bold" : "font-semibold")}>{value}</dd>
     </div>
   );
 }

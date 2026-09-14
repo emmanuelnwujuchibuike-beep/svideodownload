@@ -180,6 +180,7 @@ const schema = z.object({
             label: z.string().max(12).optional(),
             hint: z.string().max(24).optional(),
             multiplier: z.number().min(0.05).max(20).optional(),
+            perSecondCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
             enabled: z.boolean().optional(),
           }),
         )
@@ -214,6 +215,24 @@ const schema = z.object({
         .max(40)
         .optional(),
       trim: z.object({ enabled: z.boolean().optional(), minimumSeconds: z.number().min(0.5).max(30).optional() }).optional(),
+      voice: z
+        .object({ newVoiceEnabled: z.boolean().optional(), surchargePerSecondCents: z.number().int().min(0).max(100_000_000).optional() })
+        .optional(),
+      recharge: z
+        .object({
+          minCents: z.number().int().min(100).max(1_000_000_000).optional(),
+          maxCents: z.number().int().min(100).max(10_000_000_000).optional(),
+          packages: z
+            .array(z.object({ amountCents: z.number().int().positive(), enabled: z.boolean().optional(), order: z.number().int().min(0).optional() }))
+            .max(12)
+            .optional(),
+        })
+        .optional(),
+      /*
+        🔴 NOT accepted from a panel: `pricingVersion`, `pricingUpdatedAt`,
+        `pricingHistory`. The server stamps them (settings.ts); a body that
+        carries them is refused by `.strict()`.
+      */
     })
     .strict()
     .optional(),

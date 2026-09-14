@@ -3,8 +3,6 @@ import {
   BadgeCheck,
   BookOpen,
   Briefcase,
-  Building2,
-  CalendarDays,
   Clock,
   Download,
   ExternalLink,
@@ -58,21 +56,24 @@ const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satu
 
 /* ─────────────────────────────── About ─────────────────────────────── */
 
+/*
+  🔴 NO TYPE LINE, NO JOINED LINE (owner, 2026-09-13, screenshot of the card
+  reading "Community profile · Joined June 2026": "remove this section card
+  and any other duplicate section card"). The hero already carries the
+  headline, the bio, the website and the joined date; this panel — now a
+  hub modal — shows only what the hero does not: mission, facts, contacts.
+*/
 export function AboutPanel({
   details,
   bio,
   website,
-  joined,
   isOwner,
-  typeLabel,
   handle,
 }: {
   details: ProfileDetails;
   bio: string | null;
   website: string | null;
-  joined: string;
   isOwner: boolean;
-  typeLabel: string;
   handle: string;
 }) {
   const contacts: { icon: LucideIcon; label: string; href?: string }[] = [];
@@ -150,17 +151,6 @@ export function AboutPanel({
           ) : null}
         </div>
       ) : null}
-
-      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 pt-4 text-sm text-muted-foreground">
-        <span className="inline-flex items-center gap-1.5">
-          <Building2 className="h-4 w-4" />
-          {typeLabel} profile
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <CalendarDays className="h-4 w-4" />
-          {joined}
-        </span>
-      </div>
 
       {barren && isOwner ? (
         <p className="mt-4 rounded-2xl border border-dashed border-border/70 px-4 py-3 text-xs text-muted-foreground">

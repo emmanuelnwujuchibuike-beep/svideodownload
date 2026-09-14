@@ -1,18 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
 import {
   getCharacterReplaceBalance,
   getCharacterReplaceConfig,
+  getCharacterReplaceQuote,
   readCachedCharacterReplaceBalance,
   takeTopupReturnReference,
   verifyCharacterReplaceTopup,
 } from "@/lib/ai/character-replace/client";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import type { QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
 import {
   characterReplaceLimits,
+  inputReadiness,
+  selectedRangeMs,
   validatePhotoFile,
   validatePhotoPixels,
   validateVideoFile,
@@ -31,10 +35,22 @@ import { readImageSize, readVideoMetadata } from "@/features/ai/character-replac
  *  THE WORKSPACE HOOK — side effects around a pure reducer
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owns: the two reads from the server (config, balance), the decoding of a
- * picked file for its facts, the object URLs and their revocation, and the
- * Paystack return. Decides nothing about the draft itself — that is the
- * reducer's, and it is tested without a browser.
+ * Owns: the reads from the server (config, balance, and since Part 3 the
+ * quote), the decoding of a picked file for its facts, the object URLs and
+ * their revocation, and the Paystack return. Decides nothing about the draft
+ * itself — that is the reducer's, and it is tested without a browser.
+ *
+ * ── 🔴 THE PRICE IS ASKED FOR ON EVERY CHANGE, AND NEVER COMPUTED HERE ───────
+ *
+ * Owner, 2026-09-13 (Part 3, §12): "The price should update when the user
+ * changes: trim duration, output quality, voice mode, lip-sync mode." The
+ * reducer marks the quote `stale` on each of those; the effect below sees
+ * `stale` (or `idle` with complete inputs) and asks the server again, a beat
+ * after the last change so a dragged trim handle sends one request rather
+ * than sixty. A newer request aborts the older; an answer that is not the
+ * newest is dropped; a quote that reaches its `expiresAt` is marked stale so
+ * a member who lingers on the review step never confirms a price the server
+ * would no longer honour.
  *
  * ── 🔴 NOTHING LEAVES THE DEVICE ─────────────────────────────────────────────
  *
@@ -155,6 +171,83 @@ export function useCharacterReplaceWorkspace() {
     })();
   }, [loadBalance]);
 
+  /* ───────────────────────── the quote (Part 3) ────────────────────────── */
+
+  /*
+    The four priced inputs, as one object that is referentially stable while
+    none of them changes — so the effect below runs on a REAL change and not
+    on every render of the workspace.
+  */
+  const range = selectedRangeMs(state.project);
+  const quoteInput = useMemo<QuoteInput | null>(() => {
+    if (!range) return null;
+    const ms = range.endMs - range.startMs;
+    if (ms <= 0) return null;
+    return {
+      selectedDurationMs: ms,
+      quality: state.project.settings.quality,
+      voiceMode: state.project.voice.mode,
+      lipSyncMode: state.project.voice.mode === "new_voice" ? state.project.lipSync.tier : null,
+    };
+    // The range is a fresh object each render; its two numbers are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range?.startMs, range?.endMs, state.project.settings.quality, state.project.voice.mode, state.project.lipSync.tier]);
+
+  const ready = inputReadiness(state.project, loads.config).ready;
+  const quotable = ready && loads.available === true && loads.config?.pricingAvailable === true && quoteInput !== null;
+  const pricingStatus = state.pricing.status;
+  const quoteSeq = useRef(0);
+  const quoteAbort = useRef<AbortController | null>(null);
+  /** A member pressing "Try again" on a failed quote; bumps to re-run the effect. */
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    if (!quotable || !quoteInput) {
+      // Inputs incomplete, or the tool is off: whatever was quoted no longer
+      // applies. Back to idle, once (the reducer ignores a no-op).
+      if (pricingStatus !== "idle") dispatch({ type: "pricing", pricing: { status: "idle" } });
+      return;
+    }
+    if (pricingStatus === "quoted" || pricingStatus === "error") return;
+    // idle with complete inputs, stale after a change, pending after a retry
+    const seq = ++quoteSeq.current;
+    quoteAbort.current?.abort();
+    const controller = new AbortController();
+    quoteAbort.current = controller;
+    const timer = window.setTimeout(async () => {
+      const res = await getCharacterReplaceQuote(quoteInput, controller.signal);
+      if (!alive.current || seq !== quoteSeq.current || controller.signal.aborted) return;
+      if (res.ok) {
+        dispatch({ type: "pricing", pricing: { status: "quoted", snapshot: res.quote } });
+        // The server read the wallet while quoting; the card shows the same figure.
+        setLoads((l) => (l.balance && l.balance.balanceCents !== res.balanceCents ? { ...l, balance: { ...l.balance, balanceCents: res.balanceCents } } : l));
+      } else {
+        dispatch({ type: "pricing", pricing: { status: "error", message: res.code === "NETWORK" ? res.error : "We couldn't price this. Try again." } });
+      }
+    }, pricingStatus === "stale" ? 350 : 120);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+    // `retry` is a deliberate re-run trigger with no value of its own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotable, quoteInput, pricingStatus, retry]);
+
+  /* A quote past its time is stale: the effect above asks again. */
+  useEffect(() => {
+    if (state.pricing.status !== "quoted") return;
+    const snapshot = state.pricing.snapshot;
+    const wait = Math.max(0, new Date(snapshot.expiresAt).getTime() - Date.now());
+    if (!Number.isFinite(wait)) return;
+    const timer = window.setTimeout(() => dispatch({ type: "pricing", pricing: { status: "stale", snapshot } }), wait);
+    return () => window.clearTimeout(timer);
+  }, [state.pricing]);
+
+  const requote = useCallback(() => {
+    dispatch({ type: "pricing", pricing: { status: "pending" } });
+    setRetry((n) => n + 1);
+  }, []);
+
   /* ───────────────────────── the pickers ───────────────────────────────── */
 
   /*
@@ -258,6 +351,7 @@ export function useCharacterReplaceWorkspace() {
     pickVideo,
     clearVideo,
     reloadBalance: loadBalance,
+    requote,
     dismissTopupNotice,
   };
 }

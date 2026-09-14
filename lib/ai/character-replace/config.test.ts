@@ -123,8 +123,9 @@ describe("publicCharacterReplaceConfig", () => {
   });
 
   it("lists only the qualities and tiers that are on, and picks the balanced default", () => {
+    // 1080p is off by default (the provider documents 480/720); switched on here to see the list.
     const config = normalizeCharacterReplaceConfig({
-      qualities: [{ id: "720p", enabled: false }],
+      qualities: [{ id: "720p", enabled: false }, { id: "1080p", enabled: true }],
       lipSync: [{ id: "studio", enabled: false }],
     });
     const pub = publicCharacterReplaceConfig(config, currency, false);

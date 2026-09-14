@@ -26,15 +26,9 @@ import { PageLoaderWithHeader } from "@/features/ui/page-loader";
 import { RankCrown } from "@/components/badges/rank-crown";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { AppModeSwitcher } from "@/features/app-shell/app-mode-switcher";
-import { CreatorRail } from "@/features/profile/creator-rail";
-import type { TopContent } from "@/features/profile/identity-analytics";
-import { notificationsToActivity } from "@/features/profile/activity-map";
-import { listNotifications } from "@/lib/social/notifications";
 import { ProfileSections } from "@/features/profile/profile-sections";
-import { StreakProfileCard } from "@/features/streaks/streak-profile-card";
 import { AddFriendButton } from "@/features/friends/add-friend-button";
 import { IdentityRing } from "@/features/profile/identity-ring";
-import { friendIdSet } from "@/lib/social/friend-ids";
 import { viewerCircleIds } from "@/lib/social/graph/store";
 import { ProfileCoverControls } from "@/features/profile/profile-cover-controls";
 import { Toaster } from "@/features/ui/toast";
@@ -56,11 +50,10 @@ import { IdentityMedia } from "@/features/profile/identity-media";
 import { IdentityModeGlyph } from "@/features/profile/identity-mode-glyphs";
 import { IdentityMediaViewer } from "@/features/profile/identity-media-viewer";
 import { computeReputation } from "@/lib/social/reputation";
-import type { ProfileHealth } from "@/lib/profile/health";
 import { resolveProfileTheme } from "@/lib/profile/theme";
+import { creatorTotals, publishedPostsCount } from "@/lib/profile/hub-data";
 import { getProfileAppearance } from "@/lib/social/profile-appearance";
-import { getProfileHealth } from "@/lib/social/profile-health";
-import { computeAchievements, earnedCount } from "@/lib/social/achievements";
+import { computeAchievements } from "@/lib/social/achievements";
 import { isPreviewableRole, resolveViewerRole, type ViewerRole } from "@/lib/profile/audience";
 import type { StoredModule } from "@/lib/profile/engine";
 import type { ModuleKey } from "@/lib/profile/modules";
@@ -76,9 +69,6 @@ import {
   type Offering,
   type ProfileDetails,
 } from "@/lib/social/profile-platform";
-import { buildLifeJourney } from "@/lib/social/life-journey";
-import { getTimeCapsules } from "@/lib/social/time-capsules";
-import { getJournalEntries } from "@/lib/social/journal";
 import { createClient } from "@/lib/supabase/server";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -92,19 +82,6 @@ export const dynamic = "force-dynamic";
  * that live on the session and cannot be derived from a profile row. Returns
  * undefined on any failure — the rail simply drops the card.
  */
-async function ownerHealth(): Promise<ProfileHealth | undefined> {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return undefined;
-    return await getProfileHealth(user);
-  } catch {
-    return undefined;
-  }
-}
-
 async function viewerId(): Promise<string | null> {
   try {
     const supabase = await createClient();
@@ -193,109 +170,6 @@ function StatCell({ label, value, href }: { label: string; value: number; href?:
   ) : (
     <div className={cls}>{inner}</div>
   );
-}
-
-async function publishedPostsCount(profileId: string, isOwner: boolean): Promise<number> {
-  try {
-    let q = createAdminClient()
-      .from("posts")
-      .select("id", { head: true, count: "exact" })
-      .eq("publisher_id", profileId)
-      .eq("status", "published");
-    if (!isOwner) q = q.eq("visibility", "public");
-    const { count } = await q;
-    return count ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** The creator's earliest published post — the "First post" Life Journey milestone. */
-async function firstPublishedPost(profileId: string): Promise<{ id: string; title: string | null; thumbnailUrl: string | null; createdAt: string } | null> {
-  try {
-    const { data } = await createAdminClient()
-      .from("posts")
-      .select("id, title, thumbnail_url, media_url, created_at")
-      .eq("publisher_id", profileId)
-      .eq("status", "published")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (!data) return null;
-    const row = data as { id: string; title: string | null; thumbnail_url: string | null; media_url: string | null; created_at: string };
-    return { id: row.id, title: row.title, thumbnailUrl: row.thumbnail_url ?? row.media_url, createdAt: row.created_at };
-  } catch {
-    return null;
-  }
-}
-
-/** Engagement totals across a creator's published posts. Likes + views drive the
- *  hero stats; comments/shares/saves + the highest-viewed post feed the Identity
- *  Analytics panel. Everything is summed from real rows — no fabricated numbers. */
-async function creatorTotals(profileId: string): Promise<{
-  likes: number;
-  views: number;
-  comments: number;
-  shares: number;
-  saves: number;
-  topPost: TopContent | null;
-}> {
-  try {
-    const { data } = await createAdminClient()
-      .from("posts")
-      .select("id, title, thumbnail_url, media_url, likes_count, views_count, comments_count, shares_count, saves_count")
-      .eq("publisher_id", profileId)
-      .eq("status", "published");
-    let likes = 0;
-    let views = 0;
-    let comments = 0;
-    let shares = 0;
-    let saves = 0;
-    let topPost: TopContent | null = null;
-    for (const r of (data ?? []) as {
-      id: string;
-      title: string | null;
-      thumbnail_url: string | null;
-      media_url: string | null;
-      likes_count: number | null;
-      views_count: number | null;
-      comments_count: number | null;
-      shares_count: number | null;
-      saves_count: number | null;
-    }[]) {
-      const v = r.views_count ?? 0;
-      const l = r.likes_count ?? 0;
-      likes += l;
-      views += v;
-      comments += r.comments_count ?? 0;
-      shares += r.shares_count ?? 0;
-      saves += r.saves_count ?? 0;
-      if (!topPost || v > topPost.views) {
-        topPost = { id: r.id, title: r.title, thumbnailUrl: r.thumbnail_url ?? r.media_url, views: v, likes: l };
-      }
-    }
-    return { likes, views, comments, shares, saves, topPost };
-  } catch {
-    return { likes: 0, views: 0, comments: 0, shares: 0, saves: 0, topPost: null };
-  }
-}
-
-/** A few real friends for the creator rail's "Top Friends". */
-async function topFriends(viewerId: string): Promise<{ name: string; handle: string; avatarUrl: string | null }[]> {
-  try {
-    const ids = [...(await friendIdSet(viewerId))].slice(0, 8);
-    if (ids.length === 0) return [];
-    const { data } = await createAdminClient()
-      .from("profiles")
-      .select("handle, display_name, avatar_url")
-      .in("id", ids)
-      .limit(5);
-    return ((data ?? []) as { handle: string | null; display_name: string | null; avatar_url: string | null }[])
-      .filter((p) => p.handle)
-      .map((p) => ({ name: p.display_name || `@${p.handle}`, handle: p.handle as string, avatarUrl: p.avatar_url }));
-  } catch {
-    return [];
-  }
 }
 
 /** Does this profile follow the viewer back? Powers the "Follows you" relationship
@@ -558,32 +432,16 @@ async function ProfileData({
   // Creator Tools · Achievements · Top Friends · Recent Activity). Everything is
   // the viewer's REAL data; tools without a backend announce "coming soon".
   if (profile.isOwner) {
-    const [friends, notifs, firstPost, timeCapsules, journalEntries, health] = await Promise.all([
-      topFriends(profile.id),
-      listNotifications(profile.id, 12),
-      firstPublishedPost(profile.id),
-      getTimeCapsules(profile.id),
-      getJournalEntries(profile.id),
-      // Profile Health (Part 15) — owner-only, and computed from the SESSION
-      // user so the auth-only signals (email confirmation, MFA factors) are
-      // real. Never computed for a visitor: a health score is nobody else's
-      // business, and it would leak whether an account has 2FA turned on.
-      ownerHealth(),
-    ]);
-    const activity = notificationsToActivity(notifs.items);
-    // `totals`, `accountAgeDays`, `reputation`, `achievements` and `joined` are
-    // all computed in the shared scope above — they feed the public reputation
-    // chip and the Achievements section as well as this rail.
-    // Life Journey™ — real dated milestones (joined, first post) + current-state
-    // highlights (posts, friends, rank, achievements). No invented events.
-    const journey = buildLifeJourney({
-      joinedAt: profile.createdAt,
-      firstPost,
-      rankName: reputation.rank.name,
-      achievementsEarned: earnedCount(achievements),
-      postsCount: postsTotal,
-      friendsCount: friendTotal,
-    });
+    /*
+      🔴 NOTHING ELSE IS READ FOR THE OWNER (owner, 2026-09-13: "The profile
+      page should be extremely light"). Top friends, twelve notifications,
+      the first post, the time capsules, the journal and the health score
+      used to be six more awaited reads here, streamed into the document as
+      cards under the grid. They are hub sections now — read by
+      /api/profile/<handle>/hub/<key> when their button scrolls into view or
+      is tapped (lib/profile/hub-data.ts) — and this branch renders the
+      hero, the mode switcher, the grid and the buttons.
+    */
     /*
       🔴 VIEWS DROPPED FROM THE HERO ROW (owner, 2026-08-16: "let the profile
       post view be showed only in profile analysis, and not in profile
@@ -676,7 +534,21 @@ async function ProfileData({
                       identity-mode-glyphs.tsx ("3D, Snapchat-style"); the avatar
                       mode is a person, never a sparkle.
                     */}
-                    <div className="-mx-1 flex items-start justify-between gap-3 sm:-mx-4 sm:gap-6">
+                    {/*
+                      ── 4th pass (owner, 2026-09-13, screenshot of the ring + pill) ─
+                      "Give more padding left and right to the name and username
+                      and also [the avatar section] — they sit too close to the
+                      edge; move [it] below and more to the left, there is too
+                      much space at the centre."
+
+                      So: the row no longer pulls to the card edges (the -mx that
+                      put both columns at padding-3 is gone; they sit inside the
+                      card's own px-4/px-7), the identity column keeps its natural
+                      width instead of stretching (so the avatar column follows the
+                      name at a fixed gap rather than parking at the far right),
+                      and the avatar column starts a little lower.
+                    */}
+                    <div className="flex items-start gap-6 sm:gap-8">
                       {/* Identity — the LEFT edge: name, handle, and the chips that
                           describe the profile. */}
                       {/*
@@ -690,7 +562,7 @@ async function ProfileData({
                         identity in the middle of that height instead — the bio
                         and the rest still follow below the row at full width.
                       */}
-                      <div className="min-w-0 flex-1 self-center py-3 sm:py-4">
+                      <div className="min-w-0 max-w-[60%] flex-none self-center py-3 sm:py-4">
                         <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
                           {profile.displayName}
                           {/* Verified · plan (Pro/Business) · Creator, one cluster */}
@@ -741,7 +613,7 @@ async function ProfileData({
                         either: this is the member's OWN header, and the two frame
                         colours the owner named are the only ones it may take.
                       */}
-                      <div className="flex shrink-0 flex-col items-end pt-3 sm:pt-4">
+                      <div className="flex shrink-0 flex-col items-start pt-5 sm:pt-6">
                         <div className="relative w-fit">
                           <IdentityRing
                             userId={profile.id}
@@ -866,25 +738,8 @@ async function ProfileData({
                   <AppModeSwitcher />
                 </div>
 
-                {/*
-                  Daily streak.
-
-                  🔴 THIS BRANCH, NOT THE OTHER ONE. This file has two full
-                  returns: this one is inside `if (profile.isOwner)` — your own
-                  profile — and the second is the VISITOR view. The card first
-                  went into the visitor branch guarded by `profile.isOwner`,
-                  which is a condition that is false everywhere in that branch
-                  by construction, so it rendered for nobody. No guard is needed
-                  here: reaching this code already means you are the owner.
-
-                  It DISPLAYS ONLY — opening a profile never replays the
-                  celebration. That is raised solely by StreakTracker from the
-                  server's `shouldCelebrate`, which is already false once the
-                  day has been marked.
-                */}
-                <div className="mt-6 px-4 sm:px-6">
-                  <StreakProfileCard />
-                </div>
+                {/* The daily streak card is a hub section now ("Daily streak"),
+                    with the rest of the owner's cards — see ProfileHub. */}
 
                 {/* The sections this profile shows — resolved by the Universal
                     Profile Engine from the member's type, their module choices
@@ -905,9 +760,7 @@ async function ProfileData({
                       credentials={credentials}
                       offerings={offerings}
                       achievements={achievements}
-                      bio={profile.bio}
                       website={profile.website}
-                      joined={joined}
                       collectionsCount={collectionsN}
                       ownerViewing={profile.isOwner}
                       previewRole={previewRole}
@@ -917,22 +770,10 @@ async function ProfileData({
               </div>
             </div>
 
-              <CreatorRail
-                className="frenz-profile-rail"
-                bio={profile.bio}
-                website={profile.website}
-                joined={joined}
-                friends={friends}
-                activity={activity}
-                achievements={achievements}
-                analytics={{ views: totals.views, likes: totals.likes, comments: totals.comments, shares: totals.shares, saves: totals.saves }}
-                topContent={totals.topPost}
-                reputation={reputation}
-                journey={journey}
-                health={health}
-                timeCapsules={timeCapsules}
-                journalEntries={journalEntries}
-              />
+              {/* The creator rail (About Me · Appearance · Health · Reputation ·
+                  Journey · Capsules · Journal · Analytics · Tools · Friends ·
+                  Activity) is gone from the document: every card is a hub
+                  button now (features/profile/profile-hub.tsx), read on demand. */}
             </div>
           </div>
         </main>
@@ -1297,9 +1138,7 @@ async function ProfileData({
                     credentials={credentials}
                     offerings={offerings}
                     achievements={achievements}
-                    bio={profile.bio}
                     website={profile.website}
-                    joined={joined}
                     collectionsCount={collectionsN}
                       ownerViewing={profile.isOwner}
                       previewRole={previewRole}
@@ -1339,9 +1178,7 @@ async function ProfileSectionsLoader({
   credentials,
   offerings,
   achievements,
-  bio,
   website,
-  joined,
   collectionsCount,
   ownerViewing,
   previewRole,
@@ -1359,9 +1196,7 @@ async function ProfileSectionsLoader({
   credentials: Credential[];
   offerings: Offering[];
   achievements: EarnedAchievement[];
-  bio: string | null;
   website: string | null;
-  joined: string;
   collectionsCount: number;
   ownerViewing: boolean;
   previewRole: ViewerRole | null;
@@ -1422,9 +1257,7 @@ async function ProfileSectionsLoader({
       credentials={credentials}
       offerings={offerings}
       achievements={achievements}
-      bio={bio}
       website={website}
-      joined={joined}
       collectionsCount={collectionsCount}
       ownerViewing={ownerViewing}
       previewRole={previewRole}

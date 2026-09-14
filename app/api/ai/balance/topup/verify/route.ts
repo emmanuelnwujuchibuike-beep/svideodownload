@@ -4,7 +4,8 @@ import { creditAiBalance, getAiBalanceCents } from "@/lib/ai/balance";
 import { markTopupAttempt } from "@/lib/ai/topup-attempts";
 import { notifyTopupFailed, notifyTopupSuccess } from "@/lib/ai/topup-notify";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { AI_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
+import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
+import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -122,7 +123,7 @@ export async function POST(request: Request) {
       */
       if (
         (charge.status === "failed" || charge.status === "abandoned") &&
-        charge.metadata?.purpose === AI_TOPUP_PURPOSE &&
+        (charge.metadata?.purpose === AI_TOPUP_PURPOSE || charge.metadata?.purpose === CHARACTER_REPLACE_TOPUP_PURPOSE) &&
         charge.metadata?.user_id === user.id
       ) {
         const outcome = charge.status;
@@ -147,6 +148,50 @@ export async function POST(request: Request) {
         });
       }
       return NextResponse.json({ credited: false, pending: charge.status === "pending" });
+    }
+
+    /*
+      ── CHARACTER REPLACE (Part 3, §3) ──────────────────────────────────────
+
+      Its own purpose, its own wallet. The same three checks the AI branch
+      below makes — ownership, currency, amount — and then the PRODUCT credit,
+      never `creditAiBalance`. Placed before the AI branch so a Character
+      Replace reference can never fall through into it.
+    */
+    if (charge.metadata?.purpose === CHARACTER_REPLACE_TOPUP_PURPOSE) {
+      if (charge.metadata?.user_id !== user.id) {
+        console.warn("[ai/topup-verify] cr reference does not belong to caller", { userId: user.id, reference });
+        return NextResponse.json({ credited: false });
+      }
+      const { frenzAiCurrency: crCurrency } = await getLandingSettings();
+      if (charge.currency && charge.currency !== crCurrency) {
+        console.error("[ai/topup-verify] cr currency mismatch", { reference, got: charge.currency, expected: crCurrency });
+        return NextResponse.json({ credited: false });
+      }
+      const crAmount = Number(charge.amount);
+      if (!Number.isFinite(crAmount) || crAmount <= 0) return NextResponse.json({ credited: false });
+      const crBalance = await creditVerifiedCharacterReplaceRecharge({
+        userId: user.id,
+        reference,
+        amountCents: crAmount,
+        currency: crCurrency,
+        channel: charge.channel ?? null,
+        paidAt: charge.paid_at ?? null,
+        gatewayResponse: charge.gateway_response ?? null,
+      });
+      after(() =>
+        announceCharacterReplaceRecharge({
+          userId: user.id,
+          reference,
+          amountCents: crAmount,
+          currency: crCurrency,
+          balanceAfterCents: crBalance,
+          channel: charge.channel ?? null,
+          paidAt: charge.paid_at ?? null,
+          gatewayResponse: charge.gateway_response ?? null,
+        }),
+      );
+      return NextResponse.json({ credited: true, balanceCents: crBalance, product: "character_replace" });
     }
 
     if (charge.metadata?.purpose !== AI_TOPUP_PURPOSE) {

@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
+import { navigationDepth } from "@/features/app-shell/page-transition";
+import { fallbackBackHref } from "@/lib/dom/back-fallback";
 import { takeBackTarget } from "@/lib/dom/back-target";
 import { isBodyScrollLocked } from "@/lib/dom/scroll-lock";
 import { isStandalone } from "@/lib/pwa/platform";
@@ -85,6 +87,9 @@ const CANCEL_MS = 190;
 export function EdgeSwipeBack() {
   const router = useRouter();
   const pathname = usePathname();
+  /** The current path, for the commit handler below (a closure over the first render). */
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname;
   const start = useRef<{ x: number; y: number } | null>(null);
   const el = useRef<HTMLElement | null>(null);
   /** null = undecided, true = horizontal (ours), false = vertical (theirs). */
@@ -282,8 +287,22 @@ export function EdgeSwipeBack() {
             a mode.
           */
           const target = takeBackTarget();
-          if (target) router.replace(target);
-          else router.back();
+          if (target) {
+            router.replace(target);
+          } else if (navigationDepth() >= 2) {
+            router.back();
+          } else {
+            /*
+              🔴 NOTHING BEHIND THIS PAGE IN THIS DOCUMENT (owner, 2026-09-13:
+              "it reloads and goes to a different page"). `router.back()` here
+              would cross into a document that no longer exists — a full load
+              of whatever URL was there, and whatever that URL redirects to
+              today. A client navigation to the page logically behind this
+              one instead: instant, and it lands where the member expects.
+              `replace`, as above, so the stack never grows a loop.
+            */
+            router.replace(fallbackBackHref(pathRef.current ?? "/"));
+          }
         }, COMPLETE_MS);
         return;
       }

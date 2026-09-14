@@ -83,16 +83,15 @@ export function FrenzAiFab() {
       )}
       style={{ bottom: "max(1.5rem, calc(var(--frenz-bottomnav-h, 0px) + 1rem))" }}
     >
-      {/* the halo — a soft brand glow that sits under the disc */}
-      <span aria-hidden className="pointer-events-none absolute -inset-2 rounded-full bg-gradient-to-br from-blue-500/35 via-indigo-500/25 to-fuchsia-500/35 blur-lg transition-opacity group-hover:opacity-100" />
       {/* the conic rim — a slow-turning light on the edge of the disc */}
       <span aria-hidden className="frenz-fab-rim pointer-events-none absolute inset-0 rounded-full" />
       {/* the disc */}
       <span
         aria-hidden
         className={cn(
+          // No drop shadow (owner, 2026-09-14: "remove the shadow from the Ai button widget") — the rim and the gloss carry the depth.
           "absolute inset-[3px] rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500",
-          "shadow-[0_1px_0_rgb(255_255_255/0.4)_inset,0_-6px_14px_rgb(0_0_0/0.18)_inset,0_16px_34px_-12px_rgb(99_102_241/0.9)]",
+          "shadow-[0_1px_0_rgb(255_255_255/0.4)_inset,0_-6px_14px_rgb(0_0_0/0.18)_inset]",
         )}
       />
       {/* the gloss */}
@@ -101,7 +100,7 @@ export function FrenzAiFab() {
       {/* the "AI" badge */}
       <span
         aria-hidden
-        className="absolute -right-0.5 -top-0.5 rounded-full border border-white/70 bg-white px-1.5 py-[1px] text-[9px] font-black leading-none tracking-[0.06em] text-indigo-600 shadow-sm"
+        className="absolute -right-0.5 -top-0.5 rounded-full border border-white/70 bg-white px-1.5 py-[1px] text-[9px] font-black leading-none tracking-[0.06em] text-indigo-600"
       >
         AI
       </span>

@@ -242,7 +242,7 @@ export function HistoryPanel({
    */
   embedded?: boolean;
 }) {
-  const { items, toggleFavorite, removeDownload, clearHistory } = useHistory();
+  const { items, ready, toggleFavorite, removeDownload, clearHistory } = useHistory();
   const [tab, setTab] = useState<"recent" | "favorites" | "failed">("recent");
   const [kind, setKind] = useState<KindFilter>("all");
   const [query, setQuery] = useState("");
@@ -363,6 +363,26 @@ export function HistoryPanel({
     setSelected(new Set());
     setSelecting(false);
   };
+
+  if (!ready) {
+    // The server render and the hydration frame: the store has not read the
+    // device yet, so neither "empty" nor a list is true. A quiet skeleton in
+    // the grid's own shape, gone the moment the first snapshot lands.
+    if (!standalone && !embedded) return null;
+    return (
+      <section aria-busy="true" aria-label="Loading your history" className={cn(standalone ? "pb-16 pt-2" : "py-14")}>
+        <div className={cn(embedded ? "" : "mx-auto max-w-6xl px-2 sm:px-4")}>
+          <div className="h-24 animate-pulse rounded-3xl bg-secondary/70" />
+          <div className="mt-4 h-11 animate-pulse rounded-2xl bg-secondary/60" />
+          <div className="mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
+            {Array.from({ length: 12 }, (_, i) => (
+              <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-secondary/60" />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (items.length === 0) {
     // Embedded (e.g. on /library) → render nothing so it doesn't take space; the

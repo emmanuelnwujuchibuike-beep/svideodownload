@@ -35,8 +35,14 @@ export function AppModeSwitcher({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* a whisper of brand light in the corner — decoration, not a message */}
-      <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gradient-to-br from-blue-500/15 via-indigo-500/10 to-fuchsia-500/0 blur-2xl" />
+      {/*
+        A whisper of brand light in the corner — decoration, not a message.
+        🔴 Painted as an in-bounds gradient, NOT a blurred child hanging past
+        the edge: Safari does not clip a blurred, overflowing child to a
+        rounded parent, and the corner rendered square (owner, 2026-09-14
+        screenshot, "the edge gradient not have a border radius").
+      */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(70%_60%_at_100%_0%,rgb(99_102_241/0.14),transparent_70%)]" />
 
       <div className="relative flex items-center gap-3">
         <span aria-hidden className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow-sm">

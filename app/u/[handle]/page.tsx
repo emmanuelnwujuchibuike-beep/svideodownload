@@ -616,7 +616,8 @@ async function ProfileData({
                         either: this is the member's OWN header, and the two frame
                         colours the owner named are the only ones it may take.
                       */}
-                      <div className="flex shrink-0 flex-col items-center pt-5 sm:pt-6">
+                      {/* pt-7 / mr-2: "a bit more below and left, about 2 padding down and 2 padding left" (owner, 2026-09-14). */}
+                      <div className="mr-2 flex shrink-0 flex-col items-center pt-7 sm:mr-3 sm:pt-8">
                         <div className="relative w-fit">
                           <IdentityRing
                             userId={profile.id}

@@ -125,13 +125,13 @@ describe("the prepare plan — trim on the frame, nothing foreign in the array",
 
   it("an SDR plan is tagged BT.709; an HDR plan is tone-mapped first — and both stay fully known", () => {
     const sdr = buildPrepareArgs(plan);
-    const vf = sdr[sdr.indexOf("-vf") + 1];
+    const vf = sdr[sdr.indexOf("-vf") + 1] ?? "";
     expect(vf.startsWith("scale=")).toBe(true);
     expect(sdr).toContain("-color_primaries");
     expect(sdr).toContain("bt709");
     const hdrPlan = { ...plan, hdr: true };
     const hdr = buildPrepareArgs(hdrPlan);
-    const hvf = hdr[hdr.indexOf("-vf") + 1];
+    const hvf = hdr[hdr.indexOf("-vf") + 1] ?? "";
     expect(hvf).toMatch(/^zscale=t=linear.*tonemap=.*,scale=/);
     for (const arg of hdr) expect(isKnownPrepareArg(arg, hdrPlan), arg).toBe(true);
   });

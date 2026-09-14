@@ -1,9 +1,12 @@
 import "server-only";
 
+import { readPipeline } from "@/lib/ai/character-replace/job-meta";
+import { isProviderStage, markFailed, markSucceeded, nextStage, type PipelineMeta, type PipelineStage } from "@/lib/ai/character-replace/pipeline";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
-import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
+import { aiErrorMessage } from "@/lib/ai/errors";
+import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { aiFeature, type AiJobRow, type AiJobStatus } from "@/lib/ai/jobs";
-import { recordProviderOutput, transitionJob, noteJobDiagnostic } from "@/lib/ai/job-store";
+import { getJobAsService, recordProviderOutput, transitionJob, noteJobDiagnostic, writeProcessingMetadata } from "@/lib/ai/job-store";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { providerFor } from "@/lib/ai/providers";
 import { subjectFromRow } from "@/lib/ai/subject";
@@ -105,6 +108,30 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
   const provider = providerFor(feature.provider);
   if (!provider || !provider.isConfigured()) return false;
 
+  /*
+    ── Part 8: WHICH STAGE the prediction on the row belongs to ────────────
+
+    A multi-stage Character Replace job keeps the LAST prediction it created
+    on the row. Between stages — the voice succeeded, the worker stored the
+    speech, the replace stage is `pending` because its submit was throttled —
+    that id is a finished stage's, and asking the provider about it again
+    answers "succeeded" for work that is already home. Before this guard the
+    member's own poll did exactly that ninety seconds in: it recorded the
+    speech file as "the provider output" and dispatched a FINALIZATION for a
+    job whose video had not been generated. Nothing here may act unless the
+    prediction is the CURRENT stage's and that stage is still in flight.
+  */
+  const pipeline = job.feature === "ai_character_replace" ? readPipeline(job.metadata) : null;
+  const stage: PipelineStage | null = pipeline?.current ?? null;
+  if (pipeline && stage) {
+    if (!isProviderStage(stage)) return false;
+    const record = pipeline.records[stage];
+    const inFlight = record?.status === "submitted" || record?.status === "processing";
+    if (!inFlight || (record.predictionId && record.predictionId !== job.replicate_prediction_id)) return false;
+  }
+  const following = pipeline && stage ? nextStage(pipeline, stage) : null;
+  const intermediate = !!pipeline && !!stage && !!following && isProviderStage(following);
+
   lastChecked.set(job.id, now);
 
   try {
@@ -133,6 +160,31 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
       // lands still leaves a job that can be finalized later rather than one
       // that has lost the only link to its own output.
       await recordProviderOutput(job.id, state.resultUrl);
+      if (pipeline && stage) await recordStage(job, pipeline, (p) => markSucceeded(p, stage, state.resultUrl, new Date(now).toISOString()));
+
+      if (intermediate) {
+        /*
+          ── Part 8: a lost callback for an INTERMEDIATE stage ────────────────
+          Mirror of the webhook's own branch: the worker brings this stage's
+          output home and submits the next (advance), never the finalizer —
+          a finalizer handed a speech file would call it "not a video" and
+          refund a job that was going fine. A refusal ends the job exactly as
+          the webhook's would; anything transient is left to the sweep, which
+          re-dispatches while `pipeline.pending_advance` is set.
+        */
+        const dispatch = await dispatchAdvance(job.id);
+        console.warn("[ai/reconcile] advanced a stage the webhook never reported", { jobId: job.id, stage, next: following, predictionId: job.replicate_prediction_id, dispatched: dispatch.dispatched, ...(dispatch.dispatched ? {} : { reason: dispatch.reason }) });
+        await noteJobDiagnostic(job.id, {
+          advance_dispatch: dispatch.dispatched ? "ok" : dispatch.reason,
+          advance_detail: dispatch.dispatched ? null : ("detail" in dispatch ? dispatch.detail : null),
+          advance_from: "reconcile",
+        });
+        if (dispatch.dispatched === false && dispatch.reason === "refused") {
+          console.error("[ai/reconcile] worker REFUSED the advance — ending the job", { jobId: job.id, status: dispatch.status, detail: dispatch.detail });
+          return await failFrom(job, "FINALIZER_UNAVAILABLE", dispatch.detail);
+        }
+        return true;
+      }
 
       /*
         🔴 NOT `after()` here, unlike the webhook.
@@ -181,7 +233,9 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
     }
 
     if (state.status === "failed") {
-      return await failFrom(job, "PROCESSING_FAILED", state.detail);
+      // Which stage failed, for the operator — before the status moves, so the note survives the CAS.
+      if (pipeline && stage) await recordStage(job, pipeline, (p) => markFailed(p, stage, state.detail ?? "provider failed", new Date(now).toISOString()));
+      return await failFrom(job, stage === "voice" ? "VOICE_GENERATION_FAILED" : stage === "lipsync" ? "LIPSYNC_FAILED" : "PROCESSING_FAILED", state.detail);
     }
 
     if (state.status === "cancelled") {
@@ -205,6 +259,22 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
   }
 }
 
+/**
+ * Write a stage record on the CURRENT row, guarded by the prediction id so a
+ * webhook landing in the same second cannot be overwritten with older
+ * metadata. Best-effort: the stage note is for the tracker and the operator;
+ * the transition that matters is the status CAS in the caller.
+ */
+async function recordStage(job: AiJobRow, fallback: PipelineMeta, mark: (pipeline: PipelineMeta) => PipelineMeta): Promise<void> {
+  try {
+    const current = await getJobAsService(job.id);
+    if (!current || current.replicate_prediction_id !== job.replicate_prediction_id || current.status !== "processing") return;
+    await writeProcessingMetadata(job.id, job.replicate_prediction_id!, { ...(current.metadata ?? {}), pipeline: mark(readPipeline(current.metadata) ?? fallback) });
+  } catch (e) {
+    console.warn("[ai/reconcile] stage note not written", { jobId: job.id, error: String(e).slice(0, 120) });
+  }
+}
+
 async function failFrom(job: AiJobRow, code: string, detail: string | null | undefined): Promise<boolean> {
   const updated = await transitionJob(job.id, ["queued", "processing"], "failed", {
     error_code: code,
@@ -223,7 +293,8 @@ async function failFrom(job: AiJobRow, code: string, detail: string | null | und
       userId: subject.userId,
       jobId: job.id,
       feature: job.feature,
-      message: "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
+      // The product's own sentence: AI Clean's "cleanup" line is wrong for a Character Replace job.
+      message: job.feature === "ai_character_replace" ? aiErrorMessage("PROCESSING_FAILED") : "The cleanup didn't finish. Your allowance wasn't used — you can try again.",
       // A job reconcile gives up on failed on OUR side, not on the input.
       errorCode: "PROCESSING_FAILED",
     });

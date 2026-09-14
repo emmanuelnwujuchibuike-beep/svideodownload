@@ -179,12 +179,16 @@ export function markFailed(pipeline: PipelineMeta, stage: PipelineStage, error: 
 }
 
 /** The worker brought `stage`'s output home at `storedPath` and the job now waits on `to`. Refuses an illegal move by returning null. */
-export function advance(pipeline: PipelineMeta, from: PipelineStage, to: PipelineStage, storedPath: string | null): PipelineMeta | null {
+export function advance(pipeline: PipelineMeta, from: PipelineStage, to: PipelineStage, storedPath: string | null, at: string = new Date().toISOString()): PipelineMeta | null {
   if (!canAdvance(pipeline, from, to)) return null;
   return {
     ...pipeline,
     current: to,
     pending_advance: null,
+    // The clock the stall deadline and the sweep read is the CURRENT stage's. It
+    // used to keep the previous stage's submit time across an advance, so a
+    // throttled submit (Part 8, production) waited out the OLD stage's grace.
+    stage_started_at: at,
     records: {
       ...pipeline.records,
       [from]: { ...(pipeline.records[from] ?? { status: "succeeded" }), storedPath, outputUrl: null },

@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     {
       ok: outcome.ok,
       accepted: true,
+      retry: "retry" in outcome && outcome.retry === true,
       code: "code" in outcome ? outcome.code : null,
       detail: "detail" in outcome ? outcome.detail : null,
       skipped: "skipped" in outcome ? outcome.skipped : null,

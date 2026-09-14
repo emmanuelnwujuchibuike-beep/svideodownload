@@ -90,7 +90,8 @@ export type FinalizeOutcome =
   | { ok: true; jobId: string; audioRestored: boolean; durationSeconds: number; bytes: number }
   /** Nothing to do: another worker has it, or it is already finished. */
   | { ok: true; jobId: string; skipped: string }
-  | { ok: false; jobId: string; code: FinalizeErrorCode; detail: string };
+  /** `retry: true` = the row already carries the next attempt (finalize_next_at); the frontend must not read it as a decline. */
+  | { ok: false; jobId: string; code: FinalizeErrorCode; detail: string; retry?: true };
 
 export type FinalizeErrorCode =
   | "AI_FINALIZATION_FAILED"

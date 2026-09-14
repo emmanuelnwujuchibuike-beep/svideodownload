@@ -186,8 +186,11 @@ describe("money and analytics on the result page (§33–§34)", () => {
   });
   it("the AI button lives on the history page only (owner, 2026-09-14)", () => {
     const fab = src("features/ai/frenz-ai-fab.tsx");
-    expect(fab).toContain('const SHOWN_PREFIXES = ["/downloads", "/history"];');
+    expect(fab).toContain('const SHOWN_PREFIXES = ["/history"];');
     expect(fab).not.toContain("HIDDEN_PREFIXES");
     expect(src("app/(marketing)/history/page.tsx")).toContain("<FrenzAiFab />");
+    // owner, later the same day: "the AI widget button still shows in the Download page" — no layout mounts it
+    expect(src("app/(app)/layout.tsx")).not.toContain("FrenzAiFab");
+    expect(src("app/u/layout.tsx")).not.toContain("FrenzAiFab");
   });
 });

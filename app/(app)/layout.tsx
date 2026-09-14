@@ -20,7 +20,6 @@ import { PinLockGate } from "@/features/account/pin-lock-gate";
 import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
 import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
 import { AiJobAlertMount } from "@/features/ai/ai-job-alert-mount";
-import { FrenzAiFab } from "@/features/ai/frenz-ai-fab";
 import { NotificationLiveToast } from "@/features/notifications/live-toast";
 import { InboxRealtimeTracker } from "@/features/social/inbox";
 import { ReactionFloatLayer } from "@/features/ui/reaction-float";
@@ -126,9 +125,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           notifications row to fire on) and a job that finishes while the member
           is on a page this layout does not own. Idle cost is one request. */}
       <AiJobAlertMount />
-      {/* The floating Frenz AI circle (owner, 2026-09-13): bottom right of
-          every signed-in page, hides on scroll down, prefetches /ai on open. */}
-      <FrenzAiFab />
       {/* Heavy, hidden-until-triggered overlays — code-split out of the initial
           bundle (composer, Story Studio, download player, iOS install nudge). */}
       <AppOverlays />

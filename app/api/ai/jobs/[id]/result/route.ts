@@ -90,6 +90,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         status: aiErrorStatus("JOB_NOT_FOUND"),
       });
     }
+    // Part 7 §20: the member removed it. Gone is 404, not "not ready yet" (409 — measured on the production E2E, 2026-09-14).
+    if (job.status === "deleted") {
+      return NextResponse.json(aiErrorBody("JOB_NOT_FOUND", { error: "That video has been deleted." }), {
+        status: aiErrorStatus("JOB_NOT_FOUND"),
+      });
+    }
     if (job.status !== "completed" || !job.result_path) {
       return NextResponse.json(
         aiErrorBody("JOB_NOT_FOUND", { error: "That video isn't ready yet." }),

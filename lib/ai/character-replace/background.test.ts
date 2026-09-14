@@ -79,7 +79,8 @@ describe("the finalizer — a lease, and nobody is told 'ready' before the file 
     const giveUp = s.indexOf("await failFinalize(job, failure, { exhausted: transient })");
     expect(retry).toBeGreaterThan(0);
     expect(giveUp).toBeGreaterThan(retry);
-    expect(s.slice(retry, giveUp)).toContain("return { ok: false, jobId, code: failure.code, detail: `retry scheduled:");
+    // `retry: true` — the frontend reads a scheduled retry as a hand-off, never as a decline (Part 8, production 2026-09-14).
+    expect(s.slice(retry, giveUp)).toContain("return { ok: false, jobId, retry: true, code: failure.code, detail: `retry scheduled:");
     // The retry branch never touches the money or the member.
     expect(s.slice(retry, giveUp)).not.toContain("releaseJobFunding");
     expect(s.slice(retry, giveUp)).not.toContain("notifyAiJobFailed");

@@ -56,12 +56,16 @@ import { cn } from "@/lib/utils";
   ── 🔴 ONLY ON THE HISTORY PAGE (owner, 2026-09-14: "Remove the AI button
   widget from all pages, it should only be on the history page") ─────────────
 
-  What used to be a deny-list of surfaces is now an ALLOW-list of one: the
-  download history, in both of its doors (`/history` in the marketing shell,
-  `/downloads` in the app shell). Everywhere else draws nothing — the AI
-  tools are reached from the bottom nav's profile hub and the Studio.
+  What used to be a deny-list of surfaces is now an ALLOW-list of one:
+  `/history`. The first cut also kept `/downloads` on the theory that it is
+  the same history behind the app shell — the owner, same day: "the AI
+  widget button still shows in the Download page". It is the Download page
+  to the person using it, so it is off. Everywhere else draws nothing — the
+  AI tools are reached from the bottom nav's profile hub and the Studio.
+  The component is mounted ONLY by app/(marketing)/history/page.tsx now; the
+  (app) and /u layouts no longer carry it, so no other page even loads it.
 */
-const SHOWN_PREFIXES = ["/downloads", "/history"];
+const SHOWN_PREFIXES = ["/history"];
 
 export function FrenzAiFab() {
   const pathname = usePathname() ?? "";

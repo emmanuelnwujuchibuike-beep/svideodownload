@@ -46,6 +46,16 @@ import { subjectFromRow } from "@/lib/ai/subject";
 /** A recorded provider URL whose dispatch note is this fresh is still in flight — leave it to the worker. */
 const DISPATCH_GRACE_MS = 3 * 60_000;
 
+/**
+ * A stage whose prediction was never created gets re-submitted after this
+ * long. Shorter than the dispatch grace on purpose: the one cause seen on
+ * production (2026-09-14) is Replicate throttling a low-credit account to
+ * one prediction a minute, and the second try only needs that minute to
+ * pass. The advance stamps `stage_started_at` when it moves the stage, so
+ * this clock starts at the failed submit, not at the previous stage.
+ */
+const STAGE_SUBMIT_GRACE_MS = 70_000;
+
 /** Replicate keeps a prediction's output about an hour; a retry after that cannot download it. */
 const PROVIDER_OUTPUT_LIFETIME_MS = 60 * 60_000;
 
@@ -115,8 +125,8 @@ export async function recoverJob(row: AiJobRow, now: number = Date.now()): Promi
     if (row.status === "processing" && pipeline && pipeline.current !== "finalize" && (pipeline.records[pipeline.current]?.status ?? "pending") === "pending" && !pipeline.pending_advance) {
       if (leased) return "working";
       const stageStarted = typeof pipeline.stage_started_at === "string" ? Date.parse(pipeline.stage_started_at) : NaN;
-      // The advance wrote the plan a moment ago and the submit may still be in flight; give it the same grace.
-      if (Number.isFinite(stageStarted) && now - stageStarted < DISPATCH_GRACE_MS) return "working";
+      // The advance wrote the plan a moment ago and the submit may still be in flight — or was throttled; give it a minute.
+      if (Number.isFinite(stageStarted) && now - stageStarted < STAGE_SUBMIT_GRACE_MS) return "working";
       const feature = aiFeature(row.feature);
       if (feature) {
         try {

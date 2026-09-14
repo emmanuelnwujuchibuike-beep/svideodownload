@@ -60,7 +60,8 @@ import { cleanupFinalizationFiles, downloadToFile, probeMedia } from "@/server/s
 export type AdvanceOutcome =
   | { ok: true; jobId: string; from: PipelineStage; to: PipelineStage }
   | { ok: true; jobId: string; skipped: string }
-  | { ok: false; jobId: string; code: AdvanceErrorCode; detail: string };
+  /** `retry: true` = left for the sweep, lease released; the frontend must not read it as a decline. */
+  | { ok: false; jobId: string; code: AdvanceErrorCode; detail: string; retry?: true };
 
 export type AdvanceErrorCode = "ADVANCE_FAILED" | "INVALID_AI_OUTPUT" | "AUDIO_INVALID" | "AUDIO_TOO_LONG" | "AUDIO_TOO_SHORT" | "SUBMIT_FAILED";
 
@@ -211,7 +212,8 @@ export async function advanceCharacterReplaceJob(jobId: string): Promise<Advance
       await releaseAdvanceLease(jobId);
       await recordJobEvent(jobId, "advance.retry_scheduled", { from: stage, code: failure.code, detail: failure.detail.slice(0, 200) });
       console.warn("[cr/advance] transient failure — left for the sweep", { jobId, from: stage, code: failure.code, detail: failure.detail.slice(0, 200) });
-      return { ok: false, jobId, code: failure.code, detail: `retry left to the sweep: ${failure.detail}` };
+      // `retry: true` is what stops the frontend reading this as a refusal (lib/ai/finalize-dispatch.ts).
+      return { ok: false, jobId, retry: true, code: failure.code, detail: `retry left to the sweep: ${failure.detail}` };
     }
     await failAdvance(job, stage, failure);
     return { ok: false, jobId, code: failure.code, detail: failure.detail };

@@ -28,7 +28,13 @@ import { hasWorker, WORKER_SECRET, WORKER_URL } from "@/lib/worker";
 const DISPATCH_TIMEOUT_MS = 8_000;
 
 export type DispatchResult =
-  | { dispatched: true }
+  /**
+   * `retry: true` — the worker accepted the job, could not finish it for a
+   * reason that is ours or the provider's to outlast (a throttle, our own
+   * storage), and has ALREADY scheduled the next attempt on the row. The
+   * caller must treat it exactly like a hand-off in progress.
+   */
+  | { dispatched: true; retry?: true }
   /** No worker is configured — the caller degrades rather than losing the job. */
   | { dispatched: false; reason: "no-worker" }
   /**
@@ -120,6 +126,7 @@ async function dispatchToWorker(path: "/api/internal/ai/finalize" | "/api/intern
       const body = (await res.json()) as {
         ok?: boolean;
         pending?: boolean;
+        retry?: boolean;
         code?: string | null;
         detail?: string | null;
         skipped?: string | null;
@@ -128,6 +135,26 @@ async function dispatchToWorker(path: "/api/internal/ai/finalize" | "/api/intern
       // Still running past the budget: a genuine hand-off, outcome to follow
       // on the job row.
       if (body?.pending) return { dispatched: true };
+
+      /*
+        ── 🔴 A SCHEDULED RETRY IS NOT A DECLINE (production, 2026-09-14) ──────
+
+        The first voice + lip-sync job on production: the voice stage
+        succeeded, the worker brought the speech home and asked for the
+        replace stage — and Replicate answered 429 (a low-credit account is
+        throttled to one prediction a minute). The advance service did the
+        right thing: released its lease, wrote "advance.retry_scheduled", left
+        the row for the sweep — and answered `ok: false` inside the report
+        budget. The block below read `ok: false` as "the worker declined",
+        the webhook ended the job with FINALIZER_UNAVAILABLE and refunded a
+        member whose job needed sixty more seconds.
+
+        So the worker now says `retry: true` when IT has scheduled the next
+        attempt, and that is a hand-off: the row carries the retry, the sweep
+        and the member's poll both know what a due retry looks like, and
+        nothing here may end the job.
+      */
+      if (body && body.ok === false && body.retry === true) return { dispatched: true, retry: true };
 
       if (body && body.ok === false) {
         /*

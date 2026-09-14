@@ -259,7 +259,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       const scheduled = await scheduleFinalizationRetry(jobId, { nextAt, error: `${failure.code}: ${failure.detail}` });
       await recordJobEvent(jobId, "finalize.retry_scheduled", { attempt, code: failure.code, nextAt: new Date(nextAt).toISOString(), scheduled });
       console.warn("[cr/finalize] transient failure — retry scheduled", { jobId, attempt, code: failure.code, detail: failure.detail.slice(0, 200), nextAt: new Date(nextAt).toISOString() });
-      return { ok: false, jobId, code: failure.code, detail: `retry scheduled: ${failure.detail}` };
+      // `retry: true`: the row carries finalize_next_at; the frontend must not read this as a decline.
+      return { ok: false, jobId, retry: true, code: failure.code, detail: `retry scheduled: ${failure.detail}` };
     }
     await failFinalize(job, failure, { exhausted: transient });
     return { ok: false, jobId, code: failure.code, detail: failure.detail };

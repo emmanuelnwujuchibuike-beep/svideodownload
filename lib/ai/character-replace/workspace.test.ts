@@ -240,9 +240,18 @@ describe("pricing state", () => {
     minimumChargeCents: 100,
     minimumApplied: false,
     pricingConfigVersion: 1,
+    mode: "full_character",
     quality: "720p",
+    qualityRateCents: 2_500,
+    videoCents: 25_000,
+    voiceCents: 0,
+    lipSyncCents: 0,
+    basePriceCents: 0,
     voiceMode: "original",
+    voiceSource: null,
+    ttsCharacters: 0,
     lipSyncMode: null,
+    rateLine: "10.0s × ₦25.00/s = ₦250.00",
   };
 
   it("a quote goes stale when any priced input moves, and survives an unpriced one", () => {
@@ -261,7 +270,7 @@ describe("pricing state", () => {
     expect(lines.map((l) => [l.key, l.value])).toEqual([
       ["video", "10.0 sec"],
       ["quality", "720p"],
-      ["character", "Included"],
+      ["character", "Full Character"],
       ["voice", "English · Warm"],
       ["lipSync", "Standard"],
     ]);
@@ -289,23 +298,72 @@ describe("pricing state", () => {
     expect(canStart({ ...base, project: noVideo.project, pricing: { status: "quoted", snapshot } })).toBe(false);
   });
 
-  it("a new voice must be fully described before Start", () => {
+  it("a new voice must be fully described before Start — a dialogue, a language and a voice (Part 6); lip sync is optional", () => {
     let s = withBoth(18_437);
     s = workspaceReducer(s, { type: "consent", value: true });
-    s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: null, voiceId: null, tier: null } });
-    expect(canStart({ project: s.project, config, available: true, balanceCents: 1_000_000, pricing: { status: "quoted", snapshot } })).toBe(false);
+    s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: null, voiceId: null, tier: null, source: "tts" } });
+    const start = (project: typeof s.project) => canStart({ project, config, available: true, balanceCents: 1_000_000, pricing: { status: "quoted", snapshot } });
+    expect(start(s.project)).toBe(false);
     s = workspaceReducer(s, { type: "voice/language", code: "en" });
     s = workspaceReducer(s, { type: "voice/voice", id: "warm" });
+    expect(start(s.project)).toBe(false); // no dialogue yet
+    s = workspaceReducer(s, { type: "voice/text", text: "Hello there, this is the new voice." });
+    expect(start(s.project)).toBe(true);
     s = workspaceReducer(s, { type: "lipsync/tier", tier: "studio" });
-    expect(canStart({ project: s.project, config, available: true, balanceCents: 1_000_000, pricing: { status: "quoted", snapshot } })).toBe(true);
+    expect(start(s.project)).toBe(true);
+    s = workspaceReducer(s, { type: "lipsync/clear" });
+    expect(start(s.project)).toBe(true);
+    // a language the provider does not speak is refused locally too
+    s = workspaceReducer(s, { type: "voice/language", code: "yo" });
+    expect(start(s.project)).toBe(false);
   });
 
-  it("switching back to the original audio clears the voice and the tier", () => {
+  it("an uploaded voice needs the file AND the rights confirmation (Part 6 §6)", () => {
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "consent", value: true });
+    s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "en", voiceId: "warm", tier: null, source: "upload" } });
+    const start = (project: typeof s.project) => canStart({ project, config, available: true, balanceCents: 1_000_000, pricing: { status: "quoted", snapshot } });
+    expect(start(s.project)).toBe(false);
+    s = workspaceReducer(s, { type: "audio/ready", asset: { file: new File(["x"], "v.mp3", { type: "audio/mpeg" }), objectUrl: "blob:a", name: "v.mp3", size: 1, mimeType: "audio/mpeg", durationMs: 9_000 } });
+    expect(s.audio.status).toBe("ready");
+    expect(start(s.project)).toBe(false);
+    s = workspaceReducer(s, { type: "voice/consent", value: true });
+    expect(start(s.project)).toBe(true);
+    // the dialogue's length is a priced input: changing it goes stale; the source too
+    s = workspaceReducer(s, { type: "pricing", pricing: { status: "quoted", snapshot } });
+    s = workspaceReducer(s, { type: "voice/source", source: "tts" });
+    expect(s.pricing.status).toBe("stale");
+  });
+
+  it("switching back to the original audio clears the voice, its audio and the tier", () => {
     let s = withBoth();
     s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "en", voiceId: "warm", tier: "studio" } });
     s = workspaceReducer(s, { type: "voice/mode", mode: "original", defaults: { languageCode: null, voiceId: null, tier: null } });
-    expect(s.project.voice).toEqual({ mode: "original", languageCode: null, voiceId: null });
+    expect(s.project.voice).toEqual({ mode: "original", source: null, audio: null, trimAudioToFit: false, text: "", languageCode: null, voiceId: null, voiceConsent: false });
     expect(s.project.lipSync.tier).toBeNull();
+    expect(s.audio.status).toBe("empty");
+  });
+
+  it("switching the mode keeps the files, resets the tier to the mode's default, and trims extra references (Part 6)", () => {
+    let s = withBoth(18_437);
+    s = workspaceReducer(s, { type: "pricing", pricing: { status: "quoted", snapshot } });
+    s = workspaceReducer(s, { type: "mode", mode: "skin_face", defaultQuality: "high", maxReferences: 3 });
+    expect(s.project.mode).toBe("skin_face");
+    expect(s.project.settings.quality).toBe("high");
+    expect(s.project.character).not.toBeNull();
+    expect(s.project.video).not.toBeNull();
+    expect(s.pricing.status).toBe("stale");
+    s = workspaceReducer(s, { type: "reference/add", asset: photo(), max: 3 });
+    s = workspaceReducer(s, { type: "reference/add", asset: photo(), max: 3 });
+    s = workspaceReducer(s, { type: "reference/add", asset: photo(), max: 3 });
+    expect(s.project.references).toHaveLength(2); // the primary + two = the maximum of three
+    s = workspaceReducer(s, { type: "mode", mode: "face_only", defaultQuality: "standard", maxReferences: 1 });
+    expect(s.project.references).toHaveLength(0);
+    expect(s.project.settings.quality).toBe("standard");
+    // the job input carries the mode and the voice source
+    const input = buildJobInput(s.project);
+    expect(input?.output.mode).toBe("face_only");
+    expect(input?.audio.voiceSource).toBeNull();
   });
 });
 
@@ -320,7 +378,8 @@ describe("the job input (§14)", () => {
     expect(json).not.toMatch(/price|cents|total/i);
     expect(JSON.parse(json)).toEqual(input);
     expect(input.video).toMatchObject({ sourceWidth: 1080, sourceHeight: 1920, sourceResolution: "1080p", aspect: "9:16", hasAudio: null, container: "mp4" });
-    expect(input.audio).toEqual({ voiceMode: "new_voice", languageCode: "yo", voiceId: "deep", lipSyncMode: "studio" });
+    expect(input.audio).toEqual({ voiceMode: "new_voice", voiceSource: "tts", languageCode: "yo", voiceId: "deep", lipSyncMode: "studio" });
+    expect(input.output.mode).toBe("full_character");
     expect(input.output.requestedQuality).toBe("720p");
     expect(input.consent).toBe(true);
   });

@@ -1,7 +1,8 @@
 "use client";
 
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
-import type { CharacterReplaceQuote, QuoteInput } from "@/lib/ai/character-replace/pricing";
+import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
+import type { CharacterReplaceQuote, CharacterReplaceVoiceSource, QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import type { AiJobView } from "@/lib/ai/jobs";
@@ -85,13 +86,28 @@ export interface CharacterReplaceUploadTicket {
  * sent to a provider. Idempotent on `clientRequestId` — a retry returns the
  * same job with fresh tickets.
  */
+export interface CharacterReplaceUploadTickets {
+  video: CharacterReplaceUploadTicket;
+  photo: CharacterReplaceUploadTicket;
+  /** Part 6: one ticket per extra identity photo, in the order they were sent. */
+  references: CharacterReplaceUploadTicket[];
+  /** Part 6: the replacement audio's ticket, when one was declared. */
+  voice: CharacterReplaceUploadTicket | null;
+}
+
 export async function createCharacterReplaceJob(input: {
   clientRequestId: string;
   /** The finished attempt this one retries (Part 5, §7). */
   retryOf?: string;
+  /** Part 6: which replacement. Absent = Full Character. */
+  mode?: ReplacementMode;
   photo: { name: string; mimeType: string; size: number; width: number; height: number };
+  /** Part 6: extra identity photos (Skin + Face). */
+  references?: { name: string; mimeType: string; size: number; width: number; height: number }[];
   video: { name: string; mimeType: string; size: number; durationMs: number; width: number; height: number; hasAudio: boolean };
-}): Promise<CharacterReplaceClientResult<{ job: AiJobView; created: boolean; uploads: { video: CharacterReplaceUploadTicket; photo: CharacterReplaceUploadTicket } | null }>> {
+  /** Part 6: the member's replacement audio, facts only. */
+  audio?: { name: string; mimeType: string; size: number; durationMs: number | null };
+}): Promise<CharacterReplaceClientResult<{ job: AiJobView; created: boolean; uploads: CharacterReplaceUploadTickets | null }>> {
   return request("/api/ai/character-replace/jobs", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -109,9 +125,21 @@ export async function createCharacterReplaceJob(input: {
 export async function startCharacterReplaceJob(
   jobId: string,
   input: {
-    quote: Pick<CharacterReplaceQuote, "id" | "product" | "currency" | "pricingConfigVersion" | "durationMs" | "quality" | "voiceMode" | "lipSyncMode" | "totalCents" | "expiresAt">;
+    quote: Pick<
+      CharacterReplaceQuote,
+      "id" | "product" | "currency" | "pricingConfigVersion" | "durationMs" | "mode" | "quality" | "voiceMode" | "voiceSource" | "ttsCharacters" | "lipSyncMode" | "totalCents" | "expiresAt"
+    >;
     trim: { startMs: number; endMs: number } | null;
     consent: true;
+    /** Part 6: the voice in full — only with a new voice. */
+    voice?: {
+      source: CharacterReplaceVoiceSource;
+      text?: string;
+      languageCode?: string;
+      voiceId?: string;
+      trimToFit?: boolean;
+      voiceConsent?: boolean;
+    };
   },
 ): Promise<CharacterReplaceClientResult<{ job: AiJobView; started: boolean; balanceCents?: number; shortfallCents?: number; requiredCents?: number }>> {
   return request(`/api/ai/character-replace/jobs/${encodeURIComponent(jobId)}/start`, {
@@ -240,8 +268,11 @@ export async function getCharacterReplaceQuote(
 ): Promise<CharacterReplaceClientResult<CharacterReplaceQuoteAnswer>> {
   const body: QuoteInput = {
     selectedDurationMs: input.selectedDurationMs,
+    mode: input.mode,
     quality: input.quality,
     voiceMode: input.voiceMode,
+    voiceSource: input.voiceMode === "new_voice" ? (input.voiceSource ?? null) : null,
+    ttsCharacters: input.voiceMode === "new_voice" && input.voiceSource === "tts" ? (input.ttsCharacters ?? 0) : 0,
     lipSyncMode: input.lipSyncMode,
   };
   try {

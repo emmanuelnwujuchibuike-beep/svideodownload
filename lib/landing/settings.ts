@@ -718,7 +718,27 @@ export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharact
   frenzAiCharacterReplace?: Record<string, unknown>;
 };
 
-export async function setLandingSettings(s: LandingSettingsPatch): Promise<void> {
+/**
+ * The Character Replace patch is merged ONE LEVEL DEEPER than a spread for
+ * its nested objects (Part 6): a panel that posts `modes: { face_only: {…} }`
+ * must not erase `skin_face`, and `audio: { syncMode }` must not erase the
+ * audio ceilings. Arrays (qualities, tiers, voices…) are still replaced
+ * wholesale — the normaliser merges those by id over the defaults.
+ */
+function mergeCharacterReplacePatch(current: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...current };
+  for (const [key, value] of Object.entries(patch)) {
+    const existing = out[key];
+    if (value && typeof value === "object" && !Array.isArray(value) && existing && typeof existing === "object" && !Array.isArray(existing)) {
+      out[key] = mergeCharacterReplacePatch(existing as Record<string, unknown>, value as Record<string, unknown>);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+export async function setLandingSettings(s: LandingSettingsPatch, audit: { changedBy?: string | null; reason?: string | null } = {}): Promise<void> {
   const db = createAdminClient();
   const current = await getLandingSettings();
 
@@ -762,10 +782,9 @@ export async function setLandingSettings(s: LandingSettingsPatch): Promise<void>
     */
     frenzAiCharacterReplace: versionCharacterReplacePricing(
       current.frenzAiCharacterReplace,
-      normalizeCharacterReplaceConfig({
-        ...(current.frenzAiCharacterReplace as unknown as Record<string, unknown>),
-        ...((s.frenzAiCharacterReplace ?? {}) as Record<string, unknown>),
-      }),
+      normalizeCharacterReplaceConfig(mergeCharacterReplacePatch(current.frenzAiCharacterReplace as unknown as Record<string, unknown>, (s.frenzAiCharacterReplace ?? {}) as Record<string, unknown>)),
+      // Part 6 §27: who changed the prices and why, recorded with the superseded version.
+      audit,
     ),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });

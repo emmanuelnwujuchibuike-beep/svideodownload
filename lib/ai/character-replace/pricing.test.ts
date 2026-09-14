@@ -148,7 +148,10 @@ describe("the informative sentences", () => {
 describe("🔴 validation — the operator's switches are the law", () => {
   it("accepts a configuration the operator offers", () => {
     expect(validateQuoteInput(base, cfg)).toEqual({ ok: true });
-    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", lipSyncMode: "studio" }, cfg)).toEqual({ ok: true });
+    // Part 6: a new voice names its source; without one it is refused, with one it is accepted.
+    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", lipSyncMode: "studio" }, cfg).ok).toBe(false);
+    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", voiceSource: "upload", lipSyncMode: "studio" }, cfg)).toEqual({ ok: true });
+    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", voiceSource: "tts", ttsCharacters: 40, lipSyncMode: null }, cfg)).toEqual({ ok: true });
   });
 
   it("refuses a quality that is switched off rather than pricing another one", () => {
@@ -162,11 +165,11 @@ describe("🔴 validation — the operator's switches are the law", () => {
   it("refuses lip sync without a new voice, a disabled tier, and a new voice when it is off", () => {
     expect(validateQuoteInput({ ...base, lipSyncMode: "standard" }, cfg).ok).toBe(false);
     const noStudio = normalizeCharacterReplaceConfig({ ...cfg, lipSync: [{ id: "studio", enabled: false }] });
-    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", lipSyncMode: "studio" }, noStudio).ok).toBe(false);
+    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", voiceSource: "upload", lipSyncMode: "studio" }, noStudio).ok).toBe(false);
     const noVoice = normalizeCharacterReplaceConfig({ ...cfg, voice: { newVoiceEnabled: false, surchargePerSecondCents: 0 } });
-    expect(validateQuoteInput({ ...base, voiceMode: "new_voice" }, noVoice).ok).toBe(false);
+    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", voiceSource: "upload" }, noVoice).ok).toBe(false);
     const noLip = normalizeCharacterReplaceConfig({ ...cfg, lipSyncEnabled: false });
-    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", lipSyncMode: "standard" }, noLip).ok).toBe(false);
+    expect(validateQuoteInput({ ...base, voiceMode: "new_voice", voiceSource: "upload", lipSyncMode: "standard" }, noLip).ok).toBe(false);
   });
 
   it("refuses durations outside the operator's window, non-integers, and a disabled tool", () => {

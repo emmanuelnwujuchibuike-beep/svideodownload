@@ -1,14 +1,16 @@
 "use client";
 
-import { ArrowLeft, Check, Download, History, Maximize2, Share2, Smartphone, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Download, History, Maximize2, Share2, Smartphone, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { aiResultDownloadHref, startAiResultDownload } from "@/features/ai/ai-result-download";
 import { VideoReadyPlayer, type VideoReadyPlayerHandle } from "@/features/ai/character-replace/video-ready-player";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import { REPLACEMENT_MODE_COPY } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceResult } from "@/lib/ai/character-replace/types";
 import { formatSeconds } from "@/lib/ai/character-replace/workspace";
+import { formatCents } from "@/lib/ai/economy";
 import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
 import { isIosDevice } from "@/lib/client-download";
 import { haptic } from "@/lib/motion/haptics";
@@ -114,10 +116,18 @@ export function CharacterReplaceResultScreen({
     }
   }, [result.job, sharing]);
 
-  const quality = config?.qualities.find((q) => q.id === result.quality)?.label ?? result.quality ?? "—";
-  const language = config?.languages.find((l) => l.code === result.voice?.languageCode)?.label;
-  const voice = config?.voices.find((v) => v.id === result.voice?.voiceId)?.label;
-  const voiceLine = result.voice?.mode === "new_voice" ? [language, voice].filter(Boolean).join(" · ") || "New voice" : "Original audio";
+  const mode = result.mode ?? "full_character";
+  const modeView = config?.modes.find((m) => m.id === mode) ?? null;
+  const quality = modeView?.tiers.find((t) => t.id === result.quality)?.label ?? config?.qualities.find((q) => q.id === result.quality)?.label ?? result.quality ?? "—";
+  const voiceLine =
+    result.voice?.mode === "new_voice"
+      ? result.voice.source === "upload"
+        ? "Your audio"
+        : "New voice from text"
+      : "Original audio";
+  const lipLine = result.lipSync?.tier ? (config?.lipSync.find((l) => l.id === result.lipSync?.tier)?.label ?? result.lipSync.tier) + " lip sync" : null;
+  const cr = result.job.characterReplace;
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const poster = result.job.result.hasPoster ? `/api/ai/jobs/${encodeURIComponent(result.job.id)}/poster` : null;
   const attempt = result.job.characterReplace?.attempt ?? 1;
 
@@ -214,12 +224,13 @@ export function CharacterReplaceResultScreen({
 
       {/* the facts */}
       <dl className="grid grid-cols-3 gap-2 text-center">
+        <Fact label="Replacement" value={REPLACEMENT_MODE_COPY[mode].label} />
         <Fact label="Duration" value={formatSeconds(result.durationSeconds)} />
         <Fact label="Quality" value={quality} />
-        <Fact label="Created" value={createdOn(result.job.createdAt)} />
       </dl>
       <p className="text-center text-[11.5px] text-muted-foreground">
         {voiceLine}
+        {lipLine ? ` · ${lipLine}` : ""}
         {attempt > 1 ? ` · attempt ${attempt}` : ""}
         {" · "}
         Saved to{" "}
@@ -229,6 +240,33 @@ export function CharacterReplaceResultScreen({
         for three days.
       </p>
 
+      {/* ── generation details, on request (Skin + Face brief §14) ─────── */}
+      <div className="rounded-[1.25rem] border border-border/70 bg-card">
+        <button
+          type="button"
+          aria-expanded={detailsOpen}
+          onClick={() => setDetailsOpen((o) => !o)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[13px] font-semibold transition hover:bg-secondary/40"
+        >
+          View generation details
+          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", detailsOpen && "rotate-180")} aria-hidden />
+        </button>
+        {detailsOpen ? (
+          <dl className="divide-y divide-border/60 border-t border-border/60 px-4 pb-2">
+            <DetailRow label="Replacement" value={REPLACEMENT_MODE_COPY[mode].label} />
+            <DetailRow label="Quality" value={quality} />
+            <DetailRow label="Duration" value={formatSeconds(result.durationSeconds)} />
+            <DetailRow label="Voice" value={voiceLine} />
+            <DetailRow label="Lip sync" value={lipLine ?? "Not selected"} />
+            {cr?.rateCents !== null && cr?.rateCents !== undefined && cr.currency ? <DetailRow label="Rate" value={`${formatCents(cr.rateCents, symbolFor(cr.currency))} per second`} /> : null}
+            {cr?.chargedCents !== null && cr?.chargedCents !== undefined && cr.currency ? <DetailRow label="Charged" value={formatCents(cr.chargedCents, symbolFor(cr.currency))} /> : null}
+            <DetailRow label="Created" value={createdOn(result.job.createdAt)} />
+            {result.job.completedAt ? <DetailRow label="Finished" value={createdOn(result.job.completedAt)} /> : null}
+            {attempt > 1 ? <DetailRow label="Attempt" value={String(attempt)} /> : null}
+          </dl>
+        ) : null}
+      </div>
+
       {canShareFiles ? (
         <button
           type="button"
@@ -236,7 +274,7 @@ export function CharacterReplaceResultScreen({
           className="btn-lux mx-auto flex border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <Sparkles className="h-4 w-4" aria-hidden />
-          Create Another
+          Generate again
         </button>
       ) : (
         <p className="flex items-center justify-center gap-1.5 text-center text-[12px] text-muted-foreground">
@@ -263,6 +301,19 @@ function createdOn(iso: string): string {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return "Today";
   return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2.5">
+      <dt className="text-[13px] text-muted-foreground">{label}</dt>
+      <dd className="text-right text-[13px] font-semibold tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+function symbolFor(currency: string): string {
+  return currency === "NGN" ? "₦" : currency === "USD" ? "$" : currency === "GHS" ? "GH₵" : `${currency} `;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

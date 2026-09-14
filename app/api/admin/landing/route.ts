@@ -58,6 +58,29 @@ const reelsPoster = z
   the time it reaches the store. Optional is the only shape that can tell
   "leave it alone" apart from "set it to this".
 */
+/** One replacement mode's editable fields (Part 6). */
+const modeSchema = z.object({
+  enabled: z.boolean().optional(),
+  tiers: z
+    .array(
+      z.object({
+        id: z.enum(["standard", "high", "ultra"]),
+        label: z.string().max(12).optional(),
+        hint: z.string().max(40).optional(),
+        perSecondCents: z.number().int().min(0).max(100_000_000).optional(),
+        enabled: z.boolean().optional(),
+      }),
+    )
+    .max(3)
+    .optional(),
+  maximumDurationSeconds: z.number().int().min(1).max(120).optional(),
+  maximumUploadBytes: z.number().int().min(1024 * 1024).max(100 * 1024 * 1024).optional(),
+  maximumPixels: z.number().int().min(640 * 360).max(3840 * 2160).optional(),
+  maximumReferenceImages: z.number().int().min(1).max(3).optional(),
+  providerCostPerSecondUsdCents: z.number().min(0).max(100_000).optional(),
+  provider: z.object({ model: z.string().max(160).optional() }).optional(),
+});
+
 const schema = z.object({
   reelsPosterUrl: reelsPoster.optional(),
   feedGridImages: z.array(gridImage).max(FEED_GRID_SLOTS).optional(),
@@ -196,10 +219,45 @@ const schema = z.object({
             blurb: z.string().max(120).optional(),
             perSecondCents: z.number().int().min(0).max(1_000_000).optional(),
             enabled: z.boolean().optional(),
+            /** Part 6 §26: the lip-sync model behind the tier ("owner/model"). */
+            model: z.string().max(160).optional(),
           }),
         )
         .max(2)
         .optional(),
+      lipSyncMaximumDurationSeconds: z.number().int().min(1).max(120).optional(),
+      /*
+        ── Part 6: the two new modes, the audio, the voice ─────────────────
+        Bounds mirror the normaliser's; the normaliser is still the control.
+      */
+      modes: z
+        .object({
+          face_only: modeSchema.optional(),
+          skin_face: modeSchema.optional(),
+        })
+        .optional(),
+      audio: z
+        .object({
+          replacementEnabled: z.boolean().optional(),
+          maximumDurationSeconds: z.number().int().min(1).max(30 * 60).optional(),
+          maximumUploadBytes: z.number().int().min(64 * 1024).max(100 * 1024 * 1024).optional(),
+          shorterAudio: z.enum(["silence", "reject"]).optional(),
+          minimumCoverageFraction: z.number().min(0).max(1).optional(),
+          syncMode: z.enum(["silence", "loop", "bounce"]).optional(),
+        })
+        .optional(),
+      tts: z
+        .object({
+          enabled: z.boolean().optional(),
+          model: z.string().max(160).optional(),
+          perRequestCents: z.number().int().min(0).max(100_000_000).optional(),
+          perCharacterCents: z.number().int().min(0).max(1_000_000).optional(),
+          minimumCharacters: z.number().int().min(1).max(10_000).optional(),
+          maximumCharacters: z.number().int().min(1).max(10_000).optional(),
+        })
+        .optional(),
+      /** Part 6 §27: why the prices changed. Recorded in the pricing history beside the admin's id; never stored as a setting. */
+      pricingChangeReason: z.string().max(300).optional(),
       languages: z
         .array(z.object({ code: z.string().max(40), label: z.string().max(40), native: z.string().max(40).optional() }))
         .max(60)
@@ -211,6 +269,8 @@ const schema = z.object({
             label: z.string().max(40),
             blurb: z.string().max(80).optional(),
             languages: z.array(z.string().max(40)).max(60).optional(),
+            /** Part 6: the configured TTS provider's own id for this voice. */
+            providerVoiceId: z.string().max(80).optional(),
           }),
         )
         .max(40)
@@ -282,7 +342,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    await setLandingSettings(parsed.data);
+    // Part 6 §27: the reason rides beside the config, not inside it; the settings writer records it with the admin's id.
+    const { pricingChangeReason, ...crPatch } = parsed.data.frenzAiCharacterReplace ?? {};
+    const patch = parsed.data.frenzAiCharacterReplace ? { ...parsed.data, frenzAiCharacterReplace: crPatch } : parsed.data;
+    await setLandingSettings(patch, { changedBy: admin.id, reason: pricingChangeReason ?? null });
   } catch {
     return NextResponse.json({ error: "Couldn't save settings." }, { status: 500 });
   }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AI_CLEAN_CONFIG } from "@/lib/ai/config";
 import { isAiJobError } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
+import { readPipeline } from "@/lib/ai/character-replace/job-meta";
 import { getJobAsService } from "@/lib/ai/job-store";
 import { submitJobToProvider } from "@/lib/ai/submit";
 import { WORKER_SECRET } from "@/lib/worker";
@@ -80,11 +81,20 @@ export async function POST(request: Request) {
       duplicate delivery of this call finds the job already `processing` and
       changes nothing — the same idempotency shape as the webhook.
     */
-    if (job.status !== "acquiring") {
+    /*
+      Part 6: a multi-stage Character Replace job comes back here from
+      `processing` after the worker advanced it — the next provider stage
+      is `pending` and owes a prediction. `submitCharacterReplaceJob` guards
+      the update with the previous stage's prediction id, so this too is
+      idempotent under a duplicate delivery.
+    */
+    const pipeline = readPipeline(job.metadata);
+    const nextStagePending = job.status === "processing" && feature.id === "ai_character_replace" && !!pipeline && pipeline.current !== "finalize" && (pipeline.records[pipeline.current]?.status ?? "pending") === "pending";
+    if (job.status !== "acquiring" && !nextStagePending) {
       return NextResponse.json({ ok: true, skipped: `status is ${job.status}` }, { status: 200 });
     }
 
-    const { submission } = await submitJobToProvider(job, feature, { from: ["acquiring"] });
+    const { submission } = await submitJobToProvider(job, feature, { from: [job.status === "acquiring" ? "acquiring" : "processing"] });
 
     console.info("[ai/submit] started from acquisition", {
       jobId,
@@ -93,7 +103,7 @@ export async function POST(request: Request) {
       modelVersion: submission.modelVersion,
       engine: submission.engine,
       predictionId: submission.reference,
-      transition: "acquiring -> processing",
+      transition: `${job.status} -> processing`,
     });
 
     return NextResponse.json({ ok: true, jobId }, { status: 200 });

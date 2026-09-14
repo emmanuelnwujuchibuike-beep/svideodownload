@@ -512,6 +512,74 @@ export async function claimFinalization(
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE ADVANCE CLAIM — one worker brings a finished stage home (Part 6)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Between two provider stages the webhook records the finished stage's
+ * output and asks the worker to "advance" the job: download it, validate
+ * it, store it, submit the next stage. Two deliveries of that webhook, or
+ * the webhook and the recovery sweep, must not both do that download — so
+ * the advance takes the SAME lease column the finalizer uses
+ * (`finalize_lease_until`, null while a job is processing), for the same
+ * reason and with the same expiry semantics. The WHERE also requires the
+ * row to still be waiting on this exact stage (`pipeline.pending_advance`),
+ * so a late duplicate for a stage already advanced matches nothing.
+ */
+export async function claimAdvance(
+  jobId: string,
+  stage: string,
+  opts: { leaseSeconds: number; now?: number },
+): Promise<AiJobRow | null> {
+  const now = opts.now ?? Date.now();
+  const nowIso = new Date(now).toISOString();
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({ finalize_lease_until: new Date(now + opts.leaseSeconds * 1000).toISOString() })
+    .eq("id", jobId)
+    .eq("status", "processing")
+    .eq("metadata->pipeline->>pending_advance", stage)
+    .or(`finalize_lease_until.is.null,finalize_lease_until.lte.${nowIso}`)
+    .select(JOB_COLUMNS)
+    .maybeSingle();
+  if (error) {
+    console.error("[ai/jobs] advance claim failed", { jobId, stage, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return (data as AiJobRow | null) ?? null;
+}
+
+/** Release the advance lease without moving anything else — a failed advance that will be retried by the sweep. */
+export async function releaseAdvanceLease(jobId: string): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.from("ai_jobs").update({ finalize_lease_until: null }).eq("id", jobId).eq("status", "processing");
+  if (error) console.error("[ai/jobs] advance lease release failed", { jobId, message: error.message });
+}
+
+/**
+ * Replace the row's metadata while it is still `processing` on the same
+ * prediction — the advance's own compare-and-set. Returns the row, or null
+ * when the job moved on (a webhook failed it, a cancel landed) meanwhile.
+ */
+export async function writeProcessingMetadata(
+  jobId: string,
+  expectPredictionId: string | null,
+  metadata: Record<string, unknown>,
+  patch: Pick<JobPatch, "finalize_lease_until"> = {},
+): Promise<AiJobRow | null> {
+  const admin = createAdminClient();
+  let query = admin.from("ai_jobs").update({ metadata, ...patch }).eq("id", jobId).eq("status", "processing");
+  query = expectPredictionId === null ? query.is("replicate_prediction_id", null) : query.eq("replicate_prediction_id", expectPredictionId);
+  const { data, error } = await query.select(JOB_COLUMNS).maybeSingle();
+  if (error) {
+    console.error("[ai/jobs] processing metadata write failed", { jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return (data as AiJobRow | null) ?? null;
+}
+
+/**
  * Keep the job in `finalizing`, release the lease, and say when the next
  * attempt may run. The provider's output URL on the row is untouched — it is
  * the whole reason a retry can work.
@@ -592,6 +660,14 @@ export async function transitionJob(
   from: readonly AiJobStatus[],
   to: AiJobStatus,
   patch: JobPatch = {},
+  /**
+   * Part 6: a multi-stage job moves `processing → processing` when its next
+   * provider stage is submitted, so the status alone cannot make the update
+   * idempotent. `guard.predictionId` adds the previous stage's prediction id
+   * (or null, for the first) to the WHERE — the second of two racing
+   * submissions matches no row, exactly as a second webhook delivery does.
+   */
+  guard: { predictionId?: string | null } = {},
 ): Promise<AiJobRow | null> {
   for (const source of from) {
     if (source !== to && !canTransition(source, to)) {
@@ -600,13 +676,15 @@ export async function transitionJob(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let query = admin
     .from("ai_jobs")
     .update({ status: to, ...patch })
     .eq("id", jobId)
-    .in("status", [...from])
-    .select(JOB_COLUMNS)
-    .maybeSingle();
+    .in("status", [...from]);
+  if (guard.predictionId !== undefined) {
+    query = guard.predictionId === null ? query.is("replicate_prediction_id", null) : query.eq("replicate_prediction_id", guard.predictionId);
+  }
+  const { data, error } = await query.select(JOB_COLUMNS).maybeSingle();
 
   if (error) {
     console.error("[ai/jobs] transition failed", { jobId, to, code: error.code, message: error.message });

@@ -9,8 +9,10 @@ import {
   AI_SOURCE_BUCKET,
   aiCharacterKey,
   aiPosterKey,
+  aiReferenceKey,
   aiResultKey,
   aiSourceKey,
+  aiVoiceKey,
 } from "@/lib/ai/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -71,13 +73,19 @@ export async function createSourceUploadTicket(opts: {
   feature: AiFeature;
   jobId: string;
   extension: string;
-  /** Which object in the job folder: the video (default) or the character image. */
-  role?: "source" | "character";
+  /** Which object in the job folder: the video (default), the character image, an extra reference (Part 6), or the replacement audio (Part 6). */
+  role?: "source" | "character" | "reference" | "voice";
+  /** For `reference`: 2 or 3 — the position among the identity photos. */
+  index?: number;
 }): Promise<UploadTicket> {
   const path =
     opts.role === "character"
       ? aiCharacterKey(opts.userId, opts.feature, opts.jobId, opts.extension)
-      : aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
+      : opts.role === "reference"
+        ? aiReferenceKey(opts.userId, opts.feature, opts.jobId, opts.index ?? 2, opts.extension)
+        : opts.role === "voice"
+          ? aiVoiceKey(opts.userId, opts.feature, opts.jobId, opts.extension)
+          : aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
   const admin = createAdminClient();
   /*
     🔴 `upsert: true` (2026-09-14). A retry after a half-finished upload —

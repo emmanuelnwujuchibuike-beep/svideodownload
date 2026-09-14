@@ -1,5 +1,7 @@
 import type { AiLedgerEntry } from "@/lib/ai/balance";
-import type { CharacterReplaceAudioMode, CharacterReplaceConfig, CharacterReplaceLipSyncTier, CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
+import type { CharacterReplaceAudioMode, CharacterReplaceConfig, CharacterReplaceLipSyncTier } from "@/lib/ai/character-replace/config";
+import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
+import type { CharacterReplaceAnyQuality, CharacterReplaceVoiceSource } from "@/lib/ai/character-replace/pricing";
 import type { AiJobStatus, AiJobView } from "@/lib/ai/jobs";
 
 /**
@@ -143,9 +145,26 @@ export type AssetSlot =
   /** Something failed that was not the file's fault — the decoder, storage. */
   | { status: "error"; code: string };
 
+/**
+ * A replacement audio file, once picked and measured in the browser (Part 6
+ * §3). The same contract as the two other assets: a File the browser holds,
+ * an object URL the picker owns, and facts that are CLAIMS until the worker's
+ * ffprobe confirms them.
+ */
+export interface AudioAsset {
+  file: File;
+  objectUrl: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  /** Integer milliseconds, as the browser decoded it. Null when it could not. */
+  durationMs: number | null;
+}
+
 /** Output settings. Every value is one the server's public config offered. */
 export interface VideoSettings {
-  quality: CharacterReplaceQualityId;
+  /** The tier of the CURRENT mode — 480p/720p/1080p for Full Character, standard/high/ultra for the two new modes. */
+  quality: CharacterReplaceAnyQuality;
   /**
    * The kept range, in seconds from the start of the source. `end` is
    * exclusive. Both null means "the whole video". Trimming is how a member
@@ -155,12 +174,28 @@ export interface VideoSettings {
   trim: { start: number; end: number } | null;
 }
 
-/** Whether the original sound is kept or a new voice is generated. */
+/** Whether the original sound is kept or a new voice is generated — and, if so, from where (Part 6 §2–§5). */
 export interface VoiceSettings {
   mode: CharacterReplaceAudioMode;
-  /** Only read when `mode` is "new_voice". */
+  /** Only read when `mode` is "new_voice": the member's own audio, or a voice generated from text. */
+  source: CharacterReplaceVoiceSource | null;
+  /** The uploaded replacement audio, when `source` is "upload". */
+  audio: AudioAsset | null;
+  /**
+   * Audio longer than the kept video (§4): the member's explicit choice to
+   * have it cut to fit. Never assumed — without it the server refuses.
+   */
+  trimAudioToFit: boolean;
+  /** The dialogue, when `source` is "tts". */
+  text: string;
+  /** Only read when `source` is "tts". */
   languageCode: string | null;
   voiceId: string | null;
+  /**
+   * §6: "I confirm that I own this voice or have permission to use it."
+   * Required for an uploaded voice; the server refuses without it.
+   */
+  voiceConsent: boolean;
 }
 
 /** Only meaningful with a new voice; a member cannot lip-sync the original. */
@@ -173,7 +208,12 @@ export interface LipSyncSettings {
  * workspace reducer and NOWHERE else until Start.
  */
 export interface CharacterReplaceProject {
+  /** Which of the three replacements this is (Part 6). Chosen first; it shapes the reference step. */
+  mode: ReplacementMode;
+  /** The primary reference — the face (Face Only), the first identity photo (Skin + Face), the photo (Full Character). */
   character: CharacterAsset | null;
+  /** Extra identity photos for Skin + Face (up to the mode's maximum minus one). Always empty for the other modes. */
+  references: readonly CharacterAsset[];
   video: SourceVideo | null;
   settings: VideoSettings;
   voice: VoiceSettings;
@@ -220,6 +260,12 @@ export interface PricingSnapshot {
   */
   /** The kept duration the price is for, integer milliseconds. */
   durationMs: number;
+  /** The per-second rate of the chosen tier, and the amounts of the four lines (Part 6 §12), minor units. */
+  qualityRateCents: number;
+  videoCents: number;
+  voiceCents: number;
+  lipSyncCents: number;
+  basePriceCents: number;
   /** The sum of the lines before the floor. */
   subtotalCents: number;
   /** The operator's floor, and whether it was the total. */
@@ -228,9 +274,14 @@ export interface PricingSnapshot {
   /** Which pricing configuration produced this; the server checks it at confirm. */
   pricingConfigVersion: number;
   /** The inputs it was priced for — handed back, signed, at /start (Part 4). */
-  quality: CharacterReplaceQualityId;
+  mode: ReplacementMode;
+  quality: CharacterReplaceAnyQuality;
   voiceMode: CharacterReplaceAudioMode;
+  voiceSource: CharacterReplaceVoiceSource | null;
+  ttsCharacters: number;
   lipSyncMode: CharacterReplaceLipSyncTier | null;
+  /** "12.4s × ₦25/s = ₦310" — printed, never computed here. */
+  rateLine: string;
 }
 
 export interface PricingLine {
@@ -380,8 +431,9 @@ export interface CharacterReplaceResult {
   /** A short-lived signed URL for the player; re-fetched when it expires. */
   previewUrl: string | null;
   durationSeconds: number | null;
-  quality: CharacterReplaceQualityId | null;
-  voice: VoiceSettings | null;
+  quality: CharacterReplaceAnyQuality | null;
+  mode: ReplacementMode | null;
+  voice: Pick<VoiceSettings, "mode" | "source" | "languageCode" | "voiceId"> | null;
   lipSync: LipSyncSettings | null;
 }
 
@@ -433,10 +485,12 @@ export interface CharacterReplaceJobInput {
     whole: boolean;
   };
   output: {
-    requestedQuality: CharacterReplaceQualityId;
+    mode: ReplacementMode;
+    requestedQuality: CharacterReplaceAnyQuality;
   };
   audio: {
     voiceMode: CharacterReplaceAudioMode;
+    voiceSource: CharacterReplaceVoiceSource | null;
     languageCode: string | null;
     voiceId: string | null;
     lipSyncMode: CharacterReplaceLipSyncTier | null;

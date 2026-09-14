@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 
 import { FrenzAICore } from "@/features/ai/core/frenz-ai-core";
 import { enablePush, getPushState, type PushState } from "@/features/notifications/push";
-import { PROCESSING_STAGES, isProcessingActive, type ProcessingJob } from "@/lib/ai/character-replace/types";
+import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
+import { stageSteps, type PipelineMeta } from "@/lib/ai/character-replace/pipeline";
+import { isProcessingActive, type ProcessingJob } from "@/lib/ai/character-replace/types";
 import { formatCents } from "@/lib/ai/economy";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +35,7 @@ import { cn } from "@/lib/utils";
  */
 export function CharacterReplaceProcessing({
   job,
+  mode = "full_character",
   onCancel,
   onRetry,
   onDone,
@@ -42,6 +45,8 @@ export function CharacterReplaceProcessing({
   className,
 }: {
   job: ProcessingJob;
+  /** Which replacement (Part 6) — words the replacement step for it. */
+  mode?: ReplacementMode;
   /** Present only where cancelling is technically safe (no charge left behind). */
   onCancel?: () => void;
   onRetry?: () => void;
@@ -56,9 +61,17 @@ export function CharacterReplaceProcessing({
   className?: string;
 }) {
   const active = isProcessingActive(job.status);
-  const stage = PROCESSING_STAGES.find((s) => s.key === job.status);
-  const currentIndex = PROCESSING_STAGES.findIndex((s) => s.key === job.status);
   const offline = useOffline();
+  /*
+    ── Part 6 §21: stage-based, from the job's OWN plan ─────────────────────
+    The rows are the stages this job runs (a voice-from-text job has five, a
+    plain one three), each done / doing / to come from the row's pipeline
+    record — never from a timer. No percentages: the provider reports none,
+    so none are shown.
+  */
+  const pipeline = toPipeline(job.job?.characterReplace?.pipeline ?? null);
+  const steps = stageSteps({ status: job.status, pipeline, mode });
+  const doing = steps.find((s) => s.state === "doing") ?? null;
 
   if (job.status === "failed" || job.status === "refunded" || job.status === "cancelled") {
     const cancelled = job.status === "cancelled";
@@ -127,8 +140,8 @@ export function CharacterReplaceProcessing({
           <FrenzAICore size="md" presence="working" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{stage?.label ?? "Working"}</p>
-          <h2 className="mt-0.5 text-[19px] font-bold leading-tight tracking-[-0.02em]">{headline(job)}</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{stageWord(job.status)}</p>
+          <h2 className="mt-0.5 text-[19px] font-bold leading-tight tracking-[-0.02em]">{job.status === "uploading" || job.status === "preparing" ? headline(job) : (doing?.label ?? headline(job))}</h2>
           {job.estimatedSecondsRemaining !== null ? (
             <p className="mt-1 text-[12.5px] text-muted-foreground">About {eta(job.estimatedSecondsRemaining)} left</p>
           ) : null}
@@ -147,25 +160,28 @@ export function CharacterReplaceProcessing({
         )}
       </div>
 
-      {/* the tracker */}
+      {/* the tracker — the job's own stages (§21) */}
       <ol className="mt-4 divide-y divide-border/60 border-t border-border/60">
-        {PROCESSING_STAGES.map((s, i) => {
-          const done = i < currentIndex;
-          const doing = i === currentIndex;
+        {steps.map((s, i) => {
+          const done = s.state === "done";
+          const working = s.state === "doing";
           return (
-            <li key={s.key} className="flex items-center gap-3 px-5 py-2.5" aria-current={doing ? "step" : undefined}>
+            <li key={s.key} className="flex items-center gap-3 px-5 py-2.5" aria-current={working ? "step" : undefined}>
               <span
                 aria-hidden
                 className={cn(
                   "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold",
                   done && "bg-emerald-500/15 text-emerald-600",
-                  doing && "bg-foreground text-background",
-                  !done && !doing && "bg-secondary text-muted-foreground/60",
+                  working && "bg-foreground text-background",
+                  !done && !working && "bg-secondary text-muted-foreground/60",
                 )}
               >
-                {done ? <Check className="h-3 w-3" strokeWidth={3} /> : i + 1}
+                {done ? <Check className="h-3 w-3" strokeWidth={3} /> : working ? <span className="frenz-pulse-dot block h-2 w-2 rounded-full bg-background" /> : i + 1}
               </span>
-              <span className={cn("text-[13.5px]", doing ? "font-bold" : done ? "text-muted-foreground" : "text-muted-foreground/60")}>{s.label}</span>
+              <span className={cn("text-[13.5px]", working ? "font-bold" : done ? "text-muted-foreground" : "text-muted-foreground/60")}>
+                {done ? s.doneLabel : s.label}
+                {working ? <span className="ml-2 text-[11.5px] font-semibold text-primary">Working…</span> : !done ? <span className="ml-2 text-[11.5px] text-muted-foreground/60">Waiting</span> : null}
+              </span>
             </li>
           );
         })}
@@ -199,6 +215,31 @@ export function CharacterReplaceProcessing({
       </div>
     </section>
   );
+}
+
+/** The row's pipeline summary (statuses only) as the pure stage functions read it. */
+function toPipeline(p: NonNullable<NonNullable<ProcessingJob["job"]>["characterReplace"]>["pipeline"] | null): PipelineMeta | null {
+  if (!p) return null;
+  const records: PipelineMeta["records"] = {};
+  for (const [k, status] of Object.entries(p.records)) if (status) records[k as keyof PipelineMeta["records"]] = { status };
+  return { stages: p.stages, current: p.current, records };
+}
+
+function stageWord(status: ProcessingJob["status"]): string {
+  switch (status) {
+    case "preparing":
+      return "Preparing";
+    case "uploading":
+      return "Uploading";
+    case "queued":
+      return "Queued";
+    case "processing":
+      return "Processing";
+    case "finalizing":
+      return "Finalizing";
+    default:
+      return "Working";
+  }
 }
 
 function headline(job: ProcessingJob): string {

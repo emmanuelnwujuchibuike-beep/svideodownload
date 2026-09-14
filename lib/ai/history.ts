@@ -180,7 +180,10 @@ export function historyChip(job: AiJobView, now: number): { label: string; tone:
 export function characterReplaceFacts(job: AiJobView): string | null {
   const cr = job.characterReplace;
   if (!cr) return null;
-  const parts: string[] = [cr.quality];
+  // Part 6: the operation first — Face Only · Skin + Face · Full Character — then the tier.
+  const parts: string[] = [MODE_LABEL[cr.mode] ?? "Full Character", TIER_LABEL[cr.quality] ?? cr.quality];
+  if (cr.voiceMode === "new_voice") parts.push(cr.voiceSource === "tts" ? "new voice" : "your audio");
+  if (cr.lipSyncMode) parts.push(`${cr.lipSyncMode} lip sync`);
   const seconds = cr.selectedDurationMs !== null ? cr.selectedDurationMs / 1000 : (job.result.durationSeconds ?? null);
   if (seconds !== null) parts.push(`${(Math.round(seconds * 10) / 10).toFixed(1)} s`);
   if (cr.chargedCents !== null && cr.chargedCents > 0) {
@@ -189,6 +192,9 @@ export function characterReplaceFacts(job: AiJobView): string | null {
   }
   return parts.join(" · ");
 }
+
+const MODE_LABEL: Record<string, string> = { face_only: "Face Only", skin_face: "Skin + Face", full_character: "Full Character" };
+const TIER_LABEL: Record<string, string> = { standard: "Standard", high: "High", ultra: "Ultra", "480p": "480p", "720p": "720p", "1080p": "1080p" };
 
 function symbolFor(currency: string | null): string {
   switch (currency) {
@@ -225,10 +231,16 @@ export function historyTitleFor(feature: AiFeature): string {
 export function historyResultSentence(job: AiJobView): string {
   if (job.feature === "ai_character_replace") {
     const facts = characterReplaceFacts(job);
+    const mode = job.characterReplace?.mode ?? "full_character";
+    const what = mode === "face_only" ? "Face replaced" : mode === "skin_face" ? "Identity transferred" : "Character replaced";
     const sentence =
-      job.result.audioRestored === false
-        ? "Character replaced. This video had no sound to keep."
-        : "Character replaced, with the original movement and scene kept.";
+      job.characterReplace?.voiceApplied
+        ? `${what}, with the new voice on it.`
+        : job.result.audioRestored === false
+          ? `${what}. This video had no sound to keep.`
+          : mode === "full_character"
+            ? `${what}, with the original movement and scene kept.`
+            : `${what}, with the original body, clothes and scene kept.`;
     return facts ? `${sentence} ${facts}.` : sentence;
   }
   if (job.feature === "ai_clean") {

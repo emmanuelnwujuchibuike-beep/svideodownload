@@ -588,6 +588,22 @@ export interface AiJobView {
     attempt: number;
     /** The first attempt's id — the "project" every attempt of one draft belongs to. */
     projectId: string;
+    /*
+      ── Part 6 ─────────────────────────────────────────────────────────────
+      The replacement mode, the voice's source, the per-second rate the
+      member was quoted, and the pipeline as the tracker draws it — stage
+      names and their states only. Never a prediction id, a model name, a
+      path or a URL; never the dialogue.
+    */
+    mode: "face_only" | "skin_face" | "full_character";
+    voiceSource: "upload" | "tts" | null;
+    /** The quality tier's per-second rate the price was made from, minor units. Null before /start. */
+    rateCents: number | null;
+    /** How many reference images went in (1–3). */
+    references: number;
+    pipeline: { stages: readonly ("voice" | "replace" | "lipsync" | "finalize")[]; current: "voice" | "replace" | "lipsync" | "finalize"; records: Partial<Record<"voice" | "replace" | "lipsync" | "finalize", "pending" | "submitted" | "processing" | "succeeded" | "failed">> } | null;
+    /** Whether the finished file carries a new voice (a swap, or lip-synced). */
+    voiceApplied: boolean;
   } | null;
 }
 /* `characterReplace` is optional on the type so fixtures and other tools' views need not name it; the mapper always sets it. */
@@ -662,11 +678,37 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
   if (!m || m.tool !== "character_replace") return null;
   const settings = (m.settings ?? {}) as { quality?: unknown; voiceMode?: unknown; lipSyncMode?: unknown };
   const prepared = (m.prepared ?? null) as { durationMs?: unknown; trimmed?: unknown } | null;
-  const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown } | null;
+  const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown; qualityRateCents?: unknown } | null;
   const trim = m.trim ?? null;
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const charged = row.charged_cents ?? null;
+  const mode = m.mode === "face_only" || m.mode === "skin_face" ? m.mode : "full_character";
+  const audio = (m.audio ?? null) as { source?: unknown } | null;
+  const pipelineRaw = (m.pipeline ?? null) as { stages?: unknown; current?: unknown; records?: Record<string, { status?: unknown }> } | null;
+  const stageIds = ["voice", "replace", "lipsync", "finalize"] as const;
+  type StageId = (typeof stageIds)[number];
+  const isStage = (v: unknown): v is StageId => typeof v === "string" && (stageIds as readonly string[]).includes(v);
+  const stageStatuses = ["pending", "submitted", "processing", "succeeded", "failed"] as const;
+  const pipeline =
+    pipelineRaw && Array.isArray(pipelineRaw.stages) && isStage(pipelineRaw.current)
+      ? {
+          stages: pipelineRaw.stages.filter(isStage),
+          current: pipelineRaw.current,
+          records: Object.fromEntries(
+            Object.entries(pipelineRaw.records ?? {})
+              .filter(([k, v]) => isStage(k) && v && (stageStatuses as readonly string[]).includes(String(v.status)))
+              .map(([k, v]) => [k, v!.status as (typeof stageStatuses)[number]]),
+          ) as Partial<Record<StageId, (typeof stageStatuses)[number]>>,
+        }
+      : null;
+  const newVoice = settings.voiceMode === "new_voice";
   return {
+    mode,
+    voiceSource: newVoice && (audio?.source === "upload" || audio?.source === "tts") ? audio.source : null,
+    rateCents: num(quote?.qualityRateCents),
+    references: 1 + (Array.isArray(m.references) ? m.references.length : 0),
+    pipeline,
+    voiceApplied: row.status === "completed" && newVoice && row.audio_restored === true,
     attempt: num(m.attempt) ?? 1,
     projectId: typeof m.project_id === "string" ? m.project_id : row.id,
     quality: typeof settings.quality === "string" ? settings.quality : "720p",

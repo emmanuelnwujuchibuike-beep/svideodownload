@@ -128,3 +128,40 @@ export function readVideoMetadata(url: string, file: { name: string; size: numbe
     video.src = url;
   });
 }
+
+/**
+ * The replacement audio's length, as the browser decodes it (Part 6 §3), or
+ * "invalid" when it cannot open the file. Integer milliseconds, null when the
+ * container hides its duration — the worker's ffprobe is the authority
+ * either way, and the fit decision is the server's (§4); this only lets the
+ * interface say "your audio is longer than the selected video" BEFORE an
+ * upload. One `<audio>` element, released on every outcome.
+ */
+export function readAudioDuration(url: string): Promise<number | null | "invalid"> {
+  return new Promise((resolve) => {
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    let settled = false;
+    const done = (value: number | null | "invalid") => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      audio.onloadedmetadata = null;
+      audio.onerror = null;
+      audio.removeAttribute("src");
+      try {
+        audio.load();
+      } catch {
+        /* nothing to release */
+      }
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => done(null), 8_000);
+    audio.onloadedmetadata = () => {
+      const d = audio.duration;
+      done(Number.isFinite(d) && d > 0 ? Math.round(d * 1000) : null);
+    };
+    audio.onerror = () => done("invalid");
+    audio.src = url;
+  });
+}

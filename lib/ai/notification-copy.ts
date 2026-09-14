@@ -240,6 +240,9 @@ export function outcomeForErrorCode(code: string | null | undefined): AiNotifica
     case "FILE_TOO_LARGE":
     case "VIDEO_TOO_LONG":
     case "INVALID_INPUT":
+    case "AUDIO_INVALID":
+    case "AUDIO_TOO_LONG":
+    case "AUDIO_TOO_SHORT":
       return "unsupported";
     default:
       return "failed";

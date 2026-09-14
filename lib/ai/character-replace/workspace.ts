@@ -1,11 +1,15 @@
-import type { CharacterReplacePublicConfig, CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
+import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
+import type { CharacterReplaceAnyQuality, CharacterReplaceVoiceSource } from "@/lib/ai/character-replace/pricing";
 import type {
   AssetSlot,
+  AudioAsset,
   CharacterAsset,
   CharacterReplaceProject,
   PricingLine,
   PricingState,
   SourceVideo,
+  VoiceSettings,
 } from "@/lib/ai/character-replace/types";
 import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/validate";
 
@@ -25,10 +29,13 @@ import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/vali
  *
  *   photo → video → settings → voice → review
  *
- * "Price", "Confirm" and "Start" (the owner's steps 5–7) are the review step:
- * the price, the balance, the consent line and the one button live together
- * on the screen where a member decides, because separating a price from the
- * button that spends it is how people get surprised.
+ * The REPLACEMENT MODE (Part 6) is chosen on the first step, above the
+ * reference picker, because it decides what that picker asks for: one clear
+ * face, one to three identity photos, or a full-body photo. "Price",
+ * "Confirm" and "Start" are the review step: the price, the balance, the
+ * consent line and the one button live together on the screen where a
+ * member decides, because separating a price from the button that spends
+ * it is how people get surprised.
  *
  * ── 🔴 TWO SLOTS, ONE INVARIANT (Part 2, §20) ───────────────────────────────
  *
@@ -38,13 +45,14 @@ import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/vali
  * transition sets them together, so "video ready" with no file, or a trim on
  * a video that was removed, cannot be represented. Replacing a file runs the
  * same clear as removing it first: the old metadata, trim and preview are
- * gone before the new file's facts arrive.
+ * gone before the new file's facts arrive. Part 6's audio slot follows the
+ * same rule.
  */
 
 export type WorkspaceStep = "photo" | "video" | "settings" | "voice" | "review";
 
 export const WORKSPACE_STEPS: readonly { id: WorkspaceStep; label: string; title: string }[] = [
-  { id: "photo", label: "Photo", title: "Your photo" },
+  { id: "photo", label: "Reference", title: "Replacement & reference" },
   { id: "video", label: "Video", title: "Your video" },
   { id: "settings", label: "Settings", title: "Output settings" },
   { id: "voice", label: "Voice", title: "Voice & language" },
@@ -61,13 +69,28 @@ export interface WorkspaceState {
   pricing: PricingState;
   photo: AssetSlot;
   video: AssetSlot;
+  /** Part 6: the replacement audio picker. */
+  audio: AssetSlot;
 }
 
+export const EMPTY_VOICE: VoiceSettings = {
+  mode: "original",
+  source: null,
+  audio: null,
+  trimAudioToFit: false,
+  text: "",
+  languageCode: null,
+  voiceId: null,
+  voiceConsent: false,
+};
+
 export const EMPTY_PROJECT: CharacterReplaceProject = {
+  mode: "full_character",
   character: null,
+  references: [],
   video: null,
   settings: { quality: "720p", trim: null },
-  voice: { mode: "original", languageCode: null, voiceId: null },
+  voice: EMPTY_VOICE,
   lipSync: { tier: null },
   consent: false,
 };
@@ -78,27 +101,49 @@ export const INITIAL_STATE: WorkspaceState = {
   pricing: { status: "idle" },
   photo: { status: "empty" },
   video: { status: "empty" },
+  audio: { status: "empty" },
 };
 
 export type WorkspaceAction =
   | { type: "go"; step: WorkspaceStep }
+  /** Part 6: switch the replacement. `defaultQuality` is the mode's tier the settings step opens on. */
+  | { type: "mode"; mode: ReplacementMode; defaultQuality: CharacterReplaceAnyQuality | null; maxReferences: number }
   | { type: "photo/validating" }
   | { type: "photo/ready"; asset: CharacterAsset }
   | { type: "photo/invalid"; code: string }
   | { type: "photo/error"; code: string }
   | { type: "photo/clear" }
+  /** Part 6: an extra identity photo (Skin + Face). Refused past the mode's maximum. */
+  | { type: "reference/add"; asset: CharacterAsset; max: number }
+  | { type: "reference/remove"; index: number }
   | { type: "video/validating" }
   | { type: "video/ready"; video: SourceVideo; maxDurationMs: number }
   | { type: "video/invalid"; code: string }
   | { type: "video/error"; code: string }
   | { type: "video/clear" }
-  | { type: "quality"; quality: CharacterReplaceQualityId }
+  | { type: "quality"; quality: CharacterReplaceAnyQuality }
   | { type: "trim"; start: number; end: number }
   | { type: "trim/clear" }
-  | { type: "voice/mode"; mode: "original" | "new_voice"; defaults: { languageCode: string | null; voiceId: string | null; tier: "standard" | "studio" | null } }
+  | {
+      type: "voice/mode";
+      mode: "original" | "new_voice";
+      defaults: { languageCode: string | null; voiceId: string | null; tier: "standard" | "studio" | null; source?: CharacterReplaceVoiceSource };
+    }
+  /** Part 6: upload your own audio, or generate from text. */
+  | { type: "voice/source"; source: CharacterReplaceVoiceSource }
+  | { type: "audio/validating" }
+  | { type: "audio/ready"; asset: AudioAsset }
+  | { type: "audio/invalid"; code: string }
+  | { type: "audio/error"; code: string }
+  | { type: "audio/clear" }
+  | { type: "voice/text"; text: string }
+  | { type: "voice/trimToFit"; value: boolean }
+  | { type: "voice/consent"; value: boolean }
   | { type: "voice/language"; code: string }
   | { type: "voice/voice"; id: string }
   | { type: "lipsync/tier"; tier: "standard" | "studio" }
+  /** Part 6: lip sync is a toggle — off keeps the new voice as a plain audio swap. */
+  | { type: "lipsync/clear" }
   | { type: "consent"; value: boolean }
   | { type: "pricing"; pricing: PricingState }
   | { type: "reset" };
@@ -107,6 +152,23 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
   switch (action.type) {
     case "go":
       return canEnterStep(state.project, action.step) ? { ...state, step: action.step } : state;
+
+    /* ── the mode (Part 6) ──────────────────────────────────────────────── */
+    case "mode": {
+      if (action.mode === state.project.mode) return state;
+      // The files stay; the tier becomes the new mode's default; extra references beyond the new maximum go.
+      const references = state.project.references.slice(0, Math.max(0, action.maxReferences - 1));
+      return {
+        ...state,
+        pricing: markStale(state.pricing),
+        project: {
+          ...state.project,
+          mode: action.mode,
+          references,
+          settings: { ...state.project.settings, quality: action.defaultQuality ?? state.project.settings.quality },
+        },
+      };
+    }
 
     /* ── the photo slot ─────────────────────────────────────────────────── */
     case "photo/validating":
@@ -121,6 +183,14 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return { ...state, photo: { status: "error", code: action.code }, project: { ...state.project, character: null } };
     case "photo/clear":
       return { ...state, photo: { status: "empty" }, project: { ...state.project, character: null } };
+
+    /* ── extra references (Skin + Face) ─────────────────────────────────── */
+    case "reference/add": {
+      if (state.project.references.length >= Math.max(0, action.max - 1)) return state;
+      return { ...state, project: { ...state.project, references: [...state.project.references, action.asset] } };
+    }
+    case "reference/remove":
+      return { ...state, project: { ...state.project, references: state.project.references.filter((_, i) => i !== action.index) } };
 
     /* ── the video slot ─────────────────────────────────────────────────── */
     case "video/validating":
@@ -190,26 +260,66 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
     case "trim/clear":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, settings: { ...state.project.settings, trim: null } } };
 
-    /* ── voice ──────────────────────────────────────────────────────────── */
-    case "voice/mode":
+    /* ── voice (Part 6) ─────────────────────────────────────────────────── */
+    case "voice/mode": {
+      if (action.mode === "original") {
+        // Back to the original audio: the voice, its audio file and the tier all go.
+        return {
+          ...state,
+          audio: { status: "empty" },
+          pricing: markStale(state.pricing),
+          project: { ...state.project, voice: EMPTY_VOICE, lipSync: { tier: null } },
+        };
+      }
       return {
         ...state,
         pricing: markStale(state.pricing),
         project: {
           ...state.project,
-          voice:
-            action.mode === "original"
-              ? { mode: "original", languageCode: null, voiceId: null }
-              : { mode: "new_voice", languageCode: action.defaults.languageCode, voiceId: action.defaults.voiceId },
-          lipSync: { tier: action.mode === "original" ? null : action.defaults.tier },
+          voice: {
+            ...EMPTY_VOICE,
+            mode: "new_voice",
+            source: action.defaults.source ?? "tts",
+            languageCode: action.defaults.languageCode,
+            voiceId: action.defaults.voiceId,
+          },
+          lipSync: { tier: action.defaults.tier },
         },
       };
+    }
+    case "voice/source": {
+      if (state.project.voice.mode !== "new_voice" || state.project.voice.source === action.source) return state;
+      // The other source's material is kept (a member may flip back), but the slot reflects the audio only when it is the source.
+      return { ...state, pricing: markStale(state.pricing), project: { ...state.project, voice: { ...state.project.voice, source: action.source } } };
+    }
+    case "audio/validating":
+      return { ...state, audio: { status: "validating" }, project: { ...state.project, voice: { ...state.project.voice, audio: null } } };
+    case "audio/ready":
+      return { ...state, audio: { status: "ready" }, pricing: markStale(state.pricing), project: { ...state.project, voice: { ...state.project.voice, audio: action.asset, trimAudioToFit: false } } };
+    case "audio/invalid":
+      return { ...state, audio: { status: "invalid", code: action.code }, project: { ...state.project, voice: { ...state.project.voice, audio: null } } };
+    case "audio/error":
+      return { ...state, audio: { status: "error", code: action.code }, project: { ...state.project, voice: { ...state.project.voice, audio: null } } };
+    case "audio/clear":
+      return { ...state, audio: { status: "empty" }, project: { ...state.project, voice: { ...state.project.voice, audio: null, trimAudioToFit: false } } };
+    case "voice/text": {
+      const text = action.text.slice(0, 10_000);
+      // The price depends on the dialogue's LENGTH (per-character), so a change of length is a change of price.
+      const lengthChanged = Array.from(text.trim()).length !== Array.from(state.project.voice.text.trim()).length;
+      return { ...state, pricing: lengthChanged ? markStale(state.pricing) : state.pricing, project: { ...state.project, voice: { ...state.project.voice, text } } };
+    }
+    case "voice/trimToFit":
+      return { ...state, project: { ...state.project, voice: { ...state.project.voice, trimAudioToFit: action.value } } };
+    case "voice/consent":
+      return { ...state, project: { ...state.project, voice: { ...state.project.voice, voiceConsent: action.value } } };
     case "voice/language":
       return { ...state, project: { ...state.project, voice: { ...state.project.voice, languageCode: action.code } } };
     case "voice/voice":
       return { ...state, project: { ...state.project, voice: { ...state.project.voice, voiceId: action.id } } };
     case "lipsync/tier":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, lipSync: { tier: action.tier } } };
+    case "lipsync/clear":
+      return state.project.lipSync.tier === null ? state : { ...state, pricing: markStale(state.pricing), project: { ...state.project, lipSync: { tier: null } } };
 
     case "consent":
       return { ...state, project: { ...state.project, consent: action.value } };
@@ -283,6 +393,34 @@ export function furthestStep(project: CharacterReplaceProject): WorkspaceStep {
   return "review";
 }
 
+/** The dialogue's length as the engine counts it — code points, trimmed. */
+export function dialogueCharacters(text: string): number {
+  return Array.from(text.trim()).length;
+}
+
+/**
+ * Whether the voice section is complete (Part 6): nothing to say for the
+ * original audio; an uploaded voice needs the file and the rights
+ * confirmation; a generated voice needs a dialogue within the operator's
+ * bounds, a language the provider speaks and a voice. Lip sync is optional
+ * with either.
+ */
+export function voiceComplete(project: CharacterReplaceProject, config: CharacterReplacePublicConfig | null): boolean {
+  const v = project.voice;
+  if (v.mode !== "new_voice") return true;
+  if (v.source === "upload") return !!v.audio && v.voiceConsent;
+  if (v.source === "tts") {
+    const chars = dialogueCharacters(v.text);
+    const min = config?.tts.minimumCharacters ?? 1;
+    const max = config?.tts.maximumCharacters ?? 10_000;
+    if (chars < min || chars > max) return false;
+    if (!v.languageCode || !v.voiceId) return false;
+    if (config && !config.tts.languages.includes(v.languageCode)) return false;
+    return true;
+  }
+  return false;
+}
+
 /**
  * Whether Start may be pressed. Every clause is a fact the interface can
  * verify locally; the SERVER re-verifies all of them and the balance at
@@ -300,7 +438,7 @@ export function canStart(input: {
   if (!config || !input.available) return false;
   if (!project.consent) return false;
   if (!inputReadiness(project, config).ready) return false;
-  if (project.voice.mode === "new_voice" && (!project.voice.languageCode || !project.voice.voiceId || !project.lipSync.tier)) return false;
+  if (!voiceComplete(project, config)) return false;
   if (pricing.status !== "quoted") return false;
   if (input.balanceCents === null || input.balanceCents < pricing.snapshot.totalCents) return false;
   return true;
@@ -324,27 +462,35 @@ export function formatClock(seconds: number | null): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${t}`;
 }
 
+/** The tier label for the current mode, from the public config. */
+export function qualityLabelFor(project: CharacterReplaceProject, config: CharacterReplacePublicConfig | null): string {
+  const mode = config?.modes.find((m) => m.id === project.mode);
+  const tier = mode?.tiers.find((t) => t.id === project.settings.quality) ?? config?.qualities.find((q) => q.id === project.settings.quality);
+  return tier?.label ?? project.settings.quality;
+}
+
 /**
  * The summary card's rows, from the draft alone. They carry NO amounts —
  * `amountCents` is null on every line until a server snapshot replaces them —
  * which is what keeps the browser from ever implying a price it did not get.
  */
 export function summaryLines(project: CharacterReplaceProject, config: CharacterReplacePublicConfig | null): PricingLine[] {
-  const quality = config?.qualities.find((q) => q.id === project.settings.quality);
   const language = config?.languages.find((l) => l.code === project.voice.languageCode);
   const voice = config?.voices.find((v) => v.id === project.voice.voiceId);
   const tier = config?.lipSync.find((l) => l.id === project.lipSync.tier);
   const newVoice = project.voice.mode === "new_voice";
+  const voiceValue = !newVoice
+    ? "Original audio"
+    : project.voice.source === "upload"
+      ? project.voice.audio
+        ? "Your audio"
+        : "Your audio · not chosen yet"
+      : [language?.label, voice?.label].filter(Boolean).join(" · ") || "New voice";
   return [
     { key: "video", label: "Video", value: formatSeconds(selectedDurationSeconds(project)), amountCents: null },
-    { key: "quality", label: "Quality", value: quality?.label ?? project.settings.quality, amountCents: null },
-    { key: "character", label: "Character replacement", value: "Included", amountCents: null },
-    {
-      key: "voice",
-      label: "Voice",
-      value: newVoice ? [language?.label, voice?.label].filter(Boolean).join(" · ") || "New voice" : "Original audio",
-      amountCents: null,
-    },
+    { key: "quality", label: "Quality", value: qualityLabelFor(project, config), amountCents: null },
+    { key: "character", label: "Replacement", value: REPLACEMENT_MODE_COPY[project.mode].label, amountCents: null },
+    { key: "voice", label: "Voice", value: voiceValue, amountCents: null },
     { key: "lipSync", label: "Lip sync", value: newVoice && tier ? tier.label : "Not selected", amountCents: null },
   ];
 }

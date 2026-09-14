@@ -4,7 +4,8 @@ import { AlertTriangle, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type FormEvent } from "react";
 
-import type { CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
+import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
 import { formatCents } from "@/lib/ai/economy";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput, type LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
@@ -82,6 +83,38 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [maxUploadMb, setMaxUploadMb] = useState(String(Math.round(cr.maximumUploadBytes / (1024 * 1024))));
   const [trimMin, setTrimMin] = useState(String(cr.trim.minimumSeconds));
 
+  /* ── Part 6: the two new modes ── */
+  const modeState = (m: ReplacementModeConfig) => ({
+    enabled: m.enabled,
+    tiers: m.tiers.map((t) => ({ id: t.id, label: t.label, enabled: t.enabled, perSecond: minorToMajorInput(t.perSecondCents) })),
+    maxSeconds: String(m.maximumDurationSeconds),
+    maxUploadMb: String(Math.round(m.maximumUploadBytes / (1024 * 1024))),
+    maxPixels: String(m.maximumPixels),
+    maxReferences: String(m.maximumReferenceImages),
+    providerCostUsd: m.providerCostPerSecondUsdCents ? (m.providerCostPerSecondUsdCents / 100).toString() : "",
+    model: m.provider.model,
+  });
+  const [faceOnly, setFaceOnly] = useState(modeState(cr.modes.face_only));
+  const [skinFace, setSkinFace] = useState(modeState(cr.modes.skin_face));
+
+  /* ── Part 6: audio, voice (TTS), lip-sync models ── */
+  const [audioEnabled, setAudioEnabled] = useState(cr.audio.replacementEnabled);
+  const [audioMaxSeconds, setAudioMaxSeconds] = useState(String(cr.audio.maximumDurationSeconds));
+  const [audioMaxMb, setAudioMaxMb] = useState(String(Math.round(cr.audio.maximumUploadBytes / (1024 * 1024))));
+  const [shorterAudio, setShorterAudio] = useState<"silence" | "reject">(cr.audio.shorterAudio);
+  const [coverage, setCoverage] = useState(String(Math.round(cr.audio.minimumCoverageFraction * 100)));
+  const [syncMode, setSyncMode] = useState<"silence" | "loop" | "bounce">(cr.audio.syncMode);
+  const [ttsEnabled, setTtsEnabled] = useState(cr.tts.enabled);
+  const [ttsModel, setTtsModel] = useState(cr.tts.model);
+  const [ttsPerRequest, setTtsPerRequest] = useState(minorToMajorInput(cr.tts.perRequestCents));
+  const [ttsPerCharacter, setTtsPerCharacter] = useState(minorToMajorInput(cr.tts.perCharacterCents));
+  const [ttsMinChars, setTtsMinChars] = useState(String(cr.tts.minimumCharacters));
+  const [ttsMaxChars, setTtsMaxChars] = useState(String(cr.tts.maximumCharacters));
+  const [lipModels, setLipModels] = useState(cr.lipSync.map((l) => ({ id: l.id, model: l.model })));
+  const [lipMaxSeconds, setLipMaxSeconds] = useState(String(cr.lipSyncMaximumDurationSeconds));
+  /** §27: why the prices changed — asked for when they did, recorded beside the old version. */
+  const [reason, setReason] = useState("");
+
   /* ── recharge ── */
   const [minTopup, setMinTopup] = useState(minorToMajorInput(cr.recharge.minCents));
   const [maxTopup, setMaxTopup] = useState(minorToMajorInput(cr.recharge.maxCents));
@@ -117,7 +150,29 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         id: l.id,
         enabled: l.enabled,
         perSecondCents: majorInputToMinor(l.perSecond) ?? cr.lipSync.find((c) => c.id === l.id)?.perSecondCents ?? 0,
+        model: (lipModels.find((m) => m.id === l.id)?.model ?? "").trim() || (cr.lipSync.find((c) => c.id === l.id)?.model ?? ""),
       })),
+      lipSyncMaximumDurationSeconds: lipMaxSeconds.trim() === "" ? cr.lipSyncMaximumDurationSeconds : Math.floor(Number(lipMaxSeconds)),
+      modes: {
+        face_only: modePayload(faceOnly, cr.modes.face_only),
+        skin_face: modePayload(skinFace, cr.modes.skin_face),
+      },
+      audio: {
+        replacementEnabled: audioEnabled,
+        maximumDurationSeconds: audioMaxSeconds.trim() === "" ? cr.audio.maximumDurationSeconds : Math.floor(Number(audioMaxSeconds)),
+        maximumUploadBytes: audioMaxMb.trim() === "" ? cr.audio.maximumUploadBytes : Math.floor(Number(audioMaxMb)) * 1024 * 1024,
+        shorterAudio,
+        minimumCoverageFraction: coverage.trim() === "" ? cr.audio.minimumCoverageFraction : Math.max(0, Math.min(1, Number(coverage) / 100)),
+        syncMode,
+      },
+      tts: {
+        enabled: ttsEnabled,
+        model: ttsModel.trim() || cr.tts.model,
+        perRequestCents: majorInputToMinor(ttsPerRequest) ?? cr.tts.perRequestCents,
+        perCharacterCents: majorInputToMinor(ttsPerCharacter) ?? cr.tts.perCharacterCents,
+        minimumCharacters: ttsMinChars.trim() === "" ? cr.tts.minimumCharacters : Math.floor(Number(ttsMinChars)),
+        maximumCharacters: ttsMaxChars.trim() === "" ? cr.tts.maximumCharacters : Math.floor(Number(ttsMaxChars)),
+      },
       maximumDurationSeconds: maxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(maxSeconds)),
       maximumUploadBytes: maxUploadMb.trim() === "" ? cr.maximumUploadBytes : Math.floor(Number(maxUploadMb)) * 1024 * 1024,
       trim: { minimumSeconds: trimMin.trim() === "" ? cr.trim.minimumSeconds : Number(trimMin) },
@@ -129,7 +184,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [basePrice, cr, enabled, goFast, lipSyncEnabled, lipTiers, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, trimMin, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, coverage, cr, enabled, faceOnly, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -151,6 +206,18 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.recharge.packages.length === 0) out.push("Keep at least one recharge package.");
     if (payload.lipSyncEnabled && !payload.lipSync.some((l) => l.enabled)) out.push("Lip sync is on but no tier is on.");
+    /* ── Part 6 ── */
+    for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
+      if (!Number.isInteger(m.maximumDurationSeconds) || m.maximumDurationSeconds < 1 || m.maximumDurationSeconds > 120) out.push(`${label}: longest video must be between 1 and 120 seconds.`);
+      if (!(m.maximumUploadBytes >= 1024 * 1024 && m.maximumUploadBytes <= 100 * 1024 * 1024)) out.push(`${label}: largest upload must be between 1 and 100 MB.`);
+      if (!Number.isInteger(m.maximumReferenceImages) || m.maximumReferenceImages < 1 || m.maximumReferenceImages > 3) out.push(`${label}: reference images must be 1 to 3.`);
+      if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(m.provider.model)) out.push(`${label}: the model must look like owner/model.`);
+    }
+    if (!(payload.audio.maximumDurationSeconds >= 1 && payload.audio.maximumDurationSeconds <= 1800)) out.push("Longest audio must be between 1 and 1800 seconds.");
+    if (!(payload.tts.minimumCharacters >= 1 && payload.tts.maximumCharacters <= 10_000 && payload.tts.minimumCharacters <= payload.tts.maximumCharacters)) out.push("Dialogue length bounds must be 1 to 10,000 characters, minimum below maximum.");
+    if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(payload.tts.model)) out.push("The voice model must look like owner/model.");
+    for (const l of payload.lipSync) if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(l.model)) out.push(`${l.id} lip sync: the model must look like owner/model.`);
+    if (!(payload.lipSyncMaximumDurationSeconds >= 1 && payload.lipSyncMaximumDurationSeconds <= 120)) out.push("Lip sync's longest video must be between 1 and 120 seconds.");
     return out;
   }, [payload, symbol]);
 
@@ -173,8 +240,19 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.recharge.maxCents > 1_000_000_000) out.push(`Maximum recharge is ${formatCents(payload.recharge.maxCents, symbol)}.`);
     if (!payload.enabled && cr.enabled) out.push("This switches Character Replace OFF for every member.");
+    /* ── Part 6 §27: ₦0 or an unusual price on any mode or the voice ── */
+    for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
+      for (const t of m.tiers) {
+        if (!t.enabled) continue;
+        if (t.perSecondCents === 0) out.push(`${label} ${t.id} is free — its rate is zero.`);
+        if (t.perSecondCents * sixty > 5_000_000) out.push(`${label} ${t.id} prices a 60-second video at ${formatCents(t.perSecondCents * sixty, symbol)}.`);
+      }
+      if (!m.enabled && cr.modes[label === "Face Only" ? "face_only" : "skin_face"].enabled) out.push(`This switches ${label} OFF for every member.`);
+    }
+    if (payload.tts.enabled && payload.tts.perRequestCents === 0 && payload.tts.perCharacterCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("A generated voice is free — every voice fee is zero.");
+    if (payload.tts.perCharacterCents * payload.tts.maximumCharacters > 5_000_000) out.push(`The per-character fee prices the longest dialogue at ${formatCents(payload.tts.perCharacterCents * payload.tts.maximumCharacters, symbol)}.`);
     return out;
-  }, [cr.enabled, payload, symbol]);
+  }, [cr.enabled, cr.modes, payload, symbol]);
 
   const priceChanged = useMemo(() => {
     const before = cr;
@@ -190,7 +268,17 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       payload.lipSync.some((l) => {
         const b = before.lipSync.find((x) => x.id === l.id);
         return !b || b.perSecondCents !== l.perSecondCents || b.enabled !== l.enabled;
-      })
+      }) ||
+      (["face_only", "skin_face"] as const).some((id) =>
+        payload.modes[id].enabled !== before.modes[id].enabled ||
+        payload.modes[id].tiers.some((t) => {
+          const b = before.modes[id].tiers.find((x) => x.id === t.id);
+          return !b || b.perSecondCents !== t.perSecondCents || b.enabled !== t.enabled;
+        }),
+      ) ||
+      payload.tts.enabled !== before.tts.enabled ||
+      payload.tts.perRequestCents !== before.tts.perRequestCents ||
+      payload.tts.perCharacterCents !== before.tts.perCharacterCents
     );
   }, [cr, payload]);
 
@@ -204,8 +292,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       const res = await fetch("/api/admin/landing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // 🔴 One key. The route merges the nested object; nothing else is touched.
-        body: JSON.stringify({ frenzAiCharacterReplace: payload }),
+        // 🔴 One key. The route merges the nested object; nothing else is touched. The reason rides beside the prices (§27).
+        body: JSON.stringify({ frenzAiCharacterReplace: { ...payload, ...(priceChanged && reason.trim() ? { pricingChangeReason: reason.trim() } : {}) } }),
       });
       const json = await res.json();
       setMsg(
@@ -227,8 +315,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       setMsg({ ok: false, text: problems[0]! });
       return;
     }
-    if (warnings.length > 0 && confirming === null) {
-      setConfirming(warnings);
+    // §27: a price change is confirmed, and asked for a reason, before it is saved.
+    if ((warnings.length > 0 || priceChanged) && confirming === null) {
+      setConfirming(warnings.length ? warnings : ["Prices are changing. The current version is kept in the history; existing jobs keep their own snapshot."]);
       return;
     }
     void submit();
@@ -243,7 +332,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         <Coins className="h-5 w-5 text-primary" /> Character Replace pricing
       </h2>
       <p className="mb-2 text-sm text-muted-foreground">
-        What the Wan 2.2 tool costs a member, in {settings.frenzAiCurrency}. Every quote is calculated on the server from
+        What Character Replace costs a member, in {settings.frenzAiCurrency} — Full Character (Wan 2.2), Face Only and Skin + Face, the voice and the lip sync. Every quote is calculated on the server from
         these numbers; nothing here is read by the browser.
       </p>
       <p className="mb-6 text-xs text-muted-foreground">
@@ -315,17 +404,116 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           </div>
         </Group>
 
+        {/* ── REPLACEMENT MODES (Part 6) ── */}
+        {(
+          [
+            ["face_only", "Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, "xrunda/hello — swaps the face only; the model has ONE configuration, so High and Ultra cannot be honoured and stay off."],
+            ["skin_face", "Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, "prunaai/p-video-replace — identity and exposed skin; Standard = 720p turbo, High = 720p, Ultra = 1080p."],
+          ] as const
+        ).map(([id, label, st, set, map, blurb]) => (
+          <Group key={id} title={`${label} pricing`}>
+            <p className="mb-3 text-xs text-muted-foreground">{blurb}</p>
+            <Toggle label={`${label} is available`} hint="Off hides the mode on the selector. Nothing already running is affected." checked={st.enabled} onChange={(v) => set({ ...st, enabled: v })} />
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {st.tiers.map((t, i) => {
+                const supported = map[t.id].support === "supported";
+                return (
+                  <div key={t.id} className={cn("rounded-2xl border border-border/70 bg-background/60 p-3", !supported && "opacity-60")}>
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
+                      <input type="checkbox" checked={t.enabled && supported} disabled={!supported} onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)) })} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                      {t.label}
+                    </label>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{map[t.id].note}</p>
+                    <Field id={`cr-${id}-${t.id}`} label="Rate per second" className="mt-2">
+                      <input id={`cr-${id}-${t.id}`} type="number" inputMode="decimal" min={0} step="any" value={t.perSecond} disabled={!supported} onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)) })} className={cn(input, "disabled:opacity-50")} />
+                    </Field>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <Field id={`cr-${id}-max-seconds`} label="Longest video (seconds)" hint="1 to 120; never above the tool's own ceiling.">
+                <input id={`cr-${id}-max-seconds`} type="number" inputMode="numeric" min={1} max={120} value={st.maxSeconds} onChange={(e) => set({ ...st, maxSeconds: e.target.value })} className={input} />
+              </Field>
+              <Field id={`cr-${id}-max-upload`} label="Largest upload (MB)" hint="Same Storage caveat as above.">
+                <input id={`cr-${id}-max-upload`} type="number" inputMode="numeric" min={1} max={100} value={st.maxUploadMb} onChange={(e) => set({ ...st, maxUploadMb: e.target.value })} className={input} />
+              </Field>
+              <Field id={`cr-${id}-max-pixels`} label="Maximum resolution (pixels)" hint="Width × height of the source, e.g. 8294400 for 4K.">
+                <input id={`cr-${id}-max-pixels`} type="number" inputMode="numeric" min={640 * 360} max={3840 * 2160} value={st.maxPixels} onChange={(e) => set({ ...st, maxPixels: e.target.value })} className={input} />
+              </Field>
+              <Field id={`cr-${id}-max-refs`} label="Reference images" hint={id === "face_only" ? "Face Only takes one." : "Up to three photos of the same person."}>
+                <input id={`cr-${id}-max-refs`} type="number" inputMode="numeric" min={1} max={id === "face_only" ? 1 : 3} value={st.maxReferences} onChange={(e) => set({ ...st, maxReferences: e.target.value })} className={input} />
+              </Field>
+              <Field id={`cr-${id}-cost`} label="Provider cost estimate ($ per second)" hint="Your estimate of the Replicate bill. Recorded on every job beside the member's charge; never shown to members.">
+                <input id={`cr-${id}-cost`} type="number" inputMode="decimal" min={0} step="any" value={st.providerCostUsd} onChange={(e) => set({ ...st, providerCostUsd: e.target.value })} className={input} />
+              </Field>
+              <Field id={`cr-${id}-model`} label="Model" hint="Provider: Replicate. owner/model; the version pin lives with the adapter.">
+                <input id={`cr-${id}-model`} type="text" value={st.model} onChange={(e) => set({ ...st, model: e.target.value })} className={cn(input, "font-mono text-xs")} />
+              </Field>
+            </div>
+          </Group>
+        ))}
+
         {/* ── VOICE ── */}
         <Group title="Voice">
           <Toggle
             label="Offer a new voice"
-            hint="Off keeps every member on their original audio and hides the Voice & Language choices. The voice model is not connected yet either way."
+            hint="Off keeps every member on their original audio and hides the Voice & Language choices."
             checked={newVoice}
             onChange={setNewVoice}
           />
           <div className="mt-4">
             <Field id="cr-voice-surcharge" label="New-voice surcharge per second" hint="Added per second when a new voice is chosen. Zero means the voice is included.">
               <input id="cr-voice-surcharge" type="number" inputMode="decimal" min={0} step="any" value={voiceSurcharge} onChange={(e) => setVoiceSurcharge(e.target.value)} className={cn(input, "sm:max-w-xs")} />
+            </Field>
+          </div>
+          <div className="mt-5 border-t border-border/60 pt-4">
+            <Toggle label="Generate a voice from text" hint="Text-to-speech through Replicate. The languages offered are your catalogue intersected with what the model speaks." checked={ttsEnabled} onChange={setTtsEnabled} />
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <Field id="cr-tts-model" label="Voice model" hint="Provider: Replicate. minimax/speech-02-hd or minimax/speech-02-turbo today.">
+                <input id="cr-tts-model" type="text" value={ttsModel} onChange={(e) => setTtsModel(e.target.value)} className={cn(input, "font-mono text-xs")} />
+              </Field>
+              <Field id="cr-tts-request" label="Price per generated voice" hint="Charged once per job that generates a voice.">
+                <input id="cr-tts-request" type="number" inputMode="decimal" min={0} step="any" value={ttsPerRequest} onChange={(e) => setTtsPerRequest(e.target.value)} className={input} />
+              </Field>
+              <Field id="cr-tts-char" label="Price per character" hint="Charged per character of dialogue.">
+                <input id="cr-tts-char" type="number" inputMode="decimal" min={0} step="any" value={ttsPerCharacter} onChange={(e) => setTtsPerCharacter(e.target.value)} className={input} />
+              </Field>
+              <Field id="cr-tts-min" label="Shortest dialogue (characters)">
+                <input id="cr-tts-min" type="number" inputMode="numeric" min={1} max={10000} value={ttsMinChars} onChange={(e) => setTtsMinChars(e.target.value)} className={input} />
+              </Field>
+              <Field id="cr-tts-max" label="Longest dialogue (characters)">
+                <input id="cr-tts-max" type="number" inputMode="numeric" min={1} max={10000} value={ttsMaxChars} onChange={(e) => setTtsMaxChars(e.target.value)} className={input} />
+              </Field>
+            </div>
+          </div>
+        </Group>
+
+        {/* ── AUDIO (Part 6) ── */}
+        <Group title="Audio">
+          <Toggle label="Members may upload their own replacement audio" hint="MP3, WAV, M4A, AAC, OGG. Off leaves generated voices as the only new-voice source." checked={audioEnabled} onChange={setAudioEnabled} />
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Field id="cr-audio-max-seconds" label="Longest audio (seconds)">
+              <input id="cr-audio-max-seconds" type="number" inputMode="numeric" min={1} max={1800} value={audioMaxSeconds} onChange={(e) => setAudioMaxSeconds(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-audio-max-mb" label="Largest audio upload (MB)">
+              <input id="cr-audio-max-mb" type="number" inputMode="numeric" min={1} max={100} value={audioMaxMb} onChange={(e) => setAudioMaxMb(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-audio-shorter" label="Audio shorter than the video" hint="Pad the end with silence, or refuse the job before it is charged.">
+              <select id="cr-audio-shorter" value={shorterAudio} onChange={(e) => setShorterAudio(e.target.value as "silence" | "reject")} className={input}>
+                <option value="silence">Pad with silence</option>
+                <option value="reject">Refuse</option>
+              </select>
+            </Field>
+            <Field id="cr-audio-coverage" label="Least of the video the audio must cover (%)" hint="Below this the job is refused. 0 disables.">
+              <input id="cr-audio-coverage" type="number" inputMode="numeric" min={0} max={100} value={coverage} onChange={(e) => setCoverage(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-audio-sync" label="Lip-sync residual mode" hint="What the lip-sync model does with a frame's rounding after our own fit. Never cut_off or remap.">
+              <select id="cr-audio-sync" value={syncMode} onChange={(e) => setSyncMode(e.target.value as "silence" | "loop" | "bounce")} className={input}>
+                <option value="silence">Silence</option>
+                <option value="loop">Loop</option>
+                <option value="bounce">Bounce</option>
+              </select>
             </Field>
           </div>
         </Group>
@@ -348,8 +536,22 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                 <Field id={`cr-lip-${l.id}`} label="Per second" className="mt-3">
                   <input id={`cr-lip-${l.id}`} type="number" inputMode="decimal" min={0} step="any" value={l.perSecond} onChange={(e) => setLipTiers((ts) => ts.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)))} className={input} />
                 </Field>
+                <Field id={`cr-lip-model-${l.id}`} label="Model" hint="Provider: Replicate. sync/lipsync-2 or sync/lipsync-2-pro today." className="mt-3">
+                  <input
+                    id={`cr-lip-model-${l.id}`}
+                    type="text"
+                    value={lipModels.find((m) => m.id === l.id)?.model ?? ""}
+                    onChange={(e) => setLipModels((ms) => ms.map((m) => (m.id === l.id ? { ...m, model: e.target.value } : m)))}
+                    className={cn(input, "font-mono text-xs")}
+                  />
+                </Field>
               </div>
             ))}
+          </div>
+          <div className="mt-4">
+            <Field id="cr-lip-max" label="Longest video for lip sync (seconds)" hint="1 to 120. A longer kept range hides the lip-sync toggle.">
+              <input id="cr-lip-max" type="number" inputMode="numeric" min={1} max={120} value={lipMaxSeconds} onChange={(e) => setLipMaxSeconds(e.target.value)} className={cn(input, "sm:max-w-xs")} />
+            </Field>
           </div>
         </Group>
 
@@ -416,6 +618,11 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                 <li key={w}>{w}</li>
               ))}
             </ul>
+            {priceChanged ? (
+              <Field id="cr-reason" label="Reason for the price change (recorded in the pricing history)" className="mt-3">
+                <input id="cr-reason" type="text" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. provider cost went up" className={input} />
+              </Field>
+            ) : null}
             <div className="mt-3 flex gap-2">
               <button type="button" disabled={busy} onClick={() => void submit()} className="btn-lux btn-lux-primary">
                 {busy ? "Saving…" : "Save anyway"}
@@ -440,6 +647,23 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
 }
 
 /* ───────────────────────────── pieces ────────────────────────────────────── */
+
+/** One mode's form state → the route's shape. Empty boxes keep the stored value. */
+function modePayload(
+  st: { enabled: boolean; tiers: { id: "standard" | "high" | "ultra"; enabled: boolean; perSecond: string }[]; maxSeconds: string; maxUploadMb: string; maxPixels: string; maxReferences: string; providerCostUsd: string; model: string },
+  before: ReplacementModeConfig,
+) {
+  return {
+    enabled: st.enabled,
+    tiers: st.tiers.map((t) => ({ id: t.id, enabled: t.enabled, perSecondCents: majorInputToMinor(t.perSecond) ?? before.tiers.find((b) => b.id === t.id)?.perSecondCents ?? 0 })),
+    maximumDurationSeconds: st.maxSeconds.trim() === "" ? before.maximumDurationSeconds : Math.floor(Number(st.maxSeconds)),
+    maximumUploadBytes: st.maxUploadMb.trim() === "" ? before.maximumUploadBytes : Math.floor(Number(st.maxUploadMb)) * 1024 * 1024,
+    maximumPixels: st.maxPixels.trim() === "" ? before.maximumPixels : Math.floor(Number(st.maxPixels)),
+    maximumReferenceImages: st.maxReferences.trim() === "" ? before.maximumReferenceImages : Math.floor(Number(st.maxReferences)),
+    providerCostPerSecondUsdCents: st.providerCostUsd.trim() === "" ? before.providerCostPerSecondUsdCents : Math.max(0, Number(st.providerCostUsd) * 100),
+    provider: { model: st.model.trim() || before.provider.model },
+  };
+}
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (

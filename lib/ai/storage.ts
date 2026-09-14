@@ -77,6 +77,29 @@ export function aiCharacterKey(userId: string, feature: AiFeature, jobId: string
 export function aiPreparedKey(userId: string, feature: AiFeature, jobId: string): string {
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/prepared.mp4`;
 }
+/*
+  Part 6: a job folder may also hold up to two EXTRA identity photos (Skin +
+  Face), the member's replacement audio as uploaded, the worker's prepared
+  WAV, and the replacement stage's output brought home for the lip-sync
+  stage. All under the same prefix; `pathBelongsTo` answers for all of them.
+*/
+export function aiReferenceKey(userId: string, feature: AiFeature, jobId: string, index: number, ext: string): string {
+  const n = Math.max(2, Math.min(9, Math.floor(index)));
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/character-${n}.${safeExt(ext)}`;
+}
+export function aiVoiceKey(userId: string, feature: AiFeature, jobId: string, ext: string): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/voice.${safeExt(ext)}`;
+}
+export function aiVoicePreparedKey(userId: string, feature: AiFeature, jobId: string): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/voice-prepared.wav`;
+}
+export function aiStageKey(userId: string, feature: AiFeature, jobId: string, stage: "replace" | "voice"): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/${stage === "voice" ? "voice-prepared.wav" : "replaced.mp4"}`;
+}
+/** The folder every object of one job lives in — what the retention sweep lists and removes. */
+export function aiJobFolder(userId: string, feature: AiFeature, jobId: string): string {
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}`;
+}
 export function aiResultKey(userId: string, feature: AiFeature, jobId: string, ext: string): string {
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/result.${safeExt(ext)}`;
 }

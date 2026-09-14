@@ -41,6 +41,7 @@ export function CharacterReplaceJobsTable({ jobs, symbol }: { jobs: CharacterRep
               <tr>
                 <th className="py-2 pr-3 font-semibold">When</th>
                 <th className="py-2 pr-3 font-semibold">Status</th>
+                <th className="py-2 pr-3 font-semibold">Mode · stage</th>
                 <th className="py-2 pr-3 font-semibold">Quality</th>
                 <th className="py-2 pr-3 font-semibold">Length</th>
                 <th className="py-2 pr-3 font-semibold">Charged</th>
@@ -79,6 +80,13 @@ export function CharacterReplaceJobsTable({ jobs, symbol }: { jobs: CharacterRep
                         {j.status}
                       </span>
                     </td>
+                    <td className="py-2 pr-3 text-[11px]" title={j.model ?? undefined}>
+                      <span className="font-semibold">{j.mode === "face_only" ? "Face Only" : j.mode === "skin_face" ? "Skin + Face" : "Full Character"}</span>
+                      {j.stage ? <span className="ml-1 rounded-full bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{j.stage}</span> : null}
+                      {j.voiceSource ? <span className="ml-1 text-muted-foreground">{j.voiceSource === "tts" ? "voice: text" : "voice: upload"}</span> : null}
+                      {j.lipSyncMode ? <span className="ml-1 text-muted-foreground">· {j.lipSyncMode} lip sync</span> : null}
+                      {j.model ? <span className="block font-mono text-[10px] text-muted-foreground/80">{j.model}</span> : null}
+                    </td>
                     <td className="py-2 pr-3">{j.quality ?? "—"}</td>
                     <td className="py-2 pr-3 tabular-nums">
                       {j.durationMs !== null ? `${(j.durationMs / 1000).toFixed(1)} s` : "—"}
@@ -87,6 +95,10 @@ export function CharacterReplaceJobsTable({ jobs, symbol }: { jobs: CharacterRep
                     <td className="py-2 pr-3 tabular-nums">
                       {j.chargedCents !== null ? `${symbol}${(j.chargedCents / 100).toFixed(2)}` : "—"}
                       {j.refunded ? <span className="ml-1 font-semibold text-amber-600">refunded</span> : null}
+                      {j.rateCents !== null ? <span className="block text-[10px] text-muted-foreground">{`${symbol}${(j.rateCents / 100).toFixed(2)}/s`}</span> : null}
+                      {j.providerCostUsdCents !== null ? (
+                        <span className="block text-[10px] text-muted-foreground" title="Operator's estimate of the provider bill">{`est. provider $${(j.providerCostUsdCents / 100).toFixed(2)}`}</span>
+                      ) : null}
                     </td>
                     <td className="py-2 pr-3">
                       {j.errorCode ? (

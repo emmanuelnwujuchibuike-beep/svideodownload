@@ -1,8 +1,12 @@
 import "server-only";
 
 import { FINALIZE_MAX_ATTEMPTS as MAX_FINALIZE_ATTEMPTS } from "@/lib/ai/character-replace/finalize-policy";
+import { readPipeline } from "@/lib/ai/character-replace/job-meta";
+import { isProviderStage, nextStage } from "@/lib/ai/character-replace/pipeline";
 import { aiErrorMessage } from "@/lib/ai/errors";
-import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
+import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
+import { aiFeature } from "@/lib/ai/jobs";
+import { submitJobToProvider } from "@/lib/ai/submit";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { listNotifyPendingJobs, listRecoverableJobs, transitionJob } from "@/lib/ai/job-store";
@@ -91,6 +95,39 @@ export async function recoverJob(row: AiJobRow, now: number = Date.now()): Promi
       }
       if (!due) return "none";
       return await redispatch(row, "finalizing");
+    }
+
+    /* ── Part 6: a finished stage the worker never brought home ───────────── */
+    const pipeline = retryable ? readPipeline(row.metadata) : null;
+    if (row.status === "processing" && pipeline?.pending_advance && isProviderStage(pipeline.pending_advance)) {
+      const following = nextStage(pipeline, pipeline.pending_advance);
+      if (following && isProviderStage(following)) {
+        const notedAt = typeof meta.noted_at === "string" ? Date.parse(meta.noted_at) : NaN;
+        if (meta.advance_dispatch === "ok" && Number.isFinite(notedAt) && now - notedAt < DISPATCH_GRACE_MS) return "working";
+        if (leased) return "working";
+        const dispatch = await dispatchAdvance(row.id);
+        await recordJobEvent(row.id, "reconcile.redispatched", { from: "processing", stage: pipeline.pending_advance, kind: "advance", dispatched: dispatch.dispatched, ...(dispatch.dispatched ? {} : { reason: dispatch.reason }) });
+        return dispatch.dispatched ? "redispatched" : "redispatch-failed";
+      }
+    }
+
+    /* ── Part 6: a stage advanced but its prediction was never created ──────── */
+    if (row.status === "processing" && pipeline && pipeline.current !== "finalize" && (pipeline.records[pipeline.current]?.status ?? "pending") === "pending" && !pipeline.pending_advance) {
+      if (leased) return "working";
+      const stageStarted = typeof pipeline.stage_started_at === "string" ? Date.parse(pipeline.stage_started_at) : NaN;
+      // The advance wrote the plan a moment ago and the submit may still be in flight; give it the same grace.
+      if (Number.isFinite(stageStarted) && now - stageStarted < DISPATCH_GRACE_MS) return "working";
+      const feature = aiFeature(row.feature);
+      if (feature) {
+        try {
+          const { row: moved } = await submitJobToProvider(row, feature, { from: ["processing"] });
+          await recordJobEvent(row.id, "reconcile.redispatched", { from: "processing", stage: pipeline.current, kind: "submit", submitted: !!moved });
+          return moved ? "redispatched" : "working";
+        } catch (e) {
+          console.error("[ai/recovery] stage submit failed", { jobId: row.id, stage: pipeline.current, error: String(e).slice(0, 200) });
+          return "redispatch-failed";
+        }
+      }
     }
 
     /* ── the provider finished; did the worker ever hear? ────────────────── */

@@ -766,6 +766,20 @@
     .frenz-loader-bar { animation-duration: 2.4s; }
   }
 
+  /* The "working" dot on a Character Replace stage row (Part 6 §21) — a
+     stage-based tracker's only motion: a soft pulse, opacity only, still
+     under reduced motion. */
+  @keyframes frenz-pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  .frenz-pulse-dot {
+    animation: frenz-pulse-dot 1.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .frenz-pulse-dot { animation: none; }
+  }
+
   /* Reusable entrance animations — GPU-friendly (transform + opacity only),
      driven by the shared motion tokens. */
   @keyframes fade-up {

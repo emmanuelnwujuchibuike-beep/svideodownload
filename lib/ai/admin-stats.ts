@@ -179,6 +179,18 @@ export interface CharacterReplaceAdminJob {
   notifyPending: boolean;
   /** Past the stage's deadline, or a finalization retry waiting with no lease. */
   stuck: boolean;
+  /* ── Part 6: which replacement, which provider stage, what it cost us ── */
+  mode: "face_only" | "skin_face" | "full_character";
+  /** The model of the CURRENT stage's prediction (`ai_jobs.model`). */
+  model: string | null;
+  /** "voice" | "replace" | "lipsync" | "finalize" — the pipeline's current stage, or null for a single-stage row. */
+  stage: string | null;
+  voiceSource: "upload" | "tts" | null;
+  lipSyncMode: string | null;
+  /** The operator's estimate of the provider bill, US cents. Null when no estimate was configured. */
+  providerCostUsdCents: number | null;
+  /** The quoted per-second customer rate, minor units. */
+  rateCents: number | null;
 }
 
 /** The counts the operator wants at a glance (§35), from the rows already read. Pure. */
@@ -213,7 +225,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
     const db = createAdminClient();
     const { data, error } = await db
       .from("ai_jobs")
-      .select("id, user_id, status, charged_cents, replicate_prediction_id, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata")
+      .select("id, user_id, status, charged_cents, replicate_prediction_id, model, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata")
       .eq("feature", "ai_character_replace")
       .order("created_at", { ascending: false })
       .limit(Math.max(1, Math.min(100, limit)));
@@ -224,6 +236,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
       status: AiJobStatus;
       charged_cents: number | null;
       replicate_prediction_id: string | null;
+      model: string | null;
       model_version: string | null;
       error_code: string | null;
       created_at: string;
@@ -253,11 +266,21 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
     }
     return rows.map((r) => {
       const m = r.metadata ?? {};
-      const settings = (m.settings ?? {}) as { quality?: unknown };
+      const settings = (m.settings ?? {}) as { quality?: unknown; voiceMode?: unknown; lipSyncMode?: unknown };
       const prepared = (m.prepared ?? null) as { durationMs?: unknown; trimmed?: unknown } | null;
-      const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown } | null;
+      const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown; qualityRateCents?: unknown } | null;
       const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const pipeline = (m.pipeline ?? null) as { current?: unknown } | null;
+      const audio = (m.audio ?? null) as { source?: unknown } | null;
+      const cost = (m.provider_cost_estimate ?? null) as { totalUsdCents?: unknown } | null;
       return {
+        mode: m.mode === "face_only" || m.mode === "skin_face" ? m.mode : "full_character",
+        model: r.model,
+        stage: typeof pipeline?.current === "string" ? pipeline.current : null,
+        voiceSource: settings.voiceMode === "new_voice" && (audio?.source === "upload" || audio?.source === "tts") ? audio.source : null,
+        lipSyncMode: typeof settings.lipSyncMode === "string" ? settings.lipSyncMode : null,
+        providerCostUsdCents: num(cost?.totalUsdCents),
+        rateCents: num(quote?.qualityRateCents),
         id: r.id,
         createdAt: r.created_at,
         startedAt: r.started_at,
@@ -282,7 +305,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
         notifiedAt: r.notified_at,
         notifyPending: m.notify_pending === true && !r.notified_at,
         stuck:
-          stalledForMs({ id: r.id, status: r.status, created_at: r.created_at, started_at: r.started_at }, now) !== null ||
+          stalledForMs({ id: r.id, status: r.status, created_at: r.created_at, started_at: r.started_at, metadata: m }, now) !== null ||
           (r.status === "finalizing" && !r.finalize_lease_until && !!r.finalize_next_at && Date.parse(r.finalize_next_at) < now - 15 * 60_000),
       };
     });

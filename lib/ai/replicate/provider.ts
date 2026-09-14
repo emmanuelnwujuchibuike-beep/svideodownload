@@ -78,6 +78,49 @@ export async function replicateCall(
   }
 }
 
+/**
+ * ── One async prediction, for every adapter (Part 6) ────────────────────────
+ *
+ * Face Only, Skin + Face, text-to-speech and lip sync each pin their own
+ * model version and build their own input; what they share is this call —
+ * the token, the timeout, the webhook events filter, the 402/429
+ * classification and the "no id" refusal. Kept here so the five adapters
+ * cannot drift on any of it. Returns the prediction body; the caller maps
+ * it with `toState`.
+ */
+export async function createReplicatePrediction(opts: {
+  jobId: string;
+  version: string;
+  input: Record<string, unknown>;
+  webhookUrl: string;
+  /** For the log line. Never sent. */
+  label: string;
+}): Promise<ReplicatePrediction & { id: string }> {
+  const res = await replicateCall("/predictions", {
+    method: "POST",
+    body: JSON.stringify({
+      version: opts.version,
+      input: opts.input,
+      webhook: opts.webhookUrl,
+      webhook_events_filter: ["start", "completed"],
+    }),
+  });
+  if (!res.ok) {
+    // 402/429 are OUR account (credit, throttling), not this job.
+    const ourProblem = res.status === 402 || res.status === 429;
+    console.error(`[ai/replicate] ${opts.label} create rejected`, {
+      jobId: opts.jobId,
+      status: res.status,
+      classified: ourProblem ? "PROVIDER_UNAVAILABLE" : "PROVIDER_ERROR",
+      body: res.text.slice(0, 500),
+    });
+    throw new AiJobError(ourProblem ? "PROVIDER_UNAVAILABLE" : "PROVIDER_ERROR", `replicate ${res.status}: ${res.text.slice(0, 500)}`);
+  }
+  const body = (res.json ?? {}) as ReplicatePrediction;
+  if (!body.id) throw new AiJobError("PROVIDER_ERROR", "replicate accepted the job but returned no prediction id");
+  return body as ReplicatePrediction & { id: string };
+}
+
 export interface ReplicatePrediction {
   id?: string;
   status?: string;

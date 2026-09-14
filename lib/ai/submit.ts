@@ -89,7 +89,8 @@ export async function submitJobToProvider(
       submission: {
         reference: submission.reference,
         modelVersion: submission.modelVersion,
-        engine: "wan-2.2-animate-replace",
+        // Part 6: the stage that was submitted — voice, replace or lipsync — and the model the router chose.
+        engine: `${submission.stage}:${submission.model}`,
         hardware: "gpu",
         modelTier: "standard",
         audience: "free",

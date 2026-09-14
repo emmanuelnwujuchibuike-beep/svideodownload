@@ -110,6 +110,18 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
     AiJobRow,
     "id" | "status" | "source_path" | "result_path" | "poster_path"
   >[]) {
+    /*
+      Part 6: a Character Replace job's folder holds more than its source —
+      the reference photo(s), the prepared cut, the member's voice as
+      uploaded, the prepared WAV, the replaced video brought home for lip
+      sync. Voice files are the most private of these (§24). The whole
+      folder goes, listed from the source path's own prefix; the three
+      columns below are removed by name as before, so a row whose folder
+      listing fails still loses what it names.
+    */
+    const swept = await removeJobFolder(admin, row.source_path);
+    result.objectsDeleted += swept.deleted;
+    result.errors += swept.errors;
     const removed = await removeObjects(admin, [
       { bucket: AI_SOURCE_BUCKET, path: row.source_path },
       { bucket: AI_RESULT_BUCKET, path: row.result_path },
@@ -171,6 +183,9 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
   }
 
   for (const row of (deadRows ?? []) as Pick<AiJobRow, "id" | "source_path">[]) {
+    const swept = await removeJobFolder(admin, row.source_path);
+    result.objectsDeleted += swept.deleted;
+    result.errors += swept.errors;
     const removed = await removeObjects(admin, [{ bucket: AI_SOURCE_BUCKET, path: row.source_path }]);
     result.objectsDeleted += removed.deleted;
     result.errors += removed.errors;
@@ -204,6 +219,37 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
  * A path that is already null is not an error and not a deletion; it is a job
  * that never got that far.
  */
+/**
+ * Every object beside the source in ITS job folder (`<user>/<feature>/<job>/`),
+ * removed in one call. Listing then removing is two round trips per job; the
+ * sweep runs in batches of a hundred on a cron, so that is fine. The source
+ * itself is removed by name afterwards, whatever the listing said.
+ */
+async function removeJobFolder(admin: ReturnType<typeof createAdminClient>, sourcePath: string | null): Promise<{ deleted: number; errors: number }> {
+  if (!sourcePath) return { deleted: 0, errors: 0 };
+  const segments = sourcePath.split("/");
+  if (segments.length !== 4) return { deleted: 0, errors: 0 };
+  const folder = segments.slice(0, 3).join("/");
+  try {
+    const { data, error } = await admin.storage.from(AI_SOURCE_BUCKET).list(folder, { limit: 100 });
+    if (error) {
+      console.warn("[ai/retention] folder list failed", { folder: folder.slice(-40), message: error.message });
+      return { deleted: 0, errors: 1 };
+    }
+    const names = (data ?? []).map((o) => o.name).filter((n) => n && n !== segments[3]);
+    if (!names.length) return { deleted: 0, errors: 0 };
+    const { error: removeError } = await admin.storage.from(AI_SOURCE_BUCKET).remove(names.map((n) => `${folder}/${n}`));
+    if (removeError) {
+      console.warn("[ai/retention] folder remove failed", { folder: folder.slice(-40), message: removeError.message });
+      return { deleted: 0, errors: 1 };
+    }
+    return { deleted: names.length, errors: 0 };
+  } catch (e) {
+    console.warn("[ai/retention] folder sweep threw", { error: e instanceof Error ? e.name : "unknown" });
+    return { deleted: 0, errors: 1 };
+  }
+}
+
 async function removeObjects(
   admin: ReturnType<typeof createAdminClient>,
   targets: { bucket: string; path: string | null }[],

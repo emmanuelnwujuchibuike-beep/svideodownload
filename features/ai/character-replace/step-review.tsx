@@ -4,12 +4,13 @@ import { AlertTriangle, Check, Plus, ShieldCheck } from "lucide-react";
 import { useCallback, useId, useState } from "react";
 
 import { CharacterReplaceBalanceCard } from "@/features/ai/character-replace/balance-card";
-import { CharacterReplacePricingSummary } from "@/features/ai/character-replace/pricing-summary";
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
+import { VideoGenerationCostPreview } from "@/features/ai/character-replace/video-generation-cost-preview";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import { REPLACEMENT_MODE_COPY } from "@/lib/ai/character-replace/modes";
 import { affordability } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance, CharacterReplaceProject, PricingState } from "@/lib/ai/character-replace/types";
-import { formatSeconds, selectedDurationSeconds, summaryLines, trimmedSeconds } from "@/lib/ai/character-replace/workspace";
+import { formatSeconds, selectedDurationSeconds } from "@/lib/ai/character-replace/workspace";
 import { formatCents } from "@/lib/ai/economy";
 import { formatResolution } from "@/lib/ai/media";
 import { haptic } from "@/lib/motion/haptics";
@@ -63,10 +64,10 @@ export function CharacterReplaceReviewStep({
   onConsent: (value: boolean) => void;
 }) {
   const consentId = useId();
-  const lines = summaryLines(project, config);
   const character = project.character;
   const video = project.video;
   const symbol = balance?.symbol ?? config.symbol;
+  const mode = REPLACEMENT_MODE_COPY[project.mode];
 
   const snapshot = pricing.status === "quoted" || pricing.status === "stale" ? pricing.snapshot : null;
   const money = snapshot && balance ? affordability(snapshot.totalCents, balance.balanceCents) : null;
@@ -83,9 +84,14 @@ export function CharacterReplaceReviewStep({
   return (
     <div className="space-y-4">
       {/* ── what is about to be made ────────────────────────────────────── */}
+      <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Replacement</p>
+        <p className="mt-0.5 text-[15px] font-bold tracking-[-0.01em]">{mode.label}</p>
+        <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{mode.explanation}</p>
+      </div>
       {character && video ? (
         <div className="grid grid-cols-2 gap-3">
-          <Thumb label="Your photo" sub={formatResolution(character.width, character.height) ?? character.name}>
+          <Thumb label={project.references.length ? `Your photos (${project.references.length + 1})` : "Your photo"} sub={formatResolution(character.width, character.height) ?? character.name}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={character.objectUrl} alt="" className="h-full w-full object-cover" />
           </Thumb>
@@ -95,7 +101,8 @@ export function CharacterReplaceReviewStep({
         </div>
       ) : null}
 
-      <CharacterReplacePricingSummary lines={lines} pricing={pricing} trimmed={trimmedSeconds(project)} symbol={symbol} onRetry={onRetryQuote} />
+      {/* ── the price, live (Part 6 §12): every line, from the server ──── */}
+      <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} />
 
       <CharacterReplaceBalanceCard
         balance={balance}
@@ -105,16 +112,16 @@ export function CharacterReplaceReviewStep({
         onRecharge={openSheet}
       />
 
-      {/* ── the money, side by side (§14) ──────────────────────────────── */}
+      {/* ── the money, side by side (§14; Part 6 §12) ──────────────────── */}
       {short && money && snapshot && balance ? (
         <div role="status" className="rounded-[1.25rem] border border-amber-500/35 bg-amber-500/[0.07] px-4 py-3.5">
           <p className="flex items-center gap-2 text-[13.5px] font-bold">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
-            Insufficient balance
+            You need {formatCents(money.shortfallCents, balance.symbol)} more
           </p>
           <dl className="mt-2.5 space-y-1.5 text-[13.5px]">
             <Row label="Required" value={formatCents(snapshot.totalCents, snapshot.symbol)} />
-            <Row label="Available" value={formatCents(balance.balanceCents, balance.symbol)} />
+            <Row label="Character Replace balance" value={formatCents(balance.balanceCents, balance.symbol)} />
             <Row label="Short by" value={formatCents(money.shortfallCents, balance.symbol)} strong />
           </dl>
           <button
@@ -129,15 +136,15 @@ export function CharacterReplaceReviewStep({
             )}
           >
             <Plus className="h-4 w-4" aria-hidden />
-            Recharge {formatCents(money.shortfallCents, balance.symbol)} or more
+            Recharge Character Replace
           </button>
         </div>
       ) : money && snapshot && balance && pricing.status === "quoted" ? (
         <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3">
           <dl className="space-y-1.5 text-[13.5px]">
-            <Row label="Balance" value={formatCents(balance.balanceCents, balance.symbol)} />
+            <Row label="Character Replace balance" value={formatCents(balance.balanceCents, balance.symbol)} />
             <Row label="This video" value={`− ${formatCents(snapshot.totalCents, snapshot.symbol)}`} />
-            <Row label="After processing" value={formatCents(money.afterCents, balance.symbol)} strong />
+            <Row label="Balance after processing" value={formatCents(money.afterCents, balance.symbol)} strong />
           </dl>
         </div>
       ) : null}

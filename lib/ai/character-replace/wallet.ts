@@ -220,7 +220,15 @@ function quoteKey(): string {
 }
 
 export function quoteCanonical(q: CharacterReplaceQuote): string {
-  return JSON.stringify({
+  /*
+    Part 6 added three signed fields — the MODE (a Face Only price handed
+    back as a Full Character job would be a forged mode), the voice source
+    and the dialogue length (a TTS price for 40 characters handed back with
+    4,000 would be a forged voice price). A Full Character quote with the
+    original audio canonicalises to the SAME string as before Part 6, so a
+    quote a member was holding when this shipped still verifies.
+  */
+  const base: Record<string, unknown> = {
     p: q.product,
     v: q.pricingConfigVersion,
     d: q.durationMs,
@@ -230,7 +238,11 @@ export function quoteCanonical(q: CharacterReplaceQuote): string {
     t: q.totalCents,
     c: q.currency,
     e: q.expiresAt,
-  });
+  };
+  if (q.mode && q.mode !== "full_character") base.m = q.mode;
+  if (q.voiceSource) base.vs = q.voiceSource;
+  if (q.ttsCharacters) base.tc = q.ttsCharacters;
+  return JSON.stringify(base);
 }
 
 export function signQuote(q: CharacterReplaceQuote): string {

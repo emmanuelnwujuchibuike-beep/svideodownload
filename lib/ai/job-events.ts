@@ -30,6 +30,13 @@ export type AiJobEventKind =
   | "provider.submitted"
   | "prepare.started"
   | "prepare.failed"
+  /* Part 6: the voice, and the hand-over between provider stages */
+  | "audio.prepared"
+  | "audio.rejected"
+  | "advance.claimed"
+  | "advance.completed"
+  | "advance.failed"
+  | "advance.retry_scheduled"
   | "finalize.claimed"
   | "finalize.retry_scheduled"
   | "finalize.gave_up"

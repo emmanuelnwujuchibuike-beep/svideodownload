@@ -32,6 +32,16 @@
  * under.
  */
 
+import {
+  FACE_ONLY_TIER_MAP,
+  REPLACEMENT_MODE_COPY,
+  SKIN_FACE_TIER_MAP,
+  isReplacementTierId,
+  type ReplacementMode,
+  type ReplacementTierId,
+} from "@/lib/ai/character-replace/modes";
+import { ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
+
 /* ───────────────────────────── qualities ─────────────────────────────────── */
 
 export type CharacterReplaceQualityId = "480p" | "720p" | "1080p";
@@ -76,6 +86,14 @@ export interface CharacterReplaceLipSyncOption {
   /** Added per second of video when this tier is chosen. Input to the engine. */
   perSecondCents: number;
   enabled: boolean;
+  /**
+   * Part 6 §8/§26: which lip-sync model runs this tier. The provider is
+   * Replicate for both today; the model name is the operator's to change
+   * without a deploy (the version pin lives with the adapter, lib/ai/voice/
+   * lipsync-provider.ts). Never shown to a member.
+   */
+  provider: "replicate";
+  model: string;
 }
 
 export interface CharacterReplaceLanguage {
@@ -93,6 +111,83 @@ export interface CharacterReplaceVoice {
   blurb: string;
   /** Languages this voice can speak; empty means every configured language. */
   languages: readonly string[];
+  /**
+   * The configured TTS provider's own id for this voice (Part 6 §5). Empty
+   * means "the provider's default voice". Members see `label`, never this.
+   */
+  providerVoiceId: string;
+}
+
+/* ───────────────────────────── replacement modes (Part 6) ────────────────── */
+
+/** One quality tier of a replacement mode: its own per-second rate, on or off. */
+export interface ReplacementTier {
+  id: ReplacementTierId;
+  label: string;
+  hint: string;
+  /** Per second of video, in minor units of the AI currency. The customer rate. */
+  perSecondCents: number;
+  enabled: boolean;
+}
+
+/**
+ * The operator-tunable half of a replacement mode (Face Only brief §6,
+ * Skin + Face brief §9). The provider mapping of each tier is code
+ * (lib/ai/character-replace/modes.ts); what is tunable is whether the mode
+ * is offered, what each tier costs the member, the ceilings, and the
+ * operator's own estimate of the provider's cost — the last for the
+ * margin the admin sees, never the member (§7).
+ */
+export interface ReplacementModeConfig {
+  enabled: boolean;
+  tiers: readonly ReplacementTier[];
+  maximumDurationSeconds: number;
+  maximumUploadBytes: number;
+  maximumPixels: number;
+  /** How many reference images a member may attach (1 for Face Only; up to 3 for Skin + Face). */
+  maximumReferenceImages: number;
+  /**
+   * The operator's estimate of what the provider bills per second of output,
+   * in US cents. Admin-only: recorded on the job as `provider_cost_estimate`
+   * and compared with the customer charge in the monitor. Zero = unknown.
+   */
+  providerCostPerSecondUsdCents: number;
+  provider: { id: "replicate"; model: string };
+}
+
+/** The audio section (Part 6 §2–§4, §26): replacement audio, and how a mismatch in length is handled. */
+export interface CharacterReplaceAudioConfig {
+  /** Whether a member may upload their own replacement audio at all. */
+  replacementEnabled: boolean;
+  maximumDurationSeconds: number;
+  maximumUploadBytes: number;
+  /**
+   * Audio SHORTER than the video: `silence` pads the end (the character
+   * stops speaking); `reject` refuses the job before it is charged.
+   */
+  shorterAudio: "silence" | "reject";
+  /**
+   * The least of the video the audio must cover, 0–1. Below it the job is
+   * refused with "your audio is much shorter than the video" whatever
+   * `shorterAudio` says. 0 disables the check.
+   */
+  minimumCoverageFraction: number;
+  /** The lip-sync provider's behaviour for a residual mismatch after our own trim/pad. */
+  syncMode: "silence" | "loop" | "bounce";
+}
+
+/** The text-to-speech section (Part 6 §5, §26). */
+export interface CharacterReplaceTtsConfig {
+  enabled: boolean;
+  provider: "replicate";
+  /** The model the adapter runs. Its version pin lives with the adapter. */
+  model: string;
+  /** Charged once per generated voice. Zero allowed. */
+  perRequestCents: number;
+  /** Charged per character of dialogue. Zero allowed. */
+  perCharacterCents: number;
+  minimumCharacters: number;
+  maximumCharacters: number;
 }
 
 /* ───────────────────────────── the object ────────────────────────────────── */
@@ -151,7 +246,7 @@ export interface CharacterReplaceConfig {
    */
   pricingVersion: number;
   pricingUpdatedAt: string | null;
-  pricingHistory: readonly { version: number; replacedAt: string; config: Record<string, unknown> }[];
+  pricingHistory: readonly { version: number; replacedAt: string; config: Record<string, unknown>; changedBy: string | null; reason: string | null }[];
   /**
    * The provider's `go_fast` switch (Part 4, §10): "Expose go_fast as an
    * internal provider setting rather than a confusing customer-facing
@@ -172,6 +267,20 @@ export interface CharacterReplaceConfig {
     maxCents: number;
     packages: readonly { amountCents: number; enabled: boolean; order: number }[];
   };
+  /**
+   * ── PART 6: THE TWO NEW REPLACEMENT MODES ──────────────────────────────
+   * Full Character is the top-level configuration above (qualities, base
+   * rate, go_fast). Face Only and Skin + Face each carry their own tiers,
+   * rates and ceilings here. `modeConfig()` presents all three uniformly.
+   */
+  modes: {
+    face_only: ReplacementModeConfig;
+    skin_face: ReplacementModeConfig;
+  };
+  audio: CharacterReplaceAudioConfig;
+  tts: CharacterReplaceTtsConfig;
+  /** The longest video a lip-sync run accepts. Clamped to the tool's ceiling. */
+  lipSyncMaximumDurationSeconds: number;
 }
 
 /* ───────────────────────────── defaults ──────────────────────────────────── */
@@ -206,11 +315,34 @@ export const CHARACTER_REPLACE_DEFAULT_LANGUAGES: readonly CharacterReplaceLangu
  * stable so a saved project keeps its choice.
  */
 export const CHARACTER_REPLACE_DEFAULT_VOICES: readonly CharacterReplaceVoice[] = [
-  { id: "warm", label: "Warm", blurb: "Low, calm and close.", languages: [] },
-  { id: "bright", label: "Bright", blurb: "Clear, light and quick.", languages: [] },
-  { id: "deep", label: "Deep", blurb: "Full and steady.", languages: [] },
-  { id: "soft", label: "Soft", blurb: "Gentle, with air in it.", languages: [] },
+  /*
+    Part 6: each row now names the MiniMax system voice behind it (read from
+    the model's README on 2026-09-14). The four universal voices speak every
+    language the provider hints; the native pairs are offered only for their
+    own language, so a Spanish dialogue gets a Spanish-trained voice first.
+  */
+  { id: "warm", label: "Warm", blurb: "Low, calm and close.", languages: [], providerVoiceId: "English_Wiselady" },
+  { id: "bright", label: "Bright", blurb: "Clear, light and quick.", languages: [], providerVoiceId: "English_LovelyGirl" },
+  { id: "deep", label: "Deep", blurb: "Full and steady.", languages: [], providerVoiceId: "English_Deep-VoicedGentleman" },
+  { id: "soft", label: "Soft", blurb: "Gentle, with air in it.", languages: [], providerVoiceId: "English_Gentle-voiced_man" },
+  { id: "es-serene", label: "Serena", blurb: "Calm and clear, Spanish.", languages: ["es"], providerVoiceId: "Spanish_SereneWoman" },
+  { id: "es-steady", label: "Mateo", blurb: "Steady and warm, Spanish.", languages: ["es"], providerVoiceId: "Spanish_ReliableMan" },
+  { id: "pt-wise", label: "Clara", blurb: "Measured and kind, Portuguese.", languages: ["pt"], providerVoiceId: "Portuguese_Wiselady" },
+  { id: "pt-steady", label: "Rafael", blurb: "Steady and warm, Portuguese.", languages: ["pt"], providerVoiceId: "Portuguese_ReliableMan" },
+  { id: "fr-anchor", label: "Élise", blurb: "Clear and composed, French.", languages: ["fr"], providerVoiceId: "French_FemaleAnchor" },
+  { id: "fr-casual", label: "Louis", blurb: "Relaxed and natural, French.", languages: ["fr"], providerVoiceId: "French_CasualMan" },
+  { id: "de-sweet", label: "Lena", blurb: "Light and friendly, German.", languages: ["de"], providerVoiceId: "German_SweetLady" },
+  { id: "de-friendly", label: "Jonas", blurb: "Open and friendly, German.", languages: ["de"], providerVoiceId: "German_FriendlyMan" },
+  { id: "it-narrator", label: "Marco", blurb: "Storyteller, Italian.", languages: ["it"], providerVoiceId: "Italian_Narrator" },
+  { id: "it-brave", label: "Giulia", blurb: "Bright and bold, Italian.", languages: ["it"], providerVoiceId: "Italian_BraveHeroine" },
+  { id: "ar-calm", label: "Layla", blurb: "Calm and clear, Arabic.", languages: ["ar"], providerVoiceId: "Arabic_CalmWoman" },
+  { id: "ar-friendly", label: "Omar", blurb: "Friendly and easy, Arabic.", languages: ["ar"], providerVoiceId: "Arabic_FriendlyGuy" },
 ];
+
+/** A replacement tier row, for the two default mode configurations below. */
+function tier(id: ReplacementTierId, label: string, hint: string, perSecondCents: number, enabled: boolean): ReplacementTier {
+  return { id, label, hint, perSecondCents, enabled };
+}
 
 export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   // ON: switching a tool off is a decision an operator makes, not a state a
@@ -259,6 +391,10 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
       premium: false,
       perSecondCents: 10,
       enabled: true,
+      // Part 6 §8: the two Sync Labs models on Replicate — Standard runs
+      // lipsync-2, Studio runs lipsync-2-pro. Pins in lib/ai/voice/lipsync-provider.ts.
+      provider: "replicate",
+      model: "sync/lipsync-2",
     },
     {
       id: "studio",
@@ -267,6 +403,8 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
       premium: true,
       perSecondCents: 25,
       enabled: true,
+      provider: "replicate",
+      model: "sync/lipsync-2-pro",
     },
   ],
   languages: CHARACTER_REPLACE_DEFAULT_LANGUAGES,
@@ -294,6 +432,65 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
       { amountCents: 1_000_000, enabled: true, order: 5 },
     ],
   },
+  /*
+    ── PART 6 DEFAULTS ─────────────────────────────────────────────────────
+    Placeholder rates in the AI currency's minor units, NOT business prices
+    (Face Only brief §3: "Do NOT hard-code these example prices as the final
+    business prices"). The admin form is where the real numbers are typed.
+
+    🔴 Face Only ships with High and Ultra DISABLED: xrunda/hello has no
+    quality control (modes.ts), and an enabled tier the provider cannot
+    honour would be a price for nothing. Skin + Face ships all three on —
+    each is a different p-video-replace configuration.
+  */
+  modes: {
+    face_only: {
+      enabled: true,
+      tiers: [
+        tier("standard", "Standard", "The model's one configuration", 15, true),
+        tier("high", "High", "Not available for this model", 25, false),
+        tier("ultra", "Ultra", "Not available for this model", 40, false),
+      ],
+      maximumDurationSeconds: 60,
+      maximumUploadBytes: 50 * 1024 * 1024,
+      maximumPixels: PLATFORM_MAX_PIXELS,
+      maximumReferenceImages: 1,
+      providerCostPerSecondUsdCents: 0,
+      provider: { id: "replicate", model: "xrunda/hello" },
+    },
+    skin_face: {
+      enabled: true,
+      tiers: [
+        tier("standard", "Standard", "720p · fast", 30, true),
+        tier("high", "High", "720p · full quality", 60, true),
+        tier("ultra", "Ultra", "1080p · full quality", 90, true),
+      ],
+      maximumDurationSeconds: 60,
+      maximumUploadBytes: 50 * 1024 * 1024,
+      maximumPixels: PLATFORM_MAX_PIXELS,
+      maximumReferenceImages: 3,
+      providerCostPerSecondUsdCents: 0,
+      provider: { id: "replicate", model: "prunaai/p-video-replace" },
+    },
+  },
+  audio: {
+    replacementEnabled: true,
+    maximumDurationSeconds: 120,
+    maximumUploadBytes: 25 * 1024 * 1024,
+    shorterAudio: "silence",
+    minimumCoverageFraction: 0.5,
+    syncMode: "silence",
+  },
+  tts: {
+    enabled: true,
+    provider: "replicate",
+    model: "minimax/speech-02-hd",
+    perRequestCents: 0,
+    perCharacterCents: 0,
+    minimumCharacters: 1,
+    maximumCharacters: 1_000,
+  },
+  lipSyncMaximumDurationSeconds: 60,
 };
 
 /* ───────────────────────────── normaliser ────────────────────────────────── */
@@ -382,6 +579,8 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       blurb: text(o.blurb, base.blurb, 120),
       perSecondCents: int(o.perSecondCents, base.perSecondCents, 0, 1_000_000),
       enabled: bool(o.enabled, base.enabled),
+      provider: "replicate" as const,
+      model: modelName(o.model, base.model),
     };
   });
 
@@ -406,6 +605,7 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
           label: text(v.label, "", 40),
           blurb: text(v.blurb, "", 80),
           languages: Array.isArray(v.languages) ? v.languages.map((c) => slug(c, "")).filter(Boolean) : [],
+          providerVoiceId: providerVoiceId(v.providerVoiceId, d.voices.find((x) => x.id === slug(v.id, ""))?.providerVoiceId ?? ""),
         }))
         .filter((v) => v.id && v.label)
         .slice(0, 40)
@@ -435,10 +635,17 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
           version: int(h.version, 0, 0, 1_000_000),
           replacedAt: text(h.replacedAt, "", 40),
           config: isRecord(h.config) ? h.config : {},
+          // Part 6 §27: who changed it and why. Absent on entries written before.
+          changedBy: typeof h.changedBy === "string" ? h.changedBy.slice(0, 80) : null,
+          reason: typeof h.reason === "string" ? h.reason.trim().slice(0, 300) : null,
         }))
         .filter((h) => h.version > 0 && h.replacedAt)
         .slice(-20)
     : [];
+
+  const modesRaw = isRecord(raw.modes) ? raw.modes : {};
+  const audioRaw = isRecord(raw.audio) ? raw.audio : {};
+  const ttsRaw = isRecord(raw.tts) ? raw.tts : {};
 
   return {
     enabled: bool(raw.enabled, d.enabled),
@@ -466,7 +673,167 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       surchargePerSecondCents: int(voiceRaw.surchargePerSecondCents, d.voice.surchargePerSecondCents, 0, 100_000_000),
     },
     recharge: { minCents, maxCents, packages: packages.length ? packages : [...d.recharge.packages] },
+    modes: {
+      face_only: normalizeModeConfig(modesRaw.face_only, d.modes.face_only, "face_only"),
+      skin_face: normalizeModeConfig(modesRaw.skin_face, d.modes.skin_face, "skin_face"),
+    },
+    audio: {
+      replacementEnabled: bool(audioRaw.replacementEnabled, d.audio.replacementEnabled),
+      maximumDurationSeconds: int(audioRaw.maximumDurationSeconds, d.audio.maximumDurationSeconds, 1, 30 * 60),
+      maximumUploadBytes: int(audioRaw.maximumUploadBytes, d.audio.maximumUploadBytes, 64 * 1024, 100 * 1024 * 1024),
+      shorterAudio: audioRaw.shorterAudio === "reject" ? "reject" : "silence",
+      minimumCoverageFraction: num(audioRaw.minimumCoverageFraction, d.audio.minimumCoverageFraction, 0, 1),
+      syncMode: audioRaw.syncMode === "loop" || audioRaw.syncMode === "bounce" ? audioRaw.syncMode : "silence",
+    },
+    tts: {
+      enabled: bool(ttsRaw.enabled, d.tts.enabled),
+      provider: "replicate",
+      model: modelName(ttsRaw.model, d.tts.model),
+      perRequestCents: int(ttsRaw.perRequestCents, d.tts.perRequestCents, 0, 100_000_000),
+      perCharacterCents: int(ttsRaw.perCharacterCents, d.tts.perCharacterCents, 0, 1_000_000),
+      minimumCharacters: int(ttsRaw.minimumCharacters, d.tts.minimumCharacters, 1, 10_000),
+      maximumCharacters: Math.max(
+        int(ttsRaw.minimumCharacters, d.tts.minimumCharacters, 1, 10_000),
+        int(ttsRaw.maximumCharacters, d.tts.maximumCharacters, 1, 10_000),
+      ),
+    },
+    lipSyncMaximumDurationSeconds: int(raw.lipSyncMaximumDurationSeconds, d.lipSyncMaximumDurationSeconds, 1, PLATFORM_MAX_DURATION_SECONDS),
   };
+}
+
+/** "owner/model" — letters, digits, dots, dashes, one slash. Anything else keeps the default. */
+function modelName(value: unknown, fallback: string): string {
+  const s = typeof value === "string" ? value.trim() : "";
+  return /^[a-z0-9][a-z0-9._-]{0,60}\/[a-z0-9][a-z0-9._-]{0,80}$/i.test(s) ? s : fallback;
+}
+
+/** A provider voice id: printable, short. Empty means the provider's default. */
+function providerVoiceId(value: unknown, fallback: string): string {
+  const s = typeof value === "string" ? value.trim() : "";
+  if (!s) return fallback;
+  return /^[A-Za-z0-9 ()（）_.,:@-]{1,80}$/.test(s) ? s : fallback;
+}
+
+/**
+ * One replacement mode's configuration, clamped like everything else. Tiers
+ * are keyed by id and merged over the defaults — an operator may re-price or
+ * switch a tier, never invent a fourth. 🔴 A tier the provider cannot honour
+ * (modes.ts) is forced OFF whatever was saved: there is no honest price for
+ * a setting that changes nothing.
+ */
+function normalizeModeConfig(raw: unknown, base: ReplacementModeConfig, mode: "face_only" | "skin_face"): ReplacementModeConfig {
+  const r = isRecord(raw) ? raw : {};
+  const overrides = new Map<string, Record<string, unknown>>();
+  if (Array.isArray(r.tiers)) for (const t of r.tiers) if (isRecord(t) && isReplacementTierId(t.id)) overrides.set(t.id, t);
+  const map = mode === "face_only" ? FACE_ONLY_TIER_MAP : SKIN_FACE_TIER_MAP;
+  const tiers = base.tiers.map((b) => {
+    const o = overrides.get(b.id);
+    const merged = o
+      ? { ...b, label: text(o.label, b.label, 12), hint: text(o.hint, b.hint, 40), perSecondCents: int(o.perSecondCents, b.perSecondCents, 0, 100_000_000), enabled: bool(o.enabled, b.enabled) }
+      : { ...b };
+    if (map[b.id].support !== "supported") merged.enabled = false;
+    return merged;
+  });
+  if (!tiers.some((t) => t.enabled)) {
+    const standard = tiers.find((t) => t.id === "standard");
+    if (standard && map.standard.support === "supported") standard.enabled = true;
+  }
+  const providerRaw = isRecord(r.provider) ? r.provider : {};
+  return {
+    enabled: bool(r.enabled, base.enabled),
+    tiers,
+    maximumDurationSeconds: int(r.maximumDurationSeconds, base.maximumDurationSeconds, 1, PLATFORM_MAX_DURATION_SECONDS),
+    maximumUploadBytes: int(r.maximumUploadBytes, base.maximumUploadBytes, 1024 * 1024, PLATFORM_MAX_UPLOAD_BYTES),
+    maximumPixels: int(r.maximumPixels, base.maximumPixels, 640 * 360, PLATFORM_MAX_PIXELS),
+    maximumReferenceImages: int(r.maximumReferenceImages, base.maximumReferenceImages, 1, REPLACEMENT_MODE_COPY[mode].maxReferenceImages),
+    providerCostPerSecondUsdCents: num(r.providerCostPerSecondUsdCents, base.providerCostPerSecondUsdCents, 0, 100_000),
+    provider: { id: "replicate", model: modelName(providerRaw.model, base.provider.model) },
+  };
+}
+
+/* ───────────────────────────── one view of three modes ───────────────────── */
+
+/** A tier as every mode presents it — Full Character's 480p/720p/1080p included. */
+export interface ModeTierView {
+  id: string;
+  label: string;
+  hint: string;
+  perSecondCents: number;
+  enabled: boolean;
+  /** Whether the provider can honour it (false = drawn disabled, refused by the engine). */
+  supported: boolean;
+  note: string | null;
+}
+
+export interface ModeView {
+  mode: ReplacementMode;
+  enabled: boolean;
+  tiers: readonly ModeTierView[];
+  maximumDurationSeconds: number;
+  maximumUploadBytes: number;
+  maximumPixels: number;
+  maximumReferenceImages: number;
+  providerModel: string;
+  providerCostPerSecondUsdCents: number;
+}
+
+/**
+ * The three modes through one lens, so the engine, the validators, the
+ * limits and the admin monitor never branch on "is this the old one".
+ * Full Character's tiers are the top-level qualities priced by the base
+ * rate × multiplier (or their own rate) — exactly as Part 3 computed them.
+ */
+export function modeConfig(config: CharacterReplaceConfig, mode: ReplacementMode): ModeView {
+  if (mode === "full_character") {
+    return {
+      mode,
+      enabled: config.enabled,
+      tiers: config.qualities.map((q) => ({
+        id: q.id,
+        label: q.label,
+        hint: q.hint,
+        perSecondCents: q.perSecondCents !== null ? q.perSecondCents : Math.ceil(config.pricePerSecondCents * q.multiplier),
+        enabled: q.enabled,
+        // Wan documents 480 and 720; 1080p is a tier the operator may switch on the day a provider offers it.
+        supported: q.id !== "1080p",
+        note: q.id === "1080p" ? "The provider documents 480p and 720p only." : null,
+      })),
+      maximumDurationSeconds: config.maximumDurationSeconds,
+      maximumUploadBytes: config.maximumUploadBytes,
+      maximumPixels: config.maximumPixels,
+      maximumReferenceImages: 1,
+      providerModel: "wan-video/wan-2.2-animate-replace",
+      providerCostPerSecondUsdCents: 0,
+    };
+  }
+  const m = config.modes[mode];
+  const map = mode === "face_only" ? FACE_ONLY_TIER_MAP : SKIN_FACE_TIER_MAP;
+  return {
+    mode,
+    enabled: config.enabled && m.enabled,
+    tiers: m.tiers.map((t) => ({
+      id: t.id,
+      label: t.label,
+      hint: t.hint,
+      perSecondCents: t.perSecondCents,
+      enabled: t.enabled && map[t.id].support === "supported",
+      supported: map[t.id].support === "supported",
+      note: map[t.id].note,
+    })),
+    maximumDurationSeconds: Math.min(m.maximumDurationSeconds, config.maximumDurationSeconds),
+    maximumUploadBytes: m.maximumUploadBytes,
+    maximumPixels: m.maximumPixels,
+    maximumReferenceImages: m.maximumReferenceImages,
+    providerModel: m.provider.model,
+    providerCostPerSecondUsdCents: m.providerCostPerSecondUsdCents,
+  };
+}
+
+/** The tier a mode opens on: the balanced one when it is on, else the first that is. */
+export function defaultTierFor(view: ModeView): string | null {
+  const on = view.tiers.filter((t) => t.enabled);
+  if (!on.length) return null;
+  return (on.find((t) => t.id === "720p") ?? on.find((t) => t.id === "high") ?? on[0]!).id;
 }
 
 /**
@@ -483,6 +850,9 @@ export function pricingFingerprint(config: CharacterReplaceConfig): string {
     lipSync: config.lipSync.map((l) => [l.id, l.perSecondCents, l.enabled]),
     lipSyncEnabled: config.lipSyncEnabled,
     voice: [config.voice.newVoiceEnabled, config.voice.surchargePerSecondCents],
+    // Part 6: the two new modes' tiers and the TTS prices are price-bearing too.
+    modes: (["face_only", "skin_face"] as const).map((m) => [m, config.modes[m].enabled, config.modes[m].tiers.map((t) => [t.id, t.perSecondCents, t.enabled])]),
+    tts: [config.tts.enabled, config.tts.perRequestCents, config.tts.perCharacterCents],
   });
 }
 
@@ -525,6 +895,46 @@ export interface CharacterReplacePublicConfig {
    * Part 3, when `POST /api/ai/character-replace/quote` answers.
    */
   pricingAvailable: boolean;
+  /*
+    ── PART 6 ───────────────────────────────────────────────────────────────
+    The replacement modes as the selector draws them — every tier, with
+    `enabled`/`supported` so an unsupported tier is drawn disabled with its
+    note rather than hidden (Face Only brief §2 asks for all three chips).
+    Rates are absent, as everywhere else in this object.
+  */
+  modes: readonly CharacterReplacePublicMode[];
+  /** The mode the selector opens on. */
+  defaultMode: ReplacementMode;
+  audio: {
+    /** Whether a member may upload replacement audio. */
+    uploadEnabled: boolean;
+    maximumDurationSeconds: number;
+    maximumUploadBytes: number;
+    shorterAudio: "silence" | "reject";
+    minimumCoverageFraction: number;
+  };
+  tts: {
+    enabled: boolean;
+    minimumCharacters: number;
+    maximumCharacters: number;
+    /** Language codes the CONFIGURED provider speaks, intersected with the operator's catalogue. */
+    languages: readonly string[];
+  };
+  lipSyncMaximumDurationSeconds: number;
+}
+
+export interface CharacterReplacePublicMode {
+  id: ReplacementMode;
+  label: string;
+  tagline: string;
+  explanation: string;
+  enabled: boolean;
+  tiers: readonly { id: string; label: string; hint: string; enabled: boolean; supported: boolean; note: string | null }[];
+  defaultTier: string | null;
+  maximumDurationSeconds: number;
+  maximumUploadBytes: number;
+  maximumPixels: number;
+  maximumReferenceImages: number;
 }
 
 export function publicCharacterReplaceConfig(
@@ -534,6 +944,24 @@ export function publicCharacterReplaceConfig(
 ): CharacterReplacePublicConfig {
   const on = config.qualities.filter((q) => q.enabled);
   const balanced = on.find((q) => q.id === "720p") ?? on[0]!;
+  const modes: CharacterReplacePublicMode[] = (["face_only", "skin_face", "full_character"] as const).map((id) => {
+    const view = modeConfig(config, id);
+    const copy = REPLACEMENT_MODE_COPY[id];
+    return {
+      id,
+      label: copy.label,
+      tagline: copy.tagline,
+      explanation: copy.explanation,
+      enabled: view.enabled,
+      tiers: view.tiers.map(({ id: tierId, label, hint, enabled, supported, note }) => ({ id: tierId, label, hint, enabled, supported, note })),
+      defaultTier: defaultTierFor(view),
+      maximumDurationSeconds: view.maximumDurationSeconds,
+      maximumUploadBytes: view.maximumUploadBytes,
+      maximumPixels: view.maximumPixels,
+      maximumReferenceImages: view.maximumReferenceImages,
+    };
+  });
+  const providerLanguages = new Set(ttsSupportedLanguagesFor(config.tts.model));
   return {
     enabled: config.enabled,
     currency: currency.code,
@@ -556,6 +984,23 @@ export function publicCharacterReplaceConfig(
     },
     pricingVersion: config.pricingVersion,
     pricingAvailable,
+    modes,
+    // Full Character first when it is on: the mode every member of Parts 1–5 knows.
+    defaultMode: modes.find((m) => m.enabled && m.id === "full_character")?.id ?? modes.find((m) => m.enabled)?.id ?? "full_character",
+    audio: {
+      uploadEnabled: config.voice.newVoiceEnabled && config.audio.replacementEnabled,
+      maximumDurationSeconds: config.audio.maximumDurationSeconds,
+      maximumUploadBytes: config.audio.maximumUploadBytes,
+      shorterAudio: config.audio.shorterAudio,
+      minimumCoverageFraction: config.audio.minimumCoverageFraction,
+    },
+    tts: {
+      enabled: config.voice.newVoiceEnabled && config.tts.enabled,
+      minimumCharacters: config.tts.minimumCharacters,
+      maximumCharacters: config.tts.maximumCharacters,
+      languages: config.languages.map((l) => l.code).filter((code) => providerLanguages.has(code)),
+    },
+    lipSyncMaximumDurationSeconds: Math.min(config.lipSyncMaximumDurationSeconds, config.maximumDurationSeconds),
   };
 }
 
@@ -573,7 +1018,11 @@ export function publicCharacterReplaceConfig(
  * posted `pricingVersion` is ignored here, because the merged draft is
  * re-stamped from `current` before the comparison.
  */
-export function versionCharacterReplacePricing(current: CharacterReplaceConfig, next: CharacterReplaceConfig): CharacterReplaceConfig {
+export function versionCharacterReplacePricing(
+  current: CharacterReplaceConfig,
+  next: CharacterReplaceConfig,
+  meta: { changedBy?: string | null; reason?: string | null } = {},
+): CharacterReplaceConfig {
   const stamped: CharacterReplaceConfig = {
     ...next,
     pricingVersion: current.pricingVersion,
@@ -593,7 +1042,15 @@ export function versionCharacterReplacePricing(current: CharacterReplaceConfig, 
       lipSyncEnabled: current.lipSyncEnabled,
       lipSync: current.lipSync.map((l) => ({ id: l.id, perSecondCents: l.perSecondCents, enabled: l.enabled })),
       voice: current.voice,
+      modes: {
+        face_only: { enabled: current.modes.face_only.enabled, tiers: current.modes.face_only.tiers.map((t) => ({ id: t.id, perSecondCents: t.perSecondCents, enabled: t.enabled })) },
+        skin_face: { enabled: current.modes.skin_face.enabled, tiers: current.modes.skin_face.tiers.map((t) => ({ id: t.id, perSecondCents: t.perSecondCents, enabled: t.enabled })) },
+      },
+      tts: { enabled: current.tts.enabled, perRequestCents: current.tts.perRequestCents, perCharacterCents: current.tts.perCharacterCents },
     },
+    // Part 6 §27: the record of who and why, kept beside the old numbers.
+    changedBy: meta.changedBy ?? null,
+    reason: meta.reason ?? null,
   };
   return {
     ...stamped,

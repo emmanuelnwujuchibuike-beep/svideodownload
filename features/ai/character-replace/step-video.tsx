@@ -2,6 +2,7 @@
 
 import { RefreshCw, Trash2 } from "lucide-react";
 
+import { CharacterReplaceInputDirection } from "@/features/ai/character-replace/input-direction";
 import { CharacterReplaceInputSummary } from "@/features/ai/character-replace/input-summary";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
@@ -43,6 +44,8 @@ export function CharacterReplaceVideoStep({
     const refusal = slot.status === "invalid" || slot.status === "error" ? (slot.code as AiMediaErrorCode) : null;
     return (
       <div>
+        {/* the owner's red direction (2026-09-14): the exact kind of video this mode wants */}
+        <CharacterReplaceInputDirection kind="video" mode={project.mode} className="mb-4" />
         <CharacterReplaceMediaPicker
           kind="video"
           accept={CHARACTER_REPLACE_VIDEO_ACCEPT}
@@ -77,6 +80,7 @@ export function CharacterReplaceVideoStep({
 
   return (
     <div>
+      <CharacterReplaceInputDirection kind="video" mode={project.mode} className="mb-4" />
       <div className="overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="bg-[#0b0f1a]">
           <video

@@ -34,7 +34,8 @@ export function CharacterReplaceInputSummary({
   className?: string;
 }) {
   const { ready, issues } = inputReadiness(project, config);
-  const quality = config?.qualities.find((q) => q.id === project.settings.quality);
+  // Part 6: the tier of the CURRENT mode — 480p/720p/1080p or Standard/High/Ultra.
+  const quality = config?.modes.find((m) => m.id === project.mode)?.tiers.find((t) => t.id === project.settings.quality) ?? config?.qualities.find((q) => q.id === project.settings.quality);
   const meta = project.video?.metadata ?? null;
   const original = originalDurationSeconds(project);
   const selected = selectedDurationSeconds(project);

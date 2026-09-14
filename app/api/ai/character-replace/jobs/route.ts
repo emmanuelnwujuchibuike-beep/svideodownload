@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
-import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { createCharacterReplaceJobSchema } from "@/lib/ai/character-replace/start-schema";
 import { characterReplaceLimits, validatePhotoFile, validatePhotoPixels, validateVideoFile } from "@/lib/ai/character-replace/validate";
+import { validateAudioFile } from "@/lib/ai/voice/audio-validate";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, isActiveStatus, isValidClientRequestId, jobToView } from "@/lib/ai/jobs";
 import { countActiveJobs, createJob, findJobByRequestId, getOwnJob, reserveSourcePath } from "@/lib/ai/job-store";
-import { extensionForUpload, imageExtensionForUpload } from "@/lib/ai/media";
+import { audioExtensionForUpload, extensionForUpload, imageExtensionForUpload } from "@/lib/ai/media";
 import { hasProviderFor } from "@/lib/ai/providers";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
@@ -63,7 +65,10 @@ export async function POST(request: Request) {
   }
   const parsed = createCharacterReplaceJobSchema.safeParse(raw);
   if (!parsed.success) return fail("INVALID_INPUT");
-  const { clientRequestId, photo, video, retryOf } = parsed.data;
+  const { clientRequestId, photo, video, retryOf, audio } = parsed.data;
+  // Part 6: which replacement. Absent = Full Character, so every client from Parts 1–5 still creates.
+  const mode = parsed.data.mode ?? "full_character";
+  const references = parsed.data.references ?? [];
   if (!isValidClientRequestId(clientRequestId)) return fail("INVALID_INPUT");
 
   // The provider AND the worker: a job that could not be prepared or submitted is not opened.
@@ -73,18 +78,34 @@ export async function POST(request: Request) {
     const [settings, entitlement] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
     const config = settings.frenzAiCharacterReplace;
     if (!config.enabled || !entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
+    const modeView = modeConfig(config, mode);
+    if (!modeView.enabled) return fail("FEATURE_UNAVAILABLE", { error: `${replacementModeLabel(mode)} isn't available right now.` });
 
-    // The same rules the browser applied, applied again (§4) — sizes, types, dimensions.
-    const limits = characterReplaceLimits(publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true));
-    const photoVerdict = validatePhotoFile({ size: photo.size, type: photo.mimeType, name: photo.name }, limits);
-    if (!photoVerdict.ok) return fail(photoVerdict.code === "image-too-large" ? "FILE_TOO_LARGE" : "UNSUPPORTED_FORMAT");
-    const pixelsVerdict = validatePhotoPixels({ width: photo.width, height: photo.height }, limits);
-    if (!pixelsVerdict.ok) return fail("INVALID_INPUT", { error: "That photo is too small." });
+    // The same rules the browser applied, applied again (§4) — sizes, types, dimensions — the MODE's own ceilings (Part 6).
+    const publicConfig = publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true);
+    const limits = characterReplaceLimits(publicConfig, mode);
+    for (const [i, image] of [photo, ...references].entries()) {
+      const photoVerdict = validatePhotoFile({ size: image.size, type: image.mimeType, name: image.name }, limits);
+      if (!photoVerdict.ok) return fail(photoVerdict.code === "image-too-large" ? "FILE_TOO_LARGE" : "UNSUPPORTED_FORMAT");
+      const pixelsVerdict = validatePhotoPixels({ width: image.width, height: image.height }, limits);
+      if (!pixelsVerdict.ok) return fail("INVALID_INPUT", { error: i === 0 ? "That photo is too small." : `Reference photo ${i + 1} is too small.` });
+    }
+    // Extra identity photos only where the mode takes them, and never more than the operator allows.
+    if (references.length > Math.max(0, modeView.maximumReferenceImages - 1)) {
+      return fail("INVALID_INPUT", { error: `${replacementModeLabel(mode)} takes up to ${modeView.maximumReferenceImages} reference photo${modeView.maximumReferenceImages === 1 ? "" : "s"}.` });
+    }
     const videoVerdict = validateVideoFile({ size: video.size, type: video.mimeType, name: video.name }, limits);
     if (!videoVerdict.ok) return fail(videoVerdict.code === "file-too-large" ? "FILE_TOO_LARGE" : "UNSUPPORTED_FORMAT");
+    // A replacement audio file (Part 6 §3): offered by the operator, within its size ceiling, a kind we take.
+    if (audio) {
+      if (!config.voice.newVoiceEnabled || !config.audio.replacementEnabled) return fail("FEATURE_UNAVAILABLE", { error: "Uploading your own audio isn't available right now." });
+      const audioVerdict = validateAudioFile({ name: audio.name, size: audio.size, type: audio.mimeType }, { maxBytes: config.audio.maximumUploadBytes });
+      if (!audioVerdict.ok) return fail(audioVerdict.code === "audio-too-large" ? "FILE_TOO_LARGE" : "UNSUPPORTED_FORMAT");
+      if (audio.durationMs !== null && audio.durationMs > config.audio.maximumDurationSeconds * 1000) return fail("INVALID_INPUT", { error: `Audio can be up to ${config.audio.maximumDurationSeconds} seconds.` });
+    }
 
     // The acceptable-use screen reads the only member text there is: the filenames.
-    const policy = screenAiJob({ sourceName: `${video.name} ${photo.name}`, sourceUrl: null, sourceKind: "upload" });
+    const policy = screenAiJob({ sourceName: `${video.name} ${photo.name} ${references.map((r) => r.name).join(" ")} ${audio?.name ?? ""}`.trim(), sourceUrl: null, sourceKind: "upload" });
     if (!policy.allowed) {
       console.info("[cr/jobs] policy block", policyBlockEvent(policy.reason, subject.key));
       return fail("POLICY_BLOCKED");
@@ -92,11 +113,17 @@ export async function POST(request: Request) {
 
     const ownerId = subjectOwnerId(subject);
     const tickets = async (jobId: string) => {
-      const [videoTicket, photoTicket] = await Promise.all([
+      const [videoTicket, photoTicket, ...rest] = await Promise.all([
         createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: extensionForUpload(video.name, video.mimeType), role: "source" }),
         createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: imageExtensionForUpload(photo.name, photo.mimeType), role: "character" }),
+        ...references.map((r, i) =>
+          createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: imageExtensionForUpload(r.name, r.mimeType), role: "reference", index: i + 2 }),
+        ),
+        ...(audio ? [createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: audioExtensionForUpload(audio.name, audio.mimeType), role: "voice" })] : []),
       ]);
-      return { video: videoTicket, photo: photoTicket };
+      const referenceTickets = rest.slice(0, references.length);
+      const voiceTicket = audio ? (rest[references.length] ?? null) : null;
+      return { video: videoTicket, photo: photoTicket, references: referenceTickets, voice: voiceTicket };
     };
 
     const existing = await findJobByRequestId(subject, clientRequestId);
@@ -149,12 +176,20 @@ export async function POST(request: Request) {
           attempt: lineage?.attempt ?? 1,
           project_id: lineage?.projectId ?? result.row.id,
           retry_of: lineage?.retryOf ?? null,
+          // Part 6: the mode, the extra references and the audio file the member will upload. Settings and the voice choice land at /start.
+          mode,
           character: { path: uploads.photo.path, mime: photo.mimeType.toLowerCase(), size: photo.size, width: photo.width, height: photo.height, name: photo.name.slice(0, 200) },
+          references: references.map((r, i) => ({ path: uploads.references[i]!.path, mime: r.mimeType.toLowerCase(), size: r.size, width: r.width, height: r.height, name: r.name.slice(0, 200) })),
           video: { path: uploads.video.path, mime: video.mimeType.toLowerCase(), size: video.size, durationMs: video.durationMs, width: video.width, height: video.height, hasAudio: video.hasAudio },
+          audio:
+            audio && uploads.voice
+              ? { source: "upload", upload: { path: uploads.voice.path, mime: audio.mimeType.toLowerCase(), size: audio.size, durationMs: audio.durationMs, name: audio.name.slice(0, 200) }, tts: null, trimToFit: false, voiceConsent: false, prepared: null }
+              : null,
           trim: null,
-          settings: { quality: publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: "" }, true).defaultQuality, voiceMode: "original", lipSyncMode: null },
+          settings: { quality: publicConfig.modes.find((m) => m.id === mode)?.defaultTier ?? publicConfig.defaultQuality, voiceMode: "original", lipSyncMode: null },
           quote: null,
           prepared: null,
+          pipeline: null,
           provider: null,
         },
       })
@@ -165,7 +200,7 @@ export async function POST(request: Request) {
       return fail("INTERNAL_ERROR");
     }
 
-    console.info("[cr/jobs] opened", { jobId: result.row.id, userId: ownerId, feature: feature.id, created: result.created, audience: entitlement.audience, attempt: lineage?.attempt ?? 1, retryOf: lineage?.retryOf ?? null });
+    console.info("[cr/jobs] opened", { jobId: result.row.id, userId: ownerId, feature: feature.id, mode, references: references.length, audio: !!audio, created: result.created, audience: entitlement.audience, attempt: lineage?.attempt ?? 1, retryOf: lineage?.retryOf ?? null });
     return NextResponse.json({ job: jobToView(result.row, storedErrorMessage), created: result.created, uploads }, { status: result.created ? 201 : 200 });
   } catch (e) {
     if (isAiJobError(e)) {

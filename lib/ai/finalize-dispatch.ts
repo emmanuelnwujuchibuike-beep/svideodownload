@@ -54,12 +54,26 @@ export type DispatchResult =
  * into a 500 that makes Replicate redeliver.
  */
 export async function dispatchFinalization(jobId: string): Promise<DispatchResult> {
+  return dispatchToWorker("/api/internal/ai/finalize", jobId);
+}
+
+/**
+ * Part 6: between two provider stages the worker "advances" the job —
+ * brings the finished stage's output home and submits the next stage. The
+ * same contract, the same secret, the same reading of the answer as the
+ * finalization dispatch; only the route differs.
+ */
+export async function dispatchAdvance(jobId: string): Promise<DispatchResult> {
+  return dispatchToWorker("/api/internal/ai/advance", jobId);
+}
+
+async function dispatchToWorker(path: "/api/internal/ai/finalize" | "/api/internal/ai/advance", jobId: string): Promise<DispatchResult> {
   if (!hasWorker) return { dispatched: false, reason: "no-worker" };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DISPATCH_TIMEOUT_MS);
   try {
-    const res = await fetch(`${WORKER_URL}/api/internal/ai/finalize`, {
+    const res = await fetch(`${WORKER_URL}${path}`, {
       method: "POST",
       signal: controller.signal,
       headers: {
@@ -84,7 +98,7 @@ export async function dispatchFinalization(jobId: string): Promise<DispatchResul
           dispatched: false,
           reason: "refused",
           status: res.status,
-          detail: `worker answered ${res.status} — check WORKER_SECRET on BOTH the worker and the frontend, and that /api/internal/ai/finalize is deployed`,
+          detail: `worker answered ${res.status} — check WORKER_SECRET on BOTH the worker and the frontend, and that ${path} is deployed`,
         };
       }
       return { dispatched: false, reason: "failed", detail: `worker answered ${res.status}` };

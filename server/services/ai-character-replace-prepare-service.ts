@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { buildPrepareArgs, isKnownPrepareArg, type PreparePlan } from "@/lib/ai/character-replace/ffmpeg";
-import { durationWithinTolerance, readCharacterReplaceMeta, selectedRangeOf, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
-import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { durationWithinTolerance, readCharacterReplaceMeta, referencePaths, selectedRangeOf, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
+import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { characterReplaceLimits } from "@/lib/ai/character-replace/validate";
+import { prepareReplacementAudio } from "@/server/services/ai-audio-prepare";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
@@ -67,7 +68,11 @@ export type PrepareErrorCode =
   | "FILE_TOO_LARGE"
   | "DURATION_MISMATCH"
   | "INVALID_INPUT"
-  | "SUBMIT_FAILED";
+  | "SUBMIT_FAILED"
+  /* Part 6: the member's replacement audio did not pass (server/services/ai-audio-prepare.ts) */
+  | "AUDIO_INVALID"
+  | "AUDIO_TOO_LONG"
+  | "AUDIO_TOO_SHORT";
 
 export type PrepareOutcome =
   | { ok: true; jobId: string; durationMs: number; trimmed: boolean; bytes: number }
@@ -109,38 +114,45 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     if (!job.user_id) throw new PrepareFailure("PREPARATION_FAILED", "job has no owner", "system");
     if (!meta.quote) throw new PrepareFailure("PREPARATION_FAILED", "job has no pricing snapshot", "system");
 
-    // 🔴 Ownership of both input paths, from the ROW, before either becomes a URL.
-    if (!pathBelongsTo(meta.video.path, job.user_id, job.id) || !pathBelongsTo(meta.character.path, job.user_id, job.id)) {
-      throw new PrepareFailure("PREPARATION_FAILED", "an input path failed ownership", "system");
+    // 🔴 Ownership of EVERY input path, from the ROW, before any becomes a URL (Part 6: up to three references, and the audio).
+    const refPaths = referencePaths(meta);
+    const audioPath = meta.audio?.source === "upload" ? (meta.audio.upload?.path ?? null) : null;
+    for (const p of [meta.video.path, ...refPaths, ...(audioPath ? [audioPath] : [])]) {
+      if (!pathBelongsTo(p, job.user_id, job.id)) throw new PrepareFailure("PREPARATION_FAILED", "an input path failed ownership", "system");
     }
+    if (meta.audio?.source === "upload" && !audioPath) throw new PrepareFailure("PREPARATION_FAILED", "an uploaded voice was chosen but no audio was recorded", "system");
 
     const settings = await getLandingSettings();
-    // The same ceilings the browser and /start applied, from the same source.
+    const crConfig = settings.frenzAiCharacterReplace;
+    // The same ceilings the browser and /start applied, from the same source — the MODE's own (Part 6).
+    const mode = modeConfig(crConfig, meta.mode);
     const limits = characterReplaceLimits(
-      publicCharacterReplaceConfig(
-        settings.frenzAiCharacterReplace,
-        { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
-        true,
-      ),
+      publicCharacterReplaceConfig(crConfig, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true),
+      meta.mode,
     );
 
     await mkdir(dir, { recursive: true });
     const videoFile = path.join(dir, "source.bin");
-    const imageFile = path.join(dir, "character.bin");
+    const imageFiles = refPaths.map((_, i) => path.join(dir, `character-${i + 1}.bin`));
+    const audioFile = path.join(dir, "voice.bin");
     const preparedFile = path.join(dir, "prepared.mp4");
 
-    const [videoUrl, imageUrl] = await Promise.all([signSourceUrl(meta.video.path), signSourceUrl(meta.character.path)]);
-    const [videoBytes, imageBytes] = await Promise.all([
-      downloadToFile(videoUrl, videoFile, feature.maxBytes).catch((e) => {
+    const [videoUrl, ...imageUrls] = await Promise.all([signSourceUrl(meta.video.path), ...refPaths.map((p) => signSourceUrl(p))]);
+    const [videoBytes, ...imageByteCounts] = await Promise.all([
+      downloadToFile(videoUrl, videoFile, Math.min(feature.maxBytes, mode.maximumUploadBytes)).catch((e) => {
         throw new PrepareFailure("FILE_TOO_LARGE", `video: ${String(e)}`);
       }),
-      downloadToFile(imageUrl, imageFile, AI_IMAGE_MAX_BYTES).catch((e) => {
-        throw new PrepareFailure("FILE_TOO_LARGE", `image: ${String(e)}`);
-      }),
+      ...imageUrls.map((u, i) =>
+        downloadToFile(u, imageFiles[i]!, AI_IMAGE_MAX_BYTES).catch((e) => {
+          throw new PrepareFailure("FILE_TOO_LARGE", `image ${i + 1}: ${String(e)}`);
+        }),
+      ),
     ]);
+    const imageBytes = imageByteCounts[0] ?? 0;
 
     /* ── 3. measure, never trust ─────────────────────────────────────────── */
-    const [videoProbe, imageProbe] = await Promise.all([probeMedia(videoFile), probeMedia(imageFile)]);
+    const [videoProbe, ...imageProbes] = await Promise.all([probeMedia(videoFile), ...imageFiles.map((f) => probeMedia(f))]);
+    const imageProbe = imageProbes[0] ?? null;
     if (!videoProbe?.hasVideo || !videoProbe.durationSeconds || videoProbe.durationSeconds <= 0) {
       throw new PrepareFailure("UNSUPPORTED_SOURCE", "the video has no readable video stream");
     }
@@ -151,12 +163,11 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     if (Math.min(videoProbe.width ?? 0, videoProbe.height ?? 0) < limits.video.minEdge) {
       throw new PrepareFailure("UNSUPPORTED_SOURCE", `${videoProbe.width}x${videoProbe.height} is below the minimum edge`);
     }
-    if (!imageProbe || !imageProbe.width || !imageProbe.height) {
-      throw new PrepareFailure("INVALID_INPUT", "the character image could not be decoded");
-    }
-    if (Math.min(imageProbe.width, imageProbe.height) < limits.photo.minEdge) {
-      throw new PrepareFailure("INVALID_INPUT", `character image ${imageProbe.width}x${imageProbe.height} is too small`);
-    }
+    imageProbes.forEach((probe, i) => {
+      if (!probe || !probe.width || !probe.height) throw new PrepareFailure("INVALID_INPUT", `reference image ${i + 1} could not be decoded`);
+      if (Math.min(probe.width, probe.height) < limits.photo.minEdge) throw new PrepareFailure("INVALID_INPUT", `reference image ${i + 1} is ${probe.width}x${probe.height}, too small`);
+    });
+    if (!imageProbe || !imageProbe.width || !imageProbe.height) throw new PrepareFailure("INVALID_INPUT", "the character image could not be decoded");
 
     /* ── the kept range, against the REAL duration ───────────────────────── */
     const range = selectedRangeOf({ video: { ...meta.video, durationMs: sourceMs }, trim: meta.trim });
@@ -194,6 +205,43 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
       throw new PrepareFailure("DURATION_MISMATCH", `priced ${meta.quote.durationMs} ms, prepared ${preparedMs} ms`);
     }
 
+    /* ── 5b. the member's own voice, if they uploaded one (Part 6 §3–§4) ── */
+    let audioPrepared: NonNullable<CharacterReplaceJobMeta["audio"]>["prepared"] | null = null;
+    if (meta.audio?.source === "upload" && audioPath && meta.audio.upload) {
+      const audioUrl = await signSourceUrl(audioPath);
+      await downloadToFile(audioUrl, audioFile, crConfig.audio.maximumUploadBytes).catch((e) => {
+        throw new PrepareFailure("AUDIO_INVALID", `audio: ${String(e)}`);
+      });
+      const outcome = await prepareReplacementAudio({
+        jobId: job.id,
+        ownerId: job.user_id,
+        feature: feature.id,
+        inputFile: audioFile,
+        dir,
+        videoMs: preparedMs,
+        policy: { shorterAudio: crConfig.audio.shorterAudio, minimumCoverageFraction: crConfig.audio.minimumCoverageFraction, trimToFit: meta.audio.trimToFit },
+        limits: { maxDurationMs: crConfig.audio.maximumDurationSeconds * 1000 },
+        declared: { name: meta.audio.upload.name ?? "", type: meta.audio.upload.mime },
+      });
+      if (!outcome.ok) {
+        await recordJobEvent(job.id, "audio.rejected", { code: outcome.code, detail: outcome.detail.slice(0, 200), source: "upload" });
+        throw new PrepareFailure(outcome.code, outcome.detail);
+      }
+      audioPrepared = {
+        path: outcome.path,
+        durationMs: outcome.durationMs,
+        sampleRate: outcome.sampleRate,
+        channels: outcome.channels,
+        codec: outcome.codec,
+        bitrate: outcome.bitrate,
+        bytes: outcome.bytes,
+        trimmed: outcome.trimmed,
+        padded: outcome.padded,
+        transcoded: outcome.transcoded,
+      };
+      await recordJobEvent(job.id, "audio.prepared", { source: "upload", durationMs: outcome.durationMs, inputDurationMs: outcome.input.durationMs, trimmed: outcome.trimmed, padded: outcome.padded, transcoded: outcome.transcoded, codec: outcome.input.codec });
+    }
+
     /* ── 6. store beside the inputs, record, hand to the provider ────────── */
     const key = aiPreparedKey(job.user_id, feature.id, job.id);
     if (!pathBelongsTo(key, job.user_id, job.id)) throw new PrepareFailure("PREPARATION_FAILED", "refusing a prepared path that failed ownership", "system");
@@ -202,6 +250,7 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     if (up.error) throw new PrepareFailure("PREPARATION_FAILED", `upload failed: ${up.error.message}`, "system");
 
     const fresh = await getJobAsService(job.id);
+    const freshMeta = readCharacterReplaceMeta(fresh?.metadata);
     await createAdminClient()
       .from("ai_jobs")
       .update({
@@ -218,6 +267,8 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
             hasAudio: videoProbe.hasAudio,
           },
           character: { ...meta.character, size: imageBytes, width: imageProbe.width, height: imageProbe.height },
+          references: meta.references.map((r, i) => ({ ...r, size: imageByteCounts[i + 1] ?? r.size, width: imageProbes[i + 1]?.width ?? r.width, height: imageProbes[i + 1]?.height ?? r.height })),
+          ...(audioPrepared ? { audio: { ...(freshMeta?.audio ?? meta.audio), prepared: audioPrepared } } : {}),
           color: { source: color },
           prepared: {
             path: key,
@@ -243,6 +294,9 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
       trimmed,
       bytes: preparedStat.size,
       hasAudio: preparedProbe.hasAudio,
+      mode: meta.mode,
+      references: refPaths.length,
+      voice: meta.audio?.source ?? null,
       quality: meta.settings.quality,
       pricingVersion: meta.quote.pricingConfigVersion,
       ms: Date.now() - startedAt,
@@ -281,7 +335,15 @@ async function failPrepare(job: AiJobRow, failure: PrepareFailure): Promise<void
         userId: subject.userId,
         jobId: job.id,
         feature: "ai_character_replace",
-        message: aiErrorMessage(failure.code === "DURATION_MISMATCH" ? "DURATION_MISMATCH" : failure.code === "SUBMIT_FAILED" ? "PROVIDER_UNAVAILABLE" : "PREPARATION_FAILED"),
+        message: aiErrorMessage(
+          failure.code === "DURATION_MISMATCH"
+            ? "DURATION_MISMATCH"
+            : failure.code === "SUBMIT_FAILED"
+              ? "PROVIDER_UNAVAILABLE"
+              : failure.code === "AUDIO_INVALID" || failure.code === "AUDIO_TOO_LONG" || failure.code === "AUDIO_TOO_SHORT"
+                ? failure.code
+                : "PREPARATION_FAILED",
+        ),
         errorCode: failure.code,
       });
     }

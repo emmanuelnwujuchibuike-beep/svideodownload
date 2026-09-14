@@ -94,7 +94,15 @@ export const AI_STALL_DEADLINE_MS: Record<
   finalizing: 60 * 60 * 1000,
 };
 
+function stageStartedAt(metadata: Record<string, unknown> | null | undefined): string | null {
+  const pipeline = metadata && typeof metadata === "object" ? (metadata as { pipeline?: { stage_started_at?: unknown } }).pipeline : null;
+  const at = pipeline && typeof pipeline === "object" ? pipeline.stage_started_at : null;
+  return typeof at === "string" && at ? at : null;
+}
+
 export interface StallableJob {
+  /** The row's metadata, when the caller has it — read for the pipeline's stage clock (Part 6). */
+  metadata?: Record<string, unknown> | null;
   id: string;
   status: AiJobStatus;
   created_at: string;
@@ -131,10 +139,18 @@ export function stalledForMs(job: StallableJob, now: number = Date.now()): numbe
     upload to wait for, so the browser calls /start immediately after create.
     The 10-minute budget is therefore effectively the acquisition's own.
   */
+  /*
+    Part 6: a multi-stage job is `processing` for several provider runs in a
+    row. Each submission stamps `pipeline.stage_started_at`; the deadline is
+    measured from the CURRENT stage's start, so a job whose lip sync began
+    ten minutes ago is not judged by the character replacement that began an
+    hour ago. Rows without a pipeline keep `started_at`, exactly as before.
+  */
+  const stageStart = job.status === "processing" ? stageStartedAt(job.metadata) : null;
   const since =
     job.status === "queued" || job.status === "acquiring"
       ? job.created_at
-      : (job.started_at ?? job.created_at);
+      : (stageStart ?? job.started_at ?? job.created_at);
   const startedAt = Date.parse(since);
   // An unparseable timestamp is a reason to do nothing, not a reason to fail
   // somebody's job — `NaN` comparisons are false, so this is belt and braces.

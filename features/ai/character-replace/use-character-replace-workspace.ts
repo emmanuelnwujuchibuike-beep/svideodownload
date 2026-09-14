@@ -14,8 +14,10 @@ import {
 } from "@/lib/ai/character-replace/client";
 import { newClientRequestId, uploadSource } from "@/lib/ai/client";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
-import type { QuoteInput } from "@/lib/ai/character-replace/pricing";
+import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
+import type { CharacterReplaceAnyQuality, QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
+import { validateAudioFile } from "@/lib/ai/voice/audio-validate";
 import {
   characterReplaceLimits,
   inputReadiness,
@@ -26,12 +28,13 @@ import {
   validateVideoMetadata,
 } from "@/lib/ai/character-replace/validate";
 import {
+  dialogueCharacters,
   INITIAL_STATE,
   workspaceReducer,
   type WorkspaceAction,
   type WorkspaceState,
 } from "@/lib/ai/character-replace/workspace";
-import { readImageSize, readVideoMetadata } from "@/features/ai/character-replace/read-media";
+import { readAudioDuration, readImageSize, readVideoMetadata } from "@/features/ai/character-replace/read-media";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -193,19 +196,27 @@ export function useCharacterReplaceWorkspace() {
     on every render of the workspace.
   */
   const range = selectedRangeMs(state.project);
+  const newVoice = state.project.voice.mode === "new_voice";
+  const voiceSource = newVoice ? state.project.voice.source : null;
+  const ttsCharacters = newVoice && voiceSource === "tts" ? dialogueCharacters(state.project.voice.text) : 0;
   const quoteInput = useMemo<QuoteInput | null>(() => {
     if (!range) return null;
     const ms = range.endMs - range.startMs;
     if (ms <= 0) return null;
+    // A new voice with no source yet, or a dialogue still empty, is not priceable — the price waits for the choice.
+    if (newVoice && (!voiceSource || (voiceSource === "tts" && ttsCharacters === 0))) return null;
     return {
       selectedDurationMs: ms,
+      mode: state.project.mode,
       quality: state.project.settings.quality,
       voiceMode: state.project.voice.mode,
-      lipSyncMode: state.project.voice.mode === "new_voice" ? state.project.lipSync.tier : null,
+      voiceSource,
+      ttsCharacters,
+      lipSyncMode: newVoice ? state.project.lipSync.tier : null,
     };
     // The range is a fresh object each render; its two numbers are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range?.startMs, range?.endMs, state.project.settings.quality, state.project.voice.mode, state.project.lipSync.tier]);
+  }, [range?.startMs, range?.endMs, state.project.mode, state.project.settings.quality, state.project.voice.mode, voiceSource, ttsCharacters, state.project.lipSync.tier]);
 
   const ready = inputReadiness(state.project, loads.config).ready;
   const quotable = ready && loads.available === true && loads.config?.pricingAvailable === true && quoteInput !== null;
@@ -269,7 +280,7 @@ export function useCharacterReplaceWorkspace() {
     (lib/ai/character-replace/validate.ts). The platform defaults apply until
     the config answers; the server re-checks everything either way.
   */
-  const limits = characterReplaceLimits(loads.config);
+  const limits = characterReplaceLimits(loads.config, state.project.mode);
 
   const pickPhoto = useCallback(
     async (file: File) => {
@@ -306,6 +317,83 @@ export function useCharacterReplaceWorkspace() {
     dispatch({ type: "photo/clear" });
     release(previous);
   }, [release, state.project.character?.objectUrl]);
+
+  /* ── Part 6: the mode, extra references, the replacement audio ────────── */
+
+  const setMode = useCallback(
+    (mode: ReplacementMode) => {
+      const m = loads.config?.modes.find((x) => x.id === mode);
+      // Extra references beyond the new mode's maximum are released by the reducer's trim; their URLs go here.
+      const keep = Math.max(0, (m?.maximumReferenceImages ?? 1) - 1);
+      for (const r of state.project.references.slice(keep)) release(r.objectUrl);
+      dispatch({ type: "mode", mode, defaultQuality: (m?.defaultTier as CharacterReplaceAnyQuality | null | undefined) ?? null, maxReferences: m?.maximumReferenceImages ?? 1 });
+    },
+    [loads.config?.modes, release, state.project.references],
+  );
+
+  const addReference = useCallback(
+    async (file: File) => {
+      const max = limits.references.max;
+      if (state.project.references.length >= Math.max(0, max - 1)) return;
+      const verdict = validatePhotoFile(file, limits);
+      if (!verdict.ok) return;
+      const objectUrl = mint(file);
+      const size = await readImageSize(objectUrl);
+      if (!alive.current) return;
+      const pixels = validatePhotoPixels(size, limits);
+      if (!pixels.ok || !size) {
+        release(objectUrl);
+        return;
+      }
+      dispatch({ type: "reference/add", asset: { file, objectUrl, width: size.width, height: size.height, size: file.size, mimeType: file.type, name: file.name }, max });
+    },
+    [limits, mint, release, state.project.references.length],
+  );
+
+  const removeReference = useCallback(
+    (index: number) => {
+      const previous = state.project.references[index]?.objectUrl;
+      dispatch({ type: "reference/remove", index });
+      release(previous);
+    },
+    [release, state.project.references],
+  );
+
+  const pickAudio = useCallback(
+    async (file: File) => {
+      const previous = state.project.voice.audio?.objectUrl;
+      const verdict = validateAudioFile(file, { maxBytes: loads.config?.audio.maximumUploadBytes ?? 25 * 1024 * 1024 });
+      if (!verdict.ok) {
+        dispatch({ type: "audio/invalid", code: verdict.code });
+        release(previous);
+        return;
+      }
+      dispatch({ type: "audio/validating" });
+      release(previous);
+      const objectUrl = mint(file);
+      const duration = await readAudioDuration(objectUrl);
+      if (!alive.current) return;
+      if (duration === "invalid") {
+        release(objectUrl);
+        dispatch({ type: "audio/error", code: "invalid-audio" });
+        return;
+      }
+      const maxMs = (loads.config?.audio.maximumDurationSeconds ?? 120) * 1000;
+      if (duration !== null && duration > maxMs) {
+        release(objectUrl);
+        dispatch({ type: "audio/invalid", code: "audio-too-long" });
+        return;
+      }
+      dispatch({ type: "audio/ready", asset: { file, objectUrl, name: file.name, size: file.size, mimeType: file.type, durationMs: duration } });
+    },
+    [loads.config?.audio.maximumDurationSeconds, loads.config?.audio.maximumUploadBytes, mint, release, state.project.voice.audio?.objectUrl],
+  );
+
+  const clearAudio = useCallback(() => {
+    const previous = state.project.voice.audio?.objectUrl;
+    dispatch({ type: "audio/clear" });
+    release(previous);
+  }, [release, state.project.voice.audio?.objectUrl]);
 
   const pickVideo = useCallback(
     async (file: File) => {
@@ -395,11 +483,22 @@ export function useCharacterReplaceWorkspace() {
     if (launch.phase !== "idle" && launch.phase !== "error") return null;
     requestId.current ??= newClientRequestId();
 
+    const voice = state.project.voice;
+    const uploadVoice = voice.mode === "new_voice" && voice.source === "upload" ? voice.audio : null;
+    const references = state.project.mode === "skin_face" ? state.project.references : [];
+    for (const r of references) {
+      if (!r.width || !r.height) {
+        setLaunch({ phase: "error", code: "INVALID_INPUT", message: "We couldn't read one of the reference photos. Choose it again." });
+        return null;
+      }
+    }
     setLaunch({ phase: "preparing" });
     const created = await createCharacterReplaceJob({
       clientRequestId: requestId.current,
       ...(retryOf.current ? { retryOf: retryOf.current } : {}),
+      mode: state.project.mode,
       photo: { name: photo.name, mimeType: photo.mimeType, size: photo.size, width: photo.width, height: photo.height },
+      ...(references.length ? { references: references.map((r) => ({ name: r.name, mimeType: r.mimeType, size: r.size, width: r.width!, height: r.height! })) } : {}),
       video: {
         name: video.name,
         mimeType: video.mimeType,
@@ -409,6 +508,7 @@ export function useCharacterReplaceWorkspace() {
         height: video.metadata.height,
         hasAudio: video.metadata.hasAudio === true,
       },
+      ...(uploadVoice ? { audio: { name: uploadVoice.name, mimeType: uploadVoice.mimeType, size: uploadVoice.size, durationMs: uploadVoice.durationMs } } : {}),
     });
     if (!alive.current) return null;
     if (!created.ok) {
@@ -421,13 +521,31 @@ export function useCharacterReplaceWorkspace() {
       return created.job.id;
     }
 
-    /* the two uploads — the photo is small and first, the video carries the bar */
+    /* the uploads — the photos and the voice are small and first, the video carries the bar */
     setLaunch({ phase: "uploading", progress: 0 });
     const photoOk = await uploadSource({ ticket: created.uploads.photo, file: photo.file });
     if (!alive.current) return null;
     if (!photoOk) {
       setLaunch({ phase: "error", code: "NETWORK", message: "The photo didn't upload. Check your connection and try again." });
       return null;
+    }
+    for (const [i, r] of references.entries()) {
+      const ticket = created.uploads.references[i];
+      if (!ticket) continue;
+      const ok = await uploadSource({ ticket, file: r.file });
+      if (!alive.current) return null;
+      if (!ok) {
+        setLaunch({ phase: "error", code: "NETWORK", message: `Reference photo ${i + 2} didn't upload. Check your connection and try again.` });
+        return null;
+      }
+    }
+    if (uploadVoice && created.uploads.voice) {
+      const ok = await uploadSource({ ticket: created.uploads.voice, file: uploadVoice.file });
+      if (!alive.current) return null;
+      if (!ok) {
+        setLaunch({ phase: "error", code: "NETWORK", message: "The audio didn't upload. Check your connection and try again." });
+        return null;
+      }
     }
     const videoOk = await uploadSource({
       ticket: created.uploads.video,
@@ -454,14 +572,25 @@ export function useCharacterReplaceWorkspace() {
         currency: snapshot.currency,
         pricingConfigVersion: snapshot.pricingConfigVersion,
         durationMs: snapshot.durationMs,
+        mode: snapshot.mode,
         quality: snapshot.quality,
         voiceMode: snapshot.voiceMode,
+        voiceSource: snapshot.voiceSource,
+        ttsCharacters: snapshot.ttsCharacters,
         lipSyncMode: snapshot.lipSyncMode,
         totalCents: snapshot.totalCents,
         expiresAt: snapshot.expiresAt,
       },
       trim: trimmed && range ? { startMs: range.startMs, endMs: range.endMs } : null,
       consent: true,
+      ...(voice.mode === "new_voice" && voice.source
+        ? {
+            voice:
+              voice.source === "upload"
+                ? { source: "upload" as const, trimToFit: voice.trimAudioToFit, voiceConsent: voice.voiceConsent }
+                : { source: "tts" as const, text: voice.text.trim(), languageCode: voice.languageCode ?? undefined, voiceId: voice.voiceId ?? undefined, trimToFit: voice.trimAudioToFit, voiceConsent: voice.voiceConsent },
+          }
+        : {}),
     });
     if (!alive.current) return null;
     if (!started.ok) {
@@ -514,6 +643,11 @@ export function useCharacterReplaceWorkspace() {
     send,
     pickPhoto,
     clearPhoto,
+    setMode,
+    addReference,
+    removeReference,
+    pickAudio,
+    clearAudio,
     pickVideo,
     clearVideo,
     reloadBalance: loadBalance,

@@ -23,6 +23,7 @@ import {
   canStart,
   furthestStep,
   stepIndex,
+  voiceComplete,
   WORKSPACE_STEPS,
   type WorkspaceStep,
 } from "@/lib/ai/character-replace/workspace";
@@ -117,8 +118,8 @@ export function CharacterReplaceWorkspace({
       summary card reads too, so the button and the card never disagree.
     */
     if ((step === "video" || step === "settings") && !inputReadiness(project, config).ready) return false;
-    // The voice step holds until a new voice is fully described.
-    if (step === "voice" && project.voice.mode === "new_voice" && (!project.voice.languageCode || !project.voice.voiceId || !project.lipSync.tier)) return false;
+    // The voice step holds until a new voice is fully described (Part 6: source, file + rights, or dialogue + language + voice).
+    if (step === "voice" && !voiceComplete(project, config)) return false;
     return true;
   }, [config, index, project, step]);
 
@@ -163,7 +164,8 @@ export function CharacterReplaceWorkspace({
           previewUrl: watch.previewUrl,
           durationSeconds: watch.job.result.durationSeconds ?? (watch.job.characterReplace?.selectedDurationMs ? watch.job.characterReplace.selectedDurationMs / 1000 : null) ?? watch.job.source.durationSeconds,
           quality: (watch.job.characterReplace?.quality as CharacterReplaceResult["quality"]) ?? null,
-          voice: watch.job.characterReplace ? { mode: watch.job.characterReplace.voiceMode, languageCode: null, voiceId: null } : null,
+          mode: watch.job.characterReplace?.mode ?? null,
+          voice: watch.job.characterReplace ? { mode: watch.job.characterReplace.voiceMode, source: watch.job.characterReplace.voiceSource, languageCode: null, voiceId: null } : null,
           lipSync: watch.job.characterReplace?.lipSyncMode ? { tier: watch.job.characterReplace.lipSyncMode } : null,
         }
       : null);
@@ -195,9 +197,14 @@ export function CharacterReplaceWorkspace({
           <CharacterReplaceResultScreen result={result} config={config} historyHref={historyHref} onMakeAnother={leaveJob} onBack={leaveJob} className="mt-3" />
         ) : processing ? (
           <>
-            <Headline title="Replacing the" highlight="character." subtitle={null} />
+            <Headline
+              title={processing.job?.characterReplace?.mode === "face_only" ? "Replacing the" : processing.job?.characterReplace?.mode === "skin_face" ? "Transferring the" : "Replacing the"}
+              highlight={processing.job?.characterReplace?.mode === "face_only" ? "face." : processing.job?.characterReplace?.mode === "skin_face" ? "identity." : "character."}
+              subtitle={null}
+            />
             <CharacterReplaceProcessing
               job={processing}
+              mode={processing.job?.characterReplace?.mode ?? project.mode}
               onCancel={processing.canCancel ? () => void watch.cancel() : undefined}
               onRetry={retryJob}
               onDone={() => undefined}
@@ -234,10 +241,17 @@ export function CharacterReplaceWorkspace({
               <div className="mt-4">
                 {step === "photo" ? (
                   <CharacterReplacePhotoStep
+                    mode={project.mode}
+                    config={config}
                     asset={project.character}
+                    references={project.references}
+                    maxReferences={config?.modes.find((m) => m.id === project.mode)?.maximumReferenceImages ?? 1}
                     slot={state.photo}
+                    onMode={ws.setMode}
                     onPick={(f) => void ws.pickPhoto(f)}
                     onClear={ws.clearPhoto}
+                    onAddReference={(f) => void ws.addReference(f)}
+                    onRemoveReference={ws.removeReference}
                   />
                 ) : step === "video" ? (
                   <CharacterReplaceVideoStep
@@ -263,20 +277,41 @@ export function CharacterReplaceWorkspace({
                   <CharacterReplaceVoiceStep
                     project={project}
                     config={config}
-                    onMode={(mode) =>
+                    audioSlot={state.audio}
+                    onMode={(mode) => {
+                      if (mode === "original") ws.clearAudio();
+                      const firstLanguage = config.languages.find((l) => config.tts.languages.includes(l.code))?.code ?? null;
+                      const firstVoice = config.voices.find((v) => v.languages.length === 0 || (firstLanguage !== null && v.languages.includes(firstLanguage)))?.id ?? null;
                       send({
                         type: "voice/mode",
                         mode,
                         defaults: {
-                          languageCode: config.languages[0]?.code ?? null,
-                          voiceId: config.voices[0]?.id ?? null,
-                          tier: config.lipSync[0]?.id ?? null,
+                          languageCode: firstLanguage,
+                          voiceId: firstVoice,
+                          // Part 6 §19: lip sync is a toggle the member switches on; it starts off.
+                          tier: null,
+                          source: config.tts.enabled && firstLanguage ? "tts" : "upload",
                         },
-                      })
-                    }
-                    onLanguage={(code) => send({ type: "voice/language", code })}
+                      });
+                    }}
+                    onSource={(source) => send({ type: "voice/source", source })}
+                    onPickAudio={(f) => void ws.pickAudio(f)}
+                    onClearAudio={ws.clearAudio}
+                    onTrimToFit={(value) => send({ type: "voice/trimToFit", value })}
+                    onVoiceConsent={(value) => send({ type: "voice/consent", value })}
+                    onText={(text) => send({ type: "voice/text", text })}
+                    onLanguage={(code) => {
+                      send({ type: "voice/language", code });
+                      // A voice that does not speak the new language falls back to the first that does.
+                      const current = config.voices.find((v) => v.id === project.voice.voiceId);
+                      if (current && current.languages.length > 0 && !current.languages.includes(code)) {
+                        const next = config.voices.find((v) => v.languages.length === 0 || v.languages.includes(code));
+                        if (next) send({ type: "voice/voice", id: next.id });
+                      }
+                    }}
                     onVoice={(id) => send({ type: "voice/voice", id })}
                     onTier={(tier) => send({ type: "lipsync/tier", tier })}
+                    onLipSyncOff={() => send({ type: "lipsync/clear" })}
                   />
                 ) : (
                   <CharacterReplaceReviewStep
@@ -452,7 +487,7 @@ function devPreview(name: string | null): { processing?: import("@/lib/ai/charac
     error: null,
   };
   if (name === "result") {
-    return { result: { job, previewUrl: null, durationSeconds: 10, quality: "720p", voice: { mode: "original", languageCode: null, voiceId: null }, lipSync: { tier: null } } };
+    return { result: { job, previewUrl: null, durationSeconds: 10, quality: "720p", mode: "full_character", voice: { mode: "original", source: null, languageCode: null, voiceId: null }, lipSync: { tier: null } } };
   }
   if (name === "uploading") {
     return { processing: { status: "uploading", job: null, progress: 0.42, estimatedSecondsRemaining: null, canCancel: true, message: null } };

@@ -1,13 +1,15 @@
 import { after, NextResponse } from "next/server";
 
+import { readPipeline } from "@/lib/ai/character-replace/job-meta";
+import { isProviderStage, markFailed, markProcessing, markSucceeded, nextStage } from "@/lib/ai/character-replace/pipeline";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, isActiveStatus, type AiFeature } from "@/lib/ai/jobs";
 import { recordJobEvent } from "@/lib/ai/job-events";
-import { findJobByPredictionId, noteJobDiagnostic, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
+import { findJobByPredictionId, getJobAsService, noteJobDiagnostic, recordProviderOutput, transitionJob, writeProcessingMetadata } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
-import { dispatchFinalization } from "@/lib/ai/finalize-dispatch";
+import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { subjectFromRow, type AiSubject } from "@/lib/ai/subject";
 import { releaseAiUsage } from "@/lib/ai/usage";
@@ -117,11 +119,32 @@ export async function POST(request: Request) {
       ...(stale ? { reason: "job already terminal (duplicate or out of order)" } : {}),
     });
 
+    /*
+      ── Part 6: WHICH STAGE this delivery is about ─────────────────────────
+      A multi-stage Character Replace job carries a pipeline; the prediction
+      id on the row is the CURRENT stage's, and this delivery was matched by
+      it, so `pipeline.current` is the stage that finished. When the stage
+      after it is another provider stage, the worker "advances" the job
+      (brings the output home, submits the next); when it is our own
+      finalization, the Part 5 path below runs unchanged.
+    */
+    const pipeline = job.feature === "ai_character_replace" ? readPipeline(job.metadata) : null;
+    const stage = pipeline?.current ?? null;
+    const following = pipeline && stage ? nextStage(pipeline, stage) : null;
+    const intermediate = !!pipeline && !!stage && isProviderStage(stage) && !!following && isProviderStage(following);
+
     /* ── still running ────────────────────────────────────────────────────── */
     if (state.status === "processing" || state.status === "queued") {
       await transitionJob(job.id, ["queued"], "processing", {
         started_at: job.started_at ?? new Date().toISOString(),
       });
+      if (pipeline && stage && job.status === "processing") {
+        // The stage record says "processing" — for the tracker's "working" state. Best-effort, guarded by the prediction id.
+        const current = await getJobAsService(job.id);
+        if (current?.replicate_prediction_id === state.reference) {
+          await writeProcessingMetadata(job.id, state.reference, { ...(current.metadata ?? {}), pipeline: markProcessing(readPipeline(current.metadata) ?? pipeline, stage) }).catch(() => null);
+        }
+      }
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -153,10 +176,44 @@ export async function POST(request: Request) {
         // job that can still be finalized later rather than one that has lost
         // the only link to its own output.
         await recordProviderOutput(job.id, outputUrl);
+        if (pipeline && stage) {
+          // The stage record: succeeded, with its output, and — for an intermediate stage — the advance the worker owes.
+          const current = await getJobAsService(job.id);
+          if (current?.replicate_prediction_id === state.reference && current.status === "processing") {
+            const moved = markSucceeded(readPipeline(current.metadata) ?? pipeline, stage, outputUrl, new Date().toISOString());
+            await writeProcessingMetadata(job.id, state.reference, { ...(current.metadata ?? {}), pipeline: moved });
+          }
+        }
       } catch (e) {
         // Our database, our problem — 500 asks for the redelivery that fixes it.
         console.error("[ai/webhook] could not record provider output", { jobId: job.id, error: String(e) });
         return NextResponse.json({ ok: false }, { status: 500 });
+      }
+
+      if (intermediate) {
+        /*
+          ── Part 6: an intermediate stage finished ───────────────────────────
+          The worker downloads, validates and stores this stage's output and
+          asks the frontend to submit the next stage (server/services/
+          ai-character-replace-advance-service.ts). Same shape as the
+          finalization hand-off below: after the response, refusal ends the
+          job, transient failures are left to the recovery sweep, which
+          re-dispatches while `pipeline.pending_advance` is set.
+        */
+        after(async () => {
+          const dispatch = await dispatchAdvance(job.id);
+          console.info("[ai/webhook] advance dispatched", { jobId: job.id, userId: job.user_id, stage, next: following, predictionId: state.reference, dispatched: dispatch.dispatched, ...(dispatch.dispatched ? {} : { reason: dispatch.reason }) });
+          await noteJobDiagnostic(job.id, {
+            advance_dispatch: dispatch.dispatched ? "ok" : dispatch.reason,
+            advance_detail: dispatch.dispatched ? null : ("detail" in dispatch ? dispatch.detail : null),
+            advance_from: "webhook",
+          });
+          if (dispatch.dispatched === false && dispatch.reason === "refused") {
+            console.error("[ai/webhook] worker REFUSED the advance — ending the job", { jobId: job.id, status: dispatch.status, detail: dispatch.detail });
+            await failJob(job.id, subjectFromRow(job), feature.id, "FINALIZER_UNAVAILABLE", dispatch.detail);
+          }
+        });
+        return NextResponse.json({ ok: true }, { status: 200 });
       }
 
       /*
@@ -222,7 +279,14 @@ export async function POST(request: Request) {
     }
 
     if (state.status === "failed") {
-      return await failJob(job.id, subjectFromRow(job), feature.id, "PROCESSING_FAILED", state.detail);
+      if (pipeline && stage) {
+        // Which stage failed, for the operator — before the status moves, so the note is not lost to a CAS.
+        const current = await getJobAsService(job.id);
+        if (current?.replicate_prediction_id === state.reference && current.status === "processing") {
+          await writeProcessingMetadata(job.id, state.reference, { ...(current.metadata ?? {}), pipeline: markFailed(readPipeline(current.metadata) ?? pipeline, stage, state.detail ?? "provider failed", new Date().toISOString()) }).catch(() => null);
+        }
+      }
+      return await failJob(job.id, subjectFromRow(job), feature.id, stage === "voice" ? "VOICE_GENERATION_FAILED" : stage === "lipsync" ? "LIPSYNC_FAILED" : "PROCESSING_FAILED", state.detail);
     }
 
     if (state.status === "cancelled") {

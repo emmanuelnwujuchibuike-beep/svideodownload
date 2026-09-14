@@ -132,6 +132,17 @@ export type AiErrorCode =
   | "DURATION_MISMATCH"
   | "QUALITY_UNAVAILABLE"
   /*
+    ── Character Replace, Part 6: the voice and the lip sync ─────────────────
+    Each names what did not fit or did not finish, so the sentence can say
+    the useful thing (shorten the dialogue; choose a different audio file)
+    rather than "processing failed". Every one refunds the reservation.
+  */
+  | "AUDIO_INVALID"
+  | "AUDIO_TOO_LONG"
+  | "AUDIO_TOO_SHORT"
+  | "VOICE_GENERATION_FAILED"
+  | "LIPSYNC_FAILED"
+  /*
     Not in the owner's list, which was written as examples. It is here because
     without it the create path has no honest code for "the database refused to
     record your job": `PROCESSING_FAILED` would claim work was attempted,
@@ -231,6 +242,11 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   PREPARATION_FAILED: { status: 422, message: "We couldn't prepare that video. Choose it again and try once more." },
   DURATION_MISMATCH: { status: 422, message: "The video's length didn't match what was priced. Nothing was charged — choose it again." },
   QUALITY_UNAVAILABLE: { status: 422, message: "That quality isn't available right now. Choose another and try again." },
+  AUDIO_INVALID: { status: 422, message: "We couldn't use that audio file. Nothing was charged — try a different file." },
+  AUDIO_TOO_LONG: { status: 422, message: "The voice is longer than the selected video. Nothing was charged — shorten the dialogue or keep more of the video." },
+  AUDIO_TOO_SHORT: { status: 422, message: "The voice is much shorter than the selected video. Nothing was charged — use longer audio or trim the video." },
+  VOICE_GENERATION_FAILED: { status: 500, message: "We couldn't generate the voice. Your balance wasn't charged — you can try again." },
+  LIPSYNC_FAILED: { status: 500, message: "We couldn't synchronise the speech. Your balance wasn't charged — you can try again." },
   INTERNAL_ERROR: { status: 500, message: "Something went wrong. Nothing was charged — try again in a moment." },
 };
 

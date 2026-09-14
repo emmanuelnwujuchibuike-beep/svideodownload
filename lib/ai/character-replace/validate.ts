@@ -1,4 +1,5 @@
 import type { CharacterReplacePublicConfig, CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
+import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type {
   AspectRatio,
   CharacterReplaceJobInput,
@@ -93,12 +94,22 @@ export interface CharacterReplaceLimits {
     minEdge: number;
   };
   trim: { enabled: boolean };
+  /** How many reference images this mode takes (Part 6). */
+  references: { max: number };
 }
 
 const PLATFORM_MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const PLATFORM_MAX_PIXELS = 3840 * 2160;
 
-export function characterReplaceLimits(config: CharacterReplacePublicConfig | null): CharacterReplaceLimits {
+/**
+ * The ceilings for ONE mode (Part 6). Face Only and Skin + Face carry their
+ * own in the public config; Full Character's are the tool's top-level ones
+ * — the same numbers the mode view reports, so passing `full_character`
+ * (or nothing) gives exactly the limits Parts 1–5 applied.
+ */
+export function characterReplaceLimits(config: CharacterReplacePublicConfig | null, mode: ReplacementMode = "full_character"): CharacterReplaceLimits {
+  // Full Character's ceilings ARE the top-level fields (Parts 1–5); the two new modes carry their own.
+  const m = mode === "full_character" ? null : (config?.modes?.find((x) => x.id === mode) ?? null);
   return {
     photo: {
       maxBytes: AI_IMAGE_MAX_BYTES,
@@ -106,14 +117,15 @@ export function characterReplaceLimits(config: CharacterReplacePublicConfig | nu
       minEdge: 256,
     },
     video: {
-      maxBytes: Math.min(PLATFORM_MAX_VIDEO_BYTES, config?.maximumUploadBytes ?? PLATFORM_MAX_VIDEO_BYTES),
+      maxBytes: Math.min(PLATFORM_MAX_VIDEO_BYTES, m?.maximumUploadBytes ?? config?.maximumUploadBytes ?? PLATFORM_MAX_VIDEO_BYTES),
       formats: CHARACTER_REPLACE_VIDEO_FORMATS,
-      maxPixels: Math.min(PLATFORM_MAX_PIXELS, config?.maximumPixels ?? PLATFORM_MAX_PIXELS),
-      maxDurationMs: Math.round((config?.maximumDurationSeconds ?? 120) * 1000),
+      maxPixels: Math.min(PLATFORM_MAX_PIXELS, m?.maximumPixels ?? config?.maximumPixels ?? PLATFORM_MAX_PIXELS),
+      maxDurationMs: Math.round((m?.maximumDurationSeconds ?? config?.maximumDurationSeconds ?? 120) * 1000),
       minDurationMs: Math.round((config?.trim.minimumSeconds ?? 1) * 1000),
       minEdge: 240,
     },
     trim: { enabled: config?.trim.enabled ?? true },
+    references: { max: m?.maximumReferenceImages ?? 1 },
   };
 }
 
@@ -248,7 +260,7 @@ export function toMs(seconds: number | null): number | null {
  */
 export function qualityGuidance(
   meta: VideoMetadata | null,
-  quality: CharacterReplaceQualityId,
+  quality: CharacterReplaceQualityId | string,
   qualities: CharacterReplacePublicConfig["qualities"],
 ): string | null {
   if (!meta || meta.width === null || meta.height === null) return null;
@@ -283,7 +295,7 @@ export function inputReadiness(
   config: CharacterReplacePublicConfig | null,
 ): { ready: boolean; issues: ReadinessIssue[] } {
   const issues: ReadinessIssue[] = [];
-  const limits = characterReplaceLimits(config);
+  const limits = characterReplaceLimits(config, project.mode);
   if (!project.character) issues.push("photo-missing");
   const video = project.video;
   if (!video) {
@@ -348,11 +360,12 @@ export function buildJobInput(project: CharacterReplaceProject): CharacterReplac
       selectedDurationMs: range.endMs - range.startMs,
       whole: range.startMs === 0 && meta.durationMs !== null && range.endMs === meta.durationMs,
     },
-    output: { requestedQuality: project.settings.quality },
+    output: { mode: project.mode, requestedQuality: project.settings.quality },
     audio: {
       voiceMode: project.voice.mode,
-      languageCode: project.voice.mode === "new_voice" ? project.voice.languageCode : null,
-      voiceId: project.voice.mode === "new_voice" ? project.voice.voiceId : null,
+      voiceSource: project.voice.mode === "new_voice" ? project.voice.source : null,
+      languageCode: project.voice.mode === "new_voice" && project.voice.source === "tts" ? project.voice.languageCode : null,
+      voiceId: project.voice.mode === "new_voice" && project.voice.source === "tts" ? project.voice.voiceId : null,
       lipSyncMode: project.voice.mode === "new_voice" ? project.lipSync.tier : null,
     },
     consent: project.consent,

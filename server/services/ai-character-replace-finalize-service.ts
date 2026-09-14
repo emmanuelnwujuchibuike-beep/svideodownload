@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { FINALIZE_LEASE_SECONDS, FINALIZE_MAX_ATTEMPTS, finalizeBackoffMs, isTransientFinalizeFailure } from "@/lib/ai/character-replace/finalize-policy";
-import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
+import { readCharacterReplaceMeta, readPipeline } from "@/lib/ai/character-replace/job-meta";
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
+import { pathBelongsTo } from "@/lib/ai/storage";
+import { signSourceUrl } from "@/lib/ai/storage-server";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
@@ -19,6 +21,7 @@ import {
   downloadToFile,
   makeResultPoster,
   probeMedia,
+  restoreOriginalAudio,
   uploadFinalResult,
   type FinalizeErrorCode,
   type FinalizeOutcome,
@@ -118,8 +121,33 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     if (expectedMs !== null && Math.abs(actualMs - expectedMs) > Math.max(1000, expectedMs * 0.3)) {
       throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `expected about ${expectedMs} ms, the output is ${actualMs} ms`);
     }
-    const audioExpected = meta?.provider?.mergeAudio === true;
-    if (audioExpected && !probe.hasAudio) {
+    /*
+      ── §17 (Part 6): the container and the streams, before anything else ──
+      A file exists and has bytes (the download enforced both); it must also
+      be a container we can serve, hold a picture of a sane size, and carry
+      the audio the plan promised. A lip-synced output without a track is a
+      broken run, not a silent video.
+    */
+    const container = (probe.formatName ?? "").toLowerCase();
+    if (container && !/mp4|mov|m4a|3gp|matroska|webm/.test(container)) throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `unexpected container ${container}`);
+    if (!probe.width || !probe.height || probe.width * probe.height > 3840 * 2160) throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `unexpected frame size ${probe.width}x${probe.height}`);
+
+    const pipeline = readPipeline(job.metadata);
+    const lipSynced = !!pipeline?.stages.includes("lipsync");
+    const newVoice = meta?.settings.voiceMode === "new_voice";
+    const wavPath = meta?.audio?.prepared?.path ?? null;
+    if (lipSynced && !probe.hasAudio) throw new CrFinalizeFailure("INVALID_AI_OUTPUT", "the lip-sync output has no audio track");
+    /*
+      What the finished file should carry:
+        · a new voice WITH lip sync   — the lip-sync output already has it;
+        · a new voice, NO lip sync    — the prepared WAV is muxed onto the
+          replaced video below (a plain audio swap: the picture is copied,
+          never re-encoded);
+        · the original audio          — the model was asked to keep it
+          (`mergeAudio`); Full Character (Wan) does, exactly as Part 4.
+    */
+    const audioExpected = lipSynced || (newVoice && !!wavPath) || meta?.provider?.mergeAudio === true;
+    if (!newVoice && audioExpected && !probe.hasAudio) {
       // Not fatal — the picture is the product; say so on the row and in the result panel.
       await noteJobDiagnostic(jobId, { audio_missing_from_provider: true });
     }
@@ -128,16 +156,37 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       ── 🔴 THE MASTER IS THE PROVIDER'S FILE, BYTE FOR BYTE (owner, 2026-09-14:
       "The result and filter should be purely natural from replicate") ─────
 
-      No colour-tag rewrite, no re-mux, no re-encode, no filter of any kind
-      between the download above and the upload below. The colour probe is
-      kept as a diagnostic on the row — it changes nothing. Two results made
-      while the finalizer rewrote the stream's colour description came back
-      wrong, and whatever the cause, the rule is now simple enough to pin in
-      a test: the file we store is the file the provider returned.
+      No colour-tag rewrite, no re-encode, no filter of any kind between the
+      download above and the upload below. The colour probe is kept as a
+      diagnostic on the row — it changes nothing. The ONE exception is the
+      product the member chose: a new voice without lip sync is an audio
+      swap, and the swap is a stream copy of the picture with the WAV muxed
+      beside it (`-c:v copy` — lib/ai/ffmpeg-plan.ts). Not one pixel is
+      touched. Two results made while the finalizer rewrote the stream's
+      colour description came back wrong, and whatever the cause, the rule
+      is now simple enough to pin in a test: the picture we store is the
+      picture the provider returned.
     */
-    const finalFile = outputFile;
-    const colorNote: Record<string, unknown> = { output: await probeColor(outputFile), tagged: false, reencoded: false };
-    const finalProbe = probe;
+    let finalFile = outputFile;
+    let voiceSwapped = false;
+    if (newVoice && !lipSynced && wavPath && meta && ownerId) {
+      if (!pathBelongsTo(wavPath, ownerId, jobId)) throw new CrFinalizeFailure("AI_FINALIZATION_FAILED", "the prepared audio path failed ownership", "system");
+      const wavFile = path.join(dir, "voice.wav");
+      const muxedFile = path.join(dir, "voiced.mp4");
+      await downloadToFile(await signSourceUrl(wavPath), wavFile, 200 * 1024 * 1024).catch((e) => {
+        throw new CrFinalizeFailure("AI_FINALIZATION_FAILED", `voice download: ${String(e)}`, "system");
+      });
+      const mux = await restoreOriginalAudio({ cleanedPath: outputFile, sourcePath: wavFile, outPath: muxedFile, hasAudio: true, canCopyVideo: true });
+      if (!mux.ok) throw new CrFinalizeFailure("AUDIO_RESTORE_FAILED", `voice mux: ${mux.detail.slice(0, 300)}`, "system");
+      const muxProbe = await probeMedia(muxedFile);
+      if (!muxProbe?.hasVideo || !muxProbe.hasAudio || !muxProbe.durationSeconds || Math.abs(muxProbe.durationSeconds - probe.durationSeconds) > 1) {
+        throw new CrFinalizeFailure("AUDIO_RESTORE_FAILED", "the voiced file did not verify", "system");
+      }
+      finalFile = muxedFile;
+      voiceSwapped = true;
+    }
+    const colorNote: Record<string, unknown> = { output: await probeColor(outputFile), tagged: false, reencoded: false, voiceSwapped };
+    const finalProbe = finalFile === outputFile ? probe : ((await probeMedia(finalFile)) ?? probe);
 
     let stored: { path: string; bytes: number };
     try {
@@ -174,9 +223,9 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       // Stage H — the charge is kept: reserved → settled on the product ledger.
       const settled = await settleCharacterReplaceCharge(ownerId, jobId);
       if (!settled) console.error("[cr/finalize] settle found no reserved charge", { jobId, userId: ownerId });
-      await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, colorTagged: colorNote.tagged === true, settled, elapsedMs: Date.now() - startedAt });
+      await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, mode: meta?.mode ?? "full_character", stages: pipeline?.stages ?? null, voiceSwapped, settled, elapsedMs: Date.now() - startedAt });
       // 🔴 Only now — the result is in OUR bucket and the row says completed (§11).
-      await notifyAiJobFinished({ userId: ownerId, jobId, feature: feature.id, audioRestored: audioExpected ? probe.hasAudio : null, durationMs: Date.now() - startedAt });
+      await notifyAiJobFinished({ userId: ownerId, jobId, feature: feature.id, audioRestored: audioExpected ? finalProbe.hasAudio : null, durationMs: Date.now() - startedAt });
     }
     console.info("[cr/finalize] completed", {
       jobId,
@@ -185,7 +234,9 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       predictionId: job.replicate_prediction_id,
       durationMs: actualMs,
       bytes: stored.bytes,
-      hasAudio: probe.hasAudio,
+      hasAudio: finalProbe.hasAudio,
+      mode: meta?.mode ?? "full_character",
+      stages: pipeline?.stages ?? null,
       chargedCents: job.charged_cents,
       pricingVersion: meta?.quote?.pricingConfigVersion ?? null,
       elapsedMs: Date.now() - startedAt,
@@ -193,7 +244,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       settled: !!completed,
       downloadedBytes: bytes,
     });
-    return { ok: true, jobId, audioRestored: probe.hasAudio, durationSeconds: probe.durationSeconds, bytes: stored.bytes };
+    return { ok: true, jobId, audioRestored: finalProbe.hasAudio, durationSeconds: finalProbe.durationSeconds ?? probe.durationSeconds, bytes: stored.bytes };
   } catch (e) {
     const failure = e instanceof CrFinalizeFailure ? e : new CrFinalizeFailure("AI_FINALIZATION_FAILED", String(e), "system");
     const transient = isTransientFinalizeFailure(failure.code, failure.detail);

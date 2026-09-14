@@ -314,6 +314,13 @@ describe("summarizeCharacterReplaceJobs", () => {
     notifiedAt: null,
     notifyPending: false,
     stuck: false,
+    mode: "full_character",
+    model: null,
+    stage: null,
+    voiceSource: null,
+    lipSyncMode: null,
+    providerCostUsdCents: null,
+    rateCents: null,
     ...over,
   });
   it("counts what the operator asked for", () => {
@@ -357,11 +364,15 @@ describe("Video Ready — the master is the model's output, shown and saved with
     finalizer stores the file it downloaded: no ffmpeg pass of any kind on
     the master, and the prepare service runs one plan with no tone-map.
   */
-  it("the finalizer stores the provider's file byte for byte — no ffmpeg pass, no colour tags, no re-encode", () => {
+  it("the finalizer stores the provider's picture byte for byte — no colour tags, no re-encode; the one pass is the voice swap with the video stream COPIED", () => {
     const s = src("server/services/ai-character-replace-finalize-service.ts");
-    expect(s).toContain("const finalFile = outputFile;");
+    expect(s).toContain("let finalFile = outputFile;");
     expect(s).not.toMatch(/buildColorTagArgs|buildContainerTagArgs|runFfmpegQuiet|h264_metadata|isColorTagged/);
     expect(s).not.toMatch(/eq=saturation|saturationMatch|buildColorMatchArgs|-crf/);
+    // Part 6: a new voice without lip sync is an audio swap — the picture is a stream copy (lib/ai/ffmpeg-plan.ts buildRestoreArgs with canCopyVideo).
+    expect(s).toContain("if (newVoice && !lipSynced && wavPath && meta && ownerId) {");
+    expect(s).toContain("canCopyVideo: true");
+    expect(s.split("restoreOriginalAudio(").length).toBe(2); // one call site, inside that branch
   });
   it("the prepare service tone-maps nothing and tags nothing", () => {
     const s = src("server/services/ai-character-replace-prepare-service.ts");

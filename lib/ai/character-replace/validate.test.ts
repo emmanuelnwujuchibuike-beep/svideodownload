@@ -48,7 +48,9 @@ describe("limits", () => {
   it("derive from the server's config and never exceed the platform", () => {
     expect(limits.video.maxDurationMs).toBe(CHARACTER_REPLACE_DEFAULTS.maximumDurationSeconds * 1000);
     expect(limits.video.minDurationMs).toBe(1000);
-    expect(limits.video.maxBytes).toBe(100 * 1024 * 1024);
+    // 50 MB by default — Supabase Storage's per-object ceiling (2026-09-14) — never the platform's 100.
+    expect(limits.video.maxBytes).toBe(CHARACTER_REPLACE_DEFAULTS.maximumUploadBytes);
+    expect(limits.video.maxBytes).toBe(50 * 1024 * 1024);
     // An operator cannot loosen the platform ceiling, only tighten it.
     const loose = characterReplaceLimits({ ...config, maximumUploadBytes: 10 ** 12, maximumPixels: 10 ** 9 });
     expect(loose.video.maxBytes).toBe(100 * 1024 * 1024);

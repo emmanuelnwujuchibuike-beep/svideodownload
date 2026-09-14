@@ -9,6 +9,7 @@ import {
   aiFeature,
   createJobRequestSchema,
   featureAvailability,
+  isActiveStatus,
   isValidClientRequestId,
   jobToView,
   primaryAiFeature,
@@ -21,10 +22,12 @@ import {
   countActiveJobs,
   createJob,
   findJobByRequestId,
+  getOwnJob,
   listOwnJobs,
   reserveSourcePath,
 } from "@/lib/ai/job-store";
 import { hasProviderFor } from "@/lib/ai/providers";
+import { recoverJob, recoveryDue } from "@/lib/ai/recovery";
 import { hasWorker } from "@/lib/worker";
 import { AI_SOURCE_URL_ERRORS, validateAiSourceUrl } from "@/lib/ai/source-url";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
@@ -402,8 +405,32 @@ export async function GET(request: Request) {
       statuses: statuses as AiJobStatus[],
     });
 
+    /*
+      ── 🔴 HISTORY HEALS WHAT IT SHOWS (owner, 2026-09-14: "got stuck when I
+      left the app and came back and now I can't cancel") ────────────────────
+
+      The member left mid-job, the PWA was killed, and they came back through
+      HISTORY — which listed the row and polled this route, and this route
+      only ever READ. The one-job poll reconciles; this one did not, so a job
+      whose webhook never arrived sat at "processing" with nothing to press.
+
+      Now the same recovery step the one-job poll and the cron run is applied
+      to the live Character Replace rows on the page (a handful at most, once
+      per 30 s per job): a finished prediction is finalized, a lost one is
+      failed and refunded, a due retry is re-dispatched. The row is re-read
+      when something moved, so the list the member sees is the truth.
+    */
+    const rows = await Promise.all(
+      page.rows.map(async (row) => {
+        if (row.feature !== "ai_character_replace" || !isActiveStatus(row.status) || !recoveryDue(row.id)) return row;
+        const action = await recoverJob(row);
+        if (action === "none" || action === "working") return row;
+        return (await getOwnJob(subject, row.id)) ?? row;
+      }),
+    );
+
     return NextResponse.json({
-      jobs: page.rows.map((row) => jobToView(row, storedErrorMessage)),
+      jobs: rows.map((row) => jobToView(row, storedErrorMessage)),
       nextCursor: page.nextCursor,
     });
   } catch (e) {

@@ -45,6 +45,21 @@ const DISPATCH_GRACE_MS = 3 * 60_000;
 /** Replicate keeps a prediction's output about an hour; a retry after that cannot download it. */
 const PROVIDER_OUTPUT_LIFETIME_MS = 60 * 60_000;
 
+/**
+ * One recovery attempt per job per instance every 30 s. The workspace polls
+ * every few seconds and history every few seconds while a job is live; the
+ * step itself is cheap, but the provider read behind it should not be.
+ */
+const RECOVERY_EVERY_MS = 30_000;
+const lastRecovery = new Map<string, number>();
+export function recoveryDue(jobId: string, now: number = Date.now()): boolean {
+  const last = lastRecovery.get(jobId) ?? 0;
+  if (now - last < RECOVERY_EVERY_MS) return false;
+  lastRecovery.set(jobId, now);
+  if (lastRecovery.size > 500) lastRecovery.clear();
+  return true;
+}
+
 export type RecoveryAction =
   | "none"
   | "working"

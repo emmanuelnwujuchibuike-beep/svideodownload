@@ -6,7 +6,7 @@ import { getOwnJob } from "@/lib/ai/job-store";
 import { isActiveStatus, jobToView, primaryAiFeature, type AiJobRow, type AiJobView } from "@/lib/ai/jobs";
 import { notifyAiJobFromRow } from "@/lib/ai/notify";
 import { reconcileWithProvider } from "@/lib/ai/reconcile";
-import { recoverJob } from "@/lib/ai/recovery";
+import { recoverJob, recoveryDue } from "@/lib/ai/recovery";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -48,18 +48,6 @@ export const dynamic = "force-dynamic";
  *     frontend) is announced HERE, on the member's own poll, from the process
  *     that holds the keys. Idempotent through the claim (§21).
  */
-/** One recovery attempt per job per instance every 30 s — the poll is every few seconds. */
-const RECOVERY_EVERY_MS = 30_000;
-const lastRecovery = new Map<string, number>();
-function recoveryDue(jobId: string): boolean {
-  const now = Date.now();
-  const last = lastRecovery.get(jobId) ?? 0;
-  if (now - last < RECOVERY_EVERY_MS) return false;
-  lastRecovery.set(jobId, now);
-  if (lastRecovery.size > 500) lastRecovery.clear();
-  return true;
-}
-
 async function viewWithMoney(row: AiJobRow): Promise<AiJobView> {
   const view = jobToView(row, storedErrorMessage);
   if (row.feature !== "ai_character_replace" || !row.user_id) return view;

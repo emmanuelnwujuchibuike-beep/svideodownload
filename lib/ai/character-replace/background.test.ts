@@ -153,10 +153,15 @@ describe("the recovery sweep — the same functions the live paths use, and noth
     expect(wf).toMatch(/cron: "\*\/10 \* \* \* \*"/);
   });
 
-  it("the member's poll runs the same step, throttled, for Character Replace only", () => {
+  it("the member's poll AND the history list run the same step, throttled, for Character Replace only", () => {
     const poll = src("app/api/ai/jobs/[id]/route.ts");
     expect(poll).toContain('row.feature === "ai_character_replace" && recoveryDue(row.id) ? await recoverJob(row)');
-    expect(poll).toContain("RECOVERY_EVERY_MS = 30_000");
+    expect(s).toContain("RECOVERY_EVERY_MS = 30_000");
+    // Owner, 2026-09-14: a job left mid-run and revisited through HISTORY sat at "processing" — the list only read.
+    const list = src("app/api/ai/jobs/route.ts");
+    expect(list).toContain('row.feature !== "ai_character_replace" || !isActiveStatus(row.status) || !recoveryDue(row.id)');
+    expect(list).toContain("await recoverJob(row)");
+    expect(list).toContain("getOwnJob(subject, row.id)");
   });
 });
 

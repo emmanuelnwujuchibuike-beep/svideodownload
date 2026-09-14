@@ -45,9 +45,9 @@ export function AppModeSwitcher({ className }: { className?: string }) {
       <span aria-hidden className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(70%_60%_at_100%_0%,rgb(99_102_241/0.14),transparent_70%)]" />
 
       <div className="relative flex items-center gap-3">
-        <span aria-hidden className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow-sm">
-          <span className="pointer-events-none absolute inset-0 rounded-xl bg-gradient-to-b from-white/30 to-transparent" />
-          <SlidersHorizontal className="relative h-[18px] w-[18px]" strokeWidth={2.25} />
+        {/* Colourless, 3D (owner, 2026-09-14: "like Snapchat icons") — .frenz-tile-3d in globals.css. */}
+        <span aria-hidden className="frenz-tile-3d relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]">
+          <SlidersHorizontal className="relative h-[20px] w-[20px]" strokeWidth={2.4} />
         </span>
         <div className="min-w-0">
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Experience mode</p>

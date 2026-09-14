@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
 import { ImageUpload } from "@/components/social/image-upload";
-import { LANDING_IMAGE_ASPECT, type LandingSettings } from "@/lib/landing/settings";
+import { LANDING_IMAGE_ASPECT } from "@/lib/landing/bounds";
+import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 /**

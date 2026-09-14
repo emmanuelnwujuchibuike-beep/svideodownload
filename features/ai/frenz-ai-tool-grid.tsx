@@ -92,7 +92,7 @@ function tools(historyHref: string, usageHref: string): AiTool[] {
     {
       id: "history",
       name: "Your AI videos",
-      blurb: "Everything you have made, kept for three days.",
+      blurb: "Everything you have made, kept for a few days — longer when you save it.",
       icon: History,
       href: historyHref,
       accent: "from-amber-500 to-orange-600",

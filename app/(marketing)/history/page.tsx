@@ -6,6 +6,7 @@ import { HistoryCompleteAd } from "@/features/history/history-complete-ad";
 import { HistoryPanel } from "@/features/history/history-panel";
 import { DownloadHistoryAd } from "@/features/monetization/download-history-ad";
 import { ReviewPlayerMount } from "@/features/downloads/review-player-mount";
+import { FrenzAiFab } from "@/features/ai/frenz-ai-fab";
 
 /**
  * `/history` — the shared, history-ONLY page (owner: "a shared history that shows
@@ -27,6 +28,8 @@ export default function HistoryPage() {
   return (
     <div className="bg-background text-foreground">
       <SiteHeader />
+      {/* The one page the Frenz AI button lives on (owner, 2026-09-14); signed-in members only, decided inside. */}
+      <FrenzAiFab />
       {/* Just clears the fixed header — the big gap was too much top padding here
           stacking with the panel's own (owner). */}
       <main className="pb-24 pt-[calc(var(--frenz-safe-top)+4.75rem)]">

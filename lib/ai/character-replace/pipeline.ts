@@ -221,14 +221,14 @@ export type CharacterReplaceStageName =
   | "CANCELLED";
 
 export function stageName(input: {
-  status: "queued" | "acquiring" | "processing" | "finalizing" | "completed" | "failed" | "cancelled" | "expired";
+  status: "queued" | "acquiring" | "processing" | "finalizing" | "completed" | "failed" | "cancelled" | "expired" | "deleted";
   pipeline: PipelineMeta | null;
   /** From the ledger (Part 5 §29): whether a failed job's charge is still reserved or has come back. */
   refund: "none" | "settled" | "pending" | "refunded";
 }): CharacterReplaceStageName {
   const { status, pipeline } = input;
   if (status === "completed") return "COMPLETED";
-  if (status === "cancelled") return "CANCELLED";
+  if (status === "cancelled" || status === "deleted") return "CANCELLED";
   if (status === "failed" || status === "expired") return input.refund === "refunded" ? "REFUNDED" : input.refund === "pending" ? "REFUND_PENDING" : "FAILED";
   if (status === "queued") return "READY";
   if (status === "acquiring") return "PREPARING";
@@ -256,7 +256,7 @@ export interface StageStep {
 }
 
 export function stageSteps(input: {
-  status: "preparing" | "uploading" | "queued" | "processing" | "finalizing" | "complete" | "failed" | "refunded" | "cancelled";
+  status: "preparing" | "uploading" | "queued" | "processing" | "finalizing" | "complete" | "failed" | "refunded" | "cancelled" | "deleted";
   pipeline: PipelineMeta | null;
   mode: ReplacementMode;
 }): StageStep[] {

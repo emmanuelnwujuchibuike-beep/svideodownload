@@ -25,6 +25,7 @@ import {
 } from "@/lib/ai/history";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { formatRelative } from "@/lib/i18n/format";
+import { useRouter } from "next/navigation";
 import { haptic } from "@/lib/motion/haptics";
 import { cn, formatDuration } from "@/lib/utils";
 
@@ -87,8 +88,17 @@ export function FrenzAIHistory({
   className,
   showHeading = true,
   groupByDay = false,
+  resultHref = (id) => `/studio/ai/character-replace/result/${encodeURIComponent(id)}`,
 }: {
   className?: string;
+  /**
+   * Part 7 §19: where a Character Replace tile goes — the result route, which
+   * renders the right screen for ANY status (ready → Video Ready, running →
+   * the tracker, failed → refund + Try again) and checks ownership on the
+   * server. AI Clean rows keep the inline player: their result screen is
+   * the player.
+   */
+  resultHref?: (jobId: string) => string;
   /**
    * Break the list into Today / Yesterday / This week / Last week / Earlier.
    *
@@ -136,6 +146,16 @@ export function FrenzAIHistory({
     including, for a job that finished while the sheet was open, "still
     working". Re-reading it by id each render is what keeps the two in step.
   */
+  /*
+    Part 7 §17: a feature filter, drawn only when the list holds more than one
+    tool's rows (a member with only Character Replace videos gets no chip
+    row to puzzle over). Client-side over the loaded page — the status tabs
+    stay the server's.
+  */
+  const features = useMemo(() => Array.from(new Set(history.jobs.map((j) => j.feature))), [history.jobs]);
+  const [featureFilter, setFeatureFilter] = useState<"all" | "ai_clean" | "ai_character_replace">("all");
+  const visibleJobs = useMemo(() => (featureFilter === "all" ? history.jobs : history.jobs.filter((j) => j.feature === featureFilter)), [featureFilter, history.jobs]);
+
   const live = openJob ? (history.jobs.find((j) => j.id === openJob.id) ?? openJob) : null;
 
   /*
@@ -159,7 +179,7 @@ export function FrenzAIHistory({
       { key: "lastweek", label: "Last week", items: [] },
       { key: "earlier", label: "Earlier", items: [] },
     ];
-    for (const job of history.jobs) {
+    for (const job of visibleJobs) {
       const t = Date.parse(job.createdAt);
       // An unparseable timestamp lands in Earlier rather than crashing a bucket
       // index — the row is still the member's and still worth showing.
@@ -168,12 +188,17 @@ export function FrenzAIHistory({
       buckets[i]!.items.push(job);
     }
     return buckets.filter((b) => b.items.length > 0);
-  }, [groupByDay, history.jobs]);
+  }, [groupByDay, visibleJobs]);
 
   const close = useCallback(() => setOpenJob(null), []);
 
+  const router = useRouter();
   const open = (job: AiJobView) => {
     haptic("selection");
+    if (job.feature === "ai_character_replace") {
+      router.push(resultHref(job.id));
+      return;
+    }
     setOpenJob(job);
   };
 
@@ -236,6 +261,34 @@ export function FrenzAIHistory({
           Refresh
         </button>
       </div>
+
+      {features.length > 1 ? (
+        <div role="tablist" aria-label="Filter by tool" className="mt-3 flex flex-wrap gap-1.5">
+          {(
+            [
+              ["all", "All AI"],
+              ["ai_clean", "Clean"],
+              ["ai_character_replace", "Character Replace"],
+            ] as const
+          )
+            .filter(([id]) => id === "all" || features.includes(id))
+            .map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={featureFilter === id}
+                onClick={() => setFeatureFilter(id)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
+                  featureFilter === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+        </div>
+      ) : null}
 
       {/* ── the tabs ────────────────────────────────────────────────────── */}
       <div role="tablist" aria-label="Filter videos" className="mt-3 flex gap-1 rounded-full bg-secondary p-1">
@@ -306,7 +359,7 @@ export function FrenzAIHistory({
             </div>
           ) : (
             <div className={HISTORY_GRID}>
-              {history.jobs.map((job) => (
+              {visibleJobs.map((job) => (
                 <HistoryTile key={job.id} job={job} now={now} onOpen={() => open(job)} />
               ))}
             </div>
@@ -420,7 +473,14 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
     with nothing. Playable tiles are buttons; the rest are plain `div`s that say
     why in their own caption.
   */
-  const Tag = playable ? "button" : "div";
+  /*
+    Part 7 §19: a Character Replace tile is a button in EVERY state — ready
+    opens Video Ready, running opens the tracker, failed opens the refund and
+    Try again — because the result route draws all of them. Other tools keep
+    the old rule: a button only when there is a video to play.
+  */
+  const opens = playable || job.feature === "ai_character_replace";
+  const Tag = opens ? "button" : "div";
   const title = job.source.name ?? historyTitleFor(job.feature);
 
   return (
@@ -434,15 +494,15 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
     <article
       className={cn(
         "group relative aspect-square overflow-hidden rounded-2xl bg-black/40",
-        playable && "transition active:scale-[0.98]",
+        opens && "transition active:scale-[0.98]",
       )}
     >
       <Tag
-        {...(playable ? { type: "button" as const, onClick: onOpen } : {})}
-        aria-label={playable ? `Play ${title}` : undefined}
+        {...(opens ? { type: "button" as const, onClick: onOpen } : {})}
+        aria-label={opens ? (playable ? `Open ${title}` : active ? `${title} — processing` : `${title} — ${chip.label}`) : undefined}
         className={cn(
           "absolute inset-0 h-full w-full text-left",
-          playable &&
+          opens &&
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/80",
         )}
       >
@@ -647,10 +707,13 @@ function TileCaption({
 }) {
   const when = formatRelative(job.createdAt, undefined, new Date(now));
 
-  if (availability === "pending") return <>Still working · keeps going if you leave</>;
-  if (availability === "expired") return <>Expired · kept for three days</>;
-  if (job.status === "cancelled") return <>You stopped this one · {when}</>;
-  if (job.status === "failed") return <>Didn&apos;t finish · {when}</>;
+  const cr = job.characterReplace;
+  if (availability === "pending") return <>Processing… · keeps going if you leave</>;
+  if (availability === "expired") return <>Expired · {when}</>;
+  if (job.status === "cancelled") return <>Canceled · {when}</>;
+  /* Part 7 §18: "Refunded ✓" only when the ledger confirmed it (the list route reads the ledger for failed rows). */
+  if (job.status === "failed") return <>Failed{cr?.refunded ? " · Refunded ✓" : cr?.refundPending ? " · Refund pending" : ""} · {when}</>;
+  if (availability === "ready" && cr?.savedAt) return <>Saved · {when}</>;
   if (availability === "ready") {
     const hours = hoursUntilExpiry(job, now);
     const days = hours === null ? null : Math.floor(hours / 24);

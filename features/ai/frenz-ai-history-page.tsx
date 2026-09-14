@@ -61,7 +61,7 @@ export function FrenzAIHistoryPage() {
           Your <span className="text-gradient">videos</span>
         </h1>
         <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">
-          Everything you&apos;ve made with Frenz AI. Finished videos stay here for three days,
+          Everything you&apos;ve made with Frenz AI. Finished videos stay here for a few days — saved ones for longer —
           so you can come back for them.
         </p>
 

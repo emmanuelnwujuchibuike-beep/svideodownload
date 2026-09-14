@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { characterReplaceRefundStates } from "@/lib/ai/character-replace/wallet";
+
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
 import { extensionForUpload } from "@/lib/ai/media";
 import { getAiEntitlement, usageForClient } from "@/lib/ai/entitlement";
@@ -429,8 +431,24 @@ export async function GET(request: Request) {
       }),
     );
 
+    /*
+      Part 7 §18: the refund line on a history tile comes from the LEDGER. One
+      read for every finished Character Replace row on the page; the mapper's
+      own status-based value would otherwise say "refunded" the moment a job
+      failed, before the money had moved.
+    */
+    const views = rows.map((row) => jobToView(row, storedErrorMessage));
+    if (subject.kind === "user") {
+      const charged = rows.filter((r) => r.feature === "ai_character_replace" && !isActiveStatus(r.status) && (r.charged_cents ?? 0) > 0).map((r) => r.id);
+      const states = await characterReplaceRefundStates(subject.userId, charged);
+      for (const view of views) {
+        if (!view.characterReplace || !charged.includes(view.id)) continue;
+        const state = states.get(view.id) ?? "none";
+        view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+      }
+    }
     return NextResponse.json({
-      jobs: rows.map((row) => jobToView(row, storedErrorMessage)),
+      jobs: views,
       nextCursor: page.nextCursor,
     });
   } catch (e) {

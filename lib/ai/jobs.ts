@@ -77,7 +77,14 @@ export type AiJobStatus =
   | "completed"
   | "failed"
   | "cancelled"
-  | "expired";
+  | "expired"
+  /**
+   * The member removed the result (Part 7 §20, migration 0157). The files are
+   * gone and the paths cleared, like `expired`; unlike `expired` it was
+   * their choice, the result screen says so, and history leaves it out. The
+   * row stays for the ledger.
+   */
+  | "deleted";
 
 /** Mirrors `ai_jobs_provider_chk`. */
 export type AiProviderId = "replicate";
@@ -91,6 +98,7 @@ export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "failed",
   "cancelled",
   "expired",
+  "deleted",
 ] as const;
 
 /** A job that is still going to change. Everything else is terminal. */
@@ -137,10 +145,12 @@ const TRANSITIONS: Record<AiJobStatus, readonly AiJobStatus[]> = {
   */
   processing: ["finalizing", "failed", "cancelled", "expired"],
   finalizing: ["completed", "failed", "cancelled", "expired"],
-  completed: ["expired"],
-  failed: ["expired"],
-  cancelled: ["expired"],
-  expired: [],
+  // A finished job may be deleted by its owner (Part 7); an expired one too (its row is otherwise identical).
+  completed: ["expired", "deleted"],
+  failed: ["expired", "deleted"],
+  cancelled: ["expired", "deleted"],
+  expired: ["deleted"],
+  deleted: [],
 };
 
 export function canTransition(from: AiJobStatus, to: AiJobStatus): boolean {
@@ -604,6 +614,13 @@ export interface AiJobView {
     pipeline: { stages: readonly ("voice" | "replace" | "lipsync" | "finalize")[]; current: "voice" | "replace" | "lipsync" | "finalize"; records: Partial<Record<"voice" | "replace" | "lipsync" | "finalize", "pending" | "submitted" | "processing" | "succeeded" | "failed">> } | null;
     /** Whether the finished file carries a new voice (a swap, or lip-synced). */
     voiceApplied: boolean;
+    /** Part 7 §9: kept beyond the ordinary retention window at the member's request. */
+    savedAt: string | null;
+    /** Part 7 §6: the finished file's OWN facts, from ffprobe on the stored master. Null where not measured. */
+    output: { width: number | null; height: number | null; frameRate: number | null } | null;
+    /** Part 7 §12: the language and voice of a generated voice, as catalogue ids; null otherwise. */
+    languageCode: string | null;
+    voiceId: string | null;
   } | null;
 }
 /* `characterReplace` is optional on the type so fixtures and other tools' views need not name it; the mapper always sets it. */
@@ -702,8 +719,14 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
         }
       : null;
   const newVoice = settings.voiceMode === "new_voice";
+  const output = (m.output ?? null) as { width?: unknown; height?: unknown; frameRate?: unknown } | null;
+  const tts = (audio as { tts?: { languageCode?: unknown; voiceId?: unknown } | null } | null)?.tts ?? null;
   return {
     mode,
+    savedAt: typeof m.saved_at === "string" ? m.saved_at : null,
+    output: output ? { width: num(output.width), height: num(output.height), frameRate: num(output.frameRate) } : null,
+    languageCode: newVoice && audio?.source === "tts" && typeof tts?.languageCode === "string" ? tts.languageCode : null,
+    voiceId: newVoice && audio?.source === "tts" && typeof tts?.voiceId === "string" ? tts.voiceId : null,
     voiceSource: newVoice && (audio?.source === "upload" || audio?.source === "tts") ? audio.source : null,
     rateCents: num(quote?.qualityRateCents),
     references: 1 + (Array.isArray(m.references) ? m.references.length : 0),

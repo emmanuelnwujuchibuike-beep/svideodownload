@@ -428,6 +428,24 @@ function landingChunks(): string[] {
  * panels behind their existing section navigation, which is real work and is
  * not being smuggled into an unrelated commit.
  */
+/*
+ * ── 368 kB HELD (2026-09-14, Character Replace part 7) ────────────────────
+ *
+ * The route measured 371 kB and the ceiling did NOT move. The 3 kB was not a
+ * panel: it was lib/ai/character-replace/config.ts — modes, voice, lip-sync,
+ * retention — arriving in the EAGER /admin chunk through a side door. Four
+ * client panels imported a currency symbol, a crop shape or a bound from
+ * lib/landing/settings.ts, and that module builds DEFAULT_LANDING from the
+ * Character Replace normaliser at load, so a one-line value import dragged the
+ * whole config (5 kB gzipped, chunk 84812) into a page whose pricing panel is
+ * already lazy and never reads it. Found by grepping the manifest's chunks
+ * for "savedResultDays".
+ *
+ * The fix is lib/landing/bounds.ts — the pure constants, no imports — with
+ * settings.ts re-exporting them; client code imports from bounds. The same
+ * move lib/money/units.ts made on 09-13, for the same reason. The guard in
+ * lib/perf/client-imports.test.ts keeps that door shut.
+ */
 const GLOBAL_CEILING = 368 * 1024;
 
 /**

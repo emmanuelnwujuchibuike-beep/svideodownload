@@ -108,7 +108,13 @@ export async function notifyAiJobFromRow(jobId: string, opts: { local: boolean }
 
 function workspaceUrlFor(feature: string, jobId: string): string {
   const q = `?job=${encodeURIComponent(jobId)}`;
-  if (feature === "ai_character_replace") return `${SITE_URL}/studio/ai/character-replace${q}`;
+  /*
+    Part 7 §23–§24: the push opens the RESULT route for this exact job. The
+    page checks ownership on the server before it renders anything, sends a
+    signed-out member through sign-in and back, and carries no media URL —
+    only the job's id, which is worthless to anyone but its owner.
+  */
+  if (feature === "ai_character_replace") return `${SITE_URL}/studio/ai/character-replace/result/${encodeURIComponent(jobId)}`;
   return `${SITE_URL}/studio/ai/history${q}`;
 }
 

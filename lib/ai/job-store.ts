@@ -229,6 +229,8 @@ export async function listOwnJobs(
   // asking for both has contradicted itself rather than asked for an
   // intersection nothing in the product wants.
   else if (opts.statuses && opts.statuses.length > 0) query = query.in("status", [...opts.statuses]);
+  // Part 7 §20: a deleted result is out of every tab — "All" included — unless a caller asks for it by name.
+  else query = query.neq("status", "deleted");
 
   const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
   if (cursor) {

@@ -5,6 +5,7 @@ import { Plus, RefreshCw, Trash2, UserRound, X } from "lucide-react";
 import { CharacterReplaceInputDirection } from "@/features/ai/character-replace/input-direction";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
 import { ReplacementModeSelector } from "@/features/ai/character-replace/mode-selector";
+import { CharacterReplaceTutorialButton } from "@/features/ai/character-replace/tutorial-example";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { AssetSlot, CharacterAsset } from "@/lib/ai/character-replace/types";
@@ -57,8 +58,11 @@ export function CharacterReplacePhotoStep({
     <div className="space-y-6">
       <ReplacementModeSelector mode={mode} config={config} onChange={onMode} />
 
-      {/* the owner's red direction (2026-09-14): the exact kind of photo this mode wants */}
-      <CharacterReplaceInputDirection kind="photo" mode={mode} />
+      {/* the owner's red direction (2026-09-14): the exact kind of photo this mode wants, and the drawn example */}
+      <div className="space-y-2">
+        <CharacterReplaceInputDirection kind="photo" mode={mode} />
+        <CharacterReplaceTutorialButton kind="photo" mode={mode} />
+      </div>
 
       <section>
         <h3 className="text-[15px] font-bold tracking-[-0.01em]">{copy.reference.title}</h3>

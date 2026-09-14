@@ -19,8 +19,8 @@ import {
   AI_CURRENCIES,
   aiCurrencySymbol,
   type AiCurrency,
-  type LandingSettings,
-} from "@/lib/landing/settings";
+} from "@/lib/landing/bounds";
+import type { LandingSettings } from "@/lib/landing/settings";
 import { aiTopupOptions, formatCents } from "@/lib/ai/economy";
 import { cn } from "@/lib/utils";
 

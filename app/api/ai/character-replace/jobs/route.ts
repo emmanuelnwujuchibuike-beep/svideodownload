@@ -170,6 +170,8 @@ export async function POST(request: Request) {
     const { error } = await createAdminClient()
       .from("ai_jobs")
       .update({
+        // Part 7 §21: the result window is the operator's (`retention.resultHours`), not the registry's constant.
+        expires_at: new Date(Date.now() + config.retention.resultHours * 3_600_000).toISOString(),
         metadata: {
           ...(result.row.metadata ?? {}),
           tool: "character_replace",

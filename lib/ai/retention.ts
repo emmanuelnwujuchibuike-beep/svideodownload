@@ -72,7 +72,8 @@ export interface RetentionResult {
  * already swept has nothing left to remove and must not be counted again.
  */
 const TERMINAL: readonly AiJobStatus[] = AI_JOB_STATUSES.filter(
-  (s) => !isActiveStatus(s) && s !== "expired",
+  // `deleted` (Part 7) is swept by the delete route itself; the row stays for the ledger.
+  (s) => !isActiveStatus(s) && s !== "expired" && s !== "deleted",
 );
 
 export async function runAiRetention(now: Date = new Date()): Promise<RetentionResult> {
@@ -225,7 +226,7 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
  * sweep runs in batches of a hundred on a cron, so that is fine. The source
  * itself is removed by name afterwards, whatever the listing said.
  */
-async function removeJobFolder(admin: ReturnType<typeof createAdminClient>, sourcePath: string | null): Promise<{ deleted: number; errors: number }> {
+export async function removeJobFolder(admin: ReturnType<typeof createAdminClient>, sourcePath: string | null): Promise<{ deleted: number; errors: number }> {
   if (!sourcePath) return { deleted: 0, errors: 0 };
   const segments = sourcePath.split("/");
   if (segments.length !== 4) return { deleted: 0, errors: 0 };
@@ -250,7 +251,7 @@ async function removeJobFolder(admin: ReturnType<typeof createAdminClient>, sour
   }
 }
 
-async function removeObjects(
+export async function removeObjects(
   admin: ReturnType<typeof createAdminClient>,
   targets: { bucket: string; path: string | null }[],
 ): Promise<{ deleted: number; errors: number }> {
@@ -274,4 +275,44 @@ async function removeObjects(
   }
 
   return { deleted, errors };
+}
+
+/**
+ * Part 7 §20 — the member deleted a result. Every object of the job goes
+ * (the source folder with its references, voice and intermediates; the
+ * result; the poster) and the paths are cleared in the same update that
+ * writes `deleted`. The row stays: the ledger and the audit events point at
+ * it, and financial records are never deleted. Idempotent — a second call
+ * finds nothing to remove and a row already `deleted`.
+ */
+export async function deleteAiJobResult(row: Pick<AiJobRow, "id" | "status" | "source_path" | "result_path" | "poster_path" | "metadata">): Promise<{ deleted: boolean; objectsDeleted: number; errors: number }> {
+  const admin = createAdminClient();
+  if (isActiveStatus(row.status)) return { deleted: false, objectsDeleted: 0, errors: 0 };
+  const folderSource =
+    row.source_path ??
+    (typeof (row.metadata as { video?: { path?: unknown } } | null)?.video?.path === "string" ? ((row.metadata as { video: { path: string } }).video.path) : null);
+  const swept = await removeJobFolder(admin, folderSource);
+  const removed = await removeObjects(admin, [
+    { bucket: AI_SOURCE_BUCKET, path: folderSource },
+    { bucket: AI_RESULT_BUCKET, path: row.result_path },
+    { bucket: AI_RESULT_BUCKET, path: row.poster_path },
+  ]);
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({
+      status: "deleted",
+      source_path: null,
+      result_path: null,
+      poster_path: null,
+      metadata: { ...(row.metadata ?? {}), deleted_at: new Date().toISOString(), provider_output_url: null },
+    })
+    .eq("id", row.id)
+    .in("status", ["completed", "failed", "cancelled", "expired"])
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    console.error("[ai/retention] delete failed", { jobId: row.id, message: error.message });
+    return { deleted: false, objectsDeleted: swept.deleted + removed.deleted, errors: swept.errors + removed.errors + 1 };
+  }
+  return { deleted: !!data, objectsDeleted: swept.deleted + removed.deleted, errors: swept.errors + removed.errors };
 }

@@ -157,13 +157,14 @@ describe("validateJobInput", () => {
 });
 
 describe("status transitions", () => {
-  it("declares the same eight statuses the database allows", () => {
+  it("declares the same nine statuses the database allows", () => {
     // Mirrors ai_jobs_status_chk: 0142 added `finalizing`, 0146 added
     // `acquiring` (our worker fetching a pasted link, before any provider is
     // asked for anything — see the note on AiJobStatus for why it is its own
-    // state rather than a flag on `processing`).
+    // state rather than a flag on `processing`), 0157 added `deleted` (the
+    // member removed a finished result; the row stays for the ledger).
     expect([...AI_JOB_STATUSES].sort()).toEqual(
-      ["acquiring", "cancelled", "completed", "expired", "failed", "finalizing", "processing", "queued"].sort(),
+      ["acquiring", "cancelled", "completed", "deleted", "expired", "failed", "finalizing", "processing", "queued"].sort(),
     );
   });
 

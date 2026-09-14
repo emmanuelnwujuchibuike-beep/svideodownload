@@ -7,7 +7,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
 import { formatCents } from "@/lib/ai/economy";
-import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput, type LandingSettings } from "@/lib/landing/settings";
+import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
+import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 /**
@@ -114,6 +115,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [lipMaxSeconds, setLipMaxSeconds] = useState(String(cr.lipSyncMaximumDurationSeconds));
   /** §27: why the prices changed — asked for when they did, recorded beside the old version. */
   const [reason, setReason] = useState("");
+  /* ── Part 7 §21: retention ── */
+  const [resultHours, setResultHours] = useState(String(cr.retention.resultHours));
+  const [savedDays, setSavedDays] = useState(String(cr.retention.savedResultDays));
 
   /* ── recharge ── */
   const [minTopup, setMinTopup] = useState(minorToMajorInput(cr.recharge.minCents));
@@ -153,6 +157,10 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         model: (lipModels.find((m) => m.id === l.id)?.model ?? "").trim() || (cr.lipSync.find((c) => c.id === l.id)?.model ?? ""),
       })),
       lipSyncMaximumDurationSeconds: lipMaxSeconds.trim() === "" ? cr.lipSyncMaximumDurationSeconds : Math.floor(Number(lipMaxSeconds)),
+      retention: {
+        resultHours: resultHours.trim() === "" ? cr.retention.resultHours : Math.floor(Number(resultHours)),
+        savedResultDays: savedDays.trim() === "" ? cr.retention.savedResultDays : Math.floor(Number(savedDays)),
+      },
       modes: {
         face_only: modePayload(faceOnly, cr.modes.face_only),
         skin_face: modePayload(skinFace, cr.modes.skin_face),
@@ -184,7 +192,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, coverage, cr, enabled, faceOnly, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, coverage, cr, enabled, faceOnly, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -218,6 +226,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(payload.tts.model)) out.push("The voice model must look like owner/model.");
     for (const l of payload.lipSync) if (!/^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/i.test(l.model)) out.push(`${l.id} lip sync: the model must look like owner/model.`);
     if (!(payload.lipSyncMaximumDurationSeconds >= 1 && payload.lipSyncMaximumDurationSeconds <= 120)) out.push("Lip sync's longest video must be between 1 and 120 seconds.");
+    if (!(payload.retention.resultHours >= 1 && payload.retention.resultHours <= 720)) out.push("Results are kept between 1 and 720 hours.");
+    if (!(payload.retention.savedResultDays >= 1 && payload.retention.savedResultDays <= 365)) out.push("Saved results are kept between 1 and 365 days.");
     return out;
   }, [payload, symbol]);
 
@@ -566,6 +576,18 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             </Field>
             <Field id="cr-max-upload" label="Largest upload (MB)" hint="Supabase Storage refuses any file over the project's global limit (50 MB unless you raised it in the Supabase dashboard). Raise this only after raising that.">
               <input id="cr-max-upload" type="number" inputMode="numeric" min={1} max={100} value={maxUploadMb} onChange={(e) => setMaxUploadMb(e.target.value)} className={input} />
+            </Field>
+          </div>
+        </Group>
+
+        {/* ── RETENTION (Part 7 §21) ── */}
+        <Group title="Retention">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id="cr-ret-hours" label="Finished videos are kept for (hours)" hint="Then the files are removed and the row reads 'no longer available'. 1 to 720.">
+              <input id="cr-ret-hours" type="number" inputMode="numeric" min={1} max={720} value={resultHours} onChange={(e) => setResultHours(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-ret-days" label="Saved videos are kept for (days)" hint="A member who taps Save keeps the video this long from the save. 1 to 365.">
+              <input id="cr-ret-days" type="number" inputMode="numeric" min={1} max={365} value={savedDays} onChange={(e) => setSavedDays(e.target.value)} className={input} />
             </Field>
           </div>
         </Group>

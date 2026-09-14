@@ -78,7 +78,7 @@ export const AI_HISTORY_EMPTY_COPY: Record<AiHistoryFilter, { title: string; bod
   },
   completed: {
     title: "No finished videos yet",
-    body: "Once a video finishes processing, it waits here for three days.",
+    body: "Once a video finishes processing, it waits here for a few days — longer when you save it.",
   },
   cancelled: {
     title: "Nothing was stopped",
@@ -155,6 +155,7 @@ const TONES: Record<AiJobStatus, { label: string; tone: AiHistoryTone }> = {
   failed: { label: "Didn't finish", tone: "warn" },
   cancelled: { label: "Cancelled", tone: "muted" },
   expired: { label: "Expired", tone: "muted" },
+  deleted: { label: "Deleted", tone: "muted" },
 };
 
 export function historyChip(job: AiJobView, now: number): { label: string; tone: AiHistoryTone } {

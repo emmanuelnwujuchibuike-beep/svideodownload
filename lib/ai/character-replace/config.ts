@@ -281,6 +281,17 @@ export interface CharacterReplaceConfig {
   tts: CharacterReplaceTtsConfig;
   /** The longest video a lip-sync run accepts. Clamped to the tool's ceiling. */
   lipSyncMaximumDurationSeconds: number;
+  /**
+   * ── PART 7 §21: RETENTION, CONFIGURATION-DRIVEN ────────────────────────
+   * A finished video is kept `resultHours` (the registry's 72 by default);
+   * one the member SAVED is kept `savedResultDays` from the save. Sources
+   * and intermediates go with the row's expiry (the sweep removes the whole
+   * job folder). Temporary provider files are the provider's own hour.
+   */
+  retention: {
+    resultHours: number;
+    savedResultDays: number;
+  };
 }
 
 /* ───────────────────────────── defaults ──────────────────────────────────── */
@@ -491,6 +502,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
     maximumCharacters: 1_000,
   },
   lipSyncMaximumDurationSeconds: 60,
+  retention: { resultHours: 72, savedResultDays: 30 },
 };
 
 /* ───────────────────────────── normaliser ────────────────────────────────── */
@@ -698,6 +710,10 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       ),
     },
     lipSyncMaximumDurationSeconds: int(raw.lipSyncMaximumDurationSeconds, d.lipSyncMaximumDurationSeconds, 1, PLATFORM_MAX_DURATION_SECONDS),
+    retention: {
+      resultHours: int(isRecord(raw.retention) ? raw.retention.resultHours : undefined, d.retention.resultHours, 1, 24 * 30),
+      savedResultDays: int(isRecord(raw.retention) ? raw.retention.savedResultDays : undefined, d.retention.savedResultDays, 1, 365),
+    },
   };
 }
 
@@ -921,6 +937,8 @@ export interface CharacterReplacePublicConfig {
     languages: readonly string[];
   };
   lipSyncMaximumDurationSeconds: number;
+  /** Part 7 §21: how long a result is kept, and how long a saved one — printed, never assumed. */
+  retention: { resultHours: number; savedResultDays: number };
 }
 
 export interface CharacterReplacePublicMode {
@@ -1001,6 +1019,7 @@ export function publicCharacterReplaceConfig(
       languages: config.languages.map((l) => l.code).filter((code) => providerLanguages.has(code)),
     },
     lipSyncMaximumDurationSeconds: Math.min(config.lipSyncMaximumDurationSeconds, config.maximumDurationSeconds),
+    retention: config.retention,
   };
 }
 

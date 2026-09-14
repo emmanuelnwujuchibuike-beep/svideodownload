@@ -213,7 +213,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       metadata: {
         ...((await getJobAsService(jobId))?.metadata ?? job.metadata ?? {}),
         provider_output_url: null,
-        output: { width: finalProbe.width, height: finalProbe.height, durationMs: actualMs, bytes: stored.bytes, hasAudio: finalProbe.hasAudio },
+        // Part 7 §6: the finished file's OWN facts — fps included — so the result page never quotes a model's brochure.
+        output: { width: finalProbe.width, height: finalProbe.height, frameRate: finalProbe.frameRate, durationMs: actualMs, bytes: stored.bytes, hasAudio: finalProbe.hasAudio },
         color: colorNote,
         finalized_ms: Date.now() - startedAt,
       },

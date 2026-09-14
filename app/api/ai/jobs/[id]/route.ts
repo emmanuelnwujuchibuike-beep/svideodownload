@@ -9,7 +9,9 @@ import { reconcileWithProvider } from "@/lib/ai/reconcile";
 import { recoverJob, recoveryDue } from "@/lib/ai/recovery";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
-import { aiJobReadLimiter } from "@/lib/rate-limit";
+import { aiJobCreateLimiter, aiJobReadLimiter } from "@/lib/rate-limit";
+import { deleteAiJobResult } from "@/lib/ai/retention";
+import { recordJobEvent } from "@/lib/ai/job-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -168,6 +170,43 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });
     }
     console.error("[ai/jobs] get threw", { subject: subject.key, jobId: id, error: String(e) });
+    return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
+  }
+}
+
+/**
+ * DELETE /api/ai/jobs/[id] — the member removes a finished result (Part 7 §20).
+ *
+ * Owner only, through the same `getOwnJob` read every other route uses (a
+ * stranger's id is "not found"); terminal jobs only — a running job is
+ * cancelled, not deleted. The files go, the paths are cleared, the row is
+ * marked `deleted` and leaves history; the ledger is untouched (§34: no
+ * balance moves because a result was deleted). An old result URL then
+ * answers "This video has been deleted" to the owner and "not found" to
+ * everyone else, exactly as before the deletion.
+ */
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const feature = primaryAiFeature();
+  const { subject } = await resolveAiSubject(request, feature.id);
+  if (!subject || subject.kind !== "user") {
+    return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
+  }
+  const burst = await aiJobCreateLimiter.limit(`ai-delete:${subject.key}`);
+  if (!burst.success) return NextResponse.json(aiErrorBody("RATE_LIMITED"), { status: aiErrorStatus("RATE_LIMITED") });
+  const { id } = await params;
+  if (!/^[0-9a-fA-F-]{36}$/.test(id)) return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
+  try {
+    const row = await getOwnJob(subject, id);
+    if (!row) return NextResponse.json(aiErrorBody("JOB_NOT_FOUND"), { status: aiErrorStatus("JOB_NOT_FOUND") });
+    if (isActiveStatus(row.status)) return NextResponse.json(aiErrorBody("JOB_ALREADY_PROCESSING", { error: "This video is still processing. Cancel it first." }), { status: aiErrorStatus("JOB_ALREADY_PROCESSING") });
+    if (row.status === "deleted") return NextResponse.json({ job: jobToView(row, storedErrorMessage), deleted: true });
+    const outcome = await deleteAiJobResult(row);
+    await recordJobEvent(row.id, "result.deleted", { objectsDeleted: outcome.objectsDeleted, errors: outcome.errors, from: row.status }, `member:${subject.userId}`);
+    const fresh = await getOwnJob(subject, id);
+    return NextResponse.json({ job: jobToView(fresh ?? row, storedErrorMessage), deleted: outcome.deleted });
+  } catch (e) {
+    if (isAiJobError(e)) return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });
+    console.error("[ai/jobs] delete threw", { subject: subject.key, jobId: id, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });
   }
 }

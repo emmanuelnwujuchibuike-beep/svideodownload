@@ -4,7 +4,8 @@ import { UserRound } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 
 import { formatCents } from "@/lib/ai/economy";
-import { aiCurrencySymbol, majorInputToMinor, type LandingSettings } from "@/lib/landing/settings";
+import { aiCurrencySymbol, majorInputToMinor } from "@/lib/landing/bounds";
+import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 export function AiBalanceAdjustPanel({ settings }: { settings: LandingSettings }) {

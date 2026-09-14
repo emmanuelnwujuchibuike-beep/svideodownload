@@ -93,7 +93,7 @@ export function FrenzAIHistoryPlayer({
           </div>
         ) : (
           <div className="flex h-48 items-center justify-center rounded-2xl bg-black/90 px-6 text-center text-sm text-white/70">
-            This video is no longer available. Finished videos are kept for three days.
+            This video is no longer available. Finished videos are kept for a limited time.
           </div>
         )}
 

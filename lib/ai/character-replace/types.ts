@@ -352,7 +352,9 @@ export type ProcessingStatus =
   | "complete"
   | "failed"
   | "refunded"
-  | "cancelled";
+  | "cancelled"
+  /** Part 7 §27: the member removed the result — "This video has been deleted." */
+  | "deleted";
 
 export const PROCESSING_STATUSES: readonly ProcessingStatus[] = [
   "preparing",
@@ -364,6 +366,7 @@ export const PROCESSING_STATUSES: readonly ProcessingStatus[] = [
   "failed",
   "refunded",
   "cancelled",
+  "deleted",
 ] as const;
 
 /** The stages the tracker draws, in order. Terminal states are not stages. */
@@ -416,6 +419,8 @@ export function processingStatusFor(status: AiJobStatus): ProcessingStatus {
       return "failed";
     case "cancelled":
       return "cancelled";
+    case "deleted":
+      return "deleted";
   }
 }
 

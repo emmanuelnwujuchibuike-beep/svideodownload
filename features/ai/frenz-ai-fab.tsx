@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  THE FRENZ AI BUTTON — a floating circle, bottom right, on every signed-in page
+ *  THE FRENZ AI BUTTON — a floating circle, bottom right, on the history page
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Owner, 2026-09-13: "put a floating circle premium Ai button bottom right
@@ -52,14 +52,23 @@ import { cn } from "@/lib/utils";
  * sits on a composer or full-screen media: reels, a chat thread, the
  * creation flow.
  */
-const HIDDEN_PREFIXES = ["/ai", "/studio/ai", "/reels", "/feed", "/messages/", "/create", "/wallpapers"];
+/*
+  ── 🔴 ONLY ON THE HISTORY PAGE (owner, 2026-09-14: "Remove the AI button
+  widget from all pages, it should only be on the history page") ─────────────
+
+  What used to be a deny-list of surfaces is now an ALLOW-list of one: the
+  download history, in both of its doors (`/history` in the marketing shell,
+  `/downloads` in the app shell). Everywhere else draws nothing — the AI
+  tools are reached from the bottom nav's profile hub and the Studio.
+*/
+const SHOWN_PREFIXES = ["/downloads", "/history"];
 
 export function FrenzAiFab() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const dir = useScrollDirection();
   const { handle } = useEntitlements();
-  const shown = !!handle && !HIDDEN_PREFIXES.some((p) => pathname === p.replace(/\/$/, "") || pathname.startsWith(p));
+  const shown = !!handle && SHOWN_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
   useEffect(() => {
     if (!shown) return;

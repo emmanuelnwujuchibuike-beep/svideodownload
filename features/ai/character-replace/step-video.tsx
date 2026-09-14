@@ -4,6 +4,7 @@ import { RefreshCw, Trash2 } from "lucide-react";
 
 import { CharacterReplaceInputDirection } from "@/features/ai/character-replace/input-direction";
 import { CharacterReplaceInputSummary } from "@/features/ai/character-replace/input-summary";
+import { CharacterReplaceTutorialButton } from "@/features/ai/character-replace/tutorial-example";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { AssetSlot, CharacterReplaceProject } from "@/lib/ai/character-replace/types";
@@ -45,7 +46,10 @@ export function CharacterReplaceVideoStep({
     return (
       <div>
         {/* the owner's red direction (2026-09-14): the exact kind of video this mode wants */}
-        <CharacterReplaceInputDirection kind="video" mode={project.mode} className="mb-4" />
+        <div className="mb-4 space-y-2">
+          <CharacterReplaceInputDirection kind="video" mode={project.mode} />
+          <CharacterReplaceTutorialButton kind="video" mode={project.mode} />
+        </div>
         <CharacterReplaceMediaPicker
           kind="video"
           accept={CHARACTER_REPLACE_VIDEO_ACCEPT}
@@ -80,7 +84,10 @@ export function CharacterReplaceVideoStep({
 
   return (
     <div>
-      <CharacterReplaceInputDirection kind="video" mode={project.mode} className="mb-4" />
+      <div className="mb-4 space-y-2">
+          <CharacterReplaceInputDirection kind="video" mode={project.mode} />
+          <CharacterReplaceTutorialButton kind="video" mode={project.mode} />
+        </div>
       <div className="overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
         <div className="bg-[#0b0f1a]">
           <video

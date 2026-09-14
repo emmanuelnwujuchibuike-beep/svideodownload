@@ -146,7 +146,9 @@ export type WorkspaceAction =
   | { type: "lipsync/clear" }
   | { type: "consent"; value: boolean }
   | { type: "pricing"; pricing: PricingState }
-  | { type: "reset" };
+  | { type: "reset" }
+  /** Part 7 §15–§16: a fresh draft that keeps the character photo (and the mode) still in the browser's hand. */
+  | { type: "reset/keep-photo" };
 
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
   switch (action.type) {
@@ -327,6 +329,13 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return { ...state, pricing: action.pricing };
     case "reset":
       return INITIAL_STATE;
+    case "reset/keep-photo":
+      return {
+        ...INITIAL_STATE,
+        step: state.project.character ? "video" : "photo",
+        photo: state.project.character ? { status: "ready" } : { status: "empty" },
+        project: { ...EMPTY_PROJECT, mode: state.project.mode, character: state.project.character },
+      };
   }
 }
 

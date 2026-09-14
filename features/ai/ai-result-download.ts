@@ -37,10 +37,11 @@ export function aiResultDownloadHref(jobId: string): string {
   return `/api/ai/jobs/${encodeURIComponent(jobId)}/result?download=1&redirect=1`;
 }
 
-export function startAiResultDownload(job: AiJobView): void {
+/** Starts the download through the platform's one manager; answers the task id (null = refused by the storage ceiling). */
+export function startAiResultDownload(job: AiJobView): string | null {
   haptic("light");
   const href = aiResultDownloadHref(job.id);
-  startDownload({
+  return startDownload({
     url: href,
     directUrl: href,
     platform: "generic",

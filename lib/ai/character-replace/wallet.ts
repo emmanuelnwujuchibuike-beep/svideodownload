@@ -284,3 +284,30 @@ export async function characterReplaceRefundState(userId: string, jobId: string)
     return "none";
   }
 }
+
+/**
+ * The refund state of MANY jobs in one read — for a history page (Part 7
+ * §18: "Never show 'Refunded' unless the financial system confirms the
+ * refund"). Jobs with no processing charge are simply absent from the map.
+ */
+export async function characterReplaceRefundStates(userId: string, jobIds: readonly string[]): Promise<Map<string, CharacterReplaceRefundState>> {
+  const out = new Map<string, CharacterReplaceRefundState>();
+  if (!jobIds.length) return out;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("ai_product_ledger")
+      .select("job_id, status")
+      .eq("user_id", userId)
+      .eq("product", PRODUCT)
+      .eq("kind", "processing_charge")
+      .in("job_id", [...jobIds]);
+    if (error || !data) return out;
+    for (const row of data as { job_id: string | null; status: string }[]) {
+      if (!row.job_id) continue;
+      out.set(row.job_id, row.status === "refunded" ? "refunded" : row.status === "reserved" ? "pending" : "settled");
+    }
+  } catch {
+    /* an unreadable ledger leaves the status-based expectation in place, which never claims a refund */
+  }
+  return out;
+}

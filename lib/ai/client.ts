@@ -314,3 +314,19 @@ export async function getAiJobSource(
 ): Promise<AiJobResult<{ url: string; expiresIn: number }>> {
   return request(`/api/ai/jobs/${encodeURIComponent(id)}/source`);
 }
+
+/* ───────────────────────────── Part 7: keep, delete ─────────────────────── */
+
+/** Keep this result beyond the ordinary window (or stop keeping it). Owner only; no charge. */
+export async function saveAiJob(id: string, saved: boolean): Promise<AiJobResult<{ job: AiJobView; saved: boolean; expiresAt: string }>> {
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}/save`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ saved }),
+  });
+}
+
+/** Remove a finished result: its files go, the row leaves history, the ledger stays. */
+export async function deleteAiJob(id: string): Promise<AiJobResult<{ job: AiJobView; deleted: boolean }>> {
+  return request(`/api/ai/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+}

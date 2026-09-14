@@ -27,6 +27,7 @@ import {
   WORKSPACE_STEPS,
   type WorkspaceStep,
 } from "@/lib/ai/character-replace/workspace";
+import { track } from "@/lib/analytics/client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -67,11 +68,14 @@ export function CharacterReplaceWorkspace({
   basePath = "/ai/character-replace",
   aiHref = "/ai",
   historyHref = "/ai/history",
+  initialJobId = null,
 }: {
   /** This page's own path — where Paystack returns to. Allow-listed server-side. */
   basePath?: string;
   aiHref?: string;
   historyHref?: string;
+  /** Part 7: the job this page was opened FOR (the result route). Ownership was checked server-side before render. */
+  initialJobId?: string | null;
 }) {
   const ws = useCharacterReplaceWorkspace();
   const { state, loads, send } = ws;
@@ -84,7 +88,7 @@ export function CharacterReplaceWorkspace({
     so a reload or a back-swipe does not drag the finished job back over a
     fresh draft.
   */
-  const [watchedJobId, setWatchedJobId] = useState<string | null>(null);
+  const [watchedJobId, setWatchedJobId] = useState<string | null>(initialJobId);
   const [preview, setPreview] = useState<string | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -170,20 +174,39 @@ export function CharacterReplaceWorkspace({
         }
       : null);
 
-  const leaveJob = useCallback(() => {
-    setWatchedJobId(null);
-    setPreview(null);
-    send({ type: "reset" });
-  }, [send]);
+  const leaveJob = useCallback(
+    (opts?: { keepPhoto?: boolean }) => {
+      setWatchedJobId(null);
+      setPreview(null);
+      // Part 7 §15–§16: "Use same photo" keeps the character photo (and the mode) still in the browser's hand; nothing is re-read.
+      send({ type: opts?.keepPhoto && project.character ? "reset/keep-photo" : "reset" });
+      if (initialJobId) window.history.replaceState(window.history.state, "", basePath);
+    },
+    [basePath, initialJobId, project.character, send],
+  );
+  /* Part 7 §20/§27: after a delete, this page shows the deleted state rather than a stale player. */
+  const [deletedLocally, setDeletedLocally] = useState(false);
 
   // §7: a fresh attempt of the same draft, linked to the one that failed.
   const retryJob = useCallback(() => {
     const failed = watch.job?.id ?? null;
+    track("character_replace_retry_clicked", { mode: watch.job?.characterReplace?.mode ?? project.mode });
     setWatchedJobId(null);
     setPreview(null);
     if (failed) ws.retryFrom(failed);
     else send({ type: "reset" });
-  }, [send, watch.job?.id, ws]);
+    if (initialJobId) window.history.replaceState(window.history.state, "", basePath);
+  }, [basePath, initialJobId, project.mode, send, watch.job?.characterReplace?.mode, watch.job?.id, ws]);
+
+  /* §27 — the states a job id can be in that are not "processing" or "ready" */
+  const terminalNotice: { title: string; body: string } | null =
+    deletedLocally || watch.job?.status === "deleted"
+      ? { title: "This video has been deleted", body: "You removed it from FrenzSave. Your charge record is kept in your usage history." }
+      : watch.job?.status === "expired"
+        ? { title: "This result is no longer available", body: `Finished videos are kept for ${config?.retention.resultHours ? (config.retention.resultHours >= 48 ? `${Math.round(config.retention.resultHours / 24)} days` : `${config.retention.resultHours} hours`) : "a limited time"} — saved ones for ${config?.retention.savedResultDays ?? 30} days. This one has passed its date and its files have been removed.` }
+        : watchedJobId && watch.missing
+          ? { title: "We couldn't find that video", body: "It may have been removed, or the link isn't yours to open." }
+          : null;
 
   const envStage = processing ? (processing.status === "complete" ? "completed" : processing.status === "failed" || processing.status === "refunded" ? "failed" : "processing") : "idle";
 
@@ -192,9 +215,22 @@ export function CharacterReplaceWorkspace({
       <div className="px-1 pb-2">
         <FrenzAICrumb tool="Character Replace" />
 
-        {result ? (
-          /* Video Ready owns its own header (Back · Video Ready · Ready) — no page headline above it. */
-          <CharacterReplaceResultScreen result={result} config={config} historyHref={historyHref} onMakeAnother={leaveJob} onBack={leaveJob} className="mt-3" />
+        {terminalNotice ? (
+          <>
+            <Headline title={terminalNotice.title.split(" ").slice(0, -1).join(" ")} highlight={terminalNotice.title.split(" ").slice(-1)[0] + "."} subtitle={null} />
+            <TerminalNotice body={terminalNotice.body} historyHref={historyHref} onNew={() => leaveJob()} />
+          </>
+        ) : result ? (
+          /* Video Ready owns its own header (Back · Your video is ready · Ready) — no page headline above it. */
+          <CharacterReplaceResultScreen
+            result={result}
+            config={config}
+            historyHref={historyHref}
+            onMakeAnother={leaveJob}
+            onBack={() => leaveJob()}
+            onDeleted={() => setDeletedLocally(true)}
+            className="mt-3"
+          />
         ) : processing ? (
           <>
             <Headline
@@ -433,6 +469,24 @@ function Headline({ title, highlight, subtitle }: { title: string; highlight: st
       </h1>
       {subtitle ? <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">{subtitle}</p> : null}
     </header>
+  );
+}
+
+/** §27 — expired, deleted, not found: one calm card, two ways on. Never a stack trace, never someone else's facts. */
+function TerminalNotice({ body, historyHref, onNew }: { body: string; historyHref: string; onNew: () => void }) {
+  return (
+    <div className="mt-6 rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center">
+      <p className="mx-auto max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
+      <div className="mt-5 flex flex-wrap justify-center gap-2">
+        <button type="button" onClick={onNew} className="btn-lux bg-foreground text-background">
+          <Sparkles className="h-4 w-4" aria-hidden />
+          Start a new video
+        </button>
+        <Link href={historyHref} prefetch={false} className="btn-lux border border-border/70 bg-card text-foreground hover:border-foreground/25">
+          Your AI videos
+        </Link>
+      </div>
+    </div>
   );
 }
 

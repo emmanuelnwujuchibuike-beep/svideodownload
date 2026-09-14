@@ -58,6 +58,13 @@ const eventSchema = z.object({
     "download_preview_authorized",
     "download_preview_opened",
     "download_preview_limit_reached",
+    // Character Replace result experience — see lib/analytics/types.ts.
+    "character_replace_result_viewed",
+    "character_replace_video_played",
+    "character_replace_download_clicked",
+    "character_replace_saved",
+    "character_replace_shared",
+    "character_replace_retry_clicked",
     "custom",
   ]),
   visitorId: z.string().min(1).max(64),

@@ -442,7 +442,7 @@ export function useCharacterReplaceWorkspace() {
 
   const send = useCallback((action: WorkspaceAction) => {
     // A new draft mints a new request id (see `start`).
-    if (action.type === "reset") requestId.current = null;
+    if (action.type === "reset" || action.type === "reset/keep-photo") requestId.current = null;
     dispatch(action);
   }, []);
 
@@ -607,6 +607,12 @@ export function useCharacterReplaceWorkspace() {
     retryOf.current = null;
     void loadBalance();
     setLaunch({ phase: "idle" });
+    // Part 7 §16: the photo is still in this browser's hand — the result may offer "Use same photo".
+    try {
+      window.sessionStorage.setItem("frenz:cr:photo-in-hand", "1");
+    } catch {
+      /* a refused write only hides the shortcut */
+    }
     return started.job.id;
   }, [launch.phase, loadBalance, state.pricing, state.project]);
 

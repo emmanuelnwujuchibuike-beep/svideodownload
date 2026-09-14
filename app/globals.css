@@ -780,6 +780,22 @@
     .frenz-pulse-dot { animation: none; }
   }
 
+  /* The Character Replace tutorial drawings (Part 7, owner: "clear HD animated
+     images on how to upload"): the framing guide draws itself, one soft
+     highlight sweeps across, the REC dot blinks. Vector, so crisp at any
+     density; still under reduced motion. */
+  @keyframes cr-tut-guide { from { stroke-dashoffset: 900; opacity: 0.2; } to { stroke-dashoffset: 0; opacity: 1; } }
+  @keyframes cr-tut-sweep { 0% { transform: translateX(-100%); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateX(100%); opacity: 0; } }
+  @keyframes cr-tut-rec { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .cr-tut-guide { stroke-dasharray: 8 6; stroke-dashoffset: 900; animation: cr-tut-guide 1.6s ease-out forwards; }
+  .cr-tut-sweep { animation: cr-tut-sweep 2.4s ease-in-out 0.6s infinite; transform-box: fill-box; }
+  .cr-tut-rec { animation: cr-tut-rec 1.2s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .cr-tut-guide { animation: none; stroke-dashoffset: 0; }
+    .cr-tut-sweep { animation: none; opacity: 0; }
+    .cr-tut-rec { animation: none; }
+  }
+
   /* Reusable entrance animations — GPU-friendly (transform + opacity only),
      driven by the shared motion tokens. */
   @keyframes fade-up {

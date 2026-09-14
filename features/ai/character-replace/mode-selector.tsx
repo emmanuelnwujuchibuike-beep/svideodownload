@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ScanFace, Sparkles, UserRound } from "lucide-react";
+import { Check, PersonStanding, ScanFace, UserRound } from "lucide-react";
 import { useId } from "react";
 
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
@@ -45,7 +45,8 @@ export function ReplacementModeSelector({
       <div role="radiogroup" aria-labelledby={`${id}-title`} className="mt-3 grid gap-2 sm:grid-cols-3">
         {(modes.length ? modes : FALLBACK).map((m) => {
           const active = m.id === mode;
-          const Icon = m.id === "face_only" ? ScanFace : m.id === "skin_face" ? UserRound : Sparkles;
+          // Owner, 2026-09-14: a FULL-BODY figure for Full Character — it is the whole person that goes in.
+          const Icon = m.id === "face_only" ? ScanFace : m.id === "skin_face" ? UserRound : PersonStanding;
           return (
             <button
               key={m.id}

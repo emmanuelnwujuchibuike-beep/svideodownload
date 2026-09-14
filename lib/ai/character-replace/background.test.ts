@@ -219,7 +219,8 @@ describe("notifications — the exact copy, one system, once per job, never load
 
   it("the deep link names the job; the page re-authorises it server-side", () => {
     const s = src("lib/ai/notify.ts");
-    expect(s).toContain("/studio/ai/character-replace${q}");
+    // Part 7: the result route, by job id; the page checks ownership on the server before it renders.
+    expect(s).toContain("/studio/ai/character-replace/result/${encodeURIComponent(jobId)}");
     const result = src("app/api/ai/jobs/[id]/result/route.ts");
     expect(result).toContain("getOwnJob(");
   });

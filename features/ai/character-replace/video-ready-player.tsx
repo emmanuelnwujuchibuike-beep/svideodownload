@@ -37,7 +37,14 @@ import { cn } from "@/lib/utils";
  */
 export interface VideoReadyPlayerHandle {
   enterFullscreen: () => void;
+  /** Part 7 §5: the playhead, so a source swap (Original ↔ Character Replace) resumes at the same second. */
+  currentTime: () => number;
+  /** Part 7 §3: pause without a tap (used when the page swaps sources or leaves). */
+  pause: () => void;
 }
+
+/** Playback speeds offered (§3). Cycled by one button; the label is the rate. */
+const SPEEDS = [1, 1.5, 2, 0.5] as const;
 
 export const VideoReadyPlayer = forwardRef<
   VideoReadyPlayerHandle,
@@ -47,9 +54,15 @@ export const VideoReadyPlayer = forwardRef<
     /** For the fullscreen title and assistive tech. */
     title: string;
     onReady?: () => void;
+    /** Fired on the FIRST play of a source — the analytics moment (§33), never a URL. */
+    onFirstPlay?: () => void;
+    /** A chip over the top-left corner: "Original" / "Character Replace" in comparison mode (§5). */
+    badge?: string | null;
+    /** Part 7 §3: a speed control, where appropriate (off inside comparison, where two clips must stay in step). */
+    speedControl?: boolean;
     className?: string;
   }
->(function VideoReadyPlayer({ src, poster, title, onReady, className }, ref) {
+>(function VideoReadyPlayer({ src, poster, title, onReady, onFirstPlay, badge = null, speedControl = true, className }, ref) {
   const box = useRef<HTMLDivElement | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -62,6 +75,26 @@ export const VideoReadyPlayer = forwardRef<
   const [controlsShown, setControlsShown] = useState(true);
   const hideTimer = useRef<number | null>(null);
   const [aspect, setAspect] = useState<number | null>(null);
+  const [volume, setVolume] = useState(1);
+  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
+  const playedOnce = useRef(false);
+  /*
+    Part 7 §5: when `src` changes (comparison mode) the element keeps its
+    place — the playhead is remembered here and restored on the new
+    source's `loadedmetadata`, so Original and Character Replace can be
+    flipped at the same second. Muted state and speed carry over too.
+  */
+  const resumeAt = useRef<number | null>(null);
+  const lastSrc = useRef<string | null>(src);
+  useEffect(() => {
+    if (lastSrc.current !== src) {
+      const v = video.current;
+      resumeAt.current = v ? v.currentTime : null;
+      lastSrc.current = src;
+      setReady(false);
+      playedOnce.current = false;
+    }
+  }, [src]);
 
   const showControls = useCallback(() => {
     setControlsShown(true);
@@ -119,7 +152,34 @@ export const VideoReadyPlayer = forwardRef<
     if (typeof v.webkitEnterFullscreen === "function") v.webkitEnterFullscreen();
   }, []);
 
-  useImperativeHandle(ref, () => ({ enterFullscreen: () => void toggleFullscreen() }), [toggleFullscreen]);
+  const cycleSpeed = useCallback(() => {
+    const v = video.current;
+    const i = SPEEDS.indexOf(speed);
+    const next = SPEEDS[(i + 1) % SPEEDS.length]!;
+    setSpeed(next);
+    if (v) v.playbackRate = next;
+    showControls();
+  }, [showControls, speed]);
+
+  const setVolumeTo = useCallback((value: number) => {
+    const v = video.current;
+    const clamped = Math.max(0, Math.min(1, value));
+    setVolume(clamped);
+    if (v) {
+      v.volume = clamped;
+      if (clamped > 0 && v.muted) v.muted = false;
+    }
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      enterFullscreen: () => void toggleFullscreen(),
+      currentTime: () => video.current?.currentTime ?? 0,
+      pause: () => video.current?.pause(),
+    }),
+    [toggleFullscreen],
+  );
 
   useEffect(() => {
     const onChange = () => setFullscreen(!!document.fullscreenElement && document.fullscreenElement === box.current);
@@ -204,6 +264,12 @@ export const VideoReadyPlayer = forwardRef<
               const v = e.currentTarget;
               if (v.videoWidth && v.videoHeight) setAspect(v.videoWidth / v.videoHeight);
               setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+              v.playbackRate = speed;
+              v.volume = volume;
+              if (resumeAt.current !== null && Number.isFinite(v.duration)) {
+                v.currentTime = Math.min(resumeAt.current, Math.max(0, v.duration - 0.05));
+                resumeAt.current = null;
+              }
             }}
             onCanPlay={() => {
               setReady(true);
@@ -215,6 +281,10 @@ export const VideoReadyPlayer = forwardRef<
               setWaiting(false);
               setPlaying(true);
               showControls();
+              if (!playedOnce.current) {
+                playedOnce.current = true;
+                onFirstPlay?.();
+              }
             }}
             onPause={() => {
               setPlaying(false);
@@ -227,6 +297,12 @@ export const VideoReadyPlayer = forwardRef<
         ) : (
           <div className="flex h-full w-full items-center justify-center" style={poster ? { backgroundImage: `url(${poster})`, backgroundSize: "contain", backgroundPosition: "center", backgroundRepeat: "no-repeat" } : undefined} />
         )}
+
+        {badge ? (
+          <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em] text-white backdrop-blur-sm" aria-live="polite">
+            {badge}
+          </span>
+        ) : null}
 
         {/* loading / buffering */}
         {(!src || !ready || waiting) && (
@@ -280,9 +356,34 @@ export const VideoReadyPlayer = forwardRef<
             {fmt(time)} <span className="text-white/50">/ {fmt(duration)}</span>
           </span>
           <span className="flex-1" />
+          {speedControl ? (
+            <button
+              type="button"
+              onClick={cycleSpeed}
+              disabled={!ready}
+              aria-label={`Playback speed ${speed}×, press to change`}
+              title="Playback speed"
+              className="flex h-10 min-w-[2.75rem] items-center justify-center rounded-full px-2 text-[12px] font-bold tabular-nums text-white transition hover:bg-white/15 active:scale-95 disabled:opacity-40"
+            >
+              {speed}×
+            </button>
+          ) : null}
           <IconButton label={muted ? "Unmute" : "Mute"} onClick={toggleMute} disabled={!ready}>
             {muted ? <VolumeX className="h-5 w-5" aria-hidden /> : <Volume2 className="h-5 w-5" aria-hidden />}
           </IconButton>
+          {/* a volume slider where there is a pointer to drag it; phones use their own buttons */}
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={muted ? 0 : volume}
+            onChange={(e) => setVolumeTo(Number(e.currentTarget.value))}
+            aria-label="Volume"
+            aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
+            disabled={!ready}
+            className="frenz-range hidden h-1.5 w-20 cursor-pointer accent-white sm:block"
+          />
           <IconButton label={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={() => void toggleFullscreen()} disabled={!src}>
             {fullscreen ? <Minimize2 className="h-5 w-5" aria-hidden /> : <Maximize2 className="h-5 w-5" aria-hidden />}
           </IconButton>

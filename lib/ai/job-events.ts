@@ -37,6 +37,10 @@ export type AiJobEventKind =
   | "advance.completed"
   | "advance.failed"
   | "advance.retry_scheduled"
+  /* Part 7: what the member did with the result */
+  | "result.saved"
+  | "result.unsaved"
+  | "result.deleted"
   | "finalize.claimed"
   | "finalize.retry_scheduled"
   | "finalize.gave_up"

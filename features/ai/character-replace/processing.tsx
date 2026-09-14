@@ -106,6 +106,21 @@ export function CharacterReplaceProcessing({
           {cancelled ? "You stopped it before it started, so nothing was charged." : (job.message ?? "Something went wrong while processing your video.")}{" "}
           <span className={cn("font-semibold", facts?.refunded ? "text-emerald-600" : "text-foreground")}>{refundLine}</span>
         </p>
+        {/* §25 — the money, as rows: the charge, and the refund only once the ledger confirms it */}
+        {charged && facts ? (
+          <dl className="mx-auto mt-4 max-w-xs space-y-1.5 rounded-2xl border border-border/60 bg-secondary/40 px-4 py-3 text-left text-[13px]">
+            <div className="flex items-baseline justify-between gap-4">
+              <dt className="text-muted-foreground">Processing charge</dt>
+              <dd className="font-semibold tabular-nums">{amount}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-4">
+              <dt className="text-muted-foreground">Refund</dt>
+              <dd className={cn("font-semibold tabular-nums", facts.refunded ? "text-emerald-600" : "text-muted-foreground")}>
+                {facts.refunded ? `${amount} ✓` : facts.refundPending ? "Being processed" : "On its way"}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
         {onRetry ? (
           <button type="button" onClick={onRetry} className="btn-lux mt-5 bg-foreground text-background">
             <RotateCcw className="h-4 w-4" aria-hidden />

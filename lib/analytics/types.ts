@@ -147,6 +147,16 @@ export type AnalyticsEventType =
   | "multilink_zip_downloaded"
   | "multilink_limit_reached"
   | "multilink_upgrade_clicked"
+  /**
+   * Character Replace result experience (Part 7 §33). Product events only:
+   * what was pressed, never what was made — no media, no URLs, no text.
+   */
+  | "character_replace_result_viewed"
+  | "character_replace_video_played"
+  | "character_replace_download_clicked"
+  | "character_replace_saved"
+  | "character_replace_shared"
+  | "character_replace_retry_clicked"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

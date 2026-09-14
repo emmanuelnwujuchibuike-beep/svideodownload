@@ -256,6 +256,8 @@ const schema = z.object({
           maximumCharacters: z.number().int().min(1).max(10_000).optional(),
         })
         .optional(),
+      /** Part 7 §21: retention, configuration-driven. */
+      retention: z.object({ resultHours: z.number().int().min(1).max(24 * 30).optional(), savedResultDays: z.number().int().min(1).max(365).optional() }).optional(),
       /** Part 6 §27: why the prices changed. Recorded in the pricing history beside the admin's id; never stored as a setting. */
       pricingChangeReason: z.string().max(300).optional(),
       languages: z

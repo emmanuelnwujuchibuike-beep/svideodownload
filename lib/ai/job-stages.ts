@@ -287,7 +287,8 @@ const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
   completed: { label: "Ready", detail: null },
   failed: { label: "Didn't finish", detail: null },
   cancelled: { label: "Cancelled", detail: null },
-  expired: { label: "No longer available", detail: "Finished videos are kept for three days." },
+  expired: { label: "No longer available", detail: "Finished videos are kept for a limited time; saved ones for longer." },
+  deleted: { label: "Deleted", detail: "This video has been deleted." },
 };
 
 /** The whole display state, from the job and the upload. */

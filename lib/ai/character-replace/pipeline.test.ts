@@ -4,7 +4,17 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { normalizeCharacterReplaceConfig } from "./config";
-import { buildPrepareArgs, isKnownPrepareArg, PREPARE_CONSTANT_ARGS, secondsArg } from "./ffmpeg";
+import {
+  buildColorMatchArgs,
+  buildPrepareArgs,
+  buildSaturationProbeArgs,
+  isKnownColorMatchArg,
+  isKnownPrepareArg,
+  parseSatAvg,
+  PREPARE_CONSTANT_ARGS,
+  saturationMatch,
+  secondsArg,
+} from "./ffmpeg";
 import { durationWithinTolerance, readCharacterReplaceMeta, selectedRangeOf } from "./job-meta";
 import { buildWanAnimateReplaceInput, isTrustedProviderOutputUrl, WAN_ANIMATE_REPLACE, WAN_INPUT_FIELDS, wanResolutionFor } from "./model";
 import { quoteCharacterReplace } from "./pricing";
@@ -111,6 +121,65 @@ describe("the prepare plan — trim on the frame, nothing foreign in the array",
 
   it("the constant set carries no filename-like value a member could have typed", () => {
     for (const c of PREPARE_CONSTANT_ARGS) expect(c).not.toMatch(/\.(mp4|mov|webm|jpg)$/i);
+  });
+
+  it("an SDR plan is tagged BT.709; an HDR plan is tone-mapped first — and both stay fully known", () => {
+    const sdr = buildPrepareArgs(plan);
+    const vf = sdr[sdr.indexOf("-vf") + 1];
+    expect(vf.startsWith("scale=")).toBe(true);
+    expect(sdr).toContain("-color_primaries");
+    expect(sdr).toContain("bt709");
+    const hdrPlan = { ...plan, hdr: true };
+    const hdr = buildPrepareArgs(hdrPlan);
+    const hvf = hdr[hdr.indexOf("-vf") + 1];
+    expect(hvf).toMatch(/^zscale=t=linear.*tonemap=.*,scale=/);
+    for (const arg of hdr) expect(isKnownPrepareArg(arg, hdrPlan), arg).toBe(true);
+  });
+});
+
+/* ─────────────── colour stays natural — the probe and the match (owner, 09-14) ─────────────── */
+
+describe("the colour match — only ever pulls an over-saturated output BACK to the source", () => {
+  it("parses ffmpeg's SATAVG lines to a mean, and null when there is nothing to read", () => {
+    const out = "frame:0 pts:0\nlavfi.signalstats.SATAVG=20.5\nframe:5\nlavfi.signalstats.SATAVG=23.5\n";
+    expect(parseSatAvg(out)).toBeCloseTo(22, 5);
+    expect(parseSatAvg("")).toBeNull();
+    expect(parseSatAvg("garbage")).toBeNull();
+  });
+
+  it("returns null when the output is as saturated or LESS than the source (never brightens a clip)", () => {
+    expect(saturationMatch(22.9, 18.8)).toBeNull();
+    expect(saturationMatch(20, 20)).toBeNull();
+    expect(saturationMatch(20, 20.5)).toBeNull(); // within the 4% noise band
+    expect(saturationMatch(null, 20)).toBeNull();
+    expect(saturationMatch(20, null)).toBeNull();
+    expect(saturationMatch(0, 20)).toBeNull();
+  });
+
+  it("returns the source/output ratio when the output is hotter, floored at 0.6", () => {
+    expect(saturationMatch(20, 25)).toBe(0.8);
+    expect(saturationMatch(10, 40)).toBe(0.6);
+  });
+
+  it("the match plan is a fixed array — eq=saturation=<0.xxx>, BT.709 tags, audio copied — every element known", () => {
+    const plan = { input: "/tmp/frenz-ai-cr-out/abc/output.mp4", output: "/tmp/frenz-ai-cr-out/abc/final.mp4", saturation: 0.8 };
+    const args = buildColorMatchArgs(plan);
+    expect(args[args.indexOf("-vf") + 1]).toBe("eq=saturation=0.800");
+    expect(args.slice(args.indexOf("-c:a"), args.indexOf("-c:a") + 2)).toEqual(["-c:a", "copy"]);
+    expect(args).toContain("-color_trc");
+    for (const arg of args) expect(isKnownColorMatchArg(arg, plan), arg).toBe(true);
+    expect(() => buildColorMatchArgs({ ...plan, saturation: 1.2 })).toThrow();
+    expect(() => buildColorMatchArgs({ ...plan, saturation: 0 })).toThrow();
+    expect(isKnownColorMatchArg("eq=saturation=1.500", plan)).toBe(false);
+    expect(isKnownColorMatchArg("/etc/passwd", plan)).toBe(false);
+  });
+
+  it("the saturation probe reads the file it was given, drops audio, writes nowhere", () => {
+    const args = buildSaturationProbeArgs("/tmp/x/prepared.mp4");
+    expect(args).toContain("/tmp/x/prepared.mp4");
+    expect(args).toContain("-an");
+    expect(args.slice(-3)).toEqual(["-f", "null", "-"]);
+    expect(args[args.indexOf("-vf") + 1]).toContain("signalstats");
   });
 });
 

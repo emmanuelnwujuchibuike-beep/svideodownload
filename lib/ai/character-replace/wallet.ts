@@ -246,3 +246,29 @@ export function verifyQuoteSignature(q: CharacterReplaceQuote): boolean {
     return false;
   }
 }
+
+/**
+ * Whether a job's charge has come back — from the LEDGER, never inferred from
+ * a status (Part 5, §16/§29): "refunded" when the processing_charge row is
+ * marked refunded, "pending" when it is still reserved on a job that has
+ * ended, "none" when there was no charge, "settled" when it was kept.
+ */
+export type CharacterReplaceRefundState = "none" | "settled" | "pending" | "refunded";
+
+export async function characterReplaceRefundState(userId: string, jobId: string): Promise<CharacterReplaceRefundState> {
+  try {
+    const { data, error } = await createAdminClient()
+      .from("ai_product_ledger")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("product", PRODUCT)
+      .eq("kind", "processing_charge")
+      .eq("job_id", jobId)
+      .maybeSingle();
+    if (error || !data) return "none";
+    const status = (data as { status: string }).status;
+    return status === "refunded" ? "refunded" : status === "reserved" ? "pending" : "settled";
+  } catch {
+    return "none";
+  }
+}

@@ -1,6 +1,9 @@
 import "server-only";
 
-import { claimAiNotification } from "@/lib/ai/job-store";
+import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
+import { claimAiNotification, getJobAsService, noteJobDiagnostic } from "@/lib/ai/job-store";
+import { dispatchAiNotification } from "@/lib/ai/notify-dispatch";
+import { hasWebPush } from "@/lib/push/web-push";
 import type { AiFeature } from "@/lib/ai/jobs";
 import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
@@ -53,6 +56,52 @@ import { SITE_URL } from "@/lib/site";
  * retention expires it — opens history rather than a workspace that no longer
  * exists.
  */
+/**
+ * ── 🔴 SEND FROM WHERE THE KEYS ARE (2026-09-14) ─────────────────────────────
+ *
+ * Two Character Replace jobs completed on the worker this morning and no push
+ * went out: the worker has no VAPID keys, `sendPushToUser` returned before
+ * logging anything, and the claim had already been taken — so nothing could
+ * ever send it. The in-app notice was written (the owner saw "your video is
+ * ready" only on opening the app).
+ *
+ * So: a process without push keys does NOT claim. It hands the job to the
+ * frontend (`/api/internal/ai/notify`, worker-secret) and, if that fails,
+ * records `notify_pending` on the row; the member's next poll (Vercel) sees
+ * the flag and sends — still exactly once, because the claim is the same
+ * conditional UPDATE. `local: true` is the frontend route itself, which must
+ * never re-dispatch.
+ */
+async function handOffIfNoKeys(jobId: string, local: boolean | undefined): Promise<boolean> {
+  if (hasWebPush || local) return false;
+  const handed = await dispatchAiNotification(jobId);
+  if (!handed.dispatched) {
+    await noteJobDiagnostic(jobId, { notify_pending: true, notify_detail: handed.detail.slice(0, 200) });
+    console.warn("[ai/notify] no push keys here and the hand-off failed — left pending", { jobId, detail: handed.detail });
+  }
+  return true;
+}
+
+/**
+ * Announce a job from its ROW — completed → finished, failed/cancelled →
+ * failed. Used by the frontend's internal notify route (the worker's
+ * hand-off) and by the member-poll fallback for a row left `notify_pending`.
+ * Idempotent through the claim; a job that is not terminal sends nothing.
+ */
+export async function notifyAiJobFromRow(jobId: string, opts: { local: boolean }): Promise<"sent" | "skipped" | "not-terminal"> {
+  const job = await getJobAsService(jobId);
+  if (!job || !job.user_id) return "skipped";
+  if (job.status === "completed") {
+    await notifyAiJobFinished({ userId: job.user_id, jobId: job.id, feature: job.feature, audioRestored: job.audio_restored, durationMs: null, local: opts.local });
+    return "sent";
+  }
+  if (job.status === "failed" || job.status === "cancelled" || job.status === "expired") {
+    await notifyAiJobFailed({ userId: job.user_id, jobId: job.id, feature: job.feature, message: "", errorCode: job.error_code, local: opts.local });
+    return "sent";
+  }
+  return "not-terminal";
+}
+
 function workspaceUrlFor(feature: string, jobId: string): string {
   const q = `?job=${encodeURIComponent(jobId)}`;
   if (feature === "ai_character_replace") return `${SITE_URL}/studio/ai/character-replace${q}`;
@@ -68,7 +117,10 @@ export async function notifyAiJobFinished(opts: {
   audioRestored?: boolean | null;
   /** Shapes the sentence: a job somebody waited out reads differently. */
   durationMs?: number | null;
+  /** True only inside /api/internal/ai/notify — the process that holds the keys. */
+  local?: boolean;
 }): Promise<void> {
+  if (await handOffIfNoKeys(opts.jobId, opts.local)) return;
   /*
     🔴 THE CLAIM COMES FIRST. Four call sites can announce one job (the
     finalizer, reconcile, the stall sweep) and a webhook can be delivered twice.
@@ -135,9 +187,14 @@ export async function notifyAiJobFailed(opts: {
    * which is the safer default — see `outcomeForErrorCode`.
    */
   errorCode?: string | null;
+  local?: boolean;
 }): Promise<void> {
+  if (await handOffIfNoKeys(opts.jobId, opts.local)) return;
   // One announcement per job, whichever safety net gets there first.
   if (!(await claimAiNotification(opts.jobId))) return;
+  // Character Replace: "refunded" only when the ledger says so (Part 5, §16).
+  const refunded =
+    (opts.feature ?? "ai_character_replace") === "ai_character_replace" ? await characterReplaceRefundState(opts.userId, opts.jobId) : null;
 
   /*
     ── 🔴 THE COPY, NOT THE CALLER'S MESSAGE ──────────────────────────────────
@@ -160,6 +217,7 @@ export async function notifyAiJobFailed(opts: {
   const copy = aiNotificationCopy({
     feature: opts.feature ?? "ai_character_replace",
     outcome: outcomeForErrorCode(opts.errorCode),
+    refunded: refunded === "refunded" ? true : refunded === "pending" ? false : null,
   });
 
   try {

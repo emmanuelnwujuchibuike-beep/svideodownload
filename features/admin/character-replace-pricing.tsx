@@ -79,6 +79,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
 
   /* ── limits ── */
   const [maxSeconds, setMaxSeconds] = useState(String(cr.maximumDurationSeconds));
+  const [maxUploadMb, setMaxUploadMb] = useState(String(Math.round(cr.maximumUploadBytes / (1024 * 1024))));
   const [trimMin, setTrimMin] = useState(String(cr.trim.minimumSeconds));
 
   /* ── recharge ── */
@@ -118,6 +119,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         perSecondCents: majorInputToMinor(l.perSecond) ?? cr.lipSync.find((c) => c.id === l.id)?.perSecondCents ?? 0,
       })),
       maximumDurationSeconds: maxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(maxSeconds)),
+      maximumUploadBytes: maxUploadMb.trim() === "" ? cr.maximumUploadBytes : Math.floor(Number(maxUploadMb)) * 1024 * 1024,
       trim: { minimumSeconds: trimMin.trim() === "" ? cr.trim.minimumSeconds : Number(trimMin) },
       recharge: {
         minCents: majorInputToMinor(minTopup) ?? cr.recharge.minCents,
@@ -127,7 +129,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [basePrice, cr, enabled, goFast, lipSyncEnabled, lipTiers, maxSeconds, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, trimMin, voiceSurcharge]);
+  }, [basePrice, cr, enabled, goFast, lipSyncEnabled, lipTiers, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, trimMin, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -137,6 +139,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       out.push("Longest video must be between 1 and 120 seconds.");
     }
     if (!(payload.trim.minimumSeconds >= 0.5 && payload.trim.minimumSeconds <= 30)) out.push("Shortest kept range must be between 0.5 and 30 seconds.");
+    if (!(payload.maximumUploadBytes >= 1024 * 1024 && payload.maximumUploadBytes <= 100 * 1024 * 1024)) out.push("Largest upload must be between 1 and 100 MB.");
     if (payload.trim.minimumSeconds > payload.maximumDurationSeconds) out.push("Shortest kept range cannot exceed the longest video.");
     if (!payload.qualities.some((q) => q.enabled)) out.push("At least one quality must be on.");
     if (payload.recharge.minCents < 100) out.push(`Minimum recharge must be at least ${formatCents(100, symbol)}.`);
@@ -358,6 +361,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             </Field>
             <Field id="cr-trim-min" label="Shortest kept range (seconds)" hint="A trim cannot keep less than this. 0.5 to 30.">
               <input id="cr-trim-min" type="number" inputMode="decimal" min={0.5} max={30} step="any" value={trimMin} onChange={(e) => setTrimMin(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-max-upload" label="Largest upload (MB)" hint="Supabase Storage refuses any file over the project's global limit (50 MB unless you raised it in the Supabase dashboard). Raise this only after raising that.">
+              <input id="cr-max-upload" type="number" inputMode="numeric" min={1} max={100} value={maxUploadMb} onChange={(e) => setMaxUploadMb(e.target.value)} className={input} />
             </Field>
           </div>
         </Group>

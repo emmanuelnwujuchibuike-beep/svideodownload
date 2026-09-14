@@ -1,9 +1,12 @@
+import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
+import { buildColorMatchArgs, buildSaturationProbeArgs, isKnownColorMatchArg, parseSatAvg, saturationMatch } from "@/lib/ai/character-replace/ffmpeg";
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
+import { signSourceUrl } from "@/lib/ai/storage-server";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
@@ -69,6 +72,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
 
   const dir = path.join(tmpdir(), "frenz-ai-cr-out", jobId.replace(/[^0-9a-fA-F-]/g, ""));
   const outputFile = path.join(dir, "output.mp4");
+  const sourceFile = path.join(dir, "prepared.mp4");
+  const matchedFile = path.join(dir, "final.mp4");
   try {
     await mkdir(dir, { recursive: true });
     // The provider's file, with the ceiling enforced as the bytes arrive.
@@ -95,21 +100,55 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       await noteJobDiagnostic(jobId, { audio_missing_from_provider: true });
     }
 
+    /*
+      ── COLOUR STAYS NATURAL (owner, 2026-09-14) ──────────────────────────
+      The model tends to leave saturation a touch above its input. Measure the
+      prepared source and the output; when the output is hotter, pull it back
+      to the source's level (never below 0.6, never the other way) and tag it
+      BT.709. A clip that came back natural is stored untouched. Any failure
+      in this step keeps the untouched output — colour must never fail a job.
+    */
+    let finalFile = outputFile;
+    let colorNote: Record<string, unknown> = { matched: false };
+    try {
+      if (meta?.prepared?.path) {
+        await downloadToFile(await signSourceUrl(meta.prepared.path), sourceFile, MAX_OUTPUT_BYTES);
+        const [sourceSat, outputSat] = await Promise.all([measureSaturation(sourceFile), measureSaturation(outputFile)]);
+        const saturation = saturationMatch(sourceSat, outputSat);
+        colorNote = { sourceSat, outputSat, saturation, matched: false };
+        if (saturation !== null) {
+          const plan = { input: outputFile, output: matchedFile, saturation };
+          const args = buildColorMatchArgs(plan);
+          if (args.every((a) => isKnownColorMatchArg(a, plan))) {
+            const ok = await runFfmpegQuiet(args, 10 * 60_000);
+            const reprobe = ok ? await probeMedia(matchedFile) : null;
+            if (reprobe?.hasVideo && reprobe.durationSeconds && Math.abs(reprobe.durationSeconds - probe.durationSeconds) < 0.5) {
+              finalFile = matchedFile;
+              colorNote = { ...colorNote, matched: true };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[cr/finalize] colour match skipped", { jobId, error: String(e).slice(0, 200) });
+    }
+    const finalProbe = finalFile === outputFile ? probe : ((await probeMedia(finalFile)) ?? probe);
+
     let stored: { path: string; bytes: number };
     try {
-      stored = await uploadFinalResult({ ownerId, feature: feature.id, jobId, filePath: outputFile });
+      stored = await uploadFinalResult({ ownerId, feature: feature.id, jobId, filePath: finalFile });
     } catch (e) {
       throw new CrFinalizeFailure("FINAL_UPLOAD_FAILED", String(e), "system");
     }
-    const posterPath = await makeResultPoster({ videoPath: outputFile, dir, ownerId, feature: feature.id, jobId, durationSeconds: probe.durationSeconds });
+    const posterPath = await makeResultPoster({ videoPath: finalFile, dir, ownerId, feature: feature.id, jobId, durationSeconds: finalProbe.durationSeconds });
 
     const completed = await transitionJob(jobId, ["finalizing"], "completed", {
       result_path: stored.path,
       poster_path: posterPath,
       result_size: stored.bytes,
-      result_duration: probe.durationSeconds,
+      result_duration: finalProbe.durationSeconds,
       result_mime_type: "video/mp4",
-      audio_restored: audioExpected ? probe.hasAudio : null,
+      audio_restored: audioExpected ? finalProbe.hasAudio : null,
       completed_at: new Date().toISOString(),
       error_code: null,
       error_message: null,
@@ -117,7 +156,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       metadata: {
         ...((await getJobAsService(jobId))?.metadata ?? job.metadata ?? {}),
         provider_output_url: null,
-        output: { width: probe.width, height: probe.height, durationMs: actualMs, bytes: stored.bytes, hasAudio: probe.hasAudio },
+        output: { width: finalProbe.width, height: finalProbe.height, durationMs: actualMs, bytes: stored.bytes, hasAudio: finalProbe.hasAudio },
+        color: colorNote,
         finalized_ms: Date.now() - startedAt,
       },
     });
@@ -155,6 +195,27 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
 
 /** A 60 s 720p output from the model is a few tens of MB; a ceiling well above that. */
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024;
+
+const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
+
+/** Mean saturation of a file (sampled frames), or null when ffmpeg could not say. */
+function measureSaturation(filePath: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    execFile(FFMPEG, buildSaturationProbeArgs(filePath), { windowsHide: true, timeout: 120_000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+      if (err) {
+        resolve(null);
+        return;
+      }
+      resolve(parseSatAvg(String(stdout)));
+    });
+  });
+}
+
+function runFfmpegQuiet(args: string[], timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(FFMPEG, args, { windowsHide: true, timeout: timeoutMs, maxBuffer: 1024 * 1024 }, (err) => resolve(!err));
+  });
+}
 
 class CrFinalizeFailure extends Error {
   constructor(

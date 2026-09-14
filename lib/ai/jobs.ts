@@ -501,6 +501,8 @@ export interface AiJobRow {
   started_at: string | null;
   completed_at: string | null;
   expires_at: string | null;
+  /** When the one announcement for this job was claimed (lib/ai/job-store.ts claimAiNotification). */
+  notified_at: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -571,8 +573,10 @@ export interface AiJobView {
     trimmed: boolean;
     chargedCents: number | null;
     currency: string | null;
-    /** True for a failed/cancelled job whose charge went back — the ledger's refund is guaranteed on those paths. */
+    /** True once the LEDGER shows the charge came back (set by the job read route); the mapper's own value is the status-based expectation. */
     refunded: boolean;
+    /** True while a finished job's charge is still reserved on the ledger — the refund is on its way, not done (Part 5, §29). */
+    refundPending?: boolean;
     voiceMode: "original" | "new_voice";
     lipSyncMode: "standard" | "studio" | null;
   } | null;

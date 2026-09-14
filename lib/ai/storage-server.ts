@@ -79,7 +79,16 @@ export async function createSourceUploadTicket(opts: {
       ? aiCharacterKey(opts.userId, opts.feature, opts.jobId, opts.extension)
       : aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
   const admin = createAdminClient();
-  const { data, error } = await admin.storage.from(AI_SOURCE_BUCKET).createSignedUploadUrl(path);
+  /*
+    🔴 `upsert: true` (2026-09-14). A retry after a half-finished upload —
+    the photo landed, the video did not — asked for tickets again and Storage
+    answered 409 "The resource already exists" for the photo's path, which
+    surfaced as "We couldn't save that file" on EVERY retry (owner: "it keeps
+    showing me"). A ticket that may overwrite the member's own object in their
+    own job folder is exactly what a retry needs; the PUT already sent
+    `x-upsert: true`.
+  */
+  const { data, error } = await admin.storage.from(AI_SOURCE_BUCKET).createSignedUploadUrl(path, { upsert: true });
 
   if (error || !data?.signedUrl) {
     console.error("[ai/storage] upload ticket failed", { jobId: opts.jobId, message: error?.message });

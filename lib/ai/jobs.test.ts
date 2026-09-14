@@ -262,6 +262,7 @@ describe("jobToView", () => {
     started_at: "2026-09-07T10:00:05.000Z",
     completed_at: "2026-09-07T10:01:05.000Z",
     expires_at: "2026-09-10T10:00:00.000Z",
+    notified_at: null,
     metadata: { source_name: "holiday.mp4" },
   };
 

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
+import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
 import { getOwnJob } from "@/lib/ai/job-store";
-import { jobToView, primaryAiFeature } from "@/lib/ai/jobs";
+import { isActiveStatus, jobToView, primaryAiFeature, type AiJobRow, type AiJobView } from "@/lib/ai/jobs";
+import { notifyAiJobFromRow } from "@/lib/ai/notify";
 import { reconcileWithProvider } from "@/lib/ai/reconcile";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
@@ -34,6 +36,31 @@ export const dynamic = "force-dynamic";
  * provider account, the paths are private-bucket keys, and the message is
  * whatever a provider chose to say, which is not fit to be shown to anyone.
  */
+/**
+ * The view, plus two things only a Character Replace job needs (Part 5):
+ *
+ *   · the refund state from the LEDGER — "pending" while a failed job's
+ *     charge is still reserved, "refunded" once it came back — so the
+ *     failure screen never claims a refund the ledger has not made (§29);
+ *   · the notification fallback: a terminal job whose announcement was left
+ *     `notify_pending` (the worker had no push keys and could not reach the
+ *     frontend) is announced HERE, on the member's own poll, from the process
+ *     that holds the keys. Idempotent through the claim (§21).
+ */
+async function viewWithMoney(row: AiJobRow): Promise<AiJobView> {
+  const view = jobToView(row, storedErrorMessage);
+  if (row.feature !== "ai_character_replace" || !row.user_id) return view;
+  const terminal = !isActiveStatus(row.status);
+  if (terminal && !row.notified_at && row.metadata?.notify_pending === true) {
+    await notifyAiJobFromRow(row.id, { local: true }).catch((e) => console.error("[ai/jobs] pending notify failed", { jobId: row.id, error: String(e) }));
+  }
+  if (view.characterReplace && terminal && (row.charged_cents ?? 0) > 0) {
+    const state = await characterReplaceRefundState(row.user_id, row.id);
+    view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+  }
+  return view;
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const feature = primaryAiFeature();
   if (!feature) {
@@ -122,17 +149,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (changed || (await failStalledJob(row))) {
       const fresh = await getOwnJob(subject, id);
       if (fresh) {
-        return applyAiSubjectCookie(
-          NextResponse.json({ job: jobToView(fresh, storedErrorMessage) }),
-          resolution,
-        );
+        return applyAiSubjectCookie(NextResponse.json({ job: await viewWithMoney(fresh) }), resolution);
       }
     }
 
-    return applyAiSubjectCookie(
-      NextResponse.json({ job: jobToView(row, storedErrorMessage) }),
-      resolution,
-    );
+    return applyAiSubjectCookie(NextResponse.json({ job: await viewWithMoney(row) }), resolution);
   } catch (e) {
     if (isAiJobError(e)) {
       return NextResponse.json(aiErrorBody(e.code), { status: aiErrorStatus(e.code) });

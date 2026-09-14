@@ -91,8 +91,47 @@ export function aiNotificationCopy(input: {
   feature: AiFeature;
   outcome: AiNotificationOutcome;
   durationMs?: number | null;
+  /**
+   * Character Replace (Part 5, §16): whether the refund has ACTUALLY landed on
+   * the ledger. "Your balance has been refunded" is written only when true;
+   * otherwise the sentence says the refund is being processed. Never claimed
+   * from a status alone.
+   */
+  refunded?: boolean | null;
 }): AiNotificationCopy {
   const noun = mediaNoun(input.feature);
+  /*
+    ── Character Replace has its own sentences (owner, Part 5 §16) ─────────
+    "Your video is ready ✨ / Your Character Replace video has finished
+    processing. Tap to view it." and "Character Replace couldn't finish /
+    Something went wrong while processing your video. Your balance has been
+    refunded." — the last clause only once the ledger says so.
+  */
+  if (input.feature === "ai_character_replace") {
+    if (input.outcome === "completed") {
+      return {
+        title: `Your video is ready ${SPARKLE}`,
+        body: "Your Character Replace video has finished processing. Tap to view it.",
+        genericBody: "Your Frenz AI video is ready.",
+        tag: "frenz-ai-done",
+      };
+    }
+    const money =
+      input.refunded === true
+        ? "Your balance has been refunded."
+        : input.refunded === false
+          ? "Your balance refund is being processed."
+          : "You weren't charged for it.";
+    return {
+      title: "Character Replace couldn't finish",
+      body:
+        input.outcome === "unsupported"
+          ? `We couldn't work with that file. ${money} Try another video or photo.`
+          : `Something went wrong while processing your video. ${money}`,
+      genericBody: "A Frenz AI job needs your attention.",
+      tag: "frenz-ai-failed",
+    };
+  }
 
   if (input.outcome === "completed") {
     /*

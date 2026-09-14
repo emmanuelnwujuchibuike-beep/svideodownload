@@ -57,7 +57,14 @@ export function CharacterReplaceVideoStep({
           The person in this video is who gets replaced. Their movement, expressions, the scene and the camera stay as
           they are.
           {maxDurationSeconds !== null ? ` Up to ${formatDuration(maxDurationSeconds)} long — longer videos can be trimmed in the next step.` : ""}
+          {config?.maximumUploadBytes ? ` Files up to ${Math.round(config.maximumUploadBytes / (1024 * 1024))} MB.` : ""}
         </p>
+        {/* The limit that actually applied, in the refusal — the generic copy names the platform ceiling. */}
+        {refusal === "file-too-large" && config?.maximumUploadBytes ? (
+          <p role="status" className="mt-2 text-[12.5px] font-semibold text-rose-500">
+            This video is over {Math.round(config.maximumUploadBytes / (1024 * 1024))} MB. Trim it or export a smaller version first.
+          </p>
+        ) : null}
       </div>
     );
   }

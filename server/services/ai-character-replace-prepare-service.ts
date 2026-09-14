@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -166,12 +166,29 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
 
     /* ── 4. cut and normalise ────────────────────────────────────────────── */
     const trimmed = range.startMs > 0 || range.endMs < sourceMs;
-    const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null };
-    const args = buildPrepareArgs(plan);
+    /*
+      HDR in → SDR out, properly (owner, 2026-09-14: "extra colour"). An HLG/PQ
+      or 10-bit BT.2020 source is tone-mapped to BT.709 before the model sees
+      it. If this ffmpeg build lacks zscale/tonemap the encode is retried
+      without the chain — a plain conversion beats no video, and the row says
+      which one ran.
+    */
+    const color = await probeColor(videoFile);
+    const hdr = isHdrSource(color);
+    let plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null, hdr };
+    let args = buildPrepareArgs(plan);
     for (const arg of args) {
       if (!isKnownPrepareArg(arg, plan)) throw new PrepareFailure("PREPARATION_FAILED", `refusing an unknown ffmpeg argument`, "system");
     }
-    const cut = await runPrepare(args);
+    let cut = await runPrepare(args);
+    let toneMapped = hdr;
+    if (!cut.ok && hdr) {
+      console.warn("[cr/prepare] HDR tone-map failed, retrying as a plain conversion", { jobId, detail: cut.detail.slice(0, 200) });
+      plan = { ...plan, hdr: false };
+      args = buildPrepareArgs(plan);
+      cut = await runPrepare(args);
+      toneMapped = false;
+    }
     if (!cut.ok) throw new PrepareFailure("PREPARATION_FAILED", cut.detail || "ffmpeg failed", "system");
 
     /* ── 5. the result is what was priced, or nothing ────────────────────── */
@@ -209,6 +226,7 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
             hasAudio: videoProbe.hasAudio,
           },
           character: { ...meta.character, size: imageBytes, width: imageProbe.width, height: imageProbe.height },
+          color: { source: color, hdr, toneMapped },
           prepared: {
             path: key,
             durationMs: preparedMs,
@@ -282,6 +300,47 @@ async function failPrepare(job: AiJobRow, failure: PrepareFailure): Promise<void
     detail: failure.detail.slice(0, 300),
     transition: "acquiring -> failed",
     refunded: !!updated,
+  });
+}
+
+/** The source's colour signalling: transfer, primaries, matrix, pixel format. Unknown reads as null. */
+export interface ColorSignal {
+  transfer: string | null;
+  primaries: string | null;
+  matrix: string | null;
+  pixFmt: string | null;
+}
+
+export function isHdrSource(c: ColorSignal | null): boolean {
+  if (!c) return false;
+  const t = (c.transfer ?? "").toLowerCase();
+  const p = (c.primaries ?? "").toLowerCase();
+  const f = (c.pixFmt ?? "").toLowerCase();
+  return t === "arib-std-b67" || t === "smpte2084" || p === "bt2020" || /10le|10be|12le|12be/.test(f);
+}
+
+const FFPROBE = process.env.FFPROBE_PATH || "ffprobe";
+
+function probeColor(filePath: string): Promise<ColorSignal | null> {
+  return new Promise((resolve) => {
+    execFile(
+      FFPROBE,
+      ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt,color_transfer,color_primaries,color_space", "-of", "json", filePath],
+      { windowsHide: true, timeout: 30_000 },
+      (err, stdout) => {
+        if (err) {
+          resolve(null);
+          return;
+        }
+        try {
+          const s = (JSON.parse(String(stdout)).streams?.[0] ?? {}) as Record<string, string | undefined>;
+          const norm = (v: string | undefined) => (v && v !== "unknown" ? v : null);
+          resolve({ transfer: norm(s.color_transfer), primaries: norm(s.color_primaries), matrix: norm(s.color_space), pixFmt: norm(s.pix_fmt) });
+        } catch {
+          resolve(null);
+        }
+      },
+    );
   });
 }
 

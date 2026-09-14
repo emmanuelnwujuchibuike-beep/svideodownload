@@ -30,6 +30,29 @@ export const PREPARE_MAX_LONG_EDGE = 1920;
 /** The scale filter: cap the long edge, keep the aspect, keep both sides even (yuv420p needs it). */
 const SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(iw,${PREPARE_MAX_LONG_EDGE})/2)*2,-2)':h='if(gt(iw,ih),-2,trunc(min(ih,${PREPARE_MAX_LONG_EDGE})/2)*2)'`;
 
+/*
+  ── 🔴 COLOUR STAYS NATURAL (owner, 2026-09-14: "it gives it extra color more
+  than the original video, it supposed to stay natural") ─────────────────────
+
+  Two things can make a result look "more colourful" than the source, and
+  neither is the member's fault:
+
+    1. An HDR source (an iPhone's HLG / PQ, 10-bit, BT.2020). Converting that to
+       8-bit yuv420p WITHOUT tone-mapping hands the model wrong primaries and a
+       crushed transfer — every colour reads hotter. `HDR_TO_SDR_FILTER` maps it
+       to BT.709 SDR properly (zscale → linear → hable tonemap → bt709) before
+       the model sees a frame.
+    2. The model's own output, which tends to leave saturation a touch higher
+       than its input. The finalizer MEASURES the source and the output
+       (`buildSaturationProbeArgs`) and, only when the output is more saturated,
+       pulls it back to the source's level (`buildColorMatchArgs`) — never the
+       other way, never past 0.6, so a naturally vivid clip stays vivid.
+
+  Every output is tagged BT.709 / limited range so a player never has to guess.
+*/
+const HDR_TO_SDR_FILTER = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p";
+const COLOR_TAG_ARGS = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"] as const;
+
 export const PREPARE_CONSTANT_ARGS = new Set<string>([
   "-y",
   "-hide_banner",
@@ -44,6 +67,8 @@ export const PREPARE_CONSTANT_ARGS = new Set<string>([
   "0:a?",
   "-vf",
   SCALE_FILTER,
+  `${HDR_TO_SDR_FILTER},${SCALE_FILTER}`,
+  ...COLOR_TAG_ARGS,
   "-c:v",
   "libx264",
   "-preset",
@@ -74,6 +99,8 @@ export interface PreparePlan {
   /** The kept range, integer milliseconds. `null` end = to the end of the file. */
   startMs: number;
   endMs: number | null;
+  /** True when the source is HDR (HLG/PQ transfer, BT.2020 primaries or 10-bit): it is tone-mapped to SDR first. */
+  hdr?: boolean;
 }
 
 /** Milliseconds → the seconds string ffmpeg reads, three decimals, no locale. */
@@ -93,7 +120,8 @@ export function buildPrepareArgs(plan: PreparePlan): string[] {
   args.push(
     "-map", "0:v:0",
     "-map", "0:a?",
-    "-vf", SCALE_FILTER,
+    "-vf", plan.hdr ? `${HDR_TO_SDR_FILTER},${SCALE_FILTER}` : SCALE_FILTER,
+    ...COLOR_TAG_ARGS,
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-crf", "20",
@@ -118,4 +146,66 @@ export function isKnownPrepareArg(arg: string, plan: PreparePlan): boolean {
   if (PREPARE_CONSTANT_ARGS.has(arg)) return true;
   if (arg === plan.input || arg === plan.output) return true;
   return /^\d+\.\d{3}$/.test(arg);
+}
+
+/* ───────────────────────── the colour probe and the match ─────────────────── */
+
+export const SATURATION_SAMPLE_EVERY = 5;
+
+/**
+ * Mean saturation of a file, sampled every fifth frame, printed one line per
+ * frame as `lavfi.signalstats.SATAVG=<n>` on stdout. Parse with `parseSatAvg`.
+ */
+export function buildSaturationProbeArgs(input: string): string[] {
+  return [
+    "-v", "error", "-nostdin",
+    "-i", input,
+    "-vf", `select='not(mod(n,${SATURATION_SAMPLE_EVERY}))',signalstats,metadata=print:key=lavfi.signalstats.SATAVG:file=-`,
+    "-an", "-f", "null", "-",
+  ];
+}
+
+export function parseSatAvg(stdout: string): number | null {
+  const values: number[] = [];
+  for (const m of stdout.matchAll(/SATAVG=([0-9.]+)/g)) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n)) values.push(n);
+  }
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+/**
+ * How much to pull the output's saturation back toward the source's, or null
+ * when nothing should change. Only ever a reduction (≤ 1), never below 0.6,
+ * and only when the output is at least 4 % more saturated than the source —
+ * a frame's noise must not trigger a re-encode.
+ */
+export function saturationMatch(sourceSat: number | null, outputSat: number | null): number | null {
+  if (sourceSat === null || outputSat === null || sourceSat <= 0 || outputSat <= 0) return null;
+  const ratio = sourceSat / outputSat;
+  if (ratio >= 0.96) return null;
+  return Math.max(0.6, Math.round(ratio * 1000) / 1000);
+}
+
+/** Re-encode the output with the saturation pulled back, tagged BT.709. Audio copied untouched. */
+export function buildColorMatchArgs(plan: { input: string; output: string; saturation: number }): string[] {
+  if (!(plan.saturation > 0 && plan.saturation <= 1)) throw new Error("saturation must be in (0, 1]");
+  return [
+    "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+    "-i", plan.input,
+    "-map", "0:v:0", "-map", "0:a?",
+    "-vf", `eq=saturation=${plan.saturation.toFixed(3)}`,
+    ...COLOR_TAG_ARGS,
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+    "-c:a", "copy",
+    "-movflags", "+faststart", "-f", "mp4",
+    plan.output,
+  ];
+}
+
+export function isKnownColorMatchArg(arg: string, plan: { input: string; output: string }): boolean {
+  if (PREPARE_CONSTANT_ARGS.has(arg) || arg === "copy" || arg === "18") return true;
+  if (arg === plan.input || arg === plan.output) return true;
+  return /^eq=saturation=0\.\d{3}$|^eq=saturation=1\.000$/.test(arg);
 }

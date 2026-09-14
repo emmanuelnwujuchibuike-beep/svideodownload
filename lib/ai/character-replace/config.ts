@@ -226,7 +226,16 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   basePriceCents: 0,
   minimumChargeCents: 100,
   maximumDurationSeconds: 60,
-  maximumUploadBytes: PLATFORM_MAX_UPLOAD_BYTES,
+  /*
+    🔴 50 MB BY DEFAULT, NOT THE PLATFORM'S 100 (2026-09-14). Supabase Storage
+    refuses any single object over the project's global limit, which is 50 MB
+    unless the operator raises it in the Supabase dashboard — and a 54 MB
+    phone video failed its PUT at exactly that wall today. The interface now
+    refuses at this figure BEFORE uploading, with the limit in the sentence.
+    Raise it here (Admin → Character Replace pricing → Limits) only after
+    raising the Storage limit, or uploads fail again with the same symptom.
+  */
+  maximumUploadBytes: 50 * 1024 * 1024,
   maximumPixels: PLATFORM_MAX_PIXELS,
   /*
     🔴 1080p SHIPS DISABLED. The provider the owner named for Part 4 (Wan 2.2

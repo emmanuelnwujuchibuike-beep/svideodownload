@@ -96,8 +96,9 @@ function due(job: Pick<AiJobRow, "id" | "status" | "started_at" | "created_at">,
  * is unreachable. A member seeing "still processing" for another minute is a
  * much better outcome than a poll that 500s.
  */
-export async function reconcileWithProvider(job: AiJobRow, now: number = Date.now()): Promise<boolean> {
-  if (!job.replicate_prediction_id || !due(job, now)) return false;
+export async function reconcileWithProvider(job: AiJobRow, now: number = Date.now(), opts: { force?: boolean } = {}): Promise<boolean> {
+  // `force` is the operator's "Reconcile now" (Part 5, §35): the grace and the throttle are theirs to skip.
+  if (!job.replicate_prediction_id || (!opts.force && !due(job, now))) return false;
 
   const feature = aiFeature(job.feature);
   if (!feature) return false;

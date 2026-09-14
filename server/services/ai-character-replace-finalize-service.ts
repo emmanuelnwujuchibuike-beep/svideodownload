@@ -3,16 +3,18 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { FINALIZE_LEASE_SECONDS, FINALIZE_MAX_ATTEMPTS, finalizeBackoffMs, isTransientFinalizeFailure } from "@/lib/ai/character-replace/finalize-policy";
 import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
-import { buildColorMatchArgs, buildSaturationProbeArgs, isKnownColorMatchArg, parseSatAvg, saturationMatch } from "@/lib/ai/character-replace/ffmpeg";
+import { buildColorTagArgs, buildContainerTagArgs, colorTagCodecFor, isKnownColorTagArg } from "@/lib/ai/character-replace/ffmpeg";
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
-import { signSourceUrl } from "@/lib/ai/storage-server";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
-import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
+import { recordJobEvent } from "@/lib/ai/job-events";
+import { claimFinalization, getJobAsService, noteJobDiagnostic, scheduleFinalizationRetry, transitionJob } from "@/lib/ai/job-store";
 import { notifyAiJobFailed, notifyAiJobFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
+import { isColorTagged, probeColor } from "@/server/services/ai-color-probe";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import {
   cleanupFinalizationFiles,
@@ -48,7 +50,24 @@ import {
  * settled, the balance already moved at /start). Failure REFUNDS it, once,
  * through `releaseJobFunding`. The webhook never decides an amount (§17);
  * the ledger row written at /start is the only record of what was charged.
+ *
+ * ── 🔴 A FAILURE ON OUR SIDE IS A RETRY, NOT A REFUND (Part 5, §10–§11) ─────
+ *
+ * Owner: "If storage upload fails after provider success: do NOT tell the
+ * user the video is complete; keep provider success info; retry
+ * finalization; only notify success after the result is safely stored."
+ *
+ * The claim is now a LEASE (`claimFinalization`, 0156): one owner at a time,
+ * attempts counted on the row. A transient failure — the download stalled,
+ * storage said no, the worker threw — leaves the job in `finalizing` with
+ * the provider URL intact and a `finalize_next_at` in the future; the
+ * reconcile sweep or the member's poll re-dispatches it. Only a PERMANENT
+ * failure (the provider's file is not a video, is the wrong length, is gone)
+ * or the last allowed attempt ends the job — and only then does the refund
+ * go out and the "couldn't finish" push get sent. The member is never told
+ * "ready" for a file that is not in our bucket.
  */
+
 export async function finalizeCharacterReplaceJob(jobId: string): Promise<FinalizeOutcome> {
   const startedAt = Date.now();
   const job = await getJobAsService(jobId);
@@ -66,14 +85,23 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
   const ownerId = subjectOwnerId(owner);
   const meta = readCharacterReplaceMeta(job.metadata);
 
-  const claimed = await transitionJob(jobId, ["processing"], "finalizing");
-  if (!claimed) return { ok: true, jobId, skipped: `not claimable from ${job.status}` };
-  console.info("[cr/finalize] started", { jobId, userId: ownerId, feature: feature.id, predictionId: job.replicate_prediction_id, transition: "processing -> finalizing" });
+  const claim = await claimFinalization(jobId, { leaseSeconds: FINALIZE_LEASE_SECONDS, maxAttempts: FINALIZE_MAX_ATTEMPTS });
+  if (!claim.claimed) {
+    if (claim.reason === "exhausted" && job.status === "finalizing") {
+      // Every allowed attempt has run. End it honestly, once.
+      await failFinalize(job, new CrFinalizeFailure("FINAL_UPLOAD_FAILED", job.finalize_error ?? "finalization attempts exhausted", "system"), { exhausted: true });
+      return { ok: false, jobId, code: "FINAL_UPLOAD_FAILED", detail: "attempts exhausted" };
+    }
+    return { ok: true, jobId, skipped: `not claimable: ${claim.reason} (status ${job.status})` };
+  }
+  const attempt = claim.claimed.finalize_attempts;
+  await recordJobEvent(jobId, "finalize.claimed", { attempt, predictionId: job.replicate_prediction_id, from: job.status });
+  console.info("[cr/finalize] started", { jobId, userId: ownerId, feature: feature.id, predictionId: job.replicate_prediction_id, attempt, transition: `${job.status} -> finalizing` });
 
   const dir = path.join(tmpdir(), "frenz-ai-cr-out", jobId.replace(/[^0-9a-fA-F-]/g, ""));
   const outputFile = path.join(dir, "output.mp4");
-  const sourceFile = path.join(dir, "prepared.mp4");
-  const matchedFile = path.join(dir, "final.mp4");
+  const taggedFile = path.join(dir, "tagged.mp4");
+  const masterFile = path.join(dir, "master.mp4");
   try {
     await mkdir(dir, { recursive: true });
     // The provider's file, with the ceiling enforced as the bytes arrive.
@@ -101,36 +129,50 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     }
 
     /*
-      ── COLOUR STAYS NATURAL (owner, 2026-09-14) ──────────────────────────
-      The model tends to leave saturation a touch above its input. Measure the
-      prepared source and the output; when the output is hotter, pull it back
-      to the source's level (never below 0.6, never the other way) and tag it
-      BT.709. A clip that came back natural is stored untouched. Any failure
-      in this step keeps the untouched output — colour must never fail a job.
+      ── THE COLOUR AUDIT (owner, 2026-09-14: "extra colour… supposed to stay
+      natural"; Video Ready brief: "fix the underlying cause, do not blindly
+      add another filter") ────────────────────────────────────────────────
+
+      Where the "extra colour" came from, layer by layer:
+        · CSS on the result page — none (no filter, object-contain on black).
+        · The poster — one frame, display only, never the download.
+        · The download route — a signed URL to the stored bytes, no transform.
+        · PREPARE — an HDR phone source was converted to 8-bit SDR without a
+          tone-map: wrong transfer, hotter colour, clipped highlights. Fixed
+          there (zscale → hable → BT.709) and every prepared file is tagged.
+        · THE MODEL'S OUTPUT — Wan returns yuv420p with NO colour tags. A
+          player guesses; for a 480p-class file (the owner's tests) the usual
+          guess is BT.601, which shifts reds and greens and reads as "more
+          colour" beside the BT.709-tagged source.
+
+      So the master is the model's output, byte for byte, with the BT.709
+      description written into the stream by a metadata bitstream filter —
+      a stream copy, no decode, no encode, no second colour conversion. An
+      output that is already tagged, or in a codec the filter does not
+      cover, is stored untouched. This step can never fail the job.
     */
     let finalFile = outputFile;
-    let colorNote: Record<string, unknown> = { matched: false };
+    const outputColor = await probeColor(outputFile);
+    let colorNote: Record<string, unknown> = { output: outputColor, tagged: false, reencoded: false };
     try {
-      if (meta?.prepared?.path) {
-        await downloadToFile(await signSourceUrl(meta.prepared.path), sourceFile, MAX_OUTPUT_BYTES);
-        const [sourceSat, outputSat] = await Promise.all([measureSaturation(sourceFile), measureSaturation(outputFile)]);
-        const saturation = saturationMatch(sourceSat, outputSat);
-        colorNote = { sourceSat, outputSat, saturation, matched: false };
-        if (saturation !== null) {
-          const plan = { input: outputFile, output: matchedFile, saturation };
-          const args = buildColorMatchArgs(plan);
-          if (args.every((a) => isKnownColorMatchArg(a, plan))) {
-            const ok = await runFfmpegQuiet(args, 10 * 60_000);
-            const reprobe = ok ? await probeMedia(matchedFile) : null;
-            if (reprobe?.hasVideo && reprobe.durationSeconds && Math.abs(reprobe.durationSeconds - probe.durationSeconds) < 0.5) {
-              finalFile = matchedFile;
-              colorNote = { ...colorNote, matched: true };
-            }
+      const codec = colorTagCodecFor(outputColor?.codec);
+      if (outputColor && !isColorTagged(outputColor) && codec) {
+        // Pass 1 writes the VUI; pass 2 copies again so the container carries `colr` (see ffmpeg.ts).
+        const plan = { input: outputFile, output: taggedFile, codec };
+        const plan2 = { input: taggedFile, output: masterFile };
+        const args = buildColorTagArgs(plan);
+        const args2 = buildContainerTagArgs(plan2);
+        if (args.every((a) => isKnownColorTagArg(a, plan)) && args2.every((a) => isKnownColorTagArg(a, plan2))) {
+          const ok = (await runFfmpegQuiet(args, 5 * 60_000)) && (await runFfmpegQuiet(args2, 5 * 60_000));
+          const reprobe = ok ? await probeMedia(masterFile) : null;
+          if (reprobe?.hasVideo && reprobe.durationSeconds && Math.abs(reprobe.durationSeconds - probe.durationSeconds) < 0.5 && reprobe.hasAudio === probe.hasAudio) {
+            finalFile = masterFile;
+            colorNote = { ...colorNote, tagged: true, master: await probeColor(masterFile) };
           }
         }
       }
     } catch (e) {
-      console.warn("[cr/finalize] colour match skipped", { jobId, error: String(e).slice(0, 200) });
+      console.warn("[cr/finalize] colour tagging skipped", { jobId, error: String(e).slice(0, 200) });
     }
     const finalProbe = finalFile === outputFile ? probe : ((await probeMedia(finalFile)) ?? probe);
 
@@ -152,6 +194,9 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       completed_at: new Date().toISOString(),
       error_code: null,
       error_message: null,
+      finalize_lease_until: null,
+      finalize_next_at: null,
+      finalize_error: null,
       // Fresh metadata (a diagnostic may have landed meanwhile); the provider URL has served its purpose.
       metadata: {
         ...((await getJobAsService(jobId))?.metadata ?? job.metadata ?? {}),
@@ -166,6 +211,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       // Stage H — the charge is kept: reserved → settled on the product ledger.
       const settled = await settleCharacterReplaceCharge(ownerId, jobId);
       if (!settled) console.error("[cr/finalize] settle found no reserved charge", { jobId, userId: ownerId });
+      await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, colorTagged: colorNote.tagged === true, settled, elapsedMs: Date.now() - startedAt });
+      // 🔴 Only now — the result is in OUR bucket and the row says completed (§11).
       await notifyAiJobFinished({ userId: ownerId, jobId, feature: feature.id, audioRestored: audioExpected ? probe.hasAudio : null, durationMs: Date.now() - startedAt });
     }
     console.info("[cr/finalize] completed", {
@@ -186,7 +233,20 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     return { ok: true, jobId, audioRestored: probe.hasAudio, durationSeconds: probe.durationSeconds, bytes: stored.bytes };
   } catch (e) {
     const failure = e instanceof CrFinalizeFailure ? e : new CrFinalizeFailure("AI_FINALIZATION_FAILED", String(e), "system");
-    await failFinalize(job, failure);
+    const transient = isTransientFinalizeFailure(failure.code, failure.detail);
+    if (transient && attempt < FINALIZE_MAX_ATTEMPTS) {
+      /*
+        Keep the provider's success. Release the lease, say when to try again,
+        and leave the row in `finalizing` — the sweep and the poll both know
+        what a due retry looks like. Nothing is refunded and nobody is told.
+      */
+      const nextAt = Date.now() + finalizeBackoffMs(attempt);
+      const scheduled = await scheduleFinalizationRetry(jobId, { nextAt, error: `${failure.code}: ${failure.detail}` });
+      await recordJobEvent(jobId, "finalize.retry_scheduled", { attempt, code: failure.code, nextAt: new Date(nextAt).toISOString(), scheduled });
+      console.warn("[cr/finalize] transient failure — retry scheduled", { jobId, attempt, code: failure.code, detail: failure.detail.slice(0, 200), nextAt: new Date(nextAt).toISOString() });
+      return { ok: false, jobId, code: failure.code, detail: `retry scheduled: ${failure.detail}` };
+    }
+    await failFinalize(job, failure, { exhausted: transient });
     return { ok: false, jobId, code: failure.code, detail: failure.detail };
   } finally {
     await cleanupFinalizationFiles(dir);
@@ -197,19 +257,6 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024;
 
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
-
-/** Mean saturation of a file (sampled frames), or null when ffmpeg could not say. */
-function measureSaturation(filePath: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    execFile(FFMPEG, buildSaturationProbeArgs(filePath), { windowsHide: true, timeout: 120_000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
-      if (err) {
-        resolve(null);
-        return;
-      }
-      resolve(parseSatAvg(String(stdout)));
-    });
-  });
-}
 
 function runFfmpegQuiet(args: string[], timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -228,17 +275,21 @@ class CrFinalizeFailure extends Error {
   }
 }
 
-async function failFinalize(job: AiJobRow, failure: CrFinalizeFailure): Promise<void> {
+async function failFinalize(job: AiJobRow, failure: CrFinalizeFailure, opts: { exhausted: boolean } = { exhausted: false }): Promise<void> {
   const updated = await transitionJob(job.id, ["finalizing"], "failed", {
     error_code: failure.code,
     error_message: failure.detail.slice(0, 2000),
     completed_at: new Date().toISOString(),
+    finalize_lease_until: null,
+    finalize_next_at: null,
   });
   await noteJobDiagnostic(job.id, { failure_category: failure.category, failed_in: "finalize" });
+  await recordJobEvent(job.id, opts.exhausted ? "finalize.gave_up" : "finalize.failed", { code: failure.code, category: failure.category, attempts: job.finalize_attempts, ended: !!updated });
   const subject = subjectFromRow(job);
   if (updated && subject) {
     // Stage I — refund exactly once (idempotent per job).
     await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0 });
+    await recordJobEvent(job.id, "refund.issued", { reason: failure.code, chargedCents: updated.charged_cents, from: "finalize" });
     if (subject.kind === "user") {
       await notifyAiJobFailed({ userId: subject.userId, jobId: job.id, feature: "ai_character_replace", message: aiErrorMessage("PROCESSING_FAILED"), errorCode: failure.code });
     }

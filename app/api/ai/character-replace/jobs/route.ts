@@ -6,8 +6,8 @@ import { createCharacterReplaceJobSchema } from "@/lib/ai/character-replace/star
 import { characterReplaceLimits, validatePhotoFile, validatePhotoPixels, validateVideoFile } from "@/lib/ai/character-replace/validate";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
-import { aiFeature, isValidClientRequestId, jobToView } from "@/lib/ai/jobs";
-import { countActiveJobs, createJob, findJobByRequestId, reserveSourcePath } from "@/lib/ai/job-store";
+import { aiFeature, isActiveStatus, isValidClientRequestId, jobToView } from "@/lib/ai/jobs";
+import { countActiveJobs, createJob, findJobByRequestId, getOwnJob, reserveSourcePath } from "@/lib/ai/job-store";
 import { extensionForUpload, imageExtensionForUpload } from "@/lib/ai/media";
 import { hasProviderFor } from "@/lib/ai/providers";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   }
   const parsed = createCharacterReplaceJobSchema.safeParse(raw);
   if (!parsed.success) return fail("INVALID_INPUT");
-  const { clientRequestId, photo, video } = parsed.data;
+  const { clientRequestId, photo, video, retryOf } = parsed.data;
   if (!isValidClientRequestId(clientRequestId)) return fail("INVALID_INPUT");
 
   // The provider AND the worker: a job that could not be prepared or submitted is not opened.
@@ -109,6 +109,23 @@ export async function POST(request: Request) {
     const active = await countActiveJobs(subject, feature.id);
     if (active >= Math.max(1, entitlement.maxConcurrent)) return fail("JOB_ALREADY_PROCESSING");
 
+    /*
+      ── §7: A RETRY IS A NEW ATTEMPT OF THE SAME PROJECT ─────────────────────
+      `retryOf` must be this member's own Character Replace job (the read runs
+      as the member, so somebody else's id reads as "no such job") and must be
+      finished — a live job cannot be "retried" into a second charge. The old
+      row is never touched: its prediction id, ledger row and error stay as
+      history; the new row carries `attempt + 1` and the project's id.
+    */
+    let lineage: { attempt: number; projectId: string; retryOf: string } | null = null;
+    if (retryOf) {
+      const prior = await getOwnJob(subject, retryOf);
+      if (!prior || prior.feature !== feature.id || prior.metadata?.tool !== "character_replace") return fail("INVALID_INPUT", { error: "That earlier attempt isn't yours to retry." });
+      if (isActiveStatus(prior.status)) return fail("JOB_ALREADY_PROCESSING");
+      const priorAttempt = typeof prior.metadata?.attempt === "number" ? prior.metadata.attempt : 1;
+      lineage = { attempt: priorAttempt + 1, projectId: typeof prior.metadata?.project_id === "string" ? prior.metadata.project_id : prior.id, retryOf: prior.id };
+    }
+
     const result = await createJob({
       subject,
       feature,
@@ -129,7 +146,9 @@ export async function POST(request: Request) {
         metadata: {
           ...(result.row.metadata ?? {}),
           tool: "character_replace",
-          attempt: 1,
+          attempt: lineage?.attempt ?? 1,
+          project_id: lineage?.projectId ?? result.row.id,
+          retry_of: lineage?.retryOf ?? null,
           character: { path: uploads.photo.path, mime: photo.mimeType.toLowerCase(), size: photo.size, width: photo.width, height: photo.height, name: photo.name.slice(0, 200) },
           video: { path: uploads.video.path, mime: video.mimeType.toLowerCase(), size: video.size, durationMs: video.durationMs, width: video.width, height: video.height, hasAudio: video.hasAudio },
           trim: null,
@@ -146,7 +165,7 @@ export async function POST(request: Request) {
       return fail("INTERNAL_ERROR");
     }
 
-    console.info("[cr/jobs] opened", { jobId: result.row.id, userId: ownerId, feature: feature.id, created: result.created, audience: entitlement.audience });
+    console.info("[cr/jobs] opened", { jobId: result.row.id, userId: ownerId, feature: feature.id, created: result.created, audience: entitlement.audience, attempt: lineage?.attempt ?? 1, retryOf: lineage?.retryOf ?? null });
     return NextResponse.json({ job: jobToView(result.row, storedErrorMessage), created: result.created, uploads }, { status: result.created ? 201 : 200 });
   } catch (e) {
     if (isAiJobError(e)) {

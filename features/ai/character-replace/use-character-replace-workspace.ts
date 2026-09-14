@@ -375,6 +375,12 @@ export function useCharacterReplaceWorkspace() {
   */
   const requestId = useRef<string | null>(null);
   const [launch, setLaunch] = useState<LaunchState>({ phase: "idle" });
+  /*
+    Part 5 (§7): the finished attempt a retry is linked to. Set by `retryFrom`,
+    sent once with the next /jobs create, then cleared — so a later, unrelated
+    draft never inherits an old lineage.
+  */
+  const retryOf = useRef<string | null>(null);
 
   const start = useCallback(async (): Promise<string | null> => {
     const photo = state.project.character;
@@ -392,6 +398,7 @@ export function useCharacterReplaceWorkspace() {
     setLaunch({ phase: "preparing" });
     const created = await createCharacterReplaceJob({
       clientRequestId: requestId.current,
+      ...(retryOf.current ? { retryOf: retryOf.current } : {}),
       photo: { name: photo.name, mimeType: photo.mimeType, size: photo.size, width: photo.width, height: photo.height },
       video: {
         name: video.name,
@@ -468,10 +475,34 @@ export function useCharacterReplaceWorkspace() {
       return null;
     }
     requestId.current = null;
+    retryOf.current = null;
     void loadBalance();
     setLaunch({ phase: "idle" });
     return started.job.id;
   }, [launch.phase, loadBalance, state.pricing, state.project]);
+
+  /**
+   * "Try again" after a failure (§7 / §29): the draft — both files, the
+   * settings, the trim — is KEPT; only the price is asked for afresh and the
+   * next Start opens attempt n+1 linked to the failed one. A draft that has
+   * no files any more (the page was opened from a notification) simply goes
+   * back to the first step.
+   */
+  const retryFrom = useCallback(
+    (failedJobId: string) => {
+      retryOf.current = failedJobId;
+      requestId.current = null;
+      setLaunch({ phase: "idle" });
+      if (state.project.character && state.project.video) {
+        dispatch({ type: "pricing", pricing: { status: "pending" } });
+        setRetry((n) => n + 1);
+        dispatch({ type: "go", step: "review" });
+      } else {
+        dispatch({ type: "reset" });
+      }
+    },
+    [state.project.character, state.project.video],
+  );
 
   const clearLaunchError = useCallback(() => setLaunch((l) => (l.phase === "error" ? { phase: "idle" } : l)), []);
 
@@ -490,6 +521,7 @@ export function useCharacterReplaceWorkspace() {
     dismissTopupNotice,
     launch,
     start,
+    retryFrom,
     clearLaunchError,
   };
 }

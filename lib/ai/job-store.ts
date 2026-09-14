@@ -73,7 +73,7 @@ import { createClient } from "@/lib/supabase/server";
  * only one of them is checked by the compiler.
  */
 const JOB_COLUMNS =
-  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, funding_source, charged_cents, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, notified_at, metadata";
+  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, funding_source, charged_cents, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata";
 
 /**
  * Claim the right to announce this job. True exactly once, ever.
@@ -445,6 +445,128 @@ export interface JobPatch {
   error_message?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  finalize_next_at?: string | null;
+  finalize_lease_until?: string | null;
+  finalize_error?: string | null;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE FINALIZATION CLAIM — one owner at a time, bounded attempts (0156)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Part 5 (§10–§11): a finalization that fails on OUR side — storage, a
+ * download hiccup, a worker restart — must not end the job. The provider's
+ * output is recorded on the row; the stage is simply run again, later, by
+ * whichever process gets there (the worker on re-dispatch, the reconcile
+ * sweep, the member's own poll).
+ *
+ * That needs two guarantees this UPDATE gives in one statement:
+ *
+ *   1. ONE OWNER. `finalize_lease_until` in the future means a finalizer is
+ *      working; the claim requires it null or past. A worker that dies mid-run
+ *      releases the job by doing nothing — the lease expires.
+ *   2. BOUNDED. `finalize_attempts` is read and then written as `n + 1` with
+ *      `.eq("finalize_attempts", n)` in the filter — optimistic concurrency
+ *      on a real column, so two racing claimants cannot both count as one
+ *      attempt. Past `maxAttempts` the claim refuses and the caller fails the
+ *      job for good (and refunds).
+ *
+ * From `processing` (first attempt) or `finalizing` (a retry). Returns the
+ * claimed row, or null when somebody else holds it / it is not claimable.
+ */
+export async function claimFinalization(
+  jobId: string,
+  opts: { leaseSeconds: number; maxAttempts: number; now?: number },
+): Promise<{ claimed: AiJobRow } | { claimed: null; reason: "not-claimable" | "leased" | "exhausted" | "not-due" }> {
+  const now = opts.now ?? Date.now();
+  const nowIso = new Date(now).toISOString();
+  const admin = createAdminClient();
+  const { data: current, error: readError } = await admin.from("ai_jobs").select(JOB_COLUMNS).eq("id", jobId).maybeSingle();
+  if (readError) throw new AiJobError("INTERNAL_ERROR", readError.message);
+  const row = current as AiJobRow | null;
+  if (!row || (row.status !== "processing" && row.status !== "finalizing")) return { claimed: null, reason: "not-claimable" };
+  if (row.finalize_lease_until && Date.parse(row.finalize_lease_until) > now) return { claimed: null, reason: "leased" };
+  if (row.finalize_next_at && Date.parse(row.finalize_next_at) > now) return { claimed: null, reason: "not-due" };
+  if (row.finalize_attempts >= opts.maxAttempts) return { claimed: null, reason: "exhausted" };
+
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({
+      status: "finalizing",
+      finalize_attempts: row.finalize_attempts + 1,
+      finalize_lease_until: new Date(now + opts.leaseSeconds * 1000).toISOString(),
+      finalize_next_at: null,
+    })
+    .eq("id", jobId)
+    .in("status", ["processing", "finalizing"])
+    .eq("finalize_attempts", row.finalize_attempts)
+    .or(`finalize_lease_until.is.null,finalize_lease_until.lte.${nowIso}`)
+    .select(JOB_COLUMNS)
+    .maybeSingle();
+  if (error) {
+    console.error("[ai/jobs] finalization claim failed", { jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return data ? { claimed: data as AiJobRow } : { claimed: null, reason: "leased" };
+}
+
+/**
+ * Keep the job in `finalizing`, release the lease, and say when the next
+ * attempt may run. The provider's output URL on the row is untouched — it is
+ * the whole reason a retry can work.
+ */
+export async function scheduleFinalizationRetry(jobId: string, opts: { nextAt: number; error: string }): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({ finalize_lease_until: null, finalize_next_at: new Date(opts.nextAt).toISOString(), finalize_error: opts.error.slice(0, 500) })
+    .eq("id", jobId)
+    .eq("status", "finalizing")
+    .select("id");
+  if (error) {
+    console.error("[ai/jobs] retry schedule failed", { jobId, message: error.message });
+    return false;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Rows the reconciliation sweep looks at: everything the provider or our own
+ * finalizer still owes an answer on. Oldest first, one page — the sweep runs
+ * every few minutes and a backlog is itself the alarm.
+ */
+export async function listRecoverableJobs(limit = 50): Promise<AiJobRow[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select(JOB_COLUMNS)
+    .in("status", ["queued", "acquiring", "processing", "finalizing"])
+    .order("created_at", { ascending: true })
+    .limit(Math.max(1, Math.min(200, limit)));
+  if (error) {
+    console.error("[ai/jobs] recoverable list failed", { message: error.message });
+    return [];
+  }
+  return (data ?? []) as AiJobRow[];
+}
+
+/** Terminal rows whose announcement was left pending by a process without push keys. */
+export async function listNotifyPendingJobs(limit = 50): Promise<AiJobRow[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select(JOB_COLUMNS)
+    .in("status", ["completed", "failed", "cancelled", "expired"])
+    .is("notified_at", null)
+    .eq("metadata->>notify_pending", "true")
+    .order("completed_at", { ascending: true })
+    .limit(Math.max(1, Math.min(200, limit)));
+  if (error) {
+    console.error("[ai/jobs] notify-pending list failed", { message: error.message });
+    return [];
+  }
+  return (data ?? []) as AiJobRow[];
 }
 
 /**

@@ -174,6 +174,15 @@ export function CharacterReplaceWorkspace({
     send({ type: "reset" });
   }, [send]);
 
+  // §7: a fresh attempt of the same draft, linked to the one that failed.
+  const retryJob = useCallback(() => {
+    const failed = watch.job?.id ?? null;
+    setWatchedJobId(null);
+    setPreview(null);
+    if (failed) ws.retryFrom(failed);
+    else send({ type: "reset" });
+  }, [send, watch.job?.id, ws]);
+
   const envStage = processing ? (processing.status === "complete" ? "completed" : processing.status === "failed" || processing.status === "refunded" ? "failed" : "processing") : "idle";
 
   return (
@@ -192,8 +201,10 @@ export function CharacterReplaceWorkspace({
             <CharacterReplaceProcessing
               job={processing}
               onCancel={processing.canCancel ? () => void watch.cancel() : undefined}
-              onRetry={leaveJob}
+              onRetry={retryJob}
               onDone={() => undefined}
+              historyHref={historyHref}
+              symbol={loads.balance?.symbol ?? config?.symbol ?? "₦"}
               className="mt-5"
             />
           </>

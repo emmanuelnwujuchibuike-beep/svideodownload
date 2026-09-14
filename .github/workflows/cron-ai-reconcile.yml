@@ -1,0 +1,65 @@
+name: Cron - AI reconcile
+
+# Supplies the clock for app/api/cron/ai-reconcile/route.ts.
+#
+# ── WHY THIS EXISTS (Character Replace, Part 5) ──────────────────────────────
+# A member starts a video and leaves the app. From then on nothing of theirs is
+# polling, so the only things that can finish the job are the provider's
+# webhook and the worker's finalizer — and both can fail on our side (a missed
+# delivery, a storage blip, a worker restart mid-run). This sweep finds every
+# live job that is owed a step and gives it one: a due finalization retry is
+# re-dispatched, a missed webhook is read straight from the provider, a stalled
+# row is ended and refunded, an announcement left pending is sent. Idempotent
+# with the live paths, so it is safe beside them.
+#
+# ── Every ten minutes ────────────────────────────────────────────────────────
+# Retries back off over minutes, the stall deadlines are tens of minutes, and
+# the provider keeps its output about an hour. Ten minutes keeps a retry inside
+# that window with room to spare; GitHub often delays scheduled runs by a few
+# minutes, which is fine here.
+#
+# ── Not Vercel ───────────────────────────────────────────────────────────────
+# The Hobby plan's two daily cron slots are spent (trending, profile-snapshots).
+# GitHub Actions is already the clock for four other routes; same pattern.
+#
+# ── REQUIRES THE ACTIONS SECRET `CRON_SECRET` ────────────────────────────────
+# The same one the others use — `npm run cron:token`, then GitHub → Settings →
+# Secrets and variables → Actions → CRON_SECRET. Nothing to add in Vercel.
+#
+# A healthy run answers 200 with a body like
+#   {"scanned":0,"actions":{"none":0,...},"notifiedPending":0,"ms":80}
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  # Two sweeps at once would only race the same compare-and-set claims and lose
+  # — harmless, but it would log actions that mean nothing.
+  group: cron-ai-reconcile
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/ai-reconcile
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          url="${SITE_URL:-https://frenzsave.com}/api/cron/ai-reconcile"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET repo secret is not set — see the header of this workflow for setup steps."
+            exit 1
+          fi
+          status=$(curl -sS -o /tmp/response.json -w "%{http_code}" -X POST "$url" \
+            -H "Authorization: Bearer $CRON_SECRET")
+          echo "HTTP $status"
+          cat /tmp/response.json
+          echo
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "::error::AI reconcile cron returned HTTP $status"
+            exit 1
+          fi

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { AI_JOB_STATUSES, type AiJobStatus } from "@/lib/ai/jobs";
+import { AI_JOB_STATUSES, isActiveStatus, type AiJobStatus } from "@/lib/ai/jobs";
+import { stalledForMs } from "@/lib/ai/stall";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -167,6 +168,44 @@ export interface CharacterReplaceAdminJob {
   modelVersion: string | null;
   errorCode: string | null;
   failureCategory: string | null;
+  /* ── Part 5 (§35): the background's own bookkeeping ── */
+  attempt: number;
+  finalizeAttempts: number;
+  finalizeNextAt: string | null;
+  finalizeError: string | null;
+  /** How long the worker's finalization took, when it finished. */
+  finalizeMs: number | null;
+  notifiedAt: string | null;
+  notifyPending: boolean;
+  /** Past the stage's deadline, or a finalization retry waiting with no lease. */
+  stuck: boolean;
+}
+
+/** The counts the operator wants at a glance (§35), from the rows already read. Pure. */
+export function summarizeCharacterReplaceJobs(jobs: CharacterReplaceAdminJob[], now: number = Date.now()): {
+  active: number;
+  queued: number;
+  processing: number;
+  finalizing: number;
+  completed24h: number;
+  failed24h: number;
+  refunded24h: number;
+  stuck: number;
+  retrying: number;
+} {
+  const dayAgo = now - 24 * 60 * 60_000;
+  const recent = (j: CharacterReplaceAdminJob) => Date.parse(j.completedAt ?? j.createdAt) >= dayAgo;
+  return {
+    active: jobs.filter((j) => isActiveStatus(j.status)).length,
+    queued: jobs.filter((j) => j.status === "queued" || j.status === "acquiring").length,
+    processing: jobs.filter((j) => j.status === "processing").length,
+    finalizing: jobs.filter((j) => j.status === "finalizing").length,
+    completed24h: jobs.filter((j) => j.status === "completed" && recent(j)).length,
+    failed24h: jobs.filter((j) => (j.status === "failed" || j.status === "expired") && recent(j)).length,
+    refunded24h: jobs.filter((j) => j.refunded && recent(j)).length,
+    stuck: jobs.filter((j) => j.stuck).length,
+    retrying: jobs.filter((j) => j.status === "finalizing" && j.finalizeAttempts > 0 && !!j.finalizeNextAt).length,
+  };
 }
 
 export async function listCharacterReplaceAdminJobs(limit = 30): Promise<CharacterReplaceAdminJob[]> {
@@ -174,7 +213,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
     const db = createAdminClient();
     const { data, error } = await db
       .from("ai_jobs")
-      .select("id, user_id, status, charged_cents, replicate_prediction_id, model_version, error_code, created_at, started_at, completed_at, metadata")
+      .select("id, user_id, status, charged_cents, replicate_prediction_id, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata")
       .eq("feature", "ai_character_replace")
       .order("created_at", { ascending: false })
       .limit(Math.max(1, Math.min(100, limit)));
@@ -190,8 +229,14 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
       created_at: string;
       started_at: string | null;
       completed_at: string | null;
+      notified_at: string | null;
+      finalize_attempts: number | null;
+      finalize_lease_until: string | null;
+      finalize_next_at: string | null;
+      finalize_error: string | null;
       metadata: Record<string, unknown> | null;
     }[];
+    const now = Date.now();
     const jobIds = rows.map((r) => r.id);
     // Which of these charges came back — the ledger is the truth, not the status.
     const refundedIds = new Set<string>();
@@ -229,6 +274,16 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
         modelVersion: r.model_version,
         errorCode: r.error_code,
         failureCategory: typeof m.failure_category === "string" ? m.failure_category : null,
+        attempt: num(m.attempt) ?? 1,
+        finalizeAttempts: r.finalize_attempts ?? 0,
+        finalizeNextAt: r.finalize_next_at,
+        finalizeError: r.finalize_error,
+        finalizeMs: num(m.finalized_ms),
+        notifiedAt: r.notified_at,
+        notifyPending: m.notify_pending === true && !r.notified_at,
+        stuck:
+          stalledForMs({ id: r.id, status: r.status, created_at: r.created_at, started_at: r.started_at }, now) !== null ||
+          (r.status === "finalizing" && !r.finalize_lease_until && !!r.finalize_next_at && Date.parse(r.finalize_next_at) < now - 15 * 60_000),
       };
     });
   } catch (e) {

@@ -1,4 +1,4 @@
-import { spawn, execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +9,8 @@ import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config"
 import { characterReplaceLimits } from "@/lib/ai/character-replace/validate";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
+import { recordJobEvent } from "@/lib/ai/job-events";
+import { isHdrSource, probeColor } from "@/server/services/ai-color-probe";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
 import { AI_IMAGE_MAX_BYTES } from "@/lib/ai/media";
@@ -279,9 +281,11 @@ async function failPrepare(job: AiJobRow, failure: PrepareFailure): Promise<void
     completed_at: new Date().toISOString(),
   });
   await noteJobDiagnostic(job.id, { failure_category: failure.category, failed_in: "prepare" });
+  await recordJobEvent(job.id, "prepare.failed", { code: failure.code, category: failure.category, ended: !!updated });
   const subject = subjectFromRow(job);
   if (updated && subject) {
     await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0 });
+    await recordJobEvent(job.id, "refund.issued", { reason: failure.code, chargedCents: updated.charged_cents, from: "prepare" });
     if (subject.kind === "user") {
       await notifyAiJobFailed({
         userId: subject.userId,
@@ -300,47 +304,6 @@ async function failPrepare(job: AiJobRow, failure: PrepareFailure): Promise<void
     detail: failure.detail.slice(0, 300),
     transition: "acquiring -> failed",
     refunded: !!updated,
-  });
-}
-
-/** The source's colour signalling: transfer, primaries, matrix, pixel format. Unknown reads as null. */
-export interface ColorSignal {
-  transfer: string | null;
-  primaries: string | null;
-  matrix: string | null;
-  pixFmt: string | null;
-}
-
-export function isHdrSource(c: ColorSignal | null): boolean {
-  if (!c) return false;
-  const t = (c.transfer ?? "").toLowerCase();
-  const p = (c.primaries ?? "").toLowerCase();
-  const f = (c.pixFmt ?? "").toLowerCase();
-  return t === "arib-std-b67" || t === "smpte2084" || p === "bt2020" || /10le|10be|12le|12be/.test(f);
-}
-
-const FFPROBE = process.env.FFPROBE_PATH || "ffprobe";
-
-function probeColor(filePath: string): Promise<ColorSignal | null> {
-  return new Promise((resolve) => {
-    execFile(
-      FFPROBE,
-      ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt,color_transfer,color_primaries,color_space", "-of", "json", filePath],
-      { windowsHide: true, timeout: 30_000 },
-      (err, stdout) => {
-        if (err) {
-          resolve(null);
-          return;
-        }
-        try {
-          const s = (JSON.parse(String(stdout)).streams?.[0] ?? {}) as Record<string, string | undefined>;
-          const norm = (v: string | undefined) => (v && v !== "unknown" ? v : null);
-          resolve({ transfer: norm(s.color_transfer), primaries: norm(s.color_primaries), matrix: norm(s.color_space), pixFmt: norm(s.pix_fmt) });
-        } catch {
-          resolve(null);
-        }
-      },
-    );
   });
 }
 

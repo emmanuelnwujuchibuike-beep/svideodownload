@@ -87,6 +87,8 @@ export interface CharacterReplaceUploadTicket {
  */
 export async function createCharacterReplaceJob(input: {
   clientRequestId: string;
+  /** The finished attempt this one retries (Part 5, §7). */
+  retryOf?: string;
   photo: { name: string; mimeType: string; size: number; width: number; height: number };
   video: { name: string; mimeType: string; size: number; durationMs: number; width: number; height: number; hasAudio: boolean };
 }): Promise<CharacterReplaceClientResult<{ job: AiJobView; created: boolean; uploads: { video: CharacterReplaceUploadTicket; photo: CharacterReplaceUploadTicket } | null }>> {

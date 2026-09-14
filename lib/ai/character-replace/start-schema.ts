@@ -23,6 +23,12 @@ const mime = z.string().trim().min(1).max(120);
 export const createCharacterReplaceJobSchema = z
   .object({
     clientRequestId: z.string().min(8).max(100),
+    /**
+     * Part 5 (§7): "Try again" opens a NEW attempt — a new job row, a new
+     * prediction, a new ledger row — linked to the one it retries. The server
+     * verifies the link is the member's own finished job; it grants nothing.
+     */
+    retryOf: z.string().uuid().optional(),
     photo: z
       .object({
         name,

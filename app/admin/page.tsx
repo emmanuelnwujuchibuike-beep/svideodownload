@@ -892,7 +892,7 @@ async function LandingSection() {
  * each POSTs only the fields it displays, so neither can clobber the other's.
  */
 async function FrenzAISection() {
-  const [landing, aiStats, crJobs] = await Promise.all([getLandingSettings(), getAiAdminStats(), listCharacterReplaceAdminJobs(30)]);
+  const [landing, aiStats, crJobs] = await Promise.all([getLandingSettings(), getAiAdminStats(), listCharacterReplaceAdminJobs(60)]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in

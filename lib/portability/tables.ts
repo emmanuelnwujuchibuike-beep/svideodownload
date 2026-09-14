@@ -61,6 +61,11 @@ export const NOT_EXPORTED: Record<string, string> = {
   media_assets: "Shared media records, not owned by one member.",
   asset_usage: "Links assets to places they appear. Not personal data.",
   post_media: "Attachments belonging to a post; the post itself is exported.",
+  /* Keyed by job, not by person: the operator-facing audit trail of what the
+     BACKGROUND did to an AI job (webhook, finalization attempts, push, refund,
+     an operator's recovery action). It carries provider and operator ids that
+     are not the member's; the job itself is exported (0156). */
+  ai_job_events: "Background audit trail belonging to an AI job; the job itself is exported with its outcome.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
   /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —
      the same shape as `post_media` above. The streak itself IS exported, and it

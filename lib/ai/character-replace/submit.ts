@@ -4,6 +4,7 @@ import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
 import { wanResolutionFor } from "@/lib/ai/character-replace/model";
 import { characterReplaceProvider } from "@/lib/ai/character-replace/provider";
 import { AiJobError } from "@/lib/ai/errors";
+import { recordJobEvent } from "@/lib/ai/job-events";
 import type { AiJobRow, AiJobStatus } from "@/lib/ai/jobs";
 import { getJobAsService, transitionJob } from "@/lib/ai/job-store";
 import { pathBelongsTo } from "@/lib/ai/storage";
@@ -97,6 +98,7 @@ export async function submitCharacterReplaceJob(
     },
   });
 
+  await recordJobEvent(job.id, "provider.submitted", { predictionId: state.reference, model: provider.model, version: state.modelVersion ?? provider.version });
   console.info("[cr/submit] prediction created", {
     jobId: fresh.id,
     userId: fresh.user_id,

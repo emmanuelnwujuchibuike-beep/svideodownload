@@ -6,6 +6,7 @@ import { getOwnJob } from "@/lib/ai/job-store";
 import { isActiveStatus, jobToView, primaryAiFeature, type AiJobRow, type AiJobView } from "@/lib/ai/jobs";
 import { notifyAiJobFromRow } from "@/lib/ai/notify";
 import { reconcileWithProvider } from "@/lib/ai/reconcile";
+import { recoverJob } from "@/lib/ai/recovery";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { applyAiSubjectCookie, resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -47,6 +48,18 @@ export const dynamic = "force-dynamic";
  *     frontend) is announced HERE, on the member's own poll, from the process
  *     that holds the keys. Idempotent through the claim (§21).
  */
+/** One recovery attempt per job per instance every 30 s — the poll is every few seconds. */
+const RECOVERY_EVERY_MS = 30_000;
+const lastRecovery = new Map<string, number>();
+function recoveryDue(jobId: string): boolean {
+  const now = Date.now();
+  const last = lastRecovery.get(jobId) ?? 0;
+  if (now - last < RECOVERY_EVERY_MS) return false;
+  lastRecovery.set(jobId, now);
+  if (lastRecovery.size > 500) lastRecovery.clear();
+  return true;
+}
+
 async function viewWithMoney(row: AiJobRow): Promise<AiJobView> {
   const view = jobToView(row, storedErrorMessage);
   if (row.feature !== "ai_character_replace" || !row.user_id) return view;
@@ -142,11 +155,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       Compare-and-set on both sides, so a callback landing mid-flight and this
       cannot both act. See lib/ai/reconcile.ts.
     */
-    const changed = await reconcileWithProvider(row);
+    /*
+      ── Character Replace (Part 5): the SAME recovery step the cron runs ─────
+      A finalization that failed on our side and is due its retry, or a
+      provider output the worker never heard about, is re-dispatched the
+      moment its owner looks — not at the next ten-minute tick. Throttled per
+      job per instance; the worker's lease makes a duplicate dispatch a no-op.
+    */
+    const recovered = row.feature === "ai_character_replace" && recoveryDue(row.id) ? await recoverJob(row) : "none";
+    const changed = recovered === "reconciled" || recovered === "stalled" || recovered === "gave-up" || (recovered === "none" && (await reconcileWithProvider(row)));
 
     // The deadline stays underneath as the last backstop, for the case where
     // the provider itself has lost the work.
-    if (changed || (await failStalledJob(row))) {
+    if (changed || (recovered === "none" && (await failStalledJob(row)))) {
       const fresh = await getOwnJob(subject, id);
       if (fresh) {
         return applyAiSubjectCookie(NextResponse.json({ job: await viewWithMoney(fresh) }), resolution);

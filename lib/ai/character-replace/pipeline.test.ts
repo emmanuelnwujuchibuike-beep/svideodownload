@@ -4,17 +4,7 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { normalizeCharacterReplaceConfig } from "./config";
-import {
-  buildColorMatchArgs,
-  buildPrepareArgs,
-  buildSaturationProbeArgs,
-  isKnownColorMatchArg,
-  isKnownPrepareArg,
-  parseSatAvg,
-  PREPARE_CONSTANT_ARGS,
-  saturationMatch,
-  secondsArg,
-} from "./ffmpeg";
+import { buildColorTagArgs, buildContainerTagArgs, buildPrepareArgs, colorTagCodecFor, isKnownColorTagArg, isKnownPrepareArg, PREPARE_CONSTANT_ARGS, secondsArg } from "./ffmpeg";
 import { durationWithinTolerance, readCharacterReplaceMeta, selectedRangeOf } from "./job-meta";
 import { buildWanAnimateReplaceInput, isTrustedProviderOutputUrl, WAN_ANIMATE_REPLACE, WAN_INPUT_FIELDS, wanResolutionFor } from "./model";
 import { quoteCharacterReplace } from "./pricing";
@@ -137,49 +127,46 @@ describe("the prepare plan — trim on the frame, nothing foreign in the array",
   });
 });
 
-/* ─────────────── colour stays natural — the probe and the match (owner, 09-14) ─────────────── */
+/* ─────────────── colour stays natural — the master is tagged, never re-encoded (09-14) ─────────────── */
 
-describe("the colour match — only ever pulls an over-saturated output BACK to the source", () => {
-  it("parses ffmpeg's SATAVG lines to a mean, and null when there is nothing to read", () => {
-    const out = "frame:0 pts:0\nlavfi.signalstats.SATAVG=20.5\nframe:5\nlavfi.signalstats.SATAVG=23.5\n";
-    expect(parseSatAvg(out)).toBeCloseTo(22, 5);
-    expect(parseSatAvg("")).toBeNull();
-    expect(parseSatAvg("garbage")).toBeNull();
+describe("the colour-tag plan — a stream copy that tells the player which colours these are", () => {
+  const plan = { input: "/tmp/frenz-ai-cr-out/abc/output.mp4", output: "/tmp/frenz-ai-cr-out/abc/master.mp4", codec: "h264" as const };
+
+  it("copies both streams, writes the BT.709 VUI through the metadata filter, and decodes nothing", () => {
+    const args = buildColorTagArgs(plan);
+    expect(args.slice(args.indexOf("-c"), args.indexOf("-c") + 2)).toEqual(["-c", "copy"]);
+    expect(args[args.indexOf("-bsf:v") + 1]).toBe("h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0");
+    expect(args).not.toContain("-vf");
+    expect(args).not.toContain("libx264");
+    expect(args).not.toContain("-crf");
+    expect(args).toContain("+faststart");
+    expect(args[args.length - 1]).toBe(plan.output);
+    for (const arg of args) expect(isKnownColorTagArg(arg, plan), arg).toBe(true);
   });
 
-  it("returns null when the output is as saturated or LESS than the source (never brightens a clip)", () => {
-    expect(saturationMatch(22.9, 18.8)).toBeNull();
-    expect(saturationMatch(20, 20)).toBeNull();
-    expect(saturationMatch(20, 20.5)).toBeNull(); // within the 4% noise band
-    expect(saturationMatch(null, 20)).toBeNull();
-    expect(saturationMatch(20, null)).toBeNull();
-    expect(saturationMatch(0, 20)).toBeNull();
+  it("HEVC gets its own filter; anything else is left alone", () => {
+    expect(colorTagCodecFor("h264")).toBe("h264");
+    expect(colorTagCodecFor("hevc")).toBe("hevc");
+    expect(colorTagCodecFor("vp9")).toBeNull();
+    expect(colorTagCodecFor(null)).toBeNull();
+    const hevc = buildColorTagArgs({ ...plan, codec: "hevc" });
+    expect(hevc[hevc.indexOf("-bsf:v") + 1]).toMatch(/^hevc_metadata=/);
+    for (const arg of hevc) expect(isKnownColorTagArg(arg, plan), arg).toBe(true);
   });
 
-  it("returns the source/output ratio when the output is hotter, floored at 0.6", () => {
-    expect(saturationMatch(20, 25)).toBe(0.8);
-    expect(saturationMatch(10, 40)).toBe(0.6);
+  it("the second pass is a bare copy — it exists only so the container gets a colr atom", () => {
+    const p2 = { input: "/tmp/frenz-ai-cr-out/abc/tagged.mp4", output: "/tmp/frenz-ai-cr-out/abc/master.mp4" };
+    const args = buildContainerTagArgs(p2);
+    expect(args).toContain("copy");
+    expect(args).not.toContain("-bsf:v");
+    expect(args).not.toContain("-vf");
+    for (const arg of args) expect(isKnownColorTagArg(arg, p2), arg).toBe(true);
   });
 
-  it("the match plan is a fixed array — eq=saturation=<0.xxx>, BT.709 tags, audio copied — every element known", () => {
-    const plan = { input: "/tmp/frenz-ai-cr-out/abc/output.mp4", output: "/tmp/frenz-ai-cr-out/abc/final.mp4", saturation: 0.8 };
-    const args = buildColorMatchArgs(plan);
-    expect(args[args.indexOf("-vf") + 1]).toBe("eq=saturation=0.800");
-    expect(args.slice(args.indexOf("-c:a"), args.indexOf("-c:a") + 2)).toEqual(["-c:a", "copy"]);
-    expect(args).toContain("-color_trc");
-    for (const arg of args) expect(isKnownColorMatchArg(arg, plan), arg).toBe(true);
-    expect(() => buildColorMatchArgs({ ...plan, saturation: 1.2 })).toThrow();
-    expect(() => buildColorMatchArgs({ ...plan, saturation: 0 })).toThrow();
-    expect(isKnownColorMatchArg("eq=saturation=1.500", plan)).toBe(false);
-    expect(isKnownColorMatchArg("/etc/passwd", plan)).toBe(false);
-  });
-
-  it("the saturation probe reads the file it was given, drops audio, writes nowhere", () => {
-    const args = buildSaturationProbeArgs("/tmp/x/prepared.mp4");
-    expect(args).toContain("/tmp/x/prepared.mp4");
-    expect(args).toContain("-an");
-    expect(args.slice(-3)).toEqual(["-f", "null", "-"]);
-    expect(args[args.indexOf("-vf") + 1]).toContain("signalstats");
+  it("no saturation, brightness or LUT filter exists anywhere in the plan module", () => {
+    const text = readFileSync(join(process.cwd(), "lib/ai/character-replace/ffmpeg.ts"), "utf8");
+    expect(text).not.toMatch(/eq=saturation/);
+    expect(text).not.toMatch(/lut3d|vibrance|unsharp/);
   });
 });
 

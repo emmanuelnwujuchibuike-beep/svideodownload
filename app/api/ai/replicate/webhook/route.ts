@@ -1,7 +1,8 @@
 import { after, NextResponse } from "next/server";
 
 import { aiErrorMessage } from "@/lib/ai/errors";
-import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
+import { aiFeature, isActiveStatus, type AiFeature } from "@/lib/ai/jobs";
+import { recordJobEvent } from "@/lib/ai/job-events";
 import { findJobByPredictionId, noteJobDiagnostic, recordProviderOutput, transitionJob } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
@@ -100,6 +101,21 @@ export async function POST(request: Request) {
 
     const feature = aiFeature(job.feature);
     if (!feature) return NextResponse.json({ ok: true }, { status: 200 });
+
+    /*
+      The audit row (Part 5, §36). `ignored` when the job is already past the
+      status this delivery could move — a duplicate or an out-of-order one —
+      which the compare-and-set below turns into a no-op regardless; the row
+      just says so. Ownership is the prediction id's: it is UNIQUE per job, so
+      a verified delivery cannot name somebody else's row.
+    */
+    const stale = !isActiveStatus(job.status);
+    await recordJobEvent(job.id, stale ? "webhook.ignored" : "webhook.received", {
+      providerStatus: state.status,
+      jobStatus: job.status,
+      predictionId: state.reference,
+      ...(stale ? { reason: "job already terminal (duplicate or out of order)" } : {}),
+    });
 
     /* ── still running ────────────────────────────────────────────────────── */
     if (state.status === "processing" || state.status === "queued") {

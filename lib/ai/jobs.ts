@@ -503,6 +503,11 @@ export interface AiJobRow {
   expires_at: string | null;
   /** When the one announcement for this job was claimed (lib/ai/job-store.ts claimAiNotification). */
   notified_at: string | null;
+  /** Finalization lease + retry bookkeeping (0156, Part 5 §10–11). See claimFinalization. */
+  finalize_attempts: number;
+  finalize_lease_until: string | null;
+  finalize_next_at: string | null;
+  finalize_error: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -579,6 +584,10 @@ export interface AiJobView {
     refundPending?: boolean;
     voiceMode: "original" | "new_voice";
     lipSyncMode: "standard" | "studio" | null;
+    /** Which processing attempt of the project this row is (1 = first). A retry is a new row, never a rewrite (Part 5, §7). */
+    attempt: number;
+    /** The first attempt's id — the "project" every attempt of one draft belongs to. */
+    projectId: string;
   } | null;
 }
 /* `characterReplace` is optional on the type so fixtures and other tools' views need not name it; the mapper always sets it. */
@@ -658,6 +667,8 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const charged = row.charged_cents ?? null;
   return {
+    attempt: num(m.attempt) ?? 1,
+    projectId: typeof m.project_id === "string" ? m.project_id : row.id,
     quality: typeof settings.quality === "string" ? settings.quality : "720p",
     selectedDurationMs: num(prepared?.durationMs) ?? num(quote?.durationMs),
     trimmed: typeof prepared?.trimmed === "boolean" ? prepared.trimmed : !!trim,

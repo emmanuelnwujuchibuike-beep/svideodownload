@@ -42,13 +42,16 @@ const SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(iw,${PREPARE_MAX_LONG_EDGE
        crushed transfer — every colour reads hotter. `HDR_TO_SDR_FILTER` maps it
        to BT.709 SDR properly (zscale → linear → hable tonemap → bt709) before
        the model sees a frame.
-    2. The model's own output, which tends to leave saturation a touch higher
-       than its input. The finalizer MEASURES the source and the output
-       (`buildSaturationProbeArgs`) and, only when the output is more saturated,
-       pulls it back to the source's level (`buildColorMatchArgs`) — never the
-       other way, never past 0.6, so a naturally vivid clip stays vivid.
+    2. The model's output carries NO colour tags. A player then guesses, and
+       for a 480p-class file the usual guess is BT.601 — reds and greens shift
+       and the clip reads as "more colour" beside a tagged source. The
+       finalizer writes the BT.709 tags INTO the stream without re-encoding
+       (`buildColorTagArgs`: `-c copy` + a metadata bitstream filter), so the
+       master's pixels are the model's pixels and the player stops guessing.
 
-  Every output is tagged BT.709 / limited range so a player never has to guess.
+  Nothing measures or lowers saturation (Video Ready brief, 2026-09-14: "do
+  not simply reduce saturation blindly… the final master should remain
+  visually accurate"). Every output is tagged BT.709 / limited range.
 */
 const HDR_TO_SDR_FILTER = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p";
 const COLOR_TAG_ARGS = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv"] as const;
@@ -148,64 +151,62 @@ export function isKnownPrepareArg(arg: string, plan: PreparePlan): boolean {
   return /^\d+\.\d{3}$/.test(arg);
 }
 
-/* ───────────────────────── the colour probe and the match ─────────────────── */
-
-export const SATURATION_SAMPLE_EVERY = 5;
+/* ─────────────────── the master's colour tags, without a re-encode ────────── */
 
 /**
- * Mean saturation of a file, sampled every fifth frame, printed one line per
- * frame as `lavfi.signalstats.SATAVG=<n>` on stdout. Parse with `parseSatAvg`.
+ * The H.264 / HEVC VUI colour description, written by a bitstream filter:
+ * primaries 1 (BT.709), transfer 1 (BT.709), matrix 1 (BT.709), limited range.
+ * A stream copy — not one pixel is decoded or encoded — and `+faststart` so
+ * the moov atom leads for the player.
+ *
+ * TWO passes, both copies (measured 2026-09-14 on ffmpeg 8): the pass that
+ * rewrites the SPS cannot also write the container's `colr` atom, because
+ * the muxer takes colour from what the DEMUXER read, which was "unspecified".
+ * A second plain copy of the now-tagged stream reads the VUI and writes
+ * `colr nclx 1/1/1`. Players that trust the container (MediaCodec on
+ * Android) and players that trust the bitstream (Safari, ffmpeg-based) then
+ * agree. Bytes of video and audio are untouched in both.
  */
-export function buildSaturationProbeArgs(input: string): string[] {
-  return [
-    "-v", "error", "-nostdin",
-    "-i", input,
-    "-vf", `select='not(mod(n,${SATURATION_SAMPLE_EVERY}))',signalstats,metadata=print:key=lavfi.signalstats.SATAVG:file=-`,
-    "-an", "-f", "null", "-",
-  ];
+const COLOR_TAG_BSF: Record<"h264" | "hevc", string> = {
+  h264: "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
+  hevc: "hevc_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
+};
+
+export type ColorTagCodec = keyof typeof COLOR_TAG_BSF;
+
+export function colorTagCodecFor(codecName: string | null | undefined): ColorTagCodec | null {
+  const c = (codecName ?? "").toLowerCase();
+  if (c === "h264") return "h264";
+  if (c === "hevc" || c === "h265") return "hevc";
+  return null;
 }
 
-export function parseSatAvg(stdout: string): number | null {
-  const values: number[] = [];
-  for (const m of stdout.matchAll(/SATAVG=([0-9.]+)/g)) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n)) values.push(n);
-  }
-  if (values.length === 0) return null;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
-/**
- * How much to pull the output's saturation back toward the source's, or null
- * when nothing should change. Only ever a reduction (≤ 1), never below 0.6,
- * and only when the output is at least 4 % more saturated than the source —
- * a frame's noise must not trigger a re-encode.
- */
-export function saturationMatch(sourceSat: number | null, outputSat: number | null): number | null {
-  if (sourceSat === null || outputSat === null || sourceSat <= 0 || outputSat <= 0) return null;
-  const ratio = sourceSat / outputSat;
-  if (ratio >= 0.96) return null;
-  return Math.max(0.6, Math.round(ratio * 1000) / 1000);
-}
-
-/** Re-encode the output with the saturation pulled back, tagged BT.709. Audio copied untouched. */
-export function buildColorMatchArgs(plan: { input: string; output: string; saturation: number }): string[] {
-  if (!(plan.saturation > 0 && plan.saturation <= 1)) throw new Error("saturation must be in (0, 1]");
+export function buildColorTagArgs(plan: { input: string; output: string; codec: ColorTagCodec }): string[] {
   return [
     "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
     "-i", plan.input,
     "-map", "0:v:0", "-map", "0:a?",
-    "-vf", `eq=saturation=${plan.saturation.toFixed(3)}`,
-    ...COLOR_TAG_ARGS,
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
-    "-c:a", "copy",
+    "-c", "copy",
+    "-bsf:v", COLOR_TAG_BSF[plan.codec],
     "-movflags", "+faststart", "-f", "mp4",
     plan.output,
   ];
 }
 
-export function isKnownColorMatchArg(arg: string, plan: { input: string; output: string }): boolean {
-  if (PREPARE_CONSTANT_ARGS.has(arg) || arg === "copy" || arg === "18") return true;
-  if (arg === plan.input || arg === plan.output) return true;
-  return /^eq=saturation=0\.\d{3}$|^eq=saturation=1\.000$/.test(arg);
+/** Pass 2: a plain copy of the tagged stream, so the container gets its `colr` atom. */
+export function buildContainerTagArgs(plan: { input: string; output: string }): string[] {
+  return [
+    "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+    "-i", plan.input,
+    "-map", "0:v:0", "-map", "0:a?",
+    "-c", "copy",
+    "-movflags", "+faststart", "-f", "mp4",
+    plan.output,
+  ];
+}
+
+export function isKnownColorTagArg(arg: string, plan: { input: string; output: string }): boolean {
+  if (PREPARE_CONSTANT_ARGS.has(arg) || arg === "-c" || arg === "copy" || arg === "-bsf:v") return true;
+  if (arg === COLOR_TAG_BSF.h264 || arg === COLOR_TAG_BSF.hevc) return true;
+  return arg === plan.input || arg === plan.output;
 }

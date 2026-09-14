@@ -1,6 +1,7 @@
 import "server-only";
 
 import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
+import { recordJobEvent } from "@/lib/ai/job-events";
 import { claimAiNotification, getJobAsService, noteJobDiagnostic } from "@/lib/ai/job-store";
 import { dispatchAiNotification } from "@/lib/ai/notify-dispatch";
 import { hasWebPush } from "@/lib/push/web-push";
@@ -77,7 +78,10 @@ async function handOffIfNoKeys(jobId: string, local: boolean | undefined): Promi
   const handed = await dispatchAiNotification(jobId);
   if (!handed.dispatched) {
     await noteJobDiagnostic(jobId, { notify_pending: true, notify_detail: handed.detail.slice(0, 200) });
+    await recordJobEvent(jobId, "notify.pending", { detail: handed.detail.slice(0, 200) });
     console.warn("[ai/notify] no push keys here and the hand-off failed — left pending", { jobId, detail: handed.detail });
+  } else {
+    await recordJobEvent(jobId, "notify.handed_off", {});
   }
   return true;
 }
@@ -127,7 +131,10 @@ export async function notifyAiJobFinished(opts: {
     `claimAiNotification` is a conditional UPDATE on `notified_at`, so exactly
     one of them wins and every later one returns here without sending.
   */
-  if (!(await claimAiNotification(opts.jobId))) return;
+  if (!(await claimAiNotification(opts.jobId))) {
+    await recordJobEvent(opts.jobId, "notify.skipped", { outcome: "completed", reason: "already claimed" });
+    return;
+  }
 
   const copy = aiNotificationCopy({
     feature: opts.feature ?? "ai_character_replace",
@@ -164,8 +171,11 @@ export async function notifyAiJobFinished(opts: {
       "downloads",
       { type: "processing_finished" },
     );
+    await recordJobEvent(opts.jobId, "notify.sent", { outcome: "completed", dedupeKey: `character_replace_completed:${opts.jobId}` });
   } catch (e) {
+    // A push that fails never fails the job: the result is stored and visible in history (§20).
     console.error("[ai/notify] finished push failed", { jobId: opts.jobId, error: String(e) });
+    await recordJobEvent(opts.jobId, "notify.skipped", { outcome: "completed", reason: "send threw", error: String(e).slice(0, 160) });
   }
 }
 
@@ -191,7 +201,10 @@ export async function notifyAiJobFailed(opts: {
 }): Promise<void> {
   if (await handOffIfNoKeys(opts.jobId, opts.local)) return;
   // One announcement per job, whichever safety net gets there first.
-  if (!(await claimAiNotification(opts.jobId))) return;
+  if (!(await claimAiNotification(opts.jobId))) {
+    await recordJobEvent(opts.jobId, "notify.skipped", { outcome: "failed", reason: "already claimed" });
+    return;
+  }
   // Character Replace: "refunded" only when the ledger says so (Part 5, §16).
   const refunded =
     (opts.feature ?? "ai_character_replace") === "ai_character_replace" ? await characterReplaceRefundState(opts.userId, opts.jobId) : null;
@@ -234,7 +247,10 @@ export async function notifyAiJobFailed(opts: {
       "downloads",
       { type: "download_failed" },
     );
+    await recordJobEvent(opts.jobId, "notify.sent", { outcome: "failed", refunded, dedupeKey: `character_replace_failed:${opts.jobId}` });
   } catch (e) {
+    // A push that fails never fails the refund — the ledger moved before this ran (§20).
     console.error("[ai/notify] failed push failed", { jobId: opts.jobId, error: String(e) });
+    await recordJobEvent(opts.jobId, "notify.skipped", { outcome: "failed", reason: "send threw", error: String(e).slice(0, 160) });
   }
 }

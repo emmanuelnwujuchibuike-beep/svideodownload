@@ -96,6 +96,10 @@ export function CharacterReplaceResultScreen({
           <Fact label="Voice" value={voiceLine} />
           <Fact label="Lip sync" value={lipLine} />
         </dl>
+        <p className="border-t border-border/60 px-4 py-2 text-center text-[11.5px] text-muted-foreground">
+          Created {createdOn(result.job.createdAt)}
+          {result.job.characterReplace && result.job.characterReplace.attempt > 1 ? ` · attempt ${result.job.characterReplace.attempt}` : ""}
+        </p>
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
@@ -144,6 +148,12 @@ export function CharacterReplaceResultScreen({
       </button>
     </section>
   );
+}
+
+function createdOn(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "today";
+  return d.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

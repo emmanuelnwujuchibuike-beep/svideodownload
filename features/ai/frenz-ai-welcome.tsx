@@ -1,14 +1,21 @@
 "use client";
 
+import { Image as ImageIcon, Film, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { CharacterReplaceEntry } from "@/features/ai/character-replace/character-replace-entry";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { FrenzAIAllowanceBar, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
+import {
+  FrenzAIAllowanceBar,
+  FrenzAITrustRow,
+} from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIToolGrid } from "@/features/ai/frenz-ai-tool-grid";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
-import { readAiEntitlementCache, writeAiEntitlementCache } from "@/lib/ai/entitlement-cache";
+import {
+  readAiEntitlementCache,
+  writeAiEntitlementCache,
+} from "@/lib/ai/entitlement-cache";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -56,6 +63,24 @@ import { readAiEntitlementCache, writeAiEntitlementCache } from "@/lib/ai/entitl
  * the bar renders NOTHING — a flash of "0 of 0" would show a limit to somebody
  * who has not reached one.
  */
+const HOW = [
+  {
+    icon: ImageIcon,
+    title: "Add a photo",
+    detail: "One clear picture of the face to use.",
+  },
+  {
+    icon: Film,
+    title: "Pick a video",
+    detail: "Trim it to the seconds you want.",
+  },
+  {
+    icon: Sparkles,
+    title: "Get your video",
+    detail: "Ready in minutes — we notify you.",
+  },
+] as const;
+
 export function FrenzAIWelcome({
   characterReplaceHref = "/studio/ai/character-replace",
   historyHref = "/studio/ai/history",
@@ -72,7 +97,9 @@ export function FrenzAIWelcome({
     plan chip and the bar are on screen at the first frame instead of
     arriving a beat later on every entry. See lib/ai/entitlement-cache.ts.
   */
-  const [entitlement, setEntitlement] = useState<AiMemberEntitlement | null>(null);
+  const [entitlement, setEntitlement] = useState<AiMemberEntitlement | null>(
+    null,
+  );
 
   useEffect(() => {
     let alive = true;
@@ -98,7 +125,10 @@ export function FrenzAIWelcome({
   }, []);
 
   return (
-    <FrenzAIEnvironment stage="idle" className="relative overflow-hidden rounded-[1.75rem]">
+    <FrenzAIEnvironment
+      stage="idle"
+      className="relative overflow-hidden rounded-[1.75rem]"
+    >
       {/* the room's light — static, and well under the text */}
       <span
         aria-hidden
@@ -131,9 +161,29 @@ export function FrenzAIWelcome({
           has, AI Clean included. The next session puts Wan 2.2's own hero here.
           Nothing was moved to make that easier; nothing should be.
         */}
-        <h1 className="text-[1.6rem] font-bold leading-[1.1] tracking-[-0.03em] sm:text-[1.9rem]">
-          Frenz <span className="text-gradient">AI</span>
-        </h1>
+        {/*
+          ── 2026-09-14: "more professional and well organised and arranged" ──
+
+          The page reads top to bottom as: who this is (title + one line),
+          the product (the entry card), how it works (three steps), your plan
+          (allowance + tier, grouped under one heading), the trust row, and
+          the tools. Every block is static markup; the only client state on
+          the page is still the one entitlement fetch above.
+        */}
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+              Studio
+            </p>
+            <h1 className="mt-1 text-[1.7rem] font-bold leading-[1.05] tracking-[-0.03em] sm:text-[2rem]">
+              Frenz <span className="text-gradient">AI</span>
+            </h1>
+          </div>
+          <p className="max-w-[12rem] text-right text-[12px] leading-snug text-muted-foreground sm:max-w-xs sm:text-[13px]">
+            Professional video tools that keep your footage looking like your
+            footage.
+          </p>
+        </div>
 
         {/*
           ── THE HERO SLOT, FILLED (2026-09-13) ───────────────────────────────
@@ -153,6 +203,37 @@ export function FrenzAIWelcome({
           className="mt-5"
         />
 
+        {/* how it works — three steps, static */}
+        <section aria-labelledby="ai-how-title" className="mt-5">
+          <h2
+            id="ai-how-title"
+            className="px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground"
+          >
+            How it works
+          </h2>
+          <ol className="mt-2 grid grid-cols-3 gap-2">
+            {HOW.map((step, i) => (
+              <li
+                key={step.title}
+                className="rounded-2xl bg-card/90 px-3 py-3 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">
+                    {i + 1}
+                  </span>
+                  <step.icon className="h-4 w-4 text-primary" aria-hidden />
+                </div>
+                <p className="mt-2 text-[12.5px] font-bold leading-tight tracking-[-0.01em]">
+                  {step.title}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                  {step.detail}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+
         {/*
           🔴 KEPT, EXPLICITLY. Owner, 2026-09-09: "Do not remove the existing
           plan description and the amount left and used." The reference
@@ -160,13 +241,31 @@ export function FrenzAIWelcome({
           have quietly deleted the one thing on this page that tells somebody
           what they have left.
         */}
-        <FrenzAIAllowanceBar entitlement={entitlement} className="mt-4" />
+        {/* Only once the entitlement has answered: an empty "Your plan" box is a claim about nothing. */}
+        {entitlement ? (
+          <section
+            aria-labelledby="ai-plan-title"
+            className="mt-5 rounded-[1.4rem] bg-card/90 px-4 py-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10"
+          >
+            <h2
+              id="ai-plan-title"
+              className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground"
+            >
+              Your plan
+            </h2>
+            <FrenzAIAllowanceBar entitlement={entitlement} className="mt-3" />
 
-        {/*
-          The tier row: what this plan gets, or what the next one adds. Free
-          sees the upgrade, Pro sees what it already has — see the component.
-        */}
-        <FrenzAITierLabel entitlement={entitlement} variant="row" className="mt-4" />
+            {/*
+            The tier row: what this plan gets, or what the next one adds. Free
+            sees the upgrade, Pro sees what it already has — see the component.
+          */}
+            <FrenzAITierLabel
+              entitlement={entitlement}
+              variant="row"
+              className="mt-3"
+            />
+          </section>
+        ) : null}
 
         {/*
           ── 🔴 THE BALANCE CARD IS NOT ON THIS PAGE ANY MORE (2026-09-13) ──
@@ -205,7 +304,14 @@ export function FrenzAIWelcome({
           "Soon" cards on 2026-09-13, and no "More AI Tools" header above them
           since the same day ("Remove this section"); see the component.
         */}
-        <FrenzAIToolGrid historyHref={historyHref} usageHref={usageHref} className="mt-8" />
+        <h2 className="mt-8 px-1 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          Tools
+        </h2>
+        <FrenzAIToolGrid
+          historyHref={historyHref}
+          usageHref={usageHref}
+          className="mt-2"
+        />
       </div>
     </FrenzAIEnvironment>
   );

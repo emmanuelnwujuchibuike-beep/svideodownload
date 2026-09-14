@@ -548,7 +548,10 @@ async function ProfileData({
                       name at a fixed gap rather than parking at the far right),
                       and the avatar column starts a little lower.
                     */}
-                    <div className="flex items-start gap-6 sm:gap-8">
+                    {/* justify-between: the identity hugs the LEFT edge and the ring + its
+                        mode control hug the RIGHT edge (owner, 2026-09-13, orange marker:
+                        "this is where I want the profile ring and display icon card to be"). */}
+                    <div className="flex items-start justify-between gap-4 sm:gap-8">
                       {/* Identity — the LEFT edge: name, handle, and the chips that
                           describe the profile. */}
                       {/*
@@ -613,7 +616,7 @@ async function ProfileData({
                         either: this is the member's OWN header, and the two frame
                         colours the owner named are the only ones it may take.
                       */}
-                      <div className="flex shrink-0 flex-col items-start pt-5 sm:pt-6">
+                      <div className="flex shrink-0 flex-col items-center pt-5 sm:pt-6">
                         <div className="relative w-fit">
                           <IdentityRing
                             userId={profile.id}

@@ -1,10 +1,11 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useScrollDirection } from "@/lib/dom/use-scroll-direction";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -20,40 +21,45 @@ import { cn } from "@/lib/utils";
  * should always prefetch when the pages opens to click it opens the Ai
  * welcome page instantly without loading."
  *
- * ── Where it sits ───────────────────────────────────────────────────────────
+ * Second pass, same day: "the Ai button shouldn't show on the landing feed
+ * page and all unsigned in pages… it should be a more editing icon and the
+ * widget should go under the bottom NAV when hiding not ontop the bottom NAV.
+ * And the widget looks too simple."
  *
- * Fixed, bottom right, ABOVE the phone's bottom nav: the nav publishes its
- * measured height as `--frenz-bottomnav-h` (0 where it is not mounted), so
- * the circle rides 16px over it on a phone and 24px over the home indicator
- * or the desktop's edge. `z-[45]`: over page content and the nav (z-40),
- * under every sheet and overlay (z-90+), so a modal always covers it.
+ * ── Signed in, or nothing ───────────────────────────────────────────────────
  *
- * ── Hide on scroll down, return on scroll up ────────────────────────────────
+ * The shells this mounts in also serve signed-out visitors (a public profile,
+ * the feed), so the button reads the same signal the bottom nav's profile
+ * tile reads — `useEntitlements().handle` — and draws nothing without one.
+ * Not on `/feed` either, by name.
  *
- * The same `useScrollDirection` store the bottom nav already reads — one
- * scroll listener for the whole shell, not a second one — and the same
- * eased transform, so the two move as one piece of chrome. "Down" slides it
- * off the bottom edge; "up" (or the top of the page) brings it back.
+ * ── Where it sits, and where it goes ────────────────────────────────────────
+ *
+ * Fixed, bottom right, 16px above the phone's bottom nav (`--frenz-bottomnav-h`,
+ * 0 where there is no nav), 24px above the edge otherwise. `z-30` — BELOW the
+ * nav's z-40 — so when scrolling down slides it off the bottom it passes
+ * behind the nav, never over it; when it is up, it is clear of the nav anyway.
+ * The same `useScrollDirection` store the nav reads: one scroll listener for
+ * the whole shell.
  *
  * ── Instant open ────────────────────────────────────────────────────────────
  *
  * `/ai` is a static route, so `router.prefetch("/ai")` on mount puts its
  * whole RSC payload in the router cache; the tap is then a client
- * transition with nothing to fetch. `<Link prefetch>` would do the same
- * only once the link is in the viewport — it always is, but the explicit
- * call runs the moment the page opens regardless, which is what was asked.
+ * transition with nothing to fetch.
  *
- * Not on the AI pages themselves (it would point at the page it is on), nor
- * on surfaces where a floating circle sits on a composer or full-screen
- * media: reels, a chat thread, the creation flow.
+ * Not on the AI pages themselves, nor on surfaces where a floating circle
+ * sits on a composer or full-screen media: reels, a chat thread, the
+ * creation flow.
  */
-const HIDDEN_PREFIXES = ["/ai", "/studio/ai", "/reels", "/messages/", "/create", "/wallpapers"];
+const HIDDEN_PREFIXES = ["/ai", "/studio/ai", "/reels", "/feed", "/messages/", "/create", "/wallpapers"];
 
 export function FrenzAiFab() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const dir = useScrollDirection();
-  const shown = !HIDDEN_PREFIXES.some((p) => pathname === p.replace(/\/$/, "") || pathname.startsWith(p));
+  const { handle } = useEntitlements();
+  const shown = !!handle && !HIDDEN_PREFIXES.some((p) => pathname === p.replace(/\/$/, "") || pathname.startsWith(p));
 
   useEffect(() => {
     if (!shown) return;
@@ -70,19 +76,35 @@ export function FrenzAiFab() {
       title="Frenz AI"
       onClick={() => haptic("light")}
       className={cn(
-        "group fixed right-4 z-[45] flex h-14 w-14 items-center justify-center rounded-full text-white sm:right-6",
-        "bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500",
-        "shadow-[0_1px_0_rgb(255_255_255/0.35)_inset,0_16px_36px_-12px_rgb(99_102_241/0.85)]",
+        "group fixed right-4 z-30 flex h-[60px] w-[60px] items-center justify-center rounded-full text-white sm:right-6",
         "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none",
         "active:scale-95 motion-safe:hover:-translate-y-0.5",
-        dir === "down" && "translate-y-[calc(100%+var(--frenz-bottomnav-h,0px)+2rem)]",
+        dir === "down" && "translate-y-[calc(100%+var(--frenz-bottomnav-h,0px)+3rem)]",
       )}
       style={{ bottom: "max(1.5rem, calc(var(--frenz-bottomnav-h, 0px) + 1rem))" }}
     >
-      {/* the gloss, and a soft halo that breathes on hover only */}
-      <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/35 via-white/5 to-transparent" />
-      <span aria-hidden className="pointer-events-none absolute -inset-1 rounded-full bg-gradient-to-br from-blue-500/40 to-fuchsia-500/40 opacity-0 blur-md transition-opacity group-hover:opacity-100" />
-      <Sparkles className="relative h-6 w-6 drop-shadow-[0_1px_1px_rgb(0_0_0/0.25)]" strokeWidth={2.25} />
+      {/* the halo — a soft brand glow that sits under the disc */}
+      <span aria-hidden className="pointer-events-none absolute -inset-2 rounded-full bg-gradient-to-br from-blue-500/35 via-indigo-500/25 to-fuchsia-500/35 blur-lg transition-opacity group-hover:opacity-100" />
+      {/* the conic rim — a slow-turning light on the edge of the disc */}
+      <span aria-hidden className="frenz-fab-rim pointer-events-none absolute inset-0 rounded-full" />
+      {/* the disc */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute inset-[3px] rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500",
+          "shadow-[0_1px_0_rgb(255_255_255/0.4)_inset,0_-6px_14px_rgb(0_0_0/0.18)_inset,0_16px_34px_-12px_rgb(99_102_241/0.9)]",
+        )}
+      />
+      {/* the gloss */}
+      <span aria-hidden className="pointer-events-none absolute inset-[3px] rounded-full bg-[radial-gradient(60%_45%_at_50%_18%,rgb(255_255_255/0.45),transparent_70%)]" />
+      <WandSparkles className="relative h-[26px] w-[26px] drop-shadow-[0_1px_1px_rgb(0_0_0/0.3)]" strokeWidth={2.1} />
+      {/* the "AI" badge */}
+      <span
+        aria-hidden
+        className="absolute -right-0.5 -top-0.5 rounded-full border border-white/70 bg-white px-1.5 py-[1px] text-[9px] font-black leading-none tracking-[0.06em] text-indigo-600 shadow-sm"
+      >
+        AI
+      </span>
       <span className="sr-only">Frenz AI</span>
     </Link>
   );

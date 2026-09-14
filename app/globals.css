@@ -3966,3 +3966,17 @@ html.dark .streak-recover {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
+
+/* ── The floating Frenz AI button's rim (features/ai/frenz-ai-fab.tsx) ──────
+   A conic light that turns slowly around the disc's edge — the one motion on
+   the widget, on the compositor, paused for reduced-motion. */
+.frenz-fab-rim {
+  background: conic-gradient(from 0deg, rgb(255 255 255 / 0.85), rgb(99 102 241 / 0.2), rgb(236 72 153 / 0.6), rgb(255 255 255 / 0.85));
+  animation: frenz-fab-spin 6s linear infinite;
+}
+@keyframes frenz-fab-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .frenz-fab-rim { animation: none; }
+}

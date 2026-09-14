@@ -566,7 +566,11 @@ async function ProfileData({
                         and the rest still follow below the row at full width.
                       */}
                       <div className="min-w-0 max-w-[60%] flex-none self-center py-3 sm:py-4">
-                        <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                        {/* The brand display face (Outfit, the wordmark's), bigger, heavier and
+                            darker (owner, 2026-09-14: "increase the text size… the premium font
+                            the brand text uses… more bolder and thicker and darker"). Outfit ships
+                            at 700 only, so the extra weight comes from a hairline text-stroke. */}
+                        <h1 className="font-brand flex flex-wrap items-center gap-x-2 gap-y-1 text-[2rem] font-bold leading-[1.05] tracking-[-0.03em] text-slate-950 [-webkit-text-stroke:0.35px_currentColor] dark:text-white sm:text-[2.5rem]">
                           {profile.displayName}
                           {/* Verified · plan (Pro/Business) · Creator, one cluster */}
                           <IdentityBadges verified={profile.isVerified} plan={plan} creator accent={heroAccent} />
@@ -616,8 +620,8 @@ async function ProfileData({
                         either: this is the member's OWN header, and the two frame
                         colours the owner named are the only ones it may take.
                       */}
-                      {/* pt-7 / mr-2: "a bit more below and left, about 2 padding down and 2 padding left" (owner, 2026-09-14). */}
-                      <div className="mr-2 flex shrink-0 flex-col items-center pt-7 sm:mr-3 sm:pt-8">
+                      {/* pt-10 / mr-5: two nudges (owner, 2026-09-14: "2 padding down and left", then "about more padding 3 down and left"). */}
+                      <div className="mr-5 flex shrink-0 flex-col items-center pt-10 sm:mr-6 sm:pt-11">
                         <div className="relative w-fit">
                           <IdentityRing
                             userId={profile.id}

@@ -318,7 +318,8 @@ export function ExploreFeaturesBar({
               tile has to be the same object, or the row reads as assembled.
             */
             "flex min-h-[11rem] w-full flex-col rounded-3xl p-4 text-left shadow-[0_10px_30px_-14px_rgba(15,23,42,0.22)]"
-          : "flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)]",
+          : /* The BAR: one row, y-padding 2 (owner, 2026-09-14: "is supposed to fit in and have a just y axis padding of 2"). */
+            "flex w-full items-center gap-3 rounded-2xl px-4 py-2 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.16)]",
         className,
       )}
       /*
@@ -339,7 +340,9 @@ export function ExploreFeaturesBar({
         pages by construction rather than by whichever happens to have the most
         words in it.
       */
-      style={{ minHeight: "11rem" }}
+      // 🔴 The TILE only. This applied to the bar too and made the full-width
+      // "Explore Features" row eleven rem tall (owner, 2026-09-14 screenshot).
+      style={tile ? { minHeight: "11rem" } : undefined}
     >
       {/*
         ── 🔴 THE GRADIENT, AS A STATIC WASH ────────────────────────────────

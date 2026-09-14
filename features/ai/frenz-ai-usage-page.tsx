@@ -47,7 +47,8 @@ import { cn } from "@/lib/utils";
  * sheet and a page are not the same surface.
  */
 
-type LedgerKind = "topup" | "admin_credit" | "job_charge" | "job_refund";
+// The ONE wallet's kinds (0155) — the product ledger's, not the retired AI Clean ledger's.
+type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
 
 interface UsageState {
   balanceCents: number;
@@ -74,10 +75,11 @@ interface UsageState {
  * labels as the dashboard sheet, on purpose: one vocabulary.
  */
 const LEDGER_LABEL: Record<LedgerKind, string> = {
-  topup: "Balance added",
-  admin_credit: "Credit from Frenz",
-  job_charge: "AI video",
-  job_refund: "Refunded — job didn't finish",
+  recharge: "Balance added",
+  adjustment: "Adjustment by Frenz",
+  processing_charge: "Character Replace video",
+  refund: "Refunded — video didn't finish",
+  reversal: "Reversed",
 };
 
 export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
@@ -187,7 +189,7 @@ export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
                     {formatCents(state.balanceCents, state.symbol)}
                   </p>
                   <p className="mt-2 text-[13px] text-muted-foreground">
-                    {formatCents(state.priceCents, state.symbol)} per video after your free ones.
+                    Character Replace from {formatCents(state.priceCents, state.symbol)} per second of video.
                   </p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
@@ -204,7 +206,10 @@ export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
               </Link>
             </section>
 
-            {/* ── free counters ─────────────────────────────────────────── */}
+            {/* ── free counters — only for a tool that HAS a free allowance.
+                Character Replace is paid-only (dailyLimit 0), so a "0 / 0"
+                meter would be noise (owner, 2026-09-13: "0 of 0 free videos"). ── */}
+            {state.dailyLimit > 0 || state.weeklyLimit > 0 ? (
             <section aria-label="Free videos" className="mt-4 grid gap-3 sm:grid-cols-2">
               <Meter
                 label="Today"
@@ -219,11 +224,14 @@ export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
                 hint={`Resets ${formatDate(state.weekResetsAt)}`}
               />
             </section>
+            ) : null}
+            {state.dailyLimit > 0 || state.weeklyLimit > 0 ? (
             <p className="mt-3 text-[13px] text-muted-foreground">
               {state.freeRemaining > 0
                 ? `${state.freeRemaining} free ${state.freeRemaining === 1 ? "video" : "videos"} left right now.`
                 : "No free videos left right now — your balance covers the rest."}
             </p>
+            ) : null}
 
             {/* ── the statement ─────────────────────────────────────────── */}
             <section aria-label="Statement" className="mt-8">

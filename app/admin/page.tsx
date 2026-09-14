@@ -171,7 +171,7 @@ import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, CharacterReplacePricingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiAdminStats } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
@@ -893,12 +893,23 @@ async function LandingSection() {
 async function FrenzAISection() {
   const [landing, aiStats] = await Promise.all([getLandingSettings(), getAiAdminStats()]);
 
+  /*
+    Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
+    the admin dashboard in horizontal NAV and button for each section so when
+    I enter the Frenz AI I don't need to scroll down before seeing what am
+    looking for." One tab per panel; the inactive ones are unmounted, so a
+    panel's chunk is fetched the first time its tab is opened.
+  */
   return (
-    <div className="space-y-6">
-      <FrenzAISettings settings={landing} />
-      {/* Counts only — see lib/ai/admin-stats.ts for why there is no job table. */}
-      <FrenzAIHealth stats={aiStats} />
-    </div>
+    <AdminSubsections
+      unmountInactive
+      groups={[
+        { id: "health", label: "Overview", content: <FrenzAIHealth stats={aiStats} /> },
+        { id: "pricing", label: "Character Replace pricing", content: <CharacterReplacePricingLazy settings={landing} /> },
+        { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },
+        { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },
+      ]}
+    />
   );
 }
 

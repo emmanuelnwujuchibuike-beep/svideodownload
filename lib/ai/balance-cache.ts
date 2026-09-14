@@ -30,7 +30,9 @@
  * matter. This snapshot decides nothing; it only stops the page opening empty.
  */
 
-const KEY = "frenzsave_ai_balance_v1";
+// v2 (2026-09-14): the figure is the ONE wallet now (0155); a v1 snapshot held
+// the retired AI Clean balance and must never paint again.
+const KEY = "frenzsave_ai_balance_v2";
 const TTL_MS = 24 * 60 * 60 * 1000;
 
 interface Snapshot<T> {

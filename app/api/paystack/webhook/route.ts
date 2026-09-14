@@ -1,8 +1,5 @@
 import { after, NextResponse } from "next/server";
 
-import { creditAiBalance } from "@/lib/ai/balance";
-import { markTopupAttempt } from "@/lib/ai/topup-attempts";
-import { notifyTopupSuccess } from "@/lib/ai/topup-notify";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
@@ -138,7 +135,17 @@ export async function POST(request: Request) {
     }
 
     try {
-      const balanceAfterCents = await creditAiBalance({ userId, amountCents: amount, kind: "topup", reference });
+      // 🔴 ONE WALLET (owner, 2026-09-14; 0155): a legacy AI-purpose payment
+      // credits the product wallet. `ai_balances` is retired at zero.
+      const balanceAfterCents = await creditVerifiedCharacterReplaceRecharge({
+        userId,
+        reference,
+        amountCents: amount,
+        currency: event.data.currency ?? "NGN",
+        channel: event.data.channel ?? null,
+        paidAt: event.data.paid_at ?? null,
+        gatewayResponse: event.data.gateway_response ?? null,
+      });
       /*
         Off the money path (owner, 2026-09-13: push + email invoice on every
         deposit). Both are `void`: the credit above is the thing Paystack must
@@ -151,23 +158,18 @@ export async function POST(request: Request) {
       // the response is sent, and a fire-and-forget promise freezes with it.
       // `after()` is how this platform keeps the invocation alive for work
       // that must not delay the response — the same as the Replicate webhook.
-      after(async () => {
-        await markTopupAttempt(reference, {
-          status: "success",
-          gatewayResponse: event.data.gateway_response ?? null,
-          channel: event.data.channel ?? null,
-          paidAt: event.data.paid_at ?? null,
-        });
-        await notifyTopupSuccess({
+      after(() =>
+        announceCharacterReplaceRecharge({
           userId,
           reference,
           amountCents: amount,
-          currency: event.data.currency ?? "",
+          currency: event.data.currency ?? "NGN",
           balanceAfterCents,
           channel: event.data.channel ?? null,
           paidAt: event.data.paid_at ?? null,
-        });
-      });
+          gatewayResponse: event.data.gateway_response ?? null,
+        }),
+      );
     } catch (e) {
       console.error("[paystack] ai topup credit failed", { reference, error: String(e) });
       /*

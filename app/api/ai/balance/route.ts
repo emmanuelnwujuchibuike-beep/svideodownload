@@ -1,15 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getAiBalanceCents, listAiLedger } from "@/lib/ai/balance";
-import {
-  aiTopupCeiling,
-  aiTopupFloor,
-  aiTopupOptions,
-  freeRemaining,
-  isoDate,
-  weekResetsAt,
-  weekStartUtc,
-} from "@/lib/ai/economy";
+import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
+import { qualityRateCents } from "@/lib/ai/character-replace/pricing";
+import { freeRemaining, isoDate, weekResetsAt, weekStartUtc } from "@/lib/ai/economy";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { primaryAiFeature } from "@/lib/ai/jobs";
@@ -102,9 +95,25 @@ export async function GET(request: Request) {
         with credit that they have none and send them to pay again, so the whole
         request fails instead and the panel says it could not load.
       */
-      getAiBalanceCents(subject.userId ?? ""),
-      listAiLedger(subject.userId ?? "", ledgerLimit),
+      /*
+        ── 🔴 ONE WALLET (owner, 2026-09-14; migration 0155) ─────────────────
+        "I want the AI clean balance added to the character replace and the
+        one balance should be the character replace and it should be in the
+        balance and usage button." The figure and the statement here are the
+        product wallet's — `ai_balances` is retired at zero.
+      */
+      getCharacterReplaceBalanceCents(subject.userId ?? ""),
+      listCharacterReplaceLedger(subject.userId ?? "", ledgerLimit),
     ]);
+    const cr = settings.frenzAiCharacterReplace;
+    /*
+      The price a member sees on the balance page is the tool's STARTING rate
+      — the cheapest quality that is switched on, per second — and the floor a
+      very short video is billed at. The exact figure for a given video is the
+      quote's (POST /api/ai/character-replace/quote); this is orientation.
+    */
+    const enabledRates = cr.qualities.filter((q) => q.enabled).map((q) => qualityRateCents(cr, q.id));
+    const fromPerSecondCents = enabledRates.length ? Math.min(...enabledRates) : cr.pricePerSecondCents;
 
     const dailyLimit = entitlement.dailyLimit;
     const weeklyLimit = settings.frenzAiWeeklyFreeCredits;
@@ -132,10 +141,12 @@ export async function GET(request: Request) {
       balanceCents,
       currency: settings.frenzAiCurrency,
       symbol: aiCurrencySymbol(settings.frenzAiCurrency),
-      priceCents: settings.frenzAiVideoPriceCents,
+      priceCents: fromPerSecondCents,
+      priceUnit: "second",
+      minimumChargeCents: cr.minimumChargeCents,
       /* The ladder the top-up screen offers — generated from the operator's
          minimum, and re-validated server-side when one is chosen. */
-      topupOptionsCents: aiTopupOptions(settings.frenzAiMinTopupCents),
+      topupOptionsCents: cr.recharge.packages.filter((p) => p.enabled).map((p) => p.amountCents),
       /*
         🔴 THE BOUNDS ON A CUSTOM AMOUNT (owner, 2026-09-09: "the add balance
         dont have an input field to add a custom amount").
@@ -146,8 +157,8 @@ export async function GET(request: Request) {
         operator's settings and refuses anything outside them, so editing these
         in a browser changes nothing except the message shown locally.
       */
-      minTopupCents: aiTopupFloor(settings.frenzAiMinTopupCents),
-      maxTopupCents: aiTopupCeiling(settings.frenzAiMinTopupCents),
+      minTopupCents: cr.recharge.minCents,
+      maxTopupCents: cr.recharge.maxCents,
       usedToday: usedTodayShown,
       dailyLimit,
       usedThisWeek: usedThisWeekShown,

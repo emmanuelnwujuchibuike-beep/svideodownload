@@ -82,7 +82,10 @@ const GlassSheetShell = dynamic(
 interface DashboardState {
   balanceCents: number;
   symbol: string;
+  /** The starting rate per second (the cheapest quality that is on). */
   priceCents: number;
+  /** The floor a very short video is billed at. */
+  minimumChargeCents?: number;
   topupOptionsCents: number[];
   minTopupCents: number;
   maxTopupCents: number;
@@ -95,7 +98,7 @@ interface DashboardState {
   ledger: {
     id: string;
     deltaCents: number;
-    kind: "topup" | "admin_credit" | "job_charge" | "job_refund";
+    kind: "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
     createdAt: string;
   }[];
 }
@@ -263,7 +266,7 @@ export function FrenzAIDashboard({
   const freeLine =
     state.freeRemaining > 0
       ? `${state.freeRemaining} free ${state.freeRemaining === 1 ? "video" : "videos"} left today`
-      : `${formatCents(state.priceCents, state.symbol)} per video`;
+      : `From ${formatCents(state.priceCents, state.symbol)} per second`;
 
   return (
     <>
@@ -426,7 +429,7 @@ function DashboardPanel({
     customCents !== null && customCents >= state.minTopupCents && customCents <= state.maxTopupCents;
 
   const outOfFree = state.freeRemaining <= 0;
-  const canAfford = state.balanceCents >= state.priceCents;
+  const canAfford = state.balanceCents >= (state.minimumChargeCents ?? state.priceCents);
 
   return (
     <div className="pb-1">
@@ -475,20 +478,25 @@ function DashboardPanel({
       </div>
 
       {/* ── the three facts, as the reference asks ──────────────────────── */}
-      <dl className="mt-4 grid grid-cols-3 gap-2">
-        <Fact
-          label="Today"
-          value={`${state.usedToday} / ${state.dailyLimit}`}
-          hint="free"
-          spent={state.usedToday >= state.dailyLimit}
-        />
-        <Fact
-          label="This week"
-          value={`${state.usedThisWeek} / ${state.weeklyLimit}`}
-          hint="free"
-          spent={state.usedThisWeek >= state.weeklyLimit}
-        />
-        <Fact label="Per video" value={formatCents(state.priceCents, state.symbol)} hint="after free" />
+      <dl className={cn("mt-4 grid gap-2", state.dailyLimit > 0 ? "grid-cols-3" : "grid-cols-1")}>
+        {/* Free counters only where a free allowance exists; Character Replace is paid-only. */}
+        {state.dailyLimit > 0 ? (
+          <Fact
+            label="Today"
+            value={`${state.usedToday} / ${state.dailyLimit}`}
+            hint="free"
+            spent={state.usedToday >= state.dailyLimit}
+          />
+        ) : null}
+        {state.weeklyLimit > 0 && state.dailyLimit > 0 ? (
+          <Fact
+            label="This week"
+            value={`${state.usedThisWeek} / ${state.weeklyLimit}`}
+            hint="free"
+            spent={state.usedThisWeek >= state.weeklyLimit}
+          />
+        ) : null}
+        <Fact label="Per second" value={`from ${formatCents(state.priceCents, state.symbol)}`} hint="Character Replace" />
       </dl>
 
       {/*
@@ -503,11 +511,10 @@ function DashboardPanel({
       */}
       {outOfFree && !canAfford ? (
         <div className="mt-4 rounded-2xl border border-amber-500/35 bg-amber-500/[0.06] p-3.5">
-          <p className="text-[13.5px] font-bold">AI balance too low</p>
+          <p className="text-[13.5px] font-bold">Balance too low</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-            Your free AI allowance has been used for this period. Recharge your AI balance to keep
-            going — {formatCents(state.priceCents, state.symbol)} per video. Free videos come back{" "}
-            {resetWording(state.weekResetsAt)}.
+            Recharge your balance to keep going — Character Replace starts from{" "}
+            {formatCents(state.priceCents, state.symbol)} per second of video.
           </p>
         </div>
       ) : null}
@@ -654,10 +661,11 @@ function DashboardPanel({
  * BUILD here rather than rendering as an empty row on somebody's statement.
  */
 const LEDGER_LABEL: Record<DashboardState["ledger"][number]["kind"], string> = {
-  topup: "Balance added",
-  admin_credit: "Credit from Frenz",
-  job_charge: "AI video",
-  job_refund: "Refunded — job didn't finish",
+  recharge: "Balance added",
+  adjustment: "Adjustment by Frenz",
+  processing_charge: "Character Replace video",
+  refund: "Refunded — video didn't finish",
+  reversal: "Reversed",
 };
 
 function Fact({
@@ -698,10 +706,3 @@ function Fact({
  * 00:00 UTC on 2026-09-14" is a true sentence nobody can act on; the weekly
  * boundary is Monday and that is the useful half of it.
  */
-function resetWording(iso: string): string {
-  const at = Date.parse(iso);
-  if (!Number.isFinite(at)) return "next week";
-  const days = Math.ceil((at - Date.now()) / 86_400_000);
-  if (days <= 1) return "tomorrow";
-  return `on ${new Date(at).toLocaleDateString(undefined, { weekday: "long" })}`;
-}

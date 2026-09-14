@@ -7,43 +7,47 @@ import type { LandingSettings } from "@/lib/landing/settings";
 /*
   🔴 CODE-SPLIT, and the route budget is why (lib/perf/budget.test.ts).
 
-  The Frenz AI settings form is one of the largest client panels on /admin —
-  the allowances, the pricing, the currency, and since 2026-09-13 the
-  Character Replace block — and that route renders every panel eagerly. Its
-  ceiling note says the answer to the next overflow is splitting the panels
-  rather than raising the number again; this is that split, for the panel
-  that crossed the line (by 335 bytes).
+  The Frenz AI panels are among the largest client panels on /admin — the
+  allowances, the pricing, the currency, the Character Replace pricing form —
+  and that route renders every panel eagerly. Its ceiling note says the answer
+  to the next overflow is splitting the panels rather than raising the number
+  again; this is that split.
 
   ⚠️ The split has to happen INSIDE a client component. A `next/dynamic` call
   from the server page was tried first and moved nothing: a client boundary
   referenced by a page is bundled into that page's client chunk regardless.
-  From here, the form is a real lazy chunk, fetched when this wrapper mounts
-  — immediately for an operator on the AI section, and never counted in the
-  route's first load. Same pattern as `use-sensitive-action.tsx`.
+  From here, each form is a real lazy chunk, fetched when its wrapper mounts
+  — and since the AI section became tabbed (owner, 2026-09-14: "horizontal
+  NAV and button for each section"), a chunk is fetched only when its tab is
+  first opened. Same pattern as `use-sensitive-action.tsx`.
 
-  The placeholder keeps the section's height steady for the ~100 ms the
-  chunk takes on a warm cache, so nothing below it jumps.
+  The placeholders keep the section's height steady for the ~100 ms a chunk
+  takes on a warm cache, so nothing below them jumps.
 */
+const skeleton = (label: string) =>
+  function Skeleton() {
+    return <div aria-busy="true" aria-label={label} className="min-h-[28rem] rounded-3xl border border-border bg-card" />;
+  };
+
 const FrenzAISettings = dynamic(() => import("@/features/admin/frenz-ai-settings").then((m) => m.FrenzAISettings), {
-  loading: () => <div aria-busy="true" aria-label="Loading Frenz AI settings" className="min-h-[40rem] rounded-3xl border border-border bg-card" />,
+  loading: skeleton("Loading Frenz AI settings"),
 });
-
-/*
-  Part 3 (2026-09-13): the Character Replace pricing panel — its own form,
-  its own chunk, under the same AI grouping. Same reasoning, same split.
-*/
 const CharacterReplacePricingPanel = dynamic(
   () => import("@/features/admin/character-replace-pricing").then((m) => m.CharacterReplacePricingPanel),
-  {
-    loading: () => <div aria-busy="true" aria-label="Loading Character Replace pricing" className="min-h-[40rem] rounded-3xl border border-border bg-card" />,
-  },
+  { loading: skeleton("Loading Character Replace pricing") },
 );
+const AiBalanceAdjustPanel = dynamic(() => import("@/features/admin/ai-balance-adjust").then((m) => m.AiBalanceAdjustPanel), {
+  loading: skeleton("Loading balance adjustments"),
+});
 
 export function FrenzAISettingsLazy({ settings }: { settings: LandingSettings }) {
-  return (
-    <div className="space-y-6">
-      <FrenzAISettings settings={settings} />
-      <CharacterReplacePricingPanel settings={settings} />
-    </div>
-  );
+  return <FrenzAISettings settings={settings} />;
+}
+
+export function CharacterReplacePricingLazy({ settings }: { settings: LandingSettings }) {
+  return <CharacterReplacePricingPanel settings={settings} />;
+}
+
+export function AiBalanceAdjustLazy({ settings }: { settings: LandingSettings }) {
+  return <AiBalanceAdjustPanel settings={settings} />;
 }

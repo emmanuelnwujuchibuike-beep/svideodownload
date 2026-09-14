@@ -1,10 +1,10 @@
 import { after, NextResponse } from "next/server";
 
-import { creditAiBalance, getAiBalanceCents } from "@/lib/ai/balance";
 import { markTopupAttempt } from "@/lib/ai/topup-attempts";
-import { notifyTopupFailed, notifyTopupSuccess } from "@/lib/ai/topup-notify";
+import { notifyTopupFailed } from "@/lib/ai/topup-notify";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
+import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -239,22 +239,24 @@ export async function POST(request: Request) {
       webhook already credited this, the function returns the existing balance
       and writes nothing, which is why calling this on every return is safe.
     */
-    const balanceCents = await creditAiBalance({
+    /*
+      ── 🔴 ONE WALLET (owner, 2026-09-14; migration 0155) ─────────────────────
+      A legacy `frenz_ai_topup` reference — a payment started before the
+      wallets were unified and completed after — credits the SAME product
+      wallet a `frenz_cr_topup` one does. `ai_balances` is retired at zero;
+      nothing writes it any more. Idempotent on the reference as before.
+    */
+    const balanceCents = await creditVerifiedCharacterReplaceRecharge({
       userId: user.id,
-      amountCents: amount,
-      kind: "topup",
       reference,
+      amountCents: amount,
+      currency: frenzAiCurrency,
+      channel: charge.channel ?? null,
+      paidAt: charge.paid_at ?? null,
+      gatewayResponse: charge.gateway_response ?? null,
     });
-    // Off the money path, once, and kept alive past the response — see the
-    // webhook for the same two calls and why `after()` rather than `void`.
-    after(async () => {
-      await markTopupAttempt(reference, {
-        status: "success",
-        gatewayResponse: charge.gateway_response ?? null,
-        channel: charge.channel ?? null,
-        paidAt: charge.paid_at ?? null,
-      });
-      await notifyTopupSuccess({
+    after(() =>
+      announceCharacterReplaceRecharge({
         userId: user.id,
         reference,
         amountCents: amount,
@@ -262,10 +264,11 @@ export async function POST(request: Request) {
         balanceAfterCents: balanceCents,
         channel: charge.channel ?? null,
         paidAt: charge.paid_at ?? null,
-      });
-    });
+        gatewayResponse: charge.gateway_response ?? null,
+      }),
+    );
 
-    return NextResponse.json({ credited: true, balanceCents });
+    return NextResponse.json({ credited: true, balanceCents, product: "character_replace" });
   } catch (e) {
     /*
       🔴 Never the provider's message, and never a stack. §22: "Do not expose
@@ -278,7 +281,7 @@ export async function POST(request: Request) {
     */
     console.error("[ai/topup-verify] failed", { userId: user.id, reference, error: String(e) });
     try {
-      return NextResponse.json({ credited: false, balanceCents: await getAiBalanceCents(user.id) });
+      return NextResponse.json({ credited: false, balanceCents: await getCharacterReplaceBalanceCents(user.id) });
     } catch {
       return NextResponse.json({ error: "We couldn't check that payment. Try again." }, { status: 502 });
     }

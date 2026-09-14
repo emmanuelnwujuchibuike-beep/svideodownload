@@ -191,10 +191,8 @@ export function CharacterReplaceWorkspace({
         <FrenzAICrumb tool="Character Replace" />
 
         {result ? (
-          <>
-            <Headline title="Your video is" highlight="ready." subtitle={null} />
-            <CharacterReplaceResultScreen result={result} config={config} historyHref={historyHref} onMakeAnother={leaveJob} className="mt-5" />
-          </>
+          /* Video Ready owns its own header (Back · Video Ready · Ready) — no page headline above it. */
+          <CharacterReplaceResultScreen result={result} config={config} historyHref={historyHref} onMakeAnother={leaveJob} onBack={leaveJob} className="mt-3" />
         ) : processing ? (
           <>
             <Headline title="Replacing the" highlight="character." subtitle={null} />

@@ -342,3 +342,37 @@ describe("migration 0156 — plain DDL, the audit table locked to the service ro
     expect(sql).not.toMatch(/create policy .* on public\.ai_job_events/);
   });
 });
+
+/* ───────────────────────── Video Ready (owner, 2026-09-14) ──────────────── */
+
+describe("Video Ready — the master is the model's output, shown and saved without a transform", () => {
+  it("the finalizer never re-encodes the master: two stream copies for the colour tags, no eq/lut/scale", () => {
+    const s = src("server/services/ai-character-replace-finalize-service.ts");
+    expect(s).toContain("buildColorTagArgs(plan)");
+    expect(s).toContain("buildContainerTagArgs(plan2)");
+    expect(s).not.toMatch(/eq=saturation|saturationMatch|buildColorMatchArgs|-crf/);
+  });
+  it("the download route redirects to the stored bytes — no video passes through a function", () => {
+    const s = src("app/api/ai/jobs/[id]/result/route.ts");
+    expect(s).toContain("NextResponse.redirect(signed.url");
+    expect(s).not.toMatch(/ffmpeg|transcode/i);
+  });
+  it("the viewer applies no CSS filter and fetches nothing into memory by itself", () => {
+    const p = src("features/ai/character-replace/video-ready-player.tsx");
+    expect(p).not.toMatch(/filter:|saturate\(|contrast\(|brightness\(/);
+    expect(p).not.toContain("fetch(");
+    expect(p).toContain('preload="metadata"');
+    expect(p).toContain("webkitEnterFullscreen");
+    expect(p).toContain("requestFullscreen(");
+    expect(p).toContain("env(safe-area-inset-bottom)");
+  });
+  it("Share is drawn only where a file can be shared, and never invents an 'open in Photos' button", () => {
+    const r = src("features/ai/character-replace/result.tsx");
+    expect(r).toContain("navigator.canShare?.({ files: [file] })");
+    expect(r).toContain("typeof navigator.share === \"function\" && typeof navigator.canShare === \"function\"");
+    expect(r).not.toMatch(/Open in (Google )?Photos/);
+    // Download stays the platform's one implementation.
+    expect(r).toContain("startAiResultDownload(result.job)");
+    expect(r).not.toContain("<a download");
+  });
+});

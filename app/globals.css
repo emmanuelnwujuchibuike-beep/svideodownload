@@ -4008,3 +4008,29 @@ html.dark .streak-recover {
     0 0 0 1px rgb(255 255 255 / 0.08);
   color: #e2e8f0;
 }
+
+/* ── the Video Ready viewer's seek bar (features/ai/character-replace/video-ready-player.tsx) ── */
+.frenz-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+}
+.frenz-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.frenz-range::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+}
+.frenz-range:disabled {
+  opacity: 0.4;
+}

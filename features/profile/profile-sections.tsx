@@ -1,5 +1,4 @@
 import { ProfileHub } from "@/features/profile/profile-hub";
-import { ProfilePreviewBar } from "@/features/profile/preview-bar";
 import { ProfileTabs, type ProfileSection } from "@/features/profile/profile-tabs";
 import type { ViewerRole } from "@/lib/profile/audience";
 import { resolveProfileLayout, type StoredModule } from "@/lib/profile/engine";
@@ -123,12 +122,13 @@ export function ProfileSections({
     viewerCircles,
   });
 
-  // The preview bar is owner-only chrome and renders even when the previewed
-  // role can see NOTHING — that empty result is the single most useful thing
-  // the preview can tell you, so returning null here would hide the answer.
-  const previewBar = ownerViewing ? (
-    <ProfilePreviewBar handle={handle} active={previewRole} visibleCount={layout.modules.length} />
-  ) : null;
+  /*
+    The "Preview as" bar is gone from the page (owner, 2026-09-13, screenshot:
+    "remove this section from the profile page"). `?preview=<role>` still
+    resolves server-side — a hand-typed URL renders the profile as that role,
+    which is all the mechanism ever did — but nothing draws the chips.
+  */
+  void ownerViewing;
 
   const media = layout.modules.filter((m) => MEDIA_MODULE_KEYS.has(m.key));
   const sections: ProfileSection[] = media.map((m) => ({ key: m.key, label: m.spec.label, icon: m.spec.icon }));
@@ -158,16 +158,7 @@ export function ProfileSections({
     for (const key of HUB_OWNER_KEYS) entries.push({ key, sub: null });
   }
 
-  if (layout.modules.length === 0) {
-    return previewBar ? (
-      <>
-        {previewBar}
-        <p className="rounded-2xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
-          Nothing on your profile is visible to {previewRole ? "this audience" : "anyone"} yet.
-        </p>
-      </>
-    ) : null;
-  }
+  if (layout.modules.length === 0) return null;
 
   // A ?tab= that this viewer can't see falls back to the resolved landing
   // section rather than showing an empty dock. Only media sections are tabs
@@ -178,7 +169,6 @@ export function ProfileSections({
 
   return (
     <>
-      {previewBar}
       {sections.length > 0 && active ? (
         <ProfileTabs
           handle={handle}

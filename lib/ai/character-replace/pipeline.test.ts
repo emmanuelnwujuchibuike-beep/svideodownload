@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { normalizeCharacterReplaceConfig } from "./config";
 import { buildPrepareArgs, isKnownPrepareArg, PREPARE_CONSTANT_ARGS, secondsArg } from "./ffmpeg";
 import { durationWithinTolerance, readCharacterReplaceMeta, selectedRangeOf } from "./job-meta";
-import { buildWanAnimateReplaceInput, WAN_ANIMATE_REPLACE, WAN_INPUT_FIELDS, wanResolutionFor } from "./model";
+import { buildWanAnimateReplaceInput, isTrustedProviderOutputUrl, WAN_ANIMATE_REPLACE, WAN_INPUT_FIELDS, wanResolutionFor } from "./model";
 import { quoteCharacterReplace } from "./pricing";
 import { createCharacterReplaceJobSchema, startCharacterReplaceJobSchema } from "./start-schema";
 import { aiCharacterKey, aiPreparedKey, aiResultKey, aiSourceKey, pathBelongsTo } from "../storage";
@@ -58,6 +58,15 @@ describe("Wan 2.2 Animate Replace — the payload", () => {
     expect(wanResolutionFor("480p")).toBe("480");
     expect(wanResolutionFor("720p")).toBe("720");
     expect(wanResolutionFor("1080p")).toBeNull();
+  });
+
+  it("follows a recorded output only to Replicate's delivery hosts (SSRF)", () => {
+    expect(isTrustedProviderOutputUrl("https://replicate.delivery/xezq/abc/output.mp4")).toBe(true);
+    expect(isTrustedProviderOutputUrl("https://cdn.replicate.delivery/x.mp4")).toBe(true);
+    expect(isTrustedProviderOutputUrl("http://replicate.delivery/x.mp4")).toBe(false);
+    expect(isTrustedProviderOutputUrl("https://replicate.delivery.evil.com/x.mp4")).toBe(false);
+    expect(isTrustedProviderOutputUrl("https://169.254.169.254/latest/meta-data")).toBe(false);
+    expect(isTrustedProviderOutputUrl("file:///etc/passwd")).toBe(false);
   });
 
   it("refuses non-https media urls", () => {

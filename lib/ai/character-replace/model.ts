@@ -85,3 +85,20 @@ export function buildWanAnimateReplaceInput(opts: {
 
 /** The fields the input may carry — a test walks the built object against this. */
 export const WAN_INPUT_FIELDS = ["video", "character_image", "resolution", "go_fast", "merge_audio"] as const;
+
+/**
+ * Where a provider output may be fetched FROM (§40, SSRF). The URL arrives in
+ * a signature-verified webhook or a poll of the provider's own API, so it is
+ * the provider's; this is defence in depth — the worker will not follow a
+ * recorded output URL to any host but Replicate's delivery domains.
+ */
+export function isTrustedProviderOutputUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    return host === "replicate.delivery" || host.endsWith(".replicate.delivery") || host === "replicate.com" || host.endsWith(".replicate.com");
+  } catch {
+    return false;
+  }
+}

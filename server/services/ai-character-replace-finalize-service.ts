@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
+import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
@@ -55,7 +56,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
 
   const providerOutputUrl = typeof job.metadata?.provider_output_url === "string" ? job.metadata.provider_output_url : null;
   if (!providerOutputUrl) return { ok: false, jobId, code: "INVALID_AI_OUTPUT", detail: "no provider output recorded" };
-  if (!/^https:\/\//.test(providerOutputUrl)) return { ok: false, jobId, code: "INVALID_AI_OUTPUT", detail: "provider output is not an https url" };
+  if (!isTrustedProviderOutputUrl(providerOutputUrl)) return { ok: false, jobId, code: "INVALID_AI_OUTPUT", detail: "provider output is not on a trusted host" };
 
   const owner = subjectFromRow(job);
   if (!owner || owner.kind !== "user") return { ok: false, jobId, code: "AI_FINALIZATION_FAILED", detail: "job row has no member owner" };

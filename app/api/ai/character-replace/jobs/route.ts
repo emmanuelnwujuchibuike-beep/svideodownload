@@ -78,6 +78,9 @@ export async function POST(request: Request) {
     const [settings, entitlement] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
     const config = settings.frenzAiCharacterReplace;
     if (!config.enabled || !entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
+    // Part 8 §2: the switches refuse a NEW project before any upload ticket is minted; results and history stay reachable.
+    if (config.ops.maintenanceMode) return fail("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });
+    if (!config.ops.processingEnabled) return fail("CR_BUSY");
     const modeView = modeConfig(config, mode);
     if (!modeView.enabled) return fail("FEATURE_UNAVAILABLE", { error: `${replacementModeLabel(mode)} isn't available right now.` });
 

@@ -68,7 +68,16 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<Chara
 
 /** What the tool offers, and whether it is on for this member. */
 export async function getCharacterReplaceConfig(): Promise<
-  CharacterReplaceClientResult<{ config: CharacterReplacePublicConfig; available: boolean; audience: string; processingAvailable?: boolean }>
+  CharacterReplaceClientResult<{
+    config: CharacterReplacePublicConfig;
+    available: boolean;
+    audience: string;
+    processingAvailable?: boolean;
+    /** Part 8 §2: the operator's maintenance notice, when one is up. */
+    maintenance?: { active: boolean; message: string | null };
+    /** Part 8 §2: new starts are paused (running jobs finish). */
+    processingPaused?: boolean;
+  }>
 > {
   return request("/api/ai/character-replace/config");
 }

@@ -55,6 +55,7 @@ export async function GET(request: Request) {
 
   try {
     const [settings, entitlement] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
+    const cr = settings.frenzAiCharacterReplace;
     const config = publicCharacterReplaceConfig(
       settings.frenzAiCharacterReplace,
       { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
@@ -77,7 +78,14 @@ export async function GET(request: Request) {
         provider token is present and the worker that trims is reachable. The
         workspace enables Start on this, never on a constant.
       */
-      processingAvailable: hasProviderFor(feature) && hasWorker,
+      processingAvailable: hasProviderFor(feature) && hasWorker && cr.ops.processingEnabled && !cr.ops.maintenanceMode,
+      /*
+        Part 8 §2, §30: why Start is off, in the operator's words when it is
+        maintenance. The workspace shows this instead of a generic "not
+        available"; nothing else about the switches reaches a browser.
+      */
+      maintenance: cr.ops.maintenanceMode ? { active: true, message: cr.ops.maintenanceMessage } : { active: false, message: null },
+      processingPaused: !cr.ops.processingEnabled && !cr.ops.maintenanceMode,
     });
   } catch (e) {
     console.error("[ai/character-replace/config] read failed", { subject: subject.key, error: String(e) });

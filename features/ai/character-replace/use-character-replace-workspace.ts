@@ -79,8 +79,10 @@ export interface WorkspaceLoads {
   config: CharacterReplacePublicConfig | null;
   /** The tool is on for this member. Null until the config answers. */
   available: boolean | null;
-  /** A job can actually run on this deployment (provider + worker). Null until the config answers. */
+  /** A job can actually run on this deployment (provider + worker + the operator's switches). Null until the config answers. */
   processingAvailable: boolean | null;
+  /** Part 8 §2, §30: why Start is off, in the operator's own words — maintenance, or a pause. */
+  processingNotice: string | null;
   configError: string | null;
   balance: CharacterReplaceBalance | null;
   balanceError: string | null;
@@ -94,6 +96,7 @@ export function useCharacterReplaceWorkspace() {
     config: null,
     available: null,
     processingAvailable: null,
+    processingNotice: null,
     configError: null,
     // The last figure this browser saw paints first (from the effect below,
     // not here — the prerendered markup has no balance); the network replaces it.
@@ -158,7 +161,19 @@ export function useCharacterReplaceWorkspace() {
     void (async () => {
       const res = await getCharacterReplaceConfig();
       if (!alive.current) return;
-      if (res.ok) setLoads((l) => ({ ...l, config: res.config, available: res.available, processingAvailable: res.processingAvailable === true, configError: null }));
+      if (res.ok)
+        setLoads((l) => ({
+          ...l,
+          config: res.config,
+          available: res.available,
+          processingAvailable: res.processingAvailable === true,
+          processingNotice: res.maintenance?.active
+            ? (res.maintenance.message ?? "Character Replace is being looked after right now. New videos will be back shortly.")
+            : res.processingPaused
+              ? "New videos are paused for a moment while we look after the service. Nothing has been charged — try again shortly."
+              : null,
+          configError: null,
+        }));
       else setLoads((l) => ({ ...l, configError: res.error, available: false }));
     })();
 

@@ -66,6 +66,8 @@ export const NOT_EXPORTED: Record<string, string> = {
      an operator's recovery action). It carries provider and operator ids that
      are not the member's; the job itself is exported (0156). */
   ai_job_events: "Background audit trail belonging to an AI job; the job itself is exported with its outcome.",
+  /* One row per provider model: the circuit breaker's failure streak and pause (0158). Vendor state, no member data. */
+  ai_provider_health: "Provider health for the AI circuit breaker. Not personal data.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
   /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —
      the same shape as `post_media` above. The streak itself IS exported, and it

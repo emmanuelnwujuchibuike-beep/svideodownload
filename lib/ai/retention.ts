@@ -60,6 +60,8 @@ export interface RetentionResult {
   expired: number;
   /** Failed/cancelled jobs whose dead source was removed. */
   sourcesReclaimed: number;
+  /** Part 8 §17: queued jobs never started within a day — files removed, row expired. */
+  abandoned: number;
   /** Objects actually deleted, across both buckets. */
   objectsDeleted: number;
   /** Storage errors — logged, never fatal. A retry gets them next run. */
@@ -82,6 +84,7 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
   const result: RetentionResult = {
     expired: 0,
     sourcesReclaimed: 0,
+    abandoned: 0,
     objectsDeleted: 0,
     errors: 0,
     ms: 0,
@@ -205,10 +208,55 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
     result.sourcesReclaimed += 1;
   }
 
+  /*
+    ── 3 · ABANDONED PROJECTS (Part 8 §17) ─────────────────────────────────
+
+    A member creates a project, the browser uploads the photo and the video,
+    and Start is never pressed — a closed tab, a change of mind. The row sits
+    in `queued` with nothing to move it, `started_at` null, and the uploads
+    stay in the private bucket until now. A day is long enough for anyone
+    who meant to come back; after it the files go and the row reads
+    `expired`, which the workspace already knows how to say. Nothing was
+    ever reserved for such a row, so there is nothing to refund.
+  */
+  const { data: idleRows, error: idleError } = await admin
+    .from("ai_jobs")
+    .select("id, source_path")
+    .eq("status", "queued")
+    .is("started_at", null)
+    .lte("created_at", new Date(now.getTime() - ABANDONED_AFTER_MS).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(BATCH);
+  if (idleError) {
+    console.error("[ai/retention] abandoned query failed", { message: idleError.message });
+    result.errors += 1;
+  }
+  for (const row of (idleRows ?? []) as Pick<AiJobRow, "id" | "source_path">[]) {
+    const swept = await removeJobFolder(admin, row.source_path);
+    result.objectsDeleted += swept.deleted;
+    result.errors += swept.errors;
+    const { data: moved, error } = await admin
+      .from("ai_jobs")
+      .update({ status: "expired", source_path: null, result_path: null, poster_path: null, completed_at: now.toISOString() })
+      .eq("id", row.id)
+      .eq("status", "queued")
+      .is("started_at", null)
+      .select("id");
+    if (error) {
+      console.error("[ai/retention] abandoned expire failed", { jobId: row.id, message: error.message });
+      result.errors += 1;
+      continue;
+    }
+    if ((moved?.length ?? 0) === 1) result.abandoned += 1;
+  }
+
   result.ms = Date.now() - startedAt;
   console.info("[ai/retention] swept", result);
   return result;
 }
+
+/** A queued project nobody started within this long is abandoned. */
+const ABANDONED_AFTER_MS = 24 * 60 * 60_000;
 
 /**
  * Remove objects, tolerating everything.

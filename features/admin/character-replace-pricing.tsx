@@ -118,6 +118,18 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   /* ── Part 7 §21: retention ── */
   const [resultHours, setResultHours] = useState(String(cr.retention.resultHours));
   const [savedDays, setSavedDays] = useState(String(cr.retention.savedResultDays));
+  /* ── Part 8 §2, §4, §7, §8, §25: the switches, the limits, the breaker, the FX rate ── */
+  const [processingEnabled, setProcessingEnabled] = useState(cr.ops.processingEnabled);
+  const [maintenanceMode, setMaintenanceMode] = useState(cr.ops.maintenanceMode);
+  const [maintenanceMessage, setMaintenanceMessage] = useState(cr.ops.maintenanceMessage);
+  const [breakerEnabled, setBreakerEnabled] = useState(cr.ops.circuitBreaker.enabled);
+  const [breakerThreshold, setBreakerThreshold] = useState(String(cr.ops.circuitBreaker.failureThreshold));
+  const [breakerWindow, setBreakerWindow] = useState(String(Math.round(cr.ops.circuitBreaker.windowSeconds / 60)));
+  const [breakerCooldown, setBreakerCooldown] = useState(String(Math.round(cr.ops.circuitBreaker.cooldownSeconds / 60)));
+  const [maxActiveUser, setMaxActiveUser] = useState(String(cr.limits.maxActiveJobsPerUser));
+  const [maxActiveGlobal, setMaxActiveGlobal] = useState(String(cr.limits.maxActiveJobsGlobal));
+  const [maxPerDay, setMaxPerDay] = useState(String(cr.limits.maxJobsPerUserPerDay));
+  const [fxPerUsd, setFxPerUsd] = useState(cr.localMinorUnitsPerUsd > 0 ? minorToMajorInput(cr.localMinorUnitsPerUsd) : "");
 
   /* ── recharge ── */
   const [minTopup, setMinTopup] = useState(minorToMajorInput(cr.recharge.minCents));
@@ -161,6 +173,23 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         resultHours: resultHours.trim() === "" ? cr.retention.resultHours : Math.floor(Number(resultHours)),
         savedResultDays: savedDays.trim() === "" ? cr.retention.savedResultDays : Math.floor(Number(savedDays)),
       },
+      ops: {
+        processingEnabled,
+        maintenanceMode,
+        maintenanceMessage: maintenanceMessage.trim() || cr.ops.maintenanceMessage,
+        circuitBreaker: {
+          enabled: breakerEnabled,
+          failureThreshold: breakerThreshold.trim() === "" ? cr.ops.circuitBreaker.failureThreshold : Math.floor(Number(breakerThreshold)),
+          windowSeconds: breakerWindow.trim() === "" ? cr.ops.circuitBreaker.windowSeconds : Math.floor(Number(breakerWindow)) * 60,
+          cooldownSeconds: breakerCooldown.trim() === "" ? cr.ops.circuitBreaker.cooldownSeconds : Math.floor(Number(breakerCooldown)) * 60,
+        },
+      },
+      limits: {
+        maxActiveJobsPerUser: maxActiveUser.trim() === "" ? cr.limits.maxActiveJobsPerUser : Math.floor(Number(maxActiveUser)),
+        maxActiveJobsGlobal: maxActiveGlobal.trim() === "" ? cr.limits.maxActiveJobsGlobal : Math.floor(Number(maxActiveGlobal)),
+        maxJobsPerUserPerDay: maxPerDay.trim() === "" ? cr.limits.maxJobsPerUserPerDay : Math.floor(Number(maxPerDay)),
+      },
+      localMinorUnitsPerUsd: fxPerUsd.trim() === "" ? 0 : (majorInputToMinor(fxPerUsd) ?? 0),
       modes: {
         face_only: modePayload(faceOnly, cr.modes.face_only),
         skin_face: modePayload(skinFace, cr.modes.skin_face),
@@ -192,7 +221,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, coverage, cr, enabled, faceOnly, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, coverage, cr, enabled, faceOnly, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -228,6 +257,15 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     if (!(payload.lipSyncMaximumDurationSeconds >= 1 && payload.lipSyncMaximumDurationSeconds <= 120)) out.push("Lip sync's longest video must be between 1 and 120 seconds.");
     if (!(payload.retention.resultHours >= 1 && payload.retention.resultHours <= 720)) out.push("Results are kept between 1 and 720 hours.");
     if (!(payload.retention.savedResultDays >= 1 && payload.retention.savedResultDays <= 365)) out.push("Saved results are kept between 1 and 365 days.");
+    /* ── Part 8 ── */
+    const b = payload.ops.circuitBreaker;
+    if (!(Number.isInteger(b.failureThreshold) && b.failureThreshold >= 1 && b.failureThreshold <= 1000)) out.push("The breaker's failure count must be between 1 and 1,000.");
+    if (!(b.windowSeconds >= 30 && b.windowSeconds <= 86_400)) out.push("The breaker's window must be between 1 and 1,440 minutes.");
+    if (!(b.cooldownSeconds >= 30 && b.cooldownSeconds <= 86_400)) out.push("The breaker's pause must be between 1 and 1,440 minutes.");
+    for (const [label, v, max] of [["Active videos per member", payload.limits.maxActiveJobsPerUser, 100], ["Active videos across FrenzSave", payload.limits.maxActiveJobsGlobal, 10_000], ["Videos per member per day", payload.limits.maxJobsPerUserPerDay, 10_000]] as const) {
+      if (!(Number.isInteger(v) && v >= 0 && v <= max)) out.push(`${label} must be a whole number from 0 (no cap) to ${max.toLocaleString()}.`);
+    }
+    if (payload.ops.maintenanceMode && payload.ops.maintenanceMessage.trim().length < 10) out.push("Write the maintenance notice members will read (at least 10 characters).");
     return out;
   }, [payload, symbol]);
 
@@ -260,6 +298,27 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       if (!m.enabled && cr.modes[label === "Face Only" ? "face_only" : "skin_face"].enabled) out.push(`This switches ${label} OFF for every member.`);
     }
     if (payload.tts.enabled && payload.tts.perRequestCents === 0 && payload.tts.perCharacterCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("A generated voice is free — every voice fee is zero.");
+    /* ── Part 8 §2, §8: the switches and the caps ── */
+    if (payload.ops.maintenanceMode && !cr.ops.maintenanceMode) out.push("This puts Character Replace into MAINTENANCE: no new videos for anyone until it is switched back. Finished videos stay reachable.");
+    if (!payload.ops.processingEnabled && cr.ops.processingEnabled) out.push("This PAUSES new videos for every member. Videos already running finish normally.");
+    if (payload.limits.maxActiveJobsGlobal === 0) out.push("No platform-wide cap on active videos — a burst can run up the provider bill without a ceiling.");
+    if (!payload.ops.circuitBreaker.enabled && cr.ops.circuitBreaker.enabled) out.push("The provider circuit breaker is OFF: a failing provider keeps being paid until somebody notices.");
+    /* ── Part 8 §25: the margin, when the FX rate is known ── */
+    const fx = payload.localMinorUnitsPerUsd;
+    if (fx > 0) {
+      const localPerUsdCent = fx / 100;
+      const tiers: [string, number, number][] = [];
+      for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
+        for (const t of m.tiers) if (t.enabled && m.providerCostPerSecondUsdCents > 0) tiers.push([`${label} ${t.id}`, t.perSecondCents, m.providerCostPerSecondUsdCents * localPerUsdCent]);
+      }
+      // Full Character carries no operator cost figure yet (the Wan provider predates Part 6); its margin is not checked here.
+      for (const [label, price, cost] of tiers) {
+        if (price < cost) out.push(`${label} sells BELOW the provider's cost: ${formatCents(Math.round(price), symbol)}/s charged against about ${formatCents(Math.round(cost), symbol)}/s paid.`);
+        else if (price < cost * 1.3) out.push(`${label} has a thin margin: ${formatCents(Math.round(price), symbol)}/s charged against about ${formatCents(Math.round(cost), symbol)}/s paid.`);
+      }
+    } else {
+      out.push("No exchange rate is set (Switches, limits & safety), so prices cannot be checked against the provider's USD cost.");
+    }
     if (payload.tts.perCharacterCents * payload.tts.maximumCharacters > 5_000_000) out.push(`The per-character fee prices the longest dialogue at ${formatCents(payload.tts.perCharacterCents * payload.tts.maximumCharacters, symbol)}.`);
     return out;
   }, [cr.enabled, cr.modes, payload, symbol]);
@@ -576,6 +635,50 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             </Field>
             <Field id="cr-max-upload" label="Largest upload (MB)" hint="Supabase Storage refuses any file over the project's global limit (50 MB unless you raised it in the Supabase dashboard). Raise this only after raising that.">
               <input id="cr-max-upload" type="number" inputMode="numeric" min={1} max={100} value={maxUploadMb} onChange={(e) => setMaxUploadMb(e.target.value)} className={input} />
+            </Field>
+          </div>
+        </Group>
+
+        {/* ── SWITCHES, LIMITS & SAFETY (Part 8 §2, §4, §7, §8, §25) ── */}
+        <Group title="Switches, limits & safety">
+          <div className="space-y-4">
+            <Toggle label="New videos can start" hint="Off pauses every new start at once — members see a notice, nothing is charged, videos already running finish. The kill switch for a bad day at the provider." checked={processingEnabled} onChange={setProcessingEnabled} />
+            <Toggle label="Maintenance mode" hint="On refuses new projects and shows the notice below; finished videos, history and downloads stay reachable." checked={maintenanceMode} onChange={setMaintenanceMode} />
+            <Field id="cr-maint-msg" label="Maintenance notice" hint="What members read while maintenance is on. Up to 300 characters.">
+              <textarea id="cr-maint-msg" rows={2} maxLength={300} value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} className={cn(input, "min-h-[3.5rem] resize-y")} />
+            </Field>
+          </div>
+          <p className="mt-5 text-xs font-semibold text-muted-foreground">Limits — 0 means no cap of that kind</p>
+          <div className="mt-2 grid gap-4 sm:grid-cols-3">
+            <Field id="cr-lim-user" label="Active videos per member" hint="Counted at Start across running videos. The plan's own cap (1–3) still applies; this can only tighten it.">
+              <input id="cr-lim-user" type="number" inputMode="numeric" min={0} max={100} value={maxActiveUser} onChange={(e) => setMaxActiveUser(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-lim-global" label="Active videos across FrenzSave" hint="Past this, Start answers 'busy, try again in a few minutes' and charges nothing.">
+              <input id="cr-lim-global" type="number" inputMode="numeric" min={0} max={10_000} value={maxActiveGlobal} onChange={(e) => setMaxActiveGlobal(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-lim-day" label="Videos per member per day" hint="Starts in the last 24 hours.">
+              <input id="cr-lim-day" type="number" inputMode="numeric" min={0} max={10_000} value={maxPerDay} onChange={(e) => setMaxPerDay(e.target.value)} className={input} />
+            </Field>
+          </div>
+          <p className="mt-5 text-xs font-semibold text-muted-foreground">Provider circuit breaker</p>
+          <div className="mt-2 space-y-4">
+            <Toggle label="Pause a model that keeps failing" hint="After the failure count inside the window, new starts needing that model are refused (nothing charged) and paid jobs wait, until the pause passes. The Providers tab shows the state." checked={breakerEnabled} onChange={setBreakerEnabled} />
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field id="cr-brk-n" label="Failures before pausing" hint="1 to 1,000.">
+                <input id="cr-brk-n" type="number" inputMode="numeric" min={1} max={1000} value={breakerThreshold} onChange={(e) => setBreakerThreshold(e.target.value)} className={input} />
+              </Field>
+              <Field id="cr-brk-w" label="Counted within (minutes)" hint="1 to 1,440.">
+                <input id="cr-brk-w" type="number" inputMode="numeric" min={1} max={1440} value={breakerWindow} onChange={(e) => setBreakerWindow(e.target.value)} className={input} />
+              </Field>
+              <Field id="cr-brk-c" label="Pause for (minutes)" hint="1 to 1,440. The next try after the pause is the probe.">
+                <input id="cr-brk-c" type="number" inputMode="numeric" min={1} max={1440} value={breakerCooldown} onChange={(e) => setBreakerCooldown(e.target.value)} className={input} />
+              </Field>
+            </div>
+          </div>
+          <p className="mt-5 text-xs font-semibold text-muted-foreground">Margin check</p>
+          <div className="mt-2 grid gap-4 sm:grid-cols-2">
+            <Field id="cr-fx" label={`One US dollar in ${symbol}`} hint="Used only here, to compare each tier's price with the provider's USD cost and warn when the margin is thin. Never shown to members. Leave empty to skip the check.">
+              <input id="cr-fx" type="number" inputMode="decimal" min={0} step="any" value={fxPerUsd} onChange={(e) => setFxPerUsd(e.target.value)} className={input} />
             </Field>
           </div>
         </Group>

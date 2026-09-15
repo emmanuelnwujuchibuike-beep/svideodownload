@@ -253,10 +253,15 @@ export function MobileNav({
   // the history page") — feed and profile were already here; settings was
   // the one signed-in destination this effect hadn't reached yet, even
   // though `account/loading.tsx` already existed for it to warm into.
+  //
+  // `/history` and `/studio/ai/history` ADDED (owner, 2026-09-14: "the history
+  // pages still don't open instantly") — the tab warmed `/history` only on
+  // pointer-down, which is too late on a phone that taps; the AI history had
+  // no warm at all. Both have a loading.tsx to warm into.
   useEffect(() => {
     if (isSlowConnection()) return;
     const id = setTimeout(() => {
-      for (const r of ["/home", "/friends", "/messages", "/feed", "/account", profileHref]) router.prefetch(r);
+      for (const r of ["/home", "/friends", "/messages", "/feed", "/account", "/history", "/studio/ai/history", profileHref]) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
   }, [router, profileHref]);

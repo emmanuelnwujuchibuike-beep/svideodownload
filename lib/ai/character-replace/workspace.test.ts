@@ -97,6 +97,17 @@ describe("the asset slots (§20/§21)", () => {
     expect(inputReadiness(s.project, config).ready).toBe(true);
   });
 
+  it("Face Only with its own tier is ready — the gate reads the MODE's tiers, not the Full Character list (owner, 2026-09-14: Continue stayed grey)", () => {
+    const face = workspaceReducer(withBoth(), { type: "mode", mode: "face_only", defaultQuality: "standard", maxReferences: 1 });
+    expect(face.project.settings.quality).toBe("standard");
+    const r = inputReadiness(face.project, config);
+    expect(r.issues).not.toContain("quality-unavailable");
+    expect(r.ready).toBe(true);
+    // a tier the mode does not support stays refused
+    const ultra = { ...face, project: { ...face.project, settings: { ...face.project.settings, quality: "ultra" as const } } };
+    expect(inputReadiness(ultra.project, config).issues).toContain("quality-unavailable");
+  });
+
   it("🔴 'ready' is impossible without the file — the slot and the asset move together", () => {
     const s = workspaceReducer(withBoth(), { type: "video/clear" });
     expect(s.video).toEqual({ status: "empty" });

@@ -1,6 +1,8 @@
 import { ArrowRight, BellRing, Clock3, Palette, PersonStanding } from "lucide-react";
 import Link from "next/link";
 
+import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
+
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { cn } from "@/lib/utils";
 
@@ -113,9 +115,16 @@ export function CharacterReplaceEntry({
       {available ? (
         <div className="mt-6">
           <span className="block rounded-[1.2rem] bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 p-[1.5px] shadow-[0_14px_30px_-16px_rgba(79,70,229,0.55)] sm:inline-block">
+            {/*
+              ── 2026-09-14: "doesn't respond instant" ────────────────────
+              Prefetch is ON (Next's default: the route's static shell and its
+              loading skeleton are fetched when the link scrolls into view),
+              so the tap paints the workspace skeleton at once. When it could
+              not be prefetched — a cold tab, a slow connection — the stripe
+              inside the link shows the page is on its way.
+            */}
             <Link
               href={href}
-              prefetch={false}
               className={cn(
                 "group flex min-h-[56px] w-full items-center justify-center gap-2.5 rounded-[calc(1.2rem-1.5px)] bg-foreground px-7",
                 "text-[16px] font-semibold tracking-[-0.01em] text-background sm:min-w-[15rem]",
@@ -126,6 +135,7 @@ export function CharacterReplaceEntry({
             >
               Start Creating
               <ArrowRight className="h-[18px] w-[18px] transition-transform motion-safe:group-hover:translate-x-0.5" aria-hidden />
+              <LinkPendingStripe />
             </Link>
           </span>
           <p className="mt-3 flex items-center gap-1.5 text-[12px] text-muted-foreground">

@@ -274,6 +274,22 @@ export function qualityGuidance(
   return null;
 }
 
+/**
+ * Is this quality one the member may pick for this mode? Full Character
+ * reads the 480p/720p/1080p list; Face Only and Skin + Face read THEIR
+ * tiers (standard/high/ultra).
+ *
+ * 🔴 The gate used to read only `config.qualities` — so in Face Only the
+ * tier "standard" was never found, Continue stayed grey, and the summary
+ * said "Check the selected range" about a range that was fine (owner,
+ * 2026-09-14: "I can't click the continue button after inputting a video").
+ */
+export function qualityOffered(config: CharacterReplacePublicConfig, mode: ReplacementMode, quality: string): boolean {
+  if (mode === "full_character") return config.qualities.some((q) => q.id === quality);
+  const m = config.modes.find((x) => x.id === mode);
+  return !!m && m.tiers.some((t) => t.id === quality && t.enabled && t.supported);
+}
+
 /* ───────────────────────────── readiness (§15) ───────────────────────────── */
 
 export type ReadinessIssue =
@@ -311,7 +327,7 @@ export function inputReadiness(
       if (kept < limits.video.minDurationMs - 50) issues.push("trim-too-short");
     }
   }
-  if (config && !config.qualities.some((q) => q.id === project.settings.quality)) issues.push("quality-unavailable");
+  if (config && !qualityOffered(config, project.mode, project.settings.quality)) issues.push("quality-unavailable");
   return { ready: issues.length === 0, issues };
 }
 

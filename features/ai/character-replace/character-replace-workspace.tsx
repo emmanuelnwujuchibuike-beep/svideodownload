@@ -268,6 +268,12 @@ export function CharacterReplaceWorkspace({
             />
 
             <CharacterReplaceStepper current={step} furthest={furthestStep(project)} onGo={goTo} className="mt-6" />
+            {loads.processingNotice ? (
+              /* Part 8 §2, §30: the operator's notice, shown before a single file is chosen — not only at Start. */
+              <div role="status" className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px] font-medium leading-relaxed text-foreground">
+                {loads.processingNotice}
+              </div>
+            ) : null}
 
             <section aria-labelledby="cr-step-title" className="mt-6">
               <h2 id="cr-step-title" className="text-[19px] font-bold tracking-[-0.02em]">
@@ -442,7 +448,7 @@ export function CharacterReplaceWorkspace({
                     : ws.launch.phase === "error"
                     ? ws.launch.message
                   : readyToStart && !processingAvailable
-                      ? "Processing isn't switched on yet. Your price is confirmed and nothing has been charged."
+                      ? (loads.processingNotice ?? "Processing isn't switched on yet. Your price is confirmed and nothing has been charged.")
                     : state.pricing.status === "error"
                       ? "We couldn't price this video yet."
                       : state.pricing.status !== "quoted"

@@ -273,6 +273,87 @@ export async function countActiveJobs(subject: AiSubject, feature: AiFeature): P
   return count ?? 0;
 }
 
+/**
+ * ── Part 8 §4, §5, §8: THE /start CLAIM, WITH THE LIMITS INSIDE ONE LOCK ──
+ *
+ * `claim_ai_job_start` (0158) takes an advisory lock for the feature, counts
+ * the member's and the platform's active jobs and the member's starts in the
+ * last day, and only then moves the row queued → acquiring with the fields
+ * /start always wrote. Two requests racing the last slot cannot both win;
+ * the count and the write are one transaction.
+ *
+ * The verdict is a word, never a throw: the route answers each one with its
+ * own honest code and charges nothing for any of them.
+ */
+export type StartClaimVerdict = "claimed" | "lost" | "user_limit" | "global_limit" | "daily_limit";
+
+export async function claimJobStart(input: {
+  jobId: string;
+  userId: string;
+  feature: AiFeature;
+  maxActivePerUser: number;
+  maxActiveGlobal: number;
+  maxPerDay: number;
+  chargedCents: number;
+  metadata: Record<string, unknown>;
+}): Promise<StartClaimVerdict> {
+  const { data, error } = await createAdminClient().rpc("claim_ai_job_start", {
+    p_job_id: input.jobId,
+    p_user_id: input.userId,
+    p_feature: input.feature,
+    p_max_user: Math.max(0, Math.floor(input.maxActivePerUser)),
+    p_max_global: Math.max(0, Math.floor(input.maxActiveGlobal)),
+    p_max_daily: Math.max(0, Math.floor(input.maxPerDay)),
+    p_charged: input.chargedCents,
+    p_metadata: input.metadata,
+  });
+  if (error) {
+    /*
+      0158 not applied yet (PGRST202 = no such function): the deploy and the
+      migration land minutes apart, and a /start in that window must still
+      work. The old compare-and-set is the fallback — the limits are then the
+      create route's count, exactly as before Part 8.
+    */
+    if (error.code === "PGRST202" || /claim_ai_job_start/.test(error.message)) {
+      console.warn("[ai/jobs] claim_ai_job_start missing — falling back to the plain CAS (apply 0158)", { jobId: input.jobId });
+      const moved = await transitionJob(input.jobId, ["queued"], "acquiring", {
+        funding_source: "balance",
+        charged_cents: input.chargedCents,
+        started_at: new Date().toISOString(),
+        metadata: input.metadata,
+      });
+      return moved ? "claimed" : "lost";
+    }
+    console.error("[ai/jobs] start claim failed", { jobId: input.jobId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  const verdict = typeof data === "string" ? data : "";
+  if (verdict === "claimed" || verdict === "lost" || verdict === "user_limit" || verdict === "global_limit" || verdict === "daily_limit") return verdict;
+  throw new AiJobError("INTERNAL_ERROR", `unexpected start claim verdict: ${verdict}`);
+}
+
+/**
+ * Undo a claim whose reservation then failed (an insufficient balance the
+ * atomic deduction saw and the read before it did not). The row goes back
+ * to `queued` exactly as it was, so the member can recharge and press Start
+ * again. Guarded on `acquiring` with no prediction: a row the worker has
+ * already moved cannot be pulled back.
+ */
+export async function revertJobStartClaim(jobId: string, metadata: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from("ai_jobs")
+    .update({ status: "queued", funding_source: null, charged_cents: null, started_at: null, metadata })
+    .eq("id", jobId)
+    .eq("status", "acquiring")
+    .is("replicate_prediction_id", null)
+    .select("id");
+  if (error) {
+    console.error("[ai/jobs] start claim revert failed", { jobId, code: error.code, message: error.message });
+    return false;
+  }
+  return (data?.length ?? 0) === 1;
+}
+
 /** The job this member already created with this request id, if any. */
 export async function findJobByRequestId(
   subject: AiSubject,

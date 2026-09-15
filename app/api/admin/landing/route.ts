@@ -258,6 +258,32 @@ const schema = z.object({
         .optional(),
       /** Part 7 §21: retention, configuration-driven. */
       retention: z.object({ resultHours: z.number().int().min(1).max(24 * 30).optional(), savedResultDays: z.number().int().min(1).max(365).optional() }).optional(),
+      /** Part 8 §2, §7: the switches and the breaker. */
+      ops: z
+        .object({
+          processingEnabled: z.boolean().optional(),
+          maintenanceMode: z.boolean().optional(),
+          maintenanceMessage: z.string().max(300).optional(),
+          circuitBreaker: z
+            .object({
+              enabled: z.boolean().optional(),
+              failureThreshold: z.number().int().min(1).max(1_000).optional(),
+              windowSeconds: z.number().int().min(30).max(86_400).optional(),
+              cooldownSeconds: z.number().int().min(30).max(86_400).optional(),
+            })
+            .optional(),
+        })
+        .optional(),
+      /** Part 8 §4, §8: the limits (0 = no cap of that kind). */
+      limits: z
+        .object({
+          maxActiveJobsPerUser: z.number().int().min(0).max(100).optional(),
+          maxActiveJobsGlobal: z.number().int().min(0).max(10_000).optional(),
+          maxJobsPerUserPerDay: z.number().int().min(0).max(10_000).optional(),
+        })
+        .optional(),
+      /** Part 8 §25: local minor units per US dollar, for the margin warnings. */
+      localMinorUnitsPerUsd: z.number().int().min(0).max(100_000_000).optional(),
       /** Part 6 §27: why the prices changed. Recorded in the pricing history beside the admin's id; never stored as a setting. */
       pricingChangeReason: z.string().max(300).optional(),
       languages: z

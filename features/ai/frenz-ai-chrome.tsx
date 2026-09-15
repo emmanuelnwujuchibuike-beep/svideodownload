@@ -139,7 +139,6 @@ export function FrenzAIAllowanceBar({
   return (
     <Link
       href={href}
-      prefetch={false}
       className={cn(
         "group flex items-center gap-3 rounded-2xl border border-border/60 bg-card/95 px-3.5 py-3",
         "shadow-[0_8px_26px_-18px_hsl(229_55%_3%/0.55)] transition hover:border-foreground/15",

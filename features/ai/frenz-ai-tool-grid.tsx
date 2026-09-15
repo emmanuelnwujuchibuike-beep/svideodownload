@@ -1,6 +1,7 @@
 import { ChevronRight, History, Wallet } from "lucide-react";
 import Link from "next/link";
 
+import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import { cn } from "@/lib/utils";
 
 /**
@@ -152,7 +153,6 @@ function ToolCard({ tool }: { tool: AiTool }) {
   return (
     <Link
       href={href}
-      prefetch={false}
       className={cn(
         "group flex min-h-[9.5rem] flex-col rounded-[1.25rem] p-3.5",
         "bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10",
@@ -198,6 +198,8 @@ function ToolCard({ tool }: { tool: AiTool }) {
           <ChevronRight className="h-4 w-4 text-foreground/70" aria-hidden />
         </span>
       </div>
+      {/* 2026-09-14: prefetch on (default), and a stripe while a not-yet-cached page is fetched. */}
+      <LinkPendingStripe />
     </Link>
   );
 }

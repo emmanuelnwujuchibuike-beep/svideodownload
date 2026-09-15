@@ -1,5 +1,6 @@
 import "server-only";
 
+import { withCircuit } from "@/lib/ai/character-replace/circuit";
 import { readCharacterReplaceMeta, readPipeline, referencePaths, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
 import { markSubmitted, planPipeline, type PipelineMeta, type PipelineStage } from "@/lib/ai/character-replace/pipeline";
 import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
@@ -105,7 +106,10 @@ export async function submitCharacterReplaceJob(
     const provider = textToSpeechProviderFor(config.tts.model);
     if (!provider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `text-to-speech model ${config.tts.model} is not configured`);
     if (!provider.supportedLanguages().includes(tts.languageCode)) throw new AiJobError("INVALID_INPUT", `language ${tts.languageCode} is not spoken by ${config.tts.model}`);
-    const sub = await provider.createPrediction({ jobId: fresh.id, text: tts.text, languageCode: tts.languageCode, providerVoiceId: tts.providerVoiceId, webhookUrl });
+    // Part 8 §7: under the breaker — refused while the model's circuit is open, scored after.
+    const sub = await withCircuit(provider.model, config.ops.circuitBreaker, () =>
+      provider.createPrediction({ jobId: fresh.id, text: tts.text, languageCode: tts.languageCode, providerVoiceId: tts.providerVoiceId, webhookUrl }),
+    );
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: false };
   } else if (stage === "replace") {
     /* ── the replacement, routed by mode ───────────────────────────────── */
@@ -124,16 +128,18 @@ export async function submitCharacterReplaceJob(
     */
     const keepOriginalAudio = meta.prepared.hasAudio && meta.settings.voiceMode === "original";
     const [videoUrl, ...referenceImageUrls] = await Promise.all([signSourceUrl(meta.prepared.path), ...refs.map((p) => signSourceUrl(p))]);
-    const sub = await provider.createPrediction({
-      jobId: fresh.id,
-      mode: meta.mode,
-      videoUrl,
-      referenceImageUrls,
-      quality: meta.settings.quality,
-      keepOriginalAudio,
-      goFast: config.providerGoFast === true,
-      webhookUrl,
-    });
+    const sub = await withCircuit(provider.model, config.ops.circuitBreaker, () =>
+      provider.createPrediction({
+        jobId: fresh.id,
+        mode: meta.mode,
+        videoUrl,
+        referenceImageUrls,
+        quality: meta.settings.quality,
+        keepOriginalAudio,
+        goFast: config.providerGoFast === true,
+        webhookUrl,
+      }),
+    );
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: sub.mergeAudio };
     providerNote = {
       model: sub.model,
@@ -155,7 +161,9 @@ export async function submitCharacterReplaceJob(
     const provider = lipSyncProviderFor(tier.model);
     if (!provider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `lip-sync model ${tier.model} is not configured`);
     const [videoUrl, audioUrl] = await Promise.all([signSourceUrl(replaced), signSourceUrl(wav)]);
-    const sub = await provider.createPrediction({ jobId: fresh.id, videoUrl, audioUrl, syncMode: config.audio.syncMode, webhookUrl });
+    const sub = await withCircuit(provider.model, config.ops.circuitBreaker, () =>
+      provider.createPrediction({ jobId: fresh.id, videoUrl, audioUrl, syncMode: config.audio.syncMode, webhookUrl }),
+    );
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: true };
   }
 

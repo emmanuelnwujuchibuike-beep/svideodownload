@@ -292,6 +292,38 @@ export interface CharacterReplaceConfig {
     resultHours: number;
     savedResultDays: number;
   };
+  /**
+   * ── PART 8 §2, §4, §8: THE KILL SWITCHES AND THE LIMITS ──────────────────
+   * `enabled` above is the feature: off = nobody sees Character Replace as
+   * available. These are finer: `processingEnabled` off refuses NEW starts
+   * while every running job finishes and every result stays reachable;
+   * `maintenanceMode` on shows `maintenanceMessage` on the workspace and
+   * refuses creates and starts (results and history stay). The limits are
+   * decided inside one database lock at /start (claim_ai_job_start, 0158):
+   * 0 = no cap of that kind.
+   */
+  ops: {
+    processingEnabled: boolean;
+    maintenanceMode: boolean;
+    maintenanceMessage: string;
+    /** §7: after `failureThreshold` provider failures inside `windowSeconds`, submits pause for `cooldownSeconds`. */
+    circuitBreaker: { enabled: boolean; failureThreshold: number; windowSeconds: number; cooldownSeconds: number };
+  };
+  limits: {
+    /** Per member, counted at /start across acquiring/processing/finalizing. 0 = the plan's own cap only. */
+    maxActiveJobsPerUser: number;
+    /** Platform-wide, same statuses. 0 = unlimited. */
+    maxActiveJobsGlobal: number;
+    /** Per member, starts in the last 24 h. 0 = unlimited. */
+    maxJobsPerUserPerDay: number;
+  };
+  /**
+   * §25: local minor units per ONE US dollar (₦1,500 = 150,000 kobo), so the
+   * admin form can compare a tier's price with the provider's USD cost and
+   * warn when the margin is thin. Never shown to a member. 0 = unknown, no
+   * warnings.
+   */
+  localMinorUnitsPerUsd: number;
 }
 
 /* ───────────────────────────── defaults ──────────────────────────────────── */
@@ -503,6 +535,14 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   },
   lipSyncMaximumDurationSeconds: 60,
   retention: { resultHours: 72, savedResultDays: 30 },
+  ops: {
+    processingEnabled: true,
+    maintenanceMode: false,
+    maintenanceMessage: "Character Replace is being looked after right now. Your finished videos are still here — new videos will be back shortly.",
+    circuitBreaker: { enabled: true, failureThreshold: 5, windowSeconds: 600, cooldownSeconds: 300 },
+  },
+  limits: { maxActiveJobsPerUser: 0, maxActiveJobsGlobal: 25, maxJobsPerUserPerDay: 0 },
+  localMinorUnitsPerUsd: 0,
 };
 
 /* ───────────────────────────── normaliser ────────────────────────────────── */
@@ -658,6 +698,9 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
   const modesRaw = isRecord(raw.modes) ? raw.modes : {};
   const audioRaw = isRecord(raw.audio) ? raw.audio : {};
   const ttsRaw = isRecord(raw.tts) ? raw.tts : {};
+  const opsRaw = isRecord(raw.ops) ? raw.ops : {};
+  const breakerRaw = isRecord(opsRaw.circuitBreaker) ? opsRaw.circuitBreaker : {};
+  const limitsRaw = isRecord(raw.limits) ? raw.limits : {};
 
   return {
     enabled: bool(raw.enabled, d.enabled),
@@ -714,6 +757,23 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       resultHours: int(isRecord(raw.retention) ? raw.retention.resultHours : undefined, d.retention.resultHours, 1, 24 * 30),
       savedResultDays: int(isRecord(raw.retention) ? raw.retention.savedResultDays : undefined, d.retention.savedResultDays, 1, 365),
     },
+    ops: {
+      processingEnabled: bool(opsRaw.processingEnabled, d.ops.processingEnabled),
+      maintenanceMode: bool(opsRaw.maintenanceMode, d.ops.maintenanceMode),
+      maintenanceMessage: text(opsRaw.maintenanceMessage, d.ops.maintenanceMessage, 300),
+      circuitBreaker: {
+        enabled: bool(breakerRaw.enabled, d.ops.circuitBreaker.enabled),
+        failureThreshold: int(breakerRaw.failureThreshold, d.ops.circuitBreaker.failureThreshold, 1, 1_000),
+        windowSeconds: int(breakerRaw.windowSeconds, d.ops.circuitBreaker.windowSeconds, 30, 86_400),
+        cooldownSeconds: int(breakerRaw.cooldownSeconds, d.ops.circuitBreaker.cooldownSeconds, 30, 86_400),
+      },
+    },
+    limits: {
+      maxActiveJobsPerUser: int(limitsRaw.maxActiveJobsPerUser, d.limits.maxActiveJobsPerUser, 0, 100),
+      maxActiveJobsGlobal: int(limitsRaw.maxActiveJobsGlobal, d.limits.maxActiveJobsGlobal, 0, 10_000),
+      maxJobsPerUserPerDay: int(limitsRaw.maxJobsPerUserPerDay, d.limits.maxJobsPerUserPerDay, 0, 10_000),
+    },
+    localMinorUnitsPerUsd: int(raw.localMinorUnitsPerUsd, d.localMinorUnitsPerUsd, 0, 100_000_000),
   };
 }
 

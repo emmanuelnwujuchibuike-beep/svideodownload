@@ -126,6 +126,15 @@ export type AiErrorCode =
     Each names the way out; none names a provider.
   */
   | "CR_BALANCE_REQUIRED"
+  /*
+    ── Character Replace (Part 8) ──────────────────────────────────────────
+    The limits and the switches, decided at /start BEFORE anything is
+    reserved, so every one of these is "nothing was charged".
+  */
+  | "CR_ACTIVE_LIMIT"
+  | "CR_DAILY_LIMIT"
+  | "CR_BUSY"
+  | "CR_MAINTENANCE"
   | "QUOTE_EXPIRED"
   | "PRICE_CHANGED"
   | "PREPARATION_FAILED"
@@ -237,6 +246,10 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },
   RATE_LIMITED: { status: 429, message: "You're going a bit fast — give it a moment." },
   CR_BALANCE_REQUIRED: { status: 402, message: "Your balance doesn't cover this video. Recharge to continue." },
+  CR_ACTIVE_LIMIT: { status: 409, message: "You already have a video being made. Wait for it to finish, then start this one — nothing was charged." },
+  CR_DAILY_LIMIT: { status: 429, message: "You've reached today's limit for Character Replace videos. Try again tomorrow — nothing was charged." },
+  CR_BUSY: { status: 503, message: "Character Replace is busy right now. Try again in a few minutes — nothing was charged." },
+  CR_MAINTENANCE: { status: 503, message: "Character Replace is being looked after right now. Your finished videos are still here — new videos will be back shortly." },
   QUOTE_EXPIRED: { status: 409, message: "That price has expired. Check the new price and try again." },
   PRICE_CHANGED: { status: 409, message: "The price changed while you were reviewing. Check the new price and try again." },
   PREPARATION_FAILED: { status: 422, message: "We couldn't prepare that video. Choose it again and try once more." },

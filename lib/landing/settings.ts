@@ -1,3 +1,4 @@
+import { recordConfigChange } from "@/lib/platform/config-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   normalizeCharacterReplaceConfig,
@@ -608,5 +609,39 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;
+
+  /*
+    ── Part 8 §22: THE ADMIN AUDIT LOG ──────────────────────────────────────
+    Every Character Replace settings change is written to config_audit_log
+    (the platform's existing governance table) as the keys that CHANGED —
+    before and after — with the admin's id and their reason. The pricing
+    history above keeps the full price snapshots per version; this is the
+    line-by-line record of switches, limits, models and retention too.
+    Best-effort and after the save: an audit that could refuse the change it
+    records would be a switch the operator cannot flip in an emergency.
+  */
+  if (s.frenzAiCharacterReplace) {
+    const beforeCr = current.frenzAiCharacterReplace as unknown as Record<string, unknown>;
+    const afterCr = value.frenzAiCharacterReplace as unknown as Record<string, unknown>;
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const key of Object.keys(afterCr)) {
+      if (key === "pricingHistory" || key === "pricingUpdatedAt" || key === "pricingVersion") continue;
+      if (JSON.stringify(beforeCr[key]) !== JSON.stringify(afterCr[key])) {
+        changedBefore[key] = beforeCr[key];
+        changedAfter[key] = afterCr[key];
+      }
+    }
+    if (Object.keys(changedAfter).length > 0) {
+      recordConfigChange({
+        actorId: audit.changedBy ?? null,
+        surface: "character_replace",
+        targetId: "settings",
+        action: "settings.update",
+        before: changedBefore,
+        after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) },
+      });
+    }
+  }
 }
 

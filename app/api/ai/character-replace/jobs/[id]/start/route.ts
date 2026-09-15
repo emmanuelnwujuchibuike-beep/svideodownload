@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { providerHealthFor } from "@/lib/ai/character-replace/circuit";
 import { modeConfig } from "@/lib/ai/character-replace/config";
 import { readCharacterReplaceMeta, referencePaths } from "@/lib/ai/character-replace/job-meta";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
+import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
 import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch";
 import { providerCostEstimateUsdCents } from "@/lib/ai/character-replace/pricing";
 import { startCharacterReplaceJobSchema } from "@/lib/ai/character-replace/start-schema";
@@ -14,7 +16,7 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
-import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
+import { claimJobStart, getOwnJob, revertJobStartClaim, transitionJob } from "@/lib/ai/job-store";
 import { AI_IMAGE_MAX_BYTES } from "@/lib/ai/media";
 import { hasProviderFor } from "@/lib/ai/providers";
 import { pathBelongsTo } from "@/lib/ai/storage";
@@ -134,6 +136,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!config.enabled || !entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
     const modeView = modeConfig(config, meta.mode);
     if (!modeView.enabled) return fail("FEATURE_UNAVAILABLE");
+    /*
+      ── Part 8 §2: THE KILL SWITCHES ─────────────────────────────────────
+      Maintenance refuses new work with the operator's own sentence; a
+      processing pause refuses new starts while every running job finishes.
+      Both BEFORE any money moves, so "nothing was charged" is literally true.
+    */
+    if (config.ops.maintenanceMode) return fail("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });
+    if (!config.ops.processingEnabled) return fail("CR_BUSY");
 
     const age = Date.now() - Date.parse(job.created_at);
     const notYet = (what: string) => fail("INVALID_INPUT", { error: age > ABANDONED_AFTER_MS ? `That ${what} upload didn't finish. Choose it again.` : `The ${what} upload hasn't finished yet.` });
@@ -182,19 +192,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (balanceBefore < snapshot.totalCents) {
       return fail("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: snapshot.totalCents - balanceBefore, currency: money.currency });
     }
-    let balanceAfter: number;
-    try {
-      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot });
-    } catch (e) {
-      // The atomic check disagreed with the read (a concurrent spend), or the row is already reserved for this job.
-      const message = String((e as Error)?.message ?? e);
-      console.warn("[cr/start] reservation refused", { jobId: job.id, subject: subject.key, message: message.slice(0, 200) });
-      if (/insufficient/i.test(message)) {
-        const balance = await getCharacterReplaceBalanceCents(ownerId).catch(() => balanceBefore);
-        return fail("CR_BALANCE_REQUIRED", { balanceCents: balance, requiredCents: snapshot.totalCents, shortfallCents: Math.max(0, snapshot.totalCents - balance), currency: money.currency });
-      }
-      return fail("INTERNAL_ERROR");
-    }
 
     /* ── D · claim ───────────────────────────────────────────────────────── */
     /*
@@ -224,30 +221,91 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       config,
       () => lipSyncProviderUsdCentsPerSecond(lipTierModel),
     );
-    const claimed = await transitionJob(job.id, ["queued"], "acquiring", {
-      funding_source: "balance",
-      charged_cents: snapshot.totalCents,
-      metadata: {
-        ...(job.metadata ?? {}),
-        trim: body.trim,
-        settings: { quality: snapshot.quality, voiceMode: snapshot.voiceMode, lipSyncMode: snapshot.lipSyncMode },
-        quote: snapshot,
-        quote_id: snapshot.id,
-        audio: audioMeta,
-        pipeline,
-        provider_cost_estimate: costEstimate ? { ...costEstimate, perSecondUsdCents: modeView.providerCostPerSecondUsdCents } : null,
-        consent_at: new Date().toISOString(),
-      },
+    /*
+      ── Part 8 §7: THE CIRCUIT BREAKER, BEFORE ANY MONEY MOVES ───────────
+      Every model this pipeline will call is looked up once; an open circuit
+      on any of them refuses the start with "temporarily unavailable" and
+      nothing reserved. A job already paid for is a different matter (the
+      submit path waits it out); a NEW one simply does not begin.
+    */
+    if (config.ops.circuitBreaker.enabled) {
+      const models = pipeline.stages
+        .map((stage) => (stage === "voice" ? config.tts.model : stage === "replace" ? replacementProviderFor(meta.mode).model : stage === "lipsync" ? lipTierModel : ""))
+        .filter((m) => m.length > 0);
+      const { open } = await providerHealthFor(models);
+      if (open.length > 0) {
+        console.warn("[cr/start] refused — circuit open", { jobId: job.id, subject: subject.key, models: open.map((o) => o.key), until: open[0]!.openedUntil });
+        return fail("PROVIDER_UNAVAILABLE", { error: "Character Replace is temporarily unavailable. Try again in a few minutes — nothing was charged." });
+      }
+    }
+
+    const startMetadata = {
+      ...(job.metadata ?? {}),
+      trim: body.trim,
+      settings: { quality: snapshot.quality, voiceMode: snapshot.voiceMode, lipSyncMode: snapshot.lipSyncMode },
+      quote: snapshot,
+      quote_id: snapshot.id,
+      audio: audioMeta,
+      pipeline,
+      provider_cost_estimate: costEstimate ? { ...costEstimate, perSecondUsdCents: modeView.providerCostPerSecondUsdCents } : null,
+      consent_at: new Date().toISOString(),
+    };
+
+    /*
+      ── Part 8 §4, §5, §8: THE CLAIM, WITH THE LIMITS, BEFORE THE RESERVE ─
+      One database function takes the lock, counts the member's active jobs
+      (the plan's cap, tightened by the operator's), the platform's active
+      jobs and the member's starts today, and moves the row queued →
+      acquiring only if every count allows it. Two requests racing the last
+      slot cannot both win. Every refusal is answered with its own code and
+      NOTHING has been reserved yet — the reservation comes after the claim,
+      and a reservation that then fails puts the row back (below).
+
+      The order used to be reserve → claim. It cannot be: `reserve_product_charge`
+      is idempotent per job, so a reservation refunded for a limit would make
+      the member's next press of Start run this job for free.
+    */
+    const claim = await claimJobStart({
+      jobId: job.id,
+      userId: ownerId,
+      feature: feature.id,
+      maxActivePerUser: config.limits.maxActiveJobsPerUser > 0 ? Math.min(config.limits.maxActiveJobsPerUser, Math.max(1, entitlement.maxConcurrent)) : Math.max(1, entitlement.maxConcurrent),
+      maxActiveGlobal: config.limits.maxActiveJobsGlobal,
+      maxPerDay: config.limits.maxJobsPerUserPerDay,
+      chargedCents: snapshot.totalCents,
+      metadata: startMetadata,
     });
-    if (!claimed) {
+    if (claim === "user_limit") return fail("CR_ACTIVE_LIMIT");
+    if (claim === "daily_limit") return fail("CR_DAILY_LIMIT");
+    if (claim === "global_limit") {
+      console.warn("[cr/start] refused — platform at its active-job cap", { jobId: job.id, cap: config.limits.maxActiveJobsGlobal });
+      return fail("CR_BUSY");
+    }
+    const claimed = claim === "claimed" ? await getOwnJob(subject, job.id) : null;
+    if (!claimed || claimed.status !== "acquiring") {
       /*
         Lost the race to another request for the SAME job (a double press).
         🔴 NO refund here: `reserve_product_charge` is idempotent per job, so
         the reservation is the one the winning request made and is now paying
         for a job that is proceeding. Refunding it would run that job for free.
       */
-      const now = await getOwnJob(subject, job.id);
+      const now = claimed ?? (await getOwnJob(subject, job.id));
       return NextResponse.json({ job: jobToView(now ?? job, storedErrorMessage), started: false });
+    }
+
+    let balanceAfter: number;
+    try {
+      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot });
+    } catch (e) {
+      // The atomic check disagreed with the read (a concurrent spend). The claim goes back so Start can be pressed again after a recharge.
+      const message = String((e as Error)?.message ?? e);
+      const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});
+      console.warn("[cr/start] reservation refused — claim reverted", { jobId: job.id, subject: subject.key, message: message.slice(0, 200), reverted });
+      if (/insufficient/i.test(message)) {
+        const balance = await getCharacterReplaceBalanceCents(ownerId).catch(() => balanceBefore);
+        return fail("CR_BALANCE_REQUIRED", { balanceCents: balance, requiredCents: snapshot.totalCents, shortfallCents: Math.max(0, snapshot.totalCents - balance), currency: money.currency });
+      }
+      return fail("INTERNAL_ERROR");
     }
 
     /* ── E/F · hand off ──────────────────────────────────────────────────── */

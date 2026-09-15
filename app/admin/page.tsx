@@ -170,6 +170,8 @@ import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { CharacterReplaceJobsTable } from "@/features/admin/character-replace-jobs";
+import { CharacterReplaceProvidersPanel } from "@/features/admin/character-replace-providers";
+import { listProviderHealth } from "@/lib/ai/character-replace/circuit";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
 import { AiBalanceAdjustLazy, CharacterReplacePricingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
@@ -892,7 +894,13 @@ async function LandingSection() {
  * each POSTs only the fields it displays, so neither can clobber the other's.
  */
 async function FrenzAISection() {
-  const [landing, aiStats, crJobs] = await Promise.all([getLandingSettings(), getAiAdminStats(), listCharacterReplaceAdminJobs(60)]);
+  const [landing, aiStats, crJobs, providers, changes] = await Promise.all([
+    getLandingSettings(),
+    getAiAdminStats(),
+    listCharacterReplaceAdminJobs(60),
+    listProviderHealth(),
+    listConfigChanges(30, "character_replace"),
+  ]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -917,6 +925,8 @@ async function FrenzAISection() {
           ),
         },
         { id: "pricing", label: "Character Replace pricing", content: <CharacterReplacePricingLazy settings={landing} /> },
+        /* Part 8 §7, §21, §22: the breaker's state per model and the settings audit trail — server-rendered, one small button. */
+        { id: "providers", label: "Providers & changes", content: <CharacterReplaceProvidersPanel providers={providers} changes={changes} /> },
         { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },
         { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },
       ]}

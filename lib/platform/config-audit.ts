@@ -12,7 +12,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * (migration 0093 not yet applied), so the stores that call it stay safe.
  */
 
-export type ConfigSurface = "flag" | "experiment";
+/** Part 8 §22: Character Replace settings changes ride the same log. */
+export type ConfigSurface = "flag" | "experiment" | "character_replace";
 
 export interface ConfigChange {
   id: string;
@@ -56,15 +57,17 @@ export function recordConfigChange(input: {
 }
 
 /** Recent config changes, newest first — for the admin history view. `[]` on any error. */
-export async function listConfigChanges(limit = 50): Promise<ConfigChange[]> {
+export async function listConfigChanges(limit = 50, surface?: ConfigSurface): Promise<ConfigChange[]> {
   if (!hasSupabase) return [];
   try {
     const db = createAdminClient();
-    const { data, error } = await db
+    let query = db
       .from("config_audit_log")
       .select("id, actor_id, surface, target_id, action, before, after, created_at")
       .order("created_at", { ascending: false })
       .limit(limit);
+    if (surface) query = query.eq("surface", surface);
+    const { data, error } = await query;
     if (error || !data) return [];
     return (data as Record<string, unknown>[]).map((r) => ({
       id: r.id as string,

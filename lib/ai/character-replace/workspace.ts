@@ -52,11 +52,16 @@ import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/vali
 export type WorkspaceStep = "photo" | "video" | "settings" | "voice" | "review";
 
 export const WORKSPACE_STEPS: readonly { id: WorkspaceStep; label: string; title: string }[] = [
-  { id: "photo", label: "Reference", title: "Replacement & reference" },
+  /*
+    Part 9 §3: the member's words, not ours. "Reference" and "Settings" were
+    the engineering names; a first-time user reads Character → Video →
+    Quality → Voice → Review and knows where they are.
+  */
+  { id: "photo", label: "Character", title: "Your character" },
   { id: "video", label: "Video", title: "Your video" },
-  { id: "settings", label: "Settings", title: "Output settings" },
-  { id: "voice", label: "Voice", title: "Voice & language" },
-  { id: "review", label: "Review", title: "Review & confirm" },
+  { id: "settings", label: "Quality", title: "Quality & trim" },
+  { id: "voice", label: "Voice", title: "Audio & voice" },
+  { id: "review", label: "Review", title: "Review & create" },
 ] as const;
 
 export function stepIndex(step: WorkspaceStep): number {

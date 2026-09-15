@@ -73,8 +73,8 @@ export const AI_HISTORY_FILTER_LABELS: Record<AiHistoryFilter, string> = {
 /** What the empty list should say, per tab. Never a bare "Nothing here". */
 export const AI_HISTORY_EMPTY_COPY: Record<AiHistoryFilter, { title: string; body: string }> = {
   all: {
-    title: "Nothing here yet",
-    body: "Videos you make with Frenz AI show up here, so you can come back for them later.",
+    title: "Your transformations will appear here",
+    body: "Create your first Character Replace video to see it here — it stays for a few days, longer when you save it.",
   },
   completed: {
     title: "No finished videos yet",

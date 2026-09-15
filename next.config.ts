@@ -323,6 +323,30 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        /*
+          ── 🔴 A PER-MEMBER JSON API WAS CACHED FOR TWO HOURS (2026-09-14) ─────
+
+          Measured on production with a signed-in member: `GET /api/ai/jobs/<id>`
+          came back `Cache-Control: public, max-age=7200, must-revalidate` with
+          `cf-cache-status: EXPIRED` — the route sends no Cache-Control of its
+          own, Cloudflare's rule stamps its two-hour default on anything
+          without one, and the browser then serves the workspace's polling
+          fetch from ITS cache: a job that finished at 01:17 still read
+          "Replacing the face" at 01:21 and would have until 03:17. EXPIRED
+          means the edge had held a copy too — a member-specific answer keyed
+          by URL alone.
+
+          `/api/app-version` sets `no-store` itself and Cloudflare answers it
+          BYPASS, so an explicit origin header is honoured. This rule gives it
+          to every Frenz AI and admin route: nothing under them is the same
+          answer for two people, and none may be served from any cache.
+          A route that sets its own Cache-Control (the poster, a day-long
+          `private`) keeps it — a handler's header wins over these.
+        */
+        source: "/api/:group(ai|admin|internal)/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+      {
         // Same reasoning, for the app icons the manifest and iOS reference.
         source: "/:file(icon|icon-192|icon-512|icon-1024|icon-maskable-512|apple-icon-152|apple-icon-167).png",
         headers: [

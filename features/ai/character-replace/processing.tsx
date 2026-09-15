@@ -42,6 +42,7 @@ export function CharacterReplaceProcessing({
   historyHref = "/ai/history",
   exploreHref = "/explore",
   symbol = "₦",
+  previews = null,
   className,
 }: {
   job: ProcessingJob;
@@ -58,6 +59,12 @@ export function CharacterReplaceProcessing({
   exploreHref?: string;
   /** The wallet's currency symbol, for the refund sentence (§29). */
   symbol?: string;
+  /**
+   * Part 9 §16: the character photo and the video, as object URLs the browser
+   * still holds while the member stays on the page. Absent after a reload
+   * (the result route) — then the hero is the stage and the mark alone.
+   */
+  previews?: { photoUrl: string | null; videoUrl: string | null } | null;
   className?: string;
 }) {
   const active = isProcessingActive(job.status);
@@ -150,29 +157,54 @@ export function CharacterReplaceProcessing({
 
   return (
     <section aria-live="polite" aria-busy={active} className={cn("rounded-[1.5rem] border border-border/70 bg-card", className)}>
-      <div className="flex items-center gap-4 px-5 pt-5">
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary/70">
-          <FrenzAICore size="md" presence="working" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{stageWord(job.status)}</p>
-          <h2 className="mt-0.5 text-[19px] font-bold leading-tight tracking-[-0.02em]">{job.status === "uploading" || job.status === "preparing" ? headline(job) : (doing?.label ?? headline(job))}</h2>
-          {job.estimatedSecondsRemaining !== null ? (
-            <p className="mt-1 text-[12.5px] text-muted-foreground">About {eta(job.estimatedSecondsRemaining)} left</p>
+      <div className="relative overflow-hidden px-5 pt-5">
+        {/* the room's light — one soft gradient, opacity only under reduced motion */}
+        <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.18),transparent)] blur-2xl" />
+        <div className="relative flex items-center gap-4">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary/70">
+            <FrenzAICore size="md" presence="working" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{stageWord(job.status)}</p>
+            <h2 className="mt-0.5 text-[19px] font-bold leading-tight tracking-[-0.02em]">{job.status === "uploading" || job.status === "preparing" ? headline(job) : (doing?.label ?? headline(job))}</h2>
+            {job.estimatedSecondsRemaining !== null ? (
+              <p className="mt-1 text-[12.5px] text-muted-foreground">About {eta(job.estimatedSecondsRemaining)} left</p>
+            ) : (
+              <p className="mt-1 text-[12.5px] text-muted-foreground">
+                Step {Math.min(steps.length, steps.filter((s) => s.state === "done").length + 1)} of {steps.length}
+              </p>
+            )}
+          </div>
+          {previews && (previews.photoUrl || previews.videoUrl) ? (
+            /* Part 9 §16: what is being made, from what — the two files the member chose */
+            <div className="hidden shrink-0 items-center gap-1.5 min-[380px]:flex" aria-hidden>
+              {previews.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={previews.photoUrl} alt="" className="h-14 w-11 rounded-xl object-cover ring-1 ring-black/10 dark:ring-white/10" />
+              ) : null}
+              {previews.videoUrl ? (
+                <video src={previews.videoUrl} muted playsInline preload="metadata" className="h-14 w-11 rounded-xl object-cover ring-1 ring-black/10 dark:ring-white/10" />
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
 
-      {/* the bar — measured, or indeterminate; never a creeping number */}
-      <div className="mx-5 mt-4 h-1.5 overflow-hidden rounded-full bg-secondary" role={job.progress !== null ? "progressbar" : undefined} aria-valuenow={job.progress !== null ? Math.round(job.progress * 100) : undefined} aria-valuemin={0} aria-valuemax={100}>
-        {job.progress !== null ? (
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500 transition-[width] duration-300 ease-out motion-reduce:transition-none"
-            style={{ width: `${Math.max(2, Math.min(100, job.progress * 100))}%` }}
-          />
-        ) : (
-          <div className="frenz-loader-bar h-full w-2/5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500" />
-        )}
+      {/*
+        The bar — one segment per stage of THIS job, filled as stages finish,
+        the current one sweeping. Stage-based, never a creeping percentage:
+        the provider reports none (Part 9 §15).
+      */}
+      <div className="mx-5 mt-4 flex gap-1" role="progressbar" aria-label="Progress by stage" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={steps.filter((s) => s.state === "done").length}>
+        {steps.map((s) => (
+          <div key={s.key} className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+            {s.state === "done" ? (
+              <div className="h-full w-full rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500" />
+            ) : s.state === "doing" ? (
+              <div className="frenz-loader-bar h-full w-2/5 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500" />
+            ) : null}
+          </div>
+        ))}
       </div>
 
       {/* the tracker — the job's own stages (§21) */}
@@ -247,9 +279,9 @@ function stageWord(status: ProcessingJob["status"]): string {
     case "uploading":
       return "Uploading";
     case "queued":
-      return "Queued";
+      return "Starting";
     case "processing":
-      return "Processing";
+      return "In progress";
     case "finalizing":
       return "Finalizing";
     default:

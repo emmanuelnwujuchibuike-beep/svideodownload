@@ -89,15 +89,16 @@ export function CharacterReplaceVoiceStep({
           <ChoiceCard
             active={!newVoice}
             icon={<AudioLines className="h-5 w-5" aria-hidden />}
-            title="Original audio"
-            body="Keep the sound exactly as it is in your video."
+            title="Keep original audio"
+            body="The sound stays exactly as it is in your video. Lip sync isn't needed."
             onClick={() => onMode("original")}
+            badge="Recommended"
           />
           <ChoiceCard
             active={newVoice}
             icon={<Mic2 className="h-5 w-5" aria-hidden />}
             title="Replace voice"
-            body="Use your own audio, or generate a voice from text. Add lip sync to match the mouth to it."
+            body="Use your own audio, or generate a voice from text. Add lip sync to match the mouth to the new voice."
             onClick={() => onMode("new_voice")}
             disabled={!offered}
             note={offered ? null : "Not available right now"}
@@ -154,7 +155,7 @@ export function CharacterReplaceVoiceStep({
                     <FileAudio className="h-5 w-5" aria-hidden />
                   </span>
                   <span className="text-[14px] font-bold">{audioSlot.status === "validating" ? "Reading your audio…" : "Choose an audio file"}</span>
-                  <span className="text-[12px] text-muted-foreground">It stays on your device until you press Start.</span>
+                  <span className="text-[12px] text-muted-foreground">It stays on your device until you press Create.</span>
                   <input
                     type="file"
                     accept={AUDIO_ACCEPT}
@@ -326,10 +327,10 @@ export function CharacterReplaceVoiceStep({
               <div className="min-w-0">
                 <h3 id={`${id}-lip`} className="flex items-center gap-2 text-[15px] font-bold tracking-[-0.01em]">
                   Lip sync
-                  <span className="rounded-full border border-amber-400/30 bg-amber-400/[0.10] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300">Studio</span>
+                  <span className="rounded-full border border-amber-400/30 bg-amber-400/[0.10] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-700 dark:text-amber-300">Premium</span>
                 </h3>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-                  Match the character&apos;s mouth movements to the new voice. Off, the new voice simply replaces the sound.
+                  Synchronise the character&apos;s mouth with the new voice. Off, the new voice simply replaces the sound.
                 </p>
               </div>
               <button
@@ -400,6 +401,7 @@ function ChoiceCard({
   onClick,
   disabled = false,
   note = null,
+  badge = null,
 }: {
   active: boolean;
   icon: React.ReactNode;
@@ -408,6 +410,8 @@ function ChoiceCard({
   onClick: () => void;
   disabled?: boolean;
   note?: string | null;
+  /** Part 9 §8: the one card wearing "Recommended". */
+  badge?: string | null;
 }) {
   return (
     <button
@@ -425,7 +429,10 @@ function ChoiceCard({
     >
       <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", active ? "bg-foreground text-background" : "bg-secondary text-foreground/80")}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[14.5px] font-bold">{title}</span>
+        <span className="flex flex-wrap items-center gap-2 text-[14.5px] font-bold">
+          {title}
+          {badge ? <span className="rounded-full bg-gradient-to-r from-blue-600 to-fuchsia-500 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.08em] text-white">{badge}</span> : null}
+        </span>
         <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">{body}</span>
         {note ? <span className="mt-1.5 inline-block rounded-full bg-secondary px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{note}</span> : null}
       </span>

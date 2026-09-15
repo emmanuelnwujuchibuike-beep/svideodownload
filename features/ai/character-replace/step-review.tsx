@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, Check, Plus, ShieldCheck } from "lucide-react";
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 
 import { CharacterReplaceBalanceCard } from "@/features/ai/character-replace/balance-card";
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
@@ -51,6 +51,7 @@ export function CharacterReplaceReviewStep({
   onRetryQuote,
   returnTo,
   onConsent,
+  rechargeAsk = 0,
 }: {
   project: CharacterReplaceProject;
   config: CharacterReplacePublicConfig;
@@ -62,6 +63,8 @@ export function CharacterReplaceReviewStep({
   onRetryQuote: () => void;
   returnTo: string;
   onConsent: (value: boolean) => void;
+  /** Part 9 §13: bumped by the footer's "Recharge to continue" — each bump opens the recharge sheet. */
+  rechargeAsk?: number;
 }) {
   const consentId = useId();
   const character = project.character;
@@ -79,6 +82,9 @@ export function CharacterReplaceReviewStep({
     setSheetMounted(true);
     setSheetOpen(true);
   }, []);
+  useEffect(() => {
+    if (rechargeAsk && rechargeAsk > 0) openSheet();
+  }, [rechargeAsk, openSheet]);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
 
   return (
@@ -102,7 +108,7 @@ export function CharacterReplaceReviewStep({
       ) : null}
 
       {/* ── the price, live (Part 6 §12): every line, from the server ──── */}
-      <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} />
+      <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} balanceCents={balance?.balanceCents ?? null} />
 
       <CharacterReplaceBalanceCard
         balance={balance}
@@ -139,23 +145,11 @@ export function CharacterReplaceReviewStep({
             Recharge Character Replace
           </button>
         </div>
-      ) : money && snapshot && balance && pricing.status === "quoted" ? (
-        <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3">
-          <dl className="space-y-1.5 text-[13.5px]">
-            <Row label="Character Replace balance" value={formatCents(balance.balanceCents, balance.symbol)} />
-            <Row label="This video" value={`− ${formatCents(snapshot.totalCents, snapshot.symbol)}`} />
-            <Row label="Balance after processing" value={formatCents(money.afterCents, balance.symbol)} strong />
-          </dl>
-        </div>
       ) : null}
 
       {/* ── consent (§12): professional, unobtrusive, and required ─────────── */}
       <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5">
-        <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-muted-foreground">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" aria-hidden />
-          Use only photos and videos you own or have permission to use.
-        </p>
-        <label htmlFor={consentId} className="mt-3 flex cursor-pointer items-start gap-3">
+        <label htmlFor={consentId} className="flex cursor-pointer items-start gap-3">
           <input
             id={consentId}
             type="checkbox"
@@ -174,8 +168,21 @@ export function CharacterReplaceReviewStep({
           >
             <Check className={cn("h-3.5 w-3.5 transition-opacity", project.consent ? "opacity-100" : "opacity-0")} strokeWidth={3} />
           </span>
-          <span className="text-[13.5px] font-medium leading-snug">I confirm that I have the right to use this likeness and content.</span>
+          <span className="text-[13.5px] font-medium leading-snug">
+            I confirm that I have permission to use this {project.voice.mode === "new_voice" ? "image, video and voice" : "image and video"}.
+          </span>
         </label>
+        {/* Part 9 §11: the why, on request — never a document before every video */}
+        <details className="group mt-2.5 pl-8 text-[12.5px] leading-relaxed text-muted-foreground">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 font-semibold text-foreground/80 [&::-webkit-details-marker]:hidden">
+            <ShieldCheck className="h-3.5 w-3.5 text-primary/70" aria-hidden />
+            What this means
+          </summary>
+          <p className="mt-1.5">
+            Use only photos and videos you own or have permission to use, and only a voice you may use. The result carries a small AI-generated
+            note. Frenz AI keeps your files private and removes them on the schedule shown in Video details.
+          </p>
+        </details>
       </div>
 
       {sheetMounted && balance ? (

@@ -55,6 +55,15 @@ export function PushNudge() {
   useEffect(() => {
     if (typeof window === "undefined" || !pushSupported() || loading) return;
     if (dismissedThisSession() || hasExceededDeclines(PROMPT_ID)) return;
+    /*
+      Not over the Character Replace workspace (Part 9, 2026-09-14): this card
+      is fixed above the bottom nav — exactly where that flow keeps its
+      Back / Continue / Start bar — and with notifications blocked it covered
+      the button a member was about to press (measured on production with a
+      phone viewport). That flow asks for push itself, at the moment it
+      matters (the processing screen), so nothing is lost by staying quiet.
+    */
+    if ((pathname ?? "").startsWith("/studio/ai/character-replace")) return;
 
     if (!user) {
       // A guest still sees the value of turning notifications on — just with
@@ -94,7 +103,7 @@ export function PushNudge() {
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
       clearTimeout(t);
     };
-  }, [user, loading]);
+  }, [user, loading, pathname]);
 
   const dismiss = () => {
     setPhase("hidden");

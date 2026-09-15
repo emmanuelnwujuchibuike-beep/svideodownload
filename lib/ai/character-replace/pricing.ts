@@ -319,7 +319,14 @@ export function quoteCharacterReplace(
   */
   const savings: PricingSaving[] = [];
   const cheaper = view.tiers
-    .filter((t) => t.enabled && t.supported && t.id !== input.quality && t.perSecondCents < a.qualityRate)
+    /*
+      Never "save money with 480p" (Part 9, 2026-09-14): every Full Character
+      result the owner called unclear was a 480p run — the tier generates the
+      whole video at a lower resolution, faces come out soft, and a saving
+      that costs the result is not a saving. The line still names 720p when
+      1080p is chosen, and Face Only / Skin + Face tiers as before.
+    */
+    .filter((t) => t.enabled && t.supported && t.id !== input.quality && t.perSecondCents < a.qualityRate && !(input.mode === "full_character" && t.id === "480p"))
     .sort((x, y) => y.perSecondCents - x.perSecondCents)[0];
   if (cheaper) {
     const alt = quoteTotal({ ...input, quality: cheaper.id as CharacterReplaceAnyQuality }, config);

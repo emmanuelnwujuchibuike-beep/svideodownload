@@ -45,7 +45,15 @@ export type CharacterReplaceClientResult<T> =
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<CharacterReplaceClientResult<T>> {
   let res: Response;
   try {
-    res = await fetch(input, init);
+    /*
+      `no-store` on the REQUEST as well as the response (2026-09-14): a job
+      poll answered from the browser's HTTP cache showed "Replacing the face"
+      four minutes after the job had finished, because the edge had stamped
+      a two-hour public max-age on a header-less API answer. The server now
+      sends no-store for every AI route; this side refuses a cached answer
+      even if a proxy in between ever rewrites that again.
+    */
+    res = await fetch(input, { cache: "no-store", ...init });
   } catch {
     return { ok: false, code: "NETWORK", error: "You appear to be offline. Try again in a moment." };
   }

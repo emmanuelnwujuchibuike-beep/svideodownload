@@ -81,7 +81,8 @@ export function CharacterReplaceEntry({
         </span>
         <div className="min-w-0">
           <p className="text-[13px] font-semibold leading-tight">Character Replace</p>
-          <p className="text-[11px] leading-tight text-muted-foreground">Frenz AI · Wan 2.2</p>
+          {/* Part 9 §7: the product, never the model behind it. */}
+          <p className="text-[11px] leading-tight text-muted-foreground">Frenz AI · Studio</p>
         </div>
         <span className="ml-auto rounded-full border border-primary/25 bg-primary/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">
           New

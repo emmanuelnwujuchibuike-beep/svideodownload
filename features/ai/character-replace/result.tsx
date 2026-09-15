@@ -228,7 +228,7 @@ export function CharacterReplaceResultScreen({
   const src = view === "original" ? originalUrl : result.previewUrl;
 
   return (
-    <section className={cn("space-y-4", className)} aria-labelledby="video-ready-title">
+    <section className={cn("space-y-4", className)} aria-labelledby="video-ready-title" data-reveal>
       {/* ── header: ← Character Replace · Your video is ready ─────────────── */}
       <header className="flex items-center gap-2">
         <button
@@ -253,6 +253,7 @@ export function CharacterReplaceResultScreen({
       </header>
 
       {/* ── the hero ───────────────────────────────────────────────────────── */}
+      <div className="animate-fade-up">
       <VideoReadyPlayer
         ref={player}
         src={src}
@@ -262,9 +263,10 @@ export function CharacterReplaceResultScreen({
         speedControl={view === "result"}
         onFirstPlay={() => track("character_replace_video_played", { mode, view })}
       />
+      </div>
 
       {/* the facts line + comparison switch (§5–§6) */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="animate-fade-up flex flex-wrap items-center justify-between gap-2 [animation-delay:90ms]">
         <p className="text-[13px] font-semibold tabular-nums text-muted-foreground">
           {REPLACEMENT_MODE_COPY[mode].label} · {quality} · {formatSeconds(result.durationSeconds)}
           {fps ? ` · ${fps}` : ""}
@@ -296,7 +298,7 @@ export function CharacterReplaceResultScreen({
       </div>
 
       {/* ── Download · Save · Share (§7–§11) ──────────────────────────────── */}
-      <div className="space-y-2">
+      <div className="animate-fade-up space-y-2 [animation-delay:160ms]">
         <button
           type="button"
           onClick={download}
@@ -408,7 +410,7 @@ export function CharacterReplaceResultScreen({
 
       {/* ── disclosure (§13) and delete (§20) ─────────────────────────────── */}
       <div className="flex flex-col items-center gap-2 pt-1 text-center">
-        <p className="text-[11px] text-muted-foreground/80">Created with Frenz AI · AI-generated video</p>
+        <p className="text-[11px] text-muted-foreground/80">AI-generated transformation · made with Frenz AI</p>
         {!confirmDelete ? (
           <button type="button" onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-muted-foreground underline-offset-4 hover:text-rose-500 hover:underline">
             <Trash2 className="h-3.5 w-3.5" aria-hidden />

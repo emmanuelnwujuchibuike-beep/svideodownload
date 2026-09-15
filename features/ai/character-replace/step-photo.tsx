@@ -177,21 +177,34 @@ export function CharacterReplacePhotoStep({
   );
 }
 
-/** Part 2, §3 — concise, no guarantees; the mode's own lines (Part 6). */
+/**
+ * Part 2, §3 — concise, no guarantees; the mode's own lines (Part 6).
+ * Part 9 §3: folded under one line. The owner's red direction box above
+ * the picker already says what matters; four more sentences under the
+ * picker made a phone page twice as long as it needed to be.
+ */
 function Guidance({ lines }: { lines: readonly string[] }) {
   return (
-    <ul className="space-y-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
-      {lines.map((line) => (
-        <li key={line} className="flex gap-2">
-          <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />
-          {line}
+    <details className="group rounded-2xl border border-border/60 bg-card/60 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+      <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold text-foreground/85 [&::-webkit-details-marker]:hidden">
+        <UserRound className="h-3.5 w-3.5 text-primary/70" aria-hidden />
+        Tips for the best result
+        <span className="ml-auto text-[11px] font-medium text-muted-foreground group-open:hidden">Show</span>
+        <span className="ml-auto hidden text-[11px] font-medium text-muted-foreground group-open:inline">Hide</span>
+      </summary>
+      <ul className="mt-2.5 space-y-1.5">
+        {lines.map((line) => (
+          <li key={line} className="flex gap-2">
+            <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-primary/60" />
+            {line}
+          </li>
+        ))}
+        <li className="flex gap-2">
+          <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-primary/60" />
+          Your photos stay on your device until you press Create.
         </li>
-      ))}
-      <li className="flex gap-2">
-        <UserRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden />
-        Your photos stay on your device until you press Start.
-      </li>
-    </ul>
+      </ul>
+    </details>
   );
 }
 

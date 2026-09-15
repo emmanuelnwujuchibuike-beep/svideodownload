@@ -1,9 +1,8 @@
 "use client";
 
-import { Info, RotateCcw, Scissors } from "lucide-react";
-import { useCallback, useEffect, useId, useRef } from "react";
+import { Info, Pause, Play, RotateCcw, Scissors } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { CharacterReplaceInputSummary } from "@/features/ai/character-replace/input-summary";
 import { VideoGenerationCostPreview } from "@/features/ai/character-replace/video-generation-cost-preview";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import { REPLACEMENT_MODE_COPY } from "@/lib/ai/character-replace/modes";
@@ -93,15 +92,55 @@ export function CharacterReplaceSettingsStep({
   const maxSeconds = modeView?.maximumDurationSeconds ?? config.maximumDurationSeconds;
   const guidance = project.mode === "full_character" ? qualityGuidance(video?.metadata ?? null, project.settings.quality, config.qualities) : null;
   const chosenTier = tiers.find((t) => t.id === project.settings.quality) ?? null;
+  /*
+    Part 9 §7: cards a first-time user reads without knowing what a pixel is.
+    The name is ours (Standard / HD / Full HD for the resolution tiers; the
+    mode tiers already carry their names), the line under it is what it
+    means for them, and ONE card wears "Recommended" — the mode's default
+    tier, the one the operator marked as the balance of quality and cost.
+  */
+  const recommendedId = modeView?.defaultTier ?? (project.mode === "full_character" ? "720p" : null);
+  const nameFor = (id: string, label: string) => (id === "480p" ? "Standard" : id === "720p" ? "HD" : id === "1080p" ? "Full HD" : label);
+  const meaningFor = (id: string, hint: string) =>
+    id === "480p" ? "Lower cost · faster · softer detail" : id === "720p" ? "Sharper detail · balanced cost" : id === "1080p" ? "Highest detail · slowest" : hint;
 
   /* ── the scrubbing preview ───────────────────────────────────────────── */
   const preview = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [now, setNow] = useState<number | null>(null);
+  /*
+    Part 9 §6: play the KEPT range, not the file. Playback starts at the start
+    handle and pauses itself at the end handle; the clock under the handles
+    follows the playhead. The billed duration is untouched — it is the
+    handles' range the quote already prices; this only lets the member watch
+    what those handles keep.
+  */
+  const togglePlay = useCallback(() => {
+    const el = preview.current;
+    if (!el) return;
+    if (!el.paused) {
+      el.pause();
+      return;
+    }
+    if (el.currentTime < start || el.currentTime >= end - 0.05) el.currentTime = start;
+    void el.play().catch(() => null);
+  }, [start, end]);
+  const onTimeUpdate = useCallback(() => {
+    const el = preview.current;
+    if (!el) return;
+    setNow(el.currentTime);
+    if (!el.paused && el.currentTime >= end) {
+      el.pause();
+      el.currentTime = end;
+    }
+  }, [end]);
   const seekTo = useCallback((seconds: number) => {
     const el = preview.current;
     if (!el || !Number.isFinite(seconds)) return;
     try {
       el.pause();
       el.currentTime = Math.max(0, seconds);
+      setNow(Math.max(0, seconds));
     } catch {
       /* a not-yet-seekable element; the next move will land */
     }
@@ -138,6 +177,7 @@ export function CharacterReplaceSettingsStep({
           {tiers.map((q) => {
             const active = q.id === project.settings.quality;
             const offered = q.enabled && q.supported;
+            const recommended = offered && q.id === recommendedId;
             return (
               <button
                 key={q.id}
@@ -148,7 +188,7 @@ export function CharacterReplaceSettingsStep({
                 onClick={() => onQuality(q.id as CharacterReplaceAnyQuality)}
                 title={!offered ? (q.note ?? "Not available right now") : undefined}
                 className={cn(
-                  "flex min-h-[64px] flex-col items-center justify-center rounded-2xl border px-2 py-3 transition",
+                  "relative flex min-h-[84px] flex-col items-center justify-center rounded-2xl border px-2 pb-3 pt-4 transition",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   "disabled:cursor-not-allowed disabled:opacity-45",
                   active
@@ -156,9 +196,20 @@ export function CharacterReplaceSettingsStep({
                     : "border-border/70 bg-card text-foreground hover:border-foreground/30",
                 )}
               >
-                <span className="text-[15px] font-bold tabular-nums">{q.label}</span>
-                <span className={cn("mt-0.5 text-center text-[11px] font-medium leading-tight", active ? "text-background/70" : "text-muted-foreground")}>
-                  {offered ? q.hint : "Not available"}
+                {recommended ? (
+                  <span
+                    className={cn(
+                      "absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.08em]",
+                      active ? "bg-background text-foreground" : "bg-gradient-to-r from-blue-600 to-fuchsia-500 text-white",
+                    )}
+                  >
+                    Recommended
+                  </span>
+                ) : null}
+                <span className="text-[15px] font-bold">{nameFor(q.id, q.label)}</span>
+                <span className={cn("mt-0.5 text-[11px] font-semibold tabular-nums", active ? "text-background/80" : "text-muted-foreground")}>{q.label !== nameFor(q.id, q.label) ? q.label : "\u00a0"}</span>
+                <span className={cn("mt-1 text-center text-[10.5px] font-medium leading-tight", active ? "text-background/70" : "text-muted-foreground")}>
+                  {offered ? meaningFor(q.id, q.hint) : "Not available"}
                 </span>
               </button>
             );
@@ -223,7 +274,7 @@ export function CharacterReplaceSettingsStep({
           ) : (
             <div className="mt-3 overflow-hidden rounded-[1.25rem] border border-border/70 bg-card">
               {/* the scrubbing preview: muted, never autoplays, one decoder */}
-              <div className="bg-[#0b0f1a]">
+              <div className="relative bg-[#0b0f1a]">
                 <video
                   ref={preview}
                   key={video.objectUrl}
@@ -231,22 +282,42 @@ export function CharacterReplaceSettingsStep({
                   muted
                   playsInline
                   preload="metadata"
-                  aria-label="Preview of the frame at the selected point"
-                  className="mx-auto block max-h-[38vh] w-full object-contain sm:max-h-[22rem]"
+                  onPlay={() => setPlaying(true)}
+                  onPause={() => setPlaying(false)}
+                  onTimeUpdate={onTimeUpdate}
+                  onClick={togglePlay}
+                  aria-label="Preview of the kept range"
+                  className="mx-auto block max-h-[38vh] w-full cursor-pointer object-contain sm:max-h-[22rem]"
                 />
+                <button
+                  type="button"
+                  onClick={togglePlay}
+                  aria-label={playing ? "Pause" : "Play the kept range"}
+                  aria-pressed={playing}
+                  className={cn(
+                    "absolute bottom-3 left-3 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition",
+                    "hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                  )}
+                >
+                  {playing ? <Pause className="h-5 w-5" aria-hidden /> : <Play className="ml-0.5 h-5 w-5" aria-hidden />}
+                </button>
+                <span className="pointer-events-none absolute bottom-4 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11.5px] font-semibold tabular-nums text-white backdrop-blur-sm">
+                  {formatClock(now ?? start)} / {formatClock(duration)}
+                </span>
               </div>
 
               <div className="p-4">
-                <dl className="grid grid-cols-2 gap-3">
-                  <div>
-                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Original duration</dt>
-                    <dd className="mt-0.5 text-[17px] font-bold tabular-nums tracking-[-0.01em]">{formatSeconds(duration)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Selected duration</dt>
+                <dl className="flex items-baseline justify-between gap-3">
+                  <div className="min-w-0">
+                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Selected</dt>
                     <dd className={cn("mt-0.5 text-[17px] font-bold tabular-nums tracking-[-0.01em]", !fits && "text-rose-500")}>
-                      {formatSeconds(selected)}
+                      {formatClock(start)} – {formatClock(end)}
+                      <span className={cn("ml-2 text-[13px] font-semibold", !fits ? "text-rose-500" : "text-muted-foreground")}>{formatSeconds(selected)}</span>
                     </dd>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <dt className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Whole video</dt>
+                    <dd className="mt-0.5 text-[13px] font-semibold tabular-nums text-muted-foreground">{formatSeconds(duration)}</dd>
                   </div>
                 </dl>
 
@@ -258,6 +329,9 @@ export function CharacterReplaceSettingsStep({
                     className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500"
                     style={{ left: `${(start / duration) * 100}%`, right: `${100 - (end / duration) * 100}%` }}
                   />
+                  {now !== null && now > start && now < end ? (
+                    <div aria-hidden className="pointer-events-none absolute top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" style={{ left: `${(now / duration) * 100}%` }} />
+                  ) : null}
                   <input
                     type="range"
                     aria-label="Start of the kept range, in seconds"
@@ -317,9 +391,6 @@ export function CharacterReplaceSettingsStep({
           )}
         </section>
       ) : null}
-
-      {/* ── the input summary (§15), with the output line that now means something ── */}
-      <CharacterReplaceInputSummary project={project} config={config} />
 
       {/* ── the live price (Part 3, §12; Part 6 §13): the server's figure for THESE settings ── */}
       {config.pricingAvailable ? (

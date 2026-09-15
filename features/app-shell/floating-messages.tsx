@@ -21,6 +21,9 @@ export function FloatingMessages() {
 
   // Don't float over the messages pages.
   if (pathname.startsWith("/messages")) return null;
+  // Not over the Character Replace workspace (2026-09-14): on a desktop this pill sits
+  // exactly where that flow's sticky Back / Continue / Create bar keeps its primary button.
+  if (pathname.startsWith("/studio/ai/character-replace")) return null;
 
   return (
     <Link

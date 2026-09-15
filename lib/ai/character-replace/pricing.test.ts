@@ -139,6 +139,11 @@ describe("the informative sentences", () => {
     expect(q.savings.map((s) => s.message)).toContain("Standard lip sync would save ₦150.00.");
   });
 
+  it("never suggests 480p for Full Character — a saving that costs the result is not a saving (owner, 2026-09-14)", () => {
+    const q = quoteCharacterReplace({ ...base, quality: "720p" }, cfg, money);
+    expect(q.savings.map((s) => s.message).join(" ")).not.toMatch(/480p/);
+  });
+
   it("says nothing when the cheapest choices are already made", () => {
     const q = quoteCharacterReplace({ ...base, quality: "480p" }, cfg, money);
     expect(q.savings).toEqual([]);

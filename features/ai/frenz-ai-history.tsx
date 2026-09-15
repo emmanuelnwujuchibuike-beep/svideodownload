@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Ban,
   Loader2,
+  PersonStanding,
   Play,
   RotateCcw,
   Sparkles,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/ai/history";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { formatRelative } from "@/lib/i18n/format";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { haptic } from "@/lib/motion/haptics";
 import { cn, formatDuration } from "@/lib/utils";
@@ -713,7 +715,19 @@ function TileCaption({
   if (job.status === "cancelled") return <>Canceled · {when}</>;
   /* Part 7 §18: "Refunded ✓" only when the ledger confirmed it (the list route reads the ledger for failed rows). */
   if (job.status === "failed") return <>Failed{cr?.refunded ? " · Refunded ✓" : cr?.refundPending ? " · Refund pending" : ""} · {when}</>;
-  if (availability === "ready" && cr?.savedAt) return <>Saved · {when}</>;
+  /* Part 9 §24: a Character Replace tile names its length and quality, then when and how long it stays. */
+  const facts = cr ? [job.result.durationSeconds ? `${(Math.round(job.result.durationSeconds * 10) / 10).toFixed(1)} s` : null, qualityWord(cr.quality)].filter(Boolean).join(" · ") : "";
+  if (availability === "ready" && cr?.savedAt) return <>Saved{facts ? ` · ${facts}` : ""} · {when}</>;
+  if (availability === "ready" && facts) {
+    const hours = hoursUntilExpiry(job, now);
+    const days = hours === null ? null : Math.floor(hours / 24);
+    return (
+      <>
+        {facts} · {when}
+        {hours === null ? "" : days && days >= 1 ? ` · ${days}d left` : hours >= 1 ? ` · ${Math.floor(hours)}h left` : " · expiring"}
+      </>
+    );
+  }
   if (availability === "ready") {
     const hours = hoursUntilExpiry(job, now);
     const days = hours === null ? null : Math.floor(hours / 24);
@@ -740,8 +754,20 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
       </span>
       <p className="mt-3 text-sm font-semibold">{copy.title}</p>
       <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{copy.body}</p>
+      {/* Part 9 §35: useful, not decorative — the door to the first video, from the empty list itself */}
+      {filter === "all" ? (
+        <Link href="/studio/ai/character-replace" className="btn-lux mt-5 bg-foreground text-background">
+          <PersonStanding className="h-4 w-4" aria-hidden />
+          Create a video
+        </Link>
+      ) : null}
     </div>
   );
+}
+
+/** "720p" stays "720p"; a mode tier reads as its name. */
+function qualityWord(q: string): string {
+  return q === "standard" ? "Standard" : q === "high" ? "High" : q === "ultra" ? "Ultra" : q;
 }
 
 /** The grid's own shape while the first page loads — never a spinner. */

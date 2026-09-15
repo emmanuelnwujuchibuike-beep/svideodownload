@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -27,6 +27,7 @@ import {
   WORKSPACE_STEPS,
   type WorkspaceStep,
 } from "@/lib/ai/character-replace/workspace";
+import { formatCents } from "@/lib/ai/economy";
 import { track } from "@/lib/analytics/client";
 import { cn } from "@/lib/utils";
 
@@ -137,6 +138,17 @@ export function CharacterReplaceWorkspace({
   const processingAvailable = loads.processingAvailable === true;
   const launching = ws.launch.phase !== "idle" && ws.launch.phase !== "error";
   const startAllowed = readyToStart && processingAvailable && !launching;
+  /*
+    Part 9 §13: the button names the action and the price — "Create Video ·
+    ₦450.00" — never a bare "Start". Short of balance it becomes "Recharge to
+    continue" and opens the recharge sheet, so a failed start is never the
+    way a member learns their balance is low. Both figures are the server's:
+    the quote's total and the balance route's answer.
+  */
+  const quotedTotal = state.pricing.status === "quoted" || state.pricing.status === "stale" ? state.pricing.snapshot : null;
+  const balanceKnown = loads.balance?.balanceCents ?? null;
+  const shortOfBalance = !!quotedTotal && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;
+  const [rechargeAsk, setRechargeAsk] = useState(0);
 
   const onStart = useCallback(async () => {
     const id = await ws.start();
@@ -246,6 +258,7 @@ export function CharacterReplaceWorkspace({
               onDone={() => undefined}
               historyHref={historyHref}
               symbol={loads.balance?.symbol ?? config?.symbol ?? "₦"}
+              previews={{ photoUrl: project.character?.objectUrl ?? null, videoUrl: project.video?.objectUrl ?? null }}
               className="mt-5"
             />
           </>
@@ -367,6 +380,7 @@ export function CharacterReplaceWorkspace({
                     onRetryQuote={ws.requote}
                     returnTo={basePath}
                     onConsent={(value) => send({ type: "consent", value })}
+                    rechargeAsk={rechargeAsk}
                   />
                 )}
               </div>
@@ -407,7 +421,19 @@ export function CharacterReplaceWorkspace({
 
               <div className="min-w-0 flex-1" />
 
-              {step === "review" ? (
+              {step === "review" && shortOfBalance && project.consent && !launching ? (
+                <button
+                  type="button"
+                  onClick={() => setRechargeAsk((n) => n + 1)}
+                  className={cn(
+                    "inline-flex min-h-[48px] items-center gap-2 rounded-full bg-foreground px-6 text-[14px] font-bold text-background",
+                    "transition motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
+                  )}
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Recharge to continue
+                </button>
+              ) : step === "review" ? (
                 <button
                   type="button"
                   disabled={!startAllowed}
@@ -420,7 +446,7 @@ export function CharacterReplaceWorkspace({
                   )}
                 >
                   <Sparkles className="h-4 w-4" aria-hidden />
-                  Start
+                  {launching ? "Starting…" : quotedTotal ? `Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}` : "Create Video"}
                 </button>
               ) : (
                 <button

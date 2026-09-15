@@ -29,6 +29,17 @@ export const AUDIO_FORMATS: readonly AudioFormat[] = [
   { label: "M4A", extension: "m4a", mimeTypes: ["audio/mp4", "audio/x-m4a", "audio/m4a"] },
   { label: "AAC", extension: "aac", mimeTypes: ["audio/aac", "audio/x-aac", "audio/aacp"] },
   { label: "OGG", extension: "ogg", mimeTypes: ["audio/ogg", "application/ogg", "audio/opus"] },
+  /*
+    Owner, 2026-09-15: "make users able to upload videos from gallery too for
+    the voice lip sync, not only an audio file." A phone keeps a recorded
+    voice as a video more often than as an audio file. The worker already
+    takes the audio track only (`-vn -map 0:a:0`, lib/ai/voice/audio-ffmpeg.ts)
+    and refuses a file without one, so accepting the container is the whole
+    change. The picture in the file is never used.
+  */
+  { label: "MP4 video", extension: "mp4", mimeTypes: ["video/mp4"] },
+  { label: "MOV video", extension: "mov", mimeTypes: ["video/quicktime"] },
+  { label: "WebM", extension: "webm", mimeTypes: ["video/webm", "audio/webm"] },
 ];
 
 export const AUDIO_ACCEPT = [...new Set(AUDIO_FORMATS.flatMap((f) => f.mimeTypes)), ...AUDIO_FORMATS.map((f) => `.${f.extension}`)].join(",");
@@ -75,7 +86,7 @@ export function validateAudioFile(file: { name: string; size: number; type: stri
 
 /* ───────────────────────────── the bytes themselves ──────────────────────── */
 
-export type AudioContainer = "mp3" | "wav" | "mp4" | "aac" | "ogg";
+export type AudioContainer = "mp3" | "wav" | "mp4" | "aac" | "ogg" | "webm";
 
 /**
  * What the first bytes say the file is. The claim in the name and the type
@@ -96,6 +107,8 @@ export function sniffAudioContainer(head: Uint8Array): AudioContainer | null {
   if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE") return "wav";
   if (ascii(4, 8) === "ftyp") return "mp4";
   if (ascii(0, 4) === "OggS") return "ogg";
+  // EBML header — WebM (and Matroska). 1A 45 DF A3.
+  if (head.length >= 4 && head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return "webm";
   // MPEG audio frame sync: 11 set bits. Layer bits decide ADTS (AAC, layer 00) vs MP3 (layer 01).
   if (head[0] === 0xff && (head[1]! & 0xe0) === 0xe0) {
     const layer = (head[1]! >> 1) & 0x03;
@@ -113,7 +126,7 @@ export function sniffedContainerAgrees(sniffed: AudioContainer | null, declared:
   for (const f of AUDIO_FORMATS) if (f.mimeTypes.includes(type) || f.extension === ext) kinds.add(f.extension);
   // A file that lied about its kind is still accepted when the bytes are a real audio container we take:
   // the point of the signature is to refuse a PDF called song.mp3, not an MP3 called song.wav.
-  const accepted: Record<AudioContainer, boolean> = { mp3: true, wav: true, mp4: true, aac: true, ogg: true };
+  const accepted: Record<AudioContainer, boolean> = { mp3: true, wav: true, mp4: true, aac: true, ogg: true, webm: true };
   return accepted[sniffed] && kinds.size > 0;
 }
 
@@ -133,12 +146,12 @@ export interface ProbedAudio {
 /**
  * The worker's verdict on a file it has opened: a readable audio stream in
  * an accepted codec, within the operator's length ceiling, not zero. A file
- * with a VIDEO stream is refused too — a member who uploads a video as
- * "audio" almost certainly picked the wrong file.
+ * with a VIDEO stream alongside is fine since 2026-09-15 (a gallery video used
+ * for its voice — the owner's ask); the picture is dropped by the ffmpeg plan
+ * (`-vn`), and a video with NO sound is still refused as unreadable audio.
  */
 export function validateProbedAudio(probe: ProbedAudio | null, limits: { maxDurationMs: number; minDurationMs: number }): AudioVerdict {
   if (!probe || !probe.hasAudio) return { ok: false, code: "invalid-audio" };
-  if (probe.hasVideo) return { ok: false, code: "unsupported-audio" };
   if (!probe.audioCodec || !ACCEPTED_AUDIO_CODECS.has(probe.audioCodec.toLowerCase())) return { ok: false, code: "unsupported-audio" };
   const ms = probe.durationSeconds !== null ? Math.round(probe.durationSeconds * 1000) : 0;
   if (ms <= 0) return { ok: false, code: "invalid-audio" };

@@ -389,7 +389,20 @@ export function useCharacterReplaceWorkspace() {
       dispatch({ type: "audio/validating" });
       release(previous);
       const objectUrl = mint(file);
-      const duration = await readAudioDuration(objectUrl);
+      /*
+        A video from the gallery is read by the video reader (an <audio>
+        element refuses a QuickTime container the <video> element plays); a
+        video with no sound is refused here, before any upload. The worker
+        measures the real file again either way.
+      */
+      const isVideo = file.type.toLowerCase().startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name);
+      let duration: number | null | "invalid";
+      if (isVideo) {
+        const meta = await readVideoMetadata(objectUrl, { name: file.name, size: file.size, type: file.type });
+        duration = meta === "invalid" ? "invalid" : meta.hasAudio === false ? "invalid" : meta.durationMs;
+      } else {
+        duration = await readAudioDuration(objectUrl);
+      }
       if (!alive.current) return;
       if (duration === "invalid") {
         release(objectUrl);

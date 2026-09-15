@@ -19,6 +19,28 @@ const SUBJECT = process.env.VAPID_SUBJECT || "mailto:support@frenzsave.com";
 export const hasWebPush = !!PUBLIC_KEY && !!PRIVATE_KEY;
 
 let configured = false;
+/**
+ * ── 🔴 APPLE REJECTED EVERY "frenz-ai-done" PUSH: BadWebPushTopic (2026-09-15) ──
+ *
+ * The Character Replace "your video is ready" push never reached the owner's
+ * iPhone — 60 failures this week, zero successes, every one
+ * `400 {"reason":"BadWebPushTopic"}` from web.push.apple.com, while
+ * "frenz-ai-failed", "download-outcome" and "streak-lost" went through fine.
+ *
+ * The old topic was the tag with illegal characters stripped and cut to 32.
+ * Apple's Topic header must be valid base64url, and a base64url string of
+ * length ≡ 1 (mod 4) cannot exist. "frenz-ai-done" is 13 characters: the
+ * ONE tag in the catalogue with that length, and the one Apple refused.
+ * ("frenz-ai-failed" is 15, "download-outcome" 16, "streak-lost" 11.)
+ *
+ * So the topic is now the tag's own bytes, base64url-ENCODED — never a length
+ * Apple can refuse — from the first 24 bytes, which is exactly 32 characters,
+ * APNs' ceiling. Same tag ⇒ same topic, so collapsing still works.
+ */
+export function webPushTopic(tag: string): string {
+  return Buffer.from(tag, "utf8").subarray(0, 24).toString("base64url");
+}
+
 function ensureConfigured(): boolean {
   if (!hasWebPush) return false;
   if (!configured) {
@@ -192,7 +214,10 @@ async function sendOnce(s: SubRow, body: string, topic: string | undefined): Pro
  * payload — things that are OUR fault and would hit every device at once) is
  * still retried and logged, never pruned.
  */
-const APPLE_PERMANENT_REASONS = /BadDeviceToken|DeviceTokenNotForTopic|Unregistered/i;
+// VapidPkHashMismatch ADDED 2026-09-15: the subscription was minted under a
+// different VAPID public key than the one signing now (a rotated pair). It can
+// never be delivered to again; the device re-subscribes on its next visit.
+const APPLE_PERMANENT_REASONS = /BadDeviceToken|DeviceTokenNotForTopic|Unregistered|VapidPkHashMismatch/i;
 function isApplePermanentReject(endpoint: string, outcome: SendOutcome): boolean {
   return (
     outcome.code === 400 &&
@@ -272,7 +297,7 @@ async function sendPushToIdentity(identity: PushIdentity, payload: PushPayload):
     // base64url limit) lets a newer push REPLACE an older queued one instead
     // of stacking duplicates when the device reconnects. Remaining delay after
     // this is iOS platform behavior (APNs power management), not app code.
-    const topic = payload.tag ? payload.tag.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) : undefined;
+    const topic = payload.tag ? webPushTopic(payload.tag) : undefined;
     const tag = payload.tag ?? null;
 
     const deliverToOne = async (s: SubRow) => {

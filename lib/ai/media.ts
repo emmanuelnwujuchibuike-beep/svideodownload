@@ -288,7 +288,7 @@ export function imageExtensionForUpload(name: string | undefined, mimeType: stri
 
 /** The extension a replacement audio upload is stored under (Part 6). From the name, then the type; "mp3" as the last resort. */
 export function audioExtensionForUpload(name: string | undefined, mimeType: string): string {
-  const known = ["mp3", "wav", "m4a", "aac", "ogg", "opus"];
+  const known = ["mp3", "wav", "m4a", "aac", "ogg", "opus", "mp4", "mov", "webm"];
   const fromName = name ? fileExtension(name) : "";
   if (known.includes(fromName)) return fromName;
   const mime = mimeType.trim().toLowerCase();
@@ -297,6 +297,10 @@ export function audioExtensionForUpload(name: string | undefined, mimeType: stri
   if (mime === "audio/mp4" || /m4a/.test(mime)) return "m4a";
   if (/aac/.test(mime)) return "aac";
   if (/ogg|opus/.test(mime)) return "ogg";
+  // a video from the gallery, used for its voice (2026-09-15)
+  if (mime === "video/mp4") return "mp4";
+  if (mime === "video/quicktime") return "mov";
+  if (/webm/.test(mime)) return "webm";
   return "mp3";
 }
 

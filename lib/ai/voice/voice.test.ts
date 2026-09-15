@@ -30,7 +30,11 @@ describe("replacement audio — the file, before and after it is opened", () => 
     expect(validateAudioFile({ name: "a.bin", size: 10, type: "audio/wav" }, limits)).toEqual({ ok: true });
     expect(validateAudioFile({ name: "a.m4a", size: 10, type: "" }, limits)).toEqual({ ok: true });
     expect(validateAudioFile({ name: "a.ogg", size: 10, type: "application/ogg" }, limits)).toEqual({ ok: true });
-    expect(validateAudioFile({ name: "a.mp4", size: 10, type: "video/mp4" }, limits)).toEqual({ ok: false, code: "unsupported-audio" });
+    // a gallery video is a voice source too (owner, 2026-09-15) — the worker takes its sound only
+    expect(validateAudioFile({ name: "a.mp4", size: 10, type: "video/mp4" }, limits)).toEqual({ ok: true });
+    expect(validateAudioFile({ name: "clip.mov", size: 10, type: "video/quicktime" }, limits)).toEqual({ ok: true });
+    expect(validateAudioFile({ name: "clip.webm", size: 10, type: "" }, limits)).toEqual({ ok: true });
+    expect(validateAudioFile({ name: "a.avi", size: 10, type: "video/x-msvideo" }, limits)).toEqual({ ok: false, code: "unsupported-audio" });
     expect(validateAudioFile({ name: "a.mp3", size: 1001, type: "audio/mpeg" }, limits)).toEqual({ ok: false, code: "audio-too-large" });
     expect(validateAudioFile({ name: "a.mp3", size: 0, type: "audio/mpeg" }, limits)).toEqual({ ok: false, code: "invalid-audio" });
   });
@@ -42,17 +46,19 @@ describe("replacement audio — the file, before and after it is opened", () => 
     expect(sniffAudioContainer(bytes("RIFF", 0, 0, 0, 0, "WAVE"))).toBe("wav");
     expect(sniffAudioContainer(bytes(0, 0, 0, 0x20, "ftypM4A "))).toBe("mp4");
     expect(sniffAudioContainer(bytes("OggS", 0, 2))).toBe("ogg");
+    expect(sniffAudioContainer(bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42))).toBe("webm");
     expect(sniffAudioContainer(bytes("%PDF-1.7"))).toBeNull();
     expect(sniffedContainerAgrees(null, { name: "song.mp3", type: "audio/mpeg" })).toBe(false);
     expect(sniffedContainerAgrees("wav", { name: "song.mp3", type: "audio/mpeg" })).toBe(true); // a real container, declared as another audio kind — accepted
     expect(sniffedContainerAgrees("mp3", { name: "song.exe", type: "application/octet-stream" })).toBe(false);
   });
 
-  it("a probed file needs an audio stream in an accepted codec, no picture, within the ceiling", () => {
+  it("a probed file needs an audio stream in an accepted codec, within the ceiling — a picture beside it is fine", () => {
     const limits = { maxDurationMs: 120_000, minDurationMs: 200 };
     const good = { hasAudio: true, hasVideo: false, durationSeconds: 9.5, audioCodec: "mp3", sampleRate: 44_100, channels: 2, bitrate: 128_000 };
     expect(validateProbedAudio(good, limits)).toEqual({ ok: true });
-    expect(validateProbedAudio({ ...good, hasVideo: true }, limits)).toEqual({ ok: false, code: "unsupported-audio" });
+    expect(validateProbedAudio({ ...good, hasVideo: true, audioCodec: "aac" }, limits)).toEqual({ ok: true });
+    expect(validateProbedAudio({ ...good, hasVideo: true, hasAudio: false }, limits)).toEqual({ ok: false, code: "invalid-audio" });
     expect(validateProbedAudio({ ...good, audioCodec: "wmav2" }, limits)).toEqual({ ok: false, code: "unsupported-audio" });
     expect(validateProbedAudio({ ...good, durationSeconds: 121 }, limits)).toEqual({ ok: false, code: "audio-too-long" });
     expect(validateProbedAudio({ ...good, durationSeconds: 0 }, limits)).toEqual({ ok: false, code: "invalid-audio" });

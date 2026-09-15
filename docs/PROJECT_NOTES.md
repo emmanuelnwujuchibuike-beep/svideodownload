@@ -13,6 +13,35 @@ _Last updated: 2026‑09‑15 (Character Replace Part 9 — the API cache findin
 
 ---
 
+## 2026‑09‑15 — Apple refused every "your video is ready" push (`BadWebPushTopic`); gallery videos as a voice source
+
+**Push (owner: "I don't see a push notification, only when I enter the app").** `push_delivery_log`
+for the week: `frenz-ai-done` 60 failed / 0 sent, every one `400 {"reason":"BadWebPushTopic"}` from
+`web.push.apple.com`, while `frenz-ai-failed` (18 sent), `download-outcome` (268 sent) and
+`streak-lost` went through on the same devices. Apple's Topic header must be valid base64url and a
+base64url string can never have length ≡ 1 (mod 4); "frenz-ai-done" is 13 characters — the one
+tag with that length. The topic is now `webPushTopic(tag)` = base64url of the tag's first 24 bytes
+(always legal, ≤ 32 chars, stable per tag so collapsing still works), with a test that every
+catalogue tag encodes to a legal length. `VapidPkHashMismatch` (a subscription minted under a
+rotated VAPID key) is now pruned like `BadDeviceToken`. Verify on the next completed job:
+`frenz-ai-done|sent|201` rows for the owner.
+
+**Voice from a gallery video.** The replace‑voice picker accepts MP4 / MOV / WebM alongside the audio
+formats; the browser reads a video's length with the video reader (an `<audio>` element refuses
+QuickTime) and refuses a silent video before upload; the server's byte sniff knows the EBML header;
+the worker's probe accepts a picture beside the sound (the ffmpeg plan already took the audio track
+only, `-vn -map 0:a:0`). Copy: "Upload audio or a video — only its sound is used."
+
+**Cold‑entry check (owner: "the PWA cold entry now takes time").** Measured on production from this
+machine: landing LCP 1.35–1.69 s, median 1.52 s (09‑13 baseline 1.63 s); signed‑in `/home` LCP
+1.7–2.6 s with TTFB 0.8–1.2 s (server render with auth) and ~130 ms of long tasks before LCP. No
+change in Parts 7–9 touches the cold‑entry path (the AI button left two layouts; the nav's two
+extra prefetches run 400 ms after mount and skip slow connections). Two things do cost: six deploys
+in one day each forced a service‑worker update and a reload on the next launch, and Cloudflare's
+challenge script (`/cdn-cgi/challenge-platform/scripts/jsd/main.js`, ~100 ms of main thread) runs on
+every page — a Cloudflare "Bot Fight Mode / JS detections" setting on the owner's side.
+
+
 ## 2026‑09‑15 — Frenz AI Character Replace, Part 9: premium UX pass (`5c1da03` + follow‑up)
 
 **⛔ The find that outranks the polish.** Photographing the real workspace on production with a

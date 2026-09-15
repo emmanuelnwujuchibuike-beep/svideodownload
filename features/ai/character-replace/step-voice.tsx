@@ -117,8 +117,8 @@ export function CharacterReplaceVoiceStep({
               <ChoiceCard
                 active={v.source === "upload"}
                 icon={<Upload className="h-5 w-5" aria-hidden />}
-                title="Upload audio"
-                body="Your own recording or voice-over, in your own voice or one you have permission to use."
+                title="Upload audio or a video"
+                body="A recording, a voice-over, or a video from your gallery — only its sound is used."
                 onClick={() => onSource("upload")}
                 disabled={!config.audio.uploadEnabled}
                 note={config.audio.uploadEnabled ? null : "Not available right now"}
@@ -139,10 +139,11 @@ export function CharacterReplaceVoiceStep({
           {v.source === "upload" ? (
             <section aria-labelledby={`${id}-audio`}>
               <h3 id={`${id}-audio`} className="text-[15px] font-bold tracking-[-0.01em]">
-                Your audio
+                Your voice
               </h3>
               <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-                {AUDIO_FORMAT_LINE} · up to {config.audio.maximumDurationSeconds} seconds and {formatBytes(config.audio.maximumUploadBytes)}.
+                An audio file, or a video from your gallery — only its sound is used. {AUDIO_FORMAT_LINE} · up to {config.audio.maximumDurationSeconds} seconds and{" "}
+                {formatBytes(config.audio.maximumUploadBytes)}.
               </p>
               {!v.audio ? (
                 <label
@@ -154,7 +155,7 @@ export function CharacterReplaceVoiceStep({
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-foreground/80">
                     <FileAudio className="h-5 w-5" aria-hidden />
                   </span>
-                  <span className="text-[14px] font-bold">{audioSlot.status === "validating" ? "Reading your audio…" : "Choose an audio file"}</span>
+                  <span className="text-[14px] font-bold">{audioSlot.status === "validating" ? "Reading your file…" : "Choose an audio file or a video"}</span>
                   <span className="text-[12px] text-muted-foreground">It stays on your device until you press Create.</span>
                   <input
                     type="file"

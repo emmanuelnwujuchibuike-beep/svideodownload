@@ -119,3 +119,19 @@ describe("the admin price set-up is one number per row (owner, 2026-09-14)", () 
     expect(pricing).toMatch(/perSecondCents\s*\?\?|perSecondCents !== null|perSecondCents ?: /);
   });
 });
+
+describe("a gallery video is a voice source (owner, 2026-09-15)", () => {
+  it("the picker accepts MP4 / MOV / WebM, the worker keeps the sound only, and the copy says so", () => {
+    const v = src("lib/ai/voice/audio-validate.ts");
+    expect(v).toContain('{ label: "MP4 video", extension: "mp4", mimeTypes: ["video/mp4"] },');
+    expect(v).toContain('{ label: "MOV video", extension: "mov", mimeTypes: ["video/quicktime"] },');
+    expect(v).toContain('return "webm";');
+    expect(code("lib/ai/voice/audio-validate.ts")).not.toContain("if (probe.hasVideo) return");
+    expect(src("lib/ai/voice/audio-ffmpeg.ts")).toContain('"-vn", "-map", "0:a:0"');
+    expect(src("lib/ai/media.ts")).toContain('if (mime === "video/quicktime") return "mov";');
+    const hook = src("features/ai/character-replace/use-character-replace-workspace.ts");
+    expect(hook).toContain("const meta = await readVideoMetadata(objectUrl, { name: file.name, size: file.size, type: file.type });");
+    expect(hook).toContain('meta.hasAudio === false ? "invalid"');
+    expect(src("features/ai/character-replace/step-voice.tsx")).toContain('title="Upload audio or a video"');
+  });
+});

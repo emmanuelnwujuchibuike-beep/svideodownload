@@ -490,9 +490,10 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
     face_only: {
       enabled: true,
       tiers: [
-        tier("standard", "Standard", "The model's one configuration", 15, true),
-        tier("high", "High", "Not available for this model", 25, false),
-        tier("ultra", "Ultra", "Not available for this model", 40, false),
+        // Part 9 §7: the member's words. What a tier means for THEM, never a sentence about the model.
+        tier("standard", "Standard", "Clean face swap · fast", 15, true),
+        tier("high", "High", "Coming later", 25, false),
+        tier("ultra", "Ultra", "Coming later", 40, false),
       ],
       maximumDurationSeconds: 60,
       maximumUploadBytes: 50 * 1024 * 1024,

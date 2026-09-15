@@ -9,9 +9,56 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑14 (Character Replace Parts 7 & 8 — result page, hardening, circuit breaker; see the first section below)_
+_Last updated: 2026‑09‑15 (Character Replace Part 9 — the API cache finding, the premium UX pass, the admin price table; Parts 7 & 8 below)_
 
 ---
+
+## 2026‑09‑15 — Frenz AI Character Replace, Part 9: premium UX pass (`5c1da03` + follow‑up)
+
+**⛔ The find that outranks the polish.** Photographing the real workspace on production with a
+throwaway member showed a job that had *finished* still reading "Replacing the face" four minutes
+later. `GET /api/ai/jobs/<id>` — a per‑member answer — came back `Cache-Control: public,
+max-age=7200, must-revalidate` with `cf-cache-status: EXPIRED`: Next route handlers on Vercel send
+no Cache-Control, Cloudflare stamps its two‑hour default on anything without one (and had held a
+copy at the edge), and the browser then served the workspace's polling from its own cache.
+`next.config.ts` now sends `private, no-store, max-age=0` for `/api/(ai|admin|internal)/*` (a
+route's own header still wins — the poster keeps its day‑long `private`), and both AI clients fetch
+with `cache: "no-store"`. Verified after deploy: `cf-cache-status: BYPASS`. ⚠️ Other per‑user API
+groups (messages, profile, conversations, friends…) send no Cache-Control either — the same
+exposure, left for their own change.
+
+**Workspace.** Entry card names the product, not the model. Steps read Character → Video → Quality
+→ Voice → Review. Photo tips fold under "Tips for the best result" (the owner's red direction boxes
+stay). Quality cards are Standard / HD / Full HD with what each means and one "Recommended" (the
+mode's default tier); tier notes are member words. The trimmer plays the kept range only, shows the
+playhead and a live clock, and reads "Selected 00:00.0 – 00:03.0 · 3.0 sec". One price card: video
+duration, quality, the rate line, voice, premium lip sync, minimum, total, current balance, balance
+after / short by — every figure the server's; the quote never suggests 480p as a saving for Full
+Character. "Keep original audio" wears Recommended; lip sync is "Premium". Consent is one sentence
+with "What this means" on request. The primary button is "Create Video · ₦X", or "Recharge to
+continue" when short (opens the recharge sheet). Processing shows one segment per real stage, "Step
+n of m", "Starting" instead of QUEUED, and the chosen photo + video beside the mark. The result
+reveals in three short entrances, says "AI‑generated transformation · made with Frenz AI", and on a
+wide screen splits player‑left / actions‑right (the review step splits the same way, money sticky).
+History's empty state opens the workspace; a ready tile reads "3.0 s · Standard · when · 2d left".
+Light haptic on an accepted file, medium on a refused one, selection on quality/audio/consent,
+medium on Create. The push nudge and the desktop Messages pill no longer float over the workspace's
+Back / Continue / Create bar (both covered it, measured).
+
+**Admin (owner, same day: "make the AI price set‑up understandable and clear").** One "Price per
+second" table — a row per replacement type × quality, one field each, a 10‑second example, the
+provider cost estimate and an on/off — replaces base rate + multiplier + own rate. Every quality is
+saved with its own `perSecondCents`, which the engine already prefers, so the pricing logic is
+untouched.
+
+**Audit harness (untracked `scripts/_p9-shots*.tmp.mjs`).** Throwaway member → anon sign‑in →
+`sb-<ref>-auth-token` cookie (`base64-` + base64url(session), chunked at 3180) →
+`context.addCookies` → shots per device/theme. Traps worth remembering: `setInputFiles` before
+`networkidle` is lost (not hydrated); headless Chromium reports notifications denied, so the push
+nudge covers the footer and clicks time out; `text=Download` matches the sidebar; deleting the
+member cascades the job, its events and its ledger rows; `next dev` overwrites `.next` and breaks
+the budget test until a production build.
+
 
 ## 2026‑09‑14 — Frenz AI Character Replace, Parts 7 & 8 (`557ff87`, `7405768`, `b4beb46`)
 

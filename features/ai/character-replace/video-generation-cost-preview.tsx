@@ -88,7 +88,6 @@ export function VideoGenerationCostPreview({
         <Row
           label={modeLabel}
           value={snapshot ? snapshot.rateLine : pricing.status === "pending" || pricing.status === "stale" ? "…" : "—"}
-          amount={snapshot ? formatCents(snapshot.videoCents, sym) : null}
         />
         {snapshot && snapshot.basePriceCents > 0 ? <Row label="Processing" value="" amount={formatCents(snapshot.basePriceCents, sym)} /> : null}
         {project.voice.mode === "new_voice" ? <Row label="Voice" value={voiceLine?.value ?? ""} amount={snapshot ? (snapshot.voiceCents > 0 ? formatCents(snapshot.voiceCents, sym) : "Included") : null} /> : null}

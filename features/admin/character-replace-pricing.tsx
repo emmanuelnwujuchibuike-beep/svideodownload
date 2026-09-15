@@ -56,16 +56,27 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [basePrice, setBasePrice] = useState(minorToMajorInput(cr.basePriceCents));
   const [minimum, setMinimum] = useState(minorToMajorInput(cr.minimumChargeCents));
 
-  /* ── video pricing ── */
-  const [perSecond, setPerSecond] = useState(minorToMajorInput(cr.pricePerSecondCents));
+  /*
+    ── video pricing ──────────────────────────────────────────────────────
+    Owner, 2026-09-14: "make the AI price set-up understandable and clear,
+    so I can easily set the model price per second." The old form asked for
+    a base rate, a multiplier per quality and an optional own rate — three
+    numbers to reason about for one price. Every quality now shows ONE
+    field: the price per second a member pays. It is saved as that
+    quality's own rate (`perSecondCents`), which the pricing engine already
+    prefers over base × multiplier — so the engine is untouched and the
+    base rate / multipliers simply stop mattering once this form is saved.
+    The starting value is whatever the member is charged today.
+  */
+  const [perSecond] = useState(minorToMajorInput(cr.pricePerSecondCents));
   const [qualities, setQualities] = useState(
     cr.qualities.map((q) => ({
       id: q.id,
       label: q.label,
       enabled: q.enabled,
       multiplier: String(q.multiplier),
-      perSecond: q.perSecondCents === null ? "" : minorToMajorInput(q.perSecondCents),
-      useOwnRate: q.perSecondCents !== null,
+      perSecond: minorToMajorInput(q.perSecondCents ?? Math.ceil(cr.pricePerSecondCents * q.multiplier)),
+      useOwnRate: true,
     })),
   );
 
@@ -321,7 +332,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.tts.perCharacterCents * payload.tts.maximumCharacters > 5_000_000) out.push(`The per-character fee prices the longest dialogue at ${formatCents(payload.tts.perCharacterCents * payload.tts.maximumCharacters, symbol)}.`);
     return out;
-  }, [cr.enabled, cr.modes, payload, symbol]);
+  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.maintenanceMode, cr.ops.processingEnabled, payload, symbol]);
 
   const priceChanged = useMemo(() => {
     const before = cr;
@@ -428,49 +439,115 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             />
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <Field id="cr-base-price" label="Base price per video" hint="Added once to every video. Zero is fine.">
+            <Field id="cr-base-price" label="Base price per video" hint="Added once to every video on top of the per-second price. Zero is fine.">
               <input id="cr-base-price" type="number" inputMode="decimal" min={0} step="any" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} className={input} />
             </Field>
-            <Field id="cr-minimum" label="Minimum charge" hint="The floor a very short video is billed at.">
+            <Field id="cr-minimum" label="Minimum charge per video" hint="A very short video is billed at least this much.">
               <input id="cr-minimum" type="number" inputMode="decimal" min={0} step="any" value={minimum} onChange={(e) => setMinimum(e.target.value)} className={input} />
             </Field>
           </div>
         </Group>
 
-        {/* ── VIDEO PRICING ── */}
-        <Group title="Video pricing">
-          <Field id="cr-per-second" label="Base rate per second" hint="Each quality bills this × its multiplier, unless it has a rate of its own.">
-            <input id="cr-per-second" type="number" inputMode="decimal" min={0} step="any" value={perSecond} onChange={(e) => setPerSecond(e.target.value)} className={cn(input, "sm:max-w-xs")} />
-          </Field>
-          <div className="mt-4 space-y-3">
-            {qualities.map((q, i) => {
-              const effective = q.useOwnRate ? (majorInputToMinor(q.perSecond) ?? 0) : Math.ceil((majorInputToMinor(perSecond) ?? cr.pricePerSecondCents) * (Number(q.multiplier) || 0));
-              return (
-                <div key={q.id} className="rounded-2xl border border-border/70 bg-background/60 p-3 sm:p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-                      <input type="checkbox" checked={q.enabled} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
-                      {q.label}
-                      {q.id === "1080p" ? <span className="text-xs font-normal text-muted-foreground">(the provider documents 480 and 720 only)</span> : null}
-                    </label>
-                    <span className="text-xs tabular-nums text-muted-foreground">= {formatCents(effective, symbol)} per second</span>
-                  </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <Field id={`cr-q-mult-${q.id}`} label="Multiplier">
-                      <input id={`cr-q-mult-${q.id}`} type="number" inputMode="decimal" min={0.05} max={20} step="any" value={q.multiplier} disabled={q.useOwnRate} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, multiplier: e.target.value } : x)))} className={cn(input, "disabled:opacity-50")} />
-                    </Field>
-                    <label className="flex items-end gap-2 pb-2 text-xs font-semibold text-muted-foreground">
-                      <input type="checkbox" checked={q.useOwnRate} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, useOwnRate: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
-                      Own rate instead
-                    </label>
-                    <Field id={`cr-q-rate-${q.id}`} label="Rate per second">
-                      <input id={`cr-q-rate-${q.id}`} type="number" inputMode="decimal" min={0} step="any" value={q.perSecond} disabled={!q.useOwnRate} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)))} className={cn(input, "disabled:opacity-50")} />
-                    </Field>
-                  </div>
-                </div>
-              );
-            })}
+        {/* ── PRICE PER SECOND — one number per replacement type and quality ── */}
+        <Group title="Price per second">
+          <p className="mb-3 text-sm text-muted-foreground">
+            What a member pays for each second of video, by replacement type and quality. A 10-second video costs ten times the number you type here (plus the
+            base price and any voice or lip-sync add-on below). Untick a row to hide that quality from members.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <thead className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                <tr>
+                  <th className="py-2 pr-3">Replacement type</th>
+                  <th className="py-2 pr-3">Quality</th>
+                  <th className="py-2 pr-3">Members pay, per second</th>
+                  <th className="py-2 pr-3">10-second video</th>
+                  <th className="py-2 pr-3">Provider cost</th>
+                  <th className="py-2">On</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {qualities.map((q, i) => {
+                  const cents = majorInputToMinor(q.perSecond) ?? 0;
+                  return (
+                    <tr key={`full-${q.id}`} className={cn(!q.enabled && "opacity-55")}>
+                      <td className="py-2.5 pr-3 font-semibold">{i === 0 ? "Full Character" : ""}</td>
+                      <td className="py-2.5 pr-3">
+                        {q.id === "480p" ? "Standard" : q.id === "720p" ? "HD" : "Full HD"} <span className="text-muted-foreground">({q.label})</span>
+                        {q.id === "1080p" ? <span className="block text-[11px] text-muted-foreground">provider documents 480p and 720p only</span> : null}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground">{symbol}</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="any"
+                            aria-label={`Full Character ${q.label} price per second`}
+                            value={q.perSecond}
+                            onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, perSecond: e.target.value, useOwnRate: true } : x)))}
+                            className={cn(input, "mt-0 w-28")}
+                          />
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{formatCents(cents * 10, symbol)}</td>
+                      <td className="py-2.5 pr-3 text-muted-foreground">—</td>
+                      <td className="py-2.5">
+                        <input type="checkbox" aria-label={`Full Character ${q.label} available`} checked={q.enabled} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(
+                  [
+                    ["Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, cr.modes.face_only],
+                    ["Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, cr.modes.skin_face],
+                  ] as const
+                ).map(([label, st, set, map, before]) =>
+                  st.tiers.map((t, i) => {
+                    const supported = map[t.id].support === "supported";
+                    const cents = majorInputToMinor(t.perSecond) ?? 0;
+                    const usd = before.providerCostPerSecondUsdCents;
+                    return (
+                      <tr key={`${label}-${t.id}`} className={cn((!supported || !t.enabled || !st.enabled) && "opacity-55")}>
+                        <td className="py-2.5 pr-3 font-semibold">{i === 0 ? label : ""}</td>
+                        <td className="py-2.5 pr-3">
+                          {t.label}
+                          {!supported ? <span className="block text-[11px] text-muted-foreground">not available for this type</span> : null}
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-muted-foreground">{symbol}</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              step="any"
+                              aria-label={`${label} ${t.label} price per second`}
+                              value={t.perSecond}
+                              disabled={!supported}
+                              onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)) })}
+                              className={cn(input, "mt-0 w-28 disabled:opacity-50")}
+                            />
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{supported ? formatCents(cents * 10, symbol) : "—"}</td>
+                        <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{usd > 0 ? `$${(usd / 100).toFixed(3)}/s` : "—"}</td>
+                        <td className="py-2.5">
+                          <input type="checkbox" aria-label={`${label} ${t.label} available`} checked={t.enabled && supported} disabled={!supported} onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)) })} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                        </td>
+                      </tr>
+                    );
+                  }),
+                )}
+              </tbody>
+            </table>
           </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Provider cost is your own estimate per second, entered under each replacement type&apos;s settings below; with an exchange rate (Switches, limits &amp;
+            safety) the save warns when a price is under it. Members never see either.
+          </p>
         </Group>
 
         {/* ── REPLACEMENT MODES (Part 6) ── */}
@@ -479,27 +556,10 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             ["face_only", "Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, "xrunda/hello — swaps the face only; the model has ONE configuration, so High and Ultra cannot be honoured and stay off."],
             ["skin_face", "Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, "prunaai/p-video-replace — identity and exposed skin; Standard = 720p turbo, High = 720p, Ultra = 1080p."],
           ] as const
-        ).map(([id, label, st, set, map, blurb]) => (
-          <Group key={id} title={`${label} pricing`}>
-            <p className="mb-3 text-xs text-muted-foreground">{blurb}</p>
+        ).map(([id, label, st, set, _map, blurb]) => (
+          <Group key={id} title={`${label} settings`}>
+            <p className="mb-3 text-xs text-muted-foreground">{blurb} Prices per second are set in the table above.</p>
             <Toggle label={`${label} is available`} hint="Off hides the mode on the selector. Nothing already running is affected." checked={st.enabled} onChange={(v) => set({ ...st, enabled: v })} />
-            <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {st.tiers.map((t, i) => {
-                const supported = map[t.id].support === "supported";
-                return (
-                  <div key={t.id} className={cn("rounded-2xl border border-border/70 bg-background/60 p-3", !supported && "opacity-60")}>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
-                      <input type="checkbox" checked={t.enabled && supported} disabled={!supported} onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)) })} className="h-4 w-4 accent-[hsl(var(--primary))]" />
-                      {t.label}
-                    </label>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{map[t.id].note}</p>
-                    <Field id={`cr-${id}-${t.id}`} label="Rate per second" className="mt-2">
-                      <input id={`cr-${id}-${t.id}`} type="number" inputMode="decimal" min={0} step="any" value={t.perSecond} disabled={!supported} onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)) })} className={cn(input, "disabled:opacity-50")} />
-                    </Field>
-                  </div>
-                );
-              })}
-            </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <Field id={`cr-${id}-max-seconds`} label="Longest video (seconds)" hint="1 to 120; never above the tool's own ceiling.">
                 <input id={`cr-${id}-max-seconds`} type="number" inputMode="numeric" min={1} max={120} value={st.maxSeconds} onChange={(e) => set({ ...st, maxSeconds: e.target.value })} className={input} />
@@ -602,7 +662,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                   <input type="checkbox" checked={l.enabled} onChange={(e) => setLipTiers((ts) => ts.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
                   {l.label}
                 </label>
-                <Field id={`cr-lip-${l.id}`} label="Per second" className="mt-3">
+                <Field id={`cr-lip-${l.id}`} label="Lip-sync price per second" hint="Added per second of video when this tier is chosen." className="mt-3">
                   <input id={`cr-lip-${l.id}`} type="number" inputMode="decimal" min={0} step="any" value={l.perSecond} onChange={(e) => setLipTiers((ts) => ts.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)))} className={input} />
                 </Field>
                 <Field id={`cr-lip-model-${l.id}`} label="Model" hint="Provider: Replicate. sync/lipsync-2 or sync/lipsync-2-pro today." className="mt-3">

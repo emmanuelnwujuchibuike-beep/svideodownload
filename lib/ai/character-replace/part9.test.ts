@@ -102,3 +102,20 @@ describe("the empty history is a door, and a tile says what it holds (§24, §35
     expect(src("lib/ai/history.ts")).toContain('title: "Your transformations will appear here",');
   });
 });
+
+describe("the admin price set-up is one number per row (owner, 2026-09-14)", () => {
+  it("shows a per-second field for every replacement type and quality, saves it as that quality's own rate, and no longer asks for a base rate or multiplier", () => {
+    const panel = src("features/admin/character-replace-pricing.tsx");
+    expect(panel).toContain('<Group title="Price per second">');
+    expect(panel).toContain("<th className=\"py-2 pr-3\">Members pay, per second</th>");
+    expect(panel).toContain("<th className=\"py-2 pr-3\">10-second video</th>");
+    expect(panel).toContain("perSecond: minorToMajorInput(q.perSecondCents ?? Math.ceil(cr.pricePerSecondCents * q.multiplier)),");
+    expect(panel).toContain("useOwnRate: true,");
+    expect(panel).not.toContain('label="Base rate per second"');
+    expect(panel).not.toContain('label="Multiplier"');
+    expect(panel).not.toContain("Own rate instead");
+    // the engine is untouched: an own rate still wins over base × multiplier
+    const pricing = src("lib/ai/character-replace/pricing.ts");
+    expect(pricing).toMatch(/perSecondCents\s*\?\?|perSecondCents !== null|perSecondCents ?: /);
+  });
+});

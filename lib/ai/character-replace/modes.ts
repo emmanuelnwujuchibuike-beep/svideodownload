@@ -164,9 +164,10 @@ export interface TierMapping<TSettings> {
  * the one configuration the model has; High and Ultra cannot be honoured.
  */
 export const FACE_ONLY_TIER_MAP: Record<ReplacementTierId, TierMapping<FaceOnlyProviderSettings>> = {
-  standard: { support: "supported", settings: { quality: "single" }, note: "The model's one and only configuration." },
-  high: { support: "unsupported", settings: null, note: "This model has no higher setting — held for a future model." },
-  ultra: { support: "unsupported", settings: null, note: "This model has no higher setting — held for a future model." },
+  // The notes reach the member (the quality card's line and the sentence under it) — plain words, no model talk (Part 9 §7).
+  standard: { support: "supported", settings: { quality: "single" }, note: "Face Only has one quality — the face is swapped at the video's own resolution." },
+  high: { support: "unsupported", settings: null, note: "Not available for Face Only yet." },
+  ultra: { support: "unsupported", settings: null, note: "Not available for Face Only yet." },
 };
 
 /**
@@ -184,9 +185,9 @@ export const FACE_ONLY_TIER_MAP: Record<ReplacementTierId, TierMapping<FaceOnlyP
  * changes the duration the member was priced for.
  */
 export const SKIN_FACE_TIER_MAP: Record<ReplacementTierId, TierMapping<SkinFaceProviderSettings>> = {
-  standard: { support: "supported", settings: { resolution: "720p", turbo: true, target_fps: "original" }, note: "720p, turbo mode — fastest." },
-  high: { support: "supported", settings: { resolution: "720p", turbo: false, target_fps: "original" }, note: "720p, full quality." },
-  ultra: { support: "supported", settings: { resolution: "1080p", turbo: false, target_fps: "original" }, note: "1080p, full quality." },
+  standard: { support: "supported", settings: { resolution: "720p", turbo: true, target_fps: "original" }, note: "720p, the fastest setting." },
+  high: { support: "supported", settings: { resolution: "720p", turbo: false, target_fps: "original" }, note: "720p at full quality." },
+  ultra: { support: "supported", settings: { resolution: "1080p", turbo: false, target_fps: "original" }, note: "1080p at full quality — the slowest." },
 };
 
 export function tierSupport(mode: Exclude<ReplacementMode, "full_character">, tier: ReplacementTierId): TierMapping<FaceOnlyProviderSettings | SkinFaceProviderSettings> {

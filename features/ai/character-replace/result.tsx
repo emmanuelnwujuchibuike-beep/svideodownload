@@ -252,8 +252,15 @@ export function CharacterReplaceResultScreen({
         </span>
       </header>
 
+      {/*
+        Part 9 §36: one column on a phone; on a wide screen the player keeps
+        the left and stays put while the actions and details scroll on the
+        right — a portrait video no longer sits in a letterbox as wide as the
+        page.
+      */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-8">
       {/* ── the hero ───────────────────────────────────────────────────────── */}
-      <div className="animate-fade-up">
+      <div className="animate-fade-up lg:sticky lg:top-24">
       <VideoReadyPlayer
         ref={player}
         src={src}
@@ -265,6 +272,7 @@ export function CharacterReplaceResultScreen({
       />
       </div>
 
+      <div className="mt-4 space-y-4 lg:mt-0">
       {/* the facts line + comparison switch (§5–§6) */}
       <div className="animate-fade-up flex flex-wrap items-center justify-between gap-2 [animation-delay:90ms]">
         <p className="text-[13px] font-semibold tabular-nums text-muted-foreground">
@@ -430,6 +438,8 @@ export function CharacterReplaceResultScreen({
             </div>
           </div>
         )}
+      </div>
+      </div>
       </div>
     </section>
   );

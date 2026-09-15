@@ -35,6 +35,7 @@ import {
   type WorkspaceState,
 } from "@/lib/ai/character-replace/workspace";
 import { readAudioDuration, readImageSize, readVideoMetadata } from "@/features/ai/character-replace/read-media";
+import { haptic } from "@/lib/motion/haptics";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -304,6 +305,7 @@ export function useCharacterReplaceWorkspace() {
       const previous = state.project.character?.objectUrl;
       const verdict = validatePhotoFile(file, limits);
       if (!verdict.ok) {
+        haptic("medium");
         dispatch({ type: "photo/invalid", code: verdict.code });
         release(previous);
         return;
@@ -319,6 +321,7 @@ export function useCharacterReplaceWorkspace() {
         dispatch({ type: pixels.ok ? "photo/error" : pixels.code === "invalid-image" ? "photo/error" : "photo/invalid", code: pixels.ok ? "invalid-image" : pixels.code });
         return;
       }
+      haptic("light");
       dispatch({
         type: "photo/ready",
         asset: { file, objectUrl, width: size.width, height: size.height, size: file.size, mimeType: file.type, name: file.name },
@@ -418,6 +421,7 @@ export function useCharacterReplaceWorkspace() {
       const previous = state.project.video?.objectUrl;
       const verdict = validateVideoFile(file, limits);
       if (!verdict.ok) {
+        haptic("medium");
         dispatch({ type: "video/invalid", code: verdict.code });
         release(previous);
         return;
@@ -437,9 +441,11 @@ export function useCharacterReplaceWorkspace() {
       const facts = validateVideoMetadata(metadata, limits);
       if (!facts.ok) {
         release(objectUrl);
+        haptic("medium");
         dispatch({ type: "video/invalid", code: facts.code });
         return;
       }
+      haptic("light");
       dispatch({
         type: "video/ready",
         video: { file, objectUrl, name: file.name, size: file.size, mimeType: file.type, metadata },

@@ -28,6 +28,7 @@ import {
   type WorkspaceStep,
 } from "@/lib/ai/character-replace/workspace";
 import { formatCents } from "@/lib/ai/economy";
+import { haptic } from "@/lib/motion/haptics";
 import { track } from "@/lib/analytics/client";
 import { cn } from "@/lib/utils";
 
@@ -151,6 +152,7 @@ export function CharacterReplaceWorkspace({
   const [rechargeAsk, setRechargeAsk] = useState(0);
 
   const onStart = useCallback(async () => {
+    haptic("medium");
     const id = await ws.start();
     if (id) setWatchedJobId(id);
   }, [ws]);
@@ -324,7 +326,10 @@ export function CharacterReplaceWorkspace({
                     config={config}
                     pricing={state.pricing}
                     onRetryQuote={ws.requote}
-                    onQuality={(quality) => send({ type: "quality", quality })}
+                    onQuality={(quality) => {
+                      haptic("selection");
+                      send({ type: "quality", quality });
+                    }}
                     onTrim={(start, end) => send({ type: "trim", start, end })}
                     onTrimClear={() => send({ type: "trim/clear" })}
                   />
@@ -334,6 +339,7 @@ export function CharacterReplaceWorkspace({
                     config={config}
                     audioSlot={state.audio}
                     onMode={(mode) => {
+                      haptic("selection");
                       if (mode === "original") ws.clearAudio();
                       const firstLanguage = config.languages.find((l) => config.tts.languages.includes(l.code))?.code ?? null;
                       const firstVoice = config.voices.find((v) => v.languages.length === 0 || (firstLanguage !== null && v.languages.includes(firstLanguage)))?.id ?? null;
@@ -379,7 +385,10 @@ export function CharacterReplaceWorkspace({
                     onDismissTopupNotice={ws.dismissTopupNotice}
                     onRetryQuote={ws.requote}
                     returnTo={basePath}
-                    onConsent={(value) => send({ type: "consent", value })}
+                    onConsent={(value) => {
+                      haptic("selection");
+                      send({ type: "consent", value });
+                    }}
                     rechargeAsk={rechargeAsk}
                   />
                 )}

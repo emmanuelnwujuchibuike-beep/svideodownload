@@ -88,12 +88,20 @@ export function CharacterReplaceReviewStep({
   const closeSheet = useCallback(() => setSheetOpen(false), []);
 
   return (
-    <div className="space-y-4">
+    /*
+      Part 9 §36: stacked on a phone; on a wide screen what is being made sits
+      on the left and the money — price, balance, shortfall — stays put on
+      the right while the left scrolls. The consent line stays under the
+      money, where the Create button is.
+    */
+    <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start lg:gap-6 lg:space-y-0">
+      <div className="space-y-4">
       {/* ── what is about to be made ────────────────────────────────────── */}
       <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Replacement</p>
         <p className="mt-0.5 text-[15px] font-bold tracking-[-0.01em]">{mode.label}</p>
-        <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{mode.explanation}</p>
+        {/* the tagline, not the paragraph — the picker already explained the mode (Part 9 §2: do not overuse text) */}
+        <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{mode.tagline}</p>
       </div>
       {character && video ? (
         <div className="grid grid-cols-2 gap-3">
@@ -106,7 +114,9 @@ export function CharacterReplaceReviewStep({
           </Thumb>
         </div>
       ) : null}
+      </div>
 
+      <div className="space-y-4 lg:sticky lg:top-24">
       {/* ── the price, live (Part 6 §12): every line, from the server ──── */}
       <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} balanceCents={balance?.balanceCents ?? null} />
 
@@ -194,6 +204,7 @@ export function CharacterReplaceReviewStep({
           suggestedCents={short && money ? money.shortfallCents : null}
         />
       ) : null}
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
 
 import { DOWNLOAD_KIND } from "./activity-categories";
+import { collapseDownloadPairs } from "./activity-dedupe";
 import { resolveDownloadStatus } from "./packed-format";
 import { eventDetail, eventLabel, NOTABLE } from "./activity-format";
 
@@ -90,84 +91,12 @@ interface DownloadRow {
   source_url: string | null;
 }
 
-/**
- * Collapse the SAME download's two `downloads` rows into one (owner,
- * 2026-08-16: "signed users who make download should show the user's name
- * and download details alone and not include a duplicate anonymous download
- * … it currently shows Frenz Download and also anonymous download with same
- * details").
- *
- * ── Why there are two rows for one download at all ──────────────────────────
- * `server/services/analytics.ts`'s `recordDownloadEvent` inserts an ANONYMOUS
- * row the instant `/api/download` is called — before the transfer has even
- * started, let alone finished, and with no `user_id` because that route
- * never resolves one (adding an auth round-trip to the hottest path in the
- * app to fix an admin-dashboard display bug would be the wrong trade). If the
- * visitor is signed in, `features/history/sync.ts`'s `pushAdd` inserts a
- * SECOND, fully-attributed row once the file actually finishes downloading
- * client-side — real completion, real `user_id`, real format/quality. Both
- * rows are honest individually; shown together they are the same event twice,
- * once unnamed.
- *
- * ── Why the fix is here and not upstream ────────────────────────────────────
- * Preventing the write is the alternative, and it's worse here: it would mean
- * either adding that auth lookup to `/api/download` (latency on every
- * download, including the guest ones this product exists to serve) or
- * skipping the platform-stats rollup for signed-in users until their download
- * finishes minutes later. Collapsing at READ time costs nothing on the
- * download path and only runs when an admin is actually looking at this feed.
- *
- * ── The matching rule ────────────────────────────────────────────────────────
- * Same `source_url`, one row with `user_id === null` and one with
- * `user_id !== null`, within a generous 20-minute window (large files —
- * Telegram in particular, see the note in server/services/telegram-mtproto.ts
- * — can take a while to actually finish). Paired 1:1 by nearest timestamp
- * within each `source_url` group, not "any anonymous row near any attributed
- * one", so two genuinely different people downloading the same viral link
- * around the same time are never merged into one. The ANONYMOUS row of each
- * matched pair is dropped; the attributed one — which also carries the real
- * format/quality, not just a media-kind guess — is kept.
- */
-const DEDUPE_WINDOW_MS = 20 * 60_000;
-
-function dedupeAttributedDownloads(rows: DownloadRow[]): DownloadRow[] {
-  const bySource = new Map<string, DownloadRow[]>();
-  for (const r of rows) {
-    const key = r.source_url ?? `id:${r.id}`; // no source_url on file → never merge it
-    const list = bySource.get(key);
-    if (list) list.push(r);
-    else bySource.set(key, [r]);
-  }
-
-  const drop = new Set<string>();
-  for (const group of bySource.values()) {
-    if (group.length < 2) continue;
-    const anon = group.filter((r) => !r.user_id).sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const attributed = group.filter((r) => r.user_id).sort((a, b) => a.created_at.localeCompare(b.created_at));
-    if (anon.length === 0 || attributed.length === 0) continue;
-
-    const usedAttributed = new Set<string>();
-    for (const a of anon) {
-      const aTime = Date.parse(a.created_at);
-      let best: DownloadRow | null = null;
-      let bestDelta = Infinity;
-      for (const u of attributed) {
-        if (usedAttributed.has(u.id)) continue;
-        const delta = Math.abs(Date.parse(u.created_at) - aTime);
-        if (delta <= DEDUPE_WINDOW_MS && delta < bestDelta) {
-          best = u;
-          bestDelta = delta;
-        }
-      }
-      if (best) {
-        usedAttributed.add(best.id);
-        drop.add(a.id);
-      }
-    }
-  }
-
-  return rows.filter((r) => !drop.has(r.id));
-}
+/*
+  The (anonymous, attributed) pairing of one download's two rows now lives in
+  lib/admin/activity-dedupe.ts — pure, and run by the live feed over what the
+  browser is holding as well as here, because the two rows of one download
+  arrive in DIFFERENT polls (owner, 2026-09-20: duplicates in the live feed).
+*/
 
 /**
  * Recent notable activity, events + downloads merged newest-first. `since` (ISO)
@@ -230,6 +159,18 @@ function decodePackedFormat(raw: string | null): Record<string, unknown> {
     statusExplicit: status || null,
     failureReason: failureReason || null,
   };
+}
+
+/** The one-line row text for a download: platform · quality or kind · a non-completed outcome — title. */
+function downloadDetail(d: DownloadRow): string {
+  const decoded = decodePackedFormat(d.format);
+  const status = resolveDownloadStatus(decoded.statusExplicit as string | null, d.status);
+  const parts = [
+    d.platform,
+    (decoded.quality as string | null) ?? (decoded.mediaKind as string | null) ?? (typeof decoded.format === "string" ? decoded.format : null),
+    status && status !== "completed" ? status : null,
+  ].filter(Boolean);
+  return parts.join(" · ") + (d.title ? ` — ${d.title}` : "");
 }
 
 /** Bytes → a short human string. Local to avoid pulling a client util server-side. */
@@ -357,14 +298,18 @@ export async function fetchRecentActivity(
         meta: { eventId: e.id, eventType: e.type, ...(e.metadata ?? {}) },
       }));
 
-    const downloadItems: (ActivityItem & { userId: string | null })[] = dedupeAttributedDownloads(
-      (downloads ?? []) as DownloadRow[],
-    ).map(
+    const downloadItems: (ActivityItem & { userId: string | null })[] = collapseDownloadPairs(((downloads ?? []) as DownloadRow[]).map(
       (d) => ({
         id: `d:${d.id}`,
         kind: "download",
         label: "Downloaded",
-        detail: [d.platform, d.format].filter(Boolean).join(" · ") + (d.title ? ` — ${d.title}` : ""),
+        /*
+          In words, not the packed column (2026-09-20): a client-synced row's
+          `format` is "snap-3~|~video~|~Story 4~|~1016185~|~~|~", which the
+          feed printed as-is. The decoded fields say the same thing readably,
+          and a non-completed outcome is named on the row itself.
+        */
+        detail: downloadDetail(d),
         actor: null,
         // A signed-in user's downloads carry their id (history sync writes it), so
         // they resolve to a handle below instead of all reading "Anonymous" — the
@@ -373,6 +318,13 @@ export async function fetchRecentActivity(
         at: d.created_at,
         meta: {
           downloadId: d.id,
+          /*
+            The member behind the row, when there is one. The pairing rule
+            (activity-dedupe.ts) reads this so a member whose profile has no
+            handle still counts as attributed, and the detail sheet gets the
+            id an operator needs to find the account.
+          */
+          memberId: d.user_id,
           platform: d.platform,
           title: d.title,
           // Clickable in the detail sheet — the operator's "link so i can click
@@ -409,7 +361,7 @@ export async function fetchRecentActivity(
           ),
         },
       }),
-    );
+    ));
 
     // Resolve actor handles for every item that has a user — events AND downloads.
     const userIds = [

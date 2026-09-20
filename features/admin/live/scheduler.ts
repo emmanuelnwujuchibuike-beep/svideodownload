@@ -77,13 +77,28 @@ const TICK_MS = 5_000;
 
 /** Backoff after consecutive failures, in multiples of the tier interval. */
 const MAX_BACKOFF_FACTOR = 8;
+/**
+ * Stretch after consecutive QUIET answers (a key whose fetcher said "nothing
+ * new"), in multiples of the tier interval. 15s → 30s after two empty polls →
+ * 60s after four; the first answer that carries something snaps it back to
+ * the tier. Owner, 2026-09-20: the dashboard's polling shows up as Vercel
+ * observability events, and a feed that is quiet most of the hour was paying
+ * 240 requests an hour to learn that. Same shape as the failure backoff —
+ * there is still no branch in this file that makes anything poll FASTER
+ * than its tier.
+ */
+const MAX_QUIET_FACTOR = 4;
 
 interface Entry {
   tier: Tier;
   fetcher: () => Promise<unknown>;
+  /** "This answer carried nothing new." Undefined = every answer counts as news. */
+  quiet: ((value: unknown) => boolean) | undefined;
   subscribers: Set<(value: unknown, error: unknown) => void>;
   lastRunAt: number;
   failures: number;
+  /** Consecutive answers the key's own `quiet` called empty. */
+  quietRuns: number;
   inflight: Promise<unknown> | null;
   /** The last good value, replayed to a component that mounts mid-cycle. */
   last: unknown;
@@ -97,7 +112,9 @@ function dueAt(e: Entry): number {
   // Backoff multiplies the interval; it never divides it. There is no branch in
   // this file that can make anything poll FASTER than its tier.
   const factor = Math.min(MAX_BACKOFF_FACTOR, 2 ** e.failures);
-  return e.lastRunAt + TIER_MS[e.tier] * factor;
+  // two quiet answers → ×2, four → ×4 (the cap). A factor of 1 while news arrives.
+  const quietFactor = Math.min(MAX_QUIET_FACTOR, 2 ** Math.floor(e.quietRuns / 2));
+  return e.lastRunAt + TIER_MS[e.tier] * Math.max(factor, quietFactor);
 }
 
 async function run(key: string, e: Entry): Promise<void> {
@@ -108,6 +125,7 @@ async function run(key: string, e: Entry): Promise<void> {
   try {
     const value = await p;
     e.failures = 0;
+    e.quietRuns = e.quiet?.(value) ? e.quietRuns + 1 : 0;
     e.last = value;
     for (const s of e.subscribers) s(value, null);
   } catch (err) {
@@ -166,16 +184,18 @@ export function subscribe(
   tier: Tier,
   fetcher: () => Promise<unknown>,
   onUpdate: (value: unknown, error: unknown) => void,
+  quiet?: (value: unknown) => boolean,
 ): () => void {
   let e = entries.get(key);
   if (!e) {
-    e = { tier, fetcher, subscribers: new Set(), lastRunAt: 0, failures: 0, inflight: null, last: undefined };
+    e = { tier, fetcher, quiet, subscribers: new Set(), lastRunAt: 0, failures: 0, quietRuns: 0, inflight: null, last: undefined };
     entries.set(key, e);
   }
   // Keep the newest fetcher — a widget whose range changed re-subscribes with a
   // closure over the new range, and the old one must not keep being called.
   e.fetcher = fetcher;
   e.tier = tier;
+  if (quiet) e.quiet = quiet;
   e.subscribers.add(onUpdate);
 
   if (e.last !== undefined) onUpdate(e.last, null);
@@ -203,7 +223,10 @@ export function subscribe(
 /** Force one key to refresh now — for an explicit operator "Refresh" tap. */
 export function refreshNow(key: string): void {
   const e = entries.get(key);
-  if (e) void run(key, e);
+  if (e) {
+    e.quietRuns = 0; // an operator asked: back to the tier's own cadence
+    void run(key, e);
+  }
 }
 
 /** Test seam. */
@@ -216,4 +239,16 @@ export function __resetScheduler(): void {
 /** Introspection, for the cost-safety test. */
 export function __activeKeys(): string[] {
   return [...entries.keys()];
+}
+
+/** Test seam: run one key now WITHOUT touching its quiet/backoff state (unlike refreshNow). */
+export function __forceRun(key: string): void {
+  const e = entries.get(key);
+  if (e) void run(key, e);
+}
+
+/** Introspection, for the quiet-stretch test: how far after its last run a key is next due. */
+export function __dueIn(key: string): number | null {
+  const e = entries.get(key);
+  return e ? dueAt(e) - e.lastRunAt : null;
 }

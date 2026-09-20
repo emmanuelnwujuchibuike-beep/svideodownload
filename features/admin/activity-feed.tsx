@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Repeat, UserPlus } from "lucide-react";
 
 import { ACTIVITY_CATEGORIES, type ActivityCategoryId } from "@/lib/admin/activity-categories";
+import { collapseDownloadPairs } from "@/lib/admin/activity-dedupe";
 import type { ActivityItem, ActivityTotals, MetricTotals } from "@/lib/admin/activity";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
@@ -21,9 +22,12 @@ import { adminJson, useAdminLive } from "./live/use-admin-live";
  * ── Responsive + de-duplicated (owner, 2026-08-03) ────────────────────────────
  * Rebuilt to be mobile-first: the period stats are cards that stack on a phone
  * instead of a table that scrolls sideways, and each row wraps its detail rather
- * than truncating to nothing on a narrow screen. Duplicates are collapsed two
- * ways — by id, and by a content signature (same kind + actor + detail within the
- * same second) — so a download logged twice never shows twice.
+ * than truncating to nothing on a narrow screen. Duplicates are collapsed three
+ * ways — by id, by a content signature (same kind + actor + detail within the
+ * same second), and by the download pairing rule (owner, 2026-09-20: the
+ * anonymous "started" row and the member's "finished" row of ONE download
+ * arrive in different polls, so the rule has to run over what the browser is
+ * holding, not only inside one server answer — lib/admin/activity-dedupe.ts).
  */
 
 /*
@@ -172,7 +176,7 @@ function signature(i: ActivityItem): string {
   return `${i.kind}|${i.actor?.handle ?? "anon"}|${i.detail ?? ""}|${i.at.slice(0, 19)}`;
 }
 
-/** Dedup by id first, then collapse identical-signature rows, keeping the newest. */
+/** Dedup by id first, then collapse identical-signature rows (keeping the newest), then pair one download's two rows. */
 function dedupe(items: ActivityItem[]): ActivityItem[] {
   const byId = new Map<string, ActivityItem>();
   for (const i of items) if (!byId.has(i.id)) byId.set(i.id, i);
@@ -182,7 +186,7 @@ function dedupe(items: ActivityItem[]): ActivityItem[] {
     const existing = bySig.get(sig);
     if (!existing || i.at > existing.at) bySig.set(sig, i);
   }
-  return [...bySig.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  return collapseDownloadPairs([...bySig.values()]).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
 export function ActivityFeed({
@@ -222,6 +226,8 @@ export function ActivityFeed({
   /** The row whose full payload is open, if any. */
   const [detail, setDetail] = useState<ActivityItem | null>(null);
   const sinceRef = useRef<string | null>(initial[0]?.at ?? null);
+  /** Every id on screen or ever merged — how a poll is judged quiet (the cursor row itself comes back on every `gte` poll). */
+  const knownIdsRef = useRef<Set<string>>(new Set(initial.map((i) => i.id)));
 
   /*
     The cursor is what makes a slower poll lossless. `?since=` is a TIMESTAMP,
@@ -243,6 +249,15 @@ export function ActivityFeed({
           ? `/api/admin/activity?since=${encodeURIComponent(sinceRef.current)}`
           : "/api/admin/activity",
       ),
+    /*
+      A quiet feed polls less (owner, 2026-09-20: the dashboard's polling shows
+      up as Vercel observability events). Every empty answer lets the scheduler
+      stretch the interval — 15s → 30s → 60s — and the first non-empty one
+      snaps it back. Nothing is lost either way: the `since` cursor carries
+      the whole gap. "Empty" is judged by id, not by length: the `gte` cursor
+      returns the newest row again on every poll, and that is not news.
+    */
+    quiet: (value) => (value.items ?? []).every((i) => knownIdsRef.current.has(i.id)),
   });
 
   useEffect(() => {
@@ -251,6 +266,7 @@ export function ActivityFeed({
     setItems((prev) => {
       const merged = dedupe([...fresh, ...prev]).slice(0, MAX_ITEMS);
       sinceRef.current = merged[0]?.at ?? sinceRef.current;
+      for (const i of fresh) knownIdsRef.current.add(i.id);
       return merged;
     });
   }, [data]);

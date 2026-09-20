@@ -22,11 +22,14 @@ export function useAdminLive<T>({
   tier,
   fetcher,
   initial = null,
+  quiet,
 }: {
   key: string;
   tier: Tier;
   fetcher: () => Promise<T>;
   initial?: T | null;
+  /** "This answer carried nothing new" — lets the scheduler stretch the interval while it stays true. */
+  quiet?: (value: T) => boolean;
 }): { data: T | null; error: unknown; stale: boolean } {
   const [data, setData] = useState<T | null>(initial);
   const [error, setError] = useState<unknown>(null);
@@ -38,6 +41,8 @@ export function useAdminLive<T>({
   */
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
+  const quietRef = useRef(quiet);
+  quietRef.current = quiet;
 
   /*
     🔴 A HIDDEN PANEL DOES NOT POLL.
@@ -69,6 +74,7 @@ export function useAdminLive<T>({
         setError(null);
         setData(value as T);
       },
+      (value) => quietRef.current?.(value as T) ?? false,
     );
   }, [key, tier, visible]);
 

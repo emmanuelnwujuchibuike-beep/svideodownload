@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { TIER_MS } from "./scheduler";
+import { __dueIn, __forceRun, __resetScheduler, subscribe, TIER_MS } from "./scheduler";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -111,6 +111,30 @@ describe("admin dashboard cost safety", () => {
     // factor below 1, anywhere in the scheduling arithmetic.
     expect(src).toContain("Math.min(MAX_BACKOFF_FACTOR");
     expect(src).not.toMatch(/TIER_MS\[[^\]]+\]\s*\//);
+  });
+
+  it("a quiet key stretches to ×2 after two empty answers, ×4 after four, and snaps back on news (2026-09-20)", async () => {
+    __resetScheduler();
+    let news = false;
+    const fetcher = () => Promise.resolve({ items: news ? [{ id: String(Math.random()) }] : [] });
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const unsubscribe = subscribe("t:quiet", "live", fetcher, () => {}, (v) => (v as { items: unknown[] }).items.length === 0);
+    await tick(); // the immediate first run
+    expect(__dueIn("t:quiet")).toBe(TIER_MS.live); // one quiet answer: still the tier
+    __forceRun("t:quiet");
+    await tick();
+    expect(__dueIn("t:quiet")).toBe(TIER_MS.live * 2); // two: ×2
+    for (let i = 0; i < 4; i++) {
+      __forceRun("t:quiet");
+      await tick();
+    }
+    expect(__dueIn("t:quiet")).toBe(TIER_MS.live * 4); // six quiet answers: still the ×4 cap
+    news = true;
+    __forceRun("t:quiet");
+    await tick();
+    expect(__dueIn("t:quiet")).toBe(TIER_MS.live); // news: back to the tier
+    unsubscribe();
+    __resetScheduler();
   });
 
   it("drops a key when its last subscriber unmounts", () => {

@@ -1,18 +1,18 @@
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
-import { alertEmailHtml, sendAdminEmail } from "@/lib/notify";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveAdminUserIds } from "@/lib/support/chat";
 
 /**
- * Notify every admin — push AND email — when a download ends badly: failed,
+ * Notify every admin — a PUSH, no email — when a download ends badly: failed,
  * cancelled, or abandoned (owner, 2026-08-16: "Let admin receive push and
- * email alert on failed, cancelled and abandoned Downloads").
+ * email alert on failed, cancelled and abandoned Downloads"; owner,
+ * 2026-09-20: "remove emails sent to admin on failed, cancelled and abandoned
+ * Downloads" — the push stays, the inbox is left alone).
  *
  * Reuses the exact fan-out `notifyAdminsOfSignIn` uses — `resolveAdminUserIds`
- * + `sendSmartPush` for push, `sendAdminEmail` + `alertEmailHtml` for email,
- * each in its own try/catch so one channel failing never blocks the other or
- * throws into the caller.
+ * + `sendSmartPush` — in its own try/catch so a failing channel never throws
+ * into the caller.
  *
  * ── Why this dedupes and sign-in alerts don't ───────────────────────────────
  * A sign-in is a single client action; this is fed from `/api/analytics/collect`,
@@ -24,7 +24,7 @@ import { resolveAdminUserIds } from "@/lib/support/chat";
  * a check-then-act race — reused as the existing "record each admin alert
  * exactly once" ledger, same table `sendAdminAlertOnce` writes to, just with
  * the insert done directly so this function can see whether it actually won
- * the lock (needed to gate BOTH channels, not only email).
+ * the lock (it gates the push, and gated the email while there was one).
  */
 export interface DownloadOutcomeDetails {
   downloadId: string;
@@ -83,14 +83,11 @@ const OUTCOME_LABEL: Record<DownloadOutcomeDetails["status"], string> = {
   timed_out: "Download abandoned",
 };
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 export async function notifyAdminsOfDownloadOutcome(d: DownloadOutcomeDetails): Promise<void> {
   // One alert per (LINK, outcome) — see `outcomeDedupeKey`. The insert below
   // is the lock itself, so whichever media item of a link arrives first wins it
-  // and its siblings silently no-op.
+  // and its siblings silently no-op. Still taken now that there is only the
+  // push: the same replayed batch would otherwise push twice.
   const dedupeKey = outcomeDedupeKey(d);
   try {
     const admin = createAdminClient();
@@ -129,31 +126,5 @@ export async function notifyAdminsOfDownloadOutcome(d: DownloadOutcomeDetails): 
     );
   } catch {
     /* push is best-effort */
-  }
-
-  // Email the admin inbox.
-  try {
-    await sendAdminEmail(
-      `${label}: ${d.platform ?? "unknown platform"}`,
-      alertEmailHtml({
-        heading: label,
-        intro:
-          d.status === "timed_out"
-            ? "A download sat unfinished long enough to count as abandoned — nobody ever reported success or failure for it."
-            : `A visitor's download just ${d.status === "failed" ? "failed" : "was cancelled"}.`,
-        rows: [
-          { label: "Platform", value: esc(d.platform ?? "Unknown") },
-          { label: "Media", value: esc(d.mediaKind ?? "—") },
-          { label: "Reason", value: esc(d.errorReason ?? "—") },
-          { label: "Visitor", value: esc(d.userId ?? d.visitorId) },
-          { label: "Device", value: esc(d.device ?? "—") },
-          { label: "Location", value: esc(d.country ?? "Unknown") },
-          { label: "Download ID", value: esc(d.downloadId) },
-        ],
-        footnote: "FrenzSave · Download outcome alerts",
-      }),
-    );
-  } catch {
-    /* email is best-effort */
   }
 }

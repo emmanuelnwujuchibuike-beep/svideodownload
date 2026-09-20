@@ -18,8 +18,10 @@ export const dynamic = "force-dynamic";
  *
  * ── Why this exists when automatic failure alerts already do ─────────────────
  *
- * `lib/analytics/download-failure-alert.ts` already emails admins when a
- * download ends badly, fed from the analytics pipeline. It is not a substitute
+ * `lib/analytics/download-failure-alert.ts` already pushes admins when a
+ * download ends badly, fed from the analytics pipeline (its email went on
+ * 2026-09-20 at the owner's request; THIS report still emails, because a
+ * person pressed the button). It is not a substitute
  * for this, for two reasons:
  *
  *   • It reports what the SERVER saw. A download that fails in the browser —

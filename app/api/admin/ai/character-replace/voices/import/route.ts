@@ -15,12 +15,15 @@ export const dynamic = "force-dynamic";
  *  IMPORT THE ELEVENLABS VOICE LIBRARY INTO THE CATALOGUE (2026-09-20)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * The catalogue ships with ElevenLabs' documented default voices; this reads
- * what the ACCOUNT can actually use — the premade library plus any voice
- * the operator added — and writes it as the catalogue's ElevenLabs rows,
- * each with the provider's own gender and age label. The MiniMax rows are
- * left exactly as they are. Members never see a provider id: the public
- * config strips it (config.ts `publicVoice`).
+ * Reads what the ACCOUNT can actually use — the premade library plus any
+ * voice the operator added — and writes it as the catalogue's DIRECT-API
+ * rows (`provider: "elevenlabs_api"`, voice IDs; what the voice changer and
+ * a direct-API text-to-speech model use), each with the provider's own
+ * gender and age label. The Replicate rows (`elevenlabs`, voice NAMES) and
+ * the MiniMax rows are left exactly as they are — on 2026-09-20 this route
+ * replaced the Replicate names with ids and text-to-speech would have failed
+ * at submit; the two are different vocabularies (config.ts VoiceProvider).
+ * Members never see a provider id: the public config strips it.
  *
  * POST only, admin only, no body. Answers with the counts; the provider's
  * own sentence never leaves the server.
@@ -41,12 +44,12 @@ export async function POST() {
 
   const settings = await getLandingSettings();
   const current = settings.frenzAiCharacterReplace.voices;
-  const kept = current.filter((v) => v.provider !== "elevenlabs");
+  const kept = current.filter((v) => v.provider !== "elevenlabs_api");
   const seen = new Set<string>();
   const imported: CharacterReplaceVoice[] = [];
   for (const r of rows) {
     // a stable, catalogue-shaped id from the provider's name; the provider id itself is what is sent
-    const base = `el-${r.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`.slice(0, 40) || `el-${r.voiceId.slice(0, 8).toLowerCase()}`;
+    const base = `ela-${r.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`.slice(0, 40) || `ela-${r.voiceId.slice(0, 8).toLowerCase()}`;
     let id = base;
     for (let n = 2; seen.has(id); n++) id = `${base.slice(0, 36)}-${n}`;
     seen.add(id);
@@ -59,7 +62,7 @@ export async function POST() {
       blurb,
       languages: [],
       providerVoiceId: r.voiceId,
-      provider: "elevenlabs",
+      provider: "elevenlabs_api",
       gender: voiceGenderFromLabel(r.labels.gender),
       age: voiceAgeFromLabel(r.labels.age),
     });
@@ -78,8 +81,8 @@ export async function POST() {
     surface: "character_replace",
     targetId: "voices",
     action: "voices.import",
-    before: { elevenlabs: current.length - kept.length, total: current.length },
-    after: { elevenlabs: imported.length, total: voices.length },
+    before: { elevenlabs_api: current.length - kept.length, total: current.length },
+    after: { elevenlabs_api: imported.length, total: voices.length },
   });
   console.info("[admin/cr/voices/import] imported", { admin: admin.id, imported: imported.length, kept: kept.length, dropped: Math.max(0, kept.length + imported.length - voices.length) });
   return NextResponse.json({ ok: true, imported: imported.length, kept: kept.length, total: voices.length });

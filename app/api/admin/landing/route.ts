@@ -308,7 +308,7 @@ const schema = z.object({
             /** Part 6: the configured TTS provider's own id for this voice. */
             providerVoiceId: z.string().max(80).optional(),
             /** 2026-09-20: which provider the id belongs to, and the gender/age a member filters by. */
-            provider: z.enum(["minimax", "elevenlabs"]).optional(),
+            provider: z.enum(["minimax", "elevenlabs", "elevenlabs_api"]).optional(),
             gender: z.enum(["female", "male", "neutral"]).optional(),
             age: z.enum(["young", "middle_aged", "old"]).optional(),
           }),

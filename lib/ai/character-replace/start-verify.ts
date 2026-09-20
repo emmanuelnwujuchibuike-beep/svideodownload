@@ -1,6 +1,6 @@
 import "server-only";
 
-import { voiceProviderForModel, type CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { VOICE_CHANGE_PROVIDER, voiceProviderForModel, type CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { normalizeQuoteInput, quoteCharacterReplace, validateQuoteInput, type CharacterReplaceQuote, type QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { StartCharacterReplaceJobRequest } from "@/lib/ai/character-replace/start-schema";
 import { verifyQuoteSignature } from "@/lib/ai/character-replace/wallet";
@@ -127,7 +127,7 @@ function verifyVoice(
     if (quote.voiceChange) {
       // 2026-09-20: the change was priced, so the voice it is made in must be a changer voice from the catalogue, and the changer must exist here
       if (capabilities.voiceChangeConfigured !== true) return { ok: false, code: "FEATURE_UNAVAILABLE", reason: "voice change is not configured" };
-      const voice = config.voices.find((x) => x.id === v.changeVoiceId && x.provider === "elevenlabs");
+      const voice = config.voices.find((x) => x.id === v.changeVoiceId && x.provider === VOICE_CHANGE_PROVIDER);
       if (!voice || !voice.providerVoiceId) return { ok: false, code: "INVALID_INPUT", reason: `change voice ${v.changeVoiceId ?? "(none)"} is not in the catalogue` };
       change = { voiceId: voice.id, providerVoiceId: voice.providerVoiceId };
     } else if (v.changeVoiceId) {

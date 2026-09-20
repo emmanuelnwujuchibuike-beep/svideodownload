@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { normalizeCharacterReplaceConfig, publicCharacterReplaceConfig, voiceProviderForModel } from "@/lib/ai/character-replace/config";
+// (ELEVENLABS_REPLICATE_VOICE_NAMES is imported with the models below)
 import { quoteCanonical } from "@/lib/ai/character-replace/wallet";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
 import { normalizeQuoteInput, quoteCharacterReplace, validateQuoteInput } from "@/lib/ai/character-replace/pricing";
@@ -103,15 +104,35 @@ describe("the catalogue and the public config", () => {
       expect("providerVoiceId" in v).toBe(false);
       expect("provider" in v).toBe(false);
     }
-    expect(pub.voiceChange.enabled).toBe(true);
-    expect(pub.voiceChange.voices.length).toBe(ELEVENLABS_DEFAULT_VOICES.length);
+    // the default catalogue has no account rows, so the changer has nothing to offer until Import runs
+    expect(pub.voiceChange.enabled).toBe(false);
+    expect(pub.voiceChange.voices).toEqual([]);
   });
-  it("switching the model to MiniMax offers the MiniMax rows only; the changer keeps its ElevenLabs voices", () => {
+  it("switching the model to MiniMax offers the MiniMax rows only; the changer offers only ACCOUNT rows (ids), never the Replicate names", () => {
     const mm = normalizeCharacterReplaceConfig({ tts: { model: "minimax/speech-02-hd" } });
     const pub = publicCharacterReplaceConfig(mm, { code: "NGN", symbol: "₦" }, true);
     expect(pub.voices.every((v) => !v.id.startsWith("el-"))).toBe(true);
     expect(pub.voices.length).toBeGreaterThan(0);
-    expect(pub.voiceChange.voices.every((v) => v.id.startsWith("el-"))).toBe(true);
+    // no account rows yet → the changer has nothing to offer and is not enabled
+    expect(pub.voiceChange.voices).toEqual([]);
+    expect(pub.voiceChange.enabled).toBe(false);
+    expect(voiceProviderForModel("elevenlabs/v3")).toBe("elevenlabs");
+    expect(voiceProviderForModel("elevenlabs/eleven_v3")).toBe("elevenlabs_api");
+    expect(voiceProviderForModel("minimax/speech-02-hd")).toBe("minimax");
+  });
+  it("🔴 a catalogue the Import action overwrote (account ids under the Replicate provider) is healed: ids become account rows, the names come back", () => {
+    const overwritten = { voices: [{ id: "el-sarah", label: "Sarah", provider: "elevenlabs", gender: "female", age: "young", providerVoiceId: "EXAVITQu4vr4xnSDxMaL" }, { id: "el-roger", label: "Roger", provider: "elevenlabs", gender: "male", age: "middle_aged", providerVoiceId: "CwhRBWXzGAHq8TQ4Fs17" }] };
+    const c = normalizeCharacterReplaceConfig(overwritten);
+    const account = c.voices.filter((v) => v.provider === "elevenlabs_api");
+    const replicate = c.voices.filter((v) => v.provider === "elevenlabs");
+    expect(account.map((v) => v.id).sort()).toEqual(["ela-roger", "ela-sarah"]);
+    expect(account.every((v) => /^[A-Za-z0-9]{15,}$/.test(v.providerVoiceId))).toBe(true);
+    expect(replicate.length).toBe(ELEVENLABS_DEFAULT_VOICES.length);
+    expect(replicate.every((v) => ELEVENLABS_REPLICATE_VOICE_NAMES.includes(v.providerVoiceId))).toBe(true);
+    expect(new Set(c.voices.map((v) => v.id)).size).toBe(c.voices.length);
+    const pub = publicCharacterReplaceConfig(c, { code: "USD", symbol: "$" }, true);
+    expect(pub.voices.length).toBe(ELEVENLABS_DEFAULT_VOICES.length); // text-to-speech on Replicate: the names
+    expect(pub.voiceChange.voices.map((v) => v.id).sort()).toEqual(["ela-roger", "ela-sarah"]); // the changer: the ids
   });
   it("a catalogue row saved before this date is a MiniMax row with the neutral / middle-aged default; a known id keeps its own", () => {
     const c = normalizeCharacterReplaceConfig({ voices: [{ id: "custom", label: "Custom", providerVoiceId: "English_Wiselady" }, { id: "el-aria", label: "Aria" }, { id: "x", label: "X", provider: "elevenlabs", gender: "male", age: "old", providerVoiceId: "abc" }] });
@@ -176,7 +197,7 @@ describe("the voice change is priced per second and signed", () => {
 describe("verifyStartQuote with a voice change", () => {
   let verifyStartQuote: typeof import("@/lib/ai/character-replace/start-verify").verifyStartQuote;
   let signQuote: typeof import("@/lib/ai/character-replace/wallet").signQuote;
-  const config = normalizeCharacterReplaceConfig({ tts: { voiceChange: { enabled: true, perSecondCents: 50 } } });
+  const config = normalizeCharacterReplaceConfig({ tts: { voiceChange: { enabled: true, perSecondCents: 50 } }, voices: [{ id: "ela-aria", label: "Aria", provider: "elevenlabs_api", gender: "female", age: "middle_aged", providerVoiceId: "9BWtsMINqrJLrRacOk9x" }] });
   const money = { currency: "USD", symbol: "$" };
   beforeAll(async () => {
     process.env.AI_QUOTE_SIGNING_SECRET = "test-signing-key";
@@ -196,10 +217,12 @@ describe("verifyStartQuote with a voice change", () => {
   });
   it("a priced change with a catalogue voice hands the provider id to the job; the changer must exist", () => {
     const q = issued(true);
-    const ok = verifyStartQuote(bodyOf(q, { changeVoiceId: "el-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true });
+    const ok = verifyStartQuote(bodyOf(q, { changeVoiceId: "ela-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true });
     expect(ok.ok).toBe(true);
-    if (ok.ok) expect(ok.voice?.change).toEqual({ voiceId: "el-aria", providerVoiceId: "Aria" });
-    const notConfigured = verifyStartQuote(bodyOf(q, { changeVoiceId: "el-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: false });
+    if (ok.ok) expect(ok.voice?.change).toEqual({ voiceId: "ela-aria", providerVoiceId: "9BWtsMINqrJLrRacOk9x" });
+    // a Replicate NAME row is never a change voice — the API would refuse it
+    expect(verifyStartQuote(bodyOf(q, { changeVoiceId: "el-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true }).ok).toBe(false);
+    const notConfigured = verifyStartQuote(bodyOf(q, { changeVoiceId: "ela-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: false });
     expect(notConfigured.ok).toBe(false);
     if (!notConfigured.ok) expect(notConfigured.code).toBe("FEATURE_UNAVAILABLE");
   });
@@ -208,7 +231,7 @@ describe("verifyStartQuote with a voice change", () => {
     expect(verifyStartQuote(bodyOf(q, { changeVoiceId: "warm" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true }).ok).toBe(false);
     expect(verifyStartQuote(bodyOf(q, { changeVoiceId: "nope" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true }).ok).toBe(false);
     const plain = issued(false);
-    expect(verifyStartQuote(bodyOf(plain, { changeVoiceId: "el-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true }).ok).toBe(false);
+    expect(verifyStartQuote(bodyOf(plain, { changeVoiceId: "ela-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true }).ok).toBe(false);
     const forged = bodyOf(plain, {});
     forged.quote.voiceChange = true; // a change the price did not include
     expect(verifyStartQuote(forged, config, money, { ttsLanguages: [], voiceChangeConfigured: true }).ok).toBe(false);

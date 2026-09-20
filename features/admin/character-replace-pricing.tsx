@@ -4,7 +4,7 @@ import { AlertTriangle, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
+import { voiceProviderForModel, type CharacterReplaceConfig, type ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
 import { ELEVENLABS_REPLICATE_TTS_MODELS, ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsReplicateModel, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_AGES, VOICE_GENDER_LABEL, VOICE_GENDERS, type VoiceAge, type VoiceGender } from "@/lib/ai/voice/elevenlabs-models";
 import { formatCents } from "@/lib/ai/economy";
@@ -361,10 +361,11 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.tts.enabled && payload.tts.perRequestCents === 0 && payload.tts.perCharacterCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("A generated voice is free — every voice fee is zero.");
     if (payload.tts.voiceChange.enabled && payload.tts.voiceChange.perSecondCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("Changing a voice is free — its per-second rate and the new-voice surcharge are both zero.");
-    if (isElevenLabsTtsModel(payload.tts.model) && !cr.voices.some((v) => v.provider === "elevenlabs")) out.push("An ElevenLabs voice model is selected but the catalogue has no ElevenLabs voices — press Import voices below, or nobody can generate a voice.");
-    if (isElevenLabsTtsModel(payload.tts.model) && !isElevenLabsReplicateModel(payload.tts.model) && cr.voices.some((v) => v.provider === "elevenlabs" && /^[A-Z][a-z]+$/.test(v.providerVoiceId))) {
-      out.push("A direct ElevenLabs model is selected but the catalogue holds the Replicate route's voice NAMES — press Import voices so the rows carry the account's voice ids, or choose the Replicate model.");
+    if (isElevenLabsReplicateModel(payload.tts.model) && !cr.voices.some((v) => v.provider === "elevenlabs")) out.push("ElevenLabs on Replicate is selected but the catalogue has none of its named voices — save once to restore them, or nobody can generate a voice.");
+    if (isElevenLabsTtsModel(payload.tts.model) && !isElevenLabsReplicateModel(payload.tts.model) && !cr.voices.some((v) => v.provider === "elevenlabs_api")) {
+      out.push("A direct ElevenLabs model is selected but the catalogue has no account voices — press Import voices below, or nobody can generate a voice.");
     }
+    if (payload.tts.voiceChange.enabled && !cr.voices.some((v) => v.provider === "elevenlabs_api")) out.push("The voice changer is on but the catalogue has no ElevenLabs account voices (it needs voice ids, not the Replicate names) — press Import voices, or members will not be offered it.");
     /* ── Part 8 §2, §8: the switches and the caps ── */
     if (payload.ops.maintenanceMode && !cr.ops.maintenanceMode) out.push("This puts Character Replace into MAINTENANCE: no new videos for anyone until it is switched back. Finished videos stay reachable.");
     if (!payload.ops.processingEnabled && cr.ops.processingEnabled) out.push("This PAUSES new videos for every member. Videos already running finish normally.");
@@ -797,8 +798,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                 <p className="text-sm font-semibold">Voice catalogue</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Members see the voices of the selected model&apos;s provider, filtered by gender and age. The Replicate models take the 26 named voices shipped here (Kuon left out — its
-                  gender and age are undocumented). Import reads your ElevenLabs account&apos;s library for a direct-API model and replaces the ElevenLabs rows; the MiniMax rows are untouched.
-                  Provider ids never reach a member.
+                  gender and age are undocumented). Import reads your ElevenLabs account&apos;s library as separate &quot;account&quot; rows — what the voice changer and a direct-API model use — and
+                  leaves the Replicate names and the MiniMax rows alone. Provider ids never reach a member.
                 </p>
               </div>
               <button
@@ -840,12 +841,12 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                 </thead>
                 <tbody>
                   {voiceRows.map((v, i) => (
-                    <tr key={v.id} className={cn("border-t border-border/50", (isElevenLabsTtsModel(ttsModel) ? "elevenlabs" : "minimax") !== v.provider && "text-muted-foreground/70")}>
+                    <tr key={v.id} className={cn("border-t border-border/50", voiceProviderForModel(ttsModel) !== v.provider && v.provider !== "elevenlabs_api" && "text-muted-foreground/70")}>
                       <td className="py-1.5 pr-3">
                         <span className="font-semibold text-foreground">{v.label}</span>
                         {v.blurb ? <span className="text-muted-foreground"> · {v.blurb}</span> : null}
                       </td>
-                      <td className="py-1.5 pr-3">{v.provider === "elevenlabs" ? "ElevenLabs" : "MiniMax"}</td>
+                      <td className="py-1.5 pr-3">{v.provider === "elevenlabs" ? "ElevenLabs (Replicate)" : v.provider === "elevenlabs_api" ? "ElevenLabs (account)" : "MiniMax"}</td>
                       <td className="py-1.5 pr-3">
                         <select
                           aria-label={`${v.label} gender`}

@@ -45,6 +45,7 @@ import {
   ELEVENLABS_DEFAULT_TTS_MODEL,
   ELEVENLABS_DEFAULT_VOICES,
   elevenLabsStsModel,
+  isElevenLabsReplicateModel,
   isElevenLabsTtsModel,
   isVoiceAge,
   isVoiceGender,
@@ -115,8 +116,22 @@ export interface CharacterReplaceLanguage {
   native: string;
 }
 
-/** Which provider a catalogue voice belongs to (2026-09-20). A voice is only offered when the configured model is its provider's. */
-export type VoiceProvider = "minimax" | "elevenlabs";
+/**
+ * Which provider a catalogue voice belongs to (2026-09-20). A voice is only
+ * offered when the configured model is its provider's.
+ *
+ *   minimax          MiniMax on Replicate — a system voice name
+ *   elevenlabs       ElevenLabs ON REPLICATE — one of the model's 26 voice NAMES
+ *   elevenlabs_api   ElevenLabs' own API — an account voice ID (the Import
+ *                    action's rows; what the voice CHANGER uses)
+ *
+ * 🔴 The last two are different vocabularies for the same company: the
+ * Replicate model refuses an id, the API refuses a name. On 2026-09-20 the
+ * Import action wrote ids over the Replicate names and every text-to-speech
+ * job would have failed at submit; the split below is the fix, and the
+ * normaliser heals a catalogue saved that way.
+ */
+export type VoiceProvider = "minimax" | "elevenlabs" | "elevenlabs_api";
 
 export interface CharacterReplaceVoice {
   id: string;
@@ -139,7 +154,17 @@ export interface CharacterReplaceVoice {
 
 /** The provider a TTS model name belongs to. Pure on the name. */
 export function voiceProviderForModel(model: string): VoiceProvider {
-  return isElevenLabsTtsModel(model) ? "elevenlabs" : "minimax";
+  if (isElevenLabsReplicateModel(model)) return "elevenlabs";
+  if (isElevenLabsTtsModel(model)) return "elevenlabs_api";
+  return "minimax";
+}
+
+/** The catalogue rows the voice CHANGER (ElevenLabs' own API) can use. */
+export const VOICE_CHANGE_PROVIDER: VoiceProvider = "elevenlabs_api";
+
+/** An ElevenLabs account voice id, as opposed to a Replicate voice name ("Rachel"). */
+function looksLikeElevenLabsVoiceId(s: string): boolean {
+  return /^[A-Za-z0-9]{15,}$/.test(s) && !/^[A-Z][a-z]+$/.test(s);
 }
 
 /* ───────────────────────────── replacement modes (Part 6) ────────────────── */
@@ -718,14 +743,20 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
         .filter(isRecord)
         .map((v) => {
           const known = d.voices.find((x) => x.id === slug(v.id, ""));
+          const id = slug(v.id, "");
+          const pvid = providerVoiceId(v.providerVoiceId, known?.providerVoiceId ?? "");
+          // A row saved before 2026-09-20 has no provider: it was a MiniMax row (the only provider then), unless the defaults know it.
+          let provider: VoiceProvider = v.provider === "elevenlabs" || v.provider === "elevenlabs_api" || v.provider === "minimax" ? v.provider : (known?.provider ?? "minimax");
+          // 🔴 A row labelled for Replicate but carrying an ACCOUNT id (the Import action before the split) is a direct-API row.
+          if (provider === "elevenlabs" && looksLikeElevenLabsVoiceId(pvid)) provider = "elevenlabs_api";
           return {
-            id: slug(v.id, ""),
+            // …and gets the direct-route id prefix, so the Replicate names it displaced can come back beside it without a clash
+            id: provider === "elevenlabs_api" && id.startsWith("el-") ? `ela-${id.slice(3)}` : id,
             label: text(v.label, "", 40),
             blurb: text(v.blurb, "", 80),
             languages: Array.isArray(v.languages) ? v.languages.map((c) => slug(c, "")).filter(Boolean) : [],
-            providerVoiceId: providerVoiceId(v.providerVoiceId, known?.providerVoiceId ?? ""),
-            // A row saved before 2026-09-20 has no provider: it was a MiniMax row (the only provider then), unless the defaults know it.
-            provider: v.provider === "elevenlabs" || v.provider === "minimax" ? v.provider : (known?.provider ?? "minimax"),
+            providerVoiceId: pvid,
+            provider,
             gender: isVoiceGender(v.gender) ? v.gender : (known?.gender ?? "neutral"),
             age: isVoiceAge(v.age) ? v.age : (known?.age ?? "middle_aged"),
           };
@@ -743,6 +774,13 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
   */
   if (!voices.some((v) => v.provider === "elevenlabs")) {
     for (const v of d.voices) if (v.provider === "elevenlabs" && !voices.some((x) => x.id === v.id)) voices.push({ ...v });
+  }
+  // one row per id, first wins (a healed catalogue can carry a direct-route row that used to share an id with a Replicate one)
+  const seenIds = new Set<string>();
+  for (let i = voices.length - 1; i >= 0; i--) {
+    const v = voices[i]!;
+    if (seenIds.has(v.id)) voices.splice(i, 1);
+    else seenIds.add(v.id);
   }
 
   const trimRaw = isRecord(raw.trim) ? raw.trim : {};
@@ -1171,8 +1209,8 @@ export function publicCharacterReplaceConfig(
   });
   const providerLanguages = new Set(ttsSupportedLanguagesFor(config.tts.model));
   const ttsProvider = voiceProviderForModel(config.tts.model);
-  // the voice changer is ElevenLabs-only today; its voices are the catalogue's ElevenLabs rows
-  const changerVoices = config.voices.filter((v) => v.provider === "elevenlabs").map(publicVoice);
+  // the voice changer speaks to ElevenLabs' own API, so its voices are the account-id rows
+  const changerVoices = config.voices.filter((v) => v.provider === VOICE_CHANGE_PROVIDER).map(publicVoice);
   return {
     enabled: config.enabled,
     currency: currency.code,

@@ -266,6 +266,13 @@ export interface CharacterReplaceConfig {
     minCents: number;
     maxCents: number;
     packages: readonly { amountCents: number; enabled: boolean; order: number }[];
+    /**
+     * The currency Paystack COLLECTS in (2026-09-20). The wallet, the prices
+     * and every amount a member sees are in `frenzAiCurrency`; when that is
+     * USD and this is not, checkout converts at `localMinorUnitsPerUsd`
+     * (lib/ai/character-replace/topup-fx.ts). Must be one Paystack settles.
+     */
+    checkoutCurrency: string;
   };
   /**
    * ── PART 6: THE TWO NEW REPLACEMENT MODES ──────────────────────────────
@@ -474,6 +481,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
       { amountCents: 500_000, enabled: true, order: 4 },
       { amountCents: 1_000_000, enabled: true, order: 5 },
     ],
+    checkoutCurrency: "NGN",
   },
   /*
     ── PART 6 DEFAULTS ─────────────────────────────────────────────────────
@@ -520,7 +528,8 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   audio: {
     replacementEnabled: true,
     maximumDurationSeconds: 120,
-    maximumUploadBytes: 25 * 1024 * 1024,
+    // 100 MB since 2026-09-20: a gallery VIDEO is a voice source now, and a 20 s phone video is 30–50 MB.
+    maximumUploadBytes: 100 * 1024 * 1024,
     shorterAudio: "silence",
     minimumCoverageFraction: 0.5,
     syncMode: "silence",
@@ -728,7 +737,12 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       newVoiceEnabled: bool(voiceRaw.newVoiceEnabled, d.voice.newVoiceEnabled),
       surchargePerSecondCents: int(voiceRaw.surchargePerSecondCents, d.voice.surchargePerSecondCents, 0, 100_000_000),
     },
-    recharge: { minCents, maxCents, packages: packages.length ? packages : [...d.recharge.packages] },
+    recharge: {
+      minCents,
+      maxCents,
+      packages: packages.length ? packages : [...d.recharge.packages],
+      checkoutCurrency: /^[A-Z]{3}$/.test(String(rechargeRaw.checkoutCurrency ?? "").toUpperCase()) ? String(rechargeRaw.checkoutCurrency).toUpperCase() : d.recharge.checkoutCurrency,
+    },
     modes: {
       face_only: normalizeModeConfig(modesRaw.face_only, d.modes.face_only, "face_only"),
       skin_face: normalizeModeConfig(modesRaw.skin_face, d.modes.skin_face, "skin_face"),

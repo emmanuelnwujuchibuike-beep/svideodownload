@@ -1,6 +1,8 @@
 import { after, NextResponse } from "next/server";
 
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
+import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 
@@ -89,11 +91,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
     try {
-      const currency = event.data.currency ?? "NGN";
+      /*
+        A USD wallet paid for in naira (2026-09-20): what is credited is what
+        the pin says the settled naira bought, in the wallet's currency —
+        lib/ai/character-replace/topup-fx.ts, the same rule as verify.
+      */
+      const { frenzAiCurrency: walletCurrency } = await getLandingSettings();
+      const credit = resolveCredit({ amount, currency: event.data.currency }, event.data.metadata, walletCurrency);
+      if (!credit.ok) {
+        console.error("[paystack] cr topup not creditable", { reference, reason: credit.reason, got: event.data.currency, amount, wallet: walletCurrency });
+        return NextResponse.json({ received: true });
+      }
+      const currency = credit.currency;
       const balanceAfterCents = await creditVerifiedCharacterReplaceRecharge({
         userId,
         reference,
-        amountCents: amount,
+        amountCents: credit.amountCents,
         currency,
         channel: event.data.channel ?? null,
         paidAt: event.data.paid_at ?? null,
@@ -103,7 +116,7 @@ export async function POST(request: Request) {
         announceCharacterReplaceRecharge({
           userId,
           reference,
-          amountCents: amount,
+          amountCents: credit.amountCents,
           currency,
           balanceAfterCents,
           channel: event.data.channel ?? null,
@@ -137,11 +150,20 @@ export async function POST(request: Request) {
     try {
       // 🔴 ONE WALLET (owner, 2026-09-14; 0155): a legacy AI-purpose payment
       // credits the product wallet. `ai_balances` is retired at zero.
+      // 2026-09-20: nothing initialises this purpose any more; a stale
+      // checkout that settles still goes through the one crediting rule, so
+      // kobo can never land in a dollar wallet as cents.
+      const { frenzAiCurrency: legacyWallet } = await getLandingSettings();
+      const legacyCredit = resolveCredit({ amount, currency: event.data.currency }, event.data.metadata, legacyWallet);
+      if (!legacyCredit.ok) {
+        console.error("[paystack] legacy ai topup not creditable", { reference, reason: legacyCredit.reason, got: event.data.currency, amount, wallet: legacyWallet });
+        return NextResponse.json({ received: true });
+      }
       const balanceAfterCents = await creditVerifiedCharacterReplaceRecharge({
         userId,
         reference,
-        amountCents: amount,
-        currency: event.data.currency ?? "NGN",
+        amountCents: legacyCredit.amountCents,
+        currency: legacyCredit.currency,
         channel: event.data.channel ?? null,
         paidAt: event.data.paid_at ?? null,
         gatewayResponse: event.data.gateway_response ?? null,
@@ -162,8 +184,8 @@ export async function POST(request: Request) {
         announceCharacterReplaceRecharge({
           userId,
           reference,
-          amountCents: amount,
-          currency: event.data.currency ?? "NGN",
+          amountCents: legacyCredit.amountCents,
+          currency: legacyCredit.currency,
           balanceAfterCents,
           channel: event.data.channel ?? null,
           paidAt: event.data.paid_at ?? null,

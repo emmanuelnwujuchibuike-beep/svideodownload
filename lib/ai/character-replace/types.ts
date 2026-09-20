@@ -331,6 +331,8 @@ export interface CharacterReplaceBalance {
   topupOptionsCents: readonly number[];
   minTopupCents: number;
   maxTopupCents: number;
+  /** 2026-09-20: how Paystack will read a wallet amount when it collects in another currency; null when it collects in the wallet's. */
+  checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
 }
 
 /** One movement of money, as the ledger records it. The platform's own row. */

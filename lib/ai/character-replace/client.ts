@@ -175,6 +175,7 @@ interface BalanceResponse {
   topupOptionsCents: number[];
   minTopupCents: number;
   maxTopupCents: number;
+  checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
   ledger: CharacterReplaceTransaction[];
 }
 
@@ -196,6 +197,7 @@ export async function getCharacterReplaceBalance(opts?: { ledger?: number }): Pr
     topupOptionsCents: res.topupOptionsCents,
     minTopupCents: res.minTopupCents,
     maxTopupCents: res.maxTopupCents,
+    checkout: res.checkout ?? null,
   };
   writeCachedCharacterReplaceBalance(balance);
   return { ok: true, balance, transactions: res.ledger ?? [] };

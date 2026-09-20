@@ -5,6 +5,7 @@ import { notifyTopupFailed } from "@/lib/ai/topup-notify";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
+import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -164,12 +165,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ credited: false });
       }
       const { frenzAiCurrency: crCurrency } = await getLandingSettings();
-      if (charge.currency && charge.currency !== crCurrency) {
-        console.error("[ai/topup-verify] cr currency mismatch", { reference, got: charge.currency, expected: crCurrency });
+      /*
+        A USD wallet paid for in naira (2026-09-20): the settled naira is
+        checked against the pin Paystack stored at initialize, and the WALLET
+        amount pinned there is what is credited. Same rule as the webhook —
+        lib/ai/character-replace/topup-fx.ts.
+      */
+      const credit = resolveCredit({ amount: Number(charge.amount), currency: charge.currency }, charge.metadata, crCurrency);
+      if (!credit.ok) {
+        console.error("[ai/topup-verify] cr charge not creditable", { reference, reason: credit.reason, got: charge.currency, amount: charge.amount, wallet: crCurrency });
         return NextResponse.json({ credited: false });
       }
-      const crAmount = Number(charge.amount);
-      if (!Number.isFinite(crAmount) || crAmount <= 0) return NextResponse.json({ credited: false });
+      const crAmount = credit.amountCents;
       const crBalance = await creditVerifiedCharacterReplaceRecharge({
         userId: user.id,
         reference,

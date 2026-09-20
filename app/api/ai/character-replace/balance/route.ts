@@ -4,7 +4,8 @@ import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/l
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
-import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
+import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
+import { aiCurrencySymbol, getLandingSettings, isAiCurrency } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -52,6 +53,14 @@ export async function GET(request: Request) {
         topupOptionsCents: recharge.packages.filter((p) => p.enabled).map((p) => p.amountCents),
         minTopupCents: recharge.minCents,
         maxTopupCents: recharge.maxCents,
+        /*
+          2026-09-20: when the wallet is USD and Paystack collects naira, the
+          sheet prints "≈ ₦7,500 at checkout" beside "$5.00" from this — the
+          operator's rate, never a browser's. Null when no conversion applies.
+        */
+        checkout: conversionApplies(settings.frenzAiCurrency, recharge.checkoutCurrency) && settings.frenzAiCharacterReplace.localMinorUnitsPerUsd > 0
+          ? { currency: recharge.checkoutCurrency, symbol: isAiCurrency(recharge.checkoutCurrency) ? aiCurrencySymbol(recharge.checkoutCurrency) : recharge.checkoutCurrency, minorPerUsd: settings.frenzAiCharacterReplace.localMinorUnitsPerUsd }
+          : null,
         ledger,
       },
       { headers: { "cache-control": "no-store" } },

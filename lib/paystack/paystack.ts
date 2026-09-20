@@ -139,6 +139,8 @@ export async function initializeAiTopup(opts: {
    * product balance and never to the AI one.
    */
   purpose?: typeof AI_TOPUP_PURPOSE | typeof CHARACTER_REPLACE_TOPUP_PURPOSE;
+  /** The wallet amount and the conversion this charge pays for (lib/ai/character-replace/topup-fx.ts). Server-set; never from a browser. */
+  pin?: { ai_topup_cents: number; wallet_currency: string; charged_currency: string; fx_minor_per_usd: number | null };
 }): Promise<string> {
   const data = await paystack<{ data: { authorization_url: string } }>(
     "/transaction/initialize",
@@ -159,7 +161,7 @@ export async function initializeAiTopup(opts: {
         metadata: {
           user_id: opts.userId,
           purpose: opts.purpose ?? AI_TOPUP_PURPOSE,
-          ai_topup_cents: opts.amount,
+          ...(opts.pin ?? { ai_topup_cents: opts.amount }),
         },
       },
     },
@@ -215,7 +217,7 @@ export interface PaystackVerifiedCharge {
   amount?: number;
   currency?: string;
   reference?: string;
-  metadata?: { user_id?: string; purpose?: string };
+  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string; wallet_currency?: string; charged_currency?: string; fx_minor_per_usd?: number | string | null };
   /**
    * The receipt fields (2026-09-13). `gateway_response` is Paystack's
    * CUSTOMER-FACING status line — "Approved", "Insufficient Funds",
@@ -265,7 +267,7 @@ export interface PaystackEventData {
    * both arrive as `charge.success`, and this is the only thing that tells them
    * apart — see the branch in the webhook route.
    */
-  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string };
+  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string; wallet_currency?: string; charged_currency?: string; fx_minor_per_usd?: number | string | null };
   /**
    * Minor units, as PAYSTACK reports them.
    *

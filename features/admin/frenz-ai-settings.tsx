@@ -247,21 +247,22 @@ export function FrenzAISettings({ settings }: { settings: LandingSettings }) {
           account and $0.50 on a dollar one. Nothing in the response
           distinguishes them, so a mismatch here is silent and permanent.
 
-          ⚠️ SETTING THIS TO USD DOES NOT ENABLE USD. Charging in a currency
-          other than the account's default is a capability Paystack grants
-          per-merchant — a Nigerian account needs USD switched on for it (a
-          business account, requested through their dashboard or support).
-          Until then a USD transaction is REFUSED at checkout, which is the
-          loud failure we want rather than a silent mispricing.
+          ⚠️ SETTING THIS TO USD DOES NOT MAKE PAYSTACK CHARGE USD. Since
+          2026-09-20 a USD balance can be COLLECTED in naira: Character
+          Replace → Recharge → "Paystack collects in" + "One US dollar in ₦"
+          (lib/ai/character-replace/topup-fx.ts). Charging Paystack in a
+          currency the account cannot process is still REFUSED at checkout —
+          the loud failure we want rather than a silent mispricing.
         */}
         <div>
           <label htmlFor="frenz-ai-currency" className="block text-sm font-semibold">
-            Billing currency
+            Balance currency
           </label>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Must match what your Paystack account can actually charge. Setting a
-            currency here does not enable it — Paystack grants that per account,
-            and a currency it cannot process is refused at checkout.
+            What every balance, price and recharge amount is shown in. Paystack can
+            collect in a different currency when this is USD — set &quot;Paystack
+            collects in&quot; and the rate under Character Replace → Recharge.
+            Otherwise it must be a currency your Paystack account can charge.
           </p>
           <select
             id="frenz-ai-currency"

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 
 import { beginCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
+import { convertUsdCents } from "@/lib/ai/character-replace/topup-fx";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
 import { formatCents } from "@/lib/ai/economy";
 import { haptic } from "@/lib/motion/haptics";
@@ -166,6 +167,13 @@ export function CharacterReplaceRechargeSheet({
         <p className="mt-2 text-[11.5px] text-muted-foreground">
           From {formatCents(balance.minTopupCents, balance.symbol)} to {formatCents(balance.maxTopupCents, balance.symbol)}.
         </p>
+        {balance.checkout && chosen !== null && withinBounds ? (
+          /* 2026-09-20: a USD wallet paid for in naira — the number the secure page will show, at the operator's rate */
+          <p className="mt-2 rounded-xl bg-secondary/60 px-3 py-2 text-[12.5px] leading-relaxed text-muted-foreground" aria-live="polite">
+            You&apos;ll pay <strong className="font-bold tabular-nums text-foreground">{formatCents(convertUsdCents(chosen, balance.checkout.minorPerUsd), balance.checkout.symbol)}</strong> on the secure page — {formatCents(chosen, balance.symbol)} at{" "}
+            {formatCents(balance.checkout.minorPerUsd, balance.checkout.symbol)} per $1. Your balance is credited in {balance.currency}.
+          </p>
+        ) : null}
 
         <button
           type="button"

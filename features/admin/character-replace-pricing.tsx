@@ -7,7 +7,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
 import { formatCents } from "@/lib/ai/economy";
-import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
+import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
+import { AI_CURRENCIES, aiCurrencySymbol, isAiCurrency, majorInputToMinor, minorToMajorInput, type AiCurrency } from "@/lib/landing/bounds";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,14 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const router = useRouter();
   const cr: CharacterReplaceConfig = settings.frenzAiCharacterReplace;
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
+  /*
+    2026-09-20 — owner: "show USD as the currency, but when clicked convert
+    the USD price to naira on Paystack, because my Paystack is naira." The
+    wallet currency lives on the Frenz AI tab; THIS panel owns the currency
+    Paystack collects in and the rate between them. Only a USD wallet
+    converts (lib/ai/character-replace/topup-fx.ts).
+  */
+  const walletIsUsd = settings.frenzAiCurrency === "USD";
 
   /* ── general ── */
   const [enabled, setEnabled] = useState(cr.enabled);
@@ -143,6 +152,10 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [fxPerUsd, setFxPerUsd] = useState(cr.localMinorUnitsPerUsd > 0 ? minorToMajorInput(cr.localMinorUnitsPerUsd) : "");
 
   /* ── recharge ── */
+  const [checkoutCurrency, setCheckoutCurrency] = useState<AiCurrency>(isAiCurrency(cr.recharge.checkoutCurrency) ? cr.recharge.checkoutCurrency : "NGN");
+  const checkoutSymbol = aiCurrencySymbol(checkoutCurrency);
+  /** The rate is "one US dollar in X": X is the checkout currency for a USD wallet, the wallet currency otherwise (margin check only). */
+  const rateSymbol = walletIsUsd ? checkoutSymbol : symbol;
   const [minTopup, setMinTopup] = useState(minorToMajorInput(cr.recharge.minCents));
   const [maxTopup, setMaxTopup] = useState(minorToMajorInput(cr.recharge.maxCents));
   const [packages, setPackages] = useState(
@@ -225,6 +238,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       maximumUploadBytes: maxUploadMb.trim() === "" ? cr.maximumUploadBytes : Math.floor(Number(maxUploadMb)) * 1024 * 1024,
       trim: { minimumSeconds: trimMin.trim() === "" ? cr.trim.minimumSeconds : Number(trimMin) },
       recharge: {
+        checkoutCurrency,
         minCents: majorInputToMinor(minTopup) ?? cr.recharge.minCents,
         maxCents: majorInputToMinor(maxTopup) ?? cr.recharge.maxCents,
         packages: packages
@@ -232,7 +246,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, coverage, cr, enabled, faceOnly, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, checkoutCurrency, coverage, cr, enabled, faceOnly, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -253,6 +267,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       }
     }
     if (payload.recharge.packages.length === 0) out.push("Keep at least one recharge package.");
+    if (conversionApplies(settings.frenzAiCurrency, payload.recharge.checkoutCurrency) && payload.localMinorUnitsPerUsd <= 0) {
+      out.push(`Paystack collects in ${payload.recharge.checkoutCurrency} for a USD balance, so "One US dollar in ${aiCurrencySymbol(payload.recharge.checkoutCurrency as AiCurrency)}" must be set — without it nobody can recharge.`);
+    }
     if (payload.lipSyncEnabled && !payload.lipSync.some((l) => l.enabled)) out.push("Lip sync is on but no tier is on.");
     /* ── Part 6 ── */
     for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
@@ -278,7 +295,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.ops.maintenanceMode && payload.ops.maintenanceMessage.trim().length < 10) out.push("Write the maintenance notice members will read (at least 10 characters).");
     return out;
-  }, [payload, symbol]);
+  }, [payload, settings.frenzAiCurrency, symbol]);
 
   const warnings = useMemo(() => {
     const out: string[] = [];
@@ -316,8 +333,12 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     if (!payload.ops.circuitBreaker.enabled && cr.ops.circuitBreaker.enabled) out.push("The provider circuit breaker is OFF: a failing provider keeps being paid until somebody notices.");
     /* ── Part 8 §25: the margin, when the FX rate is known ── */
     const fx = payload.localMinorUnitsPerUsd;
-    if (fx > 0) {
-      const localPerUsdCent = fx / 100;
+    if (!walletIsUsd && payload.recharge.checkoutCurrency !== settings.frenzAiCurrency) {
+      out.push(`Paystack will collect in ${settings.frenzAiCurrency}, the balance currency — "collects in" only applies when the balance is in USD.`);
+    }
+    if (walletIsUsd || fx > 0) {
+      // a USD wallet is already in the provider's currency; otherwise the rate says what a US cent is in the wallet's minor units
+      const localPerUsdCent = walletIsUsd ? 1 : fx / 100;
       const tiers: [string, number, number][] = [];
       for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
         for (const t of m.tiers) if (t.enabled && m.providerCostPerSecondUsdCents > 0) tiers.push([`${label} ${t.id}`, t.perSecondCents, m.providerCostPerSecondUsdCents * localPerUsdCent]);
@@ -328,11 +349,11 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         else if (price < cost * 1.3) out.push(`${label} has a thin margin: ${formatCents(Math.round(price), symbol)}/s charged against about ${formatCents(Math.round(cost), symbol)}/s paid.`);
       }
     } else {
-      out.push("No exchange rate is set (Switches, limits & safety), so prices cannot be checked against the provider's USD cost.");
+      out.push("No exchange rate is set (Recharge), so prices cannot be checked against the provider's USD cost.");
     }
     if (payload.tts.perCharacterCents * payload.tts.maximumCharacters > 5_000_000) out.push(`The per-character fee prices the longest dialogue at ${formatCents(payload.tts.perCharacterCents * payload.tts.maximumCharacters, symbol)}.`);
     return out;
-  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.maintenanceMode, cr.ops.processingEnabled, payload, symbol]);
+  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.maintenanceMode, cr.ops.processingEnabled, payload, settings.frenzAiCurrency, symbol, walletIsUsd]);
 
   const priceChanged = useMemo(() => {
     const before = cr;
@@ -607,8 +628,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             );
           })()}
           <p className="mt-3 text-xs text-muted-foreground">
-            Provider cost is your own estimate per second, entered under each replacement type&apos;s settings below; with an exchange rate (Switches, limits &amp;
-            safety) the save warns when a price is under it. Members never see either.
+            Provider cost is your own estimate per second, entered under each replacement type&apos;s settings below; with an exchange rate (Recharge) the save warns when a price is under it. Members never see either.
           </p>
         </Group>
 
@@ -797,12 +817,6 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               </Field>
             </div>
           </div>
-          <p className="mt-5 text-xs font-semibold text-muted-foreground">Margin check</p>
-          <div className="mt-2 grid gap-4 sm:grid-cols-2">
-            <Field id="cr-fx" label={`One US dollar in ${symbol}`} hint="Used only here, to compare each tier's price with the provider's USD cost and warn when the margin is thin. Never shown to members. Leave empty to skip the check.">
-              <input id="cr-fx" type="number" inputMode="decimal" min={0} step="any" value={fxPerUsd} onChange={(e) => setFxPerUsd(e.target.value)} className={input} />
-            </Field>
-          </div>
         </Group>
 
         {/* ── RETENTION (Part 7 §21) ── */}
@@ -819,7 +833,34 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
 
         {/* ── RECHARGE ── */}
         <Group title="Recharge">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <p className="text-xs text-muted-foreground">
+            Balances, prices and every amount a member types are in {settings.frenzAiCurrency} (Frenz AI tab). Paystack can collect in another currency: the
+            member sees the {settings.frenzAiCurrency} amount here and the converted amount on the secure page, and the balance is credited in {settings.frenzAiCurrency}.
+          </p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <Field id="cr-checkout-cur" label="Paystack collects in" hint={walletIsUsd ? "Your Paystack account's currency. Only a USD balance converts; a currency Paystack cannot process is refused at checkout." : `Applies only when the balance is in USD — today Paystack collects in ${settings.frenzAiCurrency}, the balance currency.`}>
+              <select id="cr-checkout-cur" value={checkoutCurrency} onChange={(e) => setCheckoutCurrency(e.target.value as AiCurrency)} className={input}>
+                {(Object.keys(AI_CURRENCIES) as AiCurrency[]).map((code) => (
+                  <option key={code} value={code}>
+                    {code} ({AI_CURRENCIES[code]})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              id="cr-fx"
+              label={`One US dollar in ${rateSymbol}`}
+              hint={
+                walletIsUsd
+                  ? `The rate the secure page charges at: $5.00 becomes 5 × this in ${rateSymbol}. Members see it on the recharge sheet ("at ${rateSymbol}… per $1"). Set it yourself, from your Paystack settlement rate.`
+                  : "Used only to compare each tier's price with the provider's USD cost and warn when the margin is thin. Never shown to members. Leave empty to skip the check."
+              }
+            >
+              <input id="cr-fx" type="number" inputMode="decimal" min={0} step="any" value={fxPerUsd} onChange={(e) => setFxPerUsd(e.target.value)} className={input} />
+            </Field>
+          </div>
+          <p className="mt-4 text-xs font-semibold text-muted-foreground">Bounds, in {settings.frenzAiCurrency}</p>
+          <div className="mt-2 grid gap-4 sm:grid-cols-2">
             <Field id="cr-topup-min" label="Minimum recharge">
               <input id="cr-topup-min" type="number" inputMode="decimal" min={1} step="any" value={minTopup} onChange={(e) => setMinTopup(e.target.value)} className={input} />
             </Field>

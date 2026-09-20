@@ -9,9 +9,38 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑20 (Character Replace — reference images made plain for providers; Parts 7–9 below)_
+_Last updated: 2026‑09‑20 (USD balance / naira checkout; no‑store on every API; live‑feed pairs; Quick actions; ElevenLabs v3 + voice changer; the Face Only finding)_
 
 ---
+
+## 2026‑09‑20 — USD balance / naira checkout, no‑store on every API, live‑feed pairs, Quick actions, ElevenLabs v3 + a voice changer
+
+Six commits, `46eddeb` → `f00569a`. Owner asks, in order, and what shipped.
+
+### A USD balance, collected in naira (`46eddeb`)
+- **Two currencies, one rule.** `frenzAiCurrency` is the WALLET currency (every price, balance, ledger line and typed amount); `recharge.checkoutCurrency` is what Paystack COLLECTS in; `localMinorUnitsPerUsd` is the rate (checkout minor units per $1). `lib/ai/character-replace/topup-fx.ts` is pure and shared by the initializer, the verify route and the webhook: `quoteCheckout` converts (no rate ⇒ 503 "Payments aren't set up for this currency yet", never a guessed rate); `checkoutMetadata` pins `{ai_topup_cents, wallet_currency, charged_currency, fx_minor_per_usd}` in Paystack's metadata at initialize (server‑set); `resolveCredit` credits the PINNED wallet amount only when the settled naira covers it (one minor unit of tolerance), else nothing, logged. The legacy AI‑purpose webhook branch obeys the same rule.
+- **Not switched on yet.** The stored settings are still `frenzAiCurrency: NGN`. To go USD the owner sets the key fields (Frenz AI tab → Balance currency USD; Character Replace → Recharge → "Paystack collects in" NGN and "One US dollar in ₦"), re‑enters every price in USD, and converts existing balances (the owner's own 7,363,226 kobo would otherwise read as $73,632.26) — that needs the rate, which is theirs to name.
+
+### "Cache control wide on all pages" (`fa712ef`)
+- Measured first: a 400 from `/api/tools`, a 401 from `/api/discovery`, a 404 from `/api/posts/<id>` all left the origin with NO `Cache-Control` — Cloudflare's two public hours, keyed by URL.
+- **The next.config header rule OVERRIDES a handler's own `Cache-Control`** (the opposite of the 09‑14 note): with a plain `/api/:path*` rule `/api/flags` served `no-store` instead of its `public, s-maxage`. So the rule is `/api/:path((?!ads(?:/|$)|ai/jobs/[^/]+/poster(?:/|$)|discovery(?:/|$)|feed(?:/|$)|flags(?:/|$)|landing/grid-image(?:/|$)|monetag(?:/|$)|posts/|sounds/discovery(?:/|$)|tools(?:/|$)|wallpaper(?:/|$)|profile/[^/]+/hub/).*)` and `part9.test.ts` runs Next's compiled path‑to‑regexp over it, scanning `app/api` for every positive `max-age` and asserting each such route is carved out. A new deliberately‑cached route that is not added there fails the build. The poster got its day‑long private cache back.
+
+### The admin live feed showed one download twice (`bd37118`)
+- `/api/download` writes an anonymous row the moment a download starts; history sync writes the member's row when it finishes — in a LATER poll, so the server's per‑answer pairing could not see both. The rule is now pure (`lib/admin/activity-dedupe.ts`) and runs on the server AND over the feed's in‑memory list. 1:1 by nearest time within 20 min per source URL.
+- Scheduler: a quiet key stretches ×2 after two empty answers, ×4 after four (15 s → 60 s), snapping back on news; "quiet" is judged by unseen ids because the `gte` cursor returns the newest row every poll. Nothing can poll faster than its tier.
+- The automatic failed/cancelled/abandoned download EMAIL is gone; the push stays; the member‑pressed "Report this" email stays.
+
+### Quick actions (`cc24231`)
+- A glass button opposite the Fast · Secure · Private pill (the hero is both the landing page's and `/downloads'`), opening a lazily loaded sheet (`features/downloads/quick-actions-sheet.tsx`, next/dynamic, warmed on hover/focus/touch). One list (`quick-actions.ts`) feeds the sheet and the in‑page grid; "Soon" is gone from both and from the rail. Icon‑only under 440 px (measured: Pixel 7 keeps both on one row with 98 px of air; a 320 px screen wraps).
+
+### "Terrible results" — checked against the jobs (`f00569a`)
+- 12 jobs today, every prediction read back from Replicate: same model versions, same settings, same photo. **Face Only (xrunda/hello) keeps the video's own skin tone and hair** — clean on a similar‑looking person (dfdcbb26, d8903a8e), "terrible" across skin tone / hair (ade6e3d0, 62eb2e1e); **Skin + Face on the very same video and photo (480d51b0) was clean.** Nothing degrades with repeated runs; the pairing decides. The Face Only photo step now says so and points at Skin + Face. Replicate's throttle affects speed, never quality.
+
+### ElevenLabs v3 + the voice changer (`f00569a`)
+- `lib/ai/voice/elevenlabs.ts` (fetch client, no SDK), `elevenlabs-models.ts` (pure: 4 TTS models with their language lists, 2 changer models, the gender/age vocabulary, the default library), `voice-change-provider.ts`. The TTS seam gained `runsIn`: an ElevenLabs voice is synchronous, so the **worker** makes it during prepare and the pipeline has no `voice` stage (`planPipeline({ttsInWorker})`); MiniMax stays a Replicate prediction.
+- The voice changer re‑voices an uploaded recording / gallery video's sound in a catalogue voice (gender + age chips). Priced per second (`tts.voiceChange.perSecondCents`), signed on the quote (`vc:1`), verified at /start (`audio.convert`).
+- Catalogue rows carry `provider / gender / age`; the public config offers only the configured provider's voices and strips provider ids; a stored MiniMax‑only catalogue gets the ElevenLabs library beside it until "Import voices from ElevenLabs" (admin) replaces it with the account's own.
+- **To switch on:** `ELEVENLABS_API_KEY` on Railway AND Vercel (`.env.example`), then admin → Character Replace → Voice model "ElevenLabs v3" (stored value is still `minimax/speech-02-hd`), press Import voices, set the changer's per‑second price. Until the key exists the models report unconfigured and the features are simply not offered.
 
 ## 2026‑09‑20 — A phone's JPEG killed the provider's own resize; "results got terrible" checked
 

@@ -290,6 +290,8 @@ export interface PricingSnapshot {
   lipSyncMode: CharacterReplaceLipSyncTier | null;
   /** "12.4s × ₦25/s = ₦310" — printed, never computed here. */
   rateLine: string;
+  /** Part 11 §7: attached by the hook from the quote answer; never part of what is signed or handed back. */
+  billing?: CharacterReplaceBilling | null;
 }
 
 export interface PricingLine {
@@ -341,6 +343,29 @@ export interface CharacterReplaceBalance {
   maxTopupCents: number;
   /** 2026-09-20: how Paystack will read a wallet amount when it collects in another currency; null when it collects in the wallet's. */
   checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
+  /** Part 11 §6: the complimentary creations, as the server answered them. Display only — /start decides. */
+  freeAccess?: CharacterReplaceFreeAccess | null;
+}
+
+/** The member's complimentary creations (Part 11). `remaining` null = unlimited (an administrator). */
+export interface CharacterReplaceFreeAccess {
+  enabled: boolean;
+  eligible: boolean;
+  remaining: number | null;
+  granted: number;
+  used: number;
+  reason: "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "ACCOUNT_NOT_ELIGIBLE";
+  requiresVerification: boolean;
+  message: string;
+  limits: { maxDurationSeconds: number; maxQualityRank: number; allowedModes: readonly ReplacementMode[]; allowTts: boolean; allowUploadedVoice: boolean; allowLipSync: boolean };
+}
+
+/** Whether THIS quote would be a complimentary creation (Part 11 §7) — a display fact from the server, re-decided at /start. */
+export interface CharacterReplaceBilling {
+  complimentary: boolean;
+  remaining: number | null;
+  reason: CharacterReplaceFreeAccess["reason"];
+  notFreeBecause: string | null;
 }
 
 /** One movement of money, as the ledger records it. The platform's own row. */

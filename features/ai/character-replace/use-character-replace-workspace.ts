@@ -289,7 +289,7 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
       const res = await getCharacterReplaceQuote(quoteInput, controller.signal);
       if (!alive.current || seq !== quoteSeq.current || controller.signal.aborted) return;
       if (res.ok) {
-        dispatch({ type: "pricing", pricing: { status: "quoted", snapshot: res.quote } });
+        dispatch({ type: "pricing", pricing: { status: "quoted", snapshot: { ...res.quote, billing: res.billing ?? null } } });
         // The server read the wallet while quoting; the card shows the same figure.
         setLoads((l) => (l.balance && l.balance.balanceCents !== res.balanceCents ? { ...l, balance: { ...l.balance, balanceCents: res.balanceCents } } : l));
       } else {
@@ -723,6 +723,12 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
         setRetry((n) => n + 1);
       }
       if (started.code === "CR_BALANCE_REQUIRED") void loadBalance();
+      // Part 11: the complimentary creation went to another start (a race) — the entitlement and the price are read again
+      if (started.code === "CR_FREE_UNAVAILABLE") {
+        void loadBalance();
+        dispatch({ type: "pricing", pricing: { status: "pending" } });
+        setRetry((n) => n + 1);
+      }
       // the pass expired or the files changed under it: check again (a stored pass answers at once)
       if (started.code === "PREFLIGHT_REQUIRED") {
         await runPreflight(jobId);

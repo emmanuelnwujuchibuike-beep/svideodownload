@@ -100,10 +100,11 @@ export const VALIDATION_THRESHOLDS = {
     full_character: { minFaceHeightFrac: 0.03, maxFaceHeightFrac: 0.3, minBodyVisibility: 0.55, ambiguousBodyVisibility: 0.4, minUsableFrameRatio: 1 },
   } satisfies Record<ReplacementMode, ModeThresholds>,
   video: {
-    face_only: { minFaceHeightFrac: 0.04, maxFaceHeightFrac: null, minBodyVisibility: null, ambiguousBodyVisibility: null, minUsableFrameRatio: 0.6 },
-    skin_face: { minFaceHeightFrac: 0.035, maxFaceHeightFrac: null, minBodyVisibility: 0.25, ambiguousBodyVisibility: 0.18, minUsableFrameRatio: 0.6 },
-    upper_body: { minFaceHeightFrac: 0.03, maxFaceHeightFrac: null, minBodyVisibility: 0.3, ambiguousBodyVisibility: 0.2, minUsableFrameRatio: 0.6 },
-    full_character: { minFaceHeightFrac: 0.025, maxFaceHeightFrac: 0.35, minBodyVisibility: 0.5, ambiguousBodyVisibility: 0.35, minUsableFrameRatio: 0.6 },
+    // 2026-09-20 (live): the model author's own Full Character demo — a dancing person, body cropped in half the sampled frames — was refused at 0.6 / 0.5. Wan handles partial bodies; half the sampled frames with the person usable is the bar, and the body band is lower so a cropped frame lands in the ambiguous band (the vision layer) rather than a hard fail.
+    face_only: { minFaceHeightFrac: 0.04, maxFaceHeightFrac: null, minBodyVisibility: null, ambiguousBodyVisibility: null, minUsableFrameRatio: 0.5 },
+    skin_face: { minFaceHeightFrac: 0.035, maxFaceHeightFrac: null, minBodyVisibility: 0.25, ambiguousBodyVisibility: 0.15, minUsableFrameRatio: 0.5 },
+    upper_body: { minFaceHeightFrac: 0.03, maxFaceHeightFrac: null, minBodyVisibility: 0.3, ambiguousBodyVisibility: 0.18, minUsableFrameRatio: 0.5 },
+    full_character: { minFaceHeightFrac: 0.025, maxFaceHeightFrac: 0.35, minBodyVisibility: 0.4, ambiguousBodyVisibility: 0.2, minUsableFrameRatio: 0.5 },
   } satisfies Record<ReplacementMode, ModeThresholds>,
 } as const;
 

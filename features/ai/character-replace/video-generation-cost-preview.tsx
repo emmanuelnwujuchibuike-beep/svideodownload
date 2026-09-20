@@ -60,7 +60,9 @@ export function VideoGenerationCostPreview({
   const sym = snapshot?.symbol ?? symbol;
   const total = snapshot ? formatCents(snapshot.totalCents, sym) : null;
   const trimmed = trimmedSeconds(project);
-  const after = snapshot && balanceCents !== null ? balanceCents - snapshot.totalCents : null;
+  // Part 11 §7: a complimentary creation shows the normal price and charges nothing; the balance is untouched
+  const complimentary = snapshot?.billing?.complimentary === true;
+  const after = snapshot && balanceCents !== null ? (complimentary ? balanceCents : balanceCents - snapshot.totalCents) : null;
   const draft = summaryLines(project, config);
   const voiceLine = draft.find((l) => l.key === "voice");
   const lipLine = draft.find((l) => l.key === "lipSync");
@@ -74,10 +76,14 @@ export function VideoGenerationCostPreview({
       {/* ── the heading and the total ─────────────────────────────────────── */}
       <div className="flex items-baseline justify-between gap-4 px-4 pt-3.5">
         <h3 id={`${detailsId}-title`} className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Estimated cost
+          {complimentary ? "Complimentary creation" : "Estimated cost"}
         </h3>
         <p className={cn("text-right text-[22px] font-bold leading-none tabular-nums tracking-[-0.02em] transition-opacity", pricing.status === "stale" && "opacity-50")}>
-          {total ?? <span className="text-[18px] text-muted-foreground">{pricing.status === "pending" ? "…" : "—"}</span>}
+          {complimentary ? (
+            <span className="text-gradient">FREE</span>
+          ) : (
+            (total ?? <span className="text-[18px] text-muted-foreground">{pricing.status === "pending" ? "…" : "—"}</span>)
+          )}
         </p>
       </div>
 
@@ -95,7 +101,14 @@ export function VideoGenerationCostPreview({
           <Row label={project.lipSync.tier === "studio" ? "Premium Lip Sync" : "Lip Sync"} value={lipLine?.value ?? ""} amount={snapshot ? (snapshot.lipSyncCents > 0 ? formatCents(snapshot.lipSyncCents, sym) : "Included") : null} />
         ) : null}
         {snapshot?.minimumApplied ? <Row label="Minimum charge" value="applies to a short video" amount={formatCents(snapshot.minimumChargeCents, sym)} /> : null}
-        <Row label="Total" value="" amount={total ?? "—"} strong />
+        {complimentary ? (
+          <>
+            <Row label="Normal price" value="" amount={total ?? "—"} />
+            <Row label="Today's creation" value="" amount="FREE" strong tone="ok" />
+          </>
+        ) : (
+          <Row label="Total" value="" amount={total ?? "—"} strong />
+        )}
         {!compact && balanceCents !== null ? (
           <>
             <Row label="Current balance" value="" amount={formatCents(balanceCents, sym)} />
@@ -116,7 +129,11 @@ export function VideoGenerationCostPreview({
               ? pricing.message
               : pricing.status === "idle"
                 ? "Add a photo and a video to see a price."
-                : "You'll only be charged this amount when processing starts."}
+                : complimentary
+                  ? "Your complimentary creation will be used for this video. Nothing is charged."
+                  : snapshot?.billing?.notFreeBecause
+                    ? `${snapshot.billing.notFreeBecause} You'll only be charged this amount when processing starts.`
+                    : "You'll only be charged this amount when processing starts."}
         {pricing.status === "error" && onRetry ? (
           <>
             {" "}

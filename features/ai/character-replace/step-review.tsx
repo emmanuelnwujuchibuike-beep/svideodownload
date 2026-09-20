@@ -74,7 +74,7 @@ export function CharacterReplaceReviewStep({
   const mode = REPLACEMENT_MODE_COPY[project.mode];
 
   const snapshot = pricing.status === "quoted" || pricing.status === "stale" ? pricing.snapshot : null;
-  const money = snapshot && balance ? affordability(snapshot.totalCents, balance.balanceCents) : null;
+  const money = snapshot && balance ? affordability(snapshot.billing?.complimentary ? 0 : snapshot.totalCents, balance.balanceCents) : null;
   const short = pricing.status === "quoted" && money !== null && !money.sufficient;
 
   const [sheetOpen, setSheetOpen] = useState(false);

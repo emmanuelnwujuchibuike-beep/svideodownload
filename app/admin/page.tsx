@@ -40,6 +40,7 @@ import { getFlagOverrides } from "@/lib/platform/flags-store";
 import { getExperiments } from "@/lib/platform/experiments";
 import { getExperimentOverrides, getExperimentStats } from "@/lib/platform/experiments-store";
 import { DownloadAlertControls } from "@/features/admin/download-alert-settings";
+import { GrowthAlertControls } from "@/features/admin/growth-alert-settings";
 import { StreakMonitor } from "@/features/admin/streak-monitor";
 import { getStreakMembers, getStreakMetrics } from "@/lib/streaks/admin";
 import { PlatformCatalog } from "@/features/admin/platform-catalog";
@@ -170,12 +171,13 @@ import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { CharacterReplaceJobsTable } from "@/features/admin/character-replace-jobs";
+import { CharacterReplaceFreeAccessPanel } from "@/features/admin/character-replace-free-access";
 import { CharacterReplaceProvidersPanel } from "@/features/admin/character-replace-providers";
 import { listProviderHealth } from "@/lib/ai/character-replace/circuit";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
 import { AiBalanceAdjustLazy, CharacterReplacePricingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
-import { getAiAdminStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
+import { getAiAdminStats, getCharacterReplaceFreeAccessStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
 import { getPlatformStatus } from "@/lib/platform-status-store";
@@ -510,8 +512,14 @@ export default async function AdminPage() {
                      which is what it counts. It loads its own state, so it
                      needs no Suspense boundary of its own. */
                   id: "alerts",
-                  label: "Download alerts",
-                  content: <DownloadAlertControls />,
+                  label: "Milestone alerts",
+                  content: (
+                    <>
+                      <DownloadAlertControls />
+                      {/* owner, 2026-09-20: the visitor and member milestones beside the download one */}
+                      <GrowthAlertControls />
+                    </>
+                  ),
                 },
               ]}
             />
@@ -901,6 +909,8 @@ async function FrenzAISection() {
     listProviderHealth(),
     listConfigChanges(30, "character_replace"),
   ]);
+  // Part 11 §19: the complimentary-creation figures, beside the health panel
+  const freeStats = await getCharacterReplaceFreeAccessStats(landing.frenzAiCurrency);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -919,6 +929,7 @@ async function FrenzAISection() {
           content: (
             <div className="space-y-6">
               <FrenzAIHealth stats={aiStats} />
+              <CharacterReplaceFreeAccessPanel stats={freeStats} symbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
               {/* Part 4, §29: the jobs, the provider state, the money — under the AI grouping. */}
               <CharacterReplaceJobsTable jobs={crJobs} symbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
             </div>
@@ -1337,7 +1348,7 @@ function AlertDot({ kind }: { kind: string }) {
   const color =
     kind === "proxy_budget"
       ? "bg-amber-500"
-      : kind === "download_milestone"
+      : kind === "download_milestone" || kind === "visitor_milestone" || kind === "user_milestone"
         ? "bg-green-500"
         : "bg-primary";
   return <span className={cn("h-2 w-2 shrink-0 rounded-full", color)} />;

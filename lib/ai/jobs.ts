@@ -592,6 +592,14 @@ export interface AiJobView {
     refunded: boolean;
     /** True while a finished job's charge is still reserved on the ledger — the refund is on its way, not done (Part 5, §29). */
     refundPending?: boolean;
+    /**
+     * Part 11 §7: how the job was paid for. A complimentary creation carries
+     * the NORMAL price it would have cost; `freeRestored` is set by the read
+     * routes from the audit row when the creation came back after a failure.
+     */
+    billing: "FREE_TRIAL" | "PAID" | null;
+    normalPriceCents: number | null;
+    freeRestored?: boolean;
     voiceMode: "original" | "new_voice";
     lipSyncMode: "standard" | "studio" | null;
     /** Which processing attempt of the project this row is (1 = first). A retry is a new row, never a rewrite (Part 5, §7). */
@@ -695,7 +703,8 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
   if (!m || m.tool !== "character_replace") return null;
   const settings = (m.settings ?? {}) as { quality?: unknown; voiceMode?: unknown; lipSyncMode?: unknown };
   const prepared = (m.prepared ?? null) as { durationMs?: unknown; trimmed?: unknown } | null;
-  const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown; qualityRateCents?: unknown } | null;
+  const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown; qualityRateCents?: unknown; totalCents?: unknown } | null;
+  const billing = (m.billing ?? null) as { type?: unknown; normalPriceCents?: unknown } | null;
   const trim = m.trim ?? null;
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const charged = row.charged_cents ?? null;
@@ -740,6 +749,8 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
     chargedCents: charged,
     currency: typeof quote?.currency === "string" ? quote.currency : null,
     refunded: (row.status === "failed" || row.status === "cancelled" || row.status === "expired") && (charged ?? 0) > 0,
+    billing: billing?.type === "FREE_TRIAL" ? "FREE_TRIAL" : billing?.type === "PAID" || row.funding_source === "balance" ? "PAID" : row.funding_source === "free" ? "FREE_TRIAL" : null,
+    normalPriceCents: num(billing?.normalPriceCents) ?? num(quote?.totalCents) ?? charged,
     voiceMode: settings.voiceMode === "new_voice" ? "new_voice" : "original",
     lipSyncMode: settings.lipSyncMode === "standard" || settings.lipSyncMode === "studio" ? settings.lipSyncMode : null,
   };

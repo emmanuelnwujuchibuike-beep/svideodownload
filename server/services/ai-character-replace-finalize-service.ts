@@ -7,6 +7,7 @@ import { readCharacterReplaceMeta, readPipeline } from "@/lib/ai/character-repla
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
+import { settleFreeUse } from "@/lib/ai/character-replace/free-access";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
@@ -221,9 +222,9 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     });
 
     if (completed) {
-      // Stage H — the charge is kept: reserved → settled on the product ledger.
-      const settled = await settleCharacterReplaceCharge(ownerId, jobId);
-      if (!settled) console.error("[cr/finalize] settle found no reserved charge", { jobId, userId: ownerId });
+      // Stage H — the charge is kept: reserved → settled on the product ledger; a complimentary creation is settled on its own audit row (Part 11).
+      const settled = job.funding_source === "free" ? await settleFreeUse(jobId) : await settleCharacterReplaceCharge(ownerId, jobId);
+      if (!settled) console.error("[cr/finalize] settle found nothing to settle", { jobId, userId: ownerId, funding: job.funding_source });
       await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, mode: meta?.mode ?? "full_character", stages: pipeline?.stages ?? null, voiceSwapped, settled, elapsedMs: Date.now() - startedAt });
       // 🔴 Only now — the result is in OUR bucket and the row says completed (§11).
       await notifyAiJobFinished({ userId: ownerId, jobId, feature: feature.id, audioRestored: audioExpected ? finalProbe.hasAudio : null, durationMs: Date.now() - startedAt });

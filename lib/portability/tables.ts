@@ -103,6 +103,10 @@ export const NOT_EXPORTED: Record<string, string> = {
     "Your current prepaid AI balance. It is a running total of the ledger rather than a separate fact, so it is not exported on its own — every change to it is in ai_balance_ledger, which is.",
   ai_product_balances:
     "Your current balance for one paid AI product (Character Replace). Like ai_balances, a running total of its ledger and not a separate fact — every change is in ai_product_ledger, which is exported.",
+  ai_free_entitlements:
+    "How many complimentary Character Replace creations your account was given and how many are used. A running total of ai_free_uses, which is exported — and a pseudonymous device identifier that is a one-way hash of a cookie, which identifies nobody.",
+  ai_device_associations:
+    "A one-way hash of a cookie this browser carried when your account first used Character Replace, kept so the complimentary offer cannot be claimed without limit by making new accounts. It holds no fingerprint, no IP address and nothing about you; it is not personal data in a form that means anything outside this system.",
 
   /*
     Rows ABOUT you that were written BY someone else. Real personal data, and
@@ -166,6 +170,12 @@ export const OWNER_COLUMN: Record<string, string> = {
     charge was made under. About you, written on your behalf, ours to hand over.
   */
   ai_product_ledger: "user_id",
+  /*
+    Every complimentary creation you used (0162): the job, which of your free
+    uses it was, the normal price you were NOT charged, and whether it was
+    delivered or restored. About you, ours to hand over.
+  */
+  ai_free_uses: "user_id",
 
   /* social */
   posts: "publisher_id",

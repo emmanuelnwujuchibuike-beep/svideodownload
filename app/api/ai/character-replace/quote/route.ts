@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { affordability, quoteCharacterReplace, validateQuoteInput } from "@/lib/ai/character-replace/pricing";
 import { quoteRequestSchema } from "@/lib/ai/character-replace/quote-schema";
+import { getCharacterReplaceFreeEligibility } from "@/lib/ai/character-replace/free-access";
+import { freeRequestQualifies } from "@/lib/ai/character-replace/free-access-rules";
 import { getCharacterReplaceBalanceCents, signQuote } from "@/lib/ai/character-replace/wallet";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
@@ -87,12 +89,29 @@ export async function POST(request: Request) {
     */
     const balanceCents = await getCharacterReplaceBalanceCents(subject.userId);
     const money = affordability(quote.totalCents, balanceCents);
+    /*
+      Part 11 §7: even with a complimentary creation in hand the NORMAL price
+      is computed and signed exactly as before — it is what the audit records.
+      `billing` only tells the interface what to print: the entitlement is
+      the server's read, the fit is the operator's bounds, and /start decides
+      both again before anything moves.
+    */
+    const free = await getCharacterReplaceFreeEligibility({ subject, config, request });
+    const fit = free.eligible ? freeRequestQualifies(config, { mode: quote.mode, quality: quote.quality, durationMs: quote.durationMs, voiceMode: quote.voiceMode, voiceSource: quote.voiceSource, lipSyncMode: quote.lipSyncMode }) : null;
+    const complimentary = free.eligible && fit?.ok === true;
     return NextResponse.json({
       quote,
       balanceCents,
-      afterCents: money.afterCents,
-      sufficient: money.sufficient,
-      shortfallCents: money.shortfallCents,
+      afterCents: complimentary ? balanceCents : money.afterCents,
+      sufficient: complimentary ? true : money.sufficient,
+      shortfallCents: complimentary ? 0 : money.shortfallCents,
+      billing: {
+        complimentary,
+        remaining: free.remainingFreeUses,
+        reason: free.reason,
+        // why this particular video is NOT complimentary although the member has one left — the bound it crosses
+        notFreeBecause: free.eligible && fit && !fit.ok ? fit.message : null,
+      },
     });
   } catch (e) {
     console.error("[ai/cr/quote] failed", { subject: subject.key, error: String(e) });

@@ -314,3 +314,65 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
     return [];
   }
 }
+
+
+/* ───────────────────── Part 11 §19: complimentary creations & anti-abuse ── */
+
+export interface CharacterReplaceFreeAccessStats {
+  accountsGranted: number;
+  creationsGranted: number;
+  creationsConsumed: number;
+  creationsSettled: number;
+  creationsRestored: number;
+  accountsAtDeviceLimit: number;
+  devicesAtLimit: number;
+  /** Members who used at least one complimentary creation AND later recharged. */
+  freeToPaidAccounts: number;
+  /** The normal price of every complimentary creation that was delivered — what the offer "cost" in retail terms, minor units. */
+  deliveredNormalPriceCents: number;
+  currency: string;
+  /** Paid Character Replace charges settled, all time, minor units — with the operator's provider cost estimate beside it. */
+  revenueCents: number;
+  providerCostUsdCents: number;
+}
+
+export async function getCharacterReplaceFreeAccessStats(currency: string): Promise<CharacterReplaceFreeAccessStats | null> {
+  try {
+    const admin = createAdminClient();
+    const [ent, uses, devices, ledger, costs] = await Promise.all([
+      admin.from("ai_free_entitlements").select("user_id, granted, used, restored, eligibility"),
+      admin.from("ai_free_uses").select("user_id, status, normal_price_cents").limit(5000),
+      admin.from("ai_device_associations").select("device_hash, risk_state").eq("risk_state", "limit_reached"),
+      admin.from("ai_product_ledger").select("user_id, kind, status, delta_cents").in("kind", ["recharge", "processing_charge"]).limit(5000),
+      admin.from("ai_jobs").select("metadata").eq("feature", "ai_character_replace").eq("status", "completed").not("metadata->provider_cost_estimate", "is", null).limit(2000),
+    ]);
+    const rows = (ent.data ?? []) as { user_id: string; granted: number; used: number; restored: number; eligibility: string }[];
+    const useRows = (uses.data ?? []) as { user_id: string; status: string; normal_price_cents: number }[];
+    const rechargers = new Set(((ledger.data ?? []) as { user_id: string; kind: string }[]).filter((l) => l.kind === "recharge").map((l) => l.user_id));
+    const freeUsers = new Set(useRows.map((u) => u.user_id));
+    let freeToPaid = 0;
+    for (const u of freeUsers) if (rechargers.has(u)) freeToPaid += 1;
+    const revenueCents = ((ledger.data ?? []) as { kind: string; status: string; delta_cents: number }[])
+      .filter((l) => l.kind === "processing_charge" && l.status === "settled")
+      .reduce((a, l) => a + Math.abs(Number(l.delta_cents)), 0);
+    const providerCostUsdCents = ((costs.data ?? []) as { metadata: { provider_cost_estimate?: { totalUsdCents?: unknown } } }[])
+      .reduce((a, r) => a + (typeof r.metadata?.provider_cost_estimate?.totalUsdCents === "number" ? r.metadata.provider_cost_estimate.totalUsdCents : 0), 0);
+    return {
+      accountsGranted: rows.filter((r) => r.granted > 0).length,
+      creationsGranted: rows.reduce((a, r) => a + Number(r.granted), 0),
+      creationsConsumed: useRows.filter((u) => u.status !== "restored").length,
+      creationsSettled: useRows.filter((u) => u.status === "settled").length,
+      creationsRestored: useRows.filter((u) => u.status === "restored").length,
+      accountsAtDeviceLimit: rows.filter((r) => r.eligibility === "device_limit").length,
+      devicesAtLimit: new Set(((devices.data ?? []) as { device_hash: string }[]).map((d) => d.device_hash)).size,
+      freeToPaidAccounts: freeToPaid,
+      deliveredNormalPriceCents: useRows.filter((u) => u.status === "settled").reduce((a, u) => a + Number(u.normal_price_cents), 0),
+      currency,
+      revenueCents,
+      providerCostUsdCents,
+    };
+  } catch (e) {
+    console.error("[ai/admin-stats] free access stats failed", { error: String(e).slice(0, 160) });
+    return null;
+  }
+}

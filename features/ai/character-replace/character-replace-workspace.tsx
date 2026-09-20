@@ -168,7 +168,7 @@ export function CharacterReplaceWorkspace({
   */
   const quotedTotal = state.pricing.status === "quoted" || state.pricing.status === "stale" ? state.pricing.snapshot : null;
   const balanceKnown = loads.balance?.balanceCents ?? null;
-  const shortOfBalance = !!quotedTotal && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;
+  const shortOfBalance = !!quotedTotal && !quotedTotal.billing?.complimentary && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;
   const [rechargeAsk, setRechargeAsk] = useState(0);
 
   const onStart = useCallback(async () => {
@@ -510,7 +510,7 @@ export function CharacterReplaceWorkspace({
                   )}
                 >
                   <Sparkles className="h-4 w-4" aria-hidden />
-                  {launching ? "Starting…" : quotedTotal ? `Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}` : "Create Video"}
+                  {launching ? "Starting…" : quotedTotal?.billing?.complimentary ? "Create Video · Complimentary" : quotedTotal ? `Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}` : "Create Video"}
                 </button>
               ) : (
                 <button
@@ -543,9 +543,11 @@ export function CharacterReplaceWorkspace({
                       ? "We couldn't price this video yet."
                       : state.pricing.status !== "quoted"
                         ? "Getting the exact price…"
-                        : loads.balance && loads.balance.balanceCents < state.pricing.snapshot.totalCents
-                          ? "Recharge your balance to start."
-                          : "You'll be charged the amount shown when processing starts."}
+                        : state.pricing.snapshot.billing?.complimentary
+                          ? "Your complimentary creation will be used for this video. Nothing is charged."
+                          : loads.balance && loads.balance.balanceCents < state.pricing.snapshot.totalCents
+                            ? "Recharge your balance to start."
+                            : "You'll be charged the amount shown when processing starts."}
               </p>
             ) : null}
           </>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { voiceProviderForModel, type CharacterReplaceConfig, type CharacterReplaceLaunchMode, type ReplacementModeConfig } from "@/lib/ai/character-replace/config";
-import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP, UPPER_BODY_TIER_MAP, knownModelsFor, modelServesMode } from "@/lib/ai/character-replace/modes";
+import { FACE_ONLY_TIER_MAP, REPLACEMENT_MODES, SKIN_FACE_TIER_MAP, UPPER_BODY_TIER_MAP, knownModelsFor, modelServesMode, replacementModeLabel, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import { ELEVENLABS_REPLICATE_TTS_MODELS, ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsReplicateModel, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_AGES, VOICE_GENDER_LABEL, VOICE_GENDERS, type VoiceAge, type VoiceGender } from "@/lib/ai/voice/elevenlabs-models";
 import { formatCents } from "@/lib/ai/economy";
 import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
@@ -120,6 +120,24 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [faceOnly, setFaceOnly] = useState(modeState(cr.modes.face_only));
   const [skinFace, setSkinFace] = useState(modeState(cr.modes.skin_face));
   const [upperBody, setUpperBody] = useState(modeState(cr.modes.upper_body));
+  /* ── Part 11 §5, §18: complimentary creations and the device rule ── */
+  const [freeEnabled, setFreeEnabled] = useState(cr.freeAccess.enabled);
+  const [freeCount, setFreeCount] = useState(String(cr.freeAccess.creationsPerAccount));
+  const [freeMaxSeconds, setFreeMaxSeconds] = useState(String(cr.freeAccess.maxDurationSeconds));
+  const [freeQualityRank, setFreeQualityRank] = useState<0 | 1 | 2>(cr.freeAccess.maxQualityRank);
+  const [freeModes, setFreeModes] = useState<ReplacementMode[]>([...cr.freeAccess.allowedModes]);
+  const [freeTts, setFreeTts] = useState(cr.freeAccess.allowTts);
+  const [freeUpload, setFreeUpload] = useState(cr.freeAccess.allowUploadedVoice);
+  const [freeLipSync, setFreeLipSync] = useState(cr.freeAccess.allowLipSync);
+  const [freeMaxUploadMb, setFreeMaxUploadMb] = useState(String(Math.round(cr.freeAccess.maxUploadBytes / (1024 * 1024))));
+  const [abuseMaxPerDevice, setAbuseMaxPerDevice] = useState(String(cr.antiAbuse.maxFreeAccountsPerDevice));
+  const [abuseDevice, setAbuseDevice] = useState(cr.antiAbuse.deviceDetection);
+  const [abuseMaxPerNetwork, setAbuseMaxPerNetwork] = useState(String(cr.antiAbuse.maxFreeAccountsPerNetwork));
+  const [abuseNetworkHours, setAbuseNetworkHours] = useState(String(cr.antiAbuse.networkWindowHours));
+  const [abuseSignup, setAbuseSignup] = useState(cr.antiAbuse.signupRateLimit);
+  const [abuseVerify, setAbuseVerify] = useState(cr.antiAbuse.verificationAfterLimit);
+  const [abusePaidExempt, setAbusePaidExempt] = useState(cr.antiAbuse.paidUsersExempt);
+  const [abuseAdminExempt, setAbuseAdminExempt] = useState(cr.antiAbuse.adminExempt);
   /* ── the replacement-scope brief §13: provider cost protection ── */
   const [guardMargin, setGuardMargin] = useState(String(cr.pricingGuard.minimumMarginPercent));
   const [guardMinPrice, setGuardMinPrice] = useState(minorToMajorInput(cr.pricingGuard.minimumCustomerPriceCents));
@@ -260,6 +278,28 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         minimumCustomerPriceCents: majorInputToMinor(guardMinPrice) ?? cr.pricingGuard.minimumCustomerPriceCents,
         allowBelowMargin: guardOverride,
       },
+      freeAccess: {
+        enabled: freeEnabled,
+        creationsPerAccount: freeCount.trim() === "" ? cr.freeAccess.creationsPerAccount : Math.max(0, Math.floor(Number(freeCount))),
+        entitlement: "lifetime" as const,
+        maxDurationSeconds: freeMaxSeconds.trim() === "" ? cr.freeAccess.maxDurationSeconds : Math.max(1, Math.floor(Number(freeMaxSeconds))),
+        maxQualityRank: freeQualityRank,
+        allowedModes: freeModes,
+        allowTts: freeTts,
+        allowUploadedVoice: freeUpload,
+        allowLipSync: freeLipSync,
+        maxUploadBytes: freeMaxUploadMb.trim() === "" ? cr.freeAccess.maxUploadBytes : Math.floor(Number(freeMaxUploadMb)) * 1024 * 1024,
+      },
+      antiAbuse: {
+        maxFreeAccountsPerDevice: abuseMaxPerDevice.trim() === "" ? cr.antiAbuse.maxFreeAccountsPerDevice : Math.max(0, Math.floor(Number(abuseMaxPerDevice))),
+        deviceDetection: abuseDevice,
+        maxFreeAccountsPerNetwork: abuseMaxPerNetwork.trim() === "" ? cr.antiAbuse.maxFreeAccountsPerNetwork : Math.max(0, Math.floor(Number(abuseMaxPerNetwork))),
+        networkWindowHours: abuseNetworkHours.trim() === "" ? cr.antiAbuse.networkWindowHours : Math.max(1, Math.floor(Number(abuseNetworkHours))),
+        signupRateLimit: abuseSignup,
+        verificationAfterLimit: abuseVerify,
+        paidUsersExempt: abusePaidExempt,
+        adminExempt: abuseAdminExempt,
+      },
       audio: {
         replacementEnabled: audioEnabled,
         maximumDurationSeconds: audioMaxSeconds.trim() === "" ? cr.audio.maximumDurationSeconds : Math.floor(Number(audioMaxSeconds)),
@@ -295,7 +335,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, guardMargin, guardMinPrice, guardOverride, launchMode, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, upperBody, voiceRows, voiceSurcharge, voicesTouched]);
+  }, [abuseAdminExempt, abuseDevice, abuseMaxPerDevice, abuseMaxPerNetwork, abuseNetworkHours, abusePaidExempt, abuseSignup, abuseVerify, freeCount, freeEnabled, freeLipSync, freeMaxSeconds, freeMaxUploadMb, freeModes, freeQualityRank, freeTts, freeUpload, audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, guardMargin, guardMinPrice, guardOverride, launchMode, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, upperBody, voiceRows, voiceSurcharge, voicesTouched]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -401,6 +441,11 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     if (payload.ops.maintenanceMode && !cr.ops.maintenanceMode) out.push("This puts Character Replace into MAINTENANCE: no new videos for anyone until it is switched back. Finished videos stay reachable.");
     if (!payload.ops.processingEnabled && cr.ops.processingEnabled) out.push("This PAUSES new videos for every member. Videos already running finish normally.");
     if (payload.ops.launchMode === "internal" && cr.ops.launchMode !== "internal") out.push("This puts Character Replace into INTERNAL launch mode: only administrators can make a new video. Every other member sees it as not yet available. Finished videos, history and balances are untouched.");
+    if (payload.freeAccess.enabled && payload.freeAccess.allowedModes.length === 0) out.push("Complimentary creations are ON but no replacement type is allowed for them — nobody can use one.");
+    if (payload.freeAccess.enabled && payload.freeAccess.creationsPerAccount > 5) out.push(`${payload.freeAccess.creationsPerAccount} complimentary creations per account is a lot of provider cost per new account.`);
+    if (payload.freeAccess.enabled && (payload.freeAccess.allowLipSync || payload.freeAccess.allowTts)) out.push("Complimentary creations include premium voice options — those bill the provider per run.");
+    if (payload.antiAbuse.deviceDetection && payload.antiAbuse.maxFreeAccountsPerDevice === 0) out.push("The device rule is on with NO account limit per device — the offer can be claimed without limit by making accounts.");
+    if (!payload.antiAbuse.deviceDetection && payload.freeAccess.enabled) out.push("Device detection is OFF: the complimentary offer can be farmed with new accounts.");
     if (payload.ops.launchMode === "production" && cr.ops.launchMode === "internal") out.push("This opens Character Replace to EVERY member the plan policy allows. Make sure the provider balance and the price table are what you want first.");
     if (payload.limits.maxActiveJobsGlobal === 0) out.push("No platform-wide cap on active videos — a burst can run up the provider bill without a ceiling.");
     if (!payload.ops.circuitBreaker.enabled && cr.ops.circuitBreaker.enabled) out.push("The provider circuit breaker is OFF: a failing provider keeps being paid until somebody notices.");
@@ -751,6 +796,76 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             </div>
           </Group>
         ))}
+
+        {/* ── FREE ACCESS & ANTI-ABUSE (Part 11 §5, §18) ── */}
+        <Group title="Free access & anti-abuse">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Every eligible new account gets this many complimentary creations — lifetime, never refilled, never converted to balance — and then pays per video. The device rule protects the offer, never paid processing.
+          </p>
+          <Toggle label="Complimentary creations" hint="Off: every account pays from the first video. Existing entitlements stay recorded." checked={freeEnabled} onChange={setFreeEnabled} />
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Field id="cr-free-count" label="Free creations per account" hint="Lifetime. 0 disables the offer for new accounts.">
+              <input id="cr-free-count" type="number" inputMode="numeric" min={0} max={100} value={freeCount} onChange={(e) => setFreeCount(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-free-entitlement" label="Entitlement" hint="Lifetime is the product rule.">
+              <input id="cr-free-entitlement" type="text" value="Lifetime" readOnly className={cn(input, "opacity-70")} />
+            </Field>
+            <Field id="cr-free-max-seconds" label="Maximum free duration (seconds)" hint="A longer video is priced normally.">
+              <input id="cr-free-max-seconds" type="number" inputMode="numeric" min={1} max={120} value={freeMaxSeconds} onChange={(e) => setFreeMaxSeconds(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-free-quality" label="Maximum free quality" hint="By rank inside each type's quality list.">
+              <select id="cr-free-quality" value={freeQualityRank} onChange={(e) => setFreeQualityRank(Number(e.target.value) as 0 | 1 | 2)} className={input}>
+                <option value={0}>Lowest (Standard / 480p)</option>
+                <option value={1}>Up to the second (High / 720p)</option>
+                <option value={2}>Any</option>
+              </select>
+            </Field>
+            <Field id="cr-free-max-upload" label="Maximum free upload (MB)" hint="A bigger source is priced normally.">
+              <input id="cr-free-max-upload" type="number" inputMode="numeric" min={1} max={100} value={freeMaxUploadMb} onChange={(e) => setFreeMaxUploadMb(e.target.value)} className={input} />
+            </Field>
+          </div>
+          <p className="mt-4 text-xs font-semibold text-muted-foreground">Allowed free replacement types</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {REPLACEMENT_MODES.map((m) => {
+              const on = freeModes.includes(m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setFreeModes((list) => (on ? list.filter((x) => x !== m) : [...list, m]))}
+                  className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold transition", on ? "border-foreground bg-foreground text-background" : "border-border/70 text-muted-foreground hover:border-foreground/40")}
+                >
+                  {replacementModeLabel(m)}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 space-y-3">
+            <Toggle label="Free lip sync" hint="Premium — bills the provider per run. Off by default." checked={freeLipSync} onChange={setFreeLipSync} />
+            <Toggle label="Free generated voice (TTS)" hint="Off by default." checked={freeTts} onChange={setFreeTts} />
+            <Toggle label="Free uploaded voice" hint="Off by default." checked={freeUpload} onChange={setFreeUpload} />
+          </div>
+          <p className="mt-5 text-xs font-semibold text-muted-foreground">Anti-abuse — protects the complimentary offer, never a funded balance</p>
+          <div className="mt-2 grid gap-4 sm:grid-cols-3">
+            <Field id="cr-abuse-device-max" label="Free-eligible accounts per device" hint="The third account on a device is not granted the offer automatically; it can still sign in and pay.">
+              <input id="cr-abuse-device-max" type="number" inputMode="numeric" min={0} max={1000} value={abuseMaxPerDevice} onChange={(e) => setAbuseMaxPerDevice(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-abuse-network-max" label="Free-eligible accounts per network" hint="A coarse network signal over the window below; catches a burst of sign-ups. 0 = off.">
+              <input id="cr-abuse-network-max" type="number" inputMode="numeric" min={0} max={10000} value={abuseMaxPerNetwork} onChange={(e) => setAbuseMaxPerNetwork(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-abuse-network-hours" label="Network window (hours)" hint="How long a network's grants count.">
+              <input id="cr-abuse-network-hours" type="number" inputMode="numeric" min={1} max={720} value={abuseNetworkHours} onChange={(e) => setAbuseNetworkHours(e.target.value)} className={input} />
+            </Field>
+          </div>
+          <div className="mt-4 space-y-3">
+            <Toggle label="Device abuse detection" hint="A server-set cookie, hashed — no fingerprinting, no IP stored. Off grants the offer to every account." checked={abuseDevice} onChange={setAbuseDevice} />
+            <Toggle label="Sign-up rate limiting" hint="Supabase Auth's own per-address limits stay on regardless; this switch is recorded for the policy." checked={abuseSignup} onChange={setAbuseSignup} />
+            <Toggle label="Verification after the device limit" hint="Tells a held account it can complete verification as well as pay." checked={abuseVerify} onChange={setAbuseVerify} />
+            <Toggle label="Paid users exempt from the device limit" hint="A funded balance is never held up by the device rule (the rule only governs the free offer)." checked={abusePaidExempt} onChange={setAbusePaidExempt} />
+            <Toggle label="Administrator exemption" hint="Administrators (the dashboard's own role check) bypass the offer's limits. Never claimable from a browser." checked={abuseAdminExempt} onChange={setAbuseAdminExempt} />
+          </div>
+        </Group>
 
         {/* ── VOICE ── */}
         <Group title="Voice">

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { freeUseStates } from "@/lib/ai/character-replace/free-access";
 import { characterReplaceRefundStates } from "@/lib/ai/character-replace/wallet";
 
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
@@ -445,6 +446,13 @@ export async function GET(request: Request) {
         if (!view.characterReplace || !charged.includes(view.id)) continue;
         const state = states.get(view.id) ?? "none";
         view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+      }
+      // Part 11 §24: a complimentary creation that came back after a failure — from the audit row, never a status
+      const free = rows.filter((r) => r.feature === "ai_character_replace" && r.funding_source === "free" && !isActiveStatus(r.status)).map((r) => r.id);
+      const freeStates = await freeUseStates(free);
+      for (const view of views) {
+        if (!view.characterReplace || !free.includes(view.id)) continue;
+        view.characterReplace = { ...view.characterReplace, freeRestored: freeStates.get(view.id) === "restored" };
       }
     }
     return NextResponse.json({

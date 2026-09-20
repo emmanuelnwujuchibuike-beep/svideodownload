@@ -9,7 +9,124 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑20 (Character Replace Part 10 — final production QA, safe launch mode, draft/stall fixes, refund currency guard)_
+_Last updated: 2026‑09‑20 (Character Replace: four scopes + the scope page, the media preflight, Part 11 complimentary creations + the device rule; growth milestone emails)_
+
+---
+
+## 2026‑09‑20 — Character Replace: the four scopes, the scope page, the preflight, and Part 11 (complimentary creations + the device rule)
+
+Three briefs in one evening, on top of Part 10's QA. Everything measured on
+production with throwaway members; nothing on a real account, no real money.
+
+### The four replacement scopes (the "replacement‑scope" brief)
+- **Customer vocabulary is the brief's:** Face Only · Face + Head · Upper Body ·
+  Full Character. `skin_face` stays the STORED id of "Face + Head" (it has always
+  transferred face + identity + skin — the head's appearance — and keeps the body);
+  `upper_body` is new, on Wan 2.2 through its own adapter (`providers/upper-body.ts`,
+  tiers Standard = 480, High = 720, Ultra unsupported). `REPLACEMENT_SCOPE` maps
+  ids → FACE_ONLY / FACE_HEAD / UPPER_BODY / FULL_CHARACTER for analytics.
+- **Provider routing is configuration:** `replacementProviderFor(mode, config)` picks
+  the adapter registered for `modes[mode].provider.model` that declares the scope
+  (`capabilities.modes`); an adapter written FOR the scope wins over a general one.
+  `KNOWN_REPLACEMENT_MODELS` (pure) feeds the admin "Provider model" select and a test
+  pins it equal to the adapters. A scope on without a serving model or a price cannot
+  be saved. No model name reaches a member; the public config carries a
+  server‑formatted `priceLine` ("from $0.15/sec + $1.00 per video"), never a rate.
+- **Pricing per scope:** a per‑video `basePriceCents` per mode (Full Character keeps the
+  top‑level one), the quote carries `modeBasePriceCents`, the fingerprint includes it;
+  `pricingGuard` (minimum margin %, minimum customer price, explicit override) — the
+  admin form REFUSES a save under the margin unless overridden.
+- **The immutable snapshot:** /start writes `ledgerSnapshot` = the signed quote +
+  scope, provider, model, original length, the trim, the rates by name, and
+  `provider_plan` on the job; `reserveCharacterReplaceCharge` takes the widened shape.
+- **Photo framing guard** (`validatePhotoFraming`: per‑scope min edge + max aspect →
+  `image-wrong-framing`) at the picker (the scope's sentence + the drawn example inline),
+  at create, on the worker from the decoded probe, and on a mode change (a photo that
+  no longer fits is dropped). Face/person detection is the preflight's job.
+- History: mode filter chips; result/processing/history copy names the scope; two
+  analytics events (`character_replace_mode_selected`, `character_replace_balance_short`).
+
+### The scope page (owner, from the screenshots)
+The tool's root route (`/studio/ai/character-replace`, `/ai/character-replace`) is a
+`force-static` "What do you want to replace?" page — cards from pure copy, prices from
+a sessionStorage‑cached config, every card a prefetched `<Link>` to
+`/create?mode=…`, back‑swipe from the router cache, `?job=` → `router.replace` to
+`/create?job=`. The workspace opens on the photo step at `/create` with `initialMode`
+from the query, a `StepHeader` (eyebrow, step title, the scope chip "· Change"), and
+`CharacterReplaceCreateSkeleton` (the header strip) as its `loading.tsx`. Steps are
+Replace → Photo → Video → Quality → Voice → Review. `mode-selector.tsx` is gone. The
+drop zone and the photo step were restyled (gradient tile, glass card, the scope's
+"best results" pill). Paystack's return allow‑list includes both `/create` paths.
+
+### The media preflight (built in a parallel session; committed on "commit all")
+YuNet face + YOLOX‑nano person detection through onnxruntime‑node on the worker,
+sampled frames, per‑scope thresholds, an ambiguous band judged by a vision model,
+a signed pass token, the gate at /start (`PREFLIGHT_REQUIRED`), the client's
+checking → ready | attention phases, the Dockerfile copying the runtime + models.
+Added: `upper_body` rows; **a pass‑through** — when the worker cannot RUN the check
+(unreachable, declined, `validator_unavailable`) the route mints the token, records
+`preflight.skipped` and the gate accepts the record as skipped; a NEGATIVE verdict
+still blocks (`AI_PREFLIGHT_STRICT=1` restores the refusal). Live: the detectors run
+on Railway (face 0.93 in 7.5 s). The model author's own Full Character demo (a dance,
+body cropped in half the sampled frames) was refused at 0.6 / 0.5 → the video bar is
+now half the sampled frames usable and a lower body band (a cropped frame lands in
+the ambiguous band, not a hard fail). **`.npmrc`: `onnxruntime-node-install-cuda=skip`**
+— the package's postinstall downloads a ~250 MB CUDA tarball on linux/x64 and it
+failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
+
+### Part 11 — complimentary creations, paid per video after, the device rule (0162)
+- **Data:** `ai_free_entitlements` (granted/used/restored, eligibility, the device it
+  was granted on), `ai_free_uses` (UNIQUE per job: use number, the NORMAL price not
+  charged, the FREE_TRIAL snapshot, consumed/settled/restored), `ai_device_associations`
+  (an HMAC of a server‑set cookie ↔ account, first/last seen, `free_granted`, a coarse
+  network hash, a risk state — no raw fingerprint, no IP). Both catalogues updated.
+- **Functions (service role only):** `grant_free_entitlement` (idempotent per member,
+  under an advisory lock per device; `pending` when the cookie is not there yet —
+  never granted blind, never refused for good), `consume_free_use` (row lock, one per
+  job, refuses when exhausted, writes the audit row), `restore_free_use` (once),
+  `settle_free_use`, and `claim_ai_job_start` with `p_funding` ('balance' | 'free' — the
+  8‑arg overload is dropped inside the closing `execute` block).
+- **Flow:** the config read plants `frenz_did` (httpOnly, Secure, 400 days); the
+  balance route answers `freeAccess` (granted/used/remaining/reason/message/limits) from
+  `getCharacterReplaceFreeEligibility` — the one authoritative read (admin exemption =
+  the dashboard's role check; `DEVICE_LIMIT_REACHED` when the device already carries the
+  offer for `maxFreeAccountsPerDevice` accounts or the network hash for
+  `maxFreeAccountsPerNetwork` within the window); the quote route adds `billing`
+  (complimentary?, `notFreeBecause`) — display only; **/start decides again**: eligible
+  + `freeRequestQualifies` (scope, quality rank, duration, premium voice, upload size)
+  → the claim carries `funding: "free"`, charged 0, `metadata.billing = FREE_TRIAL` with
+  the normal price, then `consume_free_use` (a refused race → claim reverted →
+  `CR_FREE_UNAVAILABLE`, the client re‑reads); otherwise the wallet path exactly as
+  before. `releaseJobFunding` restores the entitlement (once) for a free job and refunds
+  money for a paid one — never both; the finalizer settles the free use on completion.
+  The failure push says "Your complimentary creation has been restored." only from the
+  audit row.
+- **UI:** the scope page and the balance card carry the entitlement in the member's
+  words ("Welcome — enjoy 2 complimentary creations…", "1 complimentary creation
+  remaining", "Your complimentary creations are used. Recharge…", "This device has
+  reached the complimentary Character Replace limit."); the price card shows "Normal
+  price $X · Today's creation FREE"; the CTA reads "Create Video · Complimentary"; the
+  affordability checks skip a complimentary quote.
+- **Admin:** "Free access & anti‑abuse" group (creations per account, lifetime, max
+  duration, max quality rank, max upload, allowed scopes, free lip sync / TTS / uploaded
+  voice; accounts per device, per network + window, device detection, sign‑up rate
+  limiting, verification after the limit, paid users exempt, administrator exemption),
+  warnings, and a "Complimentary creations" panel on the AI overview (granted, used,
+  restored, held at the device limit, free → paid, retail value delivered, paid revenue,
+  provider cost estimate).
+- ⚠️ **Administrators are exempt by default (§12):** every video an admin starts is a
+  complimentary creation — the wallet is not charged; the provider cost is real.
+- Sign‑up itself is Supabase Auth's client call; its per‑address rate limits are the
+  sign‑up limiter (the admin switch records the policy). The free GRANT is what is
+  farmed, and that is what the device + network rules bound.
+
+### Also today (owner asks)
+- Recharge sheet: no rate arithmetic — the secure checkout page shows the naira.
+- Usage page: Character Replace only (the retired AI Clean allowance meters are gone).
+- Profile menu: no "Soon" rows (Cloud Storage, Marketplace removed).
+- Growth milestone emails: "🎉 N visitors / members on FrenzSave" every N (default
+  1,000, admin‑configurable beside the download milestone), checked by the daily digest
+  run and sampled from the analytics collector; `analytics_visitors_total()` (0161).
 
 ---
 

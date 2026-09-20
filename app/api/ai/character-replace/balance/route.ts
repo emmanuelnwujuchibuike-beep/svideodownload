@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { deviceCookieHeader, freeEligibilityMessage, getCharacterReplaceFreeEligibility, newDeviceId, readDeviceId } from "@/lib/ai/character-replace/free-access";
 import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -46,8 +47,27 @@ export async function GET(request: Request) {
     const recharge = settings.frenzAiCharacterReplace.recharge;
     // the live rate (cached an hour) so the sheet previews exactly what checkout will charge
     const rate = await resolveCheckoutRate(settings.frenzAiCharacterReplace, settings.frenzAiCurrency);
+    /*
+      Part 11 §6, §16: the complimentary creations, from the one authoritative
+      read — granted on first sight against the device cookie, answered from
+      the row after that. The message is the member's; the reason is a word.
+    */
+    const headers = new Headers({ "cache-control": "no-store" });
+    if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
+    const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request });
     return NextResponse.json(
       {
+        freeAccess: {
+          enabled: settings.frenzAiCharacterReplace.freeAccess.enabled,
+          eligible: free.eligible,
+          remaining: free.remainingFreeUses,
+          granted: free.granted,
+          used: free.used,
+          reason: free.reason,
+          requiresVerification: free.requiresVerification,
+          message: freeEligibilityMessage(free),
+          limits: free.limits,
+        },
         product: "character_replace",
         balanceCents,
         currency: settings.frenzAiCurrency,
@@ -65,7 +85,7 @@ export async function GET(request: Request) {
           : null,
         ledger,
       },
-      { headers: { "cache-control": "no-store" } },
+      { headers },
     );
   } catch (e) {
     console.error("[ai/cr/balance] read failed", { subject: subject.key, error: String(e) });

@@ -87,7 +87,7 @@ describe("the words a first-time user reads", () => {
     const ws = code("features/ai/character-replace/character-replace-workspace.tsx");
     expect(ws).toContain("`Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}`");
     expect(ws).toContain("Recharge to continue");
-    expect(ws).toContain("const shortOfBalance = !!quotedTotal && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;");
+    expect(ws).toContain("const shortOfBalance = !!quotedTotal && !quotedTotal.billing?.complimentary && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;");
     expect(ws).not.toMatch(/>\s*Start\s*</);
   });
   it("one Recommended badge per choice group; premium lip sync is called that", () => {

@@ -5,6 +5,8 @@ import { modeConfig } from "@/lib/ai/character-replace/config";
 import { readCharacterReplaceMeta, referencePaths, selectedRangeOf } from "@/lib/ai/character-replace/job-meta";
 import { REPLACEMENT_SCOPE } from "@/lib/ai/character-replace/modes";
 import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
+import { consumeFreeUse, getCharacterReplaceFreeEligibility } from "@/lib/ai/character-replace/free-access";
+import { freeRequestQualifies } from "@/lib/ai/character-replace/free-access-rules";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
 import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
 import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch";
@@ -216,10 +218,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return fail("INVALID_INPUT", { error: "The priced length doesn't match the video. Review the price and try again." });
     }
 
+    /*
+      ── C½ · A COMPLIMENTARY CREATION? (Part 11 §4, §7, §21–§22) ─────────
+      The server decides, from the member's entitlement row (granted lazily,
+      under the database's device lock) and the operator's bounds for a free
+      creation — never from anything the body says. The NORMAL price stays
+      exactly as computed and signed: it is what the audit row records as
+      "not charged". Nothing here touches the wallet.
+    */
+    const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request });
+    const fits = eligibility.eligible
+      ? freeRequestQualifies(config, { mode: snapshot.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, voiceMode: snapshot.voiceMode, voiceSource: snapshot.voiceSource, lipSyncMode: snapshot.lipSyncMode })
+      : null;
+    const complimentary = eligibility.eligible && fits?.ok === true && videoObject.size <= config.freeAccess.maxUploadBytes;
+
     /* ── C · reserve ─────────────────────────────────────────────────────── */
     const balanceBefore = await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
     if (balanceBefore === null) return fail("INTERNAL_ERROR");
-    if (balanceBefore < snapshot.totalCents) {
+    if (!complimentary && balanceBefore < snapshot.totalCents) {
       return fail("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: snapshot.totalCents - balanceBefore, currency: money.currency });
     }
 
@@ -317,6 +333,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       quote_id: snapshot.id,
       // §16: the provider/model the router chose at Start (the submit stage records what ACTUALLY ran in `provider`).
       provider_plan: { id: plannedProvider.id, model: plannedProvider.model, scope: REPLACEMENT_SCOPE[snapshot.mode] },
+      // Part 11 §7: how this job is paid for — the normal price is recorded either way
+      billing: complimentary
+        ? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }
+        : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency },
       audio: audioMeta,
       pipeline,
       provider_cost_estimate: costEstimate ? { ...costEstimate, perSecondUsdCents: modeView.providerCostPerSecondUsdCents } : null,
@@ -344,8 +364,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       maxActivePerUser: config.limits.maxActiveJobsPerUser > 0 ? Math.min(config.limits.maxActiveJobsPerUser, Math.max(1, entitlement.maxConcurrent)) : Math.max(1, entitlement.maxConcurrent),
       maxActiveGlobal: config.limits.maxActiveJobsGlobal,
       maxPerDay: config.limits.maxJobsPerUserPerDay,
-      chargedCents: snapshot.totalCents,
+      chargedCents: complimentary ? 0 : snapshot.totalCents,
       metadata: startMetadata,
+      funding: complimentary ? "free" : "balance",
     });
     if (claim === "user_limit") return fail("CR_ACTIVE_LIMIT");
     if (claim === "daily_limit") return fail("CR_DAILY_LIMIT");
@@ -366,6 +387,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     let balanceAfter: number;
+    if (complimentary) {
+      /*
+        ── THE ATOMIC FREE USE (Part 11 §3) ──────────────────────────────────
+        One database function: the entitlement row locked, one use per job,
+        refused when the last one was taken by a race (two tabs, a replay).
+        A refusal puts the claim back — nothing ran, nothing was charged.
+      */
+      const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });
+      if (!use.ok) {
+        const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});
+        console.warn("[cr/start] complimentary use refused — claim reverted", { jobId: job.id, subject: subject.key, reason: use.reason, reverted });
+        return fail("CR_FREE_UNAVAILABLE");
+      }
+      balanceAfter = balanceBefore;
+      console.info("[cr/start] complimentary creation used", { jobId: job.id, userId: ownerId, useNumber: use.useNumber, remaining: use.remaining, normalPriceCents: snapshot.totalCents, mode: meta.mode, quality: snapshot.quality, durationMs: snapshot.durationMs });
+    } else {
     try {
       balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });
     } catch (e) {
@@ -378,6 +415,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return fail("CR_BALANCE_REQUIRED", { balanceCents: balance, requiredCents: snapshot.totalCents, shortfallCents: Math.max(0, snapshot.totalCents - balance), currency: money.currency });
       }
       return fail("INTERNAL_ERROR");
+    }
     }
 
     /* ── E/F · hand off ──────────────────────────────────────────────────── */
@@ -404,13 +442,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       quality: snapshot.quality,
       durationMs: snapshot.durationMs,
       trimmed: !!body.trim,
-      chargedCents: snapshot.totalCents,
+      chargedCents: complimentary ? 0 : snapshot.totalCents,
+      billing: complimentary ? "FREE_TRIAL" : "PAID",
       pricingVersion: snapshot.pricingConfigVersion,
       quoteId: snapshot.id.slice(0, 12),
       balanceAfterCents: balanceAfter,
       transition: "queued -> acquiring",
     });
-    return NextResponse.json({ job: jobToView(claimed, storedErrorMessage), started: true, balanceCents: balanceAfter });
+    return NextResponse.json({ job: jobToView(claimed, storedErrorMessage), started: true, balanceCents: balanceAfter, billing: complimentary ? "free" : "paid" });
   } catch (e) {
     if (isAiJobError(e)) {
       console.error("[cr/start] failed", { subject: subject.key, jobId: id, code: e.code, detail: e.detail });

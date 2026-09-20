@@ -98,6 +98,8 @@ export function aiNotificationCopy(input: {
    * from a status alone.
    */
   refunded?: boolean | null;
+  /** Part 11 §24: the job was a complimentary creation and it came back (from the audit row, never a status). */
+  freeRestored?: boolean;
 }): AiNotificationCopy {
   const noun = mediaNoun(input.feature);
   /*
@@ -117,7 +119,9 @@ export function aiNotificationCopy(input: {
       };
     }
     const money =
-      input.refunded === true
+      input.freeRestored === true
+        ? "Your complimentary creation has been restored."
+        : input.refunded === true
         ? "Your balance has been refunded."
         : input.refunded === false
           ? "Your balance refund is being processed."

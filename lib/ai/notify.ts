@@ -1,5 +1,6 @@
 import "server-only";
 
+import { freeUseState } from "@/lib/ai/character-replace/free-access";
 import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { claimAiNotification, getJobAsService, noteJobDiagnostic } from "@/lib/ai/job-store";
@@ -233,10 +234,13 @@ export async function notifyAiJobFailed(opts: {
     because sending somebody back to re-upload the identical file that will
     fail identically is worse than saying nothing.
   */
+  // Part 11 §24: a complimentary creation that came back says so — read from its audit row, never assumed.
+  const freeRestored = (opts.feature ?? "ai_character_replace") === "ai_character_replace" && refunded === "none" ? (await freeUseState(opts.jobId)) === "restored" : false;
   const copy = aiNotificationCopy({
     feature: opts.feature ?? "ai_character_replace",
     outcome: outcomeForErrorCode(opts.errorCode),
     refunded: refunded === "refunded" ? true : refunded === "pending" ? false : null,
+    freeRestored,
   });
 
   try {

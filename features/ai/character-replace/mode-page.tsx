@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowLeft, ChevronRight, Clock3, PersonStanding, ScanFace, Shirt, Sparkles, UserRound } from "lucide-react";
+import { ArrowLeft, ChevronRight, Clock3, Gift, PersonStanding, ScanFace, Shirt, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { getCharacterReplaceConfig } from "@/lib/ai/character-replace/client";
+import { getCharacterReplaceBalance, getCharacterReplaceConfig } from "@/lib/ai/character-replace/client";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import type { CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
 import { REPLACEMENT_MODE_COPY, REPLACEMENT_MODES, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,8 @@ export function CharacterReplaceModePage({
   const [config, setConfig] = useState<CharacterReplacePublicConfig | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [legacyJob, setLegacyJob] = useState(false);
+  // Part 11 §6: the complimentary creations, from the balance read (the server's answer; never computed here)
+  const [free, setFree] = useState<CharacterReplaceFreeAccess | null>(null);
 
   useEffect(() => {
     // an older `?job=` link: the create page hosts the workspace, which reads the id from the URL
@@ -101,6 +104,10 @@ export function CharacterReplaceModePage({
         writeCachedConfig(res.config);
         setUnavailable(res.available ? null : (res.unavailableReason ?? "It has been switched off for the moment. Nothing on your account is affected — check back soon."));
       }
+      // after the config (which plants the device cookie) — the entitlement is decided against that cookie
+      const wallet = await getCharacterReplaceBalance();
+      if (!alive) return;
+      if (wallet.ok && wallet.balance.freeAccess) setFree(wallet.balance.freeAccess);
     })();
     return () => {
       alive = false;
@@ -122,6 +129,12 @@ export function CharacterReplaceModePage({
         <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">
           Choose the scope. The video&apos;s movement, expressions, scene and camera always stay.
         </p>
+        {free?.enabled ? (
+          <p className={cn("mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12.5px] font-semibold", free.eligible ? "bg-primary/[0.08] text-primary" : "bg-secondary text-muted-foreground")} role="status">
+            <Gift className="h-4 w-4" aria-hidden />
+            {free.reason === "ELIGIBLE" && free.remaining === free.granted && free.granted > 0 ? `Welcome — enjoy ${free.granted} complimentary creation${free.granted === 1 ? "" : "s"} to experience Frenz AI.` : free.message}
+          </p>
+        ) : null}
       </header>
 
       {unavailable ? (

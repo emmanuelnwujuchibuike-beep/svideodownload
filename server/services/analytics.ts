@@ -1,4 +1,5 @@
 import { getDownloadAlerts } from "@/lib/analytics/download-alert-settings";
+import { getGrowthAlerts, milestoneFor } from "@/lib/analytics/growth-alert-settings";
 import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
 import { emit } from "@/lib/platform/event-bus";
 import { detectPlatform } from "@/lib/platforms";
@@ -82,4 +83,71 @@ async function checkDownloadMilestone(
       footnote: `You'll get the next nudge at ${(milestone + every).toLocaleString()} downloads.`,
     }),
   );
+}
+
+/* ───────────────────────── growth milestones (2026-09-20) ────────────────── */
+
+/**
+ * Emails the admin when total unique visitors or total members cross a new
+ * milestone (every N of each, set on the dashboard — lib/analytics/
+ * growth-alert-settings.ts). The same lock the download milestone uses
+ * (`admin_alerts.key`), so a milestone is announced once however many
+ * callers notice it.
+ *
+ * Two callers: the daily digest cron (every run) and the analytics collect
+ * route, sampled and throttled — one count per instance per ten minutes at
+ * most, because the visitor count is a DISTINCT over every human event ever
+ * recorded (index-only on `analytics_events_human_visitor_idx`, but not free).
+ */
+let lastGrowthCheckAt = 0;
+const GROWTH_CHECK_THROTTLE_MS = 10 * 60_000;
+
+export async function checkGrowthMilestones(opts: { force?: boolean } = {}): Promise<{ visitors: number | null; users: number | null; sent: string[] }> {
+  const sent: string[] = [];
+  if (!hasSupabase) return { visitors: null, users: null, sent };
+  if (!opts.force && Date.now() - lastGrowthCheckAt < GROWTH_CHECK_THROTTLE_MS) return { visitors: null, users: null, sent };
+  lastGrowthCheckAt = Date.now();
+  const settings = await getGrowthAlerts();
+  if (!settings.visitors.enabled && !settings.users.enabled) return { visitors: null, users: null, sent };
+  const supabase = createAdminClient();
+  let visitors: number | null = null;
+  let users: number | null = null;
+  try {
+    if (settings.visitors.enabled) {
+      const { data, error } = await supabase.rpc("analytics_visitors_total");
+      if (!error && typeof data === "number") visitors = data;
+      else if (!error && data && typeof data === "object" && "count" in (data as object)) visitors = Number((data as { count: unknown }).count);
+    }
+    if (settings.users.enabled) {
+      const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true });
+      users = count ?? null;
+    }
+  } catch (e) {
+    console.error("[analytics] growth counts failed", { error: String(e).slice(0, 160) });
+    return { visitors, users, sent };
+  }
+  for (const [name, count, every, noun, intro] of [
+    ["visitors", visitors, settings.visitors.every, "visitors", "People keep finding FrenzSave. Nice work! 🚀"],
+    ["users", users, settings.users.every, "members", "More people have made FrenzSave theirs. Nice work! 🚀"],
+  ] as const) {
+    if (count === null) continue;
+    const milestone = milestoneFor(count, every);
+    if (!milestone) continue;
+    const outcome = await sendAdminAlertOnce(
+      `${name}-${milestone}`,
+      `${name === "visitors" ? "visitor" : "user"}_milestone`,
+      `🎉 ${milestone.toLocaleString()} ${noun} on FrenzSave`,
+      alertEmailHtml({
+        heading: `${milestone.toLocaleString()} ${noun} & counting`,
+        intro,
+        rows: [
+          { label: name === "visitors" ? "Unique visitors, all time" : "Members, all time", value: count.toLocaleString() },
+          { label: "Milestone", value: milestone.toLocaleString() },
+        ],
+        footnote: `You'll get the next nudge at ${(milestone + every).toLocaleString()} ${noun}.`,
+      }),
+    );
+    if (outcome === "sent") sent.push(`${name}-${milestone}`);
+  }
+  return { visitors, users, sent };
 }

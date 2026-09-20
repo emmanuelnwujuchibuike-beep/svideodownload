@@ -239,6 +239,33 @@ const schema = z.object({
           upper_body: modeSchema.optional(),
         })
         .optional(),
+      /** Part 11 §5, §18: complimentary creations and the device rule. */
+      freeAccess: z
+        .object({
+          enabled: z.boolean().optional(),
+          creationsPerAccount: z.number().int().min(0).max(100).optional(),
+          entitlement: z.literal("lifetime").optional(),
+          maxDurationSeconds: z.number().int().min(1).max(120).optional(),
+          maxQualityRank: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+          allowedModes: z.array(z.enum(["face_only", "skin_face", "upper_body", "full_character"])).max(4).optional(),
+          allowTts: z.boolean().optional(),
+          allowUploadedVoice: z.boolean().optional(),
+          allowLipSync: z.boolean().optional(),
+          maxUploadBytes: z.number().int().min(1024 * 1024).max(100 * 1024 * 1024).optional(),
+        })
+        .optional(),
+      antiAbuse: z
+        .object({
+          maxFreeAccountsPerDevice: z.number().int().min(0).max(1_000).optional(),
+          deviceDetection: z.boolean().optional(),
+          maxFreeAccountsPerNetwork: z.number().int().min(0).max(10_000).optional(),
+          networkWindowHours: z.number().int().min(1).max(720).optional(),
+          signupRateLimit: z.boolean().optional(),
+          verificationAfterLimit: z.boolean().optional(),
+          paidUsersExempt: z.boolean().optional(),
+          adminExempt: z.boolean().optional(),
+        })
+        .optional(),
       /** The replacement-scope brief §13: provider cost protection. */
       pricingGuard: z
         .object({

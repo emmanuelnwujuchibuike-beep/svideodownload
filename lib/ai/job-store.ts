@@ -296,7 +296,10 @@ export async function claimJobStart(input: {
   maxPerDay: number;
   chargedCents: number;
   metadata: Record<string, unknown>;
+  /** Part 11: a complimentary creation claims as `free` (charged 0, nothing reserved); the default is the wallet. */
+  funding?: "balance" | "free";
 }): Promise<StartClaimVerdict> {
+  const funding = input.funding ?? "balance";
   const { data, error } = await createAdminClient().rpc("claim_ai_job_start", {
     p_job_id: input.jobId,
     p_user_id: input.userId,
@@ -306,6 +309,7 @@ export async function claimJobStart(input: {
     p_max_daily: Math.max(0, Math.floor(input.maxPerDay)),
     p_charged: input.chargedCents,
     p_metadata: input.metadata,
+    p_funding: funding,
   });
   if (error) {
     /*
@@ -314,10 +318,10 @@ export async function claimJobStart(input: {
       work. The old compare-and-set is the fallback — the limits are then the
       create route's count, exactly as before Part 8.
     */
-    if (error.code === "PGRST202" || /claim_ai_job_start/.test(error.message)) {
-      console.warn("[ai/jobs] claim_ai_job_start missing — falling back to the plain CAS (apply 0158)", { jobId: input.jobId });
+    if (error.code === "PGRST202" || error.code === "PGRST203" || /claim_ai_job_start/.test(error.message)) {
+      console.warn("[ai/jobs] claim_ai_job_start missing or ambiguous — falling back to the plain CAS (apply 0158/0162)", { jobId: input.jobId, code: error.code });
       const moved = await transitionJob(input.jobId, ["queued"], "acquiring", {
-        funding_source: "balance",
+        funding_source: funding,
         charged_cents: input.chargedCents,
         started_at: new Date().toISOString(),
         metadata: input.metadata,

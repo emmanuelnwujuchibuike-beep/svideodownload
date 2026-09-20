@@ -482,6 +482,8 @@ export function canStart(input: {
   if (!inputReadiness(project, config).ready) return false;
   if (!voiceComplete(project, config)) return false;
   if (pricing.status !== "quoted") return false;
+  // Part 11 §7: a complimentary creation needs no balance; the server decides again at /start
+  if (pricing.snapshot.billing?.complimentary) return true;
   if (input.balanceCents === null || input.balanceCents < pricing.snapshot.totalCents) return false;
   return true;
 }

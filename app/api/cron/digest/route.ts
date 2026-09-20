@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { cronAuthorized } from "@/lib/cron/auth";
 import { buildDigest, type DigestPeriod } from "@/lib/analytics/digest";
 import { digestEmailHtml, digestEmailSubject } from "@/lib/analytics/digest-email";
+import { checkGrowthMilestones } from "@/server/services/analytics";
 import { alertsEnabled, diagnoseEmail, sendAdminAlertOnce, type AlertOutcome } from "@/lib/notify";
 
 export const runtime = "nodejs";
@@ -84,8 +85,11 @@ async function run(request: Request) {
     else rejected.push(period);
   }
 
+  // owner, 2026-09-20: the visitor / member milestone emails ride the daily run (forced past the ten-minute throttle)
+  const growth = await checkGrowthMilestones({ force: true }).catch(() => ({ visitors: null, users: null, sent: [] as string[] }));
+
   if (rejected.length === 0) {
-    return NextResponse.json({ ok: true, sent, ...(duplicate.length ? { duplicate } : {}) });
+    return NextResponse.json({ ok: true, sent, ...(duplicate.length ? { duplicate } : {}), growth });
   }
 
   /*

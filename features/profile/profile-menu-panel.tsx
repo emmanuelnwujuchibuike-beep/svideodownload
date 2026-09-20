@@ -3,7 +3,6 @@
 import {
   Bookmark,
   ChevronRight,
-  Cloud,
   Compass,
   Crown,
   Download,
@@ -13,7 +12,6 @@ import {
   MessageCircle,
   Music,
   Settings,
-  ShoppingBag,
   Sparkles,
   UsersRound,
   X,
@@ -50,8 +48,8 @@ import { cn } from "@/lib/utils";
  * import it statically — see `features/auth/user-menu.tsx`.
  *
  * Honesty rule (the "profile doorway" memory): only items with a REAL route are
- * links; ecosystem items that aren't built yet (Trending, News, Communities,
- * Cloud Storage, Marketplace) are marked "Soon", never links that 404.
+ * links. Owner, 2026-09-20: nothing "Soon" in this menu at all — the unbuilt
+ * spaces (Cloud Storage, Marketplace) are gone rather than shown as pills.
  */
 
 const APP_BUILD = process.env.NEXT_PUBLIC_APP_BUILD ?? "";
@@ -94,15 +92,9 @@ const NAV: NavItem[] = [
   renders as a real link with no pill; the two without one keep theirs, which is
   the doorway rule working rather than being switched off.
 */
-const SPACES: { label: string; sub: string; icon: ComponentType<{ className?: string }>; tint: string; href?: string }[] = [
+const SPACES: { label: string; sub: string; icon: ComponentType<{ className?: string }>; tint: string; href: string }[] = [
   { label: "Frenz AI", sub: "AI tools for your videos", icon: Sparkles, tint: "from-violet-500/15 to-purple-500/15 text-violet-500", href: "/studio/ai" },
-  { label: "Cloud Storage", sub: "Store and access your files", icon: Cloud, tint: "from-sky-500/15 to-blue-500/15 text-sky-500" },
-  { label: "Marketplace", sub: "Buy, sell and discover", icon: ShoppingBag, tint: "from-fuchsia-500/15 to-pink-500/15 text-fuchsia-500" },
 ];
-
-function SoonPill() {
-  return <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Soon</span>;
-}
 
 /** The reference's boxed glyph: a hairline rounded tile that turns violet when the row is active. */
 function NavTile({ icon: Icon, active }: { icon: ComponentType<{ className?: string }>; active?: boolean }) {
@@ -230,7 +222,6 @@ export function ProfileMenuPanel({
                 <span className={cn("flex-1 font-semibold", active ? "text-violet-600 dark:text-violet-300" : it.soon ? "text-muted-foreground" : undefined)}>
                   {it.label}
                 </span>
-                {it.soon ? <SoonPill /> : null}
                 {it.badge === "inbox" && unread > 0 ? (
                   <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-bold text-violet-600 dark:text-violet-300">
                     {unread > 99 ? "99+" : unread}
@@ -270,18 +261,13 @@ export function ProfileMenuPanel({
                   <span className="block text-sm font-bold">{s.label}</span>
                   <span className="block truncate text-xs text-muted-foreground">{s.sub}</span>
                 </span>
-                {s.href ? null : <SoonPill />}
               </>
             );
             const cls = "flex items-center gap-3 rounded-2xl border border-border/60 bg-card px-3 py-3";
-            return s.href ? (
+            return (
               <Link key={s.label} href={s.href} prefetch onClick={onNavigate} className={cn(cls, "transition hover:border-foreground/15")}>
                 {body}
               </Link>
-            ) : (
-              <div key={s.label} className={cls}>
-                {body}
-              </div>
             );
           })}
         </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
+import { deviceCookieHeader, newDeviceId, readDeviceId } from "@/lib/ai/character-replace/free-access";
 import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
@@ -69,6 +70,9 @@ export async function GET(request: Request) {
       // 2026-09-20: a voice feature whose provider key is missing here is not offered (it would be refused at Start)
       voiceCapabilities(cr),
     );
+    // Part 11 §14: the device id is a server-set, httpOnly cookie planted on the first read; the entitlement is decided against it later
+    const headers = new Headers();
+    if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
     return NextResponse.json({
       config,
       /*
@@ -94,7 +98,7 @@ export async function GET(request: Request) {
       */
       maintenance: cr.ops.maintenanceMode ? { active: true, message: cr.ops.maintenanceMessage } : { active: false, message: null },
       processingPaused: !cr.ops.processingEnabled && !cr.ops.maintenanceMode,
-    });
+    }, { headers });
   } catch (e) {
     console.error("[ai/character-replace/config] read failed", { subject: subject.key, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });

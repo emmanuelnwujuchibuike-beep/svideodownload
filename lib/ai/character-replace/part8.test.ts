@@ -155,7 +155,9 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
     const breaker = at("const { open } = await providerHealthFor(models);");
     const claim = at("const claim = await claimJobStart({");
     const reserve = at("balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });");
-    const revert = at("const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});");
+    // Part 11 added a revert on a refused FREE use before the reserve; the one this test pins is the reserve's own
+    const revert = start.indexOf("const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});", reserve);
+    expect(revert).toBeGreaterThan(0);
     const handoff = at("const handoff = await dispatchPreparation(job.id);");
     expect(maintenance).toBeLessThan(paused);
     expect(paused).toBeLessThan(breaker);
@@ -183,7 +185,7 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
   });
   it("the store falls back to the plain CAS only when the function is missing, and the revert is guarded on acquiring + no prediction", () => {
     const store = code("lib/ai/job-store.ts");
-    expect(store).toContain('if (error.code === "PGRST202" || /claim_ai_job_start/.test(error.message)) {');
+    expect(store).toContain('if (error.code === "PGRST202" || error.code === "PGRST203" || /claim_ai_job_start/.test(error.message)) {');
     expect(store).toContain('.eq("status", "acquiring")\n    .is("replicate_prediction_id", null)');
   });
   it("creation refuses on the switches too, and the config route folds them into processingAvailable", () => {

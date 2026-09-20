@@ -5,6 +5,7 @@ import { geoFromHeaders, isBotUA, parseUA } from "@/lib/analytics/enrich";
 import type { DownloadStatus } from "@/lib/analytics/types";
 import { notifyAdminsOfDownloadOutcome } from "@/lib/analytics/download-failure-alert";
 import { notifyAdminsOfRetrySuccess } from "@/lib/analytics/retry-success-alert";
+import { checkGrowthMilestones } from "@/server/services/analytics";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -307,6 +308,9 @@ export async function POST(request: Request) {
       }),
     );
   }
+
+  // owner, 2026-09-20: the visitor / member milestone emails — sampled here (one batch in fifty), throttled inside to one count per instance per ten minutes; the daily digest run checks every day regardless
+  if (Math.random() < 0.02) after(() => checkGrowthMilestones().catch(() => undefined));
 
   return new NextResponse(null, { status: 204 });
 }

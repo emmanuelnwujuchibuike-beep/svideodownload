@@ -3,7 +3,7 @@
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceQuote, CharacterReplaceVoiceSource, QuoteInput } from "@/lib/ai/character-replace/pricing";
-import type { CharacterReplaceBalance, CharacterReplacePreflight, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceBalance, CharacterReplaceBilling, CharacterReplacePreflight, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import type { AiJobView } from "@/lib/ai/jobs";
 
@@ -290,6 +290,8 @@ export interface CharacterReplaceQuoteAnswer {
   afterCents: number;
   sufficient: boolean;
   shortfallCents: number;
+  /** Part 11 §7: whether this video would be a complimentary creation. */
+  billing?: CharacterReplaceBilling;
 }
 
 /**

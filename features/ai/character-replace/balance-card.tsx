@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Wallet, X } from "lucide-react";
+import { Gift, Plus, Wallet, X } from "lucide-react";
 
 import { AnimatedAmount } from "@/features/ai/animated-amount";
 import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
@@ -88,6 +88,27 @@ export function CharacterReplaceBalanceCard({
       {error ? (
         <p role="status" className="mt-3 text-[12.5px] leading-relaxed text-rose-500">
           We couldn&apos;t check your balance. Nothing has been charged — try again in a moment.
+        </p>
+      ) : null}
+
+      {/* Part 11 §6, §20: the complimentary creations, in the member's words — never a mechanism */}
+      {balance?.freeAccess?.enabled ? (
+        <p
+          role="status"
+          className={cn(
+            "mt-3 flex items-start gap-2 rounded-2xl px-3.5 py-2.5 text-[12.5px] leading-relaxed",
+            balance.freeAccess.eligible ? "bg-primary/[0.07] text-foreground" : "bg-secondary/70 text-muted-foreground",
+          )}
+        >
+          <Gift className={cn("mt-0.5 h-4 w-4 shrink-0", balance.freeAccess.eligible ? "text-primary" : "text-muted-foreground")} aria-hidden />
+          <span>
+            <span className="font-semibold">{balance.freeAccess.message}</span>
+            {balance.freeAccess.reason === "FREE_USES_EXHAUSTED" ? " Recharge your Character Replace balance to continue." : null}
+            {balance.freeAccess.reason === "DEVICE_LIMIT_REACHED" ? " Continue with a funded Character Replace balance." : null}
+            {balance.freeAccess.eligible && balance.freeAccess.remaining !== null
+              ? ` Up to ${balance.freeAccess.limits.maxDurationSeconds} seconds at the standard quality.`
+              : null}
+          </span>
         </p>
       ) : null}
 

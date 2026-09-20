@@ -32,26 +32,18 @@ import { cn } from "@/lib/utils";
  *   · One hero: the balance, what a second costs, Recharge, Create a video.
  *   · Three honest figures from the statement itself — videos made, spent,
  *     refunded — labelled for the lines this page holds, never a guess.
- *   · The AI Clean free allowance keeps its meters only when the plan has one.
+ *   · Character Replace only (owner, 2026-09-20): the retired AI Clean allowance
+ *     meters are gone — this page is the wallet and its statement.
  *   · The statement rows carry a glyph per kind and a real sentence.
  *
  * Performance: the page is what it was — one client component, one request
  * for the balance + 100 ledger lines (`/api/ai/character-replace/balance`),
- * one for the AI Clean allowance, and the sheet's chunk is fetched only when
- * Recharge is pressed (next/dynamic inside the sheet module).
+ * and the sheet's chunk is fetched only when Recharge is pressed (next/dynamic
+ * inside the sheet module).
  */
 type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
 
 type LedgerRow = CharacterReplaceTransaction;
-
-interface AllowanceState {
-  usedToday: number;
-  dailyLimit: number;
-  usedThisWeek: number;
-  weeklyLimit: number;
-  freeRemaining: number;
-  weekResetsAt: string;
-}
 
 const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; tone: "in" | "out" | "neutral" }> = {
   recharge: { label: "Balance added", Icon: ArrowDownLeft, tone: "in" },
@@ -67,7 +59,6 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
   const [hidden, toggleHidden] = useBalanceHidden();
   const [openLine, setOpenLine] = useState<LedgerRow | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
-  const [allowance, setAllowance] = useState<AllowanceState | null>(null);
   const [failed, setFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -76,19 +67,13 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
 
   const load = useCallback(async () => {
     setFailed(false);
-    const [wallet, free] = await Promise.all([
-      getCharacterReplaceBalance({ ledger: 100 }),
-      fetch("/api/ai/balance", { cache: "no-store" })
-        .then((r) => (r.ok ? (r.json() as Promise<AllowanceState>) : null))
-        .catch(() => null),
-    ]);
+    const wallet = await getCharacterReplaceBalance({ ledger: 100 });
     if (!wallet.ok) {
       setFailed(true);
       return;
     }
     setBalance(wallet.balance);
     setLedger(wallet.transactions);
-    setAllowance(free);
   }, []);
 
   useEffect(() => {
@@ -156,7 +141,6 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
   }, [ledger]);
 
   const symbol = balance?.symbol ?? "₦";
-  const hasFree = !!allowance && (allowance.dailyLimit > 0 || allowance.weeklyLimit > 0);
 
   return (
     <FrenzAIEnvironment stage="idle" className="relative overflow-hidden rounded-[1.75rem]">
@@ -287,22 +271,6 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
             ) : null}
             {figures?.partial ? <p className="mt-2 text-[11.5px] text-muted-foreground">Counted from your most recent 100 lines.</p> : null}
 
-            {/* ── the AI Clean allowance, only when the plan has one ───────── */}
-            {hasFree && allowance ? (
-              <section aria-label="Free AI Clean videos" className="mt-6">
-                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">AI Clean · free videos</h2>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <Meter label="Today" used={allowance.usedToday} limit={allowance.dailyLimit} hint="Resets at midnight" />
-                  <Meter label="This week" used={allowance.usedThisWeek} limit={allowance.weeklyLimit} hint={`Resets ${formatDate(allowance.weekResetsAt)}`} />
-                </div>
-                <p className="mt-2 text-[13px] text-muted-foreground">
-                  {allowance.freeRemaining > 0
-                    ? `${allowance.freeRemaining} free ${allowance.freeRemaining === 1 ? "video" : "videos"} left right now.`
-                    : "No free videos left right now — Character Replace always uses your balance."}
-                </p>
-              </section>
-            ) : null}
-
             {/* ── the statement ─────────────────────────────────────────── */}
             <section aria-label="Statement" className="mt-8">
               <div className="flex items-baseline justify-between gap-3">
@@ -402,33 +370,6 @@ function Figure({ label, value, tone }: { label: string; value: string; tone?: "
   );
 }
 
-/**
- * A used/limit bar. A limit of 0 means NO free videos on this plan — not
- * "unlimited" (`freeRemaining` is min(daily, weekly) remaining, so a zero
- * limit is zero free). The bar says that in words rather than drawing "0 / 0".
- */
-function Meter({ label, used, limit, hint }: { label: string; used: number; limit: number; hint: string }) {
-  const pct = limit > 0 ? Math.max(0, Math.min(100, Math.round((used / limit) * 100))) : 0;
-  return (
-    <div className="rounded-2xl bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-        <p className="text-[13px] font-bold tabular-nums">{limit > 0 ? `${used} / ${limit}` : "None free"}</p>
-      </div>
-      <div
-        className="mt-2.5 h-2 overflow-hidden rounded-full bg-foreground/[0.06] dark:bg-white/10"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={limit}
-        aria-valuenow={Math.min(used, limit)}
-        aria-label={`${label}: ${used} of ${limit} free videos used`}
-      >
-        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-[width] duration-500" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="mt-2 text-[12px] text-muted-foreground">{limit > 0 ? hint : "No free videos on your plan — each one uses your balance."}</p>
-    </div>
-  );
-}
 
 /** Shapes only — no numbers. */
 function UsageSkeleton() {

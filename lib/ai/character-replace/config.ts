@@ -379,6 +379,46 @@ export interface CharacterReplaceConfig {
     minimumCustomerPriceCents: number;
     allowBelowMargin: boolean;
   };
+  /**
+   * ── PART 11: COMPLIMENTARY CREATIONS (owner, 2026-09-20) ─────────────────
+   * Every eligible account gets `creationsPerAccount` free Character Replace
+   * creations — lifetime, never refilled — and then pays per video. What a
+   * free creation may be is bounded here: its longest video, its highest
+   * quality (a rank in the scope's tier list: 0 = the lowest), the scopes it
+   * may use, and whether the premium voice options ride for free. The server
+   * decides every one of these; the browser only shows them.
+   */
+  freeAccess: {
+    enabled: boolean;
+    creationsPerAccount: number;
+    /** Lifetime is the product rule (§1); the field exists so the admin sees it, and so a later window could be added without a shape change. */
+    entitlement: "lifetime";
+    maxDurationSeconds: number;
+    /** 0 = the scope's lowest tier only, 1 = up to the second, 2 = any. */
+    maxQualityRank: 0 | 1 | 2;
+    allowedModes: readonly ReplacementMode[];
+    allowTts: boolean;
+    allowUploadedVoice: boolean;
+    allowLipSync: boolean;
+    maxUploadBytes: number;
+  };
+  /**
+   * ── PART 11: DEVICE-LEVEL ABUSE PROTECTION (§9–§15) ─────────────────────
+   * A device (a server-set cookie, hashed) may carry the complimentary offer
+   * for `maxFreeAccountsPerDevice` accounts; a coarse network hash is the
+   * secondary signal over a short window. None of it blocks PAID processing.
+   */
+  antiAbuse: {
+    maxFreeAccountsPerDevice: number;
+    deviceDetection: boolean;
+    /** Accounts granted the offer on one network hash inside `networkWindowHours` before further grants are held (0 = off). */
+    maxFreeAccountsPerNetwork: number;
+    networkWindowHours: number;
+    signupRateLimit: boolean;
+    verificationAfterLimit: boolean;
+    paidUsersExempt: boolean;
+    adminExempt: boolean;
+  };
   audio: CharacterReplaceAudioConfig;
   tts: CharacterReplaceTtsConfig;
   /** The longest video a lip-sync run accepts. Clamped to the tool's ceiling. */
@@ -666,6 +706,28 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
     minimumCustomerPriceCents: 0,
     allowBelowMargin: false,
   },
+  freeAccess: {
+    enabled: true,
+    creationsPerAccount: 2,
+    entitlement: "lifetime",
+    maxDurationSeconds: 10,
+    maxQualityRank: 0,
+    allowedModes: ["face_only", "skin_face", "upper_body", "full_character"],
+    allowTts: false,
+    allowUploadedVoice: false,
+    allowLipSync: false,
+    maxUploadBytes: 50 * 1024 * 1024,
+  },
+  antiAbuse: {
+    maxFreeAccountsPerDevice: 2,
+    deviceDetection: true,
+    maxFreeAccountsPerNetwork: 4,
+    networkWindowHours: 24,
+    signupRateLimit: true,
+    verificationAfterLimit: false,
+    paidUsersExempt: true,
+    adminExempt: true,
+  },
   audio: {
     replacementEnabled: true,
     maximumDurationSeconds: 120,
@@ -930,6 +992,36 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
         minimumMarginPercent: num(g.minimumMarginPercent, d.pricingGuard.minimumMarginPercent, 0, 1_000),
         minimumCustomerPriceCents: int(g.minimumCustomerPriceCents, d.pricingGuard.minimumCustomerPriceCents, 0, 100_000_000),
         allowBelowMargin: bool(g.allowBelowMargin, d.pricingGuard.allowBelowMargin),
+      };
+    })(),
+    freeAccess: (() => {
+      const g = isRecord(raw.freeAccess) ? raw.freeAccess : {};
+      const rank = int(g.maxQualityRank, d.freeAccess.maxQualityRank, 0, 2) as 0 | 1 | 2;
+      const modes = Array.isArray(g.allowedModes) ? REPLACEMENT_MODES.filter((m) => (g.allowedModes as unknown[]).includes(m)) : [...d.freeAccess.allowedModes];
+      return {
+        enabled: bool(g.enabled, d.freeAccess.enabled),
+        creationsPerAccount: int(g.creationsPerAccount, d.freeAccess.creationsPerAccount, 0, 100),
+        entitlement: "lifetime" as const,
+        maxDurationSeconds: int(g.maxDurationSeconds, d.freeAccess.maxDurationSeconds, 1, PLATFORM_MAX_DURATION_SECONDS),
+        maxQualityRank: rank,
+        allowedModes: modes,
+        allowTts: bool(g.allowTts, d.freeAccess.allowTts),
+        allowUploadedVoice: bool(g.allowUploadedVoice, d.freeAccess.allowUploadedVoice),
+        allowLipSync: bool(g.allowLipSync, d.freeAccess.allowLipSync),
+        maxUploadBytes: int(g.maxUploadBytes, d.freeAccess.maxUploadBytes, 1024 * 1024, PLATFORM_MAX_UPLOAD_BYTES),
+      };
+    })(),
+    antiAbuse: (() => {
+      const g = isRecord(raw.antiAbuse) ? raw.antiAbuse : {};
+      return {
+        maxFreeAccountsPerDevice: int(g.maxFreeAccountsPerDevice, d.antiAbuse.maxFreeAccountsPerDevice, 0, 1_000),
+        deviceDetection: bool(g.deviceDetection, d.antiAbuse.deviceDetection),
+        maxFreeAccountsPerNetwork: int(g.maxFreeAccountsPerNetwork, d.antiAbuse.maxFreeAccountsPerNetwork, 0, 10_000),
+        networkWindowHours: int(g.networkWindowHours, d.antiAbuse.networkWindowHours, 1, 24 * 30),
+        signupRateLimit: bool(g.signupRateLimit, d.antiAbuse.signupRateLimit),
+        verificationAfterLimit: bool(g.verificationAfterLimit, d.antiAbuse.verificationAfterLimit),
+        paidUsersExempt: bool(g.paidUsersExempt, d.antiAbuse.paidUsersExempt),
+        adminExempt: bool(g.adminExempt, d.antiAbuse.adminExempt),
       };
     })(),
     audio: {

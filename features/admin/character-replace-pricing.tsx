@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
-import { ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_GENDER_LABEL } from "@/lib/ai/voice/elevenlabs-models";
+import { ELEVENLABS_REPLICATE_TTS_MODELS, ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsReplicateModel, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_AGES, VOICE_GENDER_LABEL, VOICE_GENDERS, type VoiceAge, type VoiceGender } from "@/lib/ai/voice/elevenlabs-models";
 import { formatCents } from "@/lib/ai/economy";
 import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
 import { AI_CURRENCIES, aiCurrencySymbol, isAiCurrency, majorInputToMinor, minorToMajorInput, type AiCurrency } from "@/lib/landing/bounds";
@@ -132,6 +132,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [changeEnabled, setChangeEnabled] = useState(cr.tts.voiceChange.enabled);
   const [changeModel, setChangeModel] = useState(cr.tts.voiceChange.model);
   const [changePerSecond, setChangePerSecond] = useState(minorToMajorInput(cr.tts.voiceChange.perSecondCents));
+  /** The catalogue's gender/age, editable (2026-09-20: a label the operator disagrees with is theirs to fix). Sent only when touched. */
+  const [voiceRows, setVoiceRows] = useState(cr.voices.map((v) => ({ ...v, languages: [...v.languages] })));
+  const [voicesTouched, setVoicesTouched] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [ttsPerRequest, setTtsPerRequest] = useState(minorToMajorInput(cr.tts.perRequestCents));
@@ -266,6 +269,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       maximumDurationSeconds: maxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(maxSeconds)),
       maximumUploadBytes: maxUploadMb.trim() === "" ? cr.maximumUploadBytes : Math.floor(Number(maxUploadMb)) * 1024 * 1024,
       trim: { minimumSeconds: trimMin.trim() === "" ? cr.trim.minimumSeconds : Number(trimMin) },
+      ...(voicesTouched ? { voices: voiceRows.map((v) => ({ id: v.id, label: v.label, blurb: v.blurb, languages: v.languages, providerVoiceId: v.providerVoiceId, provider: v.provider, gender: v.gender, age: v.age })) } : {}),
       recharge: {
         checkoutCurrency,
         fxMarkupPercent: fxMarkup.trim() === "" ? cr.recharge.fxMarkupPercent : Math.max(0, Math.min(50, Number(fxMarkup) || 0)),
@@ -276,7 +280,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceRows, voiceSurcharge, voicesTouched]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -358,6 +362,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     if (payload.tts.enabled && payload.tts.perRequestCents === 0 && payload.tts.perCharacterCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("A generated voice is free — every voice fee is zero.");
     if (payload.tts.voiceChange.enabled && payload.tts.voiceChange.perSecondCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("Changing a voice is free — its per-second rate and the new-voice surcharge are both zero.");
     if (isElevenLabsTtsModel(payload.tts.model) && !cr.voices.some((v) => v.provider === "elevenlabs")) out.push("An ElevenLabs voice model is selected but the catalogue has no ElevenLabs voices — press Import voices below, or nobody can generate a voice.");
+    if (isElevenLabsTtsModel(payload.tts.model) && !isElevenLabsReplicateModel(payload.tts.model) && cr.voices.some((v) => v.provider === "elevenlabs" && /^[A-Z][a-z]+$/.test(v.providerVoiceId))) {
+      out.push("A direct ElevenLabs model is selected but the catalogue holds the Replicate route's voice NAMES — press Import voices so the rows carry the account's voice ids, or choose the Replicate model.");
+    }
     /* ── Part 8 §2, §8: the switches and the caps ── */
     if (payload.ops.maintenanceMode && !cr.ops.maintenanceMode) out.push("This puts Character Replace into MAINTENANCE: no new videos for anyone until it is switched back. Finished videos stay reachable.");
     if (!payload.ops.processingEnabled && cr.ops.processingEnabled) out.push("This PAUSES new videos for every member. Videos already running finish normally.");
@@ -716,16 +723,31 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               <Field
                 id="cr-tts-model"
                 label="Voice model"
-                hint={isElevenLabsTtsModel(ttsModel) ? "ElevenLabs, called by the worker. Needs ELEVENLABS_API_KEY on Railway (the worker) and Vercel (this import button)." : "MiniMax on Replicate — a prediction with a voice stage."}
+                hint={
+                  isElevenLabsReplicateModel(ttsModel)
+                    ? "ElevenLabs on Replicate — the same token as every other model, no other key. The 26 named voices below."
+                    : isElevenLabsTtsModel(ttsModel)
+                      ? "ElevenLabs through its own API, called by the worker. Needs ELEVENLABS_API_KEY on Railway and Vercel, and Import voices for the account's voice ids."
+                      : "MiniMax on Replicate — a prediction with a voice stage."
+                }
               >
                 <select id="cr-tts-model" value={ttsModel} onChange={(e) => setTtsModel(e.target.value)} className={input}>
-                  {Object.entries(ELEVENLABS_TTS_MODELS).map(([id, m]) => (
-                    <option key={id} value={id}>
-                      {m.label}
-                    </option>
-                  ))}
-                  <option value="minimax/speech-02-hd">MiniMax Speech-02 HD (Replicate)</option>
-                  <option value="minimax/speech-02-turbo">MiniMax Speech-02 Turbo (Replicate)</option>
+                  <optgroup label="Replicate (one token for everything)">
+                    {Object.entries(ELEVENLABS_REPLICATE_TTS_MODELS).map(([id, m]) => (
+                      <option key={id} value={id}>
+                        {m.label}
+                      </option>
+                    ))}
+                    <option value="minimax/speech-02-hd">MiniMax Speech-02 HD on Replicate</option>
+                    <option value="minimax/speech-02-turbo">MiniMax Speech-02 Turbo on Replicate</option>
+                  </optgroup>
+                  <optgroup label="ElevenLabs direct (needs ELEVENLABS_API_KEY)">
+                    {Object.entries(ELEVENLABS_TTS_MODELS).map(([id, m]) => (
+                      <option key={id} value={id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </optgroup>
                   {!isElevenLabsTtsModel(ttsModel) && !/^minimax\/speech-02-(hd|turbo)$/.test(ttsModel) ? <option value={ttsModel}>{ttsModel}</option> : null}
                 </select>
               </Field>
@@ -748,7 +770,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           <div className="mt-5 border-t border-border/60 pt-4">
             <Toggle
               label="Members may change the voice of their own recording"
-              hint="An uploaded audio file or a gallery video's sound, spoken by a catalogue voice of the gender and age the member picks. ElevenLabs, called by the worker; needs ELEVENLABS_API_KEY on Railway."
+              hint="An uploaded audio file or a gallery video's sound, spoken by a catalogue voice of the gender and age the member picks. Speech-to-speech is NOT on Replicate: this needs ELEVENLABS_API_KEY on Railway (the worker) and the account's voice ids (Import voices). Until then it is not offered to members."
               checked={changeEnabled}
               onChange={setChangeEnabled}
             />
@@ -774,8 +796,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               <div className="min-w-0">
                 <p className="text-sm font-semibold">Voice catalogue</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Members see the voices of the selected model&apos;s provider, filtered by gender and age. Import reads your ElevenLabs account&apos;s library (with its own gender and age labels) and
-                  replaces the ElevenLabs rows; the MiniMax rows are untouched. Provider ids never reach a member.
+                  Members see the voices of the selected model&apos;s provider, filtered by gender and age. The Replicate models take the 26 named voices shipped here (Kuon left out — its
+                  gender and age are undocumented). Import reads your ElevenLabs account&apos;s library for a direct-API model and replaces the ElevenLabs rows; the MiniMax rows are untouched.
+                  Provider ids never reach a member.
                 </p>
               </div>
               <button
@@ -816,15 +839,49 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                   </tr>
                 </thead>
                 <tbody>
-                  {cr.voices.map((v) => (
+                  {voiceRows.map((v, i) => (
                     <tr key={v.id} className={cn("border-t border-border/50", (isElevenLabsTtsModel(ttsModel) ? "elevenlabs" : "minimax") !== v.provider && "text-muted-foreground/70")}>
                       <td className="py-1.5 pr-3">
                         <span className="font-semibold text-foreground">{v.label}</span>
                         {v.blurb ? <span className="text-muted-foreground"> · {v.blurb}</span> : null}
                       </td>
                       <td className="py-1.5 pr-3">{v.provider === "elevenlabs" ? "ElevenLabs" : "MiniMax"}</td>
-                      <td className="py-1.5 pr-3">{VOICE_GENDER_LABEL[v.gender]}</td>
-                      <td className="py-1.5 pr-3">{VOICE_AGE_LABEL[v.age]}</td>
+                      <td className="py-1.5 pr-3">
+                        <select
+                          aria-label={`${v.label} gender`}
+                          value={v.gender}
+                          onChange={(e) => {
+                            const gender = e.target.value as VoiceGender;
+                            setVoiceRows((rows) => rows.map((r, j) => (j === i ? { ...r, gender } : r)));
+                            setVoicesTouched(true);
+                          }}
+                          className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                        >
+                          {VOICE_GENDERS.map((g) => (
+                            <option key={g} value={g}>
+                              {VOICE_GENDER_LABEL[g]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-1.5 pr-3">
+                        <select
+                          aria-label={`${v.label} age`}
+                          value={v.age}
+                          onChange={(e) => {
+                            const age = e.target.value as VoiceAge;
+                            setVoiceRows((rows) => rows.map((r, j) => (j === i ? { ...r, age } : r)));
+                            setVoicesTouched(true);
+                          }}
+                          className="rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                        >
+                          {VOICE_AGES.map((a) => (
+                            <option key={a} value={a}>
+                              {VOICE_AGE_LABEL[a]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       <td className="py-1.5">{v.languages.length ? v.languages.join(", ") : "all"}</td>
                     </tr>
                   ))}

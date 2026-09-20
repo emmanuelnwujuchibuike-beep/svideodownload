@@ -4,7 +4,7 @@ import { AiJobError } from "@/lib/ai/errors";
 import type { AiJobStatus } from "@/lib/ai/jobs";
 import { createReplicatePrediction, toState } from "@/lib/ai/replicate/provider";
 import { elevenLabsConfigured, elevenLabsTextToSpeech } from "@/lib/ai/voice/elevenlabs";
-import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
+import { elevenLabsReplicateModel, elevenLabsTtsModel, ELEVENLABS_REPLICATE_VOICE_NAMES } from "@/lib/ai/voice/elevenlabs-models";
 import { minimaxLanguageHint, ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
 
 /**
@@ -185,7 +185,62 @@ export function replicateMiniMaxProvider(model: string): TextToSpeechProvider {
  * and speaks no language — the safe failure: TTS is simply not offered
  * until an adapter exists (§5: "the provider must be replaceable later").
  */
-/* ───────────────────────────── ElevenLabs (in the worker) ───────────────── */
+/* ───────────────────────────── ElevenLabs on Replicate ──────────────────── */
+
+export interface ReplicateElevenLabsInput {
+  prompt: string;
+  voice: string;
+  language_code: string;
+}
+
+export const REPLICATE_ELEVENLABS_INPUT_FIELDS = ["prompt", "voice", "language_code"] as const;
+
+/** Pure, exposed for tests: the text, a voice NAME from the schema's enum, the language. Nothing else — stability, style and speed stay the model's defaults. */
+export function buildReplicateElevenLabsInput(req: { text: string; languageCode: string; providerVoiceId: string | null }): ReplicateElevenLabsInput {
+  const voice = req.providerVoiceId ?? "";
+  if (!ELEVENLABS_REPLICATE_VOICE_NAMES.includes(voice)) throw new AiJobError("INVALID_INPUT", `${voice || "(none)"} is not a voice the Replicate model accepts`);
+  return { prompt: req.text, voice, language_code: req.languageCode.toLowerCase() };
+}
+
+/**
+ * ElevenLabs THROUGH REPLICATE (owner, 2026-09-20: one route, one key). The
+ * same shape as the MiniMax adapter: a prediction, a `voice` pipeline stage,
+ * the webhook, the worker bringing the MP3 home and fitting it. The voice is
+ * one of the 26 names the model enumerates; the catalogue's `providerVoiceId`
+ * for these rows IS that name.
+ */
+export function replicateElevenLabsProvider(model: string): TextToSpeechProvider {
+  const spec = elevenLabsReplicateModel(model);
+  const version = process.env.REPLICATE_ELEVENLABS_VERSION?.trim() || spec?.version || "";
+  return {
+    id: "replicate",
+    model,
+    version,
+    runsIn: "replicate",
+    isConfigured() {
+      return !!spec && !!process.env.REPLICATE_API_TOKEN?.trim() && !!version;
+    },
+    supportedLanguages() {
+      return spec ? spec.languages : [];
+    },
+    buildInput(req) {
+      return buildReplicateElevenLabsInput(req) as unknown as Record<string, unknown>;
+    },
+    async createPrediction(req) {
+      if (!this.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `text-to-speech model ${model} is not configured`);
+      const input = this.buildInput(req);
+      const body = await createReplicatePrediction({ jobId: req.jobId, version, input, webhookUrl: req.webhookUrl, label: "tts" });
+      const state = toState(body, body.id);
+      const { prompt: _prompt, ...settings } = input;
+      return { reference: state.reference, status: state.status, model, modelVersion: state.modelVersion ?? version, settings };
+    },
+    synthesize: async () => {
+      throw new AiJobError("INTERNAL_ERROR", `${model} runs as a prediction, not in the worker`);
+    },
+  };
+}
+
+/* ───────────────────────────── ElevenLabs direct (in the worker) ────────── */
 
 /**
  * ElevenLabs v3 / Multilingual v2 / Turbo & Flash v2.5 (owner, 2026-09-20:
@@ -221,6 +276,8 @@ export function elevenLabsProvider(model: string): TextToSpeechProvider {
     async synthesize(req) {
       if (!spec || !elevenLabsConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `text-to-speech model ${model} is not configured`);
       if (!req.providerVoiceId) throw new AiJobError("INVALID_INPUT", "an ElevenLabs voice needs the catalogue's provider voice id");
+      // the Replicate route's rows carry NAMES ("Rachel"); the API wants an id ("21m00Tcm4TlvDq8ikWAM") — press Import voices for a direct model
+      if (ELEVENLABS_REPLICATE_VOICE_NAMES.includes(req.providerVoiceId)) throw new AiJobError("INVALID_INPUT", `"${req.providerVoiceId}" is a Replicate voice name, not an ElevenLabs voice id — import the account's voices for a direct model`);
       if (req.text.length > spec.maxCharacters) throw new AiJobError("INVALID_INPUT", `${model} takes at most ${spec.maxCharacters} characters`);
       return elevenLabsTextToSpeech({ text: req.text, modelId: spec.modelId, providerVoiceId: req.providerVoiceId, languageCode: req.languageCode, languageCodeParam: spec.languageCodeParam });
     },
@@ -229,6 +286,7 @@ export function elevenLabsProvider(model: string): TextToSpeechProvider {
 
 export function textToSpeechProviderFor(model: string): TextToSpeechProvider {
   if (/^minimax\/speech-02-(hd|turbo)$/.test(model)) return replicateMiniMaxProvider(model);
+  if (elevenLabsReplicateModel(model)) return replicateElevenLabsProvider(model);
   if (elevenLabsTtsModel(model)) return elevenLabsProvider(model);
   return {
     id: "replicate",
@@ -249,7 +307,7 @@ export function textToSpeechProviderFor(model: string): TextToSpeechProvider {
   };
 }
 
-/** Whether the configured model's voice is made in the worker (no `voice` pipeline stage). Pure on the model name. */
+/** Whether the configured model's voice is made in the worker (no `voice` pipeline stage) — only the DIRECT ElevenLabs route. Pure on the model name. */
 export function ttsRunsInWorker(model: string): boolean {
-  return !!elevenLabsTtsModel(model);
+  return !!elevenLabsTtsModel(model) && !elevenLabsReplicateModel(model);
 }

@@ -42,6 +42,7 @@ import {
 } from "@/lib/ai/character-replace/modes";
 import {
   ELEVENLABS_DEFAULT_STS_MODEL,
+  ELEVENLABS_DEFAULT_TTS_MODEL,
   ELEVENLABS_DEFAULT_VOICES,
   elevenLabsStsModel,
   isElevenLabsTtsModel,
@@ -588,8 +589,8 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   tts: {
     enabled: true,
     provider: "replicate",
-    // 2026-09-20 (owner): ElevenLabs v3. Needs ELEVENLABS_API_KEY on Railway and Vercel; until it is set the provider reports itself unconfigured and text-to-speech is simply not offered.
-    model: "elevenlabs/eleven_v3",
+    // 2026-09-20 (owner): ElevenLabs v3 — ON REPLICATE, the same token as every other model (elevenlabs-models.ts).
+    model: ELEVENLABS_DEFAULT_TTS_MODEL,
     perRequestCents: 0,
     perCharacterCents: 0,
     minimumCharacters: 1,

@@ -14,11 +14,26 @@
  * voice-change-provider.ts), by the config normaliser and by the admin form.
  * Nothing here knows a key, a URL or a job.
  *
+ * ── Two routes to the same voices (owner, later on 2026-09-20: "use the
+ * ElevenLabs in Replicate; it doesn't matter if we use the direct ElevenLabs,
+ * it will make the API route divided") ─────────────────────────────────────
+ *
+ *   · ON REPLICATE — `elevenlabs/v3`, `elevenlabs/turbo-v2.5`,
+ *     `elevenlabs/flash-v2.5`, `elevenlabs/v2-multilingual`: official
+ *     Replicate models, paid with the same REPLICATE_API_TOKEN as everything
+ *     else, run as a prediction with a `voice` pipeline stage exactly like
+ *     MiniMax. The voice is one of 26 NAMES the model's schema enumerates
+ *     (read live on 2026-09-20). This is the route in use; no other key.
+ *   · DIRECT — `elevenlabs/eleven_v3` etc. through api.elevenlabs.io with
+ *     ELEVENLABS_API_KEY, made by the worker. Kept for the voice CHANGER
+ *     (speech → speech is not on Replicate) and for an operator who wants
+ *     the account's own voice library. Not required for anything else.
+ *
  * ── Model ids ───────────────────────────────────────────────────────────────
- * The operator configures a model as `elevenlabs/<model_id>`, the same shape
- * the MiniMax rows use (`minimax/speech-02-hd`), so one text field on the
- * admin form names any provider's model. `modelId` is what the ElevenLabs
- * API is sent.
+ * The operator configures a model as `elevenlabs/<name>`, the same shape the
+ * MiniMax rows use (`minimax/speech-02-hd`), so one select on the admin form
+ * names any provider's model. For the direct route `modelId` is what the
+ * ElevenLabs API is sent; for Replicate the name IS the model.
  *
  * ── Languages ───────────────────────────────────────────────────────────────
  * Read from ElevenLabs' model documentation on 2026-09-20. v3 and
@@ -80,15 +95,85 @@ export const ELEVENLABS_TTS_MODELS: Readonly<Record<string, ElevenLabsTtsModel>>
   "elevenlabs/eleven_flash_v2_5": { modelId: "eleven_flash_v2_5", label: "ElevenLabs Flash v2.5 — fastest, 32 languages", languageCodeParam: true, maxCharacters: 40_000, languages: V2_5 },
 };
 
-export const ELEVENLABS_DEFAULT_TTS_MODEL = "elevenlabs/eleven_v3";
+/* ───────────────────────────── on Replicate ─────────────────────────────── */
 
-export function isElevenLabsTtsModel(model: string): boolean {
-  return Object.prototype.hasOwnProperty.call(ELEVENLABS_TTS_MODELS, model);
+export interface ElevenLabsReplicateModel {
+  /** The version pinned on 2026-09-20 (the model's latest that day). `REPLICATE_ELEVENLABS_VERSION` overrides. */
+  version: string;
+  label: string;
+  languages: readonly string[];
 }
 
+/**
+ * Read from the live schemas on 2026-09-20. All four take the same input —
+ * `prompt` (the text), `voice` (one of the 26 names below), `language_code`,
+ * plus stability / similarity_boost / style / speed left at the model's
+ * defaults — and answer with one MP3 (44.1 kHz mono, measured on a real
+ * prediction: 0.8 s for a sentence).
+ */
+export const ELEVENLABS_REPLICATE_TTS_MODELS: Readonly<Record<string, ElevenLabsReplicateModel>> = {
+  "elevenlabs/v3": { version: "7611845fe3de62dc322513b8bdc81b785cb730417a015093f6356f2a89fa3e73", label: "ElevenLabs v3 on Replicate — the most expressive, 70+ languages", languages: V3 },
+  "elevenlabs/v2-multilingual": { version: "cc1c55e63c927e79a35f5807accbf172051f2b21effe1db532cf8c907cc68d57", label: "ElevenLabs Multilingual v2 on Replicate — stable, 29 languages", languages: MULTILINGUAL_V2 },
+  "elevenlabs/turbo-v2.5": { version: "bdab64445fa0fb0ade1c2ae20d00f3024104afe3ff8b4572fc487de30fb24bf0", label: "ElevenLabs Turbo v2.5 on Replicate — fast, 32 languages", languages: V2_5 },
+  "elevenlabs/flash-v2.5": { version: "c9f3ebca6f2a684a2a3487271f640c389597d45c6c474db6b03fb9da0a26a47d", label: "ElevenLabs Flash v2.5 on Replicate — fastest, 32 languages", languages: V2_5 },
+};
+
+export const ELEVENLABS_DEFAULT_TTS_MODEL = "elevenlabs/v3";
+
+export function isElevenLabsReplicateModel(model: string): boolean {
+  return Object.prototype.hasOwnProperty.call(ELEVENLABS_REPLICATE_TTS_MODELS, model);
+}
+
+export function elevenLabsReplicateModel(model: string): ElevenLabsReplicateModel | null {
+  return ELEVENLABS_REPLICATE_TTS_MODELS[model] ?? null;
+}
+
+/** Either route: the catalogue's ElevenLabs rows are offered for both. */
+export function isElevenLabsTtsModel(model: string): boolean {
+  return Object.prototype.hasOwnProperty.call(ELEVENLABS_TTS_MODELS, model) || isElevenLabsReplicateModel(model);
+}
+
+/** The DIRECT-route model spec; null for a Replicate name or anything else. */
 export function elevenLabsTtsModel(model: string): ElevenLabsTtsModel | null {
   return ELEVENLABS_TTS_MODELS[model] ?? null;
 }
+
+/**
+ * The 26 voices the Replicate models accept, by NAME — the schema's enum,
+ * read live on 2026-09-20. Kuon is left out: its gender and age are not
+ * documented anywhere this was checked, and a wrong label is worse than one
+ * voice fewer. The labels are ElevenLabs' own for their library voices; an
+ * operator can correct any of them on the admin catalogue.
+ */
+export const ELEVENLABS_REPLICATE_VOICE_NAMES: readonly string[] = ["Rachel", "Drew", "Clyde", "Paul", "Aria", "Domi", "Dave", "Roger", "Fin", "Sarah", "James", "Jane", "Juniper", "Arabella", "Hope", "Bradford", "Reginald", "Gaming", "Austin", "Kuon", "Blondie", "Priyanka", "Alexandra", "Monika", "Mark", "Grimblewood"];
+
+export const ELEVENLABS_REPLICATE_VOICES: readonly ElevenLabsCatalogueVoice[] = [
+  { id: "rachel", label: "Rachel", blurb: "Calm and clear.", gender: "female", age: "young", providerVoiceId: "Rachel" },
+  { id: "sarah", label: "Sarah", blurb: "Soft, warm and confident.", gender: "female", age: "young", providerVoiceId: "Sarah" },
+  { id: "domi", label: "Domi", blurb: "Strong and assured.", gender: "female", age: "young", providerVoiceId: "Domi" },
+  { id: "arabella", label: "Arabella", blurb: "Expressive and bright.", gender: "female", age: "young", providerVoiceId: "Arabella" },
+  { id: "hope", label: "Hope", blurb: "Light and upbeat.", gender: "female", age: "young", providerVoiceId: "Hope" },
+  { id: "blondie", label: "Blondie", blurb: "Warm and easy, British.", gender: "female", age: "young", providerVoiceId: "Blondie" },
+  { id: "priyanka", label: "Priyanka", blurb: "Clear and friendly, Indian.", gender: "female", age: "young", providerVoiceId: "Priyanka" },
+  { id: "alexandra", label: "Alexandra", blurb: "Natural and conversational.", gender: "female", age: "young", providerVoiceId: "Alexandra" },
+  { id: "aria", label: "Aria", blurb: "Expressive, with a husky edge.", gender: "female", age: "middle_aged", providerVoiceId: "Aria" },
+  { id: "jane", label: "Jane", blurb: "Composed narrator.", gender: "female", age: "middle_aged", providerVoiceId: "Jane" },
+  { id: "juniper", label: "Juniper", blurb: "Grounded and warm.", gender: "female", age: "middle_aged", providerVoiceId: "Juniper" },
+  { id: "monika", label: "Monika", blurb: "Clear and steady, Polish.", gender: "female", age: "middle_aged", providerVoiceId: "Monika" },
+  { id: "dave", label: "Dave", blurb: "Conversational, British.", gender: "male", age: "young", providerVoiceId: "Dave" },
+  { id: "mark", label: "Mark", blurb: "Natural and relaxed.", gender: "male", age: "young", providerVoiceId: "Mark" },
+  { id: "gaming", label: "Gaming", blurb: "Energetic, high-tempo.", gender: "male", age: "young", providerVoiceId: "Gaming" },
+  { id: "drew", label: "Drew", blurb: "Well-rounded and steady.", gender: "male", age: "middle_aged", providerVoiceId: "Drew" },
+  { id: "clyde", label: "Clyde", blurb: "Gruff and weathered.", gender: "male", age: "middle_aged", providerVoiceId: "Clyde" },
+  { id: "paul", label: "Paul", blurb: "Measured, reporter-like.", gender: "male", age: "middle_aged", providerVoiceId: "Paul" },
+  { id: "roger", label: "Roger", blurb: "Confident and easy-going.", gender: "male", age: "middle_aged", providerVoiceId: "Roger" },
+  { id: "bradford", label: "Bradford", blurb: "Storyteller, British.", gender: "male", age: "middle_aged", providerVoiceId: "Bradford" },
+  { id: "reginald", label: "Reginald", blurb: "Deep and brooding.", gender: "male", age: "middle_aged", providerVoiceId: "Reginald" },
+  { id: "austin", label: "Austin", blurb: "Easy Southern drawl.", gender: "male", age: "middle_aged", providerVoiceId: "Austin" },
+  { id: "fin", label: "Fin", blurb: "Weathered, Irish.", gender: "male", age: "old", providerVoiceId: "Fin" },
+  { id: "james", label: "James", blurb: "Calm and unhurried, Australian.", gender: "male", age: "old", providerVoiceId: "James" },
+  { id: "grimblewood", label: "Grimblewood", blurb: "Whimsical character voice.", gender: "male", age: "old", providerVoiceId: "Grimblewood" },
+];
 
 /* ───────────────────────────── voice changer (speech → speech) ───────────── */
 
@@ -126,14 +211,12 @@ export interface ElevenLabsCatalogueVoice {
 }
 
 /**
- * ElevenLabs' own default voice library, as documented on 2026-09-20 —
- * every account can use these without adding them. The ids are the
- * provider's; the words are ours. 🔴 The admin's "Import voices" action
- * (app/api/admin/ai/character-replace/voices/import) reads the ACCOUNT's
- * list from the API and is the authority: run it once the key is set, and
- * anything here that the account cannot see is replaced by what it can.
+ * The DIRECT route's default library (ElevenLabs' own, by voice ID, as
+ * documented on 2026-09-20). Used only when an operator imports their
+ * account's voices for a direct-API model; the Replicate route (the one in
+ * use) offers `ELEVENLABS_REPLICATE_VOICES` by name instead.
  */
-export const ELEVENLABS_DEFAULT_VOICES: readonly ElevenLabsCatalogueVoice[] = [
+export const ELEVENLABS_DIRECT_DEFAULT_VOICES: readonly ElevenLabsCatalogueVoice[] = [
   { id: "aria", label: "Aria", blurb: "Expressive, with a husky edge.", gender: "female", age: "middle_aged", providerVoiceId: "9BWtsMINqrJLrRacOk9x" },
   { id: "sarah", label: "Sarah", blurb: "Soft, warm and confident.", gender: "female", age: "young", providerVoiceId: "EXAVITQu4vr4xnSDxMaL" },
   { id: "laura", label: "Laura", blurb: "Upbeat and bright.", gender: "female", age: "young", providerVoiceId: "FGY2WhTYpPnrIDTdsKH5" },
@@ -155,6 +238,9 @@ export const ELEVENLABS_DEFAULT_VOICES: readonly ElevenLabsCatalogueVoice[] = [
   { id: "bill", label: "Bill", blurb: "Trustworthy and wise.", gender: "male", age: "old", providerVoiceId: "pqHfZKP75CvOlQylNhV4" },
   { id: "river", label: "River", blurb: "Calm and relaxed, neutral.", gender: "neutral", age: "middle_aged", providerVoiceId: "SAz9YHcvj6GT2YYXdXww" },
 ];
+
+/** The catalogue's default ElevenLabs rows: the Replicate route's named voices. */
+export const ELEVENLABS_DEFAULT_VOICES: readonly ElevenLabsCatalogueVoice[] = ELEVENLABS_REPLICATE_VOICES;
 
 /**
  * ElevenLabs' own labels → our vocabulary. The API's `labels` object names

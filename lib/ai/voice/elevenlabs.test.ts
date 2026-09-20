@@ -5,8 +5,8 @@ import { quoteCanonical } from "@/lib/ai/character-replace/wallet";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
 import { normalizeQuoteInput, quoteCharacterReplace, validateQuoteInput } from "@/lib/ai/character-replace/pricing";
 import { buildElevenLabsTtsBody } from "./elevenlabs";
-import { ELEVENLABS_DEFAULT_VOICES, ELEVENLABS_TTS_MODELS, elevenLabsTtsModel, voiceAgeFromLabel, voiceGenderFromLabel } from "./elevenlabs-models";
-import { textToSpeechProviderFor, ttsRunsInWorker } from "./tts-provider";
+import { ELEVENLABS_DEFAULT_VOICES, ELEVENLABS_REPLICATE_TTS_MODELS, ELEVENLABS_REPLICATE_VOICE_NAMES, ELEVENLABS_TTS_MODELS, elevenLabsTtsModel, voiceAgeFromLabel, voiceGenderFromLabel } from "./elevenlabs-models";
+import { buildReplicateElevenLabsInput, textToSpeechProviderFor, ttsRunsInWorker } from "./tts-provider";
 import { ttsSupportedLanguagesFor } from "./tts-languages";
 import { voiceChangeProviderFor } from "./voice-change-provider";
 
@@ -45,6 +45,22 @@ describe("the ElevenLabs request bodies", () => {
     expect(ttsRunsInWorker("elevenlabs/eleven_v3")).toBe(true);
     expect(textToSpeechProviderFor("acme/voice").supportedLanguages()).toEqual([]);
   });
+  it("ElevenLabs ON REPLICATE (the route in use): a prediction with a voice stage, the text as prompt, a voice NAME from the schema, the language", () => {
+    const p = textToSpeechProviderFor("elevenlabs/v3");
+    expect(p.id).toBe("replicate");
+    expect(p.runsIn).toBe("replicate");
+    expect(ttsRunsInWorker("elevenlabs/v3")).toBe(false);
+    expect(p.version).toBe(ELEVENLABS_REPLICATE_TTS_MODELS["elevenlabs/v3"]!.version);
+    expect(p.supportedLanguages()).toContain("ha");
+    expect(buildReplicateElevenLabsInput({ text: "Hello there", languageCode: "EN", providerVoiceId: "Sarah" })).toEqual({ prompt: "Hello there", voice: "Sarah", language_code: "en" });
+    // only the 26 names the model enumerates; an ElevenLabs voice ID is refused before any money moves
+    expect(() => buildReplicateElevenLabsInput({ text: "Hi", languageCode: "en", providerVoiceId: "21m00Tcm4TlvDq8ikWAM" })).toThrow();
+    expect(() => buildReplicateElevenLabsInput({ text: "Hi", languageCode: "en", providerVoiceId: null })).toThrow();
+    expect(ELEVENLABS_REPLICATE_VOICE_NAMES).toHaveLength(26);
+    // every default catalogue row names a voice the model accepts
+    for (const v of ELEVENLABS_DEFAULT_VOICES) expect(ELEVENLABS_REPLICATE_VOICE_NAMES, v.label).toContain(v.providerVoiceId);
+    for (const m of ["elevenlabs/turbo-v2.5", "elevenlabs/flash-v2.5", "elevenlabs/v2-multilingual"]) expect(textToSpeechProviderFor(m).runsIn).toBe("replicate");
+  });
 });
 
 describe("languages and the voice vocabulary", () => {
@@ -66,18 +82,18 @@ describe("languages and the voice vocabulary", () => {
     expect(voiceAgeFromLabel("old")).toBe("old");
     expect(voiceAgeFromLabel("")).toBe("middle_aged");
   });
-  it("the default library has unique ids and provider ids, and covers every gender and two ages at least", () => {
+  it("the default library has unique ids and provider ids, and covers both genders and all three ages", () => {
     expect(new Set(ELEVENLABS_DEFAULT_VOICES.map((v) => v.id)).size).toBe(ELEVENLABS_DEFAULT_VOICES.length);
     expect(new Set(ELEVENLABS_DEFAULT_VOICES.map((v) => v.providerVoiceId)).size).toBe(ELEVENLABS_DEFAULT_VOICES.length);
-    for (const g of ["female", "male", "neutral"]) expect(ELEVENLABS_DEFAULT_VOICES.some((v) => v.gender === g), g).toBe(true);
-    expect(new Set(ELEVENLABS_DEFAULT_VOICES.map((v) => v.age)).size).toBeGreaterThanOrEqual(2);
+    for (const g of ["female", "male"]) expect(ELEVENLABS_DEFAULT_VOICES.some((v) => v.gender === g), g).toBe(true);
+    expect(new Set(ELEVENLABS_DEFAULT_VOICES.map((v) => v.age)).size).toBe(3);
   });
 });
 
 describe("the catalogue and the public config", () => {
   const config = normalizeCharacterReplaceConfig(null);
-  it("the default model is ElevenLabs v3, so the public voices are the ElevenLabs rows — with gender and age, WITHOUT the provider's id", () => {
-    expect(config.tts.model).toBe("elevenlabs/eleven_v3");
+  it("the default model is ElevenLabs v3 on Replicate, so the public voices are the ElevenLabs rows — with gender and age, WITHOUT the provider's id", () => {
+    expect(config.tts.model).toBe("elevenlabs/v3");
     expect(voiceProviderForModel(config.tts.model)).toBe("elevenlabs");
     const pub = publicCharacterReplaceConfig(config, { code: "USD", symbol: "$" }, true);
     expect(pub.voices.length).toBe(ELEVENLABS_DEFAULT_VOICES.length);
@@ -100,7 +116,7 @@ describe("the catalogue and the public config", () => {
   it("a catalogue row saved before this date is a MiniMax row with the neutral / middle-aged default; a known id keeps its own", () => {
     const c = normalizeCharacterReplaceConfig({ voices: [{ id: "custom", label: "Custom", providerVoiceId: "English_Wiselady" }, { id: "el-aria", label: "Aria" }, { id: "x", label: "X", provider: "elevenlabs", gender: "male", age: "old", providerVoiceId: "abc" }] });
     expect(c.voices.find((v) => v.id === "custom")).toMatchObject({ provider: "minimax", gender: "neutral", age: "middle_aged" });
-    expect(c.voices.find((v) => v.id === "el-aria")).toMatchObject({ provider: "elevenlabs", gender: "female", age: "middle_aged", providerVoiceId: "9BWtsMINqrJLrRacOk9x" });
+    expect(c.voices.find((v) => v.id === "el-aria")).toMatchObject({ provider: "elevenlabs", gender: "female", age: "middle_aged", providerVoiceId: "Aria" });
     expect(c.voices.find((v) => v.id === "x")).toMatchObject({ provider: "elevenlabs", gender: "male", age: "old" });
     // the changer's model must be one this build knows; anything else is the default changer
     expect(normalizeCharacterReplaceConfig({ tts: { voiceChange: { model: "acme/changer", perSecondCents: 12 } } }).tts.voiceChange).toEqual({ enabled: true, model: "elevenlabs/eleven_multilingual_sts_v2", perSecondCents: 12 });
@@ -182,7 +198,7 @@ describe("verifyStartQuote with a voice change", () => {
     const q = issued(true);
     const ok = verifyStartQuote(bodyOf(q, { changeVoiceId: "el-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: true });
     expect(ok.ok).toBe(true);
-    if (ok.ok) expect(ok.voice?.change).toEqual({ voiceId: "el-aria", providerVoiceId: "9BWtsMINqrJLrRacOk9x" });
+    if (ok.ok) expect(ok.voice?.change).toEqual({ voiceId: "el-aria", providerVoiceId: "Aria" });
     const notConfigured = verifyStartQuote(bodyOf(q, { changeVoiceId: "el-aria" }), config, money, { ttsLanguages: [], voiceChangeConfigured: false });
     expect(notConfigured.ok).toBe(false);
     if (!notConfigured.ok) expect(notConfigured.code).toBe("FEATURE_UNAVAILABLE");

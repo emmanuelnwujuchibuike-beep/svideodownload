@@ -9,9 +9,37 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑15 (Character Replace Part 9 — the API cache finding, the premium UX pass, the admin price table; Parts 7 & 8 below)_
+_Last updated: 2026‑09‑20 (Character Replace — reference images made plain for providers; Parts 7–9 below)_
 
 ---
+
+## 2026‑09‑20 — A phone's JPEG killed the provider's own resize; "results got terrible" checked
+
+**"Face and skin swap with text to speech and lip sync keeps showing couldn't finish."** Two
+Skin + Face jobs of 09‑15 failed inside the provider with `ffmpeg -i image-0.bin -vf
+scale=880:1168 … non-zero` — the provider resizing *our* reference image. The file was a valid
+1080×1440 iPhone JPEG: progressive, 8.7 kB of EXIF with a thumbnail, XMP, an ICC profile and two
+Photoshop segments. Reproduced three times against the model with that exact file; the same
+pixels as a plain baseline JPEG with the metadata stripped succeeded first time. Voice and lip
+sync were never the cause. Fix (`8c467db`): the worker re‑encodes every reference image while it
+prepares the video (baseline JPEG, no metadata, long edge ≤ 2048, q 2 — every ffmpeg argument a
+known constant, like the video plan), stores `character[-N]-prepared.jpg`, records `preparedPath`,
+and the submit reads `providerReferencePaths()`; uploads stay untouched; a failed re‑encode falls
+back to the upload with a `reference.prepare_failed` event. Proven on production with the owner's
+own failing photo (Skin + Face completed, `reference.prepared`), and the owner confirmed clean.
+
+**"Clean on the first test, terrible after, same inputs."** Checked against Replicate's records and
+the stored masters: every Face Only job used the same version with the model's only configuration
+(its input is `source` + `target`; no seed, no quality), every Skin + Face job the same version and
+settings, and the masters are the provider's bytes (no post‑processing since `f503800`). Nothing
+changed between runs. The "terrible" clip was a 30 s phone screen recording in which the person is
+a small inset for about five seconds; the "clean" clip was a different, face‑forward source; both
+shared copies had been re‑encoded to ~640p by the phone. `p-video-replace` has a random `seed`
+input, so Skin + Face varies run to run by design; Face Only is deterministic.
+
+**Admin.** The Character Replace price table stacks into one card per row on a phone; a fieldset's
+default `min-width: min-content` had let the table push the page past the phone's edge.
+
 
 ## 2026‑09‑15 — Apple refused every "your video is ready" push (`BadWebPushTopic`); gallery videos as a voice source
 

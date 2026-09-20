@@ -2,7 +2,7 @@
 
 import {
   ArrowRight,
-  Bookmark,
+  ArrowUpRight,
   Check,
   Cloud,
   CloudDownload,
@@ -22,6 +22,8 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
+import { QuickActionsButton } from "@/features/downloads/quick-actions-button";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
@@ -111,7 +113,15 @@ export function DownloadsHero() {
             A returning-visitor detail does not belong there. In the header it
             is on every route instead of two, and in the way on none.
           */}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          {/*
+            Owner, 2026-09-20: the Quick actions button sits OPPOSITE the
+            trust pill on this row — `justify-between`, and the row still
+            wraps, so on the narrowest phone the button drops to its own line
+            rather than pressing into the pill (it is also icon-only under
+            400px; see quick-actions-button.tsx). Same row on the landing page
+            and on /downloads, because this hero IS both.
+          */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
               <Pill icon={Zap} label="Fast" />
               <Divider />
@@ -119,6 +129,7 @@ export function DownloadsHero() {
               <Divider />
               <Pill icon={Shield} label="Private" />
             </span>
+            <QuickActionsButton className="ml-auto" />
           </div>
         </div>
 
@@ -354,64 +365,37 @@ function relativeTime(at: number): string {
 /* ───────────────────────────── Quick actions ─────────────────────────────── */
 
 /**
- * The reference's four action cards. Only the ones with a real destination are
- * links; the product-ecosystem entries that have no route yet are marked "Soon"
- * rather than shipped as buttons that 404 (the profile-doorway rule).
+ * The reference's four action cards, on the page itself. The list is
+ * `QUICK_ACTIONS` — the same one the hero's Quick actions sheet shows
+ * (quick-actions.ts) — and the card is the same card, so the sheet and the
+ * page can never disagree about what a quick action is or where it goes.
+ *
+ * Every entry is a real link. The "Soon" state is gone (owner, 2026-09-20):
+ * a destination that does not exist yet is not listed.
  */
 export function DownloadQuickActions() {
-  const cards: { icon: typeof Sparkles; tint: string; title: string; sub: string; href?: string; soon?: boolean }[] = [
-    // "Browse full screen" means exactly that, so it skips the grid and opens
-    // the reels viewer directly (`?reels=1`) — the behaviour this card has
-    // always had, kept on the one wallpaper route.
-    { icon: ImageIcon, tint: "text-fuchsia-500 bg-fuchsia-500/12", title: "Wallpapers", sub: "Browse full screen", href: "/wallpapers?reels=1" },
-    { icon: Heart, tint: "text-rose-500 bg-rose-500/12", title: "Favorites", sub: "View saved items", href: "/history?filter=favorites" },
-    { icon: Bookmark, tint: "text-blue-500 bg-blue-500/12", title: "Saved posts", sub: "Your bookmarks", href: "/saved" },
-    /*
-      Owner, 2026-09-07: "the ai studio button in download page still shows soon
-      and the name is suppose to be frenz ai not ai studio."
-
-      Both halves were stale rather than wrong when written: the product is
-      named Frenz AI, and it now has a route (`/studio/ai`, Part 1), so the tile
-      that was honestly "Soon" while nothing existed is now a real link. A
-      signed-out visitor is sent through sign-in, which is the feature's actual
-      gate — not a dead end, and not a 404.
-    */
-    { icon: Sparkles, tint: "text-violet-500 bg-violet-500/12", title: "Frenz AI", sub: "AI tools for your videos", href: "/studio/ai" },
-  ];
-
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {cards.map((c) => {
-        const inner = (
-          <>
-            <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", c.tint)}>
-              <c.icon className="h-5 w-5" />
-            </span>
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block truncate text-sm font-bold">{c.title}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">{c.sub}</span>
-            </span>
-            {c.soon ? (
-              <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                Soon
-              </span>
-            ) : null}
-          </>
-        );
-        const cls = "flex items-center gap-2.5 rounded-2xl border border-border/60 bg-card p-3 shadow-soft transition hover:border-foreground/15";
-        if (c.href) {
-          return (
-            <Link key={c.title} href={c.href} prefetch className={cls}>
-              {inner}
-            </Link>
-          );
-        }
-        return (
-          <div key={c.title} className={cn(cls, "opacity-75")}>
-            {inner}
-          </div>
-        );
-      })}
+      {QUICK_ACTIONS.map((a) => (
+        <Link
+          key={a.id}
+          href={a.href}
+          prefetch
+          className="group relative flex items-center gap-3 overflow-hidden rounded-2xl border border-border/60 bg-card p-3 shadow-soft transition-[transform,box-shadow,border-color] duration-200 [transition-timing-function:var(--ease-out)] hover:-translate-y-0.5 hover:border-transparent hover:shadow-[0_16px_32px_-16px_rgba(15,23,42,0.35)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          {/* the hover glow — desktop only, so a phone never paints a blur */}
+          <span aria-hidden className={cn("absolute -right-8 -top-8 hidden h-24 w-24 rounded-full opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-100 sm:block", a.glow)} />
+          <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg transition-transform duration-300 [transition-timing-function:var(--ease-out)] group-hover:scale-105", a.tile)}>
+            <a.icon className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-sm font-bold">{a.title}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{a.sub}</span>
+          </span>
+          {/* the arrow only where there is room for it — on a phone the two-up card needs every pixel for its title */}
+          <ArrowUpRight className="hidden h-4 w-4 shrink-0 text-muted-foreground/60 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground sm:block" aria-hidden />
+        </Link>
+      ))}
     </div>
   );
 }

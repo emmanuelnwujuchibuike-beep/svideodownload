@@ -1,6 +1,6 @@
 "use client";
 
-import { Cloud, Download, FileVideo, Film, Folder, GraduationCap, Image as ImageIcon, Music, Settings2, Trash2 } from "lucide-react";
+import { Download, FileVideo, Film, Folder, GraduationCap, Image as ImageIcon, Music, Settings2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -176,8 +176,12 @@ export function DownloadsRail() {
       <Panel delay={60}>
         <h3 className="mb-3 text-sm font-bold">Quick Actions</h3>
         <div className="space-y-1">
+          {/*
+            "Import from Cloud · Soon" sat here as a row that did nothing
+            (owner, 2026-09-20: "remove the soon button from the quick action
+            card"). A destination that does not exist yet is not listed.
+          */}
           <QuickAction icon={Download} title="Save from Link" sub="Paste video link" href="#download" />
-          <QuickAction icon={Cloud} title="Import from Cloud" sub="Google Drive, Dropbox" soon />
           <AutoDownloadToggle />
           <QualityPreference />
         </div>
@@ -284,12 +288,12 @@ function timeAgo(ts: number): string {
   return `${Math.floor(s / 86400)} days ago`;
 }
 
-function QuickAction({ icon: Icon, title, sub, href, soon }: { icon: typeof Download; title: string; sub: string; href?: string; soon?: boolean }) {
+function QuickAction({ icon: Icon, title, sub, href }: { icon: typeof Download; title: string; sub: string; href?: string }) {
   const inner = (
     <span className="flex items-center gap-3 rounded-xl p-2 transition-colors duration-200 hover:bg-secondary motion-safe:active:scale-[0.98] motion-safe:transition-[background-color,transform]">
       <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary"><Icon className="h-4 w-4" /></span>
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-sm font-semibold">{title}{soon ? <span className="rounded bg-secondary px-1 py-0.5 text-[8px] font-bold uppercase text-muted-foreground">Soon</span> : null}</span>
+        <span className="flex items-center gap-1.5 text-sm font-semibold">{title}</span>
         <span className="block text-[11px] text-muted-foreground">{sub}</span>
       </span>
     </span>

@@ -4,7 +4,7 @@ import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/l
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
-import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
+import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { aiCurrencySymbol, getLandingSettings, isAiCurrency } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 
@@ -44,6 +44,8 @@ export async function GET(request: Request) {
       listCharacterReplaceLedger(subject.userId, ledgerLimit),
     ]);
     const recharge = settings.frenzAiCharacterReplace.recharge;
+    // the live rate (cached an hour) so the sheet previews exactly what checkout will charge
+    const rate = await resolveCheckoutRate(settings.frenzAiCharacterReplace, settings.frenzAiCurrency);
     return NextResponse.json(
       {
         product: "character_replace",
@@ -58,8 +60,8 @@ export async function GET(request: Request) {
           sheet prints "≈ ₦7,500 at checkout" beside "$5.00" from this — the
           operator's rate, never a browser's. Null when no conversion applies.
         */
-        checkout: conversionApplies(settings.frenzAiCurrency, recharge.checkoutCurrency) && settings.frenzAiCharacterReplace.localMinorUnitsPerUsd > 0
-          ? { currency: recharge.checkoutCurrency, symbol: isAiCurrency(recharge.checkoutCurrency) ? aiCurrencySymbol(recharge.checkoutCurrency) : recharge.checkoutCurrency, minorPerUsd: settings.frenzAiCharacterReplace.localMinorUnitsPerUsd }
+        checkout: rate && !("error" in rate)
+          ? { currency: recharge.checkoutCurrency, symbol: isAiCurrency(recharge.checkoutCurrency) ? aiCurrencySymbol(recharge.checkoutCurrency) : recharge.checkoutCurrency, minorPerUsd: rate.minorPerUsd }
           : null,
         ledger,
       },

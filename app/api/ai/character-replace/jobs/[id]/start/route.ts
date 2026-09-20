@@ -163,7 +163,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const verdict = verifyStartQuote(body, config, money, { ttsLanguages: ttsProvider.supportedLanguages(), voiceChangeConfigured: config.tts.voiceChange.enabled && changer.isConfigured() });
     if (!verdict.ok) {
       console.info("[cr/start] quote refused", { jobId: job.id, subject: subject.key, code: verdict.code, reason: verdict.reason });
-      return fail(verdict.code, verdict.code === "INVALID_INPUT" ? { error: "We couldn't use that price. Check it and try again." } : undefined);
+      return fail(
+        verdict.code,
+        verdict.code === "INVALID_INPUT"
+          ? { error: "We couldn't use that price. Check it and try again." }
+          : verdict.code === "FEATURE_UNAVAILABLE"
+            ? // the only FEATURE_UNAVAILABLE the verifier gives: a priced voice change whose changer is not configured here
+              { error: "Changing the voice isn't available right now. Switch it off and try again." }
+            : undefined,
+      );
     }
     const snapshot = verdict.snapshot;
     const voice = verdict.voice;

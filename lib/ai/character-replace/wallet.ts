@@ -43,6 +43,15 @@ export interface CharacterReplaceLedgerEntry {
   jobId: string | null;
   note: string | null;
   createdAt: string;
+  /**
+   * 2026-09-20 (owner: "show the full details of each statement line and
+   * the id so users can screenshot it for support"). A RECHARGE's own
+   * payment reference — the member's own transaction, the one Paystack
+   * mails them and support looks up. Null on every other kind.
+   */
+  reference: string | null;
+  /** What a charge was priced for, from the immutable snapshot beside the row. Null on other kinds. */
+  details: { mode: string; quality: string; durationMs: number; voiceMode: string; voiceSource: string | null; lipSyncMode: string | null; pricingConfigVersion: number } | null;
 }
 
 /** A missing row is ZERO — most members have never recharged. A failed read THROWS. */
@@ -62,13 +71,15 @@ export async function getCharacterReplaceBalanceCents(userId: string): Promise<n
 }
 
 /**
- * The member's own statement. An allow-list of columns: no Paystack
- * reference, no admin id, no snapshot internals — the amounts and the kinds.
+ * The member's own statement. An allow-list of columns: no admin id, no
+ * rates — the amounts, the kinds, a recharge's own payment reference and
+ * the priced facts of a charge (2026-09-20: what a member needs to
+ * screenshot for support).
  */
 export async function listCharacterReplaceLedger(userId: string, limit = 25): Promise<CharacterReplaceLedgerEntry[]> {
   const { data, error } = await createAdminClient()
     .from("ai_product_ledger")
-    .select("id, kind, status, delta_cents, balance_after_cents, currency, job_id, note, created_at")
+    .select("id, kind, status, delta_cents, balance_after_cents, currency, job_id, note, created_at, reference, snapshot")
     .eq("user_id", userId)
     .eq("product", PRODUCT)
     .order("created_at", { ascending: false })
@@ -87,7 +98,25 @@ export async function listCharacterReplaceLedger(userId: string, limit = 25): Pr
     jobId: (row.job_id as string | null) ?? null,
     note: (row.note as string | null) ?? null,
     createdAt: row.created_at as string,
+    reference: row.kind === "recharge" && typeof row.reference === "string" ? row.reference : null,
+    details: ledgerDetails(row.snapshot),
   }));
+}
+
+/** The priced facts of a charge, and nothing else from the snapshot (no rates, no signature). */
+function ledgerDetails(snapshot: unknown): CharacterReplaceLedgerEntry["details"] {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const s = snapshot as Record<string, unknown>;
+  if (typeof s.durationMs !== "number" || typeof s.quality !== "string") return null;
+  return {
+    mode: typeof s.mode === "string" ? s.mode : "full_character",
+    quality: s.quality,
+    durationMs: s.durationMs,
+    voiceMode: typeof s.voiceMode === "string" ? s.voiceMode : "original",
+    voiceSource: typeof s.voiceSource === "string" ? s.voiceSource : null,
+    lipSyncMode: typeof s.lipSyncMode === "string" ? s.lipSyncMode : null,
+    pricingConfigVersion: typeof s.pricingConfigVersion === "number" ? s.pricingConfigVersion : 0,
+  };
 }
 
 /**

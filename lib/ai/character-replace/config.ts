@@ -308,6 +308,13 @@ export interface CharacterReplaceConfig {
      * (lib/ai/character-replace/topup-fx.ts). Must be one Paystack settles.
      */
     checkoutCurrency: string;
+    /**
+     * Added on top of the LIVE market rate at checkout (fx-rate-server.ts):
+     * 0–50 %. A mid-market rate is not what a naira account pays for the
+     * dollars the provider bills in; this covers that spread. 0 = the
+     * operator bears it.
+     */
+    fxMarkupPercent: number;
   };
   /**
    * ── PART 6: THE TWO NEW REPLACEMENT MODES ──────────────────────────────
@@ -362,8 +369,9 @@ export interface CharacterReplaceConfig {
   /**
    * §25: local minor units per ONE US dollar (₦1,500 = 150,000 kobo), so the
    * admin form can compare a tier's price with the provider's USD cost and
-   * warn when the margin is thin. Never shown to a member. 0 = unknown, no
-   * warnings.
+   * warn when the margin is thin. 0 = unknown, no warnings. Since 2026-09-20
+   * also the MANUAL FALLBACK for the checkout rate — used only when no live
+   * or stored market rate can be had (fx-rate-server.ts).
    */
   localMinorUnitsPerUsd: number;
 }
@@ -524,6 +532,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
       { amountCents: 1_000_000, enabled: true, order: 5 },
     ],
     checkoutCurrency: "NGN",
+    fxMarkupPercent: 0,
   },
   /*
     ── PART 6 DEFAULTS ─────────────────────────────────────────────────────
@@ -804,6 +813,7 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       maxCents,
       packages: packages.length ? packages : [...d.recharge.packages],
       checkoutCurrency: /^[A-Z]{3}$/.test(String(rechargeRaw.checkoutCurrency ?? "").toUpperCase()) ? String(rechargeRaw.checkoutCurrency).toUpperCase() : d.recharge.checkoutCurrency,
+      fxMarkupPercent: num(rechargeRaw.fxMarkupPercent, d.recharge.fxMarkupPercent, 0, 50),
     },
     modes: {
       face_only: normalizeModeConfig(modesRaw.face_only, d.modes.face_only, "face_only"),
@@ -1119,10 +1129,25 @@ export interface CharacterReplacePublicMode {
   maximumReferenceImages: number;
 }
 
+/**
+ * What THIS deployment can actually do for a voice (2026-09-20). The
+ * operator's switches say what is offered; these say whether the provider
+ * behind each is configured here (a key present). Absent = assumed
+ * configured — the pure callers (tests, the worker's own view) keep the
+ * operator's answer; the two API routes that shape a member's interface
+ * pass the real answer, so a voice feature whose key is missing is not
+ * offered rather than refused at Start with "this tool isn't available".
+ */
+export interface VoiceCapabilities {
+  ttsConfigured: boolean;
+  voiceChangeConfigured: boolean;
+}
+
 export function publicCharacterReplaceConfig(
   config: CharacterReplaceConfig,
   currency: { code: string; symbol: string },
   pricingAvailable: boolean,
+  capabilities: VoiceCapabilities = { ttsConfigured: true, voiceChangeConfigured: true },
 ): CharacterReplacePublicConfig {
   const on = config.qualities.filter((q) => q.enabled);
   const balanced = on.find((q) => q.id === "720p") ?? on[0]!;
@@ -1180,13 +1205,13 @@ export function publicCharacterReplaceConfig(
       minimumCoverageFraction: config.audio.minimumCoverageFraction,
     },
     tts: {
-      enabled: config.voice.newVoiceEnabled && config.tts.enabled,
+      enabled: config.voice.newVoiceEnabled && config.tts.enabled && capabilities.ttsConfigured,
       minimumCharacters: config.tts.minimumCharacters,
       maximumCharacters: config.tts.maximumCharacters,
       languages: config.languages.map((l) => l.code).filter((code) => providerLanguages.has(code)),
     },
     voiceChange: {
-      enabled: config.voice.newVoiceEnabled && config.audio.replacementEnabled && config.tts.voiceChange.enabled && changerVoices.length > 0,
+      enabled: config.voice.newVoiceEnabled && config.audio.replacementEnabled && config.tts.voiceChange.enabled && changerVoices.length > 0 && capabilities.voiceChangeConfigured,
       voices: changerVoices,
     },
     lipSyncMaximumDurationSeconds: Math.min(config.lipSyncMaximumDurationSeconds, config.maximumDurationSeconds),

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -62,6 +63,8 @@ export async function GET(request: Request) {
       // Part 3: the engine exists (lib/ai/character-replace/pricing.ts) and
       // POST /api/ai/character-replace/quote answers with the server's price.
       true,
+      // 2026-09-20: a voice feature whose provider key is missing here is not offered (it would be refused at Start)
+      voiceCapabilities(cr),
     );
     return NextResponse.json({
       config,

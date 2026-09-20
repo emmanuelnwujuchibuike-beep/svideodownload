@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
@@ -157,6 +157,23 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [maxActiveGlobal, setMaxActiveGlobal] = useState(String(cr.limits.maxActiveJobsGlobal));
   const [maxPerDay, setMaxPerDay] = useState(String(cr.limits.maxJobsPerUserPerDay));
   const [fxPerUsd, setFxPerUsd] = useState(cr.localMinorUnitsPerUsd > 0 ? minorToMajorInput(cr.localMinorUnitsPerUsd) : "");
+  /* ── 2026-09-20: the live checkout rate (read once when the panel opens; never a poll) and the markup on it ── */
+  const [fxMarkup, setFxMarkup] = useState(String(cr.recharge.fxMarkupPercent));
+  const [liveRate, setLiveRate] = useState<{ applies: boolean; missing: boolean; rate: { minorPerUsd: number; marketPerUsd: number | null; markupPercent: number; source: string; fetchedAt: string | null; provider: string | null } | null } | "loading" | "failed">("loading");
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/ai/character-replace/fx", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => {
+        if (alive) setLiveRate(d as Exclude<typeof liveRate, string>);
+      })
+      .catch(() => {
+        if (alive) setLiveRate("failed");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* ── recharge ── */
   const [checkoutCurrency, setCheckoutCurrency] = useState<AiCurrency>(isAiCurrency(cr.recharge.checkoutCurrency) ? cr.recharge.checkoutCurrency : "NGN");
@@ -251,6 +268,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       trim: { minimumSeconds: trimMin.trim() === "" ? cr.trim.minimumSeconds : Number(trimMin) },
       recharge: {
         checkoutCurrency,
+        fxMarkupPercent: fxMarkup.trim() === "" ? cr.recharge.fxMarkupPercent : Math.max(0, Math.min(50, Number(fxMarkup) || 0)),
         minCents: majorInputToMinor(minTopup) ?? cr.recharge.minCents,
         maxCents: majorInputToMinor(maxTopup) ?? cr.recharge.maxCents,
         packages: packages
@@ -258,7 +276,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -279,8 +297,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       }
     }
     if (payload.recharge.packages.length === 0) out.push("Keep at least one recharge package.");
-    if (conversionApplies(settings.frenzAiCurrency, payload.recharge.checkoutCurrency) && payload.localMinorUnitsPerUsd <= 0) {
-      out.push(`Paystack collects in ${payload.recharge.checkoutCurrency} for a USD balance, so "One US dollar in ${aiCurrencySymbol(payload.recharge.checkoutCurrency as AiCurrency)}" must be set — without it nobody can recharge.`);
+    if (conversionApplies(settings.frenzAiCurrency, payload.recharge.checkoutCurrency) && payload.localMinorUnitsPerUsd <= 0 && liveRate !== "loading" && (liveRate === "failed" || liveRate.missing)) {
+      out.push(`No live rate could be fetched and no fallback "One US dollar in ${aiCurrencySymbol(payload.recharge.checkoutCurrency as AiCurrency)}" is set — until one of the two exists nobody can recharge.`);
     }
     if (payload.lipSyncEnabled && !payload.lipSync.some((l) => l.enabled)) out.push("Lip sync is on but no tier is on.");
     /* ── Part 6 ── */
@@ -307,7 +325,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.ops.maintenanceMode && payload.ops.maintenanceMessage.trim().length < 10) out.push("Write the maintenance notice members will read (at least 10 characters).");
     return out;
-  }, [payload, settings.frenzAiCurrency, symbol]);
+  }, [liveRate, payload, settings.frenzAiCurrency, symbol]);
 
   const warnings = useMemo(() => {
     const out: string[] = [];
@@ -963,18 +981,36 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                 ))}
               </select>
             </Field>
+            <Field id="cr-fx-markup" label="Markup on the live rate (%)" hint="Added on top of the market rate at checkout, 0–50. The provider bills in dollars and a naira account pays a spread to buy them; this covers it. At 0 you bear the spread.">
+              <input id="cr-fx-markup" type="number" inputMode="decimal" min={0} max={50} step="0.1" value={fxMarkup} onChange={(e) => setFxMarkup(e.target.value)} className={input} />
+            </Field>
             <Field
               id="cr-fx"
-              label={`One US dollar in ${rateSymbol}`}
+              label={`Fallback: one US dollar in ${rateSymbol}`}
               hint={
                 walletIsUsd
-                  ? `The rate the secure page charges at: $5.00 becomes 5 × this in ${rateSymbol}. Members see it on the recharge sheet ("at ${rateSymbol}… per $1"). Set it yourself, from your Paystack settlement rate.`
+                  ? "Used only if no live rate can be fetched (and none is remembered from the last week). Also the rate for the margin check below."
                   : "Used only to compare each tier's price with the provider's USD cost and warn when the margin is thin. Never shown to members. Leave empty to skip the check."
               }
             >
               <input id="cr-fx" type="number" inputMode="decimal" min={0} step="any" value={fxPerUsd} onChange={(e) => setFxPerUsd(e.target.value)} className={input} />
             </Field>
           </div>
+          {walletIsUsd ? (
+            <p className="mt-3 rounded-xl bg-secondary/60 px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
+              {liveRate === "loading"
+                ? "Fetching the live rate…"
+                : liveRate === "failed"
+                  ? "Couldn't read the live rate just now."
+                  : !liveRate.applies
+                    ? "No conversion: Paystack collects in the balance currency."
+                    : liveRate.missing || !liveRate.rate
+                      ? "No live, remembered or fallback rate — members cannot recharge until one exists."
+                      : liveRate.rate.source === "manual"
+                        ? `Live rate unavailable — charging at the fallback, ${formatCents(liveRate.rate.minorPerUsd, checkoutSymbol)} per $1.`
+                        : `Live rate: ${formatCents(Math.round((liveRate.rate.marketPerUsd ?? 0) * 100), checkoutSymbol)} per $1 (${liveRate.rate.source === "stored" ? "remembered" : liveRate.rate.provider ?? "market"}${liveRate.rate.fetchedAt ? `, ${new Date(liveRate.rate.fetchedAt).toLocaleString()}` : ""}). With the ${liveRate.rate.markupPercent}% markup a member pays ${formatCents(liveRate.rate.minorPerUsd, checkoutSymbol)} per $1 — $5 is ${formatCents(liveRate.rate.minorPerUsd * 5, checkoutSymbol)}. Refreshed hourly; the rate is pinned to each payment when it starts.`}
+            </p>
+          ) : null}
           <p className="mt-4 text-xs font-semibold text-muted-foreground">Bounds, in {settings.frenzAiCurrency}</p>
           <div className="mt-2 grid gap-4 sm:grid-cols-2">
             <Field id="cr-topup-min" label="Minimum recharge">

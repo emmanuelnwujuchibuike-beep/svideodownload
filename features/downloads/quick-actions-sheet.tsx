@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, LayoutGrid, X } from "lucide-react";
+import { ArrowUpRight, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
@@ -104,7 +104,7 @@ export function QuickActionsSheet({ open, onClose }: { open: boolean; onClose: (
         <header className="relative flex items-start gap-3 px-5 pt-4 sm:pt-5">
           <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-lg shadow-violet-500/30">
             <span aria-hidden className="absolute inset-0 rounded-2xl bg-white/20 [mask-image:linear-gradient(to_bottom,white,transparent)]" />
-            <LayoutGrid className="relative h-5 w-5" aria-hidden />
+            <Zap className="relative h-5 w-5" fill="currentColor" strokeWidth={1.5} aria-hidden />
           </span>
           <div className="min-w-0 flex-1 pt-0.5">
             <h2 id="quick-actions-title" className="text-base font-extrabold tracking-tight">

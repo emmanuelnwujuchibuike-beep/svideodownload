@@ -323,6 +323,8 @@ const schema = z.object({
         .object({
           /** 2026-09-20: the currency Paystack collects in when the wallet is USD (Paystack's own settlement set, same as frenzAiCurrency). */
           checkoutCurrency: z.enum(["USD", "NGN", "GHS", "ZAR", "KES"]).optional(),
+          /** 2026-09-20: percent added on top of the live market rate at checkout. */
+          fxMarkupPercent: z.number().min(0).max(50).optional(),
           minCents: z.number().int().min(100).max(1_000_000_000).optional(),
           maxCents: z.number().int().min(100).max(10_000_000_000).optional(),
           packages: z

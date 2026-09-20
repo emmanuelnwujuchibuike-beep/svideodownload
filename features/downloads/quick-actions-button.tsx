@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid } from "lucide-react";
+import { Zap } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
@@ -83,7 +83,8 @@ export function QuickActionsButton({ className }: { className?: string }) {
           )}
         >
           <span className="inline-flex h-6 w-6 items-center justify-center rounded-[10px] bg-gradient-to-br from-blue-500 to-violet-600 text-white shadow-sm transition-transform duration-300 [transition-timing-function:var(--ease-out)] group-hover:rotate-6">
-            <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+            {/* the lightning bolt — the glyph every product uses for a quick action / shortcut (owner, 2026-09-20); filled, so it is not the trust pill's outline "Fast" */}
+            <Zap className="h-3.5 w-3.5" fill="currentColor" strokeWidth={1.5} aria-hidden />
           </span>
           {/* Icon-only under 440px — see the responsive note above. */}
           <span className="hidden whitespace-nowrap min-[440px]:inline">Quick actions</span>

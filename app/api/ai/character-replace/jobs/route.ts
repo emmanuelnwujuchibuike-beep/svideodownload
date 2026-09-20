@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
 import { replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { createCharacterReplaceJobSchema } from "@/lib/ai/character-replace/start-schema";
 import { characterReplaceLimits, validatePhotoFile, validatePhotoPixels, validateVideoFile } from "@/lib/ai/character-replace/validate";
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
     if (!modeView.enabled) return fail("FEATURE_UNAVAILABLE", { error: `${replacementModeLabel(mode)} isn't available right now.` });
 
     // The same rules the browser applied, applied again (§4) — sizes, types, dimensions — the MODE's own ceilings (Part 6).
-    const publicConfig = publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true);
+    const publicConfig = publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true, voiceCapabilities(config));
     const limits = characterReplaceLimits(publicConfig, mode);
     for (const [i, image] of [photo, ...references].entries()) {
       const photoVerdict = validatePhotoFile({ size: image.size, type: image.mimeType, name: image.name }, limits);

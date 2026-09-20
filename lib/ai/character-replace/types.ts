@@ -1,4 +1,3 @@
-import type { AiLedgerEntry } from "@/lib/ai/balance";
 import type { CharacterReplaceAudioMode, CharacterReplaceConfig, CharacterReplaceLipSyncTier } from "@/lib/ai/character-replace/config";
 import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceAnyQuality, CharacterReplaceVoiceSource } from "@/lib/ai/character-replace/pricing";
@@ -345,7 +344,23 @@ export interface CharacterReplaceBalance {
 }
 
 /** One movement of money, as the ledger records it. The platform's own row. */
-export type CharacterReplaceTransaction = AiLedgerEntry;
+/** One statement line, as the balance API answers it (2026-09-20: with what a member needs for support). */
+export interface CharacterReplaceTransaction {
+  id: string;
+  deltaCents: number;
+  balanceAfterCents: number;
+  /** This wallet's kinds (wallet.ts): recharge · processing_charge · refund · adjustment · reversal. */
+  kind: "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
+  jobId: string | null;
+  note: string | null;
+  createdAt: string;
+  status?: string;
+  /** The row's OWN currency — a line from before the wallet moved to USD is in naira. */
+  currency?: string;
+  /** A recharge's own payment reference; null on other kinds. */
+  reference?: string | null;
+  details?: { mode: string; quality: string; durationMs: number; voiceMode: string; voiceSource: string | null; lipSyncMode: string | null; pricingConfigVersion: number } | null;
+}
 
 /* ───────────────────────────── processing ────────────────────────────────── */
 

@@ -3,6 +3,7 @@
 import { Plus, Wallet, X } from "lucide-react";
 
 import { AnimatedAmount } from "@/features/ai/animated-amount";
+import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,7 @@ export function CharacterReplaceBalanceCard({
   onRecharge: () => void;
   className?: string;
 }) {
+  const [hidden, toggleHidden] = useBalanceHidden();
   return (
     <div className={cn("rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5", className)}>
       <div className="flex items-center gap-3">
@@ -52,13 +54,19 @@ export function CharacterReplaceBalanceCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Character Replace balance</p>
-          <p className="mt-0.5 text-[22px] font-bold leading-none tracking-[-0.02em] tabular-nums">
-            {balance ? (
-              <AnimatedAmount cents={balance.balanceCents} symbol={balance.symbol} />
-            ) : (
-              <span className="text-muted-foreground">—</span>
-            )}
-          </p>
+          {/* 2026-09-20: one tap hides the figure (kept per browser, shared with the balance page) */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic("selection");
+              toggleHidden();
+            }}
+            aria-pressed={hidden}
+            aria-label={hidden ? "Show balance" : "Hide balance"}
+            className="mt-0.5 block text-left text-[22px] font-bold leading-none tracking-[-0.02em] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-md"
+          >
+            {balance ? hidden ? <span aria-hidden>{HIDDEN_AMOUNT}</span> : <AnimatedAmount cents={balance.balanceCents} symbol={balance.symbol} /> : <span className="text-muted-foreground">—</span>}
+          </button>
         </div>
         <button
           type="button"

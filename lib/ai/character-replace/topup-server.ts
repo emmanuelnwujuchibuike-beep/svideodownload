@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { after } from "next/server";
 
+import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { checkoutMetadata, quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
 
 import { formatCents } from "@/lib/ai/economy";
@@ -57,11 +58,18 @@ export async function beginCharacterReplaceTopup(opts: {
     amount only when the settled naira covers it. No rate configured = no
     checkout, said plainly — never a guessed exchange rate.
   */
-  const quote = quoteCheckout({ walletAmountCents: amount, walletCurrency: settings.frenzAiCurrency, checkoutCurrency: cr.recharge.checkoutCurrency, minorPerUsd: cr.localMinorUnitsPerUsd });
+  // 2026-09-20 (owner: "rate should be live rate"): the market rate, cached an hour, with the operator's markup; the manual rate only when nothing live or stored exists
+  const rate = await resolveCheckoutRate(cr, settings.frenzAiCurrency);
+  if (rate && "error" in rate) {
+    console.error("[ai/cr/topup] no exchange rate for a converted checkout", { wallet: settings.frenzAiCurrency, checkout: cr.recharge.checkoutCurrency });
+    return { ok: false, status: 503, error: "Payments aren't set up for this currency yet. Please try again later." };
+  }
+  const quote = quoteCheckout({ walletAmountCents: amount, walletCurrency: settings.frenzAiCurrency, checkoutCurrency: cr.recharge.checkoutCurrency, minorPerUsd: rate?.minorPerUsd ?? 0 });
   if ("error" in quote) {
     console.error("[ai/cr/topup] no exchange rate for a converted checkout", { wallet: settings.frenzAiCurrency, checkout: cr.recharge.checkoutCurrency });
     return { ok: false, status: 503, error: "Payments aren't set up for this currency yet. Please try again later." };
   }
+  if (rate) console.info("[ai/cr/topup] checkout rate", { source: rate.source, provider: rate.provider, marketPerUsd: rate.marketPerUsd, markupPercent: rate.markupPercent, minorPerUsd: rate.minorPerUsd, fetchedAt: rate.fetchedAt });
 
   const reference = `${CHARACTER_REPLACE_TOPUP_PURPOSE}_${randomUUID()}`;
   try {

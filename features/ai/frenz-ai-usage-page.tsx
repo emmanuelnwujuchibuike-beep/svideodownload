@@ -1,14 +1,16 @@
 "use client";
 
-import { ArrowDownLeft, ArrowLeft, PersonStanding, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ChevronRight, Eye, EyeOff, PersonStanding, Plus, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
+import { StatementDetailSheet, symbolFor } from "@/features/ai/statement-detail-sheet";
+import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { getCharacterReplaceBalance, takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
-import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import { formatCents } from "@/lib/ai/economy";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
@@ -40,14 +42,7 @@ import { cn } from "@/lib/utils";
  */
 type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
 
-interface LedgerRow {
-  id: string;
-  deltaCents: number;
-  balanceAfterCents: number;
-  kind: LedgerKind;
-  createdAt: string;
-  note?: string | null;
-}
+type LedgerRow = CharacterReplaceTransaction;
 
 interface AllowanceState {
   usedToday: number;
@@ -68,6 +63,9 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
 
 export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/character-replace" }: { aiHref?: string; createHref?: string }) {
   const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
+  /* 2026-09-20: a tap on the figure hides it (kept per browser); a tap on a line opens it in full */
+  const [hidden, toggleHidden] = useBalanceHidden();
+  const [openLine, setOpenLine] = useState<LedgerRow | null>(null);
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
   const [allowance, setAllowance] = useState<AllowanceState | null>(null);
   const [failed, setFailed] = useState(false);
@@ -89,7 +87,7 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
       return;
     }
     setBalance(wallet.balance);
-    setLedger(wallet.transactions.map((t) => ({ id: t.id, deltaCents: t.deltaCents, balanceAfterCents: t.balanceAfterCents, kind: t.kind as LedgerKind, createdAt: t.createdAt, note: t.note })));
+    setLedger(wallet.transactions);
     setAllowance(free);
   }, []);
 
@@ -215,11 +213,31 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Character Replace balance</p>
-                  <p className="mt-1.5 text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums sm:text-[2.7rem]">{formatCents(balance.balanceCents, symbol)}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("selection");
+                      toggleHidden();
+                    }}
+                    aria-pressed={hidden}
+                    aria-label={hidden ? "Show balance" : "Hide balance"}
+                    className="mt-1.5 block rounded-lg text-left text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:text-[2.7rem]"
+                  >
+                    {hidden ? <span aria-hidden>{HIDDEN_AMOUNT}</span> : formatCents(balance.balanceCents, symbol)}
+                  </button>
+                  <p className="mt-1 text-[11.5px] text-white/60">{hidden ? "Tap to show" : "Tap to hide"}</p>
                 </div>
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-inset ring-white/25">
-                  <Wallet className="h-5 w-5" aria-hidden />
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("selection");
+                    toggleHidden();
+                  }}
+                  aria-label={hidden ? "Show balance" : "Hide balance"}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-inset ring-white/25 transition hover:bg-white/25"
+                >
+                  {hidden ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
+                </button>
               </div>
               {notice ? (
                 <p role="status" className="relative mt-3 rounded-xl bg-white/15 px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset ring-white/20">
@@ -263,8 +281,8 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
             {figures ? (
               <section aria-label="Your account at a glance" className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
                 <Figure label="Videos made" value={String(figures.videos)} />
-                <Figure label="Spent" value={formatCents(figures.spent, symbol)} />
-                <Figure label="Refunded" value={formatCents(figures.refunded, symbol)} tone={figures.refunded > 0 ? "in" : undefined} />
+                <Figure label="Spent" value={hidden ? HIDDEN_AMOUNT : formatCents(figures.spent, symbol)} />
+                <Figure label="Refunded" value={hidden ? HIDDEN_AMOUNT : formatCents(figures.refunded, symbol)} tone={figures.refunded > 0 ? "in" : undefined} />
               </section>
             ) : null}
             {figures?.partial ? <p className="mt-2 text-[11.5px] text-muted-foreground">Counted from your most recent 100 lines.</p> : null}
@@ -304,8 +322,18 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                       {section.items.map((row) => {
                         const copy = LEDGER_COPY[row.kind] ?? LEDGER_COPY.adjustment;
                         const Icon = copy.Icon;
+                        const rowSymbol = symbolFor(row.currency, symbol);
                         return (
-                          <li key={row.id} className="flex items-center gap-3 px-4 py-3">
+                          <li key={row.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              haptic("selection");
+                              setOpenLine(row);
+                            }}
+                            className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-secondary/50 focus-visible:outline-none focus-visible:bg-secondary/60"
+                            aria-label={`${copy.label}, ${formatCents(row.deltaCents, rowSymbol)} — see the details`}
+                          >
                             <span
                               className={cn(
                                 "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
@@ -324,10 +352,12 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                             <div className="shrink-0 text-right">
                               <p className={cn("text-[14px] font-bold tabular-nums", row.deltaCents > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
                                 {row.deltaCents > 0 ? "+" : ""}
-                                {formatCents(row.deltaCents, symbol)}
+                                {formatCents(row.deltaCents, rowSymbol)}
                               </p>
-                              <p className="mt-0.5 text-[11.5px] tabular-nums text-muted-foreground">{formatCents(row.balanceAfterCents, symbol)} after</p>
+                              <p className="mt-0.5 text-[11.5px] tabular-nums text-muted-foreground">{formatCents(row.balanceAfterCents, rowSymbol)} after</p>
                             </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden />
+                          </button>
                           </li>
                         );
                       })}
@@ -336,7 +366,9 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                 ))
               )}
               {ledger && ledger.length >= 100 ? <p className="mt-3 text-[12px] text-muted-foreground">Showing your most recent 100 lines.</p> : null}
+              <p className="mt-2 text-[12px] text-muted-foreground">Tap a line for its full details and ID — handy for a support request.</p>
             </section>
+            <StatementDetailSheet row={openLine} symbol={symbol} onClose={() => setOpenLine(null)} />
           </>
         ) : null}
 

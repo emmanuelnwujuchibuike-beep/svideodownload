@@ -49,6 +49,22 @@ export async function failStalledJob(
   },
   now: number = Date.now(),
 ): Promise<boolean> {
+  /*
+    ── 🔴 A CHARACTER REPLACE DRAFT IS NOT A STALLED JOB (Part 10, 2026-09-20) ──
+
+    A `queued` Character Replace row is a project the member has opened and
+    not yet started: the browser is still PUTting the video, or the tab was
+    closed before Create. No provider was engaged, nothing was reserved, and
+    the member has nothing to be told. Measured from `created_at` against the
+    30-minute `queued` deadline, the 10-minute sweep was ending every slow
+    upload as `failed / PROVIDER_TIMEOUT` and pushing "Character Replace
+    couldn't finish" for a video that never ran — and the 24-hour abandoned
+    sweep in lib/ai/retention.ts, which owns these rows, never got its turn.
+    /start moves queued → acquiring inside one request, so a Character
+    Replace row with a prediction id is never `queued`; the stall table's
+    other stages are untouched.
+  */
+  if (job.feature === "ai_character_replace" && job.status === "queued") return false;
   const over = stalledForMs(job, now);
   if (over === null) return false;
 

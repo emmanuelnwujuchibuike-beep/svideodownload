@@ -167,13 +167,14 @@ export function useCharacterReplaceWorkspace() {
           ...l,
           config: res.config,
           available: res.available,
+          // Part 10 §25: the launch-mode sentence, shown by the Unavailable card in place of the generic one
+          configError: res.available ? null : (res.unavailableReason ?? null),
           processingAvailable: res.processingAvailable === true,
           processingNotice: res.maintenance?.active
             ? (res.maintenance.message ?? "Character Replace is being looked after right now. New videos will be back shortly.")
             : res.processingPaused
               ? "New videos are paused for a moment while we look after the service. Nothing has been charged — try again shortly."
               : null,
-          configError: null,
         }));
       else setLoads((l) => ({ ...l, configError: res.error, available: false }));
     })();

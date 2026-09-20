@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
 import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
@@ -57,6 +58,8 @@ export async function GET(request: Request) {
   try {
     const [settings, entitlement] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
     const cr = settings.frenzAiCharacterReplace;
+    // Part 10 §25: in `internal` launch mode only administrators may make a new video; everyone else reads "not yet".
+    const launched = await launchAllows(cr, subject);
     const config = publicCharacterReplaceConfig(
       settings.frenzAiCharacterReplace,
       { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
@@ -74,7 +77,9 @@ export async function GET(request: Request) {
        * offered to this audience is "unavailable" to them, with the entitlement
        * carrying the why.
        */
-      available: config.enabled && entitlement.allowed,
+      available: config.enabled && entitlement.allowed && launched,
+      /** Part 10 §25: the sentence the workspace shows when the launch mode, not a switch, is why. Null otherwise. */
+      unavailableReason: config.enabled && entitlement.allowed && !launched ? LAUNCH_INTERNAL_MESSAGE : null,
       audience: entitlement.audience,
       /*
         Part 4: whether a job can actually be RUN on this deployment — the

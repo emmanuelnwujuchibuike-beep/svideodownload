@@ -272,6 +272,8 @@ const schema = z.object({
           processingEnabled: z.boolean().optional(),
           maintenanceMode: z.boolean().optional(),
           maintenanceMessage: z.string().max(300).optional(),
+          /** Part 10 §25: the launch mode. */
+          launchMode: z.enum(["production", "internal"]).optional(),
           circuitBreaker: z
             .object({
               enabled: z.boolean().optional(),

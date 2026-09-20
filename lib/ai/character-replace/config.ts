@@ -257,6 +257,10 @@ export interface CharacterReplaceTtsConfig {
  * The operator-tunable configuration, in full. This is what the settings row
  * stores (nested under one key) and what the normaliser below guarantees.
  */
+/** Part 10 §25: who may open a project today. */
+export type CharacterReplaceLaunchMode = "production" | "internal";
+export const CHARACTER_REPLACE_LAUNCH_MODES: readonly CharacterReplaceLaunchMode[] = ["production", "internal"];
+
 export interface CharacterReplaceConfig {
   /** The whole tool, on or off. Off = the entry card says so and the workspace refuses. */
   enabled: boolean;
@@ -381,6 +385,15 @@ export interface CharacterReplaceConfig {
     processingEnabled: boolean;
     maintenanceMode: boolean;
     maintenanceMessage: string;
+    /**
+     * ── PART 10 §25: SAFE LAUNCH MODE ──────────────────────────────────────
+     * `production` = every member the plan policy allows. `internal` = only
+     * administrators (the same server-side role the admin dashboard checks)
+     * may open or start a project; everyone else sees Character Replace as
+     * not yet available, with finished videos, history and the wallet
+     * untouched. `enabled: false` remains the off switch for everybody.
+     */
+    launchMode: CharacterReplaceLaunchMode;
     /** §7: after `failureThreshold` provider failures inside `windowSeconds`, submits pause for `cooldownSeconds`. */
     circuitBreaker: { enabled: boolean; failureThreshold: number; windowSeconds: number; cooldownSeconds: number };
   };
@@ -627,6 +640,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   ops: {
     processingEnabled: true,
     maintenanceMode: false,
+    launchMode: "production",
     maintenanceMessage: "Character Replace is being looked after right now. Your finished videos are still here — new videos will be back shortly.",
     circuitBreaker: { enabled: true, failureThreshold: 5, windowSeconds: 600, cooldownSeconds: 300 },
   },
@@ -897,6 +911,7 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       processingEnabled: bool(opsRaw.processingEnabled, d.ops.processingEnabled),
       maintenanceMode: bool(opsRaw.maintenanceMode, d.ops.maintenanceMode),
       maintenanceMessage: text(opsRaw.maintenanceMessage, d.ops.maintenanceMessage, 300),
+      launchMode: opsRaw.launchMode === "internal" ? "internal" : "production",
       circuitBreaker: {
         enabled: bool(breakerRaw.enabled, d.ops.circuitBreaker.enabled),
         failureThreshold: int(breakerRaw.failureThreshold, d.ops.circuitBreaker.failureThreshold, 1, 1_000),

@@ -109,6 +109,7 @@ describe("the kill switches and the limits are configuration (§2, §4, §8)", (
       processingEnabled: true,
       maintenanceMode: false,
       maintenanceMessage: expect.stringContaining("Character Replace is being looked after"),
+      launchMode: "production",
       circuitBreaker: { enabled: true, failureThreshold: 5, windowSeconds: 600, cooldownSeconds: 300 },
     });
     expect(CHARACTER_REPLACE_DEFAULTS.limits).toEqual({ maxActiveJobsPerUser: 0, maxActiveJobsGlobal: 25, maxJobsPerUserPerDay: 0 });

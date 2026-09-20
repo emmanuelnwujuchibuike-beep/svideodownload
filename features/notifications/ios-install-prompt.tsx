@@ -207,9 +207,20 @@ export function IosInstallPrompt() {
     }
   };
 
+  /*
+    ── Part 10 (2026-09-20): NOT over the Character Replace workspace ─────────
+    This card is fixed just above the bottom nav — exactly where that flow
+    keeps its Back / Continue / Create Video bar — and on a phone viewport it
+    intercepted the tap (measured on production with Playwright: "subtree
+    intercepts pointer events"). Same rule Part 9 gave the push nudge and the
+    Messages pill. The card is not dismissed, only kept off this route: it
+    comes back on the next page, and its engagement state is untouched.
+  */
+  const onWorkspace = (pathname ?? "").startsWith("/studio/ai/character-replace") || (pathname ?? "").startsWith("/ai/character-replace");
+
   return (
     <AnimatePresence>
-      {mode !== "hidden" ? (
+      {mode !== "hidden" && !onWorkspace ? (
         <motion.div
           initial={{ y: 96, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}

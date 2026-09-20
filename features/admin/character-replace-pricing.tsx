@@ -4,7 +4,7 @@ import { AlertTriangle, Coins } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { voiceProviderForModel, type CharacterReplaceConfig, type ReplacementModeConfig } from "@/lib/ai/character-replace/config";
+import { voiceProviderForModel, type CharacterReplaceConfig, type CharacterReplaceLaunchMode, type ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
 import { ELEVENLABS_REPLICATE_TTS_MODELS, ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsReplicateModel, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_AGES, VOICE_GENDER_LABEL, VOICE_GENDERS, type VoiceAge, type VoiceGender } from "@/lib/ai/voice/elevenlabs-models";
 import { formatCents } from "@/lib/ai/economy";
@@ -152,6 +152,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [processingEnabled, setProcessingEnabled] = useState(cr.ops.processingEnabled);
   const [maintenanceMode, setMaintenanceMode] = useState(cr.ops.maintenanceMode);
   const [maintenanceMessage, setMaintenanceMessage] = useState(cr.ops.maintenanceMessage);
+  // Part 10 §25: the launch mode — production for every member, internal for administrators only
+  const [launchMode, setLaunchMode] = useState<CharacterReplaceLaunchMode>(cr.ops.launchMode);
   const [breakerEnabled, setBreakerEnabled] = useState(cr.ops.circuitBreaker.enabled);
   const [breakerThreshold, setBreakerThreshold] = useState(String(cr.ops.circuitBreaker.failureThreshold));
   const [breakerWindow, setBreakerWindow] = useState(String(Math.round(cr.ops.circuitBreaker.windowSeconds / 60)));
@@ -228,6 +230,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         processingEnabled,
         maintenanceMode,
         maintenanceMessage: maintenanceMessage.trim() || cr.ops.maintenanceMessage,
+        launchMode,
         circuitBreaker: {
           enabled: breakerEnabled,
           failureThreshold: breakerThreshold.trim() === "" ? cr.ops.circuitBreaker.failureThreshold : Math.floor(Number(breakerThreshold)),
@@ -280,7 +283,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceRows, voiceSurcharge, voicesTouched]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, launchMode, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceRows, voiceSurcharge, voicesTouched]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -369,6 +372,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     /* ── Part 8 §2, §8: the switches and the caps ── */
     if (payload.ops.maintenanceMode && !cr.ops.maintenanceMode) out.push("This puts Character Replace into MAINTENANCE: no new videos for anyone until it is switched back. Finished videos stay reachable.");
     if (!payload.ops.processingEnabled && cr.ops.processingEnabled) out.push("This PAUSES new videos for every member. Videos already running finish normally.");
+    if (payload.ops.launchMode === "internal" && cr.ops.launchMode !== "internal") out.push("This puts Character Replace into INTERNAL launch mode: only administrators can make a new video. Every other member sees it as not yet available. Finished videos, history and balances are untouched.");
+    if (payload.ops.launchMode === "production" && cr.ops.launchMode === "internal") out.push("This opens Character Replace to EVERY member the plan policy allows. Make sure the provider balance and the price table are what you want first.");
     if (payload.limits.maxActiveJobsGlobal === 0) out.push("No platform-wide cap on active videos — a burst can run up the provider bill without a ceiling.");
     if (!payload.ops.circuitBreaker.enabled && cr.ops.circuitBreaker.enabled) out.push("The provider circuit breaker is OFF: a failing provider keeps being paid until somebody notices.");
     /* ── Part 8 §25: the margin, when the FX rate is known ── */
@@ -393,7 +398,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.tts.perCharacterCents * payload.tts.maximumCharacters > 5_000_000) out.push(`The per-character fee prices the longest dialogue at ${formatCents(payload.tts.perCharacterCents * payload.tts.maximumCharacters, symbol)}.`);
     return out;
-  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.maintenanceMode, cr.ops.processingEnabled, cr.voices, payload, settings.frenzAiCurrency, symbol, walletIsUsd]);
+  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.launchMode, cr.ops.maintenanceMode, cr.ops.processingEnabled, cr.voices, payload, settings.frenzAiCurrency, symbol, walletIsUsd]);
 
   const priceChanged = useMemo(() => {
     const before = cr;
@@ -977,6 +982,12 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         <Group title="Switches, limits & safety">
           <div className="space-y-4">
             <Toggle label="New videos can start" hint="Off pauses every new start at once — members see a notice, nothing is charged, videos already running finish. The kill switch for a bad day at the provider." checked={processingEnabled} onChange={setProcessingEnabled} />
+            <Field id="cr-launch-mode" label="Launch mode" hint="Production: every member the plan policy allows. Internal: only administrators can make a new video — everyone else reads that it is opening gradually. The safe way to switch it on, test with your own account, then open it up.">
+              <select id="cr-launch-mode" value={launchMode} onChange={(e) => setLaunchMode(e.target.value === "internal" ? "internal" : "production")} className={input}>
+                <option value="production">Production — every member</option>
+                <option value="internal">Internal — administrators only</option>
+              </select>
+            </Field>
             <Toggle label="Maintenance mode" hint="On refuses new projects and shows the notice below; finished videos, history and downloads stay reachable." checked={maintenanceMode} onChange={setMaintenanceMode} />
             <Field id="cr-maint-msg" label="Maintenance notice" hint="What members read while maintenance is on. Up to 300 characters.">
               <textarea id="cr-maint-msg" rows={2} maxLength={300} value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} className={cn(input, "min-h-[3.5rem] resize-y")} />

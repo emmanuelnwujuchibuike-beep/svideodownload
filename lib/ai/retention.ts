@@ -231,24 +231,10 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
     console.error("[ai/retention] abandoned query failed", { message: idleError.message });
     result.errors += 1;
   }
-  for (const row of (idleRows ?? []) as Pick<AiJobRow, "id" | "source_path">[]) {
-    const swept = await removeJobFolder(admin, row.source_path);
-    result.objectsDeleted += swept.deleted;
-    result.errors += swept.errors;
-    const { data: moved, error } = await admin
-      .from("ai_jobs")
-      .update({ status: "expired", source_path: null, result_path: null, poster_path: null, completed_at: now.toISOString() })
-      .eq("id", row.id)
-      .eq("status", "queued")
-      .is("started_at", null)
-      .select("id");
-    if (error) {
-      console.error("[ai/retention] abandoned expire failed", { jobId: row.id, message: error.message });
-      result.errors += 1;
-      continue;
-    }
-    if ((moved?.length ?? 0) === 1) result.abandoned += 1;
-  }
+  const abandoned = await expireDrafts(admin, (idleRows ?? []) as Pick<AiJobRow, "id" | "source_path">[], now);
+  result.abandoned += abandoned.expired;
+  result.objectsDeleted += abandoned.objectsDeleted;
+  result.errors += abandoned.errors;
 
   result.ms = Date.now() - startedAt;
   console.info("[ai/retention] swept", result);
@@ -257,6 +243,82 @@ export async function runAiRetention(now: Date = new Date()): Promise<RetentionR
 
 /** A queued project nobody started within this long is abandoned. */
 const ABANDONED_AFTER_MS = 24 * 60 * 60_000;
+
+/**
+ * Expire never-started drafts: the folder's uploads go, the row reads
+ * `expired`. Guarded on `queued` + `started_at is null` in the UPDATE, so a
+ * draft that was started in the meantime is left exactly where /start put it.
+ * Nothing was ever reserved for such a row, so there is nothing to refund.
+ */
+async function expireDrafts(
+  admin: ReturnType<typeof createAdminClient>,
+  rows: readonly Pick<AiJobRow, "id" | "source_path">[],
+  now: Date,
+): Promise<{ expired: number; objectsDeleted: number; errors: number }> {
+  const out = { expired: 0, objectsDeleted: 0, errors: 0 };
+  for (const row of rows) {
+    const swept = await removeJobFolder(admin, row.source_path);
+    out.objectsDeleted += swept.deleted;
+    out.errors += swept.errors;
+    // 🔴 The source itself too (Part 10): `removeJobFolder` spares the object the path names, and the abandoned sweep had been leaving every never-started upload in the bucket.
+    const removed = await removeObjects(admin, [{ bucket: AI_SOURCE_BUCKET, path: row.source_path }]);
+    out.objectsDeleted += removed.deleted;
+    out.errors += removed.errors;
+    const { data: moved, error } = await admin
+      .from("ai_jobs")
+      .update({ status: "expired", source_path: null, result_path: null, poster_path: null, completed_at: now.toISOString() })
+      .eq("id", row.id)
+      .eq("status", "queued")
+      .is("started_at", null)
+      .select("id");
+    if (error) {
+      console.error("[ai/retention] draft expire failed", { jobId: row.id, message: error.message });
+      out.errors += 1;
+      continue;
+    }
+    if ((moved?.length ?? 0) === 1) out.expired += 1;
+  }
+  return out;
+}
+
+/**
+ * ── A NEW PROJECT SUPERSEDES THE MEMBER'S ABANDONED DRAFTS (Part 10) ─────────
+ *
+ * A Character Replace row is opened at Create and stays `queued` until the
+ * uploads land and /start runs. When the upload fails, or the tab is closed,
+ * the draft is left behind — and the member's next Create, on a new
+ * clientRequestId, found it in the active count and answered "You already
+ * have a video being made" until the daily abandoned sweep above cleared it.
+ *
+ * So the create route calls this first: every OTHER never-started draft of
+ * the member's, for this feature, is expired the way the sweep would have
+ * expired it a day later. A retry on the SAME clientRequestId never reaches
+ * here (the route answers with the existing job), and a draft that has been
+ * started is excluded by the `started_at is null` guard on both the read and
+ * the write. Best-effort: a storage hiccup is logged and the row still moves,
+ * so a member is never blocked by our own housekeeping.
+ */
+export async function supersedeOwnDrafts(userId: string, feature: AiJobRow["feature"], now: Date = new Date()): Promise<number> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select("id, source_path")
+    .eq("user_id", userId)
+    .eq("feature", feature)
+    .eq("status", "queued")
+    .is("started_at", null)
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (error) {
+    console.error("[ai/retention] draft lookup failed", { userId, feature, message: error.message });
+    return 0;
+  }
+  const rows = (data ?? []) as Pick<AiJobRow, "id" | "source_path">[];
+  if (!rows.length) return 0;
+  const done = await expireDrafts(admin, rows, now);
+  if (done.expired > 0) console.info("[ai/retention] superseded drafts", { userId, feature, expired: done.expired, objectsDeleted: done.objectsDeleted, errors: done.errors });
+  return done.expired;
+}
 
 /**
  * Remove objects, tolerating everything.

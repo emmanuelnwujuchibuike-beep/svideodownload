@@ -85,6 +85,8 @@ export async function getCharacterReplaceConfig(): Promise<
     maintenance?: { active: boolean; message: string | null };
     /** Part 8 §2: new starts are paused (running jobs finish). */
     processingPaused?: boolean;
+    /** Part 10 §25: why `available` is false when a launch mode, not a switch, decided it. */
+    unavailableReason?: string | null;
   }>
 > {
   return request("/api/ai/character-replace/config");

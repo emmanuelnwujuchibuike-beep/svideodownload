@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { providerHealthFor } from "@/lib/ai/character-replace/circuit";
 import { modeConfig } from "@/lib/ai/character-replace/config";
 import { readCharacterReplaceMeta, referencePaths } from "@/lib/ai/character-replace/job-meta";
+import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
 import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
 import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch";
@@ -135,6 +136,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const audioObject = audioUploadPath ? (objects[refPaths.length] ?? null) : null;
     const config = settings.frenzAiCharacterReplace;
     if (!config.enabled || !entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
+    // Part 10 §25: `internal` launch mode — a draft opened before the switch flipped still cannot start; nothing reserved.
+    if (!(await launchAllows(config, subject))) return fail("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });
     const modeView = modeConfig(config, meta.mode);
     if (!modeView.enabled) return fail("FEATURE_UNAVAILABLE");
     /*

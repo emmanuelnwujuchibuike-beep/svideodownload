@@ -9,7 +9,108 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑20 (USD balance / naira checkout; no‑store on every API; live‑feed pairs; Quick actions; ElevenLabs v3 + voice changer; the Face Only finding)_
+_Last updated: 2026‑09‑20 (Character Replace Part 10 — final production QA, safe launch mode, draft/stall fixes, refund currency guard)_
+
+---
+
+## 2026‑09‑20 — Frenz AI Character Replace, Part 10: final production QA, real‑world validation, safe launch
+
+The owner's Part 10 brief: audit Parts 1–9 as one system, fix only what would lose
+money, break processing, leak media, mis‑notify or hurt the public site, and STOP.
+No Part 11. Everything below was **measured on production** with throwaway
+members (fake wallet credit through the service role, deleted afterwards), never
+on a real account and never with real money.
+
+### What the audit found and fixed
+
+- **A never‑started draft was "stalled" at 30 minutes.** `listRecoverableJobs`
+  includes `queued`; `failStalledJob` measured a Character Replace draft from
+  `created_at` against the 30‑minute `queued` deadline, so the 10‑minute sweep
+  ended every slow upload / closed tab as `failed · PROVIDER_TIMEOUT` and pushed
+  "Character Replace couldn't finish" for a video that never ran. **It hit a real
+  member today** (`3af14bd9`: created 14:03, `stall.failed from: queued` 14:33).
+  Fix: `lib/ai/stall-server.ts` leaves a CR `queued` row alone — the daily
+  abandoned sweep in `lib/ai/retention.ts` owns drafts (no push, nothing reserved).
+- **An abandoned draft blocked the next Create.** `countActiveJobs` counts
+  `queued`; the SQL claim does not. After a failed upload + reset (new
+  clientRequestId) the member got "You already have a video being made". Fix: the
+  create route calls `supersedeOwnDrafts(userId, feature)` — every OTHER
+  never‑started draft is expired the way the sweep would have, folder AND source
+  object removed (the abandoned phase had been sparing the source video itself —
+  a storage leak, now closed through the shared `expireDrafts` helper).
+- **A refund could cross a currency.** `refund_product_charge` added the charge
+  row's `-delta_cents` to the balance without comparing the row's currency to the
+  wallet's. The ledger around the 0159 USD switch is clean (every NGN refund
+  landed before 14:28; ₦48,057.26 → $35.98 auditable), but a kobo reservation
+  refunded into a cent wallet would have credited ~1,335×. Migration **0160**
+  guards it: currencies differ → nothing written, `raise warning`, the charge
+  stays `reserved` (the failure copy already says "refund is being processed"),
+  an operator settles by adjustment.
+- **The Install card covered the sticky Continue/Create bar on phones**
+  (Playwright on production: "subtree intercepts pointer events"). Same rule Part
+  9 gave the push nudge and the Messages pill: `ios-install-prompt.tsx` renders
+  nothing on `/studio/ai/character-replace*` (state untouched, back on the next page).
+- **Safe launch mode (§25):** `ops.launchMode: production | internal`.
+  `internal` = only administrators (the dashboard's own DB‑role check,
+  `lib/ai/character-replace/launch-server.ts`) may open or start a project;
+  everyone else reads "opening gradually, your videos and balance are untouched".
+  Enforced at config (`available` + `unavailableReason`), create (before a
+  ticket) and start (before the reserve); results, history, wallet and recharges
+  unaffected. Admin form: "Launch mode" select under Switches, with warnings both
+  ways; audited through `config_audit_log` like every CR setting. Default
+  `production` — nothing changes on deploy until the owner flips it.
+
+### What was measured on production (all passed)
+
+- **Price authority (§5):** price 0 / 1¢ / shortened duration / swapped currency
+  / rolled‑back version / mismatched trim / forged quality / forged mode / extra
+  `userId` / extra `price` / `consent:false` — every one refused with its own code,
+  the job still `queued`, the balance untouched. The `/start` burst limiter
+  (6/min) fired on the first pass — §14 working.
+- **Trim = billing (§6):** 3 s priced from the middle of a 9 s clip → worker
+  prepared 3000 ms (`trimmed:true`) → output 3008 ms, 576×1024, 30 fps, 822 KB,
+  audio kept. Charged $0.12 once, `reserved → settled`.
+- **Real run (§8):** face_only · standard · xrunda/hello `104b4a39…` · prediction
+  `za1ajaaa…` · predict_time 31.6 s · 115 s wall to `completed` · notified once ·
+  result 200 / download 302 / poster 200 / source 200 / signed URL 206 (600 s TTL).
+  Polling stopped for 90 s mid‑run; the job finished on the server (§10).
+- **Refund path (zero provider cost):** the browser "measured" 3 s, the upload
+  was 9 s → the worker refused `DURATION_MISMATCH` before any prediction →
+  `failed`, refunded exactly once, balance restored, view says refunded, one
+  push; a second `refund_product_charge` wrote nothing.
+- **Paystack (§3):** forged signature → 400; unknown reference at verify →
+  `credited:false`; a genuinely signed synthetic `charge.success` delivered
+  twice → ONE recharge row, balance +once; a short/tampered settled amount →
+  acknowledged, no credit; the legacy `frenz_ai_topup` purpose → the one product
+  wallet, `ai_balances` untouched (retired at zero, verified).
+- **Storage / IDOR (§12):** a stranger gets 404 on job/result/source/poster/
+  save/delete/cancel and no job data on the result page; a traversal filename
+  never becomes a path; signed‑out = 401 on APIs, 307 on the page; internal
+  routes 403 without the worker secret; cron 403; admin routes 403 for a member.
+- **Devices (§21, emulated iPhone 14 + Pixel 7 on production):** no overflow, no
+  page/console errors, video preview decodes, Continue bar and "Create Video ·
+  $0.36" in the viewport, recharge sheet opens in place, no accidental reloads.
+- **Performance (§20):** budgets green; landing 206 KiB (ceiling 275), CR
+  workspace 217 KiB, `/admin` 366 KiB under its ceiling.
+- **Public surface (§19):** `/ai` disallowed in robots, every AI page `noindex`,
+  `/studio` layout noindex, nothing AI in the sitemap, middleware gates `/ai` +
+  `/studio`; no "undetectable"/impersonation language.
+
+### Not changed, flagged for the owner
+
+- A member may cancel during `processing`/`finalizing` and is refunded in full
+  while the provider has already billed the run — bounded by the daily/active
+  limits and the 6/min limiter; a policy call, not a bug.
+- A crash between `completed` and `settle` leaves a charge `reserved` on a
+  completed job (money already moved; cosmetic on the statement). Zero such rows today.
+- A result stored just before a cancel during `finalizing` is an orphan object
+  in the results bucket (rare; not swept).
+- Push delivery on a physical phone was not exercised here (the events prove
+  `notify.sent`); the owner should tap one real "Your video is ready ✨".
+
+**Verified:** tsc clean, lint clean, vitest green (Part 10 test file added),
+`next build` clean. AI Clean stays retired (registry has one feature; 72 legacy
+rows render from history.ts; nothing re‑added).
 
 ---
 

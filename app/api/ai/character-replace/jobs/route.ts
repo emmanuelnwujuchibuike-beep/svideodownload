@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
 import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
 import { replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { createCharacterReplaceJobSchema } from "@/lib/ai/character-replace/start-schema";
@@ -13,6 +14,7 @@ import { aiFeature, isActiveStatus, isValidClientRequestId, jobToView } from "@/
 import { countActiveJobs, createJob, findJobByRequestId, getOwnJob, reserveSourcePath } from "@/lib/ai/job-store";
 import { audioExtensionForUpload, extensionForUpload, imageExtensionForUpload } from "@/lib/ai/media";
 import { hasProviderFor } from "@/lib/ai/providers";
+import { supersedeOwnDrafts } from "@/lib/ai/retention";
 import { createSourceUploadTicket } from "@/lib/ai/storage-server";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
@@ -78,6 +80,8 @@ export async function POST(request: Request) {
   try {
     const [settings, entitlement] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature)]);
     const config = settings.frenzAiCharacterReplace;
+    // Part 10 §25: in `internal` launch mode only administrators may open a project; refused before any upload ticket exists.
+    if (!(await launchAllows(config, subject))) return fail("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });
     if (!config.enabled || !entitlement.allowed) return fail("FEATURE_UNAVAILABLE");
     // Part 8 §2: the switches refuse a NEW project before any upload ticket is minted; results and history stay reachable.
     if (config.ops.maintenanceMode) return fail("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });
@@ -135,6 +139,16 @@ export async function POST(request: Request) {
       const uploads = existing.status === "queued" ? await tickets(existing.id) : null;
       return NextResponse.json({ job: jobToView(existing, storedErrorMessage), created: false, uploads });
     }
+
+    /*
+      ── Part 10: A NEW PROJECT SUPERSEDES THE MEMBER'S ABANDONED DRAFTS ────
+      A draft whose upload failed, or whose tab was closed, sat `queued` and
+      counted as active below — so the member's next Create (a new
+      clientRequestId after a reset) was refused as "already being made"
+      until the daily sweep. Every other never-started draft of theirs is
+      expired here, uploads removed, before the count (lib/ai/retention.ts).
+    */
+    await supersedeOwnDrafts(ownerId, feature.id);
 
     // §28: one Character Replace at a time per member — a cost ceiling as much as a queue rule.
     const active = await countActiveJobs(subject, feature.id);

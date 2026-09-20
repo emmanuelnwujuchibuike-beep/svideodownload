@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { buildPrepareArgs, isKnownPrepareArg, type PreparePlan } from "@/lib/ai/character-replace/ffmpeg";
 import { durationWithinTolerance, readCharacterReplaceMeta, referencePaths, selectedRangeOf, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
+import { buildReferenceImageArgs, isKnownReferenceImageArg, type ReferenceImagePlan } from "@/lib/ai/character-replace/ffmpeg";
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { characterReplaceLimits } from "@/lib/ai/character-replace/validate";
 import { prepareReplacementAudio } from "@/server/services/ai-audio-prepare";
@@ -16,7 +17,7 @@ import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
 import { AI_IMAGE_MAX_BYTES } from "@/lib/ai/media";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
-import { AI_SOURCE_BUCKET, aiPreparedKey, pathBelongsTo } from "@/lib/ai/storage";
+import { AI_SOURCE_BUCKET, aiPreparedKey, aiPreparedReferenceKey, pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { dispatchProviderSubmit } from "@/lib/ai/submit-dispatch";
@@ -205,6 +206,52 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
       throw new PrepareFailure("DURATION_MISMATCH", `priced ${meta.quote.durationMs} ms, prepared ${preparedMs} ms`);
     }
 
+    /*
+      ── 5a. THE REFERENCE IMAGES, MADE PLAIN (2026-09-20) ───────────────────
+
+      Two Skin + Face jobs died inside the provider on 09-15 with
+      `ffmpeg … -i image-0.bin -vf scale=880:1168 … returned non-zero` — the
+      provider's own resize of OUR reference image. The file was a valid
+      1080×1440 JPEG straight from an iPhone: progressive, with an 8.7 kB
+      EXIF block (thumbnail inside), XMP, an ICC profile and two Photoshop
+      segments. Reproduced three times against the model with that exact
+      file; the same pixels re-encoded as a plain baseline JPEG with the
+      metadata stripped went through first time. A phone's photo is the
+      ordinary case here, not the exception, so every reference is
+      normalised on this side before a provider ever sees it: baseline JPEG,
+      no metadata, the long edge capped at 2048 (the models resize to about
+      a megapixel anyway), quality 2. The upload itself is left untouched.
+      A re-encode that fails is not fatal — the upload is sent as before and
+      the event says so — because a refused image is what the member would
+      get either way.
+    */
+    const preparedReferencePaths: (string | null)[] = [];
+    for (const [i, imageFile] of imageFiles.entries()) {
+      const out = path.join(dir, `character-${i + 1}-prepared.jpg`);
+      const imagePlan: ReferenceImagePlan = { input: imageFile, output: out, maxEdge: 2048 };
+      const imageArgs = buildReferenceImageArgs(imagePlan);
+      let preparedPath: string | null = null;
+      try {
+        for (const arg of imageArgs) if (!isKnownReferenceImageArg(arg, imagePlan)) throw new Error("refusing an unknown ffmpeg argument");
+        const enc = await runPrepare(imageArgs);
+        if (!enc.ok) throw new Error(enc.detail || "ffmpeg failed");
+        const encStat = await stat(out).catch(() => null);
+        if (!encStat || encStat.size <= 0) throw new Error("ffmpeg wrote nothing");
+        const encProbe = await probeMedia(out);
+        if (!encProbe?.width || !encProbe.height) throw new Error("the re-encoded image could not be decoded");
+        const key = aiPreparedReferenceKey(job.user_id, feature.id, job.id, i + 1);
+        if (!pathBelongsTo(key, job.user_id, job.id)) throw new Error("refusing a prepared path that failed ownership");
+        const upImg = await createAdminClient().storage.from(AI_SOURCE_BUCKET).upload(key, await readFile(out), { contentType: "image/jpeg", upsert: true });
+        if (upImg.error) throw new Error(`upload failed: ${upImg.error.message}`);
+        preparedPath = key;
+        await recordJobEvent(job.id, "reference.prepared", { index: i + 1, width: encProbe.width, height: encProbe.height, bytes: encStat.size, inputBytes: imageByteCounts[i] ?? null });
+      } catch (e) {
+        console.warn("[cr/prepare] reference image not normalised — sending the upload as-is", { jobId: job.id, index: i + 1, error: String(e).slice(0, 200) });
+        await recordJobEvent(job.id, "reference.prepare_failed", { index: i + 1, detail: String(e).slice(0, 200) });
+      }
+      preparedReferencePaths.push(preparedPath);
+    }
+
     /* ── 5b. the member's own voice, if they uploaded one (Part 6 §3–§4) ── */
     let audioPrepared: NonNullable<CharacterReplaceJobMeta["audio"]>["prepared"] | null = null;
     if (meta.audio?.source === "upload" && audioPath && meta.audio.upload) {
@@ -266,8 +313,8 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
             height: videoProbe.height ?? meta.video.height,
             hasAudio: videoProbe.hasAudio,
           },
-          character: { ...meta.character, size: imageBytes, width: imageProbe.width, height: imageProbe.height },
-          references: meta.references.map((r, i) => ({ ...r, size: imageByteCounts[i + 1] ?? r.size, width: imageProbes[i + 1]?.width ?? r.width, height: imageProbes[i + 1]?.height ?? r.height })),
+          character: { ...meta.character, size: imageBytes, width: imageProbe.width, height: imageProbe.height, preparedPath: preparedReferencePaths[0] ?? null },
+          references: meta.references.map((r, i) => ({ ...r, size: imageByteCounts[i + 1] ?? r.size, width: imageProbes[i + 1]?.width ?? r.width, height: imageProbes[i + 1]?.height ?? r.height, preparedPath: preparedReferencePaths[i + 1] ?? null })),
           ...(audioPrepared ? { audio: { ...(freshMeta?.audio ?? meta.audio), prepared: audioPrepared } } : {}),
           color: { source: color },
           prepared: {

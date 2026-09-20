@@ -77,6 +77,16 @@ export function aiCharacterKey(userId: string, feature: AiFeature, jobId: string
 export function aiPreparedKey(userId: string, feature: AiFeature, jobId: string): string {
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/prepared.mp4`;
 }
+/**
+ * The reference image as the PROVIDER receives it (2026-09-20): a clean
+ * baseline JPEG the worker re-encodes from the member's upload — no EXIF,
+ * XMP, ICC or IPTC. Index 1 is the primary photo, 2–3 the extra identity
+ * photos. See the note in the prepare service for the failure this stops.
+ */
+export function aiPreparedReferenceKey(userId: string, feature: AiFeature, jobId: string, index: number): string {
+  const n = Math.max(1, Math.min(9, Math.floor(index)));
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/${n === 1 ? "character" : `character-${n}`}-prepared.jpg`;
+}
 /*
   Part 6: a job folder may also hold up to two EXTRA identity photos (Skin +
   Face), the member's replacement audio as uploaded, the worker's prepared

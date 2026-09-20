@@ -33,6 +33,9 @@ export type AiJobEventKind =
   /* Part 6: the voice, and the hand-over between provider stages */
   | "audio.prepared"
   | "audio.rejected"
+  /** 2026-09-20: a reference image re-encoded plain for the provider — or not, with why. */
+  | "reference.prepared"
+  | "reference.prepare_failed"
   | "advance.claimed"
   | "advance.completed"
   | "advance.failed"

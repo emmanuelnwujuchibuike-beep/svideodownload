@@ -38,6 +38,8 @@ const image = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   name: z.string().max(200).optional(),
+  /** The clean baseline JPEG the worker wrote beside the upload (2026-09-20); the provider reads THIS when present. */
+  preparedPath: z.string().min(1).nullable().optional(),
 });
 
 const stageRecord = z
@@ -226,7 +228,16 @@ export function durationWithinTolerance(billedMs: number, actualMs: number): boo
   return Math.abs(actualMs - billedMs) <= tolerance;
 }
 
-/** Every reference image path on the row, primary first. */
+/** Every reference image path on the row as UPLOADED, primary first — what /start stats and the worker downloads. */
 export function referencePaths(meta: Pick<CharacterReplaceJobMeta, "character" | "references">): string[] {
   return [meta.character.path, ...meta.references.map((r) => r.path)];
+}
+
+/**
+ * Every reference image path as the PROVIDER should read it, primary first:
+ * the worker's clean re-encode when it exists, the upload otherwise (a row
+ * prepared before 2026-09-20, or a re-encode that could not be written).
+ */
+export function providerReferencePaths(meta: Pick<CharacterReplaceJobMeta, "character" | "references">): string[] {
+  return [meta.character.preparedPath ?? meta.character.path, ...meta.references.map((r) => r.preparedPath ?? r.path)];
 }

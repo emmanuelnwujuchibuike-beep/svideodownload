@@ -1,7 +1,7 @@
 import "server-only";
 
 import { withCircuit } from "@/lib/ai/character-replace/circuit";
-import { readCharacterReplaceMeta, readPipeline, referencePaths, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
+import { providerReferencePaths, readCharacterReplaceMeta, readPipeline, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
 import { markSubmitted, planPipeline, type PipelineMeta, type PipelineStage } from "@/lib/ai/character-replace/pipeline";
 import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
 import { AiJobError } from "@/lib/ai/errors";
@@ -113,7 +113,8 @@ export async function submitCharacterReplaceJob(
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: false };
   } else if (stage === "replace") {
     /* ── the replacement, routed by mode ───────────────────────────────── */
-    const refs = referencePaths(meta);
+    // The worker's clean re-encodes, never the raw uploads (2026-09-20 — see the prepare service).
+    const refs = providerReferencePaths(meta);
     for (const p of [meta.prepared.path, ...refs]) {
       // 🔴 Ownership of EVERY path, re-checked at the moment they become URLs.
       if (!pathBelongsTo(p, fresh.user_id, fresh.id)) throw new AiJobError("INTERNAL_ERROR", "a media path failed ownership");

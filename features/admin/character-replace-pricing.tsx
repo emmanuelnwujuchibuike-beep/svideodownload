@@ -454,96 +454,158 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
             What a member pays for each second of video, by replacement type and quality. A 10-second video costs ten times the number you type here (plus the
             base price and any voice or lip-sync add-on below). Untick a row to hide that quality from members.
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                <tr>
-                  <th className="py-2 pr-3">Replacement type</th>
-                  <th className="py-2 pr-3">Quality</th>
-                  <th className="py-2 pr-3">Members pay, per second</th>
-                  <th className="py-2 pr-3">10-second video</th>
-                  <th className="py-2 pr-3">Provider cost</th>
-                  <th className="py-2">On</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {qualities.map((q, i) => {
-                  const cents = majorInputToMinor(q.perSecond) ?? 0;
-                  return (
-                    <tr key={`full-${q.id}`} className={cn(!q.enabled && "opacity-55")}>
-                      <td className="py-2.5 pr-3 font-semibold">{i === 0 ? "Full Character" : ""}</td>
-                      <td className="py-2.5 pr-3">
-                        {q.id === "480p" ? "Standard" : q.id === "720p" ? "HD" : "Full HD"} <span className="text-muted-foreground">({q.label})</span>
-                        {q.id === "1080p" ? <span className="block text-[11px] text-muted-foreground">provider documents 480p and 720p only</span> : null}
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">{symbol}</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            step="any"
-                            aria-label={`Full Character ${q.label} price per second`}
-                            value={q.perSecond}
-                            onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, perSecond: e.target.value, useOwnRate: true } : x)))}
-                            className={cn(input, "mt-0 w-28")}
-                          />
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{formatCents(cents * 10, symbol)}</td>
-                      <td className="py-2.5 pr-3 text-muted-foreground">—</td>
-                      <td className="py-2.5">
-                        <input type="checkbox" aria-label={`Full Character ${q.label} available`} checked={q.enabled} onChange={(e) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 accent-[hsl(var(--primary))]" />
-                      </td>
-                    </tr>
-                  );
-                })}
-                {(
-                  [
-                    ["Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, cr.modes.face_only],
-                    ["Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, cr.modes.skin_face],
-                  ] as const
-                ).map(([label, st, set, map, before]) =>
-                  st.tiers.map((t, i) => {
-                    const supported = map[t.id].support === "supported";
-                    const cents = majorInputToMinor(t.perSecond) ?? 0;
-                    const usd = before.providerCostPerSecondUsdCents;
-                    return (
-                      <tr key={`${label}-${t.id}`} className={cn((!supported || !t.enabled || !st.enabled) && "opacity-55")}>
-                        <td className="py-2.5 pr-3 font-semibold">{i === 0 ? label : ""}</td>
-                        <td className="py-2.5 pr-3">
-                          {t.label}
-                          {!supported ? <span className="block text-[11px] text-muted-foreground">not available for this type</span> : null}
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-muted-foreground">{symbol}</span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min={0}
-                              step="any"
-                              aria-label={`${label} ${t.label} price per second`}
-                              value={t.perSecond}
-                              disabled={!supported}
-                              onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, perSecond: e.target.value } : x)) })}
-                              className={cn(input, "mt-0 w-28 disabled:opacity-50")}
-                            />
-                          </span>
-                        </td>
-                        <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{supported ? formatCents(cents * 10, symbol) : "—"}</td>
-                        <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{usd > 0 ? `$${(usd / 100).toFixed(3)}/s` : "—"}</td>
-                        <td className="py-2.5">
-                          <input type="checkbox" aria-label={`${label} ${t.label} available`} checked={t.enabled && supported} disabled={!supported} onChange={(e) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)) })} className="h-4 w-4 accent-[hsl(var(--primary))]" />
-                        </td>
+          {(() => {
+            /*
+              One row model, drawn twice: stacked cards under `sm` (a phone
+              cannot type into a six-column table — owner, 2026-09-15) and the
+              table from `sm` up. Every field writes the same state either way.
+            */
+            type PriceRow = {
+              key: string;
+              type: string;
+              first: boolean;
+              quality: string;
+              detail: string | null;
+              note: string | null;
+              value: string;
+              supported: boolean;
+              enabled: boolean;
+              costUsdCents: number;
+              setValue: (v: string) => void;
+              setEnabled: (v: boolean) => void;
+            };
+            const rows: PriceRow[] = [
+              ...qualities.map<PriceRow>((q, i) => ({
+                key: `full-${q.id}`,
+                type: "Full Character",
+                first: i === 0,
+                quality: q.id === "480p" ? "Standard" : q.id === "720p" ? "HD" : "Full HD",
+                detail: q.label,
+                note: q.id === "1080p" ? "provider documents 480p and 720p only" : null,
+                value: q.perSecond,
+                supported: true,
+                enabled: q.enabled,
+                costUsdCents: 0,
+                setValue: (v) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, perSecond: v, useOwnRate: true } : x))),
+                setEnabled: (v) => setQualities((qs) => qs.map((x, j) => (j === i ? { ...x, enabled: v } : x))),
+              })),
+              ...(
+                [
+                  ["Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, cr.modes.face_only],
+                  ["Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, cr.modes.skin_face],
+                ] as const
+              ).flatMap(([label, st, set, map, before]) =>
+                st.tiers.map<PriceRow>((t, i) => {
+                  const supported = map[t.id].support === "supported";
+                  return {
+                    key: `${label}-${t.id}`,
+                    type: label,
+                    first: i === 0,
+                    quality: t.label,
+                    detail: null,
+                    note: supported ? null : "not available for this type",
+                    value: t.perSecond,
+                    supported,
+                    enabled: t.enabled && supported && st.enabled,
+                    costUsdCents: before.providerCostPerSecondUsdCents,
+                    setValue: (v) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, perSecond: v } : x)) }),
+                    setEnabled: (v) => set({ ...st, tiers: st.tiers.map((x, j) => (j === i ? { ...x, enabled: v } : x)) }),
+                  };
+                }),
+              ),
+            ];
+            const tenSeconds = (r: PriceRow) => (r.supported ? formatCents((majorInputToMinor(r.value) ?? 0) * 10, symbol) : "—");
+            const cost = (r: PriceRow) => (r.costUsdCents > 0 ? `$${(r.costUsdCents / 100).toFixed(3)}/s` : "—");
+            const field = (r: PriceRow, wide: boolean) => (
+              <span className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">{symbol}</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="any"
+                  aria-label={`${r.type} ${r.quality} price per second`}
+                  value={r.value}
+                  disabled={!r.supported}
+                  onChange={(e) => r.setValue(e.target.value)}
+                  className={cn(input, "mt-0 disabled:opacity-50", wide ? "w-28" : "w-full max-w-[9rem]")}
+                />
+              </span>
+            );
+            const onSwitch = (r: PriceRow) => (
+              <input type="checkbox" aria-label={`${r.type} ${r.quality} available`} checked={r.enabled} disabled={!r.supported} onChange={(e) => r.setEnabled(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+            );
+            return (
+              <>
+                {/* phone: one card per row */}
+                <ul className="space-y-2 sm:hidden">
+                  {rows.map((r) => (
+                    <li key={r.key} className={cn("rounded-2xl border border-border/70 bg-card px-3.5 py-3", (!r.supported || !r.enabled) && "opacity-60")}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{r.type}</p>
+                          <p className="text-sm font-semibold">
+                            {r.quality}
+                            {r.detail ? <span className="ml-1 font-normal text-muted-foreground">({r.detail})</span> : null}
+                          </p>
+                          {r.note ? <p className="text-[11px] text-muted-foreground">{r.note}</p> : null}
+                        </div>
+                        <label className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                          {onSwitch(r)}
+                          On
+                        </label>
+                      </div>
+                      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                        <span className="text-xs text-muted-foreground">Per second</span>
+                        {field(r, false)}
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between text-[11.5px] text-muted-foreground">
+                        <span>10-second video</span>
+                        <span className="tabular-nums">{tenSeconds(r)}</span>
+                      </div>
+                      {r.costUsdCents > 0 ? (
+                        <div className="mt-0.5 flex items-center justify-between text-[11.5px] text-muted-foreground">
+                          <span>Provider cost</span>
+                          <span className="tabular-nums">{cost(r)}</span>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                {/* tablet and up: the table */}
+                <div className="hidden overflow-x-auto sm:block">
+                  <table className="w-full min-w-[40rem] text-left text-sm">
+                    <thead className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <tr>
+                        <th className="py-2 pr-3">Replacement type</th>
+                        <th className="py-2 pr-3">Quality</th>
+                        <th className="py-2 pr-3">Members pay, per second</th>
+                        <th className="py-2 pr-3">10-second video</th>
+                        <th className="py-2 pr-3">Provider cost</th>
+                        <th className="py-2">On</th>
                       </tr>
-                    );
-                  }),
-                )}
-              </tbody>
-            </table>
-          </div>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {rows.map((r) => (
+                        <tr key={r.key} className={cn((!r.supported || !r.enabled) && "opacity-55")}>
+                          <td className="py-2.5 pr-3 font-semibold">{r.first ? r.type : ""}</td>
+                          <td className="py-2.5 pr-3">
+                            {r.quality}
+                            {r.detail ? <span className="text-muted-foreground"> ({r.detail})</span> : null}
+                            {r.note ? <span className="block text-[11px] text-muted-foreground">{r.note}</span> : null}
+                          </td>
+                          <td className="py-2.5 pr-3">{field(r, true)}</td>
+                          <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{tenSeconds(r)}</td>
+                          <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">{cost(r)}</td>
+                          <td className="py-2.5">{onSwitch(r)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
           <p className="mt-3 text-xs text-muted-foreground">
             Provider cost is your own estimate per second, entered under each replacement type&apos;s settings below; with an exchange rate (Switches, limits &amp;
             safety) the save warns when a price is under it. Members never see either.
@@ -852,7 +914,12 @@ function modePayload(
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <fieldset className="rounded-2xl border border-border/70 bg-background/40 p-4 sm:p-5">
+    /*
+      `min-w-0`: a fieldset's default is `min-width: min-content`, so one wide
+      child (the price table) pushed the whole group — and the page — past a
+      phone's edge (owner, 2026-09-15, screenshot with the paragraph cut off).
+    */
+    <fieldset className="min-w-0 rounded-2xl border border-border/70 bg-background/40 p-4 sm:p-5">
       <legend className="px-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{title}</legend>
       {children}
     </fieldset>

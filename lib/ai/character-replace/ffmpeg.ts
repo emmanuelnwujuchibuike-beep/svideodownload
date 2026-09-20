@@ -139,3 +139,64 @@ export function isKnownPrepareArg(arg: string, plan: PreparePlan): boolean {
   return /^\d+\.\d{3}$/.test(arg);
 }
 
+
+/* ───────────────────────── the reference image, made plain ───────────────── */
+
+/**
+ * ── 2026-09-20: A PHONE'S JPEG KILLED THE PROVIDER'S OWN RESIZE ───────────
+ *
+ * p-video-replace resizes each reference with its own ffmpeg. Two Skin + Face
+ * jobs died there with `-i image-0.bin -vf scale=880:1168 … non-zero exit` on
+ * a perfectly valid iPhone JPEG — progressive, 8.7 kB of EXIF with a thumbnail
+ * inside, XMP, an ICC profile and two Photoshop segments. Reproduced three
+ * times with that exact file; the same pixels as a plain baseline JPEG with
+ * the metadata stripped went through first time. So the worker hands every
+ * provider a plain image: baseline JPEG, no metadata, long edge capped (the
+ * models resize to about a megapixel regardless), quality 2 (near-lossless).
+ *
+ * Same discipline as the video plan: every argument is a known constant,
+ * the input or the output — a test proves it, and the service refuses to
+ * spawn anything else.
+ */
+export const REFERENCE_MAX_LONG_EDGE = 2048;
+
+export interface ReferenceImagePlan {
+  input: string;
+  output: string;
+  /** The long-edge cap; only REFERENCE_MAX_LONG_EDGE is known. */
+  maxEdge: typeof REFERENCE_MAX_LONG_EDGE;
+}
+
+const REFERENCE_SCALE_FILTER = `scale=w='if(gt(iw,ih),min(iw,${REFERENCE_MAX_LONG_EDGE}),-2)':h='if(gt(iw,ih),-2,min(ih,${REFERENCE_MAX_LONG_EDGE}))':flags=lanczos`;
+
+export const REFERENCE_CONSTANT_ARGS = new Set<string>([
+  "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+  "-i",
+  "-map_metadata", "-1",
+  "-frames:v", "1",
+  "-vf", REFERENCE_SCALE_FILTER,
+  "-pix_fmt", "yuvj420p",
+  "-c:v", "mjpeg",
+  "-q:v", "2",
+  "-f", "image2",
+]);
+
+export function buildReferenceImageArgs(plan: ReferenceImagePlan): string[] {
+  if (plan.maxEdge !== REFERENCE_MAX_LONG_EDGE) throw new Error("the reference long edge is fixed");
+  return [
+    "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+    "-i", plan.input,
+    "-map_metadata", "-1",
+    "-frames:v", "1",
+    "-vf", REFERENCE_SCALE_FILTER,
+    "-pix_fmt", "yuvj420p",
+    "-c:v", "mjpeg",
+    "-q:v", "2",
+    "-f", "image2",
+    plan.output,
+  ];
+}
+
+export function isKnownReferenceImageArg(arg: string, plan: ReferenceImagePlan): boolean {
+  return REFERENCE_CONSTANT_ARGS.has(arg) || arg === plan.input || arg === plan.output;
+}

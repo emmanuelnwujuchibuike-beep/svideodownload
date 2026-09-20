@@ -380,7 +380,7 @@ export function useCharacterReplaceWorkspace() {
   const pickAudio = useCallback(
     async (file: File) => {
       const previous = state.project.voice.audio?.objectUrl;
-      const verdict = validateAudioFile(file, { maxBytes: loads.config?.audio.maximumUploadBytes ?? 25 * 1024 * 1024 });
+      const verdict = validateAudioFile(file, { maxBytes: loads.config?.audio.maximumUploadBytes ?? 100 * 1024 * 1024 });
       if (!verdict.ok) {
         dispatch({ type: "audio/invalid", code: verdict.code });
         release(previous);
@@ -391,15 +391,22 @@ export function useCharacterReplaceWorkspace() {
       const objectUrl = mint(file);
       /*
         A video from the gallery is read by the video reader (an <audio>
-        element refuses a QuickTime container the <video> element plays); a
-        video with no sound is refused here, before any upload. The worker
-        measures the real file again either way.
+        element refuses a QuickTime container the <video> element plays).
+
+        🔴 The browser's audio detection is NOT a gate (owner, 2026-09-20, on
+        an iPhone: "We couldn't read that audio" on a gallery video WITH
+        sound). Safari fills `audioTracks` a beat after `loadedmetadata`, so
+        at the moment it is read the list is empty and the first cut called
+        that "no sound". Only a file the engine cannot open at all is refused
+        here; the worker's ffprobe is the authority on whether there is an
+        audio track and answers AUDIO_INVALID (nothing charged) when there is
+        none.
       */
-      const isVideo = file.type.toLowerCase().startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name);
+      const isVideo = file.type.toLowerCase().startsWith("video/") || /\.(mp4|mov|m4v|webm)$/i.test(file.name);
       let duration: number | null | "invalid";
       if (isVideo) {
         const meta = await readVideoMetadata(objectUrl, { name: file.name, size: file.size, type: file.type });
-        duration = meta === "invalid" ? "invalid" : meta.hasAudio === false ? "invalid" : meta.durationMs;
+        duration = meta === "invalid" ? "invalid" : meta.durationMs;
       } else {
         duration = await readAudioDuration(objectUrl);
       }

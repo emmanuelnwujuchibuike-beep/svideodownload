@@ -14,12 +14,55 @@ const code = (p: string) => src(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-describe("a per-member API answer is never cached (found on production, 2026-09-14)", () => {
-  it("every AI, admin and internal route carries no-store from the origin, and the AI clients refuse a cached answer", () => {
+describe("a per-member API answer is never cached (found on production, 2026-09-14; widened to every API route 2026-09-20)", () => {
+  /*
+    The rule in next.config.ts OVERRIDES a handler's own Cache-Control
+    (measured on `next start`, 2026-09-20), so the routes that cache on
+    purpose are carved out of it by name. This test runs Next's own compiled
+    path matcher over the rule: the AI, admin and a header-less route must
+    match (no-store), and EVERY route under app/api that sets a positive
+    max-age must NOT — a new deliberately-cached route that is not added to
+    the carve-out would silently lose its caching, and this is what notices.
+  */
+  const rule = () => {
     const cfg = src("next.config.ts");
-    expect(cfg).toContain('source: "/api/:group(ai|admin|internal)/:path*",');
-    expect(cfg).toContain('headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],');
+    const m = /source:\s*\n?\s*"(\/api\/:path\(\(\?!.*?\)\.\*\))",\s*\n\s*headers: \[\{ key: "Cache-Control", value: "private, no-store, max-age=0" \}\]/s.exec(cfg);
+    if (!m) throw new Error("the wide no-store rule is gone from next.config.ts");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { pathToRegexp } = require("next/dist/compiled/path-to-regexp") as { pathToRegexp: (p: string) => RegExp };
+    return pathToRegexp(m[1] ?? "");
+  };
+  it("the AI, admin and internal routes — and any header-less route — are no-store from the origin, and the AI clients refuse a cached answer", () => {
+    const re = rule();
+    for (const p of ["/api/ai/jobs/abc", "/api/ai/character-replace/balance", "/api/admin/activity", "/api/internal/x", "/api/health", "/api/profile/u", "/api/flagsx"]) {
+      expect(re.test(p), p).toBe(true);
+    }
     for (const f of ["lib/ai/client.ts", "lib/ai/character-replace/client.ts"]) expect(code(f)).toContain('res = await fetch(input, { cache: "no-store", ...init });');
+  });
+  it("every route that caches on purpose is carved out of the rule and keeps its own header", () => {
+    const re = rule();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+    const walk = (dir: string, out: string[] = []): string[] => {
+      for (const name of readdirSync(dir)) {
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full, out);
+        else if (name === "route.ts") out.push(full);
+      }
+      return out;
+    };
+    const deliberate: string[] = [];
+    for (const file of walk(join(process.cwd(), "app", "api"))) {
+      const body = code(file.slice(process.cwd().length + 1));
+      // a positive max-age / s-maxage / immutable on a line that is not itself no-store
+      const caches = body.split("\n").some((l) => /cache-control/i.test(l) && !/no-store|no-cache/i.test(l) && /max-age=[1-9]|s-maxage=[1-9]|immutable|IMMUTABLE/.test(l));
+      if (!caches) continue;
+      const rel = file.slice(process.cwd().length + 1).replace(/\\/g, "/").replace(/^app/, "").replace(/\/route\.ts$/, "").replace(/\[[^\]]+\]/g, "x");
+      deliberate.push(rel);
+      expect(re.test(rel), `${rel} caches on purpose but the wide no-store rule would override it — add it to the carve-out in next.config.ts`).toBe(false);
+    }
+    // the list this was written against; a shrink here means a route lost its caching or moved
+    expect(deliberate.length).toBeGreaterThanOrEqual(12);
   });
 });
 
@@ -131,7 +174,9 @@ describe("a gallery video is a voice source (owner, 2026-09-15)", () => {
     expect(src("lib/ai/media.ts")).toContain('if (mime === "video/quicktime") return "mov";');
     const hook = src("features/ai/character-replace/use-character-replace-workspace.ts");
     expect(hook).toContain("const meta = await readVideoMetadata(objectUrl, { name: file.name, size: file.size, type: file.type });");
-    expect(hook).toContain('meta.hasAudio === false ? "invalid"');
+    // the browser's audio detection is not a gate (Safari fills audioTracks late); the worker decides
+    expect(hook).toContain('duration = meta === "invalid" ? "invalid" : meta.durationMs;');
+    expect(hook).not.toContain('meta.hasAudio === false ? "invalid"');
     expect(src("features/ai/character-replace/step-voice.tsx")).toContain('title="Upload audio or a video"');
   });
 });

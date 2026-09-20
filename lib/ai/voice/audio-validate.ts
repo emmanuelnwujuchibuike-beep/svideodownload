@@ -56,8 +56,8 @@ export type AudioErrorCode =
 
 export const AUDIO_ERRORS: Record<AudioErrorCode, { title: string; body: string }> = {
   "unsupported-audio": { title: "That audio format isn't supported", body: `Use ${AUDIO_FORMAT_LINE}.` },
-  "audio-too-large": { title: "That audio file is too large", body: "Choose a smaller file." },
-  "invalid-audio": { title: "We couldn't read that audio", body: "The file may be damaged. Try exporting it again." },
+  "audio-too-large": { title: "That file is too large", body: "Choose a smaller file, or trim the video before choosing it." },
+  "invalid-audio": { title: "We couldn't read that file", body: "It may be damaged, or its sound could not be opened. Try a different export, or an audio file." },
   "audio-too-long": { title: "That audio is too long", body: "Choose a shorter clip." },
   "audio-too-short": { title: "That audio is too short", body: "There's nothing to sync yet." },
   "audio-longer-than-video": { title: "Your audio is longer than the selected video", body: "Trim the audio, keep more of the video, or choose to cut the audio to fit." },

@@ -1,11 +1,14 @@
 "use client";
 
-import { ArrowLeft, ChevronRight, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, PersonStanding, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
+import { getCharacterReplaceBalance, takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
+import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
 import { formatCents } from "@/lib/ai/economy";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
@@ -13,125 +16,149 @@ import { cn } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  /ai/usage — the member's usage, and the whole statement behind it
+ *  Frenz AI — Balance & usage (rebuilt 2026-09-20)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, 2026-09-13: "The usage and history button in the AI page should open
- * the usage page, not the history page, because there is already a history
- * card button below."
+ * Owner: "Add balance from the usage page goes back to the AI welcome page —
+ * make the balance page look more professional and premium without costing
+ * the performance."
  *
- * There was no usage page. The dashboard sheet's "Usage & history" row pointed
- * at /ai/history because that was the only place with any of this on it — and
- * the tool grid directly beneath already carries a full "Your AI videos" card
- * to the same place. Two doors, three inches apart, to one room; and nowhere
- * at all to read the statement past its five most recent lines.
+ * What changed:
+ *   · "Recharge" opens the SAME recharge sheet the workspace uses, in place;
+ *     the Paystack return lands back on this page and is verified here, so a
+ *     member who came to top up never leaves the page to do it.
+ *   · One hero: the balance, what a second costs, Recharge, Create a video.
+ *   · Three honest figures from the statement itself — videos made, spent,
+ *     refunded — labelled for the lines this page holds, never a guess.
+ *   · The AI Clean free allowance keeps its meters only when the plan has one.
+ *   · The statement rows carry a glyph per kind and a real sentence.
  *
- * ── What this page is ──────────────────────────────────────────────────────
- *
- * The same `/api/ai/balance` read the dashboard sheet makes, asked for the
- * full ledger (`?ledger=100`) and laid out as a page rather than a sheet:
- *
- *   · the balance, the price per video, and the way to add more;
- *   · today's and this week's free counters, as bars, with when they reset;
- *   · every ledger line, grouped by day, each with its running balance.
- *
- * It renders NOTHING numeric until the read succeeds — the dashboard's rule,
- * for the dashboard's reason: a skeleton of zeroes is a statement about
- * somebody's account, not a placeholder.
- *
- * ── Why it is not a second copy of the dashboard ───────────────────────────
- *
- * The sheet is for acting (recharge, verify, refresh) and shows five lines.
- * This is for reading, and shows them all. The two share the endpoint, the
- * money formatter and the ledger labels; they do not share layout, because a
- * sheet and a page are not the same surface.
+ * Performance: the page is what it was — one client component, one request
+ * for the balance + 100 ledger lines (`/api/ai/character-replace/balance`),
+ * one for the AI Clean allowance, and the sheet's chunk is fetched only when
+ * Recharge is pressed (next/dynamic inside the sheet module).
  */
-
-// The ONE wallet's kinds (0155) — the product ledger's, not the retired AI Clean ledger's.
 type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
 
-interface UsageState {
-  balanceCents: number;
-  symbol: string;
-  priceCents: number;
+interface LedgerRow {
+  id: string;
+  deltaCents: number;
+  balanceAfterCents: number;
+  kind: LedgerKind;
+  createdAt: string;
+  note?: string | null;
+}
+
+interface AllowanceState {
   usedToday: number;
   dailyLimit: number;
   usedThisWeek: number;
   weeklyLimit: number;
   freeRemaining: number;
   weekResetsAt: string;
-  ledger: {
-    id: string;
-    deltaCents: number;
-    balanceAfterCents: number;
-    kind: LedgerKind;
-    createdAt: string;
-  }[];
 }
 
-/**
- * 🔴 A total `Record` over the ledger's kinds — a new kind fails the build
- * here rather than rendering as a blank line on somebody's statement. Same
- * labels as the dashboard sheet, on purpose: one vocabulary.
- */
-const LEDGER_LABEL: Record<LedgerKind, string> = {
-  recharge: "Balance added",
-  adjustment: "Adjustment by Frenz",
-  processing_charge: "Character Replace video",
-  refund: "Refunded — video didn't finish",
-  reversal: "Reversed",
+const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; tone: "in" | "out" | "neutral" }> = {
+  recharge: { label: "Balance added", Icon: ArrowDownLeft, tone: "in" },
+  processing_charge: { label: "Character Replace video", Icon: PersonStanding, tone: "out" },
+  refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },
+  adjustment: { label: "Adjustment by Frenz", Icon: ShieldCheck, tone: "neutral" },
+  reversal: { label: "Reversed", Icon: RotateCcw, tone: "neutral" },
 };
 
-export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
-  const [state, setState] = useState<UsageState | null>(null);
+export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/character-replace" }: { aiHref?: string; createHref?: string }) {
+  const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
+  const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
+  const [allowance, setAllowance] = useState<AllowanceState | null>(null);
   const [failed, setFailed] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetMounted, setSheetMounted] = useState(false);
+  const [suggested, setSuggested] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setFailed(false);
-    try {
-      const res = await fetch("/api/ai/balance?ledger=100", { cache: "no-store" });
-      if (!res.ok) {
-        setFailed(true);
-        return;
-      }
-      setState((await res.json()) as UsageState);
-    } catch {
+    const [wallet, free] = await Promise.all([
+      getCharacterReplaceBalance({ ledger: 100 }),
+      fetch("/api/ai/balance", { cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<AllowanceState>) : null))
+        .catch(() => null),
+    ]);
+    if (!wallet.ok) {
       setFailed(true);
+      return;
     }
+    setBalance(wallet.balance);
+    setLedger(wallet.transactions.map((t) => ({ id: t.id, deltaCents: t.deltaCents, balanceAfterCents: t.balanceAfterCents, kind: t.kind as LedgerKind, createdAt: t.createdAt, note: t.note })));
+    setAllowance(free);
   }, []);
 
   useEffect(() => {
-    void load();
+    /*
+      The return from Paystack, if this is one: the reference leaves the
+      address bar first, is verified once, then the wallet is re-read — the
+      same contract the workspace keeps, so a recharge started HERE finishes
+      here, with the new balance on screen.
+    */
+    const reference = takeTopupReturnReference();
+    void (async () => {
+      if (reference) {
+        const verified = await verifyCharacterReplaceTopup(reference);
+        setNotice(verified.ok ? (verified.credited ? "Payment received — your balance has been updated." : verified.pending ? "Your payment is still being confirmed. This will update shortly." : null) : null);
+      }
+      await load();
+    })();
   }, [load]);
 
-  /*
-    Today / Yesterday / This week / Last week / Earlier — the same boundaries
-    the AI history and the download gallery use, so a member reads one
-    calendar across the product. Empty buckets are dropped.
-  */
+  const openSheet = useCallback((amount: number | null = null) => {
+    haptic("selection");
+    setSuggested(amount);
+    setSheetMounted(true);
+    setSheetOpen(true);
+  }, []);
+
+  /* ── honest figures from the lines this page holds ─────────────────────── */
+  const figures = useMemo(() => {
+    if (!ledger) return null;
+    let videos = 0;
+    let spent = 0;
+    let refunded = 0;
+    for (const row of ledger) {
+      if (row.kind === "processing_charge") {
+        videos += 1;
+        spent += -row.deltaCents;
+      } else if (row.kind === "refund") refunded += row.deltaCents;
+    }
+    return { videos, spent: Math.max(0, spent - refunded), refunded, partial: ledger.length >= 100 };
+  }, [ledger]);
+
+  /* ── Today / Yesterday / This week / Last week / Earlier — the product's one calendar ── */
   const sections = useMemo(() => {
-    if (!state) return [];
+    if (!ledger) return [];
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
     const today = midnight.getTime();
     const yesterday = today - 86_400_000;
     const week = today - 6 * 86_400_000;
     const lastWeek = today - 13 * 86_400_000;
-    const buckets: { key: string; label: string; items: UsageState["ledger"] }[] = [
+    const buckets: { key: string; label: string; items: LedgerRow[] }[] = [
       { key: "today", label: "Today", items: [] },
       { key: "yesterday", label: "Yesterday", items: [] },
       { key: "week", label: "This week", items: [] },
       { key: "lastweek", label: "Last week", items: [] },
       { key: "earlier", label: "Earlier", items: [] },
     ];
-    for (const row of state.ledger) {
+    for (const row of ledger) {
       const t = Date.parse(row.createdAt);
       const at = Number.isFinite(t) ? t : 0;
       const i = at >= today ? 0 : at >= yesterday ? 1 : at >= week ? 2 : at >= lastWeek ? 3 : 4;
       buckets[i]!.items.push(row);
     }
     return buckets.filter((b) => b.items.length > 0);
-  }, [state]);
+  }, [ledger]);
+
+  const symbol = balance?.symbol ?? "₦";
+  const hasFree = !!allowance && (allowance.dailyLimit > 0 || allowance.weeklyLimit > 0);
 
   return (
     <FrenzAIEnvironment stage="idle" className="relative overflow-hidden rounded-[1.75rem]">
@@ -146,18 +173,18 @@ export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
       />
 
       <div className="px-4 pb-10 pt-5 sm:px-6">
-        <FrenzAICrumb tool="Usage" />
+        <FrenzAICrumb tool="Balance" />
 
         <h1 className="mt-4 text-[1.9rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[2.2rem]">
-          Your <span className="text-gradient">usage</span>
+          Your <span className="text-gradient">balance</span>
         </h1>
         <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">
-          What you have used, what you have left, and every line of your Frenz AI balance.
+          What you have, what a video costs, and every line of your Frenz AI account.
         </p>
 
         {failed ? (
           <div className="mt-6 rounded-2xl bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
-            <p className="text-[13.5px] text-muted-foreground">Couldn&apos;t load your usage right now.</p>
+            <p className="text-[13.5px] text-muted-foreground">Couldn&apos;t load your balance right now.</p>
             <button
               type="button"
               onClick={() => {
@@ -171,129 +198,175 @@ export function FrenzAIUsagePage({ aiHref = "/ai" }: { aiHref?: string }) {
           </div>
         ) : null}
 
-        {!state && !failed ? <UsageSkeleton /> : null}
+        {!balance && !failed ? <UsageSkeleton /> : null}
 
-        {state ? (
+        {balance ? (
           <>
-            {/* ── balance and price ─────────────────────────────────────── */}
+            {/* ── the hero: the balance, and the two things to do with it ── */}
             <section
               aria-label="Balance"
-              className="mt-6 rounded-[1.5rem] bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10"
+              className={cn(
+                "relative mt-6 overflow-hidden rounded-[1.6rem] p-5 text-white sm:p-6",
+                "bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)] shadow-[0_24px_48px_-28px_rgba(79,70,229,0.75)]",
+              )}
             >
-              <div className="flex items-start justify-between gap-3">
+              <span aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
+              <span aria-hidden className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-fuchsia-300/20 blur-3xl" />
+              <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Balance
-                  </p>
-                  <p className="mt-1 text-[2rem] font-bold leading-none tracking-[-0.03em] tabular-nums">
-                    {formatCents(state.balanceCents, state.symbol)}
-                  </p>
-                  <p className="mt-2 text-[13px] text-muted-foreground">
-                    Character Replace from {formatCents(state.priceCents, state.symbol)} per second of video.
-                  </p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Character Replace balance</p>
+                  <p className="mt-1.5 text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums sm:text-[2.7rem]">{formatCents(balance.balanceCents, symbol)}</p>
                 </div>
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-inset ring-white/25">
                   <Wallet className="h-5 w-5" aria-hidden />
                 </span>
               </div>
-              <Link
-                href={aiHref}
-                prefetch={false}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground transition active:scale-[0.98]"
-              >
-                Add balance
-                <ChevronRight className="h-4 w-4" aria-hidden />
-              </Link>
+              {notice ? (
+                <p role="status" className="relative mt-3 rounded-xl bg-white/15 px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset ring-white/20">
+                  {notice}
+                </p>
+              ) : null}
+              <div className="relative mt-5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openSheet(null)}
+                  className="inline-flex min-h-[46px] items-center gap-2 rounded-full bg-white px-5 text-[14px] font-bold text-indigo-700 shadow-sm transition active:scale-[0.98] motion-safe:hover:-translate-y-0.5"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Recharge
+                </button>
+                <Link
+                  href={createHref}
+                  className="inline-flex min-h-[46px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-white/90 ring-1 ring-inset ring-white/30 transition hover:bg-white/10"
+                >
+                  <PersonStanding className="h-4 w-4" aria-hidden />
+                  Create a video
+                </Link>
+              </div>
+              {balance.topupOptionsCents.length > 0 ? (
+                <div className="relative mt-4 flex flex-wrap gap-1.5" aria-label="Quick recharge amounts">
+                  {balance.topupOptionsCents.slice(0, 4).map((cents) => (
+                    <button
+                      key={cents}
+                      type="button"
+                      onClick={() => openSheet(cents)}
+                      className="rounded-full bg-white/12 px-3 py-1.5 text-[12.5px] font-semibold tabular-nums text-white/90 ring-1 ring-inset ring-white/20 transition hover:bg-white/20"
+                    >
+                      + {formatCents(cents, symbol)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </section>
 
-            {/* ── free counters — only for a tool that HAS a free allowance.
-                Character Replace is paid-only (dailyLimit 0), so a "0 / 0"
-                meter would be noise (owner, 2026-09-13: "0 of 0 free videos"). ── */}
-            {state.dailyLimit > 0 || state.weeklyLimit > 0 ? (
-            <section aria-label="Free videos" className="mt-4 grid gap-3 sm:grid-cols-2">
-              <Meter
-                label="Today"
-                used={state.usedToday}
-                limit={state.dailyLimit}
-                hint="Resets at midnight"
-              />
-              <Meter
-                label="This week"
-                used={state.usedThisWeek}
-                limit={state.weeklyLimit}
-                hint={`Resets ${formatDate(state.weekResetsAt)}`}
-              />
-            </section>
+            {/* ── three figures, from the statement itself ─────────────────── */}
+            {figures ? (
+              <section aria-label="Your account at a glance" className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+                <Figure label="Videos made" value={String(figures.videos)} />
+                <Figure label="Spent" value={formatCents(figures.spent, symbol)} />
+                <Figure label="Refunded" value={formatCents(figures.refunded, symbol)} tone={figures.refunded > 0 ? "in" : undefined} />
+              </section>
             ) : null}
-            {state.dailyLimit > 0 || state.weeklyLimit > 0 ? (
-            <p className="mt-3 text-[13px] text-muted-foreground">
-              {state.freeRemaining > 0
-                ? `${state.freeRemaining} free ${state.freeRemaining === 1 ? "video" : "videos"} left right now.`
-                : "No free videos left right now — your balance covers the rest."}
-            </p>
+            {figures?.partial ? <p className="mt-2 text-[11.5px] text-muted-foreground">Counted from your most recent 100 lines.</p> : null}
+
+            {/* ── the AI Clean allowance, only when the plan has one ───────── */}
+            {hasFree && allowance ? (
+              <section aria-label="Free AI Clean videos" className="mt-6">
+                <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">AI Clean · free videos</h2>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <Meter label="Today" used={allowance.usedToday} limit={allowance.dailyLimit} hint="Resets at midnight" />
+                  <Meter label="This week" used={allowance.usedThisWeek} limit={allowance.weeklyLimit} hint={`Resets ${formatDate(allowance.weekResetsAt)}`} />
+                </div>
+                <p className="mt-2 text-[13px] text-muted-foreground">
+                  {allowance.freeRemaining > 0
+                    ? `${allowance.freeRemaining} free ${allowance.freeRemaining === 1 ? "video" : "videos"} left right now.`
+                    : "No free videos left right now — Character Replace always uses your balance."}
+                </p>
+              </section>
             ) : null}
 
             {/* ── the statement ─────────────────────────────────────────── */}
             <section aria-label="Statement" className="mt-8">
-              <h2 className="text-[1.05rem] font-bold tracking-[-0.02em]">Statement</h2>
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-[1.05rem] font-bold tracking-[-0.02em]">Statement</h2>
+                <span className="text-[12px] text-muted-foreground">Newest first</span>
+              </div>
               {sections.length === 0 ? (
-                <p className="mt-2 text-[13.5px] text-muted-foreground">
-                  Nothing yet. Your first AI video, top-up or refund will appear here.
-                </p>
+                <div className="mt-3 rounded-2xl border border-dashed border-border/70 px-5 py-8 text-center">
+                  <p className="text-sm font-semibold">Nothing here yet</p>
+                  <p className="mx-auto mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">Your first recharge, video or refund will appear here.</p>
+                </div>
               ) : (
                 sections.map((section) => (
                   <div key={section.key} className="mt-4">
-                    <h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      {section.label}
-                    </h3>
-                    <ul className="mt-2 divide-y divide-border/60 rounded-2xl bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
-                      {section.items.map((row) => (
-                        <li key={row.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-[13.5px] font-semibold">{LEDGER_LABEL[row.kind]}</p>
-                            <p className="mt-0.5 text-[12px] text-muted-foreground">
-                              {formatDate(row.createdAt)} · {formatTime(row.createdAt)}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p
+                    <h3 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{section.label}</h3>
+                    <ul className="mt-2 divide-y divide-border/60 overflow-hidden rounded-2xl bg-card/95 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
+                      {section.items.map((row) => {
+                        const copy = LEDGER_COPY[row.kind] ?? LEDGER_COPY.adjustment;
+                        const Icon = copy.Icon;
+                        return (
+                          <li key={row.id} className="flex items-center gap-3 px-4 py-3">
+                            <span
                               className={cn(
-                                "text-[14px] font-bold tabular-nums",
-                                row.deltaCents > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground",
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                                copy.tone === "in" ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" : copy.tone === "out" ? "bg-secondary text-foreground/80" : "bg-secondary text-muted-foreground",
                               )}
                             >
-                              {row.deltaCents > 0 ? "+" : ""}
-                              {formatCents(row.deltaCents, state.symbol)}
-                            </p>
-                            <p className="mt-0.5 text-[11.5px] tabular-nums text-muted-foreground">
-                              {formatCents(row.balanceAfterCents, state.symbol)} after
-                            </p>
-                          </div>
-                        </li>
-                      ))}
+                              <Icon className="h-4 w-4" aria-hidden />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13.5px] font-semibold">{copy.label}</p>
+                              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                                {formatDate(row.createdAt)} · {formatTime(row.createdAt)}
+                                {row.note && row.kind === "adjustment" ? ` · ${row.note}` : ""}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className={cn("text-[14px] font-bold tabular-nums", row.deltaCents > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
+                                {row.deltaCents > 0 ? "+" : ""}
+                                {formatCents(row.deltaCents, symbol)}
+                              </p>
+                              <p className="mt-0.5 text-[11.5px] tabular-nums text-muted-foreground">{formatCents(row.balanceAfterCents, symbol)} after</p>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ))
               )}
-              {state.ledger.length >= 100 ? (
-                <p className="mt-3 text-[12px] text-muted-foreground">Showing your most recent 100 lines.</p>
-              ) : null}
+              {ledger && ledger.length >= 100 ? <p className="mt-3 text-[12px] text-muted-foreground">Showing your most recent 100 lines.</p> : null}
             </section>
           </>
         ) : null}
 
         <div className="mt-8">
-          <Link
-            href={aiHref}
-            prefetch={false}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:text-foreground"
-          >
+          <Link href={aiHref} className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:text-foreground">
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to Frenz AI
           </Link>
         </div>
       </div>
+
+      {sheetMounted && balance ? (
+        <CharacterReplaceRechargeSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          balance={balance}
+          returnTo={typeof window !== "undefined" ? window.location.pathname : "/studio/ai/usage"}
+          suggestedCents={suggested}
+        />
+      ) : null}
     </FrenzAIEnvironment>
+  );
+}
+
+function Figure({ label, value, tone }: { label: string; value: string; tone?: "in" }) {
+  return (
+    <div className="rounded-2xl bg-card/95 px-3 py-3 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:px-4">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 truncate text-[17px] font-bold tabular-nums tracking-[-0.02em]", tone === "in" && "text-emerald-600 dark:text-emerald-400")}>{value}</p>
+    </div>
   );
 }
 
@@ -308,9 +381,7 @@ function Meter({ label, used, limit, hint }: { label: string; used: number; limi
     <div className="rounded-2xl bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-        <p className="text-[13px] font-bold tabular-nums">
-          {limit > 0 ? `${used} / ${limit}` : "None free"}
-        </p>
+        <p className="text-[13px] font-bold tabular-nums">{limit > 0 ? `${used} / ${limit}` : "None free"}</p>
       </div>
       <div
         className="mt-2.5 h-2 overflow-hidden rounded-full bg-foreground/[0.06] dark:bg-white/10"
@@ -320,26 +391,22 @@ function Meter({ label, used, limit, hint }: { label: string; used: number; limi
         aria-valuenow={Math.min(used, limit)}
         aria-label={`${label}: ${used} of ${limit} free videos used`}
       >
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-[width] duration-500"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-violet-600 transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
-      <p className="mt-2 text-[12px] text-muted-foreground">
-        {limit > 0 ? hint : "No free videos on your plan — each one uses your balance."}
-      </p>
+      <p className="mt-2 text-[12px] text-muted-foreground">{limit > 0 ? hint : "No free videos on your plan — each one uses your balance."}</p>
     </div>
   );
 }
 
-/** Shapes only — no numbers, for the reason at the top of the file. */
+/** Shapes only — no numbers. */
 function UsageSkeleton() {
   return (
     <div className="mt-6 space-y-4" aria-hidden>
-      <div className="h-[8.5rem] animate-pulse rounded-[1.5rem] bg-foreground/[0.05] dark:bg-white/[0.06]" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="h-24 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
-        <div className="h-24 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
+      <div className="h-[11rem] animate-pulse rounded-[1.6rem] bg-foreground/[0.05] dark:bg-white/[0.06]" />
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="h-16 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
+        <div className="h-16 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
+        <div className="h-16 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
       </div>
       <div className="h-40 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
     </div>

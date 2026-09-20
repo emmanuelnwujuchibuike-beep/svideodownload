@@ -94,6 +94,8 @@ export type AiMediaErrorCode =
   | "unsupported-image"
   | "image-too-large"
   | "image-too-small"
+  /** 2026-09-20: the photo's shape cannot hold what the chosen replacement type needs (a landscape photo for a standing person). */
+  | "image-wrong-framing"
   | "invalid-image"
   | "invalid-url"
   | "upload-failed"
@@ -149,6 +151,11 @@ export const AI_MEDIA_ERRORS: Record<AiMediaErrorCode, AiMediaErrorCopy> = {
   "image-too-small": {
     title: "That photo is too small",
     body: "The face would be too small to carry across. Choose a photo at least 256 pixels on the shorter side.",
+    action: "Choose another photo",
+  },
+  "image-wrong-framing": {
+    title: "That photo doesn't fit this replacement type",
+    body: "Its shape can't hold what this replacement needs. Check the example for the right kind of photo, then choose another.",
     action: "Choose another photo",
   },
   "invalid-image": {

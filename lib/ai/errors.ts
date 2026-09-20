@@ -136,6 +136,8 @@ export type AiErrorCode =
   | "CR_BUSY"
   | "CR_MAINTENANCE"
   | "QUOTE_EXPIRED"
+  /** 2026-09-20: Start was called without a passed preflight for exactly these files — nothing reserved. */
+  | "PREFLIGHT_REQUIRED"
   | "PRICE_CHANGED"
   | "PREPARATION_FAILED"
   | "DURATION_MISMATCH"
@@ -251,6 +253,7 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   CR_BUSY: { status: 503, message: "Character Replace is busy right now. Try again in a few minutes — nothing was charged." },
   CR_MAINTENANCE: { status: 503, message: "Character Replace is being looked after right now. Your finished videos are still here — new videos will be back shortly." },
   QUOTE_EXPIRED: { status: 409, message: "That price has expired. Check the new price and try again." },
+  PREFLIGHT_REQUIRED: { status: 409, message: "Let us check your media first — it only takes a moment, and nothing is charged." },
   PRICE_CHANGED: { status: 409, message: "The price changed while you were reviewing. Check the new price and try again." },
   PREPARATION_FAILED: { status: 422, message: "We couldn't prepare that video. Choose it again and try once more." },
   DURATION_MISMATCH: { status: 422, message: "The video's length didn't match what was priced. Nothing was charged — choose it again." },

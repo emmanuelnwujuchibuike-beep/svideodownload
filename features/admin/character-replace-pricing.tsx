@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { voiceProviderForModel, type CharacterReplaceConfig, type CharacterReplaceLaunchMode, type ReplacementModeConfig } from "@/lib/ai/character-replace/config";
-import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
+import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP, UPPER_BODY_TIER_MAP, knownModelsFor, modelServesMode } from "@/lib/ai/character-replace/modes";
 import { ELEVENLABS_REPLICATE_TTS_MODELS, ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsReplicateModel, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_AGES, VOICE_GENDER_LABEL, VOICE_GENDERS, type VoiceAge, type VoiceGender } from "@/lib/ai/voice/elevenlabs-models";
 import { formatCents } from "@/lib/ai/economy";
 import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
@@ -108,6 +108,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   /* ── Part 6: the two new modes ── */
   const modeState = (m: ReplacementModeConfig) => ({
     enabled: m.enabled,
+    basePrice: minorToMajorInput(m.basePriceCents),
     tiers: m.tiers.map((t) => ({ id: t.id, label: t.label, enabled: t.enabled, perSecond: minorToMajorInput(t.perSecondCents) })),
     maxSeconds: String(m.maximumDurationSeconds),
     maxUploadMb: String(Math.round(m.maximumUploadBytes / (1024 * 1024))),
@@ -118,6 +119,11 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   });
   const [faceOnly, setFaceOnly] = useState(modeState(cr.modes.face_only));
   const [skinFace, setSkinFace] = useState(modeState(cr.modes.skin_face));
+  const [upperBody, setUpperBody] = useState(modeState(cr.modes.upper_body));
+  /* ── the replacement-scope brief §13: provider cost protection ── */
+  const [guardMargin, setGuardMargin] = useState(String(cr.pricingGuard.minimumMarginPercent));
+  const [guardMinPrice, setGuardMinPrice] = useState(minorToMajorInput(cr.pricingGuard.minimumCustomerPriceCents));
+  const [guardOverride, setGuardOverride] = useState(cr.pricingGuard.allowBelowMargin);
 
   /* ── Part 6: audio, voice (TTS), lip-sync models ── */
   const [audioEnabled, setAudioEnabled] = useState(cr.audio.replacementEnabled);
@@ -247,6 +253,12 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       modes: {
         face_only: modePayload(faceOnly, cr.modes.face_only),
         skin_face: modePayload(skinFace, cr.modes.skin_face),
+        upper_body: modePayload(upperBody, cr.modes.upper_body),
+      },
+      pricingGuard: {
+        minimumMarginPercent: guardMargin.trim() === "" ? cr.pricingGuard.minimumMarginPercent : Math.max(0, Number(guardMargin)),
+        minimumCustomerPriceCents: majorInputToMinor(guardMinPrice) ?? cr.pricingGuard.minimumCustomerPriceCents,
+        allowBelowMargin: guardOverride,
       },
       audio: {
         replacementEnabled: audioEnabled,
@@ -283,7 +295,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, launchMode, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceRows, voiceSurcharge, voicesTouched]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxMarkup, fxPerUsd, goFast, guardMargin, guardMinPrice, guardOverride, launchMode, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, upperBody, voiceRows, voiceSurcharge, voicesTouched]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -308,8 +320,24 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       out.push(`No live rate could be fetched and no fallback "One US dollar in ${aiCurrencySymbol(payload.recharge.checkoutCurrency as AiCurrency)}" is set — until one of the two exists nobody can recharge.`);
     }
     if (payload.lipSyncEnabled && !payload.lipSync.some((l) => l.enabled)) out.push("Lip sync is on but no tier is on.");
+    /* ── the replacement-scope brief §13: cost protection is a REFUSAL, not a warning, unless overridden ── */
+    if (!payload.pricingGuard.allowBelowMargin) {
+      const localPerUsdCent = walletIsUsd ? 1 : payload.localMinorUnitsPerUsd / 100;
+      const margin = 1 + payload.pricingGuard.minimumMarginPercent / 100;
+      for (const [label, m] of [["Face Only", payload.modes.face_only], ["Face + Head", payload.modes.skin_face], ["Upper Body", payload.modes.upper_body]] as const) {
+        if (!m.enabled || m.providerCostPerSecondUsdCents <= 0 || localPerUsdCent <= 0) continue;
+        for (const t of m.tiers) {
+          if (t.enabled && t.perSecondCents < m.providerCostPerSecondUsdCents * localPerUsdCent * margin) out.push(`${label} ${t.id} is under the minimum margin (${payload.pricingGuard.minimumMarginPercent}% over the provider's estimated cost). Raise the price, or tick "Allow prices below the minimum margin" to override on purpose.`);
+        }
+      }
+      if (payload.pricingGuard.minimumCustomerPriceCents > 0 && payload.minimumChargeCents < payload.pricingGuard.minimumCustomerPriceCents) out.push(`The minimum charge is under the minimum customer price (${formatCents(payload.pricingGuard.minimumCustomerPriceCents, symbol)}). Raise it, or override on purpose.`);
+    }
     /* ── Part 6 ── */
-    for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
+    for (const [id, label, m] of [["face_only", "Face Only", payload.modes.face_only], ["skin_face", "Face + Head", payload.modes.skin_face], ["upper_body", "Upper Body", payload.modes.upper_body]] as const) {
+      // the replacement-scope brief §12: a mode enabled without a provider that serves it, or without a price, cannot be saved on
+      if (m.enabled && !modelServesMode(m.provider.model, id)) out.push(`${label}: no provider in this build serves it with model "${m.provider.model}" — pick one of the listed models or switch the mode off.`);
+      if (m.enabled && !m.tiers.some((t) => t.enabled)) out.push(`${label}: switch on at least one quality, or switch the mode off.`);
+      if (m.enabled && m.basePriceCents === 0 && m.tiers.filter((t) => t.enabled).every((t) => t.perSecondCents === 0)) out.push(`${label}: every enabled quality is free and there is no per-video price — members would pay nothing.`);
       if (!Number.isInteger(m.maximumDurationSeconds) || m.maximumDurationSeconds < 1 || m.maximumDurationSeconds > 120) out.push(`${label}: longest video must be between 1 and 120 seconds.`);
       if (!(m.maximumUploadBytes >= 1024 * 1024 && m.maximumUploadBytes <= 100 * 1024 * 1024)) out.push(`${label}: largest upload must be between 1 and 100 MB.`);
       if (!Number.isInteger(m.maximumReferenceImages) || m.maximumReferenceImages < 1 || m.maximumReferenceImages > 3) out.push(`${label}: reference images must be 1 to 3.`);
@@ -354,7 +382,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     if (payload.recharge.maxCents > 1_000_000_000) out.push(`Maximum recharge is ${formatCents(payload.recharge.maxCents, symbol)}.`);
     if (!payload.enabled && cr.enabled) out.push("This switches Character Replace OFF for every member.");
     /* ── Part 6 §27: ₦0 or an unusual price on any mode or the voice ── */
-    for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
+    for (const [label, m] of [["Face Only", payload.modes.face_only], ["Face + Head", payload.modes.skin_face], ["Upper Body", payload.modes.upper_body]] as const) {
       for (const t of m.tiers) {
         if (!t.enabled) continue;
         if (t.perSecondCents === 0) out.push(`${label} ${t.id} is free — its rate is zero.`);
@@ -385,13 +413,15 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       // a USD wallet is already in the provider's currency; otherwise the rate says what a US cent is in the wallet's minor units
       const localPerUsdCent = walletIsUsd ? 1 : fx / 100;
       const tiers: [string, number, number][] = [];
-      for (const [label, m] of [["Face Only", payload.modes.face_only], ["Skin + Face", payload.modes.skin_face]] as const) {
+      for (const [label, m] of [["Face Only", payload.modes.face_only], ["Face + Head", payload.modes.skin_face], ["Upper Body", payload.modes.upper_body]] as const) {
         for (const t of m.tiers) if (t.enabled && m.providerCostPerSecondUsdCents > 0) tiers.push([`${label} ${t.id}`, t.perSecondCents, m.providerCostPerSecondUsdCents * localPerUsdCent]);
       }
       // Full Character carries no operator cost figure yet (the Wan provider predates Part 6); its margin is not checked here.
+      // The replacement-scope brief §13: the configured minimum margin, not a constant; below it the save is refused unless the operator overrides.
+      const margin = 1 + payload.pricingGuard.minimumMarginPercent / 100;
       for (const [label, price, cost] of tiers) {
         if (price < cost) out.push(`${label} sells BELOW the provider's cost: ${formatCents(Math.round(price), symbol)}/s charged against about ${formatCents(Math.round(cost), symbol)}/s paid.`);
-        else if (price < cost * 1.3) out.push(`${label} has a thin margin: ${formatCents(Math.round(price), symbol)}/s charged against about ${formatCents(Math.round(cost), symbol)}/s paid.`);
+        else if (price < cost * margin) out.push(`${label} is under the ${payload.pricingGuard.minimumMarginPercent}% minimum margin: ${formatCents(Math.round(price), symbol)}/s charged against about ${formatCents(Math.round(cost), symbol)}/s paid.`);
       }
     } else {
       out.push("No exchange rate is set (Recharge), so prices cannot be checked against the provider's USD cost.");
@@ -558,7 +588,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               ...(
                 [
                   ["Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, cr.modes.face_only],
-                  ["Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, cr.modes.skin_face],
+                  ["Face + Head", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, cr.modes.skin_face],
+                  ["Upper Body", upperBody, setUpperBody, UPPER_BODY_TIER_MAP, cr.modes.upper_body],
                 ] as const
               ).flatMap(([label, st, set, map, before]) =>
                 st.tiers.map<PriceRow>((t, i) => {
@@ -680,14 +711,18 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         {/* ── REPLACEMENT MODES (Part 6) ── */}
         {(
           [
-            ["face_only", "Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, "xrunda/hello — swaps the face only; the model has ONE configuration, so High and Ultra cannot be honoured and stay off."],
-            ["skin_face", "Skin + Face", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, "prunaai/p-video-replace — identity and exposed skin; Standard = 720p turbo, High = 720p, Ultra = 1080p."],
+            ["face_only", "Face Only", faceOnly, setFaceOnly, FACE_ONLY_TIER_MAP, "Replaces the face; the body, hair and skin of the video stay. The face-swap model has ONE configuration, so High and Ultra cannot be honoured and stay off."],
+            ["skin_face", "Face + Head", skinFace, setSkinFace, SKIN_FACE_TIER_MAP, "Replaces the face, identity and skin — the head's appearance — from 1–3 photos; the body and clothes stay. Standard = 720p turbo, High = 720p, Ultra = 1080p."],
+            ["upper_body", "Upper Body", upperBody, setUpperBody, UPPER_BODY_TIER_MAP, "Replaces the face, head and upper-body appearance from a waist-up photo, on a body-capable model (Wan 2.2 today). Standard = 480p, High = 720p; Ultra is not offered."],
           ] as const
         ).map(([id, label, st, set, _map, blurb]) => (
           <Group key={id} title={`${label} settings`}>
             <p className="mb-3 text-xs text-muted-foreground">{blurb} Prices per second are set in the table above.</p>
             <Toggle label={`${label} is available`} hint="Off hides the mode on the selector. Nothing already running is affected." checked={st.enabled} onChange={(v) => set({ ...st, enabled: v })} />
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <Field id={`cr-${id}-base`} label="Price per video" hint="Added once per video for this replacement type, on top of the per-second rate. Zero means none.">
+                <input id={`cr-${id}-base`} type="number" inputMode="decimal" min={0} step="any" value={st.basePrice} onChange={(e) => set({ ...st, basePrice: e.target.value })} className={input} />
+              </Field>
               <Field id={`cr-${id}-max-seconds`} label="Longest video (seconds)" hint="1 to 120; never above the tool's own ceiling.">
                 <input id={`cr-${id}-max-seconds`} type="number" inputMode="numeric" min={1} max={120} value={st.maxSeconds} onChange={(e) => set({ ...st, maxSeconds: e.target.value })} className={input} />
               </Field>
@@ -697,14 +732,21 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               <Field id={`cr-${id}-max-pixels`} label="Maximum resolution (pixels)" hint="Width × height of the source, e.g. 8294400 for 4K.">
                 <input id={`cr-${id}-max-pixels`} type="number" inputMode="numeric" min={640 * 360} max={3840 * 2160} value={st.maxPixels} onChange={(e) => set({ ...st, maxPixels: e.target.value })} className={input} />
               </Field>
-              <Field id={`cr-${id}-max-refs`} label="Reference images" hint={id === "face_only" ? "Face Only takes one." : "Up to three photos of the same person."}>
-                <input id={`cr-${id}-max-refs`} type="number" inputMode="numeric" min={1} max={id === "face_only" ? 1 : 3} value={st.maxReferences} onChange={(e) => set({ ...st, maxReferences: e.target.value })} className={input} />
+              <Field id={`cr-${id}-max-refs`} label="Reference images" hint={id === "skin_face" ? "Up to three photos of the same person." : `${label} takes one.`}>
+                <input id={`cr-${id}-max-refs`} type="number" inputMode="numeric" min={1} max={id === "skin_face" ? 3 : 1} value={st.maxReferences} onChange={(e) => set({ ...st, maxReferences: e.target.value })} className={input} />
               </Field>
               <Field id={`cr-${id}-cost`} label="Provider cost estimate ($ per second)" hint="Your estimate of the Replicate bill. Recorded on every job beside the member's charge; never shown to members.">
                 <input id={`cr-${id}-cost`} type="number" inputMode="decimal" min={0} step="any" value={st.providerCostUsd} onChange={(e) => set({ ...st, providerCostUsd: e.target.value })} className={input} />
               </Field>
-              <Field id={`cr-${id}-model`} label="Model" hint="Provider: Replicate. owner/model; the version pin lives with the adapter.">
-                <input id={`cr-${id}-model`} type="text" value={st.model} onChange={(e) => set({ ...st, model: e.target.value })} className={cn(input, "font-mono text-xs")} />
+              <Field id={`cr-${id}-model`} label="Provider model" hint="Provider: Replicate. Only models this build carries an adapter for; the version pin lives with the adapter. Members never see the name.">
+                <select id={`cr-${id}-model`} value={st.model} onChange={(e) => set({ ...st, model: e.target.value })} className={input}>
+                  {knownModelsFor(id).map((m) => (
+                    <option key={m.model} value={m.model}>
+                      {m.label}
+                    </option>
+                  ))}
+                  {!modelServesMode(st.model, id) ? <option value={st.model}>{st.model} (no adapter — mode cannot run)</option> : null}
+                </select>
               </Field>
             </div>
           </Group>
@@ -993,6 +1035,18 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               <textarea id="cr-maint-msg" rows={2} maxLength={300} value={maintenanceMessage} onChange={(e) => setMaintenanceMessage(e.target.value)} className={cn(input, "min-h-[3.5rem] resize-y")} />
             </Field>
           </div>
+          <p className="mt-5 text-xs font-semibold text-muted-foreground">Provider cost protection — a price under the margin refuses to save unless overridden; members never see any of it</p>
+          <div className="mt-2 grid gap-4 sm:grid-cols-3">
+            <Field id="cr-guard-margin" label="Minimum margin (%)" hint="Every enabled per-second rate must clear the provider cost estimate by this much.">
+              <input id="cr-guard-margin" type="number" inputMode="decimal" min={0} max={1000} step="any" value={guardMargin} onChange={(e) => setGuardMargin(e.target.value)} className={input} />
+            </Field>
+            <Field id="cr-guard-min" label="Minimum customer price (per video)" hint="The minimum charge may not sit under this. Zero disables it.">
+              <input id="cr-guard-min" type="number" inputMode="decimal" min={0} step="any" value={guardMinPrice} onChange={(e) => setGuardMinPrice(e.target.value)} className={input} />
+            </Field>
+            <div className="sm:pt-6">
+              <Toggle label="Allow prices below the minimum margin" hint="An explicit override for a promotion or a test. Recorded in the audit log like every other change." checked={guardOverride} onChange={setGuardOverride} />
+            </div>
+          </div>
           <p className="mt-5 text-xs font-semibold text-muted-foreground">Limits — 0 means no cap of that kind</p>
           <div className="mt-2 grid gap-4 sm:grid-cols-3">
             <Field id="cr-lim-user" label="Active videos per member" hint="Counted at Start across running videos. The plan's own cap (1–3) still applies; this can only tighten it.">
@@ -1159,11 +1213,12 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
 
 /** One mode's form state → the route's shape. Empty boxes keep the stored value. */
 function modePayload(
-  st: { enabled: boolean; tiers: { id: "standard" | "high" | "ultra"; enabled: boolean; perSecond: string }[]; maxSeconds: string; maxUploadMb: string; maxPixels: string; maxReferences: string; providerCostUsd: string; model: string },
+  st: { enabled: boolean; basePrice: string; tiers: { id: "standard" | "high" | "ultra"; enabled: boolean; perSecond: string }[]; maxSeconds: string; maxUploadMb: string; maxPixels: string; maxReferences: string; providerCostUsd: string; model: string },
   before: ReplacementModeConfig,
 ) {
   return {
     enabled: st.enabled,
+    basePriceCents: majorInputToMinor(st.basePrice) ?? before.basePriceCents,
     tiers: st.tiers.map((t) => ({ id: t.id, enabled: t.enabled, perSecondCents: majorInputToMinor(t.perSecond) ?? before.tiers.find((b) => b.id === t.id)?.perSecondCents ?? 0 })),
     maximumDurationSeconds: st.maxSeconds.trim() === "" ? before.maximumDurationSeconds : Math.floor(Number(st.maxSeconds)),
     maximumUploadBytes: st.maxUploadMb.trim() === "" ? before.maximumUploadBytes : Math.floor(Number(st.maxUploadMb)) * 1024 * 1024,

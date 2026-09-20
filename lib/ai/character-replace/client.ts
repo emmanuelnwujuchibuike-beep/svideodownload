@@ -3,7 +3,7 @@
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceQuote, CharacterReplaceVoiceSource, QuoteInput } from "@/lib/ai/character-replace/pricing";
-import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceBalance, CharacterReplacePreflight, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import type { AiJobView } from "@/lib/ai/jobs";
 
@@ -150,6 +150,8 @@ export async function startCharacterReplaceJob(
     >;
     trim: { startMs: number; endMs: number } | null;
     consent: true;
+    /** 2026-09-20: the pass the preflight route answered for these files — Start refuses without it. */
+    preflightToken?: string;
     /** Part 6: the voice in full — only with a new voice. */
     voice?: {
       source: CharacterReplaceVoiceSource;
@@ -181,6 +183,19 @@ interface BalanceResponse {
   maxTopupCents: number;
   checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
   ledger: CharacterReplaceTransaction[];
+}
+
+/**
+ * "Checking your media…" (2026-09-20): after the uploads and before Start,
+ * the worker measures the photo and the video for the job's mode and the
+ * server answers a structured verdict with the words to print — and, on a
+ * pass, the short-lived token Start requires. Nothing is charged by this.
+ * FEATURE_UNAVAILABLE is "we couldn't check just now" — to retry, unpaid.
+ */
+export async function preflightCharacterReplaceJob(
+  jobId: string,
+): Promise<CharacterReplaceClientResult<{ preflight: CharacterReplacePreflight; token: string | null; tokenExpiresAt: string | null }>> {
+  return request(`/api/ai/character-replace/jobs/${encodeURIComponent(jobId)}/preflight`, { method: "POST" });
 }
 
 /**

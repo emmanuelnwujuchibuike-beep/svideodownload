@@ -93,7 +93,7 @@ export async function beginCharacterReplaceTopup(opts: {
 }
 
 /** Where Paystack may send the member back. Anything else becomes the workspace. */
-const RETURN_PATHS = new Set(["/ai", "/ai/character-replace", "/ai/usage", "/studio/ai", "/studio/ai/character-replace", "/studio/ai/usage"]);
+const RETURN_PATHS = new Set(["/ai", "/ai/character-replace", "/ai/character-replace/create", "/ai/usage", "/studio/ai", "/studio/ai/character-replace", "/studio/ai/character-replace/create", "/studio/ai/usage"]);
 const DEFAULT_RETURN = "/ai/character-replace";
 
 export function safeReturnTo(value: unknown): string {

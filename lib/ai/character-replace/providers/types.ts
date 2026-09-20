@@ -6,58 +6,76 @@ import type { AiJobStatus } from "@/lib/ai/jobs";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  THE REPLACEMENT PROVIDER SEAM — one interface, three implementations
+ *  THE REPLACEMENT PROVIDER SEAM (Part 6; capabilities 2026-09-20)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Skin + Face brief §12: "Create a single replacement router:
- * face_only → xrunda/hello · skin_face → prunaai/p-video-replace ·
- * full_character → existing Wan 2.2 Animate Replace. The three pipelines
- * must remain independently maintainable."
- *
- * Each adapter knows ONE model: its pin, its input names, how a quality tier
- * maps onto what it can be asked for. The application layer (submit.ts)
- * sees this interface and the router (router.ts) picks the adapter by mode.
- * Nothing here is built from a request; every value is the server's, after
- * validation, and the URLs are signed links into the private source bucket.
+ * One adapter per MODEL. A mode is routed to an adapter by configuration
+ * (`modes[mode].provider.model`, providers/router.ts), and an adapter says in
+ * its capabilities which modes, tiers, reference counts and audio it can
+ * honour — so the router can refuse a mis-configuration ("Upper Body on a
+ * face-swap model") before anything is priced, and the admin form can offer
+ * only the models that fit a scope. The customer never sees a model name.
  */
-
 export interface ReplacementRequest {
   jobId: string;
   mode: ReplacementMode;
-  /** The prepared (trimmed, normalised) video, as a signed URL. */
   videoUrl: string;
-  /** The reference image(s), primary first, as signed URLs. Face Only and Full Character use the first. */
   referenceImageUrls: readonly string[];
-  /** The tier of THIS mode, already validated against the configuration. */
   quality: CharacterReplaceAnyQuality;
-  /** Whether the source has audio the member wants kept — the adapter decides what to ask the model. */
   keepOriginalAudio: boolean;
-  /** Full Character's `go_fast` (Part 4). Ignored by the other adapters. */
   goFast: boolean;
   webhookUrl: string;
 }
 
 export interface ReplacementSubmission {
-  /** The provider's own id for this run. */
   reference: string;
   status: AiJobStatus;
   model: string;
   modelVersion: string | null;
-  /** The provider settings the tier mapped to — recorded on the row for the operator. */
   settings: Record<string, unknown>;
-  /** Whether the model was asked to keep the original audio in its output. */
   mergeAudio: boolean;
+}
+
+/**
+ * What a model can do (the replacement-scope brief §4). Pure facts about the
+ * provider, read by the router, the admin form's warnings and the start
+ * route's estimate — never by a member.
+ */
+export interface ReplacementCapabilities {
+  /** The scopes this model can honour. */
+  modes: readonly ReplacementMode[];
+  /** The quality/tier ids this model can honour FOR a scope (a tier the mode's map marks unsupported is still refused by the map). */
+  supportsTier(mode: ReplacementMode, quality: CharacterReplaceAnyQuality): boolean;
+  /** Whether the model can keep the source audio in its own output (otherwise the finalizer restores it). */
+  keepsAudio: boolean;
+  /** How many reference images the model takes, at most. */
+  maxReferenceImages: number;
+  /** The reference framing the model was made for, for the operator's eye. */
+  referenceFraming: "portrait" | "head_shoulders" | "half_body" | "full_body" | "any";
 }
 
 export interface ReplacementProvider {
   readonly id: "replicate";
+  /** The scope this adapter was written for; `capabilities.modes` lists every scope it can serve. */
   readonly mode: ReplacementMode;
   readonly model: string;
   readonly version: string;
+  readonly capabilities: ReplacementCapabilities;
   isConfigured(): boolean;
-  /** Build the payload from validated values; exposed so a test can see exactly what would be sent. */
+  supportsMode(mode: ReplacementMode): boolean;
   buildInput(req: Omit<ReplacementRequest, "jobId" | "webhookUrl">): Record<string, unknown>;
-  /** The provider settings for a tier, or null when the provider cannot honour it. */
   settingsFor(quality: CharacterReplaceAnyQuality): Record<string, unknown> | null;
+  /**
+   * The operator's estimate of what THIS provider bills for a run, in US
+   * cents, from the mode's configured per-second figure. Null = unknown.
+   * Admin-only (margin monitoring, warnings); never shown to a member.
+   */
+  estimateProcessingCostUsdCents(durationMs: number, perSecondUsdCents: number): number | null;
   createPrediction(req: ReplacementRequest): Promise<ReplacementSubmission>;
+}
+
+/** The shared cost estimate: seconds × the operator's per-second figure, rounded up; unknown when the figure is 0. */
+export function linearCostEstimate(durationMs: number, perSecondUsdCents: number): number | null {
+  if (!Number.isFinite(perSecondUsdCents) || perSecondUsdCents <= 0 || !Number.isFinite(durationMs) || durationMs <= 0) return null;
+  return Math.ceil((durationMs / 1000) * perSecondUsdCents);
 }

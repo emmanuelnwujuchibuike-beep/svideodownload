@@ -65,6 +65,8 @@ const eventSchema = z.object({
     "character_replace_saved",
     "character_replace_shared",
     "character_replace_retry_clicked",
+    "character_replace_mode_selected",
+    "character_replace_balance_short",
     "custom",
   ]),
   visitorId: z.string().min(1).max(64),

@@ -4,9 +4,7 @@ import { Plus, RefreshCw, Trash2, UserRound, X } from "lucide-react";
 
 import { CharacterReplaceInputDirection } from "@/features/ai/character-replace/input-direction";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
-import { ReplacementModeSelector } from "@/features/ai/character-replace/mode-selector";
 import { CharacterReplaceTutorialButton } from "@/features/ai/character-replace/tutorial-example";
-import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { AssetSlot, CharacterAsset } from "@/lib/ai/character-replace/types";
 import { AI_IMAGE_ACCEPT, AI_IMAGE_FORMAT_LINE, formatResolution, type AiMediaErrorCode } from "@/lib/ai/media";
@@ -25,25 +23,21 @@ import { cn, formatBytes } from "@/lib/utils";
  */
 export function CharacterReplacePhotoStep({
   mode,
-  config,
   asset,
   references,
   maxReferences,
   slot,
-  onMode,
   onPick,
   onClear,
   onAddReference,
   onRemoveReference,
 }: {
   mode: ReplacementMode;
-  config: CharacterReplacePublicConfig | null;
   asset: CharacterAsset | null;
   references: readonly CharacterAsset[];
   maxReferences: number;
   /** The picker's state machine (Part 2, §2): empty · validating · uploading · ready · invalid · error. */
   slot: AssetSlot;
-  onMode: (mode: ReplacementMode) => void;
   onPick: (file: File) => void;
   onClear: () => void;
   onAddReference: (file: File) => void;
@@ -56,7 +50,6 @@ export function CharacterReplacePhotoStep({
 
   return (
     <div className="space-y-6">
-      <ReplacementModeSelector mode={mode} config={config} onChange={onMode} />
 
       {/* the owner's red direction (2026-09-14): the exact kind of photo this mode wants, and the drawn example */}
       <div className="space-y-2">
@@ -67,17 +60,20 @@ export function CharacterReplacePhotoStep({
       <section>
         <h3 className="text-[15px] font-bold tracking-[-0.01em]">{copy.reference.title}</h3>
         <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">{copy.reference.hint}</p>
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-3 py-1 text-[12px] font-semibold text-primary">{copy.photo.best}</p>
 
         {!asset ? (
           <div className="mt-3">
             <CharacterReplaceMediaPicker
               kind="photo"
               accept={AI_IMAGE_ACCEPT}
-              title={mode === "face_only" ? "Upload a face photo" : mode === "skin_face" ? "Upload an identity photo" : "Upload your photo"}
+              title={mode === "face_only" ? "Upload a face photo" : mode === "skin_face" ? "Upload a head-and-shoulders photo" : mode === "upper_body" ? "Upload a waist-up photo" : "Upload your photo"}
               hint={copy.reference.hint}
               formats={AI_IMAGE_FORMAT_LINE}
               busy={busy}
               error={error}
+              // 2026-09-20 (brief §3, §14): a refused shape says what this scope needs and opens the drawn example right there
+              guidance={{ best: copy.photo.best, example: <CharacterReplaceTutorialButton kind="photo" mode={mode} className="min-h-0 w-auto border-0 bg-transparent px-0 text-[12.5px] hover:bg-transparent" /> }}
               onPick={onPick}
             />
           </div>

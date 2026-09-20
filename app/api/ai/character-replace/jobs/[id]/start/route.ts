@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 
 import { providerHealthFor } from "@/lib/ai/character-replace/circuit";
 import { modeConfig } from "@/lib/ai/character-replace/config";
-import { readCharacterReplaceMeta, referencePaths } from "@/lib/ai/character-replace/job-meta";
+import { readCharacterReplaceMeta, referencePaths, selectedRangeOf } from "@/lib/ai/character-replace/job-meta";
+import { REPLACEMENT_SCOPE } from "@/lib/ai/character-replace/modes";
 import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
 import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
@@ -20,6 +21,7 @@ import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, jobToView } from "@/lib/ai/jobs";
 import { claimJobStart, getOwnJob, revertJobStartClaim, transitionJob } from "@/lib/ai/job-store";
 import { AI_IMAGE_MAX_BYTES } from "@/lib/ai/media";
+import { preflightGate } from "@/lib/ai/preflight/gate";
 import { hasProviderFor } from "@/lib/ai/providers";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { statSourceObject } from "@/lib/ai/storage-server";
@@ -156,6 +158,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (videoObject.size > Math.min(feature.maxBytes, modeView.maximumUploadBytes)) return fail("FILE_TOO_LARGE");
     for (const obj of referenceObjects) if (obj && obj.size > AI_IMAGE_MAX_BYTES) return fail("FILE_TOO_LARGE");
 
+    /*
+      ── A½ · the media preflight (2026-09-20, brief §12–§13, §25) ──────────
+      The worker's stored verdict for EXACTLY these objects, this mode and
+      this validator, plus the member's token for the same — both checked
+      before the price is even looked at, so a refused or missing check
+      costs nothing and reaches no provider. A modified client that skips
+      /preflight is refused here.
+    */
+    const gate = preflightGate({ jobId: job.id, userId: ownerId, mode: meta.mode, metadata: job.metadata, reference: referenceObjects[0] ?? null, video: videoObject, token: body.preflightToken });
+    if (!gate.ok) {
+      console.info("[cr/start] preflight gate refused", { jobId: job.id, subject: subject.key, reason: gate.reason });
+      return fail("PREFLIGHT_REQUIRED");
+    }
+
     /* ── B · calculate ───────────────────────────────────────────────────── */
     const money = { currency: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) };
     // The quote's mode must be the job's: a Face Only price handed to a Full Character job is a forged mode.
@@ -255,7 +271,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     */
     if (config.ops.circuitBreaker.enabled) {
       const models = pipeline.stages
-        .map((stage) => (stage === "voice" ? config.tts.model : stage === "replace" ? replacementProviderFor(meta.mode).model : stage === "lipsync" ? lipTierModel : ""))
+        .map((stage) => (stage === "voice" ? config.tts.model : stage === "replace" ? replacementProviderFor(meta.mode, config).model : stage === "lipsync" ? lipTierModel : ""))
         .filter((m) => m.length > 0);
       const { open } = await providerHealthFor(models);
       if (open.length > 0) {
@@ -264,12 +280,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
     }
 
+    /*
+      ── THE IMMUTABLE SNAPSHOT (the replacement-scope brief §11, §16) ─────
+      The signed quote is the price; beside it go the facts a statement and
+      an audit need that the quote does not carry — which scope, which
+      provider and model the router chose for it under TODAY's
+      configuration, the original length and the trim, the rates by name.
+      Written on the ledger row (`snapshot`) and on the job (`provider_plan`)
+      so a price or provider change tomorrow never rewrites what ran today.
+    */
+    const plannedProvider = replacementProviderFor(meta.mode, config);
+    const selected = selectedRangeOf({ video: meta.video, trim: body.trim });
+    const ledgerSnapshot = {
+      ...snapshot,
+      replacementMode: snapshot.mode,
+      scope: REPLACEMENT_SCOPE[snapshot.mode],
+      provider: plannedProvider.id,
+      providerModel: plannedProvider.model,
+      originalDurationMs: meta.video.durationMs,
+      selectedStartMs: selected.startMs,
+      selectedEndMs: selected.endMs,
+      selectedDurationMs: snapshot.durationMs,
+      outputQuality: snapshot.quality,
+      modeBasePriceCents: snapshot.modeBasePriceCents,
+      modePerSecondRateCents: snapshot.qualityRateCents,
+      qualityRateCents: snapshot.qualityRateCents,
+      lipSyncRateCents: snapshot.lipSyncRateCents,
+      voiceRateCents: snapshot.voiceRateCents,
+      totalPriceCents: snapshot.totalCents,
+    };
     const startMetadata = {
       ...(job.metadata ?? {}),
       trim: body.trim,
       settings: { quality: snapshot.quality, voiceMode: snapshot.voiceMode, lipSyncMode: snapshot.lipSyncMode },
       quote: snapshot,
       quote_id: snapshot.id,
+      // §16: the provider/model the router chose at Start (the submit stage records what ACTUALLY ran in `provider`).
+      provider_plan: { id: plannedProvider.id, model: plannedProvider.model, scope: REPLACEMENT_SCOPE[snapshot.mode] },
       audio: audioMeta,
       pipeline,
       provider_cost_estimate: costEstimate ? { ...costEstimate, perSecondUsdCents: modeView.providerCostPerSecondUsdCents } : null,
@@ -320,7 +367,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     let balanceAfter: number;
     try {
-      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot });
+      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });
     } catch (e) {
       // The atomic check disagreed with the read (a concurrent spend). The claim goes back so Start can be pressed again after a recharge.
       const message = String((e as Error)?.message ?? e);

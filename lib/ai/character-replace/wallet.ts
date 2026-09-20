@@ -157,7 +157,8 @@ export async function creditCharacterReplaceBalance(opts: {
 export async function reserveCharacterReplaceCharge(opts: {
   userId: string;
   jobId: string;
-  snapshot: CharacterReplaceQuote;
+  /** The signed quote, plus the facts /start adds for the statement (the replacement-scope brief §11): scope, provider, the trim, the rates. */
+  snapshot: CharacterReplaceQuote & Record<string, unknown>;
 }): Promise<number> {
   const { data, error } = await createAdminClient().rpc("reserve_product_charge", {
     p_user_id: opts.userId,

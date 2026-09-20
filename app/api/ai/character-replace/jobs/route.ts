@@ -4,9 +4,9 @@ import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
 import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
-import { replacementModeLabel } from "@/lib/ai/character-replace/modes";
+import { REPLACEMENT_MODE_COPY, replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { createCharacterReplaceJobSchema } from "@/lib/ai/character-replace/start-schema";
-import { characterReplaceLimits, validatePhotoFile, validatePhotoPixels, validateVideoFile } from "@/lib/ai/character-replace/validate";
+import { characterReplaceLimits, validatePhotoFile, validatePhotoFraming, validatePhotoPixels, validateVideoFile } from "@/lib/ai/character-replace/validate";
 import { validateAudioFile } from "@/lib/ai/voice/audio-validate";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
@@ -97,6 +97,9 @@ export async function POST(request: Request) {
       if (!photoVerdict.ok) return fail(photoVerdict.code === "image-too-large" ? "FILE_TOO_LARGE" : "UNSUPPORTED_FORMAT");
       const pixelsVerdict = validatePhotoPixels({ width: image.width, height: image.height }, limits);
       if (!pixelsVerdict.ok) return fail("INVALID_INPUT", { error: i === 0 ? "That photo is too small." : `Reference photo ${i + 1} is too small.` });
+      // 2026-09-20 (brief §3, §14): the photo's shape must fit the scope — a landscape photo cannot hold a standing person
+      const framingVerdict = validatePhotoFraming({ width: image.width, height: image.height }, mode);
+      if (!framingVerdict.ok) return fail("INVALID_INPUT", { error: `${i === 0 ? "That photo" : `Reference photo ${i + 1}`} doesn't fit ${replacementModeLabel(mode)}. ${REPLACEMENT_MODE_COPY[mode].photo.best}` });
     }
     // Extra identity photos only where the mode takes them, and never more than the operator allows.
     if (references.length > Math.max(0, modeView.maximumReferenceImages - 1)) {

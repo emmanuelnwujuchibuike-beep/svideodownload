@@ -120,7 +120,9 @@ export async function submitCharacterReplaceJob(
       // 🔴 Ownership of EVERY path, re-checked at the moment they become URLs.
       if (!pathBelongsTo(p, fresh.user_id, fresh.id)) throw new AiJobError("INTERNAL_ERROR", "a media path failed ownership");
     }
-    const provider = replacementProviderFor(meta.mode);
+    // 2026-09-20: the adapter the OPERATOR configured for this scope (providers/router.ts), never a name from a request.
+    const provider = replacementProviderFor(meta.mode, config);
+    if (!provider.supportsMode(meta.mode)) throw new AiJobError("FEATURE_UNAVAILABLE", `no configured provider serves ${meta.mode}`);
     if (!provider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `${meta.mode} provider is not configured`);
     /*
       §8 (Part 4): keep the original audio in the model's output when the

@@ -199,6 +199,17 @@ export const aiJobCreateLimiter: Limiter = buildLimiter(
 export const aiJobReadLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_AI_JOB_READ_PER_MIN || 60),
 );
+/**
+ * 2026-09-20: the media preflight (lib/ai/preflight) — a worker run of ten
+ * seconds and, in the ambiguous band, a vision model. Per HOUR, per member,
+ * so the analysis cannot be farmed (brief §14); a refresh of the same files
+ * is answered from the stored record and never reaches this.
+ */
+export const aiPreflightLimiter: Limiter = rateLimitEnabled
+  ? hasUpstash
+    ? createUpstashLimiter(Number(process.env.RATE_LIMIT_AI_PREFLIGHT_PER_HOUR || 30), "1 h")
+    : createMemoryLimiter(Number(process.env.RATE_LIMIT_AI_PREFLIGHT_PER_HOUR || 30), 60 * 60_000)
+  : noopLimiter;
 
 /**
  * Per-day counter for enforcing daily caps (downloads per plan). Uses a single

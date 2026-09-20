@@ -157,6 +157,9 @@ export type AnalyticsEventType =
   | "character_replace_saved"
   | "character_replace_shared"
   | "character_replace_retry_clicked"
+  /** The replacement-scope brief §20 (2026-09-20): which scope was chosen; a price the balance did not cover (bucketed shortfall). Ids and buckets only. */
+  | "character_replace_mode_selected"
+  | "character_replace_balance_short"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

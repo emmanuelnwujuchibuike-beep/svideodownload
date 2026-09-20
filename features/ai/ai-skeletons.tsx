@@ -113,3 +113,38 @@ export function FrenzAIHistorySkeleton() {
     </div>
   );
 }
+
+/**
+ * The Character Replace CREATE page's fallback (2026-09-20): the header
+ * strip — eyebrow, the step title, the scope chip, the stepper — in its own
+ * place, then the step's card. Shown only when the create route's data is
+ * not yet in the router cache (the scope page prefetches it on landing).
+ */
+export function CharacterReplaceCreateSkeleton() {
+  return (
+    <SkeletonSection label="Opening Character Replace">
+      <div className="mt-4">
+        <Skeleton className="h-3 w-44 rounded-full" />
+        <div className="mt-3 flex items-end justify-between gap-4">
+          <Skeleton className="h-9 w-44" />
+          <Skeleton className="h-9 w-36 rounded-full" />
+        </div>
+      </div>
+      <div className="mt-5 flex items-center gap-2" aria-hidden>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className={i === 1 ? "h-2 flex-[2] rounded-full" : "h-2 flex-1 rounded-full opacity-60"} />
+        ))}
+      </div>
+      <div className="mt-6 rounded-3xl border border-border/70 p-4 sm:p-6" aria-hidden>
+        <Skeleton className="h-24 w-full rounded-2xl" />
+        <Skeleton className="mt-4 h-5 w-40" />
+        <Skeleton className="mt-2 h-3.5 w-64 max-w-full" />
+        <Skeleton className="mt-5 h-52 w-full rounded-3xl sm:h-60" />
+      </div>
+      <div className="mt-5 flex justify-between" aria-hidden>
+        <Skeleton className="h-12 w-28 rounded-full" />
+        <Skeleton className="h-12 w-36 rounded-full" />
+      </div>
+    </SkeletonSection>
+  );
+}

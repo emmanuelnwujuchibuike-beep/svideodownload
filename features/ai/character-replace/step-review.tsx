@@ -13,6 +13,7 @@ import type { CharacterReplaceBalance, CharacterReplaceProject, PricingState } f
 import { formatSeconds, selectedDurationSeconds } from "@/lib/ai/character-replace/workspace";
 import { formatCents } from "@/lib/ai/economy";
 import { formatResolution } from "@/lib/ai/media";
+import { track } from "@/lib/analytics/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,17 @@ export function CharacterReplaceReviewStep({
     if (rechargeAsk && rechargeAsk > 0) openSheet();
   }, [rechargeAsk, openSheet]);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
+  /*
+    §20 (the replacement-scope brief): a balance that does not cover the
+    price is a product fact worth counting — the scope, the quality and a
+    bucket of the shortfall, never an amount tied to a person, never media.
+  */
+  const shortfall = short && money ? money.shortfallCents : null;
+  useEffect(() => {
+    if (shortfall === null || !snapshot) return;
+    track("character_replace_balance_short", { mode: snapshot.mode, quality: snapshot.quality, shortfallBucket: shortfall < 100 ? "<1" : shortfall < 500 ? "1-5" : shortfall < 2000 ? "5-20" : "20+" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shortfall === null, snapshot?.id]);
 
   return (
     /*

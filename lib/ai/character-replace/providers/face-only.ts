@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ReplacementProvider, ReplacementRequest, ReplacementSubmission } from "@/lib/ai/character-replace/providers/types";
+import { linearCostEstimate, type ReplacementProvider, type ReplacementRequest, type ReplacementSubmission } from "@/lib/ai/character-replace/providers/types";
 import { FACE_ONLY_TIER_MAP, isReplacementTierId } from "@/lib/ai/character-replace/modes";
 import { AiJobError } from "@/lib/ai/errors";
 import { createReplicatePrediction, toState } from "@/lib/ai/replicate/provider";
@@ -50,6 +50,18 @@ export const faceOnlyProvider: ReplacementProvider = {
   mode: "face_only",
   model: XRUNDA_HELLO.model,
   version: XRUNDA_HELLO.version,
+  // A face swap: one face in, the face out; the body, hair and skin of the video stay. Only Face Only.
+  capabilities: {
+    modes: ["face_only"],
+    supportsTier: (_mode, quality) => isReplacementTierId(quality) && FACE_ONLY_TIER_MAP[quality].support === "supported",
+    keepsAudio: true,
+    maxReferenceImages: 1,
+    referenceFraming: "portrait",
+  },
+  supportsMode(mode) {
+    return this.capabilities.modes.includes(mode);
+  },
+  estimateProcessingCostUsdCents: linearCostEstimate,
 
   isConfigured() {
     return !!process.env.REPLICATE_API_TOKEN?.trim() && !!XRUNDA_HELLO.version;

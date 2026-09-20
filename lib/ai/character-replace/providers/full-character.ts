@@ -2,7 +2,7 @@ import "server-only";
 
 import { WAN_ANIMATE_REPLACE, wanResolutionFor } from "@/lib/ai/character-replace/model";
 import { replicateWanAnimateReplaceProvider } from "@/lib/ai/character-replace/provider";
-import type { ReplacementProvider, ReplacementRequest, ReplacementSubmission } from "@/lib/ai/character-replace/providers/types";
+import { linearCostEstimate, type ReplacementProvider, type ReplacementRequest, type ReplacementSubmission } from "@/lib/ai/character-replace/providers/types";
 import { isCharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
 import { AiJobError } from "@/lib/ai/errors";
 
@@ -27,6 +27,24 @@ export const fullCharacterProvider: ReplacementProvider = {
   mode: "full_character",
   model: WAN_ANIMATE_REPLACE.model,
   version: WAN_ANIMATE_REPLACE.version,
+  /*
+    Wan replaces the whole visible person from one character image and keeps
+    the source audio on request. It serves Full Character natively and Upper
+    Body through providers/upper-body.ts (the same model, the mode's own
+    tiers and prices — on a waist-up video what it can see is the upper body).
+    The resolutions it documents are 480 and 720 (lib/ai/character-replace/model.ts).
+  */
+  capabilities: {
+    modes: ["full_character", "upper_body"],
+    supportsTier: (mode, quality) => (mode === "upper_body" ? quality === "standard" || quality === "high" : isCharacterReplaceQualityId(quality) && wanResolutionFor(quality) !== null),
+    keepsAudio: true,
+    maxReferenceImages: 1,
+    referenceFraming: "full_body",
+  },
+  supportsMode(mode) {
+    return this.capabilities.modes.includes(mode);
+  },
+  estimateProcessingCostUsdCents: linearCostEstimate,
 
   isConfigured() {
     return replicateWanAnimateReplaceProvider.isConfigured();

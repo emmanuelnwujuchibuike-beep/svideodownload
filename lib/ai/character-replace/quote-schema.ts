@@ -20,7 +20,7 @@ import { z } from "zod";
  * server imports (quote-schema.test.ts).
  */
 export const ANY_QUALITY = z.enum(["480p", "720p", "1080p", "standard", "high", "ultra"]);
-export const REPLACEMENT_MODE = z.enum(["face_only", "skin_face", "full_character"]);
+export const REPLACEMENT_MODE = z.enum(["face_only", "skin_face", "upper_body", "full_character"]);
 export const VOICE_SOURCE = z.enum(["upload", "tts"]);
 
 export const quoteRequestSchema = z

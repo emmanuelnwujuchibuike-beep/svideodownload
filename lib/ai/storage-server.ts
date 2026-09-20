@@ -118,6 +118,8 @@ export async function createSourceUploadTicket(opts: {
 export interface StoredObject {
   size: number;
   mimeType: string | null;
+  /** The bucket's etag for these exact bytes (2026-09-20: what a preflight pass is bound to). */
+  etag: string | null;
 }
 
 /**
@@ -144,10 +146,11 @@ export async function statSourceObject(path: string): Promise<StoredObject | nul
   const entry = (data ?? []).find((f) => f.name === name);
   if (!entry) return null;
 
-  const meta = entry.metadata as { size?: number; mimetype?: string } | null;
+  const meta = entry.metadata as { size?: number; mimetype?: string; eTag?: string; etag?: string } | null;
   return {
     size: typeof meta?.size === "number" ? meta.size : 0,
     mimeType: typeof meta?.mimetype === "string" ? meta.mimetype : null,
+    etag: typeof meta?.eTag === "string" ? meta.eTag : typeof meta?.etag === "string" ? meta.etag : null,
   };
 }
 

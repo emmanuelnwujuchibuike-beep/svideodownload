@@ -194,7 +194,8 @@ export function characterReplaceFacts(job: AiJobView): string | null {
   return parts.join(" · ");
 }
 
-const MODE_LABEL: Record<string, string> = { face_only: "Face Only", skin_face: "Skin + Face", full_character: "Full Character" };
+// The customer vocabulary of the four scopes (2026-09-20); `skin_face` is the stored id of "Face + Head".
+const MODE_LABEL: Record<string, string> = { face_only: "Face Only", skin_face: "Face + Head", upper_body: "Upper Body", full_character: "Full Character" };
 const TIER_LABEL: Record<string, string> = { standard: "Standard", high: "High", ultra: "Ultra", "480p": "480p", "720p": "720p", "1080p": "1080p" };
 
 function symbolFor(currency: string | null): string {
@@ -233,13 +234,13 @@ export function historyResultSentence(job: AiJobView): string {
   if (job.feature === "ai_character_replace") {
     const facts = characterReplaceFacts(job);
     const mode = job.characterReplace?.mode ?? "full_character";
-    const what = mode === "face_only" ? "Face replaced" : mode === "skin_face" ? "Identity transferred" : "Character replaced";
+    const what = mode === "face_only" ? "Face replaced" : mode === "skin_face" ? "Face and head replaced" : mode === "upper_body" ? "Upper body replaced" : "Character replaced";
     const sentence =
       job.characterReplace?.voiceApplied
         ? `${what}, with the new voice on it.`
         : job.result.audioRestored === false
           ? `${what}. This video had no sound to keep.`
-          : mode === "full_character"
+          : mode === "full_character" || mode === "upper_body"
             ? `${what}, with the original movement and scene kept.`
             : `${what}, with the original body, clothes and scene kept.`;
     return facts ? `${sentence} ${facts}.` : sentence;

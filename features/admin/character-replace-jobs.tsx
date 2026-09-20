@@ -1,5 +1,6 @@
 import { CharacterReplaceJobActions } from "@/features/admin/character-replace-job-actions";
 import { summarizeCharacterReplaceJobs, type CharacterReplaceAdminJob } from "@/lib/ai/admin-stats";
+import { replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,7 +82,7 @@ export function CharacterReplaceJobsTable({ jobs, symbol }: { jobs: CharacterRep
                       </span>
                     </td>
                     <td className="py-2 pr-3 text-[11px]" title={j.model ?? undefined}>
-                      <span className="font-semibold">{j.mode === "face_only" ? "Face Only" : j.mode === "skin_face" ? "Skin + Face" : "Full Character"}</span>
+                      <span className="font-semibold">{replacementModeLabel(j.mode)}</span>
                       {j.stage ? <span className="ml-1 rounded-full bg-secondary px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{j.stage}</span> : null}
                       {j.voiceSource ? <span className="ml-1 text-muted-foreground">{j.voiceSource === "tts" ? "voice: text" : "voice: upload"}</span> : null}
                       {j.lipSyncMode ? <span className="ml-1 text-muted-foreground">· {j.lipSyncMode} lip sync</span> : null}

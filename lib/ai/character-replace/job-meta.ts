@@ -72,7 +72,7 @@ export const characterReplaceJobMetaSchema = z
     attempt: z.number().int().positive(),
     source_name: z.string().max(200).optional(),
     /** Part 6: which replacement. Absent on every row before it = Full Character. */
-    mode: z.enum(["face_only", "skin_face", "full_character"]).default("full_character"),
+    mode: z.enum(["face_only", "skin_face", "upper_body", "full_character"]).default("full_character"),
     /** The primary reference — the face, the first identity photo, or the photo. */
     character: image,
     /** Extra identity photos (Skin + Face), in the order the member added them. */

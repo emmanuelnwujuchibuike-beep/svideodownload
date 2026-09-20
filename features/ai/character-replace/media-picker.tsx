@@ -1,7 +1,7 @@
 "use client";
 
 import { ImagePlus, Loader2, Video } from "lucide-react";
-import { useCallback, useId, useRef, useState, type DragEvent } from "react";
+import { useCallback, useId, useRef, useState, type DragEvent, type ReactNode } from "react";
 
 import { AI_MEDIA_ERRORS, type AiMediaErrorCode } from "@/lib/ai/media";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export function CharacterReplaceMediaPicker({
   formats,
   busy = false,
   error,
+  guidance = null,
   onPick,
   className,
 }: {
@@ -38,6 +39,8 @@ export function CharacterReplaceMediaPicker({
   formats: string;
   busy?: boolean;
   error: AiMediaErrorCode | null;
+  /** 2026-09-20: what the chosen replacement type needs from the photo, shown under a refusal with the drawn example one tap away. */
+  guidance?: { best: string; example: ReactNode } | null;
   onPick: (file: File) => void;
   className?: string;
 }) {
@@ -95,30 +98,33 @@ export function CharacterReplaceMediaPicker({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
         className={cn(
-          "group relative flex min-h-[13rem] cursor-pointer flex-col items-center justify-center rounded-[1.5rem] px-6 py-8 text-center sm:min-h-[15rem]",
-          "border border-dashed border-border bg-card/70 transition-colors duration-200",
-          "hover:border-foreground/30 hover:bg-card",
+          "group relative flex min-h-[14rem] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.75rem] px-6 py-9 text-center sm:min-h-[16rem]",
+          "border border-border/70 bg-card shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-[border-color,box-shadow,transform] duration-200",
+          "hover:border-foreground/25 hover:shadow-[0_18px_40px_-28px_rgba(15,23,42,0.55)] active:scale-[0.995]",
           "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
-          dragging && "border-primary/60 bg-primary/[0.04]",
+          dragging && "border-primary/60 shadow-[0_0_0_4px_rgb(99_102_241/0.15)]",
           busy && "cursor-progress",
           copy && "border-rose-400/60",
         )}
       >
+        {/* a soft glow behind the tile — the editor's idle state, not a form field */}
+        <span aria-hidden className="pointer-events-none absolute -top-16 left-1/2 h-40 w-64 -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-500/15 via-indigo-500/15 to-fuchsia-500/15 blur-3xl" />
         <span
           className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-foreground/80 transition-transform duration-200 motion-safe:group-hover:scale-105",
-            dragging && "bg-primary/10 text-primary",
+            "relative flex h-16 w-16 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow-[0_12px_28px_-12px_rgba(79,70,229,0.6)] transition-transform duration-200 motion-safe:group-hover:scale-105",
+            dragging && "scale-105",
           )}
         >
           {busy ? (
-            <Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden />
+            <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" aria-hidden />
           ) : (
-            <Icon className="h-6 w-6" aria-hidden />
+            <Icon className="h-7 w-7" strokeWidth={2.2} aria-hidden />
           )}
         </span>
-        <span className="mt-4 text-[15.5px] font-bold tracking-[-0.01em]">{busy ? "Reading your file…" : title}</span>
-        <span className="mt-1.5 max-w-xs text-[13px] leading-relaxed text-muted-foreground">{hint}</span>
-        <span className="mt-4 inline-flex items-center rounded-full bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="relative mt-4 text-[16px] font-bold tracking-[-0.015em]">{busy ? "Reading your file…" : title}</span>
+        <span className="relative mt-1.5 max-w-xs text-[13px] leading-relaxed text-muted-foreground">{hint}</span>
+        <span className="relative mt-4 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="rounded-full bg-foreground px-1.5 py-0.5 text-[9.5px] text-background">Tap</span>
           {formats}
         </span>
       </label>
@@ -129,13 +135,19 @@ export function CharacterReplaceMediaPicker({
           <div className="mt-3 rounded-2xl border border-rose-400/40 bg-rose-500/[0.05] px-4 py-3">
             <p className="text-[13.5px] font-bold">{copy.title}</p>
             <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted-foreground">{copy.body}</p>
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="mt-2 text-[12.5px] font-semibold text-primary underline-offset-4 hover:underline"
-            >
-              {copy.action}
-            </button>
+            {guidance && (error === "image-wrong-framing" || error === "image-too-small") ? (
+              <p className="mt-1.5 text-[12.5px] font-semibold text-foreground">{guidance.best}</p>
+            ) : null}
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="text-[12.5px] font-semibold text-primary underline-offset-4 hover:underline"
+              >
+                {copy.action}
+              </button>
+              {guidance && (error === "image-wrong-framing" || error === "image-too-small") ? guidance.example : null}
+            </div>
           </div>
         ) : null}
       </div>

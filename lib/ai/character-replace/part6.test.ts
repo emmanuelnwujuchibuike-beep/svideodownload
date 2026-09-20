@@ -294,7 +294,7 @@ describe("the job metadata — every Part 1–5 row still reads, as a Full Chara
 describe("what the browser is told, and what it may say back", () => {
   it("the public config carries the modes with their tiers' support, the audio ceilings, and only the languages the provider speaks", () => {
     const pub = publicCharacterReplaceConfig(CHARACTER_REPLACE_DEFAULTS, { code: "NGN", symbol: "₦" }, true);
-    expect(pub.modes.map((m) => m.id)).toEqual(["face_only", "skin_face", "full_character"]);
+    expect(pub.modes.map((m) => m.id)).toEqual(["face_only", "skin_face", "upper_body", "full_character"]);
     const face = pub.modes.find((m) => m.id === "face_only")!;
     expect(face.tiers.map((t) => [t.id, t.enabled, t.supported])).toEqual([["standard", true, true], ["high", false, false], ["ultra", false, false]]);
     expect(face.defaultTier).toBe("standard");

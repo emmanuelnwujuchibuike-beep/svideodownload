@@ -111,7 +111,7 @@ function Example({ tone, caption, points, children }: { tone: "good" | "avoid"; 
  * enough motion to read as "this is how to frame it", none under reduced
  * motion (globals.css `.cr-tut-*`).
  */
-function Art({ figure, dim = false, children }: { figure: "full" | "face" | "crop" | "side" | "group" | "video-full" | "video-cut"; dim?: boolean; children?: React.ReactNode }) {
+function Art({ figure, dim = false, children }: { figure: "full" | "half" | "face" | "crop" | "side" | "group" | "video-full" | "video-half" | "video-cut"; dim?: boolean; children?: React.ReactNode }) {
   const id = useId();
   return (
     <svg viewBox="0 0 240 320" role="img" aria-hidden className="block h-auto w-full">
@@ -140,6 +140,8 @@ function Art({ figure, dim = false, children }: { figure: "full" | "face" | "cro
       <rect x="36" y="22" width="168" height="276" rx="16" fill="#111a2f" />
       <g opacity={dim ? 0.55 : 1}>
         {figure === "full" ? <FullFigure id={id} /> : null}
+        {figure === "half" ? <HalfFigure id={id} /> : null}
+        {figure === "video-half" ? <HalfFigure id={id} /> : null}
         {figure === "face" ? <FaceFigure id={id} /> : null}
         {figure === "crop" ? <CropFigure id={id} /> : null}
         {figure === "side" ? <SideFigure id={id} /> : null}
@@ -178,6 +180,21 @@ function FullFigure({ id }: { id: string }) {
       <rect x="122" y="262" width="26" height="12" rx="6" fill="#0f172a" />
       {/* a light on the face */}
       <circle cx="112" cy="72" r="6" fill="#fff" opacity="0.25" />
+    </g>
+  );
+}
+
+/** Head to waist, straight on, the top clearly visible (Upper Body, 2026-09-20). */
+function HalfFigure({ id }: { id: string }) {
+  return (
+    <g>
+      <circle cx="120" cy="96" r="34" fill={`url(#${id}-skin)`} />
+      <rect x="72" y="138" width="96" height="120" rx="24" fill={`url(#${id}-shirt)`} />
+      <rect x="48" y="150" width="24" height="90" rx="12" fill={`url(#${id}-skin)`} />
+      <rect x="168" y="150" width="24" height="90" rx="12" fill={`url(#${id}-skin)`} />
+      {/* the frame ends at the waist */}
+      <rect x="36" y="262" width="168" height="36" rx="6" fill="#0f172a" opacity="0.55" />
+      <circle cx="108" cy="88" r="8" fill="#fff" opacity="0.25" />
     </g>
   );
 }
@@ -342,24 +359,56 @@ const TUTORIALS: Record<ReplacementMode, Record<"photo" | "video", TutorialCopy>
       footer: "The body, clothes and scene stay exactly as they are in your video.",
     },
   },
+  upper_body: {
+    photo: {
+      title: "The right photo for Upper Body",
+      intro: "Upper Body puts the face, head and upper-body look from your photo into the video — including the top you wear — while the movement and scene stay. The photo decides how the upper body looks.",
+      good: {
+        art: <Art figure="half" />,
+        caption: "Chest or waist up, facing the camera",
+        points: ["Head to waist inside the frame, straight on.", "Wearing the top you want in the video.", "Plain background, even light, no filter."],
+      },
+      avoid: {
+        art: <Art figure="crop" dim />,
+        caption: "A face crop, or a hat and sunglasses",
+        points: ["A face crop leaves the model to invent the top.", "A hat or sunglasses hide what it needs most.", "Group photos: it cannot know who you mean."],
+      },
+      footer: "What the video shows of the person is what gets replaced — Upper Body is made for waist-up videos. For the whole person and outfit, choose Full Character.",
+    },
+    video: {
+      title: "The right video for Upper Body",
+      intro: "The person's visible upper body is replaced, so the video should be framed from the waist up with the person clearly visible.",
+      good: {
+        art: <Art figure="video-half" />,
+        caption: "Waist up, one person, steady",
+        points: ["Chest or waist up, facing the camera most of the time.", "Steady camera, good light, the person not cut off.", "Short: trim to the part that matters."],
+      },
+      avoid: {
+        art: <Art figure="video-cut" dim />,
+        caption: "Crowds, mirrors, fast cuts",
+        points: ["Extra people give the model extra bodies.", "Mirrors duplicate the person.", "Very dark scenes lose the detail it copies."],
+      },
+      footer: "On a full-length video the model still replaces what it can see of the person — the framing of your video decides the scope.",
+    },
+  },
   skin_face: {
     photo: {
-      title: "The right photos for Skin + Face",
-      intro: "Skin + Face brings the person's identity and skin into the video while keeping the video's clothes and scene. One to three photos of the SAME person work best.",
+      title: "The right photos for Face + Head",
+      intro: "Face + Head brings the person's face, head and skin into the video while keeping the video's body, clothes and scene. One to three head-and-shoulders photos of the SAME person work best.",
       good: {
         art: <Art figure="face" />,
-        caption: "1–3 clear photos of one person",
-        points: ["Face clearly visible in every photo; different angles help.", "Some neck, arms or shoulders so the skin tone carries across.", "Good light, sharp, no filters."],
+        caption: "1–3 clear head-and-shoulders photos of one person",
+        points: ["Face and hair clearly visible in every photo; different angles help.", "Some neck, arms or shoulders so the skin tone carries across.", "Good light, sharp, no filters."],
       },
       avoid: {
         art: <Art figure="group" dim />,
         caption: "Different people, or hidden faces",
         points: ["Photos of two people mix two identities.", "Sunglasses and hats hide the face.", "Heavy filters change the skin the model copies."],
       },
-      footer: "The clothes, logos and text in the video stay wherever the model can keep them — it is generative, so small changes can still happen.",
+      footer: "The body, clothes, logos and text in the video stay wherever the model can keep them — it is generative, so small changes can still happen.",
     },
     video: {
-      title: "The right video for Skin + Face",
+      title: "The right video for Face + Head",
       intro: "The person's face and exposed skin are re-rendered across the whole clip, so the person must be clearly visible.",
       good: {
         art: <Art figure="video-full" />,

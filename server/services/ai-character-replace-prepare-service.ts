@@ -7,7 +7,7 @@ import { buildPrepareArgs, isKnownPrepareArg, type PreparePlan } from "@/lib/ai/
 import { durationWithinTolerance, readCharacterReplaceMeta, referencePaths, selectedRangeOf, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
 import { buildReferenceImageArgs, isKnownReferenceImageArg, type ReferenceImagePlan } from "@/lib/ai/character-replace/ffmpeg";
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
-import { characterReplaceLimits } from "@/lib/ai/character-replace/validate";
+import { characterReplaceLimits, validatePhotoFraming } from "@/lib/ai/character-replace/validate";
 import { prepareReplacementAudio } from "@/server/services/ai-audio-prepare";
 import { ElevenLabsError } from "@/lib/ai/voice/elevenlabs";
 import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
@@ -170,6 +170,9 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     imageProbes.forEach((probe, i) => {
       if (!probe || !probe.width || !probe.height) throw new PrepareFailure("INVALID_INPUT", `reference image ${i + 1} could not be decoded`);
       if (Math.min(probe.width, probe.height) < limits.photo.minEdge) throw new PrepareFailure("INVALID_INPUT", `reference image ${i + 1} is ${probe.width}x${probe.height}, too small`);
+      // 2026-09-20 (brief §3, §14): the DECODED shape against the scope — a landscape photo cannot hold a standing person; refused before any provider call, refunded
+      const framing = validatePhotoFraming({ width: probe.width, height: probe.height }, mode.mode);
+      if (!framing.ok) throw new PrepareFailure("INVALID_INPUT", `reference image ${i + 1} is ${probe.width}x${probe.height}: ${framing.code} for ${mode.mode}`);
     });
     if (!imageProbe || !imageProbe.width || !imageProbe.height) throw new PrepareFailure("INVALID_INPUT", "the character image could not be decoded");
 

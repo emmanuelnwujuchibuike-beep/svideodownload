@@ -33,12 +33,13 @@
  */
 
 import {
-  FACE_ONLY_TIER_MAP,
   REPLACEMENT_MODE_COPY,
-  SKIN_FACE_TIER_MAP,
+  REPLACEMENT_MODES,
   isReplacementTierId,
+  tierMapFor,
   type ReplacementMode,
   type ReplacementTierId,
+  type TieredMode,
 } from "@/lib/ai/character-replace/modes";
 import {
   ELEVENLABS_DEFAULT_STS_MODEL,
@@ -189,6 +190,12 @@ export interface ReplacementTier {
  */
 export interface ReplacementModeConfig {
   enabled: boolean;
+  /**
+   * 2026-09-20 (the replacement-scope brief §6–§7): a per-video price for
+   * THIS scope, added to the per-second tier rate. Zero = none. Full
+   * Character keeps the top-level `basePriceCents`.
+   */
+  basePriceCents: number;
   tiers: readonly ReplacementTier[];
   maximumDurationSeconds: number;
   maximumUploadBytes: number;
@@ -354,7 +361,23 @@ export interface CharacterReplaceConfig {
    */
   modes: {
     face_only: ReplacementModeConfig;
+    /** The stored id of "Face + Head" (see modes.ts). */
     skin_face: ReplacementModeConfig;
+    /** Upper Body (2026-09-20): a body/appearance-capable model — Wan 2.2 by default — with its own tiers and prices. */
+    upper_body: ReplacementModeConfig;
+  };
+  /**
+   * ── PROVIDER COST PROTECTION (the replacement-scope brief §13) ──────────
+   * The retail per-second rate of a tier must clear the operator's estimated
+   * provider cost by `minimumMarginPercent`, and never fall under
+   * `minimumCustomerPriceCents` per video, unless `allowBelowMargin` is
+   * set on purpose. Read by the admin form (warnings and a refused save) and
+   * by the monitor; never by a member.
+   */
+  pricingGuard: {
+    minimumMarginPercent: number;
+    minimumCustomerPriceCents: number;
+    allowBelowMargin: boolean;
   };
   audio: CharacterReplaceAudioConfig;
   tts: CharacterReplaceTtsConfig;
@@ -587,6 +610,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   modes: {
     face_only: {
       enabled: true,
+      basePriceCents: 0,
       tiers: [
         // Part 9 §7: the member's words. What a tier means for THEM, never a sentence about the model.
         tier("standard", "Standard", "Clean face swap · fast", 15, true),
@@ -602,6 +626,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
     },
     skin_face: {
       enabled: true,
+      basePriceCents: 0,
       tiers: [
         tier("standard", "Standard", "720p · fast", 30, true),
         tier("high", "High", "720p · full quality", 60, true),
@@ -614,6 +639,32 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
       providerCostPerSecondUsdCents: 0,
       provider: { id: "replicate", model: "prunaai/p-video-replace" },
     },
+    /*
+      Upper Body (2026-09-20). The only body/appearance-capable model wired
+      today is Wan 2.2, so it is the default provider; the tiers are Wan's two
+      resolutions and the rates sit between Face + Head and Full Character.
+      Examples, like every default here — the admin's table is the price.
+    */
+    upper_body: {
+      enabled: true,
+      basePriceCents: 0,
+      tiers: [
+        tier("standard", "Standard", "480p · quick", 30, true),
+        tier("high", "High", "720p · recommended", 45, true),
+        tier("ultra", "Ultra", "Coming later", 70, false),
+      ],
+      maximumDurationSeconds: 60,
+      maximumUploadBytes: 50 * 1024 * 1024,
+      maximumPixels: PLATFORM_MAX_PIXELS,
+      maximumReferenceImages: 1,
+      providerCostPerSecondUsdCents: 0,
+      provider: { id: "replicate", model: "wan-video/wan-2.2-animate-replace" },
+    },
+  },
+  pricingGuard: {
+    minimumMarginPercent: 30,
+    minimumCustomerPriceCents: 0,
+    allowBelowMargin: false,
   },
   audio: {
     replacementEnabled: true,
@@ -871,7 +922,16 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
     modes: {
       face_only: normalizeModeConfig(modesRaw.face_only, d.modes.face_only, "face_only"),
       skin_face: normalizeModeConfig(modesRaw.skin_face, d.modes.skin_face, "skin_face"),
+      upper_body: normalizeModeConfig(modesRaw.upper_body, d.modes.upper_body, "upper_body"),
     },
+    pricingGuard: (() => {
+      const g = isRecord(raw.pricingGuard) ? raw.pricingGuard : {};
+      return {
+        minimumMarginPercent: num(g.minimumMarginPercent, d.pricingGuard.minimumMarginPercent, 0, 1_000),
+        minimumCustomerPriceCents: int(g.minimumCustomerPriceCents, d.pricingGuard.minimumCustomerPriceCents, 0, 100_000_000),
+        allowBelowMargin: bool(g.allowBelowMargin, d.pricingGuard.allowBelowMargin),
+      };
+    })(),
     audio: {
       replacementEnabled: bool(audioRaw.replacementEnabled, d.audio.replacementEnabled),
       maximumDurationSeconds: int(audioRaw.maximumDurationSeconds, d.audio.maximumDurationSeconds, 1, 30 * 60),
@@ -948,11 +1008,11 @@ function providerVoiceId(value: unknown, fallback: string): string {
  * (modes.ts) is forced OFF whatever was saved: there is no honest price for
  * a setting that changes nothing.
  */
-function normalizeModeConfig(raw: unknown, base: ReplacementModeConfig, mode: "face_only" | "skin_face"): ReplacementModeConfig {
+function normalizeModeConfig(raw: unknown, base: ReplacementModeConfig, mode: TieredMode): ReplacementModeConfig {
   const r = isRecord(raw) ? raw : {};
   const overrides = new Map<string, Record<string, unknown>>();
   if (Array.isArray(r.tiers)) for (const t of r.tiers) if (isRecord(t) && isReplacementTierId(t.id)) overrides.set(t.id, t);
-  const map = mode === "face_only" ? FACE_ONLY_TIER_MAP : SKIN_FACE_TIER_MAP;
+  const map = tierMapFor(mode);
   const tiers = base.tiers.map((b) => {
     const o = overrides.get(b.id);
     const merged = o
@@ -968,6 +1028,7 @@ function normalizeModeConfig(raw: unknown, base: ReplacementModeConfig, mode: "f
   const providerRaw = isRecord(r.provider) ? r.provider : {};
   return {
     enabled: bool(r.enabled, base.enabled),
+    basePriceCents: int(r.basePriceCents, base.basePriceCents, 0, 100_000_000),
     tiers,
     maximumDurationSeconds: int(r.maximumDurationSeconds, base.maximumDurationSeconds, 1, PLATFORM_MAX_DURATION_SECONDS),
     maximumUploadBytes: int(r.maximumUploadBytes, base.maximumUploadBytes, 1024 * 1024, PLATFORM_MAX_UPLOAD_BYTES),
@@ -995,6 +1056,8 @@ export interface ModeTierView {
 export interface ModeView {
   mode: ReplacementMode;
   enabled: boolean;
+  /** Per-video price of the scope (the replacement-scope brief §6). */
+  basePriceCents: number;
   tiers: readonly ModeTierView[];
   maximumDurationSeconds: number;
   maximumUploadBytes: number;
@@ -1015,6 +1078,7 @@ export function modeConfig(config: CharacterReplaceConfig, mode: ReplacementMode
     return {
       mode,
       enabled: config.enabled,
+      basePriceCents: config.basePriceCents,
       tiers: config.qualities.map((q) => ({
         id: q.id,
         label: q.label,
@@ -1034,10 +1098,11 @@ export function modeConfig(config: CharacterReplaceConfig, mode: ReplacementMode
     };
   }
   const m = config.modes[mode];
-  const map = mode === "face_only" ? FACE_ONLY_TIER_MAP : SKIN_FACE_TIER_MAP;
+  const map = tierMapFor(mode);
   return {
     mode,
     enabled: config.enabled && m.enabled,
+    basePriceCents: m.basePriceCents,
     tiers: m.tiers.map((t) => ({
       id: t.id,
       label: t.label,
@@ -1078,7 +1143,8 @@ export function pricingFingerprint(config: CharacterReplaceConfig): string {
     lipSyncEnabled: config.lipSyncEnabled,
     voice: [config.voice.newVoiceEnabled, config.voice.surchargePerSecondCents],
     // Part 6: the two new modes' tiers and the TTS prices are price-bearing too.
-    modes: (["face_only", "skin_face"] as const).map((m) => [m, config.modes[m].enabled, config.modes[m].tiers.map((t) => [t.id, t.perSecondCents, t.enabled])]),
+    // 2026-09-20: Upper Body and the per-scope base prices are price-bearing too.
+    modes: (["face_only", "skin_face", "upper_body"] as const).map((m) => [m, config.modes[m].enabled, config.modes[m].basePriceCents, config.modes[m].tiers.map((t) => [t.id, t.perSecondCents, t.enabled])]),
     tts: [config.tts.enabled, config.tts.perRequestCents, config.tts.perCharacterCents],
   });
 }
@@ -1181,6 +1247,16 @@ export interface CharacterReplacePublicMode {
   maximumUploadBytes: number;
   maximumPixels: number;
   maximumReferenceImages: number;
+  /**
+   * 2026-09-20 (the replacement-scope brief §2, §3): the price the selector
+   * shows beside the scope — a sentence the SERVER formatted from the
+   * cheapest enabled tier and the scope's per-video price ("from $0.15/sec
+   * + $1.00 per video"), never a rate a browser could compute with (Part 3's
+   * rule) — and the photo guidance the photo step shows once the scope is
+   * chosen. The provider behind the scope is not here.
+   */
+  priceLine: string | null;
+  photo: { best: string; framing: "portrait" | "head_shoulders" | "half_body" | "full_body" };
 }
 
 /**
@@ -1197,6 +1273,13 @@ export interface VoiceCapabilities {
   voiceChangeConfigured: boolean;
 }
 
+/** "from $0.15/sec", plus "+ $1.00 per video" when the scope has a per-video price. Formatted here so no rate leaves the server. */
+function modePriceLine(fromPerSecondCents: number, basePriceCents: number, symbol: string): string {
+  const money = (cents: number) => `${symbol}${(cents / 100).toFixed(2)}`;
+  const perSecond = `from ${money(fromPerSecondCents)}/sec`;
+  return basePriceCents > 0 ? `${perSecond} + ${money(basePriceCents)} per video` : perSecond;
+}
+
 export function publicCharacterReplaceConfig(
   config: CharacterReplaceConfig,
   currency: { code: string; symbol: string },
@@ -1205,9 +1288,11 @@ export function publicCharacterReplaceConfig(
 ): CharacterReplacePublicConfig {
   const on = config.qualities.filter((q) => q.enabled);
   const balanced = on.find((q) => q.id === "720p") ?? on[0]!;
-  const modes: CharacterReplacePublicMode[] = (["face_only", "skin_face", "full_character"] as const).map((id) => {
+  // The customer's order (the replacement-scope brief §2): narrowest scope first.
+  const modes: CharacterReplacePublicMode[] = REPLACEMENT_MODES.map((id) => {
     const view = modeConfig(config, id);
     const copy = REPLACEMENT_MODE_COPY[id];
+    const offered = view.tiers.filter((t) => t.enabled && t.supported);
     return {
       id,
       label: copy.label,
@@ -1220,6 +1305,8 @@ export function publicCharacterReplaceConfig(
       maximumUploadBytes: view.maximumUploadBytes,
       maximumPixels: view.maximumPixels,
       maximumReferenceImages: view.maximumReferenceImages,
+      priceLine: offered.length ? modePriceLine(Math.min(...offered.map((t) => t.perSecondCents)), view.basePriceCents, currency.symbol) : null,
+      photo: { best: copy.photo.best, framing: copy.photo.framing },
     };
   });
   const providerLanguages = new Set(ttsSupportedLanguagesFor(config.tts.model));

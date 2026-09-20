@@ -45,7 +45,8 @@ export default async function CharacterReplaceResultPage({ params }: { params: P
 
   return (
     <CharacterReplaceWorkspace
-      basePath="/studio/ai/character-replace"
+      basePath="/studio/ai/character-replace/create"
+      modeHref="/studio/ai/character-replace"
       aiHref="/studio/ai"
       historyHref="/studio/ai/history"
       initialJobId={id}

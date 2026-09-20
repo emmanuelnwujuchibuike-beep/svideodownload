@@ -154,7 +154,7 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
     const paused = at('if (!config.ops.processingEnabled) return fail("CR_BUSY");');
     const breaker = at("const { open } = await providerHealthFor(models);");
     const claim = at("const claim = await claimJobStart({");
-    const reserve = at("balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot });");
+    const reserve = at("balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });");
     const revert = at("const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});");
     const handoff = at("const handoff = await dispatchPreparation(job.id);");
     expect(maintenance).toBeLessThan(paused);

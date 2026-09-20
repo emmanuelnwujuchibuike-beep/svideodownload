@@ -74,8 +74,9 @@ describe("nothing floats over the workspace's action bar", () => {
 });
 
 describe("the words a first-time user reads", () => {
-  it("steps are Character → Video → Quality → Voice → Review", () => {
-    expect(WORKSPACE_STEPS.map((s) => s.label)).toEqual(["Character", "Video", "Quality", "Voice", "Review"]);
+  it("steps are Replace → Photo → Video → Quality → Voice → Review (the scope on its own page since 2026-09-20)", () => {
+    expect(WORKSPACE_STEPS.map((s) => s.label)).toEqual(["Replace", "Photo", "Video", "Quality", "Voice", "Review"]);
+    expect(WORKSPACE_STEPS[0]?.title).toBe("What do you want to replace?");
   });
   it("no provider or model name on the entry card, the workspace or the result", () => {
     for (const f of ["features/ai/character-replace/character-replace-entry.tsx", "features/ai/character-replace/step-settings.tsx", "features/ai/character-replace/step-voice.tsx", "features/ai/character-replace/result.tsx", "features/ai/character-replace/processing.tsx"]) {

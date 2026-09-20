@@ -273,8 +273,8 @@ export function stageSteps(input: {
   mode: ReplacementMode;
 }): StageStep[] {
   const stages = input.pipeline?.stages ?? ["replace", "finalize"];
-  const replaceLabel = input.mode === "face_only" ? "Replacing the face" : input.mode === "skin_face" ? "Transferring the identity" : "Replacing the character";
-  const replaceDone = input.mode === "face_only" ? "Face replaced" : input.mode === "skin_face" ? "Identity transferred" : "Character replacement complete";
+  const replaceLabel = input.mode === "face_only" ? "Replacing the face" : input.mode === "skin_face" ? "Replacing the face and head" : input.mode === "upper_body" ? "Replacing the upper body" : "Replacing the character";
+  const replaceDone = input.mode === "face_only" ? "Face replaced" : input.mode === "skin_face" ? "Face and head replaced" : input.mode === "upper_body" ? "Upper body replaced" : "Character replacement complete";
   const steps: StageStep[] = [{ key: "prepare", label: "Preparing your video", doneLabel: "Video prepared", state: "todo" }];
   for (const s of stages) {
     if (s === "voice") steps.push({ key: "voice", label: "Preparing voice", doneLabel: "Voice ready", state: "todo" });

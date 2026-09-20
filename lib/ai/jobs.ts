@@ -605,7 +605,7 @@ export interface AiJobView {
       names and their states only. Never a prediction id, a model name, a
       path or a URL; never the dialogue.
     */
-    mode: "face_only" | "skin_face" | "full_character";
+    mode: "face_only" | "skin_face" | "upper_body" | "full_character";
     voiceSource: "upload" | "tts" | null;
     /** The quality tier's per-second rate the price was made from, minor units. Null before /start. */
     rateCents: number | null;
@@ -699,7 +699,7 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
   const trim = m.trim ?? null;
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const charged = row.charged_cents ?? null;
-  const mode = m.mode === "face_only" || m.mode === "skin_face" ? m.mode : "full_character";
+  const mode = m.mode === "face_only" || m.mode === "skin_face" || m.mode === "upper_body" ? m.mode : "full_character";
   const audio = (m.audio ?? null) as { source?: unknown } | null;
   const pipelineRaw = (m.pipeline ?? null) as { stages?: unknown; current?: unknown; records?: Record<string, { status?: unknown }> } | null;
   const stageIds = ["voice", "replace", "lipsync", "finalize"] as const;

@@ -7,6 +7,7 @@ import {
   getCharacterReplaceBalance,
   getCharacterReplaceConfig,
   getCharacterReplaceQuote,
+  preflightCharacterReplaceJob,
   readCachedCharacterReplaceBalance,
   startCharacterReplaceJob,
   takeTopupReturnReference,
@@ -16,13 +17,14 @@ import { newClientRequestId, uploadSource } from "@/lib/ai/client";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceAnyQuality, QuoteInput } from "@/lib/ai/character-replace/pricing";
-import type { CharacterReplaceBalance } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceBalance, CharacterReplacePreflight } from "@/lib/ai/character-replace/types";
 import { validateAudioFile } from "@/lib/ai/voice/audio-validate";
 import {
   characterReplaceLimits,
   inputReadiness,
   selectedRangeMs,
   validatePhotoFile,
+  validatePhotoFraming,
   validatePhotoPixels,
   validateVideoFile,
   validateVideoMetadata,
@@ -35,6 +37,7 @@ import {
   type WorkspaceState,
 } from "@/lib/ai/character-replace/workspace";
 import { readAudioDuration, readImageSize, readVideoMetadata } from "@/features/ai/character-replace/read-media";
+import { track } from "@/lib/analytics/client";
 import { haptic } from "@/lib/motion/haptics";
 
 /**
@@ -68,13 +71,26 @@ import { haptic } from "@/lib/motion/haptics";
  * its URL immediately; closing the page revokes whatever is left.
  */
 
-/** The browser's own phases before the server has a row — the only measured progress there is. */
+/**
+ * The browser's own phases before the server has a row — the only measured
+ * progress there is — and, since 2026-09-20, the PREFLIGHT between the
+ * uploads and Start (the media brief, §11–§12):
+ *
+ *   preparing → uploading → checking → ready → (the member confirms) → starting
+ *                                    ↘ attention (an issue, with the words and the file to change)
+ *
+ * Nothing is reserved or charged until `starting`, and `starting` needs the
+ * token `ready` was handed.
+ */
 export type LaunchState =
   | { phase: "idle" }
   | { phase: "preparing" }
   | { phase: "uploading"; progress: number }
+  | { phase: "checking"; jobId: string }
+  | { phase: "ready"; jobId: string; preflight: CharacterReplacePreflight; token: string }
+  | { phase: "attention"; jobId: string; preflight: CharacterReplacePreflight }
   | { phase: "starting" }
-  | { phase: "error"; code: string; message: string };
+  | { phase: "error"; code: string; message: string; jobId?: string };
 
 export interface WorkspaceLoads {
   config: CharacterReplacePublicConfig | null;
@@ -91,8 +107,9 @@ export interface WorkspaceLoads {
   topupNotice: string | null;
 }
 
-export function useCharacterReplaceWorkspace() {
-  const [state, dispatch] = useReducer(workspaceReducer, INITIAL_STATE);
+export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMode | null } = {}) {
+  // 2026-09-20: the scope chosen on its own page arrives as the initial mode; the workspace opens on the photo step with it.
+  const [state, dispatch] = useReducer(workspaceReducer, opts.initialMode ?? null, (mode) => (mode ? { ...INITIAL_STATE, project: { ...INITIAL_STATE.project, mode } } : INITIAL_STATE));
   const [loads, setLoads] = useState<WorkspaceLoads>({
     config: null,
     available: null,
@@ -107,6 +124,9 @@ export function useCharacterReplaceWorkspace() {
   });
 
   const alive = useRef(true);
+  // the current tier, readable inside the config effect without re-running it on every change
+  const qualityRef = useRef(state.project.settings.quality);
+  qualityRef.current = state.project.settings.quality;
   /*
     Every object URL this hook has minted and not yet revoked. A ref, because
     the unmount cleanup below runs with the render it closed over, and a URL
@@ -177,6 +197,12 @@ export function useCharacterReplaceWorkspace() {
               : null,
         }));
       else setLoads((l) => ({ ...l, configError: res.error, available: false }));
+      // 2026-09-20: a scope chosen on its own page opens the workspace before the config is known — the tier becomes that scope's default once it is.
+      if (res.ok && opts.initialMode) {
+        const m = res.config.modes.find((x) => x.id === opts.initialMode);
+        const tier = m?.defaultTier;
+        if (m && tier && !m.tiers.some((t) => t.id === qualityRef.current && t.enabled && t.supported)) dispatch({ type: "quality", quality: tier as CharacterReplaceAnyQuality });
+      }
     })();
 
     /*
@@ -203,6 +229,7 @@ export function useCharacterReplaceWorkspace() {
       }
       await loadBalance();
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `opts.initialMode` is fixed for the life of the workspace (the create route's query)
   }, [loadBalance]);
 
   /* ───────────────────────── the quote (Part 3) ────────────────────────── */
@@ -324,13 +351,21 @@ export function useCharacterReplaceWorkspace() {
         dispatch({ type: pixels.ok ? "photo/error" : pixels.code === "invalid-image" ? "photo/error" : "photo/invalid", code: pixels.ok ? "invalid-image" : pixels.code });
         return;
       }
+      // 2026-09-20 (brief §3, §14): the shape must fit the chosen scope — refused here, with the example one tap away, before any upload
+      const framing = validatePhotoFraming(size, state.project.mode);
+      if (!framing.ok) {
+        haptic("medium");
+        release(objectUrl);
+        dispatch({ type: "photo/invalid", code: framing.code });
+        return;
+      }
       haptic("light");
       dispatch({
         type: "photo/ready",
         asset: { file, objectUrl, width: size.width, height: size.height, size: file.size, mimeType: file.type, name: file.name },
       });
     },
-    [limits, mint, release, state.project.character?.objectUrl],
+    [limits, mint, release, state.project.character?.objectUrl, state.project.mode],
   );
 
   const clearPhoto = useCallback(() => {
@@ -348,6 +383,8 @@ export function useCharacterReplaceWorkspace() {
       const keep = Math.max(0, (m?.maximumReferenceImages ?? 1) - 1);
       for (const r of state.project.references.slice(keep)) release(r.objectUrl);
       dispatch({ type: "mode", mode, defaultQuality: (m?.defaultTier as CharacterReplaceAnyQuality | null | undefined) ?? null, maxReferences: m?.maximumReferenceImages ?? 1 });
+      // §20 (the replacement-scope brief): which scope members reach for — the id only.
+      track("character_replace_mode_selected", { mode });
     },
     [loads.config?.modes, release, state.project.references],
   );
@@ -514,11 +551,33 @@ export function useCharacterReplaceWorkspace() {
   */
   const retryOf = useRef<string | null>(null);
 
+  /**
+   * The preflight for a created, uploaded job (2026-09-20): one call, one
+   * verdict. A pass carries the token Start needs; an issue carries the
+   * words and the file to change; a check that could not run is an error
+   * the member can retry — none of the three has charged anything.
+   */
+  const runPreflight = useCallback(async (jobId: string): Promise<void> => {
+    setLaunch({ phase: "checking", jobId });
+    const checked = await preflightCharacterReplaceJob(jobId);
+    if (!alive.current) return;
+    if (!checked.ok) {
+      setLaunch({ phase: "error", code: checked.code, message: checked.error, jobId });
+      return;
+    }
+    if (checked.preflight.valid && checked.token) {
+      haptic("selection");
+      setLaunch({ phase: "ready", jobId, preflight: checked.preflight, token: checked.token });
+    } else {
+      haptic("medium");
+      setLaunch({ phase: "attention", jobId, preflight: checked.preflight });
+    }
+  }, []);
+
   const start = useCallback(async (): Promise<string | null> => {
     const photo = state.project.character;
     const video = state.project.video;
     if (!photo || !video || !state.project.consent || state.pricing.status !== "quoted") return null;
-    const snapshot = state.pricing.snapshot;
     // Dimensions the browser could not read are refused here rather than sent as zeros; the worker measures the real ones anyway.
     if (!photo.width || !photo.height || !video.metadata.width || !video.metadata.height || !video.metadata.durationMs) {
       setLaunch({ phase: "error", code: "INVALID_INPUT", message: "We couldn't read the size of your files. Choose them again." });
@@ -604,12 +663,31 @@ export function useCharacterReplaceWorkspace() {
       return null;
     }
 
-    /* the start — the signed quote, the trim, the consent; the server does the rest */
+    /* "Checking your media…" — the worker measures both files for the mode; nothing is charged by this */
+    await runPreflight(created.job.id);
+    return null;
+  }, [launch.phase, runPreflight, state.pricing, state.project]);
+
+  /**
+   * The member confirmed a PASS: the reservation and the start (2026-09-20).
+   * Only from `ready`, only with the token the preflight handed over; the
+   * server verifies both before a cent moves.
+   */
+  const confirm = useCallback(async (): Promise<string | null> => {
+    if (launch.phase !== "ready") return null;
+    const photo = state.project.character;
+    const video = state.project.video;
+    if (!photo || !video || !state.project.consent || state.pricing.status !== "quoted") return null;
+    const snapshot = state.pricing.snapshot;
+    const voice = state.project.voice;
+    const jobId = launch.jobId;
+    const preflightToken = launch.token;
     setLaunch({ phase: "starting" });
     const range = selectedRangeMs(state.project);
-    const sourceMs = Math.round(video.metadata.durationMs);
+    const sourceMs = Math.round(video.metadata.durationMs ?? 0);
     const trimmed = !!state.project.settings.trim && range !== null && (range.startMs > 0 || range.endMs < sourceMs);
-    const started = await startCharacterReplaceJob(created.job.id, {
+    const started = await startCharacterReplaceJob(jobId, {
+      preflightToken,
       quote: {
         id: snapshot.id,
         product: "character_replace",
@@ -645,7 +723,12 @@ export function useCharacterReplaceWorkspace() {
         setRetry((n) => n + 1);
       }
       if (started.code === "CR_BALANCE_REQUIRED") void loadBalance();
-      setLaunch({ phase: "error", code: started.code, message: started.error });
+      // the pass expired or the files changed under it: check again (a stored pass answers at once)
+      if (started.code === "PREFLIGHT_REQUIRED") {
+        await runPreflight(jobId);
+        return null;
+      }
+      setLaunch({ phase: "error", code: started.code, message: started.error, jobId });
       return null;
     }
     requestId.current = null;
@@ -659,7 +742,30 @@ export function useCharacterReplaceWorkspace() {
       /* a refused write only hides the shortcut */
     }
     return started.job.id;
-  }, [launch.phase, loadBalance, state.pricing, state.project]);
+  }, [launch, loadBalance, state.pricing, state.project]);
+
+  /** Back to the file that needs attention: the job is left behind (a new one is created next time) and the file is cleared. */
+  const replaceMedia = useCallback((target: "reference" | "video" | "both") => {
+    requestId.current = null;
+    setLaunch({ phase: "idle" });
+    if (target === "video") {
+      dispatch({ type: "video/clear" });
+      dispatch({ type: "go", step: "video" });
+    } else {
+      dispatch({ type: "photo/clear" });
+      dispatch({ type: "go", step: "photo" });
+    }
+  }, []);
+
+  /** "Try again" after a check that could not run (nothing was charged). */
+  const retryCheck = useCallback(async () => {
+    if (launch.phase === "error" && launch.jobId) await runPreflight(launch.jobId);
+  }, [launch, runPreflight]);
+
+  /** From `ready`, back to the review step without starting — the job waits, unpaid. */
+  const cancelReady = useCallback(() => {
+    setLaunch({ phase: "idle" });
+  }, []);
 
   /**
    * "Try again" after a failure (§7 / §29): the draft — both files, the
@@ -706,6 +812,10 @@ export function useCharacterReplaceWorkspace() {
     dismissTopupNotice,
     launch,
     start,
+    confirm,
+    replaceMedia,
+    retryCheck,
+    cancelReady,
     retryFrom,
     clearLaunchError,
   };

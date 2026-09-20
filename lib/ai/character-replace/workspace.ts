@@ -11,7 +11,7 @@ import type {
   SourceVideo,
   VoiceSettings,
 } from "@/lib/ai/character-replace/types";
-import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/validate";
+import { inputReadiness, selectedRangeMs, validatePhotoFraming } from "@/lib/ai/character-replace/validate";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -49,7 +49,7 @@ import { inputReadiness, selectedRangeMs } from "@/lib/ai/character-replace/vali
  * same rule.
  */
 
-export type WorkspaceStep = "photo" | "video" | "settings" | "voice" | "review";
+export type WorkspaceStep = "mode" | "photo" | "video" | "settings" | "voice" | "review";
 
 export const WORKSPACE_STEPS: readonly { id: WorkspaceStep; label: string; title: string }[] = [
   /*
@@ -57,7 +57,14 @@ export const WORKSPACE_STEPS: readonly { id: WorkspaceStep; label: string; title
     the engineering names; a first-time user reads Character → Video →
     Quality → Voice → Review and knows where they are.
   */
-  { id: "photo", label: "Character", title: "Your character" },
+  /*
+    2026-09-20 (owner): the replacement scope is its OWN page and its own
+    step — "What do you want to replace?" — reached at the tool's root
+    route, with the four scopes and their prices; the workspace opens on the
+    photo step with the scope in hand. On the stepper it is step 1, done.
+  */
+  { id: "mode", label: "Replace", title: "What do you want to replace?" },
+  { id: "photo", label: "Photo", title: "Your photo" },
   { id: "video", label: "Video", title: "Your video" },
   { id: "settings", label: "Quality", title: "Quality & trim" },
   { id: "voice", label: "Voice", title: "Audio & voice" },
@@ -170,12 +177,21 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       if (action.mode === state.project.mode) return state;
       // The files stay; the tier becomes the new mode's default; extra references beyond the new maximum go.
       const references = state.project.references.slice(0, Math.max(0, action.maxReferences - 1));
+      /*
+        2026-09-20 (the replacement-scope brief §3): a photo that fitted the OLD
+        scope may not fit the new one — a portrait chosen for Face Only cannot
+        stand in for a full body. It is dropped, and the photo step asks again
+        with the new scope's guidance, rather than carried into a refusal at Start.
+      */
+      const character = state.project.character && state.project.character.width && state.project.character.height && !validatePhotoFraming({ width: state.project.character.width, height: state.project.character.height }, action.mode).ok ? null : state.project.character;
       return {
         ...state,
         pricing: markStale(state.pricing),
+        photo: character ? state.photo : { status: "empty" },
         project: {
           ...state.project,
           mode: action.mode,
+          character,
           references,
           settings: { ...state.project.settings, quality: action.defaultQuality ?? state.project.settings.quality },
         },
@@ -400,6 +416,7 @@ export function videoFits(project: CharacterReplaceProject, config: CharacterRep
 /** Whether a step may be opened, given what has been provided so far. */
 export function canEnterStep(project: CharacterReplaceProject, step: WorkspaceStep): boolean {
   switch (step) {
+    case "mode":
     case "photo":
       return true;
     case "video":

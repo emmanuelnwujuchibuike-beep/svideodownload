@@ -42,12 +42,21 @@ const PHOTO_DIRECTION: Record<ReplacementMode, { title: string; lines: string[] 
     ],
   },
   skin_face: {
-    title: "For the best Skin + Face result, upload 1–3 CLEAR photos of the SAME person",
+    title: "For the best Face + Head result, upload 1–3 CLEAR head-and-shoulders photos of the SAME person",
     lines: [
-      "Face clearly visible in every photo; different angles (front, three-quarter) help.",
+      "Head and shoulders in frame, face and hair clearly visible; different angles (front, three-quarter) help.",
       "Show some neck, arms or shoulders so the skin tone carries across.",
-      "The clothes in the video stay — the photos only supply the identity and the skin.",
+      "The body and clothes in the video stay — the photos only supply the face, head and skin.",
       "One person only across all the photos. Good light, sharp, no filters.",
+    ],
+  },
+  upper_body: {
+    title: "For the best Upper Body result, upload a CLEAR chest- or waist-up photo",
+    lines: [
+      "Head to waist in ONE photo, facing the camera, on a plain background — the face AND the top you wear both go into the video.",
+      "Wear the top you want in the video. Good light, sharp, no filters, no sunglasses or hat.",
+      "NOT a face crop and NOT a full-length photo — the framing should match a waist-up video.",
+      "One person only.",
     ],
   },
 };
@@ -69,6 +78,15 @@ const VIDEO_DIRECTION: Record<ReplacementMode, { title: string; lines: string[] 
       "Avoid faces turned fully sideways, hands over the face, fast motion blur and heavy shadow.",
       "The video's body, clothes, background and camera stay exactly as they are.",
       "Keep it short — trim to the part that matters.",
+    ],
+  },
+  upper_body: {
+    title: "For the best result, use a video framed from the WAIST UP",
+    lines: [
+      "ONE person, chest or waist up, facing the camera most of the time, steady camera, good light.",
+      "What the video shows of the person is what gets replaced — on a full-length video the whole visible person changes.",
+      "Avoid crowds, mirrors, fast cuts, heavy motion blur and very dark scenes.",
+      "Keep it short — trim to the part that matters. Choose High (720p) for a clean result.",
     ],
   },
   skin_face: {

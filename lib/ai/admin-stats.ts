@@ -180,7 +180,7 @@ export interface CharacterReplaceAdminJob {
   /** Past the stage's deadline, or a finalization retry waiting with no lease. */
   stuck: boolean;
   /* ── Part 6: which replacement, which provider stage, what it cost us ── */
-  mode: "face_only" | "skin_face" | "full_character";
+  mode: "face_only" | "skin_face" | "upper_body" | "full_character";
   /** The model of the CURRENT stage's prediction (`ai_jobs.model`). */
   model: string | null;
   /** "voice" | "replace" | "lipsync" | "finalize" — the pipeline's current stage, or null for a single-stage row. */
@@ -274,7 +274,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
       const audio = (m.audio ?? null) as { source?: unknown } | null;
       const cost = (m.provider_cost_estimate ?? null) as { totalUsdCents?: unknown } | null;
       return {
-        mode: m.mode === "face_only" || m.mode === "skin_face" ? m.mode : "full_character",
+        mode: m.mode === "face_only" || m.mode === "skin_face" || m.mode === "upper_body" ? m.mode : "full_character",
         model: r.model,
         stage: typeof pipeline?.current === "string" ? pipeline.current : null,
         voiceSource: settings.voiceMode === "new_voice" && (audio?.source === "upload" || audio?.source === "tts") ? audio.source : null,

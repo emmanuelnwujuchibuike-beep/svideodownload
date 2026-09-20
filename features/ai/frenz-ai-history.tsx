@@ -24,6 +24,7 @@ import {
   resultAvailability,
   type AiHistoryTone,
 } from "@/lib/ai/history";
+import { REPLACEMENT_MODES, replacementModeLabel, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { formatRelative } from "@/lib/i18n/format";
 import Link from "next/link";
@@ -156,7 +157,18 @@ export function FrenzAIHistory({
   */
   const features = useMemo(() => Array.from(new Set(history.jobs.map((j) => j.feature))), [history.jobs]);
   const [featureFilter, setFeatureFilter] = useState<"all" | "ai_clean" | "ai_character_replace">("all");
-  const visibleJobs = useMemo(() => (featureFilter === "all" ? history.jobs : history.jobs.filter((j) => j.feature === featureFilter)), [featureFilter, history.jobs]);
+  /*
+    2026-09-20 (the replacement-scope brief §18): a second chip row, by
+    SCOPE — All · Face Only · Face + Head · Upper Body · Full Character —
+    drawn only for scopes the loaded list actually holds. Client-side over
+    the page, like the tool filter.
+  */
+  const modes = useMemo(() => Array.from(new Set(history.jobs.map((j) => j.characterReplace?.mode).filter((m): m is ReplacementMode => !!m))), [history.jobs]);
+  const [modeFilter, setModeFilter] = useState<"all" | ReplacementMode>("all");
+  const visibleJobs = useMemo(
+    () => history.jobs.filter((j) => (featureFilter === "all" || j.feature === featureFilter) && (modeFilter === "all" || j.characterReplace?.mode === modeFilter)),
+    [featureFilter, modeFilter, history.jobs],
+  );
 
   const live = openJob ? (history.jobs.find((j) => j.id === openJob.id) ?? openJob) : null;
 
@@ -287,6 +299,28 @@ export function FrenzAIHistory({
                 )}
               >
                 {label}
+              </button>
+            ))}
+        </div>
+      ) : null}
+
+      {modes.length > 1 && featureFilter !== "ai_clean" ? (
+        <div role="tablist" aria-label="Filter by replacement type" className="mt-2 flex flex-wrap gap-1.5">
+          {(["all", ...REPLACEMENT_MODES] as const)
+            .filter((id) => id === "all" || modes.includes(id))
+            .map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={modeFilter === id}
+                onClick={() => setModeFilter(id)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
+                  modeFilter === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {id === "all" ? "All types" : replacementModeLabel(id)}
               </button>
             ))}
         </div>

@@ -1,9 +1,11 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, PersonStanding, Plus, ScanFace, Shirt, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CharacterReplacePreflightPanel } from "@/features/ai/character-replace/preflight-panel";
 import { CharacterReplaceProcessing } from "@/features/ai/character-replace/processing";
 import { CharacterReplaceResultScreen } from "@/features/ai/character-replace/result";
 import { CharacterReplacePhotoStep } from "@/features/ai/character-replace/step-photo";
@@ -16,6 +18,7 @@ import { useCharacterReplaceWorkspace } from "@/features/ai/character-replace/us
 import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
+import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceResult, ProcessingJob } from "@/lib/ai/character-replace/types";
 import { inputReadiness } from "@/lib/ai/character-replace/validate";
 import {
@@ -71,6 +74,8 @@ export function CharacterReplaceWorkspace({
   aiHref = "/ai",
   historyHref = "/ai/history",
   initialJobId = null,
+  initialMode = null,
+  modeHref,
 }: {
   /** This page's own path — where Paystack returns to. Allow-listed server-side. */
   basePath?: string;
@@ -78,8 +83,13 @@ export function CharacterReplaceWorkspace({
   historyHref?: string;
   /** Part 7: the job this page was opened FOR (the result route). Ownership was checked server-side before render. */
   initialJobId?: string | null;
+  /** 2026-09-20: the scope chosen on its own page (`?mode=` on the create route). The workspace opens on the photo step with it. */
+  initialMode?: ReplacementMode | null;
+  /** The scope page — where "Change", "Replace" and stepper step 1 go. */
+  modeHref: string;
 }) {
-  const ws = useCharacterReplaceWorkspace();
+  const router = useRouter();
+  const ws = useCharacterReplaceWorkspace({ initialMode });
   const { state, loads, send } = ws;
   const { project, step } = state;
 
@@ -109,7 +119,17 @@ export function CharacterReplaceWorkspace({
   }, []);
   const watch = useJobWatch(watchedJobId);
 
-  const goTo = useCallback((next: WorkspaceStep) => send({ type: "go", step: next }), [send]);
+  const goTo = useCallback(
+    (next: WorkspaceStep) => {
+      // 2026-09-20: the scope lives on its own page — step 1 is a navigation, not a reducer step.
+      if (next === "mode") {
+        router.push(modeHref);
+        return;
+      }
+      send({ type: "go", step: next });
+    },
+    [modeHref, router, send],
+  );
   const index = stepIndex(step);
   const config = loads.config;
 
@@ -153,9 +173,30 @@ export function CharacterReplaceWorkspace({
 
   const onStart = useCallback(async () => {
     haptic("medium");
+    // create → upload → "Checking your media…"; the reservation waits for the member's confirm below
     const id = await ws.start();
     if (id) setWatchedJobId(id);
   }, [ws]);
+  const onConfirm = useCallback(async () => {
+    const id = await ws.confirm();
+    if (id) setWatchedJobId(id);
+  }, [ws]);
+  /*
+    2026-09-20: the preflight screen (media brief §11) — between the uploads
+    and the start. Its own screen, not a step: the steps are behind it, the
+    processing screen is after it, and nothing on it moves money except the
+    one confirm button.
+  */
+  const preflightState =
+    ws.launch.phase === "checking"
+      ? ({ phase: "checking" } as const)
+      : ws.launch.phase === "ready"
+        ? ({ phase: "ready", preflight: ws.launch.preflight, snapshot: state.pricing.status === "quoted" ? state.pricing.snapshot : null, balanceCents: loads.balance?.balanceCents ?? null } as const)
+        : ws.launch.phase === "attention"
+          ? ({ phase: "attention", preflight: ws.launch.preflight } as const)
+          : ws.launch.phase === "error" && ws.launch.jobId
+            ? ({ phase: "unavailable", message: ws.launch.message } as const)
+            : null;
 
   /* ─────────────────────────── which screen ───────────────────────────── */
 
@@ -245,11 +286,29 @@ export function CharacterReplaceWorkspace({
             onDeleted={() => setDeletedLocally(true)}
             className="mt-3"
           />
+        ) : preflightState ? (
+          <>
+            <Headline title="Checking your" highlight="media." subtitle={null} />
+            <CharacterReplacePreflightPanel
+              state={preflightState}
+              onConfirm={() => void onConfirm()}
+              onReplace={(target) => {
+                haptic("selection");
+                ws.replaceMedia(target);
+              }}
+              onRetry={() => void ws.retryCheck()}
+              onBack={() => {
+                haptic("selection");
+                if (ws.launch.phase === "error") ws.clearLaunchError();
+                else ws.cancelReady();
+              }}
+            />
+          </>
         ) : processing ? (
           <>
             <Headline
-              title={processing.job?.characterReplace?.mode === "face_only" ? "Replacing the" : processing.job?.characterReplace?.mode === "skin_face" ? "Transferring the" : "Replacing the"}
-              highlight={processing.job?.characterReplace?.mode === "face_only" ? "face." : processing.job?.characterReplace?.mode === "skin_face" ? "identity." : "character."}
+              title="Replacing the"
+              highlight={processing.job?.characterReplace?.mode === "face_only" ? "face." : processing.job?.characterReplace?.mode === "skin_face" ? "face and head." : processing.job?.characterReplace?.mode === "upper_body" ? "upper body." : "character."}
               subtitle={null}
             />
             <CharacterReplaceProcessing
@@ -276,13 +335,9 @@ export function CharacterReplaceWorkspace({
           </>
         ) : (
           <>
-            <Headline
-              title="Put yourself into"
-              highlight="your video."
-              subtitle="Replace the person in a video with your own likeness while preserving the original movement, expressions, scene and camera motion."
-            />
+            <StepHeader title={WORKSPACE_STEPS[index]?.title ?? ""} mode={project.mode} modeHref={modeHref} />
 
-            <CharacterReplaceStepper current={step} furthest={furthestStep(project)} onGo={goTo} className="mt-6" />
+            <CharacterReplaceStepper current={step} furthest={furthestStep(project)} onGo={goTo} className="mt-5" />
             {loads.processingNotice ? (
               /* Part 8 §2, §30: the operator's notice, shown before a single file is chosen — not only at Start. */
               <div role="status" className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px] font-medium leading-relaxed text-foreground">
@@ -291,20 +346,18 @@ export function CharacterReplaceWorkspace({
             ) : null}
 
             <section aria-labelledby="cr-step-title" className="mt-6">
-              <h2 id="cr-step-title" className="text-[19px] font-bold tracking-[-0.02em]">
+              <h2 id="cr-step-title" className="sr-only">
                 {WORKSPACE_STEPS[index]?.title}
               </h2>
 
-              <div className="mt-4">
+              <div>
                 {step === "photo" ? (
                   <CharacterReplacePhotoStep
                     mode={project.mode}
-                    config={config}
                     asset={project.character}
                     references={project.references}
                     maxReferences={config?.modes.find((m) => m.id === project.mode)?.maximumReferenceImages ?? 1}
                     slot={state.photo}
-                    onMode={ws.setMode}
                     onPick={(f) => void ws.pickPhoto(f)}
                     onClear={ws.clearPhoto}
                     onAddReference={(f) => void ws.addReference(f)}
@@ -414,7 +467,7 @@ export function CharacterReplaceWorkspace({
                   "max(0.75rem, calc(0.75rem + env(safe-area-inset-bottom, 0px) - var(--frenz-bottomnav-h, 0px)))",
               }}
             >
-              {index > 0 ? (
+              {index > 1 ? (
                 <button
                   type="button"
                   onClick={() => goTo(WORKSPACE_STEPS[index - 1]!.id)}
@@ -424,9 +477,9 @@ export function CharacterReplaceWorkspace({
                   Back
                 </button>
               ) : (
-                <Link href={aiHref} prefetch={false} className="btn-lux min-h-[48px] border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground">
+                <Link href={modeHref} className="btn-lux min-h-[48px] border border-border/70 bg-card text-foreground hover:border-foreground/25">
                   <ArrowLeft className="h-4 w-4" aria-hidden />
-                  Frenz AI
+                  Replace
                 </Link>
               )}
 
@@ -503,6 +556,39 @@ export function CharacterReplaceWorkspace({
 }
 
 /* ───────────────────────────── pieces ────────────────────────────────────── */
+
+/**
+ * 2026-09-20: the step pages' header once the scope has its own page — the
+ * eyebrow, the step's title, and the chosen scope as a chip that goes back
+ * to change it. Compact on purpose: the hero lives on the scope page.
+ */
+const SCOPE_ICON: Record<ReplacementMode, typeof ScanFace> = { face_only: ScanFace, skin_face: UserRound, upper_body: Shirt, full_character: PersonStanding };
+
+function StepHeader({ title, mode, modeHref }: { title: string; mode: ReplacementMode; modeHref: string }) {
+  const Icon = SCOPE_ICON[mode];
+  return (
+    <header className="mt-4">
+      <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+        <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
+        Frenz AI · Character Replace
+      </p>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <h1 className="text-[1.85rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.2rem]">{title}</h1>
+        <Link
+          href={modeHref}
+          className="inline-flex min-h-[38px] items-center gap-2 rounded-full border border-border/70 bg-card pl-1.5 pr-3 text-[12.5px] font-bold text-foreground transition hover:border-foreground/30 active:scale-[0.98]"
+          aria-label={`Replacement type: ${REPLACEMENT_MODE_COPY[mode].label}. Change`}
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white">
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+          </span>
+          {REPLACEMENT_MODE_COPY[mode].label}
+          <span className="font-semibold text-muted-foreground">· Change</span>
+        </Link>
+      </div>
+    </header>
+  );
+}
 
 function Headline({ title, highlight, subtitle }: { title: string; highlight: string; subtitle: string | null }) {
   return (

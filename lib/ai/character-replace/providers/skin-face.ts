@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ReplacementProvider, ReplacementRequest, ReplacementSubmission } from "@/lib/ai/character-replace/providers/types";
+import { linearCostEstimate, type ReplacementProvider, type ReplacementRequest, type ReplacementSubmission } from "@/lib/ai/character-replace/providers/types";
 import { SKIN_FACE_PRESERVATION_PROMPT, SKIN_FACE_TIER_MAP, isReplacementTierId, type SkinFaceProviderSettings } from "@/lib/ai/character-replace/modes";
 import { AiJobError } from "@/lib/ai/errors";
 import { createReplicatePrediction, toState } from "@/lib/ai/replicate/provider";
@@ -73,6 +73,18 @@ export const skinFaceProvider: ReplacementProvider = {
   mode: "skin_face",
   model: P_VIDEO_REPLACE.model,
   version: P_VIDEO_REPLACE.version,
+  // Identity, face and skin from 1–3 references; the body and clothes of the video stay. The "Face + Head" model.
+  capabilities: {
+    modes: ["skin_face"],
+    supportsTier: (_mode, quality) => isReplacementTierId(quality) && SKIN_FACE_TIER_MAP[quality].support === "supported",
+    keepsAudio: true,
+    maxReferenceImages: 3,
+    referenceFraming: "head_shoulders",
+  },
+  supportsMode(mode) {
+    return this.capabilities.modes.includes(mode);
+  },
+  estimateProcessingCostUsdCents: linearCostEstimate,
 
   isConfigured() {
     return !!process.env.REPLICATE_API_TOKEN?.trim() && !!P_VIDEO_REPLACE.version;

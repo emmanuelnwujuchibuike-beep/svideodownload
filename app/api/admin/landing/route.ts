@@ -61,6 +61,8 @@ const reelsPoster = z
 /** One replacement mode's editable fields (Part 6). */
 const modeSchema = z.object({
   enabled: z.boolean().optional(),
+  /** The replacement-scope brief §6: a per-video price for the scope. */
+  basePriceCents: z.number().int().min(0).max(100_000_000).optional(),
   tiers: z
     .array(
       z.object({
@@ -234,6 +236,15 @@ const schema = z.object({
         .object({
           face_only: modeSchema.optional(),
           skin_face: modeSchema.optional(),
+          upper_body: modeSchema.optional(),
+        })
+        .optional(),
+      /** The replacement-scope brief §13: provider cost protection. */
+      pricingGuard: z
+        .object({
+          minimumMarginPercent: z.number().min(0).max(1_000).optional(),
+          minimumCustomerPriceCents: z.number().int().min(0).max(100_000_000).optional(),
+          allowBelowMargin: z.boolean().optional(),
         })
         .optional(),
       audio: z

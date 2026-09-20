@@ -39,6 +39,14 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# 2026-09-20 — the media preflight (server/preflight): the ONNX runtime, loaded
+# by a computed name so no tracer bundles it, must be present here as a plain
+# node_modules package; only the linux/x64 binding is kept (the darwin and
+# win32 ones are ~120 MB of dead weight). The two small models ride with it.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/onnxruntime-node ./node_modules/onnxruntime-node
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/onnxruntime-common ./node_modules/onnxruntime-common
+RUN rm -rf ./node_modules/onnxruntime-node/bin/napi-v3/darwin ./node_modules/onnxruntime-node/bin/napi-v3/win32
+COPY --from=builder --chown=nextjs:nodejs /app/server/preflight/models ./server/preflight/models
 
 # 🔴 The entrypoint refreshes yt-dlp on every container START — see the long note
 # in the script. Installing it at BUILD time only (the RUN above) freezes it at

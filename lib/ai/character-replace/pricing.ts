@@ -139,7 +139,10 @@ export interface CharacterReplaceQuote {
   qualityRateCents: number;
   voiceRateCents: number;
   lipSyncRateCents: number;
+  /** The per-video price that applied: Full Character's top-level one, or the scope's own (the replacement-scope brief §6–§7). */
   basePriceCents: number;
+  /** 2026-09-20: the scope's per-video price by itself, so a statement can name it (`modeBasePrice`). Zero for Full Character, whose base is the top-level one. */
+  modeBasePriceCents: number;
   /** The text-to-speech fees that applied (Part 6 §26). */
   ttsRequestCents: number;
   ttsCharacterRateCents: number;
@@ -261,10 +264,17 @@ function computeAmounts(input: NormalizedQuoteInput, config: CharacterReplaceCon
   const voiceChangeCents = centsForDuration(voiceChangeRateCents, ms);
   const voiceCents = centsForDuration(voiceRate, ms) + ttsCents + voiceChangeCents;
   const lipSyncCents = centsForDuration(lipRate, ms);
-  const subtotalCents = config.basePriceCents + videoCents + voiceCents + lipSyncCents;
+  /*
+    The per-video price (the replacement-scope brief §6–§7): Full Character
+    keeps the top-level one; every other scope has its own in its mode block.
+    One or the other — never both — so a scope's price is what its row says.
+  */
+  const modeBasePriceCents = input.mode === "full_character" ? 0 : modeConfig(config, input.mode).basePriceCents;
+  const basePriceCents = input.mode === "full_character" ? config.basePriceCents : modeBasePriceCents;
+  const subtotalCents = basePriceCents + videoCents + voiceCents + lipSyncCents;
   const minimumApplied = subtotalCents < config.minimumChargeCents;
   const totalCents = minimumApplied ? config.minimumChargeCents : subtotalCents;
-  return { ms, newVoice, tts, voiceChange, voiceChangeRateCents, voiceChangeCents, lipTier, qualityRate, voiceRate, lipRate, ttsRequestCents, ttsCharacterRateCents, ttsCents, videoCents, voiceCents, lipSyncCents, subtotalCents, minimumApplied, totalCents };
+  return { ms, newVoice, tts, voiceChange, voiceChangeRateCents, voiceChangeCents, lipTier, qualityRate, voiceRate, lipRate, ttsRequestCents, ttsCharacterRateCents, ttsCents, videoCents, voiceCents, lipSyncCents, basePriceCents, modeBasePriceCents, subtotalCents, minimumApplied, totalCents };
 }
 
 /** "12.4s" — one decimal, from integer milliseconds. */
@@ -283,7 +293,9 @@ function replacementLabel(mode: ReplacementMode): string {
     case "face_only":
       return "Face replacement";
     case "skin_face":
-      return "Identity & skin transfer";
+      return "Face & head replacement";
+    case "upper_body":
+      return "Upper-body replacement";
     case "full_character":
       return "Character replacement";
   }
@@ -324,7 +336,7 @@ export function quoteCharacterReplace(
       amountCents: a.lipTier ? a.lipSyncCents : null,
     },
   ];
-  if (config.basePriceCents > 0) lines.unshift({ key: "base", label: "Processing", value: "Per video", amountCents: config.basePriceCents });
+  if (a.basePriceCents > 0) lines.unshift({ key: "base", label: "Processing", value: "Per video", amountCents: a.basePriceCents });
   if (a.minimumApplied) lines.push({ key: "minimum", label: "Minimum charge", value: "Applied", amountCents: a.totalCents - a.subtotalCents });
 
   /*
@@ -378,7 +390,8 @@ export function quoteCharacterReplace(
     qualityRateCents: a.qualityRate,
     voiceRateCents: a.voiceRate,
     lipSyncRateCents: a.lipRate,
-    basePriceCents: config.basePriceCents,
+    basePriceCents: a.basePriceCents,
+    modeBasePriceCents: a.modeBasePriceCents,
     ttsRequestCents: a.ttsRequestCents,
     ttsCharacterRateCents: a.ttsCharacterRateCents,
     voiceChangeRateCents: a.voiceChangeRateCents,

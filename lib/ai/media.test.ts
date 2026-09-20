@@ -201,6 +201,7 @@ describe("the copy table covers every failure the type allows", () => {
       "unsupported-image",
       "image-too-large",
       "image-too-small",
+      "image-wrong-framing",
       "invalid-image",
       "invalid-url",
       "upload-failed",

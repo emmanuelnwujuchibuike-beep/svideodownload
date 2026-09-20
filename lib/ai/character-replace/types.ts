@@ -362,6 +362,30 @@ export interface CharacterReplaceTransaction {
   details?: { mode: string; quality: string; durationMs: number; voiceMode: string; voiceSource: string | null; lipSyncMode: string | null; pricingConfigVersion: number } | null;
 }
 
+/* ───────────────────────────── preflight (2026-09-20) ────────────────────── */
+
+/** What the preflight route answers — the structured verdict plus the words the interface prints. */
+export interface CharacterReplacePreflight {
+  valid: boolean;
+  mode: ReplacementMode;
+  result: {
+    valid: boolean;
+    referenceImage: { valid: boolean; faceDetected: boolean; faceConfidence: number | null; faceVisibility: number | null; bodyVisibility: number | null };
+    video: { valid: boolean; usableFrames: number; sampledFrames: number; faceVisibility: number | null; bodyVisibility: number | null };
+    compatibility: { valid: boolean; confidence: number | null };
+    errors: string[];
+    warnings: string[];
+    visionUsed: boolean;
+  };
+  checkedAt: string;
+  durationMs: number;
+  checklist: { key: "reference" | "face" | "body" | "video" | "subject" | "compatibility"; label: string; state: "pass" | "fail" | "skip" }[];
+  issues: { code: string; target: "reference" | "video" | "both"; title: string; body: string }[];
+  warnings: string[];
+  headline: { title: string; body: string } | null;
+  tips: { reference: readonly string[]; video: readonly string[] };
+}
+
 /* ───────────────────────────── processing ────────────────────────────────── */
 
 /**

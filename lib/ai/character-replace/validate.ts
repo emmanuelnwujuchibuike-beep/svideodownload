@@ -1,5 +1,5 @@
 import type { CharacterReplacePublicConfig, CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
-import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
+import { replacementPhotoGuidance, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type {
   AspectRatio,
   CharacterReplaceJobInput,
@@ -151,6 +151,24 @@ export function validatePhotoFile(file: { name: string; size: number; type: stri
 export function validatePhotoPixels(size: { width: number; height: number } | null, limits: CharacterReplaceLimits): CharacterReplaceVerdict {
   if (!size) return { ok: false, code: "invalid-image" };
   if (Math.min(size.width, size.height) < limits.photo.minEdge) return { ok: false, code: "image-too-small" };
+  return { ok: true };
+}
+
+/**
+ * ── THE PHOTO'S SHAPE, AGAINST THE CHOSEN SCOPE (2026-09-20, brief §3, §14) ──
+ *
+ * Deterministic and cheap — pixels, not a model: a scope that needs a standing
+ * person cannot be served by a landscape photo, and a scope's own shortest
+ * edge is the least the provider can use. Refused at the picker (with the
+ * example one tap away), again at create, and again on the worker from the
+ * decoded file. Whether a FACE or a PERSON is in the photo is the media
+ * preflight's question (lib/ai/preflight), not this one's.
+ */
+export function validatePhotoFraming(size: { width: number; height: number } | null, mode: ReplacementMode): CharacterReplaceVerdict {
+  if (!size || !(size.width > 0) || !(size.height > 0)) return { ok: false, code: "invalid-image" };
+  const need = replacementPhotoGuidance(mode);
+  if (Math.min(size.width, size.height) < need.minEdge) return { ok: false, code: "image-too-small" };
+  if (size.width / size.height > need.maxAspect) return { ok: false, code: "image-wrong-framing" };
   return { ok: true };
 }
 

@@ -101,6 +101,13 @@ export const startCharacterReplaceJobSchema = z
     trim: z.object({ startMs: z.number().int().nonnegative(), endMs: z.number().int().positive() }).strict().nullable(),
     consent: z.literal(true),
     /**
+     * 2026-09-20: the preflight pass for exactly these files and this mode
+     * (lib/ai/preflight/token.ts). Start verifies it AND the record the
+     * worker stored on the job before anything is reserved; without a pass
+     * nothing is charged and nothing reaches a provider.
+     */
+    preflightToken: z.string().min(16).max(2000).optional(),
+    /**
      * Part 6: the voice, in full. Only read when the quote says `new_voice`;
      * refused when it contradicts the quote (a TTS quote with no text, an
      * upload quote with text). The dialogue's LENGTH must equal the signed

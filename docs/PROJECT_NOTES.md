@@ -43,6 +43,11 @@ Six commits, `46eddeb` → `f00569a`. Owner asks, in order, and what shipped.
 - **"This tool isn't available yet"** on Change the voice = no `ELEVENLABS_API_KEY` anywhere. The public config now takes `voiceCapabilities(config)` from the two interface routes, so TTS / the changer are offered only when their key is present; Start says "Changing the voice isn't available right now" if it is ever reached.
 - Quick actions glyph → the filled lightning bolt.
 
+### ElevenLabs v3 THROUGH REPLICATE (`0ca7c5a`) — the route in use
+- Owner: "use the ElevenLabs in Replicate; a direct key would divide the API route." Replicate hosts `elevenlabs/v3`, `turbo-v2.5`, `flash-v2.5`, `v2-multilingual` as official models: input `prompt` + `voice` (an enum of 26 NAMES) + `language_code`; one MP3 out. `replicateElevenLabsProvider` = the MiniMax shape (prediction → `voice` stage → webhook → worker fits the MP3). Versions pinned in `elevenlabs-models.ts`. The stored `tts.model` was flipped to `elevenlabs/v3` by script after the deploy.
+- **Proven on production** (E2E, job bcdb8614): voice `succeeded:v3` → replace → lipsync → finalize, completed in 153 s, charged $1.06 ($0.12 video + 37¢ voice + 57¢ Studio lip sync).
+- The catalogue ships 25 of the 26 names with ElevenLabs' gender/age labels (Kuon left out — undocumented); the admin table now edits gender/age per row. The direct-API route (`elevenlabs/eleven_v3` etc., ELEVENLABS_API_KEY, worker-made) stays available; the voice CHANGER is direct-only (no speech-to-speech on Replicate) and is hidden until that key exists.
+
 ### ElevenLabs v3 + the voice changer (`f00569a`)
 - `lib/ai/voice/elevenlabs.ts` (fetch client, no SDK), `elevenlabs-models.ts` (pure: 4 TTS models with their language lists, 2 changer models, the gender/age vocabulary, the default library), `voice-change-provider.ts`. The TTS seam gained `runsIn`: an ElevenLabs voice is synchronous, so the **worker** makes it during prepare and the pipeline has no `voice` stage (`planPipeline({ttsInWorker})`); MiniMax stays a Replicate prediction.
 - The voice changer re‑voices an uploaded recording / gallery video's sound in a catalogue voice (gender + age chips). Priced per second (`tts.voiceChange.perSecondCents`), signed on the quote (`vc:1`), verified at /start (`audio.convert`).

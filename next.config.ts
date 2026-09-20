@@ -337,13 +337,31 @@ const nextConfig: NextConfig = {
           by URL alone.
 
           `/api/app-version` sets `no-store` itself and Cloudflare answers it
-          BYPASS, so an explicit origin header is honoured. This rule gives it
-          to every Frenz AI and admin route: nothing under them is the same
-          answer for two people, and none may be served from any cache.
-          A route that sets its own Cache-Control (the poster, a day-long
-          `private`) keeps it — a handler's header wins over these.
+          BYPASS, so an explicit origin header is honoured. This rule first
+          covered the Frenz AI, admin and internal groups; on 2026-09-20 the
+          owner asked for it to be "wide on all pages", and it now covers every
+          API route EXCEPT the ones listed in the lookahead below.
+
+          🔴 THIS RULE OVERRIDES A HANDLER'S OWN Cache-Control — measured on
+          `next start` 2026-09-20, the opposite of what the first version of
+          this note claimed: with a plain `/api/:path*` rule, /api/flags served
+          `private, no-store` instead of its own `public, s-maxage`, and so did
+          /api/ads/config and the poster. So the routes that cache ON PURPOSE
+          are carved out by name (every route that sets a positive max-age —
+          grep `Cache-Control` under app/api for the list; a new one must be
+          added here or it silently loses its caching), and everything else —
+          including a 400 from /api/tools, a 401 from /api/discovery and a 404
+          from /api/posts/<id>, all measured leaving the origin with NO header
+          and therefore candidates for two public hours at the edge — is
+          no-store. An answer that names no caching policy of its own was
+          never meant to be shared.
+
+          The path-to-regexp form: a negative lookahead inside the parameter's
+          custom pattern; `(?:/|$)` after a name so /api/flags is kept while
+          /api/flagsx is not. Verified against Next's own compiled matcher.
         */
-        source: "/api/:group(ai|admin|internal)/:path*",
+        source:
+          "/api/:path((?!ads(?:/|$)|ai/jobs/[^/]+/poster(?:/|$)|discovery(?:/|$)|feed(?:/|$)|flags(?:/|$)|landing/grid-image(?:/|$)|monetag(?:/|$)|posts/|sounds/discovery(?:/|$)|tools(?:/|$)|wallpaper(?:/|$)|profile/[^/]+/hub/).*)",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },
       {

@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
+import { voiceProviderForModel, type CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { normalizeQuoteInput, quoteCharacterReplace, validateQuoteInput, type CharacterReplaceQuote, type QuoteInput } from "@/lib/ai/character-replace/pricing";
 import type { StartCharacterReplaceJobRequest } from "@/lib/ai/character-replace/start-schema";
 import { verifyQuoteSignature } from "@/lib/ai/character-replace/wallet";
@@ -43,6 +43,8 @@ export interface VerifiedVoice {
   languageCode: string | null;
   voiceId: string | null;
   providerVoiceId: string | null;
+  /** 2026-09-20: the catalogue voice an uploaded recording is re-voiced in, when the quote priced a change. */
+  change: { voiceId: string; providerVoiceId: string } | null;
   trimToFit: boolean;
   voiceConsent: boolean;
 }
@@ -51,7 +53,7 @@ export function verifyStartQuote(
   body: StartCharacterReplaceJobRequest,
   config: CharacterReplaceConfig,
   money: { currency: string; symbol: string; now?: Date },
-  capabilities: { ttsLanguages: readonly string[] } = { ttsLanguages: [] },
+  capabilities: { ttsLanguages: readonly string[]; voiceChangeConfigured?: boolean } = { ttsLanguages: [] },
 ): StartVerdict {
   const q = body.quote;
   const now = money.now ?? new Date();
@@ -64,6 +66,7 @@ export function verifyStartQuote(
     voiceMode: q.voiceMode,
     voiceSource: q.voiceSource ?? null,
     ttsCharacters: q.ttsCharacters ?? 0,
+    voiceChange: q.voiceChange === true,
     lipSyncMode: q.lipSyncMode,
   };
   const verdict = validateQuoteInput(input, config);
@@ -111,7 +114,7 @@ function verifyVoice(
   body: StartCharacterReplaceJobRequest,
   quote: CharacterReplaceQuote,
   config: CharacterReplaceConfig,
-  capabilities: { ttsLanguages: readonly string[] },
+  capabilities: { ttsLanguages: readonly string[]; voiceChangeConfigured?: boolean },
 ): { ok: true; voice: VerifiedVoice | null } | { ok: false; code: AiErrorCode; reason: string } {
   if (quote.voiceMode !== "new_voice") return { ok: true, voice: null };
   const v = body.voice;
@@ -120,7 +123,17 @@ function verifyVoice(
 
   if (v.source === "upload") {
     if (v.voiceConsent !== true) return { ok: false, code: "INVALID_INPUT", reason: "voice rights not confirmed" };
-    return { ok: true, voice: { source: "upload", text: null, languageCode: null, voiceId: null, providerVoiceId: null, trimToFit: v.trimToFit === true, voiceConsent: true } };
+    let change: VerifiedVoice["change"] = null;
+    if (quote.voiceChange) {
+      // 2026-09-20: the change was priced, so the voice it is made in must be a changer voice from the catalogue, and the changer must exist here
+      if (capabilities.voiceChangeConfigured !== true) return { ok: false, code: "FEATURE_UNAVAILABLE", reason: "voice change is not configured" };
+      const voice = config.voices.find((x) => x.id === v.changeVoiceId && x.provider === "elevenlabs");
+      if (!voice || !voice.providerVoiceId) return { ok: false, code: "INVALID_INPUT", reason: `change voice ${v.changeVoiceId ?? "(none)"} is not in the catalogue` };
+      change = { voiceId: voice.id, providerVoiceId: voice.providerVoiceId };
+    } else if (v.changeVoiceId) {
+      return { ok: false, code: "INVALID_INPUT", reason: "a change voice was sent but the price had no voice change" };
+    }
+    return { ok: true, voice: { source: "upload", text: null, languageCode: null, voiceId: null, providerVoiceId: null, change, trimToFit: v.trimToFit === true, voiceConsent: true } };
   }
 
   // tts
@@ -132,11 +145,13 @@ function verifyVoice(
   const language = config.languages.find((l) => l.code === languageCode);
   if (!language) return { ok: false, code: "INVALID_INPUT", reason: `language ${languageCode || "(none)"} is not offered` };
   if (!capabilities.ttsLanguages.includes(languageCode)) return { ok: false, code: "INVALID_INPUT", reason: `language ${languageCode} is not spoken by the configured voice provider` };
-  const voice = config.voices.find((x) => x.id === v.voiceId);
-  if (!voice) return { ok: false, code: "INVALID_INPUT", reason: `voice ${v.voiceId ?? "(none)"} is not in the catalogue` };
+  // 2026-09-20: only the CONFIGURED provider's voices — a MiniMax voice id sent to ElevenLabs is a refused request at the provider, paid for
+  const provider = voiceProviderForModel(config.tts.model);
+  const voice = config.voices.find((x) => x.id === v.voiceId && x.provider === provider);
+  if (!voice) return { ok: false, code: "INVALID_INPUT", reason: `voice ${v.voiceId ?? "(none)"} is not in the catalogue for the configured provider` };
   if (voice.languages.length > 0 && !voice.languages.includes(languageCode)) return { ok: false, code: "INVALID_INPUT", reason: `voice ${voice.id} does not speak ${languageCode}` };
   return {
     ok: true,
-    voice: { source: "tts", text, languageCode, voiceId: voice.id, providerVoiceId: voice.providerVoiceId || null, trimToFit: v.trimToFit === true, voiceConsent: v.voiceConsent === true },
+    voice: { source: "tts", text, languageCode, voiceId: voice.id, providerVoiceId: voice.providerVoiceId || null, change: null, trimToFit: v.trimToFit === true, voiceConsent: v.voiceConsent === true },
   };
 }

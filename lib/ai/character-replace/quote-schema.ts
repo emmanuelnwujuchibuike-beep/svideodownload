@@ -31,6 +31,8 @@ export const quoteRequestSchema = z
     voiceMode: z.enum(["original", "new_voice"]),
     voiceSource: VOICE_SOURCE.nullable().optional(),
     ttsCharacters: z.number().int().nonnegative().max(100_000).nullable().optional(),
+    /** 2026-09-20: the uploaded voice, re-voiced in a catalogue voice. */
+    voiceChange: z.boolean().nullable().optional(),
     lipSyncMode: z.enum(["standard", "studio"]).nullable(),
   })
   .strict();

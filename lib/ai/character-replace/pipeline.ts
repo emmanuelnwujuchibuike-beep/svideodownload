@@ -88,6 +88,14 @@ export interface PipelinePlanInput {
   voiceMode: "original" | "new_voice";
   voiceSource: CharacterReplaceVoiceSource | null;
   lipSyncMode: CharacterReplaceLipSyncTier | null;
+  /**
+   * 2026-09-20: whether the text-to-speech provider answers with the audio
+   * (ElevenLabs — the WORKER synthesises during prepare) rather than as a
+   * prediction (MiniMax on Replicate — a `voice` stage). Decided by the
+   * caller from the configured model (tts-provider.ts `ttsRunsInWorker`).
+   * Absent = a prediction, which is what every plan before this date was.
+   */
+  ttsInWorker?: boolean;
 }
 
 /**
@@ -98,7 +106,7 @@ export interface PipelinePlanInput {
 export function planPipeline(input: PipelinePlanInput): PipelineMeta {
   const stages: PipelineStage[] = [];
   const newVoice = input.voiceMode === "new_voice";
-  if (newVoice && input.voiceSource === "tts") stages.push("voice");
+  if (newVoice && input.voiceSource === "tts" && input.ttsInWorker !== true) stages.push("voice");
   stages.push("replace");
   if (newVoice && input.lipSyncMode) stages.push("lipsync");
   stages.push("finalize");

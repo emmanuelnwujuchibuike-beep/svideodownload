@@ -196,6 +196,13 @@ export interface VoiceSettings {
    * Required for an uploaded voice; the server refuses without it.
    */
   voiceConsent: boolean;
+  /**
+   * 2026-09-20: with an upload, "change the voice" — the recording re-voiced
+   * in a catalogue voice of the gender and age the member picks. Priced per
+   * second; the server refuses a change it did not price.
+   */
+  changeVoice: boolean;
+  changeVoiceId: string | null;
 }
 
 /** Only meaningful with a new voice; a member cannot lip-sync the original. */
@@ -279,6 +286,8 @@ export interface PricingSnapshot {
   voiceMode: CharacterReplaceAudioMode;
   voiceSource: CharacterReplaceVoiceSource | null;
   ttsCharacters: number;
+  /** 2026-09-20: whether the uploaded voice is re-voiced. Signed with the rest. */
+  voiceChange: boolean;
   lipSyncMode: CharacterReplaceLipSyncTier | null;
   /** "12.4s × ₦25/s = ₦310" — printed, never computed here. */
   rateLine: string;

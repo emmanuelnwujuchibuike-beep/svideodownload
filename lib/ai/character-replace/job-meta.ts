@@ -138,6 +138,26 @@ export const characterReplaceJobMetaSchema = z
           })
           .nullable()
           .optional(),
+        /** 2026-09-20: an uploaded recording re-voiced in a catalogue voice (the worker's voice changer). */
+        convert: z
+          .object({
+            voiceId: z.string().max(40),
+            providerVoiceId: z.string().max(80),
+            model: z.string().max(160),
+          })
+          .nullable()
+          .optional(),
+        /** 2026-09-20: the worker made the voice itself (a synchronous provider) — what it used, for the operator. */
+        synthesized: z
+          .object({
+            provider: z.string().max(40),
+            model: z.string().max(160),
+            kind: z.enum(["tts", "voice_change"]),
+            bytes: z.number().int().nonnegative(),
+            durationMs: z.number().int().nonnegative(),
+          })
+          .nullable()
+          .optional(),
         trimToFit: z.boolean().default(false),
         voiceConsent: z.boolean().default(false),
         prepared: z

@@ -87,6 +87,8 @@ export const EMPTY_VOICE: VoiceSettings = {
   languageCode: null,
   voiceId: null,
   voiceConsent: false,
+  changeVoice: false,
+  changeVoiceId: null,
 };
 
 export const EMPTY_PROJECT: CharacterReplaceProject = {
@@ -146,6 +148,9 @@ export type WorkspaceAction =
   | { type: "voice/consent"; value: boolean }
   | { type: "voice/language"; code: string }
   | { type: "voice/voice"; id: string }
+  /** 2026-09-20: change the uploaded voice — on/off (a price change), and which catalogue voice. */
+  | { type: "voice/change"; on: boolean }
+  | { type: "voice/changeVoice"; id: string }
   | { type: "lipsync/tier"; tier: "standard" | "studio" }
   /** Part 6: lip sync is a toggle — off keeps the new voice as a plain audio swap. */
   | { type: "lipsync/clear" }
@@ -323,6 +328,12 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return { ...state, project: { ...state.project, voice: { ...state.project.voice, languageCode: action.code } } };
     case "voice/voice":
       return { ...state, project: { ...state.project, voice: { ...state.project.voice, voiceId: action.id } } };
+    case "voice/change":
+      if (state.project.voice.changeVoice === action.on) return state;
+      // priced per second, so the price is stale the moment this flips
+      return { ...state, pricing: markStale(state.pricing), project: { ...state.project, voice: { ...state.project.voice, changeVoice: action.on } } };
+    case "voice/changeVoice":
+      return { ...state, project: { ...state.project, voice: { ...state.project.voice, changeVoiceId: action.id } } };
     case "lipsync/tier":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, lipSync: { tier: action.tier } } };
     case "lipsync/clear":
@@ -422,7 +433,7 @@ export function dialogueCharacters(text: string): number {
 export function voiceComplete(project: CharacterReplaceProject, config: CharacterReplacePublicConfig | null): boolean {
   const v = project.voice;
   if (v.mode !== "new_voice") return true;
-  if (v.source === "upload") return !!v.audio && v.voiceConsent;
+  if (v.source === "upload") return !!v.audio && v.voiceConsent && (!v.changeVoice || !!v.changeVoiceId);
   if (v.source === "tts") {
     const chars = dialogueCharacters(v.text);
     const min = config?.tts.minimumCharacters ?? 1;
@@ -491,13 +502,16 @@ export function qualityLabelFor(project: CharacterReplaceProject, config: Charac
 export function summaryLines(project: CharacterReplaceProject, config: CharacterReplacePublicConfig | null): PricingLine[] {
   const language = config?.languages.find((l) => l.code === project.voice.languageCode);
   const voice = config?.voices.find((v) => v.id === project.voice.voiceId);
+  const changeVoice = config?.voiceChange.voices.find((v) => v.id === project.voice.changeVoiceId);
   const tier = config?.lipSync.find((l) => l.id === project.lipSync.tier);
   const newVoice = project.voice.mode === "new_voice";
   const voiceValue = !newVoice
     ? "Original audio"
     : project.voice.source === "upload"
       ? project.voice.audio
-        ? "Your audio"
+        ? project.voice.changeVoice
+          ? `Your audio · ${changeVoice?.label ?? "new voice"}`
+          : "Your audio"
         : "Your audio · not chosen yet"
       : [language?.label, voice?.label].filter(Boolean).join(" · ") || "New voice";
   return [

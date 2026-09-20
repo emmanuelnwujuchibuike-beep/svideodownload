@@ -11,7 +11,7 @@ import { getJobAsService, transitionJob } from "@/lib/ai/job-store";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { lipSyncProviderFor } from "@/lib/ai/voice/lipsync-provider";
-import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
+import { textToSpeechProviderFor, ttsRunsInWorker } from "@/lib/ai/voice/tts-provider";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 import { replicateProvider } from "@/lib/ai/replicate/provider";
@@ -74,9 +74,10 @@ export async function submitCharacterReplaceJob(
   if (!meta.prepared) throw new AiJobError("INTERNAL_ERROR", "job has no prepared media");
   if (!fresh.user_id) throw new AiJobError("INTERNAL_ERROR", "character replace jobs belong to a member");
 
+  // A row from before Part 6 has no plan; it is the job it always was (replace → finalize). The tts model decides whether a planned voice is a stage or the worker's.
   const pipeline: PipelineMeta =
     readPipeline(fresh.metadata) ??
-    planPipeline({ mode: meta.mode, voiceMode: meta.settings.voiceMode, voiceSource: meta.audio?.source ?? null, lipSyncMode: meta.settings.lipSyncMode });
+    planPipeline({ mode: meta.mode, voiceMode: meta.settings.voiceMode, voiceSource: meta.audio?.source ?? null, lipSyncMode: meta.settings.lipSyncMode, ttsInWorker: ttsRunsInWorker(meta.audio?.tts?.model ?? "") });
   const stage = pipeline.current;
   if (stage === "finalize") throw new AiJobError("INTERNAL_ERROR", "the pipeline is at finalize; nothing to submit");
   const record = pipeline.records[stage];

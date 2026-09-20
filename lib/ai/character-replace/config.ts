@@ -40,6 +40,16 @@ import {
   type ReplacementMode,
   type ReplacementTierId,
 } from "@/lib/ai/character-replace/modes";
+import {
+  ELEVENLABS_DEFAULT_STS_MODEL,
+  ELEVENLABS_DEFAULT_VOICES,
+  elevenLabsStsModel,
+  isElevenLabsTtsModel,
+  isVoiceAge,
+  isVoiceGender,
+  type VoiceAge,
+  type VoiceGender,
+} from "@/lib/ai/voice/elevenlabs-models";
 import { ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
 
 /* ───────────────────────────── qualities ─────────────────────────────────── */
@@ -104,6 +114,9 @@ export interface CharacterReplaceLanguage {
   native: string;
 }
 
+/** Which provider a catalogue voice belongs to (2026-09-20). A voice is only offered when the configured model is its provider's. */
+export type VoiceProvider = "minimax" | "elevenlabs";
+
 export interface CharacterReplaceVoice {
   id: string;
   label: string;
@@ -116,6 +129,16 @@ export interface CharacterReplaceVoice {
    * means "the provider's default voice". Members see `label`, never this.
    */
   providerVoiceId: string;
+  /** The provider the id above belongs to. The public config offers only the configured model's provider's voices. */
+  provider: VoiceProvider;
+  /** 2026-09-20: what a member filters by ("gender and age types so users can get an accurate result"). */
+  gender: VoiceGender;
+  age: VoiceAge;
+}
+
+/** The provider a TTS model name belongs to. Pure on the name. */
+export function voiceProviderForModel(model: string): VoiceProvider {
+  return isElevenLabsTtsModel(model) ? "elevenlabs" : "minimax";
 }
 
 /* ───────────────────────────── replacement modes (Part 6) ────────────────── */
@@ -180,7 +203,7 @@ export interface CharacterReplaceAudioConfig {
 export interface CharacterReplaceTtsConfig {
   enabled: boolean;
   provider: "replicate";
-  /** The model the adapter runs. Its version pin lives with the adapter. */
+  /** The model the adapter runs (`minimax/…` on Replicate, or `elevenlabs/<model_id>` — lib/ai/voice/elevenlabs-models.ts). Its version pin lives with the adapter. */
   model: string;
   /** Charged once per generated voice. Zero allowed. */
   perRequestCents: number;
@@ -188,6 +211,18 @@ export interface CharacterReplaceTtsConfig {
   perCharacterCents: number;
   minimumCharacters: number;
   maximumCharacters: number;
+  /**
+   * 2026-09-20: the VOICE CHANGER — a member's own recording (an audio file
+   * or a gallery video's sound), re-voiced in a catalogue voice of the gender
+   * and age they pick. Priced per second of video. `model` is an
+   * `elevenlabs/<sts model>`; the feature is offered only when the changer's
+   * provider is configured AND the catalogue has voices of that provider.
+   */
+  voiceChange: {
+    enabled: boolean;
+    model: string;
+    perSecondCents: number;
+  };
 }
 
 /* ───────────────────────────── the object ────────────────────────────────── */
@@ -371,22 +406,29 @@ export const CHARACTER_REPLACE_DEFAULT_VOICES: readonly CharacterReplaceVoice[] 
     language the provider hints; the native pairs are offered only for their
     own language, so a Spanish dialogue gets a Spanish-trained voice first.
   */
-  { id: "warm", label: "Warm", blurb: "Low, calm and close.", languages: [], providerVoiceId: "English_Wiselady" },
-  { id: "bright", label: "Bright", blurb: "Clear, light and quick.", languages: [], providerVoiceId: "English_LovelyGirl" },
-  { id: "deep", label: "Deep", blurb: "Full and steady.", languages: [], providerVoiceId: "English_Deep-VoicedGentleman" },
-  { id: "soft", label: "Soft", blurb: "Gentle, with air in it.", languages: [], providerVoiceId: "English_Gentle-voiced_man" },
-  { id: "es-serene", label: "Serena", blurb: "Calm and clear, Spanish.", languages: ["es"], providerVoiceId: "Spanish_SereneWoman" },
-  { id: "es-steady", label: "Mateo", blurb: "Steady and warm, Spanish.", languages: ["es"], providerVoiceId: "Spanish_ReliableMan" },
-  { id: "pt-wise", label: "Clara", blurb: "Measured and kind, Portuguese.", languages: ["pt"], providerVoiceId: "Portuguese_Wiselady" },
-  { id: "pt-steady", label: "Rafael", blurb: "Steady and warm, Portuguese.", languages: ["pt"], providerVoiceId: "Portuguese_ReliableMan" },
-  { id: "fr-anchor", label: "Élise", blurb: "Clear and composed, French.", languages: ["fr"], providerVoiceId: "French_FemaleAnchor" },
-  { id: "fr-casual", label: "Louis", blurb: "Relaxed and natural, French.", languages: ["fr"], providerVoiceId: "French_CasualMan" },
-  { id: "de-sweet", label: "Lena", blurb: "Light and friendly, German.", languages: ["de"], providerVoiceId: "German_SweetLady" },
-  { id: "de-friendly", label: "Jonas", blurb: "Open and friendly, German.", languages: ["de"], providerVoiceId: "German_FriendlyMan" },
-  { id: "it-narrator", label: "Marco", blurb: "Storyteller, Italian.", languages: ["it"], providerVoiceId: "Italian_Narrator" },
-  { id: "it-brave", label: "Giulia", blurb: "Bright and bold, Italian.", languages: ["it"], providerVoiceId: "Italian_BraveHeroine" },
-  { id: "ar-calm", label: "Layla", blurb: "Calm and clear, Arabic.", languages: ["ar"], providerVoiceId: "Arabic_CalmWoman" },
-  { id: "ar-friendly", label: "Omar", blurb: "Friendly and easy, Arabic.", languages: ["ar"], providerVoiceId: "Arabic_FriendlyGuy" },
+  { id: "warm", label: "Warm", blurb: "Low, calm and close.", languages: [], providerVoiceId: "English_Wiselady", provider: "minimax", gender: "female", age: "middle_aged" },
+  { id: "bright", label: "Bright", blurb: "Clear, light and quick.", languages: [], providerVoiceId: "English_LovelyGirl", provider: "minimax", gender: "female", age: "young" },
+  { id: "deep", label: "Deep", blurb: "Full and steady.", languages: [], providerVoiceId: "English_Deep-VoicedGentleman", provider: "minimax", gender: "male", age: "middle_aged" },
+  { id: "soft", label: "Soft", blurb: "Gentle, with air in it.", languages: [], providerVoiceId: "English_Gentle-voiced_man", provider: "minimax", gender: "male", age: "young" },
+  { id: "es-serene", label: "Serena", blurb: "Calm and clear, Spanish.", languages: ["es"], providerVoiceId: "Spanish_SereneWoman", provider: "minimax", gender: "female", age: "middle_aged" },
+  { id: "es-steady", label: "Mateo", blurb: "Steady and warm, Spanish.", languages: ["es"], providerVoiceId: "Spanish_ReliableMan", provider: "minimax", gender: "male", age: "middle_aged" },
+  { id: "pt-wise", label: "Clara", blurb: "Measured and kind, Portuguese.", languages: ["pt"], providerVoiceId: "Portuguese_Wiselady", provider: "minimax", gender: "female", age: "middle_aged" },
+  { id: "pt-steady", label: "Rafael", blurb: "Steady and warm, Portuguese.", languages: ["pt"], providerVoiceId: "Portuguese_ReliableMan", provider: "minimax", gender: "male", age: "middle_aged" },
+  { id: "fr-anchor", label: "Élise", blurb: "Clear and composed, French.", languages: ["fr"], providerVoiceId: "French_FemaleAnchor", provider: "minimax", gender: "female", age: "middle_aged" },
+  { id: "fr-casual", label: "Louis", blurb: "Relaxed and natural, French.", languages: ["fr"], providerVoiceId: "French_CasualMan", provider: "minimax", gender: "male", age: "young" },
+  { id: "de-sweet", label: "Lena", blurb: "Light and friendly, German.", languages: ["de"], providerVoiceId: "German_SweetLady", provider: "minimax", gender: "female", age: "young" },
+  { id: "de-friendly", label: "Jonas", blurb: "Open and friendly, German.", languages: ["de"], providerVoiceId: "German_FriendlyMan", provider: "minimax", gender: "male", age: "middle_aged" },
+  { id: "it-narrator", label: "Marco", blurb: "Storyteller, Italian.", languages: ["it"], providerVoiceId: "Italian_Narrator", provider: "minimax", gender: "male", age: "middle_aged" },
+  { id: "it-brave", label: "Giulia", blurb: "Bright and bold, Italian.", languages: ["it"], providerVoiceId: "Italian_BraveHeroine", provider: "minimax", gender: "female", age: "young" },
+  { id: "ar-calm", label: "Layla", blurb: "Calm and clear, Arabic.", languages: ["ar"], providerVoiceId: "Arabic_CalmWoman", provider: "minimax", gender: "female", age: "middle_aged" },
+  { id: "ar-friendly", label: "Omar", blurb: "Friendly and easy, Arabic.", languages: ["ar"], providerVoiceId: "Arabic_FriendlyGuy", provider: "minimax", gender: "male", age: "young" },
+  /*
+    2026-09-20: ElevenLabs' own default library (lib/ai/voice/elevenlabs-models.ts),
+    every voice with the provider's gender and age. Offered when the
+    configured model is an ElevenLabs one; the admin's "Import voices" action
+    replaces these with what the ACCOUNT actually has.
+  */
+  ...ELEVENLABS_DEFAULT_VOICES.map((v) => ({ id: `el-${v.id}`, label: v.label, blurb: v.blurb, languages: [] as readonly string[], providerVoiceId: v.providerVoiceId, provider: "elevenlabs" as const, gender: v.gender, age: v.age })),
 ];
 
 /** A replacement tier row, for the two default mode configurations below. */
@@ -537,11 +579,13 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
   tts: {
     enabled: true,
     provider: "replicate",
-    model: "minimax/speech-02-hd",
+    // 2026-09-20 (owner): ElevenLabs v3. Needs ELEVENLABS_API_KEY on Railway and Vercel; until it is set the provider reports itself unconfigured and text-to-speech is simply not offered.
+    model: "elevenlabs/eleven_v3",
     perRequestCents: 0,
     perCharacterCents: 0,
     minimumCharacters: 1,
     maximumCharacters: 1_000,
+    voiceChange: { enabled: true, model: ELEVENLABS_DEFAULT_STS_MODEL, perSecondCents: 0 },
   },
   lipSyncMaximumDurationSeconds: 60,
   retention: { resultHours: 72, savedResultDays: 30 },
@@ -662,16 +706,34 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
   const voices: CharacterReplaceVoice[] = Array.isArray(raw.voices)
     ? raw.voices
         .filter(isRecord)
-        .map((v) => ({
-          id: slug(v.id, ""),
-          label: text(v.label, "", 40),
-          blurb: text(v.blurb, "", 80),
-          languages: Array.isArray(v.languages) ? v.languages.map((c) => slug(c, "")).filter(Boolean) : [],
-          providerVoiceId: providerVoiceId(v.providerVoiceId, d.voices.find((x) => x.id === slug(v.id, ""))?.providerVoiceId ?? ""),
-        }))
+        .map((v) => {
+          const known = d.voices.find((x) => x.id === slug(v.id, ""));
+          return {
+            id: slug(v.id, ""),
+            label: text(v.label, "", 40),
+            blurb: text(v.blurb, "", 80),
+            languages: Array.isArray(v.languages) ? v.languages.map((c) => slug(c, "")).filter(Boolean) : [],
+            providerVoiceId: providerVoiceId(v.providerVoiceId, known?.providerVoiceId ?? ""),
+            // A row saved before 2026-09-20 has no provider: it was a MiniMax row (the only provider then), unless the defaults know it.
+            provider: v.provider === "elevenlabs" || v.provider === "minimax" ? v.provider : (known?.provider ?? "minimax"),
+            gender: isVoiceGender(v.gender) ? v.gender : (known?.gender ?? "neutral"),
+            age: isVoiceAge(v.age) ? v.age : (known?.age ?? "middle_aged"),
+          };
+        })
         .filter((v) => v.id && v.label)
-        .slice(0, 40)
+        .slice(0, 80)
     : [...d.voices];
+  /*
+    2026-09-20: a catalogue saved before this date holds MiniMax rows only.
+    The ElevenLabs library is added beside them so an ElevenLabs model (and
+    the voice changer) has voices the moment it is selected — the admin
+    "Import voices" action then replaces these with the account's own. Only
+    when the stored list has NO ElevenLabs row: an operator who imported and
+    pruned keeps exactly what they kept.
+  */
+  if (!voices.some((v) => v.provider === "elevenlabs")) {
+    for (const v of d.voices) if (v.provider === "elevenlabs" && !voices.some((x) => x.id === v.id)) voices.push({ ...v });
+  }
 
   const trimRaw = isRecord(raw.trim) ? raw.trim : {};
   const voiceRaw = isRecord(raw.voice) ? raw.voice : {};
@@ -766,6 +828,16 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
         int(ttsRaw.minimumCharacters, d.tts.minimumCharacters, 1, 10_000),
         int(ttsRaw.maximumCharacters, d.tts.maximumCharacters, 1, 10_000),
       ),
+      voiceChange: (() => {
+        const vc = isRecord(ttsRaw.voiceChange) ? ttsRaw.voiceChange : {};
+        const model = modelName(vc.model, d.tts.voiceChange.model);
+        return {
+          enabled: bool(vc.enabled, d.tts.voiceChange.enabled),
+          // only a model this build has a changer for; anything else falls back to the default one
+          model: elevenLabsStsModel(model) ? model : d.tts.voiceChange.model,
+          perSecondCents: int(vc.perSecondCents, d.tts.voiceChange.perSecondCents, 0, 100_000_000),
+        };
+      })(),
     },
     lipSyncMaximumDurationSeconds: int(raw.lipSyncMaximumDurationSeconds, d.lipSyncMaximumDurationSeconds, 1, PLATFORM_MAX_DURATION_SECONDS),
     retention: {
@@ -972,7 +1044,8 @@ export interface CharacterReplacePublicConfig {
   lipSyncEnabled: boolean;
   lipSync: readonly Pick<CharacterReplaceLipSyncOption, "id" | "label" | "blurb" | "premium">[];
   languages: readonly CharacterReplaceLanguage[];
-  voices: readonly CharacterReplaceVoice[];
+  /** The configured provider's voices, without the provider's ids (2026-09-20: with the gender and age a member filters by). */
+  voices: readonly CharacterReplacePublicVoice[];
   trim: { enabled: boolean; minimumSeconds: number };
   /** Whether "New voice" may be chosen. The surcharge itself stays server-side. */
   newVoiceEnabled: boolean;
@@ -1011,9 +1084,25 @@ export interface CharacterReplacePublicConfig {
     /** Language codes the CONFIGURED provider speaks, intersected with the operator's catalogue. */
     languages: readonly string[];
   };
+  /**
+   * 2026-09-20: whether an uploaded voice may be re-voiced in a catalogue
+   * voice, and which voices are offered for it (the changer's provider's,
+   * which may differ from the text-to-speech provider's). The rate stays
+   * server-side.
+   */
+  voiceChange: {
+    enabled: boolean;
+    voices: readonly CharacterReplacePublicVoice[];
+  };
   lipSyncMaximumDurationSeconds: number;
   /** Part 7 §21: how long a result is kept, and how long a saved one — printed, never assumed. */
   retention: { resultHours: number; savedResultDays: number };
+}
+
+export type CharacterReplacePublicVoice = Pick<CharacterReplaceVoice, "id" | "label" | "blurb" | "languages" | "gender" | "age">;
+
+function publicVoice(v: CharacterReplaceVoice): CharacterReplacePublicVoice {
+  return { id: v.id, label: v.label, blurb: v.blurb, languages: v.languages, gender: v.gender, age: v.age };
 }
 
 export interface CharacterReplacePublicMode {
@@ -1055,6 +1144,9 @@ export function publicCharacterReplaceConfig(
     };
   });
   const providerLanguages = new Set(ttsSupportedLanguagesFor(config.tts.model));
+  const ttsProvider = voiceProviderForModel(config.tts.model);
+  // the voice changer is ElevenLabs-only today; its voices are the catalogue's ElevenLabs rows
+  const changerVoices = config.voices.filter((v) => v.provider === "elevenlabs").map(publicVoice);
   return {
     enabled: config.enabled,
     currency: currency.code,
@@ -1067,7 +1159,7 @@ export function publicCharacterReplaceConfig(
     lipSyncEnabled: config.lipSyncEnabled && config.lipSync.some((l) => l.enabled),
     lipSync: config.lipSync.filter((l) => l.enabled).map(({ id, label, blurb, premium }) => ({ id, label, blurb, premium })),
     languages: config.languages,
-    voices: config.voices,
+    voices: config.voices.filter((v) => v.provider === ttsProvider).map(publicVoice),
     trim: config.trim,
     newVoiceEnabled: config.voice.newVoiceEnabled,
     recharge: {
@@ -1092,6 +1184,10 @@ export function publicCharacterReplaceConfig(
       minimumCharacters: config.tts.minimumCharacters,
       maximumCharacters: config.tts.maximumCharacters,
       languages: config.languages.map((l) => l.code).filter((code) => providerLanguages.has(code)),
+    },
+    voiceChange: {
+      enabled: config.voice.newVoiceEnabled && config.audio.replacementEnabled && config.tts.voiceChange.enabled && changerVoices.length > 0,
+      voices: changerVoices,
     },
     lipSyncMaximumDurationSeconds: Math.min(config.lipSyncMaximumDurationSeconds, config.maximumDurationSeconds),
     retention: config.retention,

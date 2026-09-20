@@ -261,6 +261,7 @@ describe("pricing state", () => {
     voiceMode: "original",
     voiceSource: null,
     ttsCharacters: 0,
+    voiceChange: false,
     lipSyncMode: null,
     rateLine: "10.0s × ₦25.00/s = ₦250.00",
   };
@@ -276,13 +277,13 @@ describe("pricing state", () => {
   it("summary lines carry the choices and NEVER an amount", () => {
     let s = withBoth(18_437);
     s = workspaceReducer(s, { type: "trim", start: 3.2, end: 13.2 });
-    s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "en", voiceId: "warm", tier: "standard" } });
+    s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "en", voiceId: "el-aria", tier: "standard" } });
     const lines = summaryLines(s.project, config);
     expect(lines.map((l) => [l.key, l.value])).toEqual([
       ["video", "10.0 sec"],
       ["quality", "720p"],
       ["character", "Full Character"],
-      ["voice", "English · Warm"],
+      ["voice", "English · Aria"],
       ["lipSync", "Standard"],
     ]);
     expect(lines.every((l) => l.amountCents === null)).toBe(true);
@@ -350,7 +351,7 @@ describe("pricing state", () => {
     let s = withBoth();
     s = workspaceReducer(s, { type: "voice/mode", mode: "new_voice", defaults: { languageCode: "en", voiceId: "warm", tier: "studio" } });
     s = workspaceReducer(s, { type: "voice/mode", mode: "original", defaults: { languageCode: null, voiceId: null, tier: null } });
-    expect(s.project.voice).toEqual({ mode: "original", source: null, audio: null, trimAudioToFit: false, text: "", languageCode: null, voiceId: null, voiceConsent: false });
+    expect(s.project.voice).toEqual({ mode: "original", source: null, audio: null, trimAudioToFit: false, text: "", languageCode: null, voiceId: null, voiceConsent: false, changeVoice: false, changeVoiceId: null });
     expect(s.project.lipSync.tier).toBeNull();
     expect(s.audio.status).toBe("empty");
   });

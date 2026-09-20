@@ -215,6 +215,7 @@ export function useCharacterReplaceWorkspace() {
   const newVoice = state.project.voice.mode === "new_voice";
   const voiceSource = newVoice ? state.project.voice.source : null;
   const ttsCharacters = newVoice && voiceSource === "tts" ? dialogueCharacters(state.project.voice.text) : 0;
+  const voiceChange = newVoice && voiceSource === "upload" && state.project.voice.changeVoice;
   const quoteInput = useMemo<QuoteInput | null>(() => {
     if (!range) return null;
     const ms = range.endMs - range.startMs;
@@ -228,11 +229,12 @@ export function useCharacterReplaceWorkspace() {
       voiceMode: state.project.voice.mode,
       voiceSource,
       ttsCharacters,
+      voiceChange,
       lipSyncMode: newVoice ? state.project.lipSync.tier : null,
     };
     // The range is a fresh object each render; its two numbers are what matter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range?.startMs, range?.endMs, state.project.mode, state.project.settings.quality, state.project.voice.mode, voiceSource, ttsCharacters, state.project.lipSync.tier]);
+  }, [range?.startMs, range?.endMs, state.project.mode, state.project.settings.quality, state.project.voice.mode, voiceSource, ttsCharacters, voiceChange, state.project.lipSync.tier]);
 
   const ready = inputReadiness(state.project, loads.config).ready;
   const quotable = ready && loads.available === true && loads.config?.pricingAvailable === true && quoteInput !== null;
@@ -618,6 +620,7 @@ export function useCharacterReplaceWorkspace() {
         voiceMode: snapshot.voiceMode,
         voiceSource: snapshot.voiceSource,
         ttsCharacters: snapshot.ttsCharacters,
+        voiceChange: snapshot.voiceChange === true,
         lipSyncMode: snapshot.lipSyncMode,
         totalCents: snapshot.totalCents,
         expiresAt: snapshot.expiresAt,
@@ -628,7 +631,7 @@ export function useCharacterReplaceWorkspace() {
         ? {
             voice:
               voice.source === "upload"
-                ? { source: "upload" as const, trimToFit: voice.trimAudioToFit, voiceConsent: voice.voiceConsent }
+                ? { source: "upload" as const, trimToFit: voice.trimAudioToFit, voiceConsent: voice.voiceConsent, ...(voice.changeVoice && voice.changeVoiceId ? { changeVoiceId: voice.changeVoiceId } : {}) }
                 : { source: "tts" as const, text: voice.text.trim(), languageCode: voice.languageCode ?? undefined, voiceId: voice.voiceId ?? undefined, trimToFit: voice.trimAudioToFit, voiceConsent: voice.voiceConsent },
           }
         : {}),

@@ -371,6 +371,8 @@ export function CharacterReplaceWorkspace({
                       }
                     }}
                     onVoice={(id) => send({ type: "voice/voice", id })}
+                    onChangeVoice={(on) => send({ type: "voice/change", on })}
+                    onChangeVoiceId={(id) => send({ type: "voice/changeVoice", id })}
                     onTier={(tier) => send({ type: "lipsync/tier", tier })}
                     onLipSyncOff={() => send({ type: "lipsync/clear" })}
                   />

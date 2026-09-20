@@ -3,6 +3,8 @@ import "server-only";
 import { AiJobError } from "@/lib/ai/errors";
 import type { AiJobStatus } from "@/lib/ai/jobs";
 import { createReplicatePrediction, toState } from "@/lib/ai/replicate/provider";
+import { elevenLabsConfigured, elevenLabsTextToSpeech } from "@/lib/ai/voice/elevenlabs";
+import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
 import { minimaxLanguageHint, ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
 
 /**
@@ -54,16 +56,39 @@ export interface TextToSpeechSubmission {
   settings: Record<string, unknown>;
 }
 
+/**
+ * Where a provider does its work (2026-09-20, ElevenLabs):
+ *
+ *   replicate   an asynchronous prediction — the pipeline runs a `voice`
+ *               stage, the webhook reports it, the worker brings it home
+ *   worker      a synchronous call that answers with the audio — the WORKER
+ *               synthesises during prepare (before the first provider stage)
+ *               and the pipeline has no `voice` stage at all
+ *
+ * The planner (pipeline.ts) is told which; nothing else in the application
+ * layer knows the difference.
+ */
+export type TextToSpeechRunsIn = "replicate" | "worker";
+
+export interface SynthesizedSpeech {
+  bytes: Buffer;
+  mime: string;
+}
+
 export interface TextToSpeechProvider {
-  readonly id: "replicate";
+  readonly id: "replicate" | "elevenlabs";
   readonly model: string;
   readonly version: string;
+  readonly runsIn: TextToSpeechRunsIn;
   isConfigured(): boolean;
   /** Language codes this provider (this model) speaks. The public config intersects the catalogue with it. */
   supportedLanguages(): readonly string[];
   /** Build the payload from validated values; exposed for tests. */
   buildInput(req: Omit<TextToSpeechRequest, "jobId" | "webhookUrl">): Record<string, unknown>;
+  /** `replicate` providers only. */
   createPrediction(req: TextToSpeechRequest): Promise<TextToSpeechSubmission>;
+  /** `worker` providers only: the audio itself. */
+  synthesize(req: Omit<TextToSpeechRequest, "webhookUrl">): Promise<SynthesizedSpeech>;
 }
 
 /* ───────────────────────────── MiniMax Speech-02 on Replicate ─────────────── */
@@ -130,6 +155,7 @@ export function replicateMiniMaxProvider(model: string): TextToSpeechProvider {
     id: "replicate",
     model,
     version,
+    runsIn: "replicate",
     isConfigured() {
       return !!process.env.REPLICATE_API_TOKEN?.trim() && !!version;
     },
@@ -138,6 +164,9 @@ export function replicateMiniMaxProvider(model: string): TextToSpeechProvider {
     },
     buildInput(req) {
       return buildMiniMaxInput(req) as unknown as Record<string, unknown>;
+    },
+    synthesize: async () => {
+      throw new AiJobError("INTERNAL_ERROR", `${model} runs as a prediction, not in the worker`);
     },
     async createPrediction(req) {
       if (!this.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `text-to-speech model ${model} is not configured`);
@@ -156,12 +185,56 @@ export function replicateMiniMaxProvider(model: string): TextToSpeechProvider {
  * and speaks no language — the safe failure: TTS is simply not offered
  * until an adapter exists (§5: "the provider must be replaceable later").
  */
+/* ───────────────────────────── ElevenLabs (in the worker) ───────────────── */
+
+/**
+ * ElevenLabs v3 / Multilingual v2 / Turbo & Flash v2.5 (owner, 2026-09-20:
+ * "let's use eleven lab v3 … very clean and realistic"). The API answers with
+ * the audio, so this adapter `synthesize`s and never creates a prediction;
+ * the worker calls it during prepare and fits the MP3 to the video exactly
+ * as it fits an upload. The voice is always a catalogue row's
+ * `providerVoiceId` — the same no-cloning rule as MiniMax: there is no field
+ * through which a member's own voice id could arrive.
+ */
+export function elevenLabsProvider(model: string): TextToSpeechProvider {
+  const spec = elevenLabsTtsModel(model);
+  return {
+    id: "elevenlabs",
+    model,
+    version: spec?.modelId ?? "",
+    runsIn: "worker",
+    isConfigured() {
+      return !!spec && elevenLabsConfigured();
+    },
+    supportedLanguages() {
+      return spec ? spec.languages : [];
+    },
+    buildInput(req) {
+      if (!spec) throw new AiJobError("FEATURE_UNAVAILABLE", `no text-to-speech adapter for ${model}`);
+      const body: Record<string, unknown> = { text: req.text, model_id: spec.modelId, voice_id: req.providerVoiceId ?? "" };
+      if (spec.languageCodeParam) body.language_code = req.languageCode.toLowerCase();
+      return body;
+    },
+    createPrediction: async () => {
+      throw new AiJobError("INTERNAL_ERROR", `${model} runs in the worker, not as a prediction`);
+    },
+    async synthesize(req) {
+      if (!spec || !elevenLabsConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `text-to-speech model ${model} is not configured`);
+      if (!req.providerVoiceId) throw new AiJobError("INVALID_INPUT", "an ElevenLabs voice needs the catalogue's provider voice id");
+      if (req.text.length > spec.maxCharacters) throw new AiJobError("INVALID_INPUT", `${model} takes at most ${spec.maxCharacters} characters`);
+      return elevenLabsTextToSpeech({ text: req.text, modelId: spec.modelId, providerVoiceId: req.providerVoiceId, languageCode: req.languageCode, languageCodeParam: spec.languageCodeParam });
+    },
+  };
+}
+
 export function textToSpeechProviderFor(model: string): TextToSpeechProvider {
   if (/^minimax\/speech-02-(hd|turbo)$/.test(model)) return replicateMiniMaxProvider(model);
+  if (elevenLabsTtsModel(model)) return elevenLabsProvider(model);
   return {
     id: "replicate",
     model,
     version: "",
+    runsIn: "replicate",
     isConfigured: () => false,
     supportedLanguages: () => [],
     buildInput: () => {
@@ -170,5 +243,13 @@ export function textToSpeechProviderFor(model: string): TextToSpeechProvider {
     createPrediction: async () => {
       throw new AiJobError("FEATURE_UNAVAILABLE", `no text-to-speech adapter for ${model}`);
     },
+    synthesize: async () => {
+      throw new AiJobError("FEATURE_UNAVAILABLE", `no text-to-speech adapter for ${model}`);
+    },
   };
+}
+
+/** Whether the configured model's voice is made in the worker (no `voice` pipeline stage). Pure on the model name. */
+export function ttsRunsInWorker(model: string): boolean {
+  return !!elevenLabsTtsModel(model);
 }

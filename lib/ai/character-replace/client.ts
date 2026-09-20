@@ -144,7 +144,7 @@ export async function startCharacterReplaceJob(
   input: {
     quote: Pick<
       CharacterReplaceQuote,
-      "id" | "product" | "currency" | "pricingConfigVersion" | "durationMs" | "mode" | "quality" | "voiceMode" | "voiceSource" | "ttsCharacters" | "lipSyncMode" | "totalCents" | "expiresAt"
+      "id" | "product" | "currency" | "pricingConfigVersion" | "durationMs" | "mode" | "quality" | "voiceMode" | "voiceSource" | "ttsCharacters" | "voiceChange" | "lipSyncMode" | "totalCents" | "expiresAt"
     >;
     trim: { startMs: number; endMs: number } | null;
     consent: true;
@@ -154,6 +154,8 @@ export async function startCharacterReplaceJob(
       text?: string;
       languageCode?: string;
       voiceId?: string;
+      /** 2026-09-20: the catalogue voice an uploaded recording is re-voiced in. */
+      changeVoiceId?: string;
       trimToFit?: boolean;
       voiceConsent?: boolean;
     };
@@ -292,6 +294,7 @@ export async function getCharacterReplaceQuote(
     voiceMode: input.voiceMode,
     voiceSource: input.voiceMode === "new_voice" ? (input.voiceSource ?? null) : null,
     ttsCharacters: input.voiceMode === "new_voice" && input.voiceSource === "tts" ? (input.ttsCharacters ?? 0) : 0,
+    voiceChange: input.voiceMode === "new_voice" && input.voiceSource === "upload" && input.voiceChange === true,
     lipSyncMode: input.lipSyncMode,
   };
   try {

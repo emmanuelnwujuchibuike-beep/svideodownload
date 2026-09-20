@@ -33,6 +33,7 @@ import type { PricingLine, PricingSaving } from "@/lib/ai/character-replace/type
  *                face_only / skin_face: the mode's own tier rate                 (duration × quality_rate)
  *   voice      = seconds × voiceSurcharge                     (new voice)
  *              + ttsPerRequest + characters × ttsPerCharacter (new voice from text)
+ *              + seconds × voiceChangePerSecond                (your audio, re-voiced — 2026-09-20)
  *   lipSync    = seconds × tier.perSecondCents                (new voice + a tier)
  *   subtotal   = basePrice + video + voice + lipSync
  *   total      = max(subtotal, minimumCharge)
@@ -74,6 +75,8 @@ export interface QuoteInput {
   voiceSource?: CharacterReplaceVoiceSource | null;
   /** Characters of dialogue, when the voice is generated from text. */
   ttsCharacters?: number | null;
+  /** 2026-09-20: the member's own recording, re-voiced in a catalogue voice. Only with `voiceSource: "upload"`. */
+  voiceChange?: boolean | null;
   /** Null unless a new voice is generated. */
   lipSyncMode: CharacterReplaceLipSyncTier | null;
 }
@@ -86,6 +89,7 @@ export interface NormalizedQuoteInput {
   voiceMode: CharacterReplaceAudioMode;
   voiceSource: CharacterReplaceVoiceSource | null;
   ttsCharacters: number;
+  voiceChange: boolean;
   lipSyncMode: CharacterReplaceLipSyncTier | null;
 }
 
@@ -99,6 +103,7 @@ export function normalizeQuoteInput(input: QuoteInput): NormalizedQuoteInput {
     voiceMode: input.voiceMode,
     voiceSource: newVoice ? (input.voiceSource === "tts" ? "tts" : input.voiceSource === "upload" ? "upload" : null) : null,
     ttsCharacters: newVoice && input.voiceSource === "tts" && typeof input.ttsCharacters === "number" && Number.isInteger(input.ttsCharacters) && input.ttsCharacters > 0 ? input.ttsCharacters : 0,
+    voiceChange: newVoice && input.voiceSource === "upload" && input.voiceChange === true,
     lipSyncMode: newVoice ? input.lipSyncMode : null,
   };
 }
@@ -125,6 +130,8 @@ export interface CharacterReplaceQuote {
   voiceMode: CharacterReplaceAudioMode;
   voiceSource: CharacterReplaceVoiceSource | null;
   ttsCharacters: number;
+  /** 2026-09-20: whether the uploaded voice is re-voiced in a catalogue voice. Signed. */
+  voiceChange: boolean;
   lipSyncMode: CharacterReplaceLipSyncTier | null;
 
   /** The rates that applied, per second, in minor units. */
@@ -136,6 +143,8 @@ export interface CharacterReplaceQuote {
   /** The text-to-speech fees that applied (Part 6 §26). */
   ttsRequestCents: number;
   ttsCharacterRateCents: number;
+  /** The voice-change rate per second that applied (2026-09-20); zero when no change. */
+  voiceChangeRateCents: number;
 
   /** The amounts, in minor units. */
   videoCents: number;
@@ -188,6 +197,10 @@ export function validateQuoteInput(raw: QuoteInput, config: CharacterReplaceConf
     if (!config.voice.newVoiceEnabled) return { ok: false, reason: "A new voice isn't available right now." };
     if (input.voiceSource === null) return { ok: false, reason: "Choose where the new voice comes from." };
     if (input.voiceSource === "upload" && !config.audio.replacementEnabled) return { ok: false, reason: "Uploading your own audio isn't available right now." };
+    if (input.voiceChange) {
+      if (input.voiceSource !== "upload") return { ok: false, reason: "A voice change needs your own audio." };
+      if (!config.tts.voiceChange.enabled) return { ok: false, reason: "Changing the voice isn't available right now." };
+    }
     if (input.voiceSource === "tts") {
       if (!config.tts.enabled) return { ok: false, reason: "Generating a voice from text isn't available right now." };
       if (input.ttsCharacters < config.tts.minimumCharacters) return { ok: false, reason: `Write at least ${config.tts.minimumCharacters} character${config.tts.minimumCharacters === 1 ? "" : "s"} of dialogue.` };
@@ -241,14 +254,17 @@ function computeAmounts(input: NormalizedQuoteInput, config: CharacterReplaceCon
   const lipRate = lipTier ? lipTier.perSecondCents : 0;
   const ttsRequestCents = tts ? config.tts.perRequestCents : 0;
   const ttsCharacterRateCents = tts ? config.tts.perCharacterCents : 0;
+  const voiceChange = newVoice && input.voiceSource === "upload" && input.voiceChange;
+  const voiceChangeRateCents = voiceChange ? config.tts.voiceChange.perSecondCents : 0;
   const videoCents = centsForDuration(qualityRate, ms);
   const ttsCents = tts ? ttsRequestCents + ttsCharacterRateCents * input.ttsCharacters : 0;
-  const voiceCents = centsForDuration(voiceRate, ms) + ttsCents;
+  const voiceChangeCents = centsForDuration(voiceChangeRateCents, ms);
+  const voiceCents = centsForDuration(voiceRate, ms) + ttsCents + voiceChangeCents;
   const lipSyncCents = centsForDuration(lipRate, ms);
   const subtotalCents = config.basePriceCents + videoCents + voiceCents + lipSyncCents;
   const minimumApplied = subtotalCents < config.minimumChargeCents;
   const totalCents = minimumApplied ? config.minimumChargeCents : subtotalCents;
-  return { ms, newVoice, tts, lipTier, qualityRate, voiceRate, lipRate, ttsRequestCents, ttsCharacterRateCents, ttsCents, videoCents, voiceCents, lipSyncCents, subtotalCents, minimumApplied, totalCents };
+  return { ms, newVoice, tts, voiceChange, voiceChangeRateCents, voiceChangeCents, lipTier, qualityRate, voiceRate, lipRate, ttsRequestCents, ttsCharacterRateCents, ttsCents, videoCents, voiceCents, lipSyncCents, subtotalCents, minimumApplied, totalCents };
 }
 
 /** "12.4s" — one decimal, from integer milliseconds. */
@@ -298,7 +314,7 @@ export function quoteCharacterReplace(
     {
       key: "voice",
       label: "Voice",
-      value: a.newVoice ? (a.tts ? `New voice from text · ${input.ttsCharacters} characters` : "Your audio") : "Original audio",
+      value: a.newVoice ? (a.tts ? `New voice from text · ${input.ttsCharacters} characters` : a.voiceChange ? "Your audio, in a new voice" : "Your audio") : "Original audio",
       amountCents: a.newVoice ? a.voiceCents : null,
     },
     {
@@ -356,6 +372,7 @@ export function quoteCharacterReplace(
     voiceMode: input.voiceMode,
     voiceSource: input.voiceSource,
     ttsCharacters: input.ttsCharacters,
+    voiceChange: a.voiceChange,
     lipSyncMode: a.lipTier ? a.lipTier.id : null,
     baseRateCents,
     qualityRateCents: a.qualityRate,
@@ -364,6 +381,7 @@ export function quoteCharacterReplace(
     basePriceCents: config.basePriceCents,
     ttsRequestCents: a.ttsRequestCents,
     ttsCharacterRateCents: a.ttsCharacterRateCents,
+    voiceChangeRateCents: a.voiceChangeRateCents,
     videoCents: a.videoCents,
     voiceCents: a.voiceCents,
     lipSyncCents: a.lipSyncCents,

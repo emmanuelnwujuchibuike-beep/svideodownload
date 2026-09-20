@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -9,6 +9,9 @@ import { buildReferenceImageArgs, isKnownReferenceImageArg, type ReferenceImageP
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { characterReplaceLimits } from "@/lib/ai/character-replace/validate";
 import { prepareReplacementAudio } from "@/server/services/ai-audio-prepare";
+import { ElevenLabsError } from "@/lib/ai/voice/elevenlabs";
+import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
+import { voiceChangeProviderFor } from "@/lib/ai/voice/voice-change-provider";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
@@ -289,6 +292,120 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
       await recordJobEvent(job.id, "audio.prepared", { source: "upload", durationMs: outcome.durationMs, inputDurationMs: outcome.input.durationMs, trimmed: outcome.trimmed, padded: outcome.padded, transcoded: outcome.transcoded, codec: outcome.input.codec });
     }
 
+    /*
+      ── 5c. the voice, made HERE (2026-09-20, ElevenLabs) ───────────────────
+      A synchronous text-to-speech provider answers with the audio, so the
+      worker makes the voice during prepare and the pipeline has no `voice`
+      stage (start/route.ts planned it that way from the same model name).
+      The MP3 is then fitted to the video exactly as the advance service fits
+      a MiniMax WAV. What the provider said is logged for the operator; the
+      member sees a code and is refunded — the provider's sentence never
+      reaches them.
+    */
+    let synthesized: NonNullable<CharacterReplaceJobMeta["audio"]>["synthesized"] = null;
+    if (meta.audio?.source === "tts" && meta.audio.tts) {
+      const ttsModel = meta.audio.tts.model ?? crConfig.tts.model;
+      const provider = textToSpeechProviderFor(ttsModel);
+      if (provider.runsIn === "worker") {
+        if (!provider.isConfigured()) throw new PrepareFailure("PREPARATION_FAILED", `text-to-speech model ${ttsModel} is not configured on the worker`, "system");
+        const ttsFile = path.join(dir, "voice-tts.bin");
+        let made: { bytes: Buffer; mime: string };
+        try {
+          made = await provider.synthesize({ jobId: job.id, text: meta.audio.tts.text, languageCode: meta.audio.tts.languageCode, providerVoiceId: meta.audio.tts.providerVoiceId });
+        } catch (e) {
+          await recordJobEvent(job.id, "audio.rejected", { code: "TTS_FAILED", detail: String(e).slice(0, 200), source: "tts", provider: provider.id });
+          // the provider refused the request itself (too long, an unknown voice) → the member's input; anything else is ours or the provider's
+          const userSide = e instanceof ElevenLabsError && e.kind === "input";
+          throw new PrepareFailure(userSide ? "AUDIO_INVALID" : "PREPARATION_FAILED", `text-to-speech: ${String(e)}`, userSide ? "user" : "system");
+        }
+        await writeFile(ttsFile, made.bytes);
+        const outcome = await prepareReplacementAudio({
+          jobId: job.id,
+          ownerId: job.user_id,
+          feature: feature.id,
+          inputFile: ttsFile,
+          dir,
+          videoMs: preparedMs,
+          policy: { shorterAudio: crConfig.audio.shorterAudio, minimumCoverageFraction: crConfig.audio.minimumCoverageFraction, trimToFit: meta.audio.trimToFit === true },
+          limits: { maxDurationMs: Math.max(crConfig.audio.maximumDurationSeconds * 1000, preparedMs * 2) },
+          declared: null,
+        });
+        if (!outcome.ok) {
+          await recordJobEvent(job.id, "audio.rejected", { code: outcome.code, detail: outcome.detail.slice(0, 200), source: "tts" });
+          throw new PrepareFailure(outcome.code, outcome.detail);
+        }
+        audioPrepared = {
+          path: outcome.path,
+          durationMs: outcome.durationMs,
+          sampleRate: outcome.sampleRate,
+          channels: outcome.channels,
+          codec: outcome.codec,
+          bitrate: outcome.bitrate,
+          bytes: outcome.bytes,
+          trimmed: outcome.trimmed,
+          padded: outcome.padded,
+          transcoded: outcome.transcoded,
+        };
+        synthesized = { provider: provider.id, model: ttsModel, kind: "tts", bytes: made.bytes.byteLength, durationMs: outcome.input.durationMs };
+        await recordJobEvent(job.id, "audio.prepared", { source: "tts", provider: provider.id, model: ttsModel, durationMs: outcome.durationMs, inputDurationMs: outcome.input.durationMs, trimmed: outcome.trimmed, padded: outcome.padded });
+      }
+    }
+
+    /*
+      ── 5d. the voice change (2026-09-20) ────────────────────────────────────
+      The member's fitted recording, re-voiced in the catalogue voice they
+      chose (gender and age are theirs to pick; the voice id is the
+      catalogue's, written at /start after the price was verified). The
+      changer keeps the timing, so the answer is fitted again only to
+      re-measure it and to become `audio.prepared`.
+    */
+    if (meta.audio?.source === "upload" && meta.audio.convert && audioPrepared) {
+      const convert = meta.audio.convert;
+      const changer = voiceChangeProviderFor(convert.model);
+      if (!changer.isConfigured()) throw new PrepareFailure("PREPARATION_FAILED", `voice-change model ${convert.model} is not configured on the worker`, "system");
+      const fitted = await readFile(path.join(dir, "voice-prepared.wav"));
+      const changedFile = path.join(dir, "voice-changed.bin");
+      let made: { bytes: Buffer; mime: string };
+      try {
+        made = await changer.convert({ jobId: job.id, audio: fitted, audioMime: "audio/wav", providerVoiceId: convert.providerVoiceId });
+      } catch (e) {
+        await recordJobEvent(job.id, "audio.rejected", { code: "VOICE_CHANGE_FAILED", detail: String(e).slice(0, 200), source: "upload", provider: changer.id });
+        const userSide = e instanceof ElevenLabsError && e.kind === "input";
+        throw new PrepareFailure(userSide ? "AUDIO_INVALID" : "PREPARATION_FAILED", `voice change: ${String(e)}`, userSide ? "user" : "system");
+      }
+      await writeFile(changedFile, made.bytes);
+      const outcome = await prepareReplacementAudio({
+        jobId: job.id,
+        ownerId: job.user_id,
+        feature: feature.id,
+        inputFile: changedFile,
+        dir,
+        videoMs: preparedMs,
+        // the input was already fitted; a provider that returns a hair more or less is trimmed/padded, never refused
+        policy: { shorterAudio: "silence", minimumCoverageFraction: 0, trimToFit: true },
+        limits: { maxDurationMs: Math.max(crConfig.audio.maximumDurationSeconds * 1000, preparedMs * 2) },
+        declared: null,
+      });
+      if (!outcome.ok) {
+        await recordJobEvent(job.id, "audio.rejected", { code: outcome.code, detail: outcome.detail.slice(0, 200), source: "upload", stage: "voice_change" });
+        throw new PrepareFailure(outcome.code, outcome.detail);
+      }
+      audioPrepared = {
+        path: outcome.path,
+        durationMs: outcome.durationMs,
+        sampleRate: outcome.sampleRate,
+        channels: outcome.channels,
+        codec: outcome.codec,
+        bitrate: outcome.bitrate,
+        bytes: outcome.bytes,
+        trimmed: outcome.trimmed,
+        padded: outcome.padded,
+        transcoded: outcome.transcoded,
+      };
+      synthesized = { provider: changer.id, model: convert.model, kind: "voice_change", bytes: made.bytes.byteLength, durationMs: outcome.input.durationMs };
+      await recordJobEvent(job.id, "audio.prepared", { source: "upload", stage: "voice_change", provider: changer.id, model: convert.model, voiceId: convert.voiceId, durationMs: outcome.durationMs, inputDurationMs: outcome.input.durationMs });
+    }
+
     /* ── 6. store beside the inputs, record, hand to the provider ────────── */
     const key = aiPreparedKey(job.user_id, feature.id, job.id);
     if (!pathBelongsTo(key, job.user_id, job.id)) throw new PrepareFailure("PREPARATION_FAILED", "refusing a prepared path that failed ownership", "system");
@@ -315,7 +432,7 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
           },
           character: { ...meta.character, size: imageBytes, width: imageProbe.width, height: imageProbe.height, preparedPath: preparedReferencePaths[0] ?? null },
           references: meta.references.map((r, i) => ({ ...r, size: imageByteCounts[i + 1] ?? r.size, width: imageProbes[i + 1]?.width ?? r.width, height: imageProbes[i + 1]?.height ?? r.height, preparedPath: preparedReferencePaths[i + 1] ?? null })),
-          ...(audioPrepared ? { audio: { ...(freshMeta?.audio ?? meta.audio), prepared: audioPrepared } } : {}),
+          ...(audioPrepared ? { audio: { ...(freshMeta?.audio ?? meta.audio), prepared: audioPrepared, ...(synthesized ? { synthesized } : {}) } } : {}),
           color: { source: color },
           prepared: {
             path: key,

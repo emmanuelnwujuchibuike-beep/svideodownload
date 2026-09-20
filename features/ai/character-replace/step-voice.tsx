@@ -1,13 +1,14 @@
 "use client";
 
 import { AudioLines, Check, FileAudio, Mic2, ShieldCheck, Trash2, Type as TypeIcon, Upload } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
 
-import type { CharacterReplaceLipSyncTier, CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
+import type { CharacterReplaceLipSyncTier, CharacterReplacePublicConfig, CharacterReplacePublicVoice } from "@/lib/ai/character-replace/config";
 import type { CharacterReplaceVoiceSource } from "@/lib/ai/character-replace/pricing";
 import type { AssetSlot, CharacterReplaceProject } from "@/lib/ai/character-replace/types";
 import { dialogueCharacters, formatSeconds, selectedDurationSeconds } from "@/lib/ai/character-replace/workspace";
 import { AUDIO_ACCEPT, AUDIO_ERRORS, AUDIO_FIT_TOLERANCE_MS, AUDIO_FORMAT_LINE, estimateSpeechMs, type AudioErrorCode } from "@/lib/ai/voice/audio-validate";
+import { VOICE_AGE_LABEL, VOICE_AGES, VOICE_GENDER_LABEL, VOICE_GENDERS, type VoiceAge, type VoiceGender } from "@/lib/ai/voice/elevenlabs-models";
 import { cn, formatBytes } from "@/lib/utils";
 
 /**
@@ -43,6 +44,8 @@ export function CharacterReplaceVoiceStep({
   onText,
   onLanguage,
   onVoice,
+  onChangeVoice,
+  onChangeVoiceId,
   onTier,
   onLipSyncOff,
 }: {
@@ -58,6 +61,9 @@ export function CharacterReplaceVoiceStep({
   onText: (text: string) => void;
   onLanguage: (code: string) => void;
   onVoice: (id: string) => void;
+  /** 2026-09-20: re-voice an uploaded recording in a catalogue voice — on/off, and which. */
+  onChangeVoice: (on: boolean) => void;
+  onChangeVoiceId: (id: string) => void;
   onTier: (tier: CharacterReplaceLipSyncTier) => void;
   onLipSyncOff: () => void;
 }) {
@@ -222,6 +228,48 @@ export function CharacterReplaceVoiceStep({
                 </p>
                 <Tick id={`${id}-voiceconsent`} checked={v.voiceConsent} onChange={onVoiceConsent} label="I confirm that I own this voice or have permission to use it." strong />
               </div>
+
+              {/*
+                ── Change the voice (2026-09-20) ────────────────────────────
+                Owner: "when converting a video to audio a gender and voice
+                set-up should be available in the run steps." The recording's
+                words and timing stay; a catalogue voice of the gender and age
+                the member picks speaks them. Priced per second — the switch
+                marks the price stale and the summary re-quotes.
+              */}
+              {config.voiceChange.enabled ? (
+                <section aria-labelledby={`${id}-change`} className="mt-3 rounded-[1.5rem] border border-border/70 bg-gradient-to-br from-card via-card to-violet-500/[0.06] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 id={`${id}-change`} className="text-[15px] font-bold tracking-[-0.01em]">
+                        Change the voice
+                      </h3>
+                      <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                        Keep the words and timing of your recording, spoken by a different voice — pick a gender and an age, then a voice.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={v.changeVoice}
+                      aria-label="Change the voice"
+                      onClick={() => onChangeVoice(!v.changeVoice)}
+                      className={cn(
+                        "relative h-7 w-12 shrink-0 rounded-full transition",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                        v.changeVoice ? "bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500" : "bg-secondary",
+                      )}
+                    >
+                      <span aria-hidden className={cn("absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-[left]", v.changeVoice ? "left-6" : "left-1")} />
+                    </button>
+                  </div>
+                  {v.changeVoice ? (
+                    <div className="mt-3">
+                      <VoicePicker id={`${id}-changevoice`} voices={config.voiceChange.voices} value={v.changeVoiceId} onChange={onChangeVoiceId} />
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
             </section>
           ) : null}
 
@@ -258,27 +306,9 @@ export function CharacterReplaceVoiceStep({
                 <h3 id={`${id}-voice`} className="text-[15px] font-bold tracking-[-0.01em]">
                   Voice
                 </h3>
-                <div role="radiogroup" aria-labelledby={`${id}-voice`} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {voices.map((x) => {
-                    const active = x.id === v.voiceId;
-                    return (
-                      <button
-                        key={x.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={() => onVoice(x.id)}
-                        className={cn(
-                          "min-h-[64px] rounded-2xl border px-3 py-3 text-left transition",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                          active ? "border-foreground bg-foreground text-background" : "border-border/70 bg-card hover:border-foreground/30",
-                        )}
-                      >
-                        <span className="block text-[14px] font-bold">{x.label}</span>
-                        <span className={cn("mt-0.5 block text-[11.5px] leading-snug", active ? "text-background/70" : "text-muted-foreground")}>{x.blurb}</span>
-                      </button>
-                    );
-                  })}
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">Pick a gender and an age, then the voice that fits the character.</p>
+                <div className="mt-3">
+                  <VoicePicker id={`${id}-voice`} voices={voices} value={v.voiceId} onChange={onVoice} />
                 </div>
               </section>
 
@@ -389,6 +419,88 @@ export function CharacterReplaceVoiceStep({
             ) : null}
           </section>
         </>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The voice picker (2026-09-20): two rows of filter chips — gender, then age —
+ * and the voices that match. A filter that would leave nothing is still
+ * offered (a member can see why the list is empty and change it); the
+ * chosen voice stays chosen even when a filter hides it, and the chips that
+ * would reveal it are marked. Words only — never a provider's name.
+ */
+function VoicePicker({ id, voices, value, onChange }: { id: string; voices: readonly CharacterReplacePublicVoice[]; value: string | null; onChange: (id: string) => void }) {
+  const chosen = voices.find((x) => x.id === value) ?? null;
+  const [gender, setGender] = useState<VoiceGender | "any">("any");
+  const [age, setAge] = useState<VoiceAge | "any">("any");
+  const genders = VOICE_GENDERS.filter((g) => voices.some((x) => x.gender === g));
+  const ages = VOICE_AGES.filter((a) => voices.some((x) => x.age === a && (gender === "any" || x.gender === gender)));
+  const shown = voices.filter((x) => (gender === "any" || x.gender === gender) && (age === "any" || x.age === age));
+  const chip = (active: boolean) =>
+    cn(
+      "h-9 rounded-full border px-3.5 text-[12.5px] font-semibold transition",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+      active ? "border-foreground bg-foreground text-background" : "border-border/70 bg-card text-foreground/80 hover:border-foreground/30",
+    );
+  return (
+    <div>
+      <div role="group" aria-label="Gender" className="flex flex-wrap gap-1.5">
+        <button type="button" aria-pressed={gender === "any"} onClick={() => setGender("any")} className={chip(gender === "any")}>
+          Any gender
+        </button>
+        {genders.map((g) => (
+          <button key={g} type="button" aria-pressed={gender === g} onClick={() => setGender(g)} className={chip(gender === g)}>
+            {VOICE_GENDER_LABEL[g]}
+          </button>
+        ))}
+      </div>
+      {ages.length > 1 ? (
+        <div role="group" aria-label="Age" className="mt-2 flex flex-wrap gap-1.5">
+          <button type="button" aria-pressed={age === "any"} onClick={() => setAge("any")} className={chip(age === "any")}>
+            Any age
+          </button>
+          {ages.map((a) => (
+            <button key={a} type="button" aria-pressed={age === a} onClick={() => setAge(a)} className={chip(age === a)}>
+              {VOICE_AGE_LABEL[a]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {shown.length === 0 ? (
+        <p className="mt-3 text-[12.5px] text-muted-foreground">No voice matches those filters — pick another gender or age.</p>
+      ) : (
+        <div role="radiogroup" aria-labelledby={id} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {shown.map((x) => {
+            const active = x.id === value;
+            return (
+              <button
+                key={x.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => onChange(x.id)}
+                className={cn(
+                  "min-h-[64px] rounded-2xl border px-3 py-3 text-left transition",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  active ? "border-foreground bg-foreground text-background" : "border-border/70 bg-card hover:border-foreground/30",
+                )}
+              >
+                <span className="block text-[14px] font-bold">{x.label}</span>
+                <span className={cn("mt-0.5 block text-[11.5px] leading-snug", active ? "text-background/70" : "text-muted-foreground")}>
+                  {VOICE_GENDER_LABEL[x.gender]} · {VOICE_AGE_LABEL[x.age]}
+                  {x.blurb ? ` · ${x.blurb}` : ""}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {chosen && !shown.some((x) => x.id === chosen.id) ? (
+        <p className="mt-2 text-[12px] text-muted-foreground">
+          <strong>{chosen.label}</strong> is still selected — it is {VOICE_GENDER_LABEL[chosen.gender].toLowerCase()}, {VOICE_AGE_LABEL[chosen.age].toLowerCase()}.
+        </p>
       ) : null}
     </div>
   );

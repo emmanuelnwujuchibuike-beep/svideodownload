@@ -22,6 +22,8 @@
  * and stay in the catalogue for a provider that speaks them.
  */
 
+import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
+
 export interface TtsLanguageCapability {
   /** BCP-47 primary subtag, lower-case — the catalogue's key. */
   code: string;
@@ -91,5 +93,8 @@ export function minimaxSupportedLanguages(): readonly string[] {
  */
 export function ttsSupportedLanguagesFor(model: string): readonly string[] {
   if (/^minimax\/speech-02/.test(model)) return minimaxSupportedLanguages();
+  // 2026-09-20: the ElevenLabs models, each with the list its documentation gives (elevenlabs-models.ts).
+  const eleven = elevenLabsTtsModel(model);
+  if (eleven) return eleven.languages;
   return [];
 }

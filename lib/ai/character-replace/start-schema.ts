@@ -92,6 +92,7 @@ export const startCharacterReplaceJobSchema = z
         voiceMode: z.enum(["original", "new_voice"]),
         voiceSource: VOICE_SOURCE.nullable().optional(),
         ttsCharacters: z.number().int().nonnegative().max(100_000).optional(),
+        voiceChange: z.boolean().optional(),
         lipSyncMode: z.enum(["standard", "studio"]).nullable(),
         totalCents: z.number().int().nonnegative(),
         expiresAt: z.string().min(10).max(40),
@@ -111,6 +112,8 @@ export const startCharacterReplaceJobSchema = z
         text: z.string().max(10_000).optional(),
         languageCode: z.string().trim().min(2).max(40).optional(),
         voiceId: z.string().trim().min(1).max(40).optional(),
+        /** 2026-09-20: with a voice change on an upload, the catalogue voice it is re-voiced in. */
+        changeVoiceId: z.string().trim().min(1).max(40).optional(),
         /** §4: the member's explicit choice to cut audio that is longer than the video. */
         trimToFit: z.boolean().optional(),
         /** §6: "I confirm that I own this voice or have permission to use it." Required for an upload. */

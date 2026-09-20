@@ -6,6 +6,7 @@ import { useMemo, useState, type FormEvent } from "react";
 
 import type { CharacterReplaceConfig, ReplacementModeConfig } from "@/lib/ai/character-replace/config";
 import { FACE_ONLY_TIER_MAP, SKIN_FACE_TIER_MAP } from "@/lib/ai/character-replace/modes";
+import { ELEVENLABS_STS_MODELS, ELEVENLABS_TTS_MODELS, isElevenLabsTtsModel, VOICE_AGE_LABEL, VOICE_GENDER_LABEL } from "@/lib/ai/voice/elevenlabs-models";
 import { formatCents } from "@/lib/ai/economy";
 import { conversionApplies } from "@/lib/ai/character-replace/topup-fx";
 import { AI_CURRENCIES, aiCurrencySymbol, isAiCurrency, majorInputToMinor, minorToMajorInput, type AiCurrency } from "@/lib/landing/bounds";
@@ -127,6 +128,12 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const [syncMode, setSyncMode] = useState<"silence" | "loop" | "bounce">(cr.audio.syncMode);
   const [ttsEnabled, setTtsEnabled] = useState(cr.tts.enabled);
   const [ttsModel, setTtsModel] = useState(cr.tts.model);
+  /* ── 2026-09-20: the voice changer ── */
+  const [changeEnabled, setChangeEnabled] = useState(cr.tts.voiceChange.enabled);
+  const [changeModel, setChangeModel] = useState(cr.tts.voiceChange.model);
+  const [changePerSecond, setChangePerSecond] = useState(minorToMajorInput(cr.tts.voiceChange.perSecondCents));
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [ttsPerRequest, setTtsPerRequest] = useState(minorToMajorInput(cr.tts.perRequestCents));
   const [ttsPerCharacter, setTtsPerCharacter] = useState(minorToMajorInput(cr.tts.perCharacterCents));
   const [ttsMinChars, setTtsMinChars] = useState(String(cr.tts.minimumCharacters));
@@ -233,6 +240,11 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
         perCharacterCents: majorInputToMinor(ttsPerCharacter) ?? cr.tts.perCharacterCents,
         minimumCharacters: ttsMinChars.trim() === "" ? cr.tts.minimumCharacters : Math.floor(Number(ttsMinChars)),
         maximumCharacters: ttsMaxChars.trim() === "" ? cr.tts.maximumCharacters : Math.floor(Number(ttsMaxChars)),
+        voiceChange: {
+          enabled: changeEnabled,
+          model: changeModel,
+          perSecondCents: majorInputToMinor(changePerSecond) ?? cr.tts.voiceChange.perSecondCents,
+        },
       },
       maximumDurationSeconds: maxSeconds.trim() === "" ? cr.maximumDurationSeconds : Math.floor(Number(maxSeconds)),
       maximumUploadBytes: maxUploadMb.trim() === "" ? cr.maximumUploadBytes : Math.floor(Number(maxUploadMb)) * 1024 * 1024,
@@ -246,7 +258,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           .filter((p) => p.amountCents > 0),
       },
     };
-  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, checkoutCurrency, coverage, cr, enabled, faceOnly, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
+  }, [audioEnabled, audioMaxMb, audioMaxSeconds, basePrice, breakerCooldown, breakerEnabled, breakerThreshold, breakerWindow, changeEnabled, changeModel, changePerSecond, checkoutCurrency, coverage, cr, enabled, faceOnly, fxPerUsd, goFast, lipMaxSeconds, lipModels, lipSyncEnabled, lipTiers, maintenanceMessage, maintenanceMode, maxActiveGlobal, maxActiveUser, maxPerDay, maxSeconds, maxUploadMb, maxTopup, minTopup, minimum, newVoice, packages, perSecond, processingEnabled, qualities, resultHours, savedDays, shorterAudio, skinFace, syncMode, trimMin, ttsEnabled, ttsMaxChars, ttsMinChars, ttsModel, ttsPerCharacter, ttsPerRequest, voiceSurcharge]);
 
   /* ─────────────────────── validation, in words ───────────────────────── */
 
@@ -326,6 +338,8 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
       if (!m.enabled && cr.modes[label === "Face Only" ? "face_only" : "skin_face"].enabled) out.push(`This switches ${label} OFF for every member.`);
     }
     if (payload.tts.enabled && payload.tts.perRequestCents === 0 && payload.tts.perCharacterCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("A generated voice is free — every voice fee is zero.");
+    if (payload.tts.voiceChange.enabled && payload.tts.voiceChange.perSecondCents === 0 && payload.voice.surchargePerSecondCents === 0) out.push("Changing a voice is free — its per-second rate and the new-voice surcharge are both zero.");
+    if (isElevenLabsTtsModel(payload.tts.model) && !cr.voices.some((v) => v.provider === "elevenlabs")) out.push("An ElevenLabs voice model is selected but the catalogue has no ElevenLabs voices — press Import voices below, or nobody can generate a voice.");
     /* ── Part 8 §2, §8: the switches and the caps ── */
     if (payload.ops.maintenanceMode && !cr.ops.maintenanceMode) out.push("This puts Character Replace into MAINTENANCE: no new videos for anyone until it is switched back. Finished videos stay reachable.");
     if (!payload.ops.processingEnabled && cr.ops.processingEnabled) out.push("This PAUSES new videos for every member. Videos already running finish normally.");
@@ -353,7 +367,7 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
     }
     if (payload.tts.perCharacterCents * payload.tts.maximumCharacters > 5_000_000) out.push(`The per-character fee prices the longest dialogue at ${formatCents(payload.tts.perCharacterCents * payload.tts.maximumCharacters, symbol)}.`);
     return out;
-  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.maintenanceMode, cr.ops.processingEnabled, payload, settings.frenzAiCurrency, symbol, walletIsUsd]);
+  }, [cr.enabled, cr.modes, cr.ops.circuitBreaker.enabled, cr.ops.maintenanceMode, cr.ops.processingEnabled, cr.voices, payload, settings.frenzAiCurrency, symbol, walletIsUsd]);
 
   const priceChanged = useMemo(() => {
     const before = cr;
@@ -681,8 +695,21 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
           <div className="mt-5 border-t border-border/60 pt-4">
             <Toggle label="Generate a voice from text" hint="Text-to-speech through Replicate. The languages offered are your catalogue intersected with what the model speaks." checked={ttsEnabled} onChange={setTtsEnabled} />
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <Field id="cr-tts-model" label="Voice model" hint="Provider: Replicate. minimax/speech-02-hd or minimax/speech-02-turbo today.">
-                <input id="cr-tts-model" type="text" value={ttsModel} onChange={(e) => setTtsModel(e.target.value)} className={cn(input, "font-mono text-xs")} />
+              <Field
+                id="cr-tts-model"
+                label="Voice model"
+                hint={isElevenLabsTtsModel(ttsModel) ? "ElevenLabs, called by the worker. Needs ELEVENLABS_API_KEY on Railway (the worker) and Vercel (this import button)." : "MiniMax on Replicate — a prediction with a voice stage."}
+              >
+                <select id="cr-tts-model" value={ttsModel} onChange={(e) => setTtsModel(e.target.value)} className={input}>
+                  {Object.entries(ELEVENLABS_TTS_MODELS).map(([id, m]) => (
+                    <option key={id} value={id}>
+                      {m.label}
+                    </option>
+                  ))}
+                  <option value="minimax/speech-02-hd">MiniMax Speech-02 HD (Replicate)</option>
+                  <option value="minimax/speech-02-turbo">MiniMax Speech-02 Turbo (Replicate)</option>
+                  {!isElevenLabsTtsModel(ttsModel) && !/^minimax\/speech-02-(hd|turbo)$/.test(ttsModel) ? <option value={ttsModel}>{ttsModel}</option> : null}
+                </select>
               </Field>
               <Field id="cr-tts-request" label="Price per generated voice" hint="Charged once per job that generates a voice.">
                 <input id="cr-tts-request" type="number" inputMode="decimal" min={0} step="any" value={ttsPerRequest} onChange={(e) => setTtsPerRequest(e.target.value)} className={input} />
@@ -696,6 +723,95 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
               <Field id="cr-tts-max" label="Longest dialogue (characters)">
                 <input id="cr-tts-max" type="number" inputMode="numeric" min={1} max={10000} value={ttsMaxChars} onChange={(e) => setTtsMaxChars(e.target.value)} className={input} />
               </Field>
+            </div>
+          </div>
+
+          {/* ── 2026-09-20: the voice changer ── */}
+          <div className="mt-5 border-t border-border/60 pt-4">
+            <Toggle
+              label="Members may change the voice of their own recording"
+              hint="An uploaded audio file or a gallery video's sound, spoken by a catalogue voice of the gender and age the member picks. ElevenLabs, called by the worker; needs ELEVENLABS_API_KEY on Railway."
+              checked={changeEnabled}
+              onChange={setChangeEnabled}
+            />
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field id="cr-change-model" label="Voice-changer model">
+                <select id="cr-change-model" value={changeModel} onChange={(e) => setChangeModel(e.target.value)} className={input}>
+                  {Object.entries(ELEVENLABS_STS_MODELS).map(([id, m]) => (
+                    <option key={id} value={id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field id="cr-change-rate" label={`Price per second of video (${symbol})`} hint="Added per second when a member changes the voice. Zero means it is included.">
+                <input id="cr-change-rate" type="number" inputMode="decimal" min={0} step="any" value={changePerSecond} onChange={(e) => setChangePerSecond(e.target.value)} className={input} />
+              </Field>
+            </div>
+          </div>
+
+          {/* ── 2026-09-20: the voice catalogue ── */}
+          <div className="mt-5 border-t border-border/60 pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Voice catalogue</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Members see the voices of the selected model&apos;s provider, filtered by gender and age. Import reads your ElevenLabs account&apos;s library (with its own gender and age labels) and
+                  replaces the ElevenLabs rows; the MiniMax rows are untouched. Provider ids never reach a member.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={importing}
+                onClick={async () => {
+                  setImporting(true);
+                  setImportMsg(null);
+                  try {
+                    const res = await fetch("/api/admin/ai/character-replace/voices/import", { method: "POST", cache: "no-store" });
+                    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; imported?: number; total?: number; error?: string };
+                    if (!res.ok || !data.ok) setImportMsg({ ok: false, text: data.error ?? "Import failed." });
+                    else {
+                      setImportMsg({ ok: true, text: `Imported ${data.imported} ElevenLabs voice${data.imported === 1 ? "" : "s"} — ${data.total} in the catalogue. Reloading…` });
+                      router.refresh();
+                    }
+                  } catch {
+                    setImportMsg({ ok: false, text: "Import failed." });
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+                className="shrink-0 rounded-full border border-border bg-card px-4 py-2 text-xs font-semibold transition hover:border-foreground/30 disabled:opacity-60"
+              >
+                {importing ? "Importing…" : "Import voices from ElevenLabs"}
+              </button>
+            </div>
+            {importMsg ? <p className={cn("mt-2 text-xs font-semibold", importMsg.ok ? "text-emerald-600" : "text-rose-500")}>{importMsg.text}</p> : null}
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[32rem] text-left text-xs">
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="py-1.5 pr-3 font-semibold">Voice</th>
+                    <th className="py-1.5 pr-3 font-semibold">Provider</th>
+                    <th className="py-1.5 pr-3 font-semibold">Gender</th>
+                    <th className="py-1.5 pr-3 font-semibold">Age</th>
+                    <th className="py-1.5 font-semibold">Languages</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cr.voices.map((v) => (
+                    <tr key={v.id} className={cn("border-t border-border/50", (isElevenLabsTtsModel(ttsModel) ? "elevenlabs" : "minimax") !== v.provider && "text-muted-foreground/70")}>
+                      <td className="py-1.5 pr-3">
+                        <span className="font-semibold text-foreground">{v.label}</span>
+                        {v.blurb ? <span className="text-muted-foreground"> · {v.blurb}</span> : null}
+                      </td>
+                      <td className="py-1.5 pr-3">{v.provider === "elevenlabs" ? "ElevenLabs" : "MiniMax"}</td>
+                      <td className="py-1.5 pr-3">{VOICE_GENDER_LABEL[v.gender]}</td>
+                      <td className="py-1.5 pr-3">{VOICE_AGE_LABEL[v.age]}</td>
+                      <td className="py-1.5">{v.languages.length ? v.languages.join(", ") : "all"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </Group>

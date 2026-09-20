@@ -242,6 +242,8 @@ export function quoteCanonical(q: CharacterReplaceQuote): string {
   if (q.mode && q.mode !== "full_character") base.m = q.mode;
   if (q.voiceSource) base.vs = q.voiceSource;
   if (q.ttsCharacters) base.tc = q.ttsCharacters;
+  // 2026-09-20: a voice change is priced, so it is signed; a quote without one canonicalises exactly as before.
+  if (q.voiceChange) base.vc = 1;
   return JSON.stringify(base);
 }
 

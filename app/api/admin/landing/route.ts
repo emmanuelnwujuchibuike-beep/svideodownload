@@ -254,6 +254,14 @@ const schema = z.object({
           perCharacterCents: z.number().int().min(0).max(1_000_000).optional(),
           minimumCharacters: z.number().int().min(1).max(10_000).optional(),
           maximumCharacters: z.number().int().min(1).max(10_000).optional(),
+          /** 2026-09-20: the voice changer — an upload re-voiced in a catalogue voice, priced per second. */
+          voiceChange: z
+            .object({
+              enabled: z.boolean().optional(),
+              model: z.string().max(160).optional(),
+              perSecondCents: z.number().int().min(0).max(100_000_000).optional(),
+            })
+            .optional(),
         })
         .optional(),
       /** Part 7 §21: retention, configuration-driven. */
@@ -299,9 +307,13 @@ const schema = z.object({
             languages: z.array(z.string().max(40)).max(60).optional(),
             /** Part 6: the configured TTS provider's own id for this voice. */
             providerVoiceId: z.string().max(80).optional(),
+            /** 2026-09-20: which provider the id belongs to, and the gender/age a member filters by. */
+            provider: z.enum(["minimax", "elevenlabs"]).optional(),
+            gender: z.enum(["female", "male", "neutral"]).optional(),
+            age: z.enum(["young", "middle_aged", "old"]).optional(),
           }),
         )
-        .max(40)
+        .max(80)
         .optional(),
       trim: z.object({ enabled: z.boolean().optional(), minimumSeconds: z.number().min(0.5).max(30).optional() }).optional(),
       voice: z

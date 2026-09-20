@@ -11,6 +11,7 @@ import { startCharacterReplaceJobSchema } from "@/lib/ai/character-replace/start
 import { verifyStartQuote } from "@/lib/ai/character-replace/start-verify";
 import { lipSyncProviderFor, lipSyncProviderUsdCentsPerSecond } from "@/lib/ai/voice/lipsync-provider";
 import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
+import { voiceChangeProviderFor } from "@/lib/ai/voice/voice-change-provider";
 import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
@@ -157,7 +158,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // The quote's mode must be the job's: a Face Only price handed to a Full Character job is a forged mode.
     if ((body.quote.mode ?? "full_character") !== meta.mode) return fail("INVALID_INPUT", { error: "That price was for a different replacement type. Review the price and try again." });
     const ttsProvider = textToSpeechProviderFor(config.tts.model);
-    const verdict = verifyStartQuote(body, config, money, { ttsLanguages: ttsProvider.supportedLanguages() });
+    // 2026-09-20: the voice changer (an upload re-voiced in a catalogue voice) is its own provider
+    const changer = voiceChangeProviderFor(config.tts.voiceChange.model);
+    const verdict = verifyStartQuote(body, config, money, { ttsLanguages: ttsProvider.supportedLanguages(), voiceChangeConfigured: config.tts.voiceChange.enabled && changer.isConfigured() });
     if (!verdict.ok) {
       console.info("[cr/start] quote refused", { jobId: job.id, subject: subject.key, code: verdict.code, reason: verdict.reason });
       return fail(verdict.code, verdict.code === "INVALID_INPUT" ? { error: "We couldn't use that price. Check it and try again." } : undefined);
@@ -201,12 +204,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       of the provider's cost goes on the row too — never on the quote the
       browser holds (Skin + Face brief §7).
     */
-    const pipeline = planPipeline({ mode: meta.mode, voiceMode: snapshot.voiceMode, voiceSource: snapshot.voiceSource, lipSyncMode: snapshot.lipSyncMode });
+    // 2026-09-20: an ElevenLabs voice is made by the worker during prepare, so the plan has no `voice` stage for it
+    const pipeline = planPipeline({ mode: meta.mode, voiceMode: snapshot.voiceMode, voiceSource: snapshot.voiceSource, lipSyncMode: snapshot.lipSyncMode, ttsInWorker: ttsProvider.runsIn === "worker" });
     const audioMeta =
       snapshot.voiceMode !== "new_voice" || !voice
         ? null
         : voice.source === "upload"
-          ? { ...(meta.audio ?? {}), source: "upload", upload: meta.audio?.upload ?? null, tts: null, trimToFit: voice.trimToFit, voiceConsent: true, prepared: null }
+          ? {
+              ...(meta.audio ?? {}),
+              source: "upload",
+              upload: meta.audio?.upload ?? null,
+              tts: null,
+              // the priced, verified voice change — the worker re-voices the fitted recording in this catalogue voice
+              convert: voice.change ? { voiceId: voice.change.voiceId, providerVoiceId: voice.change.providerVoiceId, model: config.tts.voiceChange.model } : null,
+              trimToFit: voice.trimToFit,
+              voiceConsent: true,
+              prepared: null,
+            }
           : {
               source: "tts",
               upload: meta.audio?.upload ?? null,

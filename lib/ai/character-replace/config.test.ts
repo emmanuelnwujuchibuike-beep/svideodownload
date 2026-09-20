@@ -91,8 +91,10 @@ describe("normalizeCharacterReplaceConfig", () => {
     });
     expect(out.languages.map((l) => l.code)).toEqual(["en", "ha"]);
     expect(out.languages[0]?.native).toBe("English");
-    expect(out.voices.map((v) => v.id)).toEqual(["calm"]);
+    // the operator's own row survives sanitised; the ElevenLabs library is added beside a catalogue that has none of it (2026-09-20)
+    expect(out.voices.filter((v) => v.provider === "minimax").map((v) => v.id)).toEqual(["calm"]);
     expect(out.voices[0]?.languages).toEqual(["en"]);
+    expect(out.voices.some((v) => v.provider === "elevenlabs")).toBe(true);
   });
 
   it("falls back to the default lists when an operator empties them", () => {

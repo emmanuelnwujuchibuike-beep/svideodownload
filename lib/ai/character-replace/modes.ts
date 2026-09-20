@@ -79,10 +79,24 @@ export const REPLACEMENT_MODE_COPY: Record<ReplacementMode, ReplacementModeCopy>
     reference: {
       title: "Reference face",
       hint: "One clear, front-facing photo of the face. A selfie works well.",
+      /*
+        🔴 The fourth line is the answer to "terrible results" (owner,
+        2026-09-20, twice). Checked against the jobs themselves: the same
+        pipeline, the same model version, the same settings and the same
+        photo gave a clean Face Only result on a video of a similar-looking
+        person (dfdcbb26, d8903a8e) and a "terrible" one on a video of a
+        person with a different skin tone or hair (ade6e3d0, 62eb2e1e) —
+        because Face Only swaps the facial features and keeps the video's
+        own skin and hair, so the result looks like neither. Skin + Face on
+        the very same video and photo (480d51b0) was clean. Nothing degrades
+        with repeated runs; the pairing decides. Members are told which mode
+        fits before they pay for the wrong one.
+      */
       guidance: [
         "A sharp, well-lit face looking towards the camera gives the best swap.",
         "Sunglasses, heavy shadows and very small faces make the result worse.",
         "Only the face is used — the rest of the photo is ignored.",
+        "The video's own skin tone and hair stay. If the photo's skin tone or hair is different, choose Skin + Face — the result will look much more like the photo.",
       ],
     },
     maxReferenceImages: 1,

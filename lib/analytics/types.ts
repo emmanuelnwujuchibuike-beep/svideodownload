@@ -152,6 +152,8 @@ export type AnalyticsEventType =
    * what was pressed, never what was made — no media, no URLs, no text.
    */
   | "character_replace_result_viewed"
+  | "lip_sync_generate_clicked"
+  | "lip_sync_result_viewed"
   | "character_replace_video_played"
   | "character_replace_download_clicked"
   | "character_replace_saved"

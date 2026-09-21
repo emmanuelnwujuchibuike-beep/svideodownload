@@ -128,7 +128,8 @@ export async function POST(request: Request) {
     first check reports "no such job".
   */
   const featureId = (await getJobAsService(jobId).catch(() => null))?.feature ?? null;
-  const finalize = featureId === "ai_character_replace" ? finalizeCharacterReplaceJob : finalizeAICleanJob;
+  // Lip Sync Pro (2026-09-21) shares the Character Replace finalizer — the same lease, the same validation, the same settle-once.
+  const finalize = featureId === "ai_character_replace" || featureId === "ai_lip_sync" ? finalizeCharacterReplaceJob : finalizeAICleanJob;
   const work = finalize(jobId).catch((e) => {
     // Anything reaching here escaped the service's own try/catch, which would
     // be a bug in the service rather than a failed job. Logged loudly.

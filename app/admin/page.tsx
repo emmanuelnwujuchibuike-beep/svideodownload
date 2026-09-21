@@ -175,9 +175,10 @@ import { CharacterReplaceProvidersPanel } from "@/features/admin/character-repla
 import { listProviderHealth } from "@/lib/ai/character-replace/circuit";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiProvidersPanelLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiProvidersPanelLazy, LipSyncSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
 import { loadAiProvidersPanel } from "@/lib/ai/providers/admin";
+import { getLipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import { getAiAdminStats, getCharacterReplaceFreeAccessStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
@@ -913,7 +914,7 @@ async function FrenzAISection() {
   // Part 11 §19: the complimentary-creation figures, beside the health panel
   const freeStats = await getCharacterReplaceFreeAccessStats(landing.frenzAiCurrency);
   // 0167: the AI plans' usage and figures (read once, rendered under their own tab)
-  const [creditRows, planStats, providerPanel] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProvidersPanel(landing)]);
+  const [creditRows, planStats, providerPanel, lipSyncStats] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProvidersPanel(landing), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null)]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -941,6 +942,12 @@ async function FrenzAISection() {
         { id: "pricing", label: "Character Replace pricing", content: <CharacterReplacePricingLazy settings={landing} /> },
         /* 0166 (multi-video brief §16): concurrency per plan, the queue, batch size, retries, timeout, the failed-job refund. */
         { id: "processing", label: "Processing", content: <CharacterReplaceProcessingLazy settings={landing} /> },
+        /* Lip Sync Pro (2026-09-21): the provider switch (Replicate | fal.ai Sync-3), the models, text and audio modes, limits, presets, the mismatch policy, the prices, the numbers. */
+        {
+          id: "lipsync",
+          label: "Lip Sync",
+          content: <LipSyncSettingsLazy settings={landing} stats={lipSyncStats} voices={landing.frenzAiCharacterReplace.voices.map((v) => ({ id: v.id, label: v.label, provider: v.provider }))} languages={landing.frenzAiCharacterReplace.languages.map((l) => ({ code: l.code, label: l.label }))} />,
+        },
         /* 0167: AI Pro / AI Max, the one-time creations per site plan, the credit rules — and who spent what. */
         {
           id: "plans",

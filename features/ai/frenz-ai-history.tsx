@@ -217,6 +217,11 @@ export function FrenzAIHistory({
       router.push(job.batch && isActiveStatus(job.status) ? batchHref(job.batch.id) : resultHref(job.id));
       return;
     }
+    if (job.feature === "ai_lip_sync") {
+      // Lip Sync Pro (2026-09-21): its own result route, the same rules
+      router.push(resultHref(job.id).replace("/character-replace/result/", "/lip-sync/result/"));
+      return;
+    }
     setOpenJob(job);
   };
 

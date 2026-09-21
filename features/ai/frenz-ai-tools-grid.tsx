@@ -41,6 +41,7 @@ export type AiToolId =
   | "upper_body"
   | "full_character"
   | "lip_sync"
+  | "lip_sync_pro"
   | "voice_replace"
   | "tts"
   | "history";
@@ -72,6 +73,8 @@ export const FLOW_TOOL_HINT: Record<
 export function aiToolCards(
   characterReplaceHref: string,
   historyHref: string,
+  /** 2026-09-21: the Lip Sync Pro door; derived from the Character Replace href when a host does not pass one. */
+  lipSyncHref: string = characterReplaceHref.replace(/\/character-replace$/, "/lip-sync"),
 ): AiToolCard[] {
   const create = `${characterReplaceHref}/create`;
   return [
@@ -124,6 +127,17 @@ export function aiToolCards(
       href: characterReplaceHref,
       scope: false,
       flow: true,
+    },
+    {
+      // 2026-09-21: the dedicated tool — a video and ONE speech source (typed text, or the member's own audio)
+      id: "lip_sync_pro",
+      icon: Mic,
+      tint: "bg-cyan-500/[0.10] text-cyan-600 dark:text-cyan-300",
+      name: "Lip Sync Pro",
+      blurb: "Make them say anything — type it, or bring your audio.",
+      href: lipSyncHref,
+      scope: false,
+      flow: false,
     },
     {
       id: "voice_replace",

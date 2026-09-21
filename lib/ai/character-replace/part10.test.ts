@@ -25,7 +25,7 @@ describe("a never-started draft is not a stalled job (found 2026-09-20)", () => 
   */
   it("failStalledJob returns before the deadline table for a Character Replace `queued` row", () => {
     const stall = code("lib/ai/stall-server.ts");
-    const guard = stall.indexOf('if (job.feature === "ai_character_replace" && job.status === "queued") return false;');
+    const guard = stall.indexOf('if (isWalletFundedFeature(job.feature) && job.status === "queued") return false;');
     const deadline = stall.indexOf("const over = stalledForMs(job, now, overrides);");
     expect(guard).toBeGreaterThan(-1);
     expect(deadline).toBeGreaterThan(guard);

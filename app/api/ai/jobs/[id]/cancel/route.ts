@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
-import { AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView, primaryAiFeature } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView, primaryAiFeature } from "@/lib/ai/jobs";
 import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
 import { jobVendor } from "@/lib/ai/character-replace/job-meta";
 import { providerFor } from "@/lib/ai/providers";
@@ -117,7 +117,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (job.replicate_prediction_id && feature) {
       // 2026-09-21: the vendor holding THIS job's request — a job keeps its provider for ever.
-      const provider = providerFor(job.feature === "ai_character_replace" ? jobVendor(job) : feature.provider);
+      const provider = providerFor(isWalletFundedFeature(job.feature) ? jobVendor(job) : feature.provider);
       // Best effort, and never allowed to stop the cancellation: the member's
       // intent is recorded either way, and a prediction we could not reach is
       // the provider's problem, not theirs.
@@ -131,7 +131,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (updated && feature) {
       const entitlement = await getAiEntitlement(subject, feature);
       // Character Replace: the reserved charge goes back to the product wallet, once (lib/ai/funding.ts).
-      if (feature.id === "ai_character_replace") {
+      if (isWalletFundedFeature(feature.id)) {
         await releaseJobFunding({ job: updated, subject, feature: feature.id, dailyLimit: entitlement.dailyLimit, cause: "cancel" });
       } else {
         await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);

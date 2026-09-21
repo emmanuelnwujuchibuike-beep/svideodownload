@@ -46,6 +46,8 @@ import { AI_VIDEO_FORMATS, AI_VIDEO_MAX_BYTES } from "@/lib/ai/media";
 export type AiFeature =
   | "ai_clean"
   | "ai_character_replace"
+  /** 2026-09-21: Lip Sync Pro — a source video and ONE speech source (text, or an uploaded audio file); migration 0169. */
+  | "ai_lip_sync"
   | "ai_image_clean"
   | "ai_upscale"
   | "ai_caption"
@@ -297,7 +299,45 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     maxDurationSeconds: 120,
     retentionHours: 72,
   },
+  {
+    /*
+      ── LIP SYNC PRO (2026-09-21, the owner's brief) ─────────────────────────
+      A source video and exactly ONE speech source — typed text (voice,
+      language, speed) or the member's own audio (mp3/wav/m4a/aac/ogg). Text
+      reaches a text-capable model natively (Kling Lip Sync on Replicate) or
+      becomes ElevenLabs speech in the worker first; audio goes straight to
+      the audio-driven model (Sync Labs on Replicate, Sync-3 on fal.ai). The
+      same job rows, the same one Frenz AI wallet, the same credits, the same
+      complimentary creations, the same finalizer. Contract:
+      lib/ai/lip-sync/job-meta.ts. Config: lib/ai/lip-sync/config.ts.
+    */
+    id: "ai_lip_sync",
+    label: "Lip Sync Pro",
+    provider: "replicate",
+    requires: "replicate",
+    // the output already carries the speech; the worker still validates, stores and announces it
+    needsFinalizer: true,
+    // paid like Character Replace: complimentary creation → included credits → the wallet
+    freeDailyJobs: 0,
+    mimeTypes: AI_VIDEO_FORMATS.flatMap((f) => f.mimeTypes),
+    maxBytes: AI_VIDEO_MAX_BYTES,
+    maxDurationSeconds: 120,
+    retentionHours: 72,
+  },
 ] as const;
+
+/**
+ * The tools funded the Character Replace way — the one Frenz AI wallet, the
+ * credit ledger, the complimentary creations, the reserve → settle/release
+ * sequence at /start, the pipeline metadata, the lease-based finalizer with
+ * retries, the recovery sweep. A branch that used to read
+ * `feature === "ai_character_replace"` asks this instead (2026-09-21), so
+ * Lip Sync Pro joined without a second copy of any of it.
+ */
+export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync"];
+export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" {
+  return feature === "ai_character_replace" || feature === "ai_lip_sync";
+}
 
 const FEATURES_BY_ID = new Map(AI_FEATURES.map((f) => [f.id, f]));
 
@@ -668,8 +708,42 @@ export interface AiJobView {
     languageCode: string | null;
     voiceId: string | null;
   } | null;
+  /**
+   * Lip Sync Pro (2026-09-21): what the workspace, the result and the history
+   * show. Read from the row's contract (lib/ai/lip-sync/job-meta.ts); absent
+   * for any other tool. Never the text itself, a path, a provider id or a URL.
+   */
+  lipSync?: {
+    speechSource: "text" | "audio";
+    /** The kept length that was priced/processed, integer ms; null before the worker measured it. */
+    selectedDurationMs: number | null;
+    chargedCents: number | null;
+    currency: string | null;
+    refunded: boolean;
+    refundPending?: boolean;
+    billing: "FREE_TRIAL" | "PAID" | "CREDITS" | null;
+    credits: number | null;
+    creditsReleased?: boolean;
+    normalPriceCents: number | null;
+    freeRestored?: boolean;
+    attempt: number;
+    projectId: string;
+    /** Catalogue ids of a generated voice; null for uploaded audio. */
+    voiceId: string | null;
+    languageCode: string | null;
+    speed: number | null;
+    /** How many characters of text were spoken (never the text). */
+    textLength: number | null;
+    expression: "natural" | "balanced" | "expressive" | null;
+    activeSpeaker: boolean;
+    /** Whether the text was spoken by the lip-sync model itself ("native") or made by the voice provider first ("tts"). */
+    speechPath: "native" | "tts" | "audio";
+    pipeline: { stages: readonly ("voice" | "lipsync" | "finalize")[]; current: "voice" | "lipsync" | "finalize"; records: Partial<Record<"voice" | "lipsync" | "finalize", "pending" | "submitted" | "processing" | "succeeded" | "failed">> } | null;
+    savedAt: string | null;
+    output: { width: number | null; height: number | null; frameRate: number | null } | null;
+  } | null;
 }
-/* `characterReplace` is optional on the type so fixtures and other tools' views need not name it; the mapper always sets it. */
+/* `characterReplace` / `lipSync` are optional on the type so fixtures and other tools' views need not name them; the mapper always sets them. */
 
 /**
  * The row, reduced to what may leave the server.
@@ -740,6 +814,60 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
         }
       : null,
     characterReplace: characterReplaceView(row),
+    lipSync: lipSyncView(row),
+  };
+}
+
+function lipSyncView(row: AiJobRow): AiJobView["lipSync"] {
+  const m = row.metadata;
+  if (!m || m.tool !== "lip_sync") return null;
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const speech = (m.speech ?? {}) as { source?: unknown; text?: unknown; voiceId?: unknown; languageCode?: unknown; speed?: unknown; path?: unknown };
+  const settings = (m.settings ?? {}) as { expression?: unknown; activeSpeaker?: unknown };
+  const prepared = (m.prepared ?? null) as { durationMs?: unknown } | null;
+  const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown; totalCents?: unknown } | null;
+  const billing = (m.billing ?? null) as { type?: unknown; normalPriceCents?: unknown; credits?: unknown } | null;
+  const charged = row.charged_cents ?? null;
+  const pipelineRaw = (m.pipeline ?? null) as { stages?: unknown; current?: unknown; records?: Record<string, { status?: unknown }> } | null;
+  const stageIds = ["voice", "lipsync", "finalize"] as const;
+  type StageId = (typeof stageIds)[number];
+  const isStage = (v: unknown): v is StageId => typeof v === "string" && (stageIds as readonly string[]).includes(v);
+  const stageStatuses = ["pending", "submitted", "processing", "succeeded", "failed"] as const;
+  const pipeline =
+    pipelineRaw && Array.isArray(pipelineRaw.stages) && isStage(pipelineRaw.current)
+      ? {
+          stages: pipelineRaw.stages.filter(isStage),
+          current: pipelineRaw.current,
+          records: Object.fromEntries(
+            Object.entries(pipelineRaw.records ?? {})
+              .filter(([k, v]) => isStage(k) && v && (stageStatuses as readonly string[]).includes(String(v.status)))
+              .map(([k, v]) => [k, v!.status as (typeof stageStatuses)[number]]),
+          ) as Partial<Record<StageId, (typeof stageStatuses)[number]>>,
+        }
+      : null;
+  const output = (m.output ?? null) as { width?: unknown; height?: unknown; frameRate?: unknown } | null;
+  const source = speech.source === "text" ? "text" : "audio";
+  return {
+    speechSource: source,
+    selectedDurationMs: num(prepared?.durationMs) ?? num(quote?.durationMs),
+    chargedCents: charged,
+    currency: typeof quote?.currency === "string" ? quote.currency : null,
+    refunded: (row.status === "failed" || row.status === "cancelled" || row.status === "expired") && (charged ?? 0) > 0,
+    billing: billing?.type === "FREE_TRIAL" ? "FREE_TRIAL" : billing?.type === "CREDITS" || row.funding_source === "credits" ? "CREDITS" : billing?.type === "PAID" || row.funding_source === "balance" ? "PAID" : row.funding_source === "free" ? "FREE_TRIAL" : null,
+    credits: num(billing?.credits),
+    normalPriceCents: num(billing?.normalPriceCents) ?? num(quote?.totalCents) ?? charged,
+    attempt: num(m.attempt) ?? 1,
+    projectId: typeof m.project_id === "string" ? m.project_id : row.id,
+    voiceId: source === "text" && typeof speech.voiceId === "string" ? speech.voiceId : null,
+    languageCode: source === "text" && typeof speech.languageCode === "string" ? speech.languageCode : null,
+    speed: source === "text" ? num(speech.speed) : null,
+    textLength: source === "text" && typeof speech.text === "string" ? speech.text.length : null,
+    expression: settings.expression === "natural" || settings.expression === "balanced" || settings.expression === "expressive" ? settings.expression : null,
+    activeSpeaker: settings.activeSpeaker === true,
+    speechPath: source === "audio" ? "audio" : speech.path === "native" ? "native" : "tts",
+    pipeline,
+    savedAt: typeof m.saved_at === "string" ? m.saved_at : null,
+    output: output ? { width: num(output.width), height: num(output.height), frameRate: num(output.frameRate) } : null,
   };
 }
 

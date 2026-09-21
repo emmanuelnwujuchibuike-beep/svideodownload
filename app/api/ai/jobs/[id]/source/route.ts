@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { readCharacterReplaceMeta } from "@/lib/ai/character-replace/job-meta";
 
-import { primaryAiFeature } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, primaryAiFeature } from "@/lib/ai/jobs";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { pathBelongsTo } from "@/lib/ai/storage";
@@ -97,8 +97,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       received — so the two videos line up second for second. A row without a
       prepared file (an old job, another tool) keeps the upload it was made from.
     */
-    const prepared = readCharacterReplaceMeta(job.metadata)?.prepared?.path ?? null;
-    const sourcePath = job.feature === "ai_character_replace" && prepared ? prepared : job.source_path;
+    // Lip Sync Pro (2026-09-21) keeps its prepared cut under the same key; the same rule applies.
+    const prepared = readCharacterReplaceMeta(job.metadata)?.prepared?.path ?? (typeof (job.metadata?.prepared as { path?: unknown } | null | undefined)?.path === "string" ? ((job.metadata!.prepared as { path: string }).path) : null);
+    const sourcePath = isWalletFundedFeature(job.feature) && prepared ? prepared : job.source_path;
     if (!pathBelongsTo(sourcePath, subjectOwnerId(subject), job.id)) {
       console.error("[ai/source] stored path failed ownership", { jobId: job.id, subject: subject.key });
       return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });

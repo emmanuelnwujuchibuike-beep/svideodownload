@@ -9,6 +9,7 @@ import { subjectFromRow } from "@/lib/ai/subject";
 import { AiJobError } from "@/lib/ai/errors";
 import type { AiFeatureDef, AiJobRow, AiJobStatus } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
+import { submitLipSyncJob } from "@/lib/ai/lip-sync/submit";
 import { providerFor } from "@/lib/ai/providers";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -83,6 +84,14 @@ export async function submitJobToProvider(
     lib/ai/character-replace/provider.ts; the transition and the claim are
     the same compare-and-set this function makes.
   */
+  // Lip Sync Pro (2026-09-21): its own stage submission, the same compare-and-set.
+  if (feature.id === "ai_lip_sync") {
+    const { submission, row } = await submitLipSyncJob(job, opts);
+    return {
+      submission: { reference: submission.reference, modelVersion: submission.modelVersion, engine: `lipsync:${submission.model}`, hardware: "gpu", modelTier: "standard", audience: "free", model: submission.model },
+      row,
+    };
+  }
   if (feature.id === "ai_character_replace") {
     const { submission, row } = await submitCharacterReplaceJob(job, opts);
     return {

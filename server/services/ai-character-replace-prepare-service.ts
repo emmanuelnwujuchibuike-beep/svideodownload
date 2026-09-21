@@ -94,7 +94,7 @@ const MAX_SOURCE_DURATION_MS = 30 * 60 * 1000;
 /** The prepared file: a 60 s 1080p h264 at CRF 20 is tens of MB; this is a ceiling, not a target. */
 const MAX_PREPARED_BYTES = 400 * 1024 * 1024;
 
-class PrepareFailure extends Error {
+export class PrepareFailure extends Error {
   constructor(
     readonly code: PrepareErrorCode,
     readonly detail: string,
@@ -550,7 +550,7 @@ async function failPrepare(job: AiJobRow, failure: PrepareFailure): Promise<void
   });
 }
 
-function runPrepare(args: string[]): Promise<{ ok: boolean; detail: string }> {
+export function runPrepare(args: string[]): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
     let child;
     try {

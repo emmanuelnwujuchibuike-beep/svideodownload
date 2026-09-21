@@ -303,7 +303,7 @@ describe("the routing stays on the server and on the row (§9, §21, §22)", () 
     expect(s).toContain("openProviderRun(");
   });
   it("the reconciler and the cancel route ask the job's own vendor, with the row's model", () => {
-    expect(code("lib/ai/reconcile.ts")).toContain("providerFor(job.feature === \"ai_character_replace\" ? jobVendor(job) : feature.provider)");
+    expect(code("lib/ai/reconcile.ts")).toContain("providerFor(isWalletFundedFeature(job.feature) ? jobVendor(job) : feature.provider)");
     expect(code("lib/ai/reconcile.ts")).toContain("provider.poll(job.replicate_prediction_id, { model: job.model })");
     expect(code("app/api/ai/jobs/[id]/cancel/route.ts")).toContain("provider.cancel(job.replicate_prediction_id, { model: job.model })");
   });

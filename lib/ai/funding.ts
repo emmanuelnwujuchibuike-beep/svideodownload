@@ -8,7 +8,7 @@ import { refundCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet"
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { decideFunding, type AiFundingSource } from "@/lib/ai/economy";
-import type { AiFeature, AiJobRow } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, type AiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import type { AiSubject } from "@/lib/ai/subject";
 import { releaseAiUsage, reserveAiUsage } from "@/lib/ai/usage";
 
@@ -187,7 +187,7 @@ export async function releaseJobFunding(opts: {
     sweep, the finalizer and cancel — can all call this without ever
     refunding twice. It never touches the daily allowance: this tool has none.
   */
-  if (opts.feature === "ai_character_replace") {
+  if (isWalletFundedFeature(opts.feature)) {
     try {
       /*
         ── 0166: THE OPERATOR'S "FAILED-JOB REFUND" SWITCH ────────────────────

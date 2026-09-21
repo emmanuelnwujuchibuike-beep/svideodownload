@@ -90,7 +90,8 @@ describe("the finalizer — a lease, and nobody is told 'ready' before the file 
 
   it("the refund is the idempotent product-wallet path and is recorded in the audit log", () => {
     const fail = s.slice(s.indexOf("async function failFinalize"));
-    expect(fail).toContain('releaseJobFunding({ job: updated, subject, feature: "ai_character_replace"');
+    // 2026-09-21: the finalizer serves Lip Sync Pro too — the feature is the row's, one of the two wallet-funded tools
+    expect(fail).toContain('releaseJobFunding({ job: updated, subject, feature: updated.feature === "ai_lip_sync" ? "ai_lip_sync" : "ai_character_replace"');
     expect(fail).toContain('recordJobEvent(job.id, "refund.issued"');
     expect(fail.indexOf('"refund.issued"')).toBeGreaterThan(fail.indexOf("releaseJobFunding("));
   });
@@ -130,8 +131,8 @@ describe("the recovery sweep — the same functions the live paths use, and noth
     expect(s).toContain("failStalledJob(row, now)");
     expect(s).toContain("notifyAiJobFromRow(row.id, { local: true })");
   });
-  it("only Character Replace rows enter the lease/retry branches", () => {
-    expect(s).toContain('const retryable = row.feature === "ai_character_replace";');
+  it("only the wallet-funded tools' rows enter the lease/retry branches (Character Replace, and Lip Sync Pro since 2026-09-21)", () => {
+    expect(s).toContain("const retryable = isWalletFundedFeature(row.feature);");
     expect(s).toContain('if (row.status === "finalizing" && retryable) {');
     expect(s).toContain('if (row.status === "processing" && providerUrl && retryable) {');
   });
@@ -141,7 +142,7 @@ describe("the recovery sweep — the same functions the live paths use, and noth
   it("giving up ends the job from finalizing, refunds once through the product wallet, and tells the member once", () => {
     const give = s.slice(s.indexOf("export async function giveUpFinalization"));
     expect(give).toContain('transitionJob(row.id, ["finalizing"], "failed"');
-    expect(give).toContain('feature: "ai_character_replace"');
+    expect(give).toContain('feature: isWalletFundedFeature(updated.feature) ? updated.feature : "ai_character_replace"');
     expect(give).toContain("notifyAiJobFailed({");
   });
 
@@ -158,11 +159,11 @@ describe("the recovery sweep — the same functions the live paths use, and noth
 
   it("the member's poll AND the history list run the same step, throttled, for Character Replace only", () => {
     const poll = src("app/api/ai/jobs/[id]/route.ts");
-    expect(poll).toContain('row.feature === "ai_character_replace" && recoveryDue(row.id) ? await recoverJob(row)');
+    expect(poll).toContain("isWalletFundedFeature(row.feature) && recoveryDue(row.id) ? await recoverJob(row)");
     expect(s).toContain("RECOVERY_EVERY_MS = 30_000");
     // Owner, 2026-09-14: a job left mid-run and revisited through HISTORY sat at "processing" — the list only read.
     const list = src("app/api/ai/jobs/route.ts");
-    expect(list).toContain('row.feature !== "ai_character_replace" || !isActiveStatus(row.status) || !recoveryDue(row.id)');
+    expect(list).toContain("!isWalletFundedFeature(row.feature) || !isActiveStatus(row.status) || !recoveryDue(row.id)");
     expect(list).toContain("await recoverJob(row)");
     expect(list).toContain("getOwnJob(subject, row.id)");
   });

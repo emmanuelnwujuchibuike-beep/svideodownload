@@ -204,6 +204,7 @@ export function aiNotificationCopy(input: {
 const MEDIA_NOUN: Record<AiFeature, string> = {
   ai_clean: "video",
   ai_character_replace: "video",
+  ai_lip_sync: "video",
   /*
     🔴 THE COMPILER FOUND THESE, WHICH IS WHY THE RECORD IS TOTAL. The first
     draft of this file listed `ai_clean` alone and typechecked as an object

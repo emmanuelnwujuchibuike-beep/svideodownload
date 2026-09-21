@@ -83,6 +83,17 @@ const modeSchema = z.object({
   provider: z.object({ model: z.string().max(160).optional() }).optional(),
 });
 
+const lipSyncModelSchema = z
+  .object({
+    model: z.string().max(200).optional(),
+    enabled: z.boolean().optional(),
+    perSecondCents: z.number().int().min(0).max(100_000_000).optional(),
+    providerCostPerSecondUsdCents: z.number().min(0).max(100_000).optional(),
+    creditMultiplier: z.number().min(0.1).max(10).optional(),
+    maxConcurrent: z.number().int().min(0).max(100).optional(),
+    notes: z.string().max(400).optional(),
+  })
+  .strict();
 const providerModelSchema = z
   .object({
     model: z.string().max(200).optional(),
@@ -276,6 +287,26 @@ const schema = z.object({
       models: z.record(z.enum(["character_replace:replicate", "character_replace:fal", "lip_sync:replicate", "lip_sync:fal"]), providerModelSchema).optional(),
       paused: z.object({ replicate: z.boolean().optional(), fal: z.boolean().optional() }).strict().optional(),
       adminJobsAreTests: z.boolean().optional(),
+    })
+    .strict()
+    .optional(),
+  /** Lip Sync Pro (2026-09-21): the tool's own configuration — the voice provider takes no field (ElevenLabs by construction). Bounds mirror LIP_SYNC_BOUNDS. */
+  frenzAiLipSync: z
+    .object({
+      enabled: z.boolean().optional(),
+      provider: z.enum(["replicate", "fal"]).optional(),
+      models: z.record(z.enum(["replicate", "fal"]), lipSyncModelSchema).optional(),
+      textMode: z.object({ enabled: z.boolean().optional(), minimumCharacters: z.number().int().min(1).max(5000).optional(), maximumCharacters: z.number().int().min(1).max(5000).optional(), speed: z.object({ min: z.number().min(0.5).max(3).optional(), max: z.number().min(0.5).max(3).optional(), default: z.number().min(0.5).max(3).optional() }).strict().optional() }).strict().optional(),
+      audioMode: z.object({ enabled: z.boolean().optional(), formats: z.array(z.string().max(8)).max(10).optional(), maximumDurationSeconds: z.number().int().min(1).max(600).optional(), maximumUploadBytes: z.number().int().min(1024 * 1024).max(100 * 1024 * 1024).optional() }).strict().optional(),
+      video: z.object({ maximumDurationSeconds: z.number().int().min(1).max(120).optional(), minimumDurationSeconds: z.number().int().min(1).max(120).optional(), maximumUploadBytes: z.number().int().min(1024 * 1024).max(100 * 1024 * 1024).optional(), maximumPixels: z.number().int().min(320 * 240).max(3840 * 2160).optional() }).strict().optional(),
+      tts: z.object({ model: z.string().max(100).optional(), perRequestCents: z.number().int().min(0).max(100_000_000).optional(), perCharacterCents: z.number().min(0).max(100_000_000).optional(), providerCostPerCharacterUsdCents: z.number().min(0).max(1000).optional() }).strict().optional(),
+      voiceIds: z.array(z.string().max(80)).max(200).optional(),
+      languageCodes: z.array(z.string().max(16)).max(200).optional(),
+      expression: z.object({ enabled: z.boolean().optional(), default: z.enum(["natural", "balanced", "expressive"]).optional(), temperature: z.object({ natural: z.number().min(0).max(1).optional(), balanced: z.number().min(0).max(1).optional(), expressive: z.number().min(0).max(1).optional() }).strict().optional() }).strict().optional(),
+      activeSpeaker: z.object({ enabled: z.boolean().optional(), default: z.boolean().optional() }).strict().optional(),
+      duration: z.object({ policy: z.enum(["trim_video_to_audio", "trim_audio_to_video", "loop_audio", "reject", "provider_sync_mode"]).optional(), significantMismatchFraction: z.number().min(0).max(1).optional(), providerSyncMode: z.enum(["silence", "loop", "bounce"]).optional() }).strict().optional(),
+      basePriceCents: z.number().int().min(0).max(100_000_000).optional(),
+      minimumChargeCents: z.number().int().min(0).max(100_000_000).optional(),
     })
     .strict()
     .optional(),

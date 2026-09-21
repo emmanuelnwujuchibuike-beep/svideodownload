@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { FINALIZE_LEASE_SECONDS, finalizeBackoffMs, finalizeMaxAttempts, isTransientFinalizeFailure } from "@/lib/ai/character-replace/finalize-policy";
 import { readCharacterReplaceMeta, readPipeline } from "@/lib/ai/character-replace/job-meta";
+import { readLipSyncMeta } from "@/lib/ai/lip-sync/job-meta";
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
@@ -78,7 +79,9 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
   const job = await getJobAsService(jobId);
   if (!job) return { ok: false, jobId, code: "RESULT_NOT_FOUND", detail: "no such job" };
   const feature = aiFeature(job.feature);
-  if (!feature || feature.id !== "ai_character_replace") return { ok: false, jobId, code: "AI_FINALIZATION_FAILED", detail: "not a character replace job" };
+  // Lip Sync Pro (2026-09-21) shares this finalizer: the same lease, the same output validation, the same settle-once and announce-once.
+  if (!feature || (feature.id !== "ai_character_replace" && feature.id !== "ai_lip_sync")) return { ok: false, jobId, code: "AI_FINALIZATION_FAILED", detail: "not a character replace or lip sync job" };
+  const lipSyncPro = feature.id === "ai_lip_sync";
   if (job.status === "completed" && job.result_path) return { ok: true, jobId, skipped: "already finalized" };
 
   const providerOutputUrl = typeof job.metadata?.provider_output_url === "string" ? job.metadata.provider_output_url : null;
@@ -88,7 +91,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
   const owner = subjectFromRow(job);
   if (!owner || owner.kind !== "user") return { ok: false, jobId, code: "AI_FINALIZATION_FAILED", detail: "job row has no member owner" };
   const ownerId = subjectOwnerId(owner);
-  const meta = readCharacterReplaceMeta(job.metadata);
+  const meta = lipSyncPro ? null : readCharacterReplaceMeta(job.metadata);
+  const lipMeta = lipSyncPro ? readLipSyncMeta(job.metadata) : null;
 
   // 0166: the retry budget is the operator's (AI → Processing → Automatic retries); the default when the read fails.
   const maxAttempts = finalizeMaxAttempts(await getLandingSettings().then((s) => s.frenzAiCharacterReplace).catch(() => null));
@@ -122,7 +126,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       fine; a file a third the length is a broken run, not a shorter video.
       Wan writes 30 fps, so a 30% tolerance also absorbs a fps resample.
     */
-    const expectedMs = meta?.prepared?.durationMs ?? meta?.quote?.durationMs ?? null;
+    const expectedMs = meta?.prepared?.durationMs ?? meta?.quote?.durationMs ?? lipMeta?.prepared?.durationMs ?? (typeof (lipMeta?.quote as { durationMs?: unknown } | null | undefined)?.durationMs === "number" ? ((lipMeta!.quote as { durationMs: number }).durationMs) : null);
     const actualMs = Math.round(probe.durationSeconds * 1000);
     if (expectedMs !== null && Math.abs(actualMs - expectedMs) > Math.max(1000, expectedMs * 0.3)) {
       throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `expected about ${expectedMs} ms, the output is ${actualMs} ms`);
@@ -139,7 +143,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     if (!probe.width || !probe.height || probe.width * probe.height > 3840 * 2160) throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `unexpected frame size ${probe.width}x${probe.height}`);
 
     const pipeline = readPipeline(job.metadata);
-    const lipSynced = !!pipeline?.stages.includes("lipsync");
+    // a Lip Sync Pro output always carries the speech — a silent file is a broken run
+    const lipSynced = lipSyncPro || !!pipeline?.stages.includes("lipsync");
     const newVoice = meta?.settings.voiceMode === "new_voice";
     const wavPath = meta?.audio?.prepared?.path ?? null;
     if (lipSynced && !probe.hasAudio) throw new CrFinalizeFailure("INVALID_AI_OUTPUT", "the lip-sync output has no audio track");
@@ -231,7 +236,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       // 0167: included plan credits settle on the credit ledger (reserved → consumed), once.
       const settled = job.funding_source === "free" ? await settleFreeUse(jobId) : job.funding_source === "credits" ? await settleAiCredits(jobId) : await settleCharacterReplaceCharge(ownerId, jobId);
       if (!settled) console.error("[cr/finalize] settle found nothing to settle", { jobId, userId: ownerId, funding: job.funding_source });
-      await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, mode: meta?.mode ?? "full_character", stages: pipeline?.stages ?? null, voiceSwapped, settled, elapsedMs: Date.now() - startedAt });
+      await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, mode: lipSyncPro ? (lipMeta?.speech.source === "text" ? "lip_sync_text" : "lip_sync_audio") : (meta?.mode ?? "full_character"), stages: pipeline?.stages ?? null, voiceSwapped, settled, elapsedMs: Date.now() - startedAt });
       // 🔴 Only now — the result is in OUR bucket and the row says completed (§11).
       await notifyAiJobFinished({ userId: ownerId, jobId, feature: feature.id, audioRestored: audioExpected ? finalProbe.hasAudio : null, durationMs: Date.now() - startedAt });
       // 0166: a slot just freed — the member's next waiting video may start (the frontend pumps; never awaited).
@@ -245,7 +250,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       durationMs: actualMs,
       bytes: stored.bytes,
       hasAudio: finalProbe.hasAudio,
-      mode: meta?.mode ?? "full_character",
+      mode: lipSyncPro ? "lip_sync" : (meta?.mode ?? "full_character"),
       stages: pipeline?.stages ?? null,
       chargedCents: job.charged_cents,
       pricingVersion: meta?.quote?.pricingConfigVersion ?? null,
@@ -305,10 +310,10 @@ async function failFinalize(job: AiJobRow, failure: CrFinalizeFailure, opts: { e
   const subject = subjectFromRow(job);
   if (updated && subject) {
     // Stage I — refund exactly once (idempotent per job).
-    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0, cause: "failure" });
+    await releaseJobFunding({ job: updated, subject, feature: updated.feature === "ai_lip_sync" ? "ai_lip_sync" : "ai_character_replace", dailyLimit: 0, cause: "failure" });
     await recordJobEvent(job.id, "refund.issued", { reason: failure.code, chargedCents: updated.charged_cents, from: "finalize" });
     if (subject.kind === "user") {
-      await notifyAiJobFailed({ userId: subject.userId, jobId: job.id, feature: "ai_character_replace", message: aiErrorMessage("PROCESSING_FAILED"), errorCode: failure.code });
+      await notifyAiJobFailed({ userId: subject.userId, jobId: job.id, feature: job.feature === "ai_lip_sync" ? "ai_lip_sync" : "ai_character_replace", message: aiErrorMessage("PROCESSING_FAILED"), errorCode: failure.code });
     }
   }
   console.error("[cr/finalize] failed", {

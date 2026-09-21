@@ -5,7 +5,7 @@ import { isProviderStage, markFailed, markSucceeded, nextStage, type PipelineMet
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
-import { aiFeature, type AiJobRow, type AiJobStatus } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, aiFeature, type AiJobRow, type AiJobStatus } from "@/lib/ai/jobs";
 import { getJobAsService, recordProviderOutput, transitionJob, noteJobDiagnostic, writeProcessingMetadata } from "@/lib/ai/job-store";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { providerFor } from "@/lib/ai/providers";
@@ -107,7 +107,7 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
   const feature = aiFeature(job.feature);
   if (!feature) return false;
   // 2026-09-21: the vendor holding THIS job's request (a job keeps its provider; the current stage's record says which), never the feature's default.
-  const provider = providerFor(job.feature === "ai_character_replace" ? jobVendor(job) : feature.provider);
+  const provider = providerFor(isWalletFundedFeature(job.feature) ? jobVendor(job) : feature.provider);
   if (!provider || !provider.isConfigured()) return false;
 
   /*
@@ -123,7 +123,7 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
     job whose video had not been generated. Nothing here may act unless the
     prediction is the CURRENT stage's and that stage is still in flight.
   */
-  const pipeline = job.feature === "ai_character_replace" ? readPipeline(job.metadata) : null;
+  const pipeline = isWalletFundedFeature(job.feature) ? readPipeline(job.metadata) : null;
   const stage: PipelineStage | null = pipeline?.current ?? null;
   if (pipeline && stage) {
     if (!isProviderStage(stage)) return false;
@@ -154,7 +154,7 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
 
     /* ── finished, and we were never told ─────────────────────────────────── */
     // 0168: the run ledger learns the outcome from here when the webhook went missing (the same (provider, id) row — never a second one).
-    const vendor = job.feature === "ai_character_replace" ? jobVendor(job) : "replicate";
+    const vendor = isWalletFundedFeature(job.feature) ? jobVendor(job) : "replicate";
     if (state.status === "completed") {
       if (!state.resultUrl) {
         await closeProviderRun(vendor, job.replicate_prediction_id, { status: "failed", errorCode: "PROVIDER_ERROR", errorDetail: state.detail ?? "succeeded with no usable output" });

@@ -6,7 +6,7 @@ import { recordJobEvent } from "@/lib/ai/job-events";
 import { claimAiNotification, getJobAsService, noteJobDiagnostic } from "@/lib/ai/job-store";
 import { dispatchAiNotification } from "@/lib/ai/notify-dispatch";
 import { hasWebPush } from "@/lib/push/web-push";
-import type { AiFeature } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, type AiFeature } from "@/lib/ai/jobs";
 import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
@@ -116,6 +116,7 @@ function workspaceUrlFor(feature: string, jobId: string): string {
     only the job's id, which is worthless to anyone but its owner.
   */
   if (feature === "ai_character_replace") return `${SITE_URL}/studio/ai/character-replace/result/${encodeURIComponent(jobId)}`;
+  if (feature === "ai_lip_sync") return `${SITE_URL}/studio/ai/lip-sync/result/${encodeURIComponent(jobId)}`;
   return `${SITE_URL}/studio/ai/history${q}`;
 }
 
@@ -214,7 +215,7 @@ export async function notifyAiJobFailed(opts: {
   }
   // Character Replace: "refunded" only when the ledger says so (Part 5, §16).
   const refunded =
-    (opts.feature ?? "ai_character_replace") === "ai_character_replace" ? await characterReplaceRefundState(opts.userId, opts.jobId) : null;
+    isWalletFundedFeature(opts.feature ?? "ai_character_replace") ? await characterReplaceRefundState(opts.userId, opts.jobId) : null;
 
   /*
     ── 🔴 THE COPY, NOT THE CALLER'S MESSAGE ──────────────────────────────────
@@ -235,7 +236,7 @@ export async function notifyAiJobFailed(opts: {
     fail identically is worse than saying nothing.
   */
   // Part 11 §24: a complimentary creation that came back says so — read from its audit row, never assumed.
-  const freeRestored = (opts.feature ?? "ai_character_replace") === "ai_character_replace" && refunded === "none" ? (await freeUseState(opts.jobId)) === "restored" : false;
+  const freeRestored = isWalletFundedFeature(opts.feature ?? "ai_character_replace") && refunded === "none" ? (await freeUseState(opts.jobId)) === "restored" : false;
   const copy = aiNotificationCopy({
     feature: opts.feature ?? "ai_character_replace",
     outcome: outcomeForErrorCode(opts.errorCode),

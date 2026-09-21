@@ -4,7 +4,7 @@ import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/
 import { creditLedgerFor } from "@/lib/ai/credits/store";
 import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
 import { getOwnJob } from "@/lib/ai/job-store";
-import { isActiveStatus, jobToView, primaryAiFeature, type AiJobRow, type AiJobView } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, isActiveStatus, jobToView, primaryAiFeature, type AiJobRow, type AiJobView } from "@/lib/ai/jobs";
 import { notifyAiJobFromRow } from "@/lib/ai/notify";
 import { reconcileWithProvider } from "@/lib/ai/reconcile";
 import { recoverJob, recoveryDue } from "@/lib/ai/recovery";
@@ -53,20 +53,22 @@ export const dynamic = "force-dynamic";
  */
 async function viewWithMoney(row: AiJobRow): Promise<AiJobView> {
   const view = jobToView(row, storedErrorMessage);
-  if (row.feature !== "ai_character_replace" || !row.user_id) return view;
+  if (!isWalletFundedFeature(row.feature) || !row.user_id) return view;
   const terminal = !isActiveStatus(row.status);
   if (terminal && !row.notified_at && row.metadata?.notify_pending === true) {
     await notifyAiJobFromRow(row.id, { local: true }).catch((e) => console.error("[ai/jobs] pending notify failed", { jobId: row.id, error: String(e) }));
   }
-  if (view.characterReplace && terminal && (row.charged_cents ?? 0) > 0) {
+  if ((view.characterReplace || view.lipSync) && terminal && (row.charged_cents ?? 0) > 0) {
     const state = await characterReplaceRefundState(row.user_id, row.id);
-    view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+    if (view.characterReplace) view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+    if (view.lipSync) view.lipSync = { ...view.lipSync, refunded: state === "refunded", refundPending: state === "pending" };
   }
   // 0167: a job paid with included credits — whether they came back, from the credit ledger, never a status
-  if (view.characterReplace && terminal && row.funding_source === "credits") {
+  if ((view.characterReplace || view.lipSync) && terminal && row.funding_source === "credits") {
     const ledger = await creditLedgerFor([row.id]);
     const released = ledger.get(row.id)?.status === "released";
-    view.characterReplace = { ...view.characterReplace, creditsReleased: released, refunded: released };
+    if (view.characterReplace) view.characterReplace = { ...view.characterReplace, creditsReleased: released, refunded: released };
+    if (view.lipSync) view.lipSync = { ...view.lipSync, creditsReleased: released, refunded: released };
   }
   return view;
 }
@@ -159,7 +161,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       moment its owner looks — not at the next ten-minute tick. Throttled per
       job per instance; the worker's lease makes a duplicate dispatch a no-op.
     */
-    const recovered = row.feature === "ai_character_replace" && recoveryDue(row.id) ? await recoverJob(row) : "none";
+    const recovered = isWalletFundedFeature(row.feature) && recoveryDue(row.id) ? await recoverJob(row) : "none";
     const changed = recovered === "reconciled" || recovered === "stalled" || recovered === "gave-up" || (recovered === "none" && (await reconcileWithProvider(row)));
 
     // The deadline stays underneath as the last backstop, for the case where

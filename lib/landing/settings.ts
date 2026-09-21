@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/character-replace/config";
 import { normalizeAiPlansConfig, versionAiPlans, type AiPlansConfig } from "@/lib/ai/credits/config";
 import { normalizeAiProvidersConfig, versionAiProviders, type AiProvidersConfig } from "@/lib/ai/providers/config";
+import { normalizeLipSyncConfig, versionLipSyncConfig, type LipSyncProConfig } from "@/lib/ai/lip-sync/config";
 
 /**
  * Admin-configurable pieces of the public landing page, stored in the `settings`
@@ -315,6 +316,8 @@ export interface LandingSettings {
    * read a provider for them. lib/ai/providers/config.ts owns the type.
    */
   frenzAiProviders: AiProvidersConfig;
+  /** Lip Sync Pro (2026-09-21): the tool's own configuration — lib/ai/lip-sync/config.ts owns the type. */
+  frenzAiLipSync: LipSyncProConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -371,6 +374,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiCharacterReplace: normalizeCharacterReplaceConfig(null),
   frenzAiPlans: normalizeAiPlansConfig(null),
   frenzAiProviders: normalizeAiProvidersConfig(null),
+  frenzAiLipSync: normalizeLipSyncConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -518,6 +522,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiCharacterReplace: normalizeCharacterReplaceConfig(raw.frenzAiCharacterReplace),
       frenzAiPlans: normalizeAiPlansConfig(raw.frenzAiPlans),
       frenzAiProviders: normalizeAiProvidersConfig(raw.frenzAiProviders),
+      frenzAiLipSync: normalizeLipSyncConfig(raw.frenzAiLipSync),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -556,7 +561,9 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync">> & {
+  /** Lip Sync Pro: the same deep merge. */
+  frenzAiLipSync?: Record<string, unknown>;
   frenzAiCharacterReplace?: Record<string, unknown>;
   /** AI Pro / AI Max: the same deep merge, so the plans panel can post one plan's figures without erasing the other's. */
   frenzAiPlans?: Record<string, unknown>;
@@ -588,7 +595,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -642,6 +649,11 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
       current.frenzAiProviders,
       normalizeAiProvidersConfig(mergeCharacterReplacePatch(current.frenzAiProviders as unknown as Record<string, unknown>, (s.frenzAiProviders ?? {}) as Record<string, unknown>)),
     ),
+    // Lip Sync Pro: merged the same way; the pricing version bumps on a price-bearing change, the version on any change.
+    frenzAiLipSync: versionLipSyncConfig(
+      current.frenzAiLipSync,
+      normalizeLipSyncConfig(mergeCharacterReplacePatch(current.frenzAiLipSync as unknown as Record<string, unknown>, (s.frenzAiLipSync ?? {}) as Record<string, unknown>)),
+    ),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;
@@ -677,6 +689,23 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
         before: changedBefore,
         after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) },
       });
+    }
+  }
+  // Lip Sync Pro's own line in the log.
+  if (s.frenzAiLipSync) {
+    const before = current.frenzAiLipSync as unknown as Record<string, unknown>;
+    const after = value.frenzAiLipSync as unknown as Record<string, unknown>;
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const key of Object.keys(after)) {
+      if (key === "updatedAt" || key === "pricingUpdatedAt" || key === "version" || key === "pricingVersion") continue;
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+        changedBefore[key] = before[key];
+        changedAfter[key] = after[key];
+      }
+    }
+    if (Object.keys(changedAfter).length > 0) {
+      recordConfigChange({ actorId: audit.changedBy ?? null, surface: "lip_sync", targetId: "settings", action: "settings.update", before: changedBefore, after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) } });
     }
   }
   // The providers' own line (the fal.ai brief §10, §21: who switched a feature's vendor, and when).

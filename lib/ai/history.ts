@@ -217,6 +217,8 @@ export function historyTitleFor(feature: AiFeature): string {
   switch (feature) {
     case "ai_character_replace":
       return "Character Replace video";
+    case "ai_lip_sync":
+      return "Lip Sync Pro video";
     case "ai_clean":
       return "Cleaned video";
     default:
@@ -246,6 +248,11 @@ export function historyResultSentence(job: AiJobView): string {
             ? `${what}, with the original movement and scene kept.`
             : `${what}, with the original body, clothes and scene kept.`;
     return facts ? `${sentence} ${facts}.` : sentence;
+  }
+  if (job.feature === "ai_lip_sync") {
+    const ls = job.lipSync;
+    const secs = ls?.selectedDurationMs ? ` ${(ls.selectedDurationMs / 1000).toFixed(ls.selectedDurationMs % 1000 ? 1 : 0)} s.` : "";
+    return ls?.speechSource === "audio" ? `Lips synced to your audio.${secs}` : ls?.speechPath === "native" ? `Lips synced to the spoken text.${secs}` : `Lips synced to the generated voice.${secs}`;
   }
   if (job.feature === "ai_clean") {
     return job.result.audioRestored === true

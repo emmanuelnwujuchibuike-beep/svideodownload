@@ -108,7 +108,7 @@ export const characterReplaceJobMetaSchema = z
         /** 2026-09-21: the prepared file's frame rate, for adapters with a documented fps window (Kling: 24–60). Absent on older rows. */
         fps: z.number().positive().nullable().optional(),
         /** 2026-09-21: which prepare profile made the file — "kling" = both edges ≥ 720, fps clamped. */
-        profile: z.enum(["default", "kling"]).optional(),
+        profile: z.enum(["default", "kling", "kling_lipsync"]).optional(),
       })
       .nullable(),
     /**

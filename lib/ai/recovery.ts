@@ -7,7 +7,7 @@ import { aiErrorMessage } from "@/lib/ai/errors";
 import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch";
 import { pumpCharacterReplaceQueue } from "@/lib/ai/character-replace/queue";
 import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
-import { aiFeature } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, aiFeature } from "@/lib/ai/jobs";
 import { submitJobToProvider } from "@/lib/ai/submit";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
@@ -98,7 +98,7 @@ export async function recoverJob(row: AiJobRow, now: number = Date.now()): Promi
     const due = !row.finalize_next_at || Date.parse(row.finalize_next_at) <= now;
     // 🔴 The lease/retry stage is Character Replace's. AI Clean's finalizer keeps
     // its own claim and its own deadline; this pass only reconciles and stalls it.
-    const retryable = row.feature === "ai_character_replace";
+    const retryable = isWalletFundedFeature(row.feature);
 
     /* ── a finalization in progress or waiting its turn ──────────────────── */
     if (row.status === "finalizing" && retryable) {
@@ -229,7 +229,7 @@ export async function giveUpFinalization(row: AiJobRow, now: number = Date.now()
   const subject = subjectFromRow(updated);
   if (subject) {
     try {
-      await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0, cause: "failure" });
+      await releaseJobFunding({ job: updated, subject, feature: isWalletFundedFeature(updated.feature) ? updated.feature : "ai_character_replace", dailyLimit: 0, cause: "failure" });
       await recordJobEvent(row.id, "refund.issued", { reason: "FINAL_UPLOAD_FAILED", chargedCents: updated.charged_cents, from: "recovery" });
     } catch (e) {
       console.error("[ai/recovery] refund failed", { jobId: row.id, error: String(e).slice(0, 200) });

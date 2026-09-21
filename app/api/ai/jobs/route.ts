@@ -21,6 +21,8 @@ import {
   type AiCapabilities,
   type AiFeature,
   type AiJobStatus,
+  type AiJobView,
+  isWalletFundedFeature,
 } from "@/lib/ai/jobs";
 import {
   countActiveJobs,
@@ -426,7 +428,7 @@ export async function GET(request: Request) {
     */
     const rows = await Promise.all(
       page.rows.map(async (row) => {
-        if (row.feature !== "ai_character_replace" || !isActiveStatus(row.status) || !recoveryDue(row.id)) return row;
+        if (!isWalletFundedFeature(row.feature) || !isActiveStatus(row.status) || !recoveryDue(row.id)) return row;
         const action = await recoverJob(row);
         if (action === "none" || action === "working") return row;
         return (await getOwnJob(subject, row.id)) ?? row;
@@ -441,27 +443,35 @@ export async function GET(request: Request) {
     */
     const views = rows.map((row) => jobToView(row, storedErrorMessage));
     if (subject.kind === "user") {
-      const charged = rows.filter((r) => r.feature === "ai_character_replace" && !isActiveStatus(r.status) && (r.charged_cents ?? 0) > 0).map((r) => r.id);
+      // Lip Sync Pro (2026-09-21) is funded the same way; its money facts land on `view.lipSync`.
+      const money = (view: AiJobView) => (view.characterReplace ? "characterReplace" : view.lipSync ? "lipSync" : null);
+      const charged = rows.filter((r) => isWalletFundedFeature(r.feature) && !isActiveStatus(r.status) && (r.charged_cents ?? 0) > 0).map((r) => r.id);
       const states = await characterReplaceRefundStates(subject.userId, charged);
       for (const view of views) {
-        if (!view.characterReplace || !charged.includes(view.id)) continue;
+        const key = money(view);
+        if (!key || !charged.includes(view.id)) continue;
         const state = states.get(view.id) ?? "none";
-        view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+        if (key === "characterReplace") view.characterReplace = { ...view.characterReplace!, refunded: state === "refunded", refundPending: state === "pending" };
+        else view.lipSync = { ...view.lipSync!, refunded: state === "refunded", refundPending: state === "pending" };
       }
       // Part 11 §24: a complimentary creation that came back after a failure — from the audit row, never a status
-      const free = rows.filter((r) => r.feature === "ai_character_replace" && r.funding_source === "free" && !isActiveStatus(r.status)).map((r) => r.id);
+      const free = rows.filter((r) => isWalletFundedFeature(r.feature) && r.funding_source === "free" && !isActiveStatus(r.status)).map((r) => r.id);
       const freeStates = await freeUseStates(free);
       for (const view of views) {
-        if (!view.characterReplace || !free.includes(view.id)) continue;
-        view.characterReplace = { ...view.characterReplace, freeRestored: freeStates.get(view.id) === "restored" };
+        const key = money(view);
+        if (!key || !free.includes(view.id)) continue;
+        if (key === "characterReplace") view.characterReplace = { ...view.characterReplace!, freeRestored: freeStates.get(view.id) === "restored" };
+        else view.lipSync = { ...view.lipSync!, freeRestored: freeStates.get(view.id) === "restored" };
       }
       // 0167: credits that came back — from the credit ledger
-      const credited = rows.filter((r) => r.feature === "ai_character_replace" && r.funding_source === "credits" && !isActiveStatus(r.status)).map((r) => r.id);
+      const credited = rows.filter((r) => isWalletFundedFeature(r.feature) && r.funding_source === "credits" && !isActiveStatus(r.status)).map((r) => r.id);
       const creditRows = await creditLedgerFor(credited);
       for (const view of views) {
-        if (!view.characterReplace || !credited.includes(view.id)) continue;
+        const key = money(view);
+        if (!key || !credited.includes(view.id)) continue;
         const released = creditRows.get(view.id)?.status === "released";
-        view.characterReplace = { ...view.characterReplace, creditsReleased: released, refunded: released };
+        if (key === "characterReplace") view.characterReplace = { ...view.characterReplace!, creditsReleased: released, refunded: released };
+        else view.lipSync = { ...view.lipSync!, creditsReleased: released, refunded: released };
       }
     }
     return NextResponse.json({

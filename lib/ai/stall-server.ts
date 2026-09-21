@@ -2,7 +2,7 @@ import "server-only";
 
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorMessage } from "@/lib/ai/errors";
-import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
@@ -75,9 +75,9 @@ export async function failStalledJob(
     Replace row with a prediction id is never `queued`; the stall table's
     other stages are untouched.
   */
-  if (job.feature === "ai_character_replace" && job.status === "queued") return false;
+  if (isWalletFundedFeature(job.feature) && job.status === "queued") return false;
   // 0166: the operator's "Job timeout" (AI → Processing) is the processing deadline for Character Replace; the table's floor still applies.
-  const overrides = job.feature === "ai_character_replace" ? await processingOverrides() : undefined;
+  const overrides = isWalletFundedFeature(job.feature) ? await processingOverrides() : undefined;
   const over = stalledForMs(job, now, overrides);
   if (over === null) return false;
 

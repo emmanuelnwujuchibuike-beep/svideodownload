@@ -163,8 +163,12 @@ export function validateProbedAudio(probe: ProbedAudio | null, limits: { maxDura
 /* ───────────────────────────── fitting audio to video (§4) ───────────────── */
 
 export interface AudioFitPolicy {
-  /** Audio shorter than the video: pad with silence, or refuse. */
-  shorterAudio: "silence" | "reject";
+  /**
+   * Audio shorter than the video: pad with silence, refuse, or — Lip Sync Pro
+   * (2026-09-21, §7) — KEEP it shorter and let a provider with sync modes
+   * (silence / loop / bounce) decide the tail. Never for a provider without them.
+   */
+  shorterAudio: "silence" | "reject" | "keep";
   /** The least of the video the audio must cover (0–1); 0 disables. */
   minimumCoverageFraction: number;
   /** The member explicitly asked for longer audio to be cut to the video. */
@@ -198,6 +202,7 @@ export function decideAudioFit(audioMs: number, videoMs: number, policy: AudioFi
     return { ok: false, code: "audio-much-shorter-than-video", audioMs, videoMs };
   }
   if (policy.shorterAudio === "reject") return { ok: false, code: "audio-much-shorter-than-video", audioMs, videoMs };
+  if (policy.shorterAudio === "keep") return { ok: true, action: "keep", audioMs, videoMs };
   return { ok: true, action: "pad", audioMs, videoMs };
 }
 

@@ -324,9 +324,9 @@ describe("storage keys — every object of a job sits under the owner's folder",
 /* ───────────────────────────── the refund wiring ────────────────────────── */
 
 describe("every path that undoes a Character Replace job refunds through the ONE idempotent function", () => {
-  it("funding routes ai_character_replace to refundCharacterReplaceCharge", () => {
+  it("funding routes the wallet-funded tools (Character Replace, Lip Sync Pro) to refundCharacterReplaceCharge", () => {
     const src = read("lib/ai/funding.ts");
-    expect(src).toMatch(/feature === "ai_character_replace"[\s\S]*refundCharacterReplaceCharge\(/);
+    expect(src).toMatch(/isWalletFundedFeature\(opts\.feature\)[\s\S]*refundCharacterReplaceCharge\(/);
   });
 
   it.each([

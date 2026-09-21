@@ -45,7 +45,11 @@ export const KLING_MIN_EDGE = 720;
 export const KLING_MAX_LONG_EDGE = 2160;
 const KLING_SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(max(iw,${KLING_MIN_EDGE}*iw/ih),${KLING_MAX_LONG_EDGE})/2)*2,-2)':h='if(gt(iw,ih),-2,trunc(min(max(ih,${KLING_MIN_EDGE}*ih/iw),${KLING_MAX_LONG_EDGE})/2)*2)'`;
 
-export type PrepareProfile = "default" | "kling";
+/** 2026-09-21: Kling Lip Sync (Replicate) documents 720–1920 px and 2–10 s; no frame-rate window. */
+const KLING_LIPSYNC_MAX_LONG_EDGE = 1920;
+const KLING_LIPSYNC_SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(max(iw,${KLING_MIN_EDGE}*iw/ih),${KLING_LIPSYNC_MAX_LONG_EDGE})/2)*2,-2)':h='if(gt(iw,ih),-2,trunc(min(max(ih,${KLING_MIN_EDGE}*ih/iw),${KLING_LIPSYNC_MAX_LONG_EDGE})/2)*2)'`;
+
+export type PrepareProfile = "default" | "kling" | "kling_lipsync";
 
 /** The frame rate the Kling profile asks ffmpeg for: the source's own when it is inside 24–60, else the nearest edge; null = leave it. */
 export function klingFrameRate(sourceFps: number | null | undefined): number | null {
@@ -89,6 +93,7 @@ export const PREPARE_CONSTANT_ARGS = new Set<string>([
   "-vf",
   SCALE_FILTER,
   KLING_SCALE_FILTER,
+  KLING_LIPSYNC_SCALE_FILTER,
   "-r",
   "24",
   "30",
@@ -147,7 +152,7 @@ export function buildPrepareArgs(plan: PreparePlan): string[] {
   args.push(
     "-map", "0:v:0",
     "-map", "0:a?",
-    "-vf", kling ? KLING_SCALE_FILTER : SCALE_FILTER,
+    "-vf", kling ? KLING_SCALE_FILTER : plan.profile === "kling_lipsync" ? KLING_LIPSYNC_SCALE_FILTER : SCALE_FILTER,
   );
   // Only the three rates the profile can ask for are in the known set; anything else is refused by isKnownPrepareArg.
   if (kling && (plan.frameRate === 24 || plan.frameRate === 30 || plan.frameRate === 60)) args.push("-r", String(plan.frameRate));

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiProvidersPanelProps } from "@/features/admin/ai-providers-settings";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
+import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import type { LandingSettings } from "@/lib/landing/settings";
 
 /*
@@ -89,6 +90,13 @@ const AiProvidersPanel = dynamic(() => import("@/features/admin/ai-providers-set
 
 export function AiProvidersPanelLazy(props: AiProvidersPanelProps) {
   return <AiProvidersPanel {...props} />;
+}
+
+// Lip Sync Pro (2026-09-21): AI → Lip Sync — the provider switch (Replicate | fal.ai Sync-3), the models, the two speech sources, the prices, the numbers.
+const LipSyncSettingsPanel = dynamic(() => import("@/features/admin/lip-sync-settings").then((m) => m.LipSyncSettingsPanel), { loading: skeleton("Loading Lip Sync Pro") });
+
+export function LipSyncSettingsLazy(props: { settings: LandingSettings; stats: LipSyncAdminStats | null; voices: { id: string; label: string; provider: string }[]; languages: { code: string; label: string }[] }) {
+  return <LipSyncSettingsPanel {...props} />;
 }
 
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {

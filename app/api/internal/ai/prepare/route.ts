@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { WORKER_SECRET } from "@/lib/worker";
+import { getJobAsService } from "@/lib/ai/job-store";
 import { prepareCharacterReplaceJob } from "@/server/services/ai-character-replace-prepare-service";
+import { prepareLipSyncJob } from "@/server/services/ai-lip-sync-prepare-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,8 +42,11 @@ export async function POST(request: Request) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ ok: false, code: "INVALID_BODY" }, { status: 400 });
   const { jobId } = parsed.data;
-  void prepareCharacterReplaceJob(jobId).catch((e) => {
-    console.error("[cr/prepare] unhandled", { jobId, error: String(e) });
+  // Which prepare: the row's feature decides (Lip Sync Pro, 2026-09-21); an unreadable row falls to Character Replace, whose first check reports it.
+  const featureId = (await getJobAsService(jobId).catch(() => null))?.feature ?? null;
+  const prepare = featureId === "ai_lip_sync" ? prepareLipSyncJob : prepareCharacterReplaceJob;
+  void prepare(jobId).catch((e) => {
+    console.error("[ai/prepare] unhandled", { jobId, feature: featureId, error: String(e) });
   });
   return NextResponse.json({ ok: true, accepted: true, jobId }, { status: 202 });
 }

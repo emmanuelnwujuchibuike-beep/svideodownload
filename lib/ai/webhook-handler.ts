@@ -10,7 +10,7 @@ import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatc
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { findJobByPredictionId, getJobAsService, noteJobDiagnostic, recordProviderOutput, transitionJob, writeProcessingMetadata } from "@/lib/ai/job-store";
-import { aiFeature, isActiveStatus, type AiFeature, type AiProviderId } from "@/lib/ai/jobs";
+import { aiFeature, isActiveStatus, isWalletFundedFeature, type AiFeature, type AiProviderId } from "@/lib/ai/jobs";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import type { AiProviderState } from "@/lib/ai/provider";
 import { closeProviderRun } from "@/lib/ai/providers/runs";
@@ -97,7 +97,7 @@ export async function handleProviderCallback(state: AiProviderState, opts: { pro
       on the row is the CURRENT stage's, and this delivery was matched by it,
       so `pipeline.current` is the stage that finished.
     */
-    const pipeline = job.feature === "ai_character_replace" ? readPipeline(job.metadata) : null;
+    const pipeline = isWalletFundedFeature(job.feature) ? readPipeline(job.metadata) : null;
     const stage = pipeline?.current ?? null;
     const following = pipeline && stage ? nextStage(pipeline, stage) : null;
     const intermediate = !!pipeline && !!stage && isProviderStage(stage) && !!following && isProviderStage(following);
@@ -256,7 +256,7 @@ async function refund(subject: AiSubject | null, feature: AiFeature, job?: { id:
   if (!def || !subject) return;
   const entitlement = await getAiEntitlement(subject, def);
   // Character Replace: the product-wallet / credit / complimentary release, exactly once (lib/ai/funding.ts).
-  if (job && feature === "ai_character_replace") {
+  if (job && isWalletFundedFeature(feature)) {
     await releaseJobFunding({ job, subject, feature, dailyLimit: entitlement.dailyLimit, cause });
     return;
   }

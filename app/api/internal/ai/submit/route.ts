@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { AI_CLEAN_CONFIG } from "@/lib/ai/config";
 import { isAiJobError } from "@/lib/ai/errors";
-import { aiFeature } from "@/lib/ai/jobs";
+import { isWalletFundedFeature, aiFeature } from "@/lib/ai/jobs";
 import { readPipeline } from "@/lib/ai/character-replace/job-meta";
 import { getJobAsService } from "@/lib/ai/job-store";
 import { submitJobToProvider } from "@/lib/ai/submit";
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       idempotent under a duplicate delivery.
     */
     const pipeline = readPipeline(job.metadata);
-    const nextStagePending = job.status === "processing" && feature.id === "ai_character_replace" && !!pipeline && pipeline.current !== "finalize" && (pipeline.records[pipeline.current]?.status ?? "pending") === "pending";
+    const nextStagePending = job.status === "processing" && isWalletFundedFeature(feature.id) && !!pipeline && pipeline.current !== "finalize" && (pipeline.records[pipeline.current]?.status ?? "pending") === "pending";
     if (job.status !== "acquiring" && !nextStagePending) {
       return NextResponse.json({ ok: true, skipped: `status is ${job.status}` }, { status: 200 });
     }

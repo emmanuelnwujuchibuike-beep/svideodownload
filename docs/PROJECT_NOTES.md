@@ -9,10 +9,103 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑21 (fal.ai as a second provider + 0168; the Get AI Pro fault; AI Pro & AI Max credits + 0167; Character Replace Part 12)_
+_Last updated: 2026‑09‑21 (Lip Sync Pro + 0169; fal.ai as a second provider + 0168; the Get AI Pro fault; AI Pro & AI Max credits + 0167; Character Replace Part 12)_
 
 ---
 
+## 2026‑09‑21 — Lip Sync Pro: a dedicated tool, two speech sources, capability‑flagged providers (migration 0169)
+
+Owner's brief ("IMPORTANT ADDITION — LIP SYNC PRO"): a dedicated Lip Sync Pro capability with TWO
+input workflows — **text** (voice, language, speed 0.8–2.0×) and **external audio** (mp3/wav/m4a/
+aac/ogg) — mutually exclusive and enforced by the server; a provider abstraction with capability
+flags; text → a text‑native model, or text → TTS → audio → an audio model; configurable duration
+handling; active speaker / expression only where supported; the same credit system (no TTS charge for
+uploaded audio); cost tracking; admin AI → Lip Sync; existing job architecture; "do NOT simply add a
+text box". Then: "the lip sync should also have a switch: use the fal.ai top lip sync model — Sync‑3 or
+higher." AI Clean is not touched (owner: ignore every AI Clean mention).
+
+### The schemas, read live before a line was written (§17)
+- `kwaivgi/kling-lip-sync` (Replicate, version `8311467f…`): `video_url` (mp4/mov, < 100 MB, **2–10 s**,
+  **720–1920 px**), `audio_file` (mp3/wav/m4a/aac, < 5 MB) OR `text` + `voice_id` (46 Kling voices,
+  default `en_AOT`) + `voice_speed` 0.8–2.0 → **text‑native**.
+- `sync/lipsync-2-pro`, `sync/lipsync-2` (Replicate): `video` (.mp4) + `audio` (.wav) + `sync_mode` +
+  `temperature` 0–1 + `active_speaker` → **audio only** (no text field).
+- `fal-ai/sync-lipsync/v3` (Sync‑3, fal.ai, $8/min listed): `video_url` + `audio_url` + `sync_mode`
+  → **audio only**. It is the highest Sync Labs model fal.ai serves today.
+
+### Design
+- **Feature `ai_lip_sync`** in the registry (migration `0169`: the `ai_jobs_feature_chk` widened, `not
+  valid` + `validate`, proven on embedded Postgres). The same job rows, the ONE Frenz AI wallet, the
+  credit ledger, the complimentary creations, the finalizer, the recovery sweep, push, history. Every
+  branch that used to say `feature === "ai_character_replace"` now asks `isWalletFundedFeature()`
+  (`lib/ai/jobs.ts`) — funding, recovery, stall, webhook handler, reconcile, cancel, the read routes.
+- **Configuration `frenzAiLipSync`** (`lib/ai/lip-sync/config.ts`): `provider` replicate | fal — **the
+  switch**; `models.replicate` (lipsync‑2‑pro · lipsync‑2 · kling‑lip‑sync) and `models.fal` (Sync‑3;
+  any `fal-ai/sync-lipsync/v3+…` endpoint accepted by pattern), each with price/second, provider cost,
+  credit multiplier, concurrency; `textMode` (chars, speed range), `audioMode` (formats, ceilings),
+  `video` ceilings, `tts` (**ElevenLabs by construction** — no provider field the normaliser reads; the
+  model id; per‑request/per‑character prices; provider cost/char), voice/language allow‑lists,
+  `expression` presets → temperatures, `activeSpeaker`, `duration { policy, significantMismatchFraction,
+  providerSyncMode }`, base/minimum prices; a pricing version and a version; audited (`lip_sync`).
+- **Providers with capability flags** (`lib/ai/lip-sync/providers/`): `types.ts` (request with ONE
+  `speech` — text or audio; `LipSyncCapabilities`: supports_text/audio/voice_selection/language/speed/
+  active_speaker/temperature/duration_control + the model's input window); `sync-labs.ts`,
+  `kling-lipsync.ts`, `fal-sync3.ts` — each builds its payload field by field from its schema and
+  throws on a speech kind it cannot take; `router.ts` — `resolveLipSyncProRoute` (vendor, model, the
+  fal.ai pauses), `planSpeechPath` (text + supports_text → **native**; text otherwise → **tts** in the
+  worker; audio → audio), `publicLipSyncConfig` (the ACTIVE model's flags decide what the interface
+  offers; no vendor/model leaves; Kling's 2–10 s window lowers the video ceiling).
+- **Pricing** (`pricing.ts`): lip‑sync line = per‑second × kept length (+ per‑video), TTS lines ONLY
+  when the voice provider does work (never for uploaded audio, never for a text‑native model),
+  minimum charge; credits from the one engine (feature `ai_lip_sync`, the model's multiplier);
+  provider‑cost estimate split TTS / lip‑sync; signed over the priced facts and an opaque `routeKey`
+  (sha of vendor:model) — the browser echoes the key, never a model name; `publicLipSyncQuote` strips
+  vendor/model/cost.
+- **Contract** (`job-meta.ts`): `speech` is a discriminated union — a row cannot carry both a text and
+  an audio upload; the text stays on the row and never leaves through a view (`lipSync` view block in
+  `jobToView`: source, path, textLength, voice/language/speed, expression, activeSpeaker, pipeline,
+  billing, refunds).
+- **Routes**: `GET /api/ai/lip-sync/config` (the flags, the voices — Kling's own for a native model,
+  the ElevenLabs catalogue otherwise — the languages, availability), `POST …/quote`, `POST …/jobs`
+  (the create body is the same union: both → 400 "Choose one", neither → 400; tickets for the video and
+  the audio), `POST …/jobs/[id]/start` (the Character Replace funding sequence: signed quote re‑verified
+  and RECOMPUTED, voice/language/speed resolved server‑side against the catalogue, the route decided
+  once and written on the row, complimentary → credits → wallet, claim under the lock, reserve, revert
+  on refusal, hand off); the generic `/api/ai/jobs/*` routes (read, cancel, result, poster, save,
+  delete, source) serve the new tool.
+- **Worker**: `ai-lip-sync-prepare-service.ts` — download, probe, the SPEECH (native: nothing;
+  tts: ElevenLabs synthesis + `atempo` for the speed, pitch kept — `lib/ai/voice/audio-tempo.ts`;
+  audio: the upload, authoritative), **the fit on measured lengths** (`trim_video_to_audio` cuts the
+  video to the speech; `trim_audio_to_video`; `loop_audio` / `provider_sync_mode` keep shorter audio
+  for a model with sync modes — `AudioFitPolicy.shorterAudio: "keep"` added; `reject` refuses a
+  significant mismatch; longer audio is never stretched), the video cut/normalised (a
+  `kling_lipsync` prepare profile: 720–1920 px), the model's window re‑checked, `duration_note` on
+  the row; `lib/ai/lip-sync/submit.ts` — the stage submission by the row's plan (Kling native text
+  sends the text; every other path sends the prepared WAV), the run ledger row; the CR finalizer
+  serves both tools (a Lip Sync Pro output must carry audio).
+- **UI** `features/ai/lip-sync/`: the workspace (§14) — Upload video (a clip over the engine's
+  ceiling keeps a chosen window, never a silent cut) → speech source tabs → text box + voice +
+  language + speed (only where the flags allow) or the audio picker (name, duration) → expression /
+  active speaker (only where supported) → the estimate (credits, remaining today/week, price or
+  "Total · Free", the speech‑length warning with the policy's sentence) → Generate → the four words
+  (Preparing speech · Synchronizing lips · Rendering video · Finalizing) → the result (Video Ready
+  player, Download, Keep, Delete, Make another). Pages `/studio/ai/lip-sync` and
+  `/studio/ai/lip-sync/result/[id]`; a "Lip Sync Pro" card on Explore; history tiles route to it;
+  pushes open it.
+- **Admin → AI → Lip Sync** (`features/admin/lip-sync-settings.tsx`, lazy): the provider switch
+  first (Replicate | fal.ai — Sync‑3 or higher), the model per vendor with prices/costs/multipliers,
+  text mode, the ElevenLabs block (locked; model; prices), voices/languages, audio mode (formats,
+  ceilings), video ceilings, expression presets, active speaker, the mismatch policy, base/minimum;
+  the numbers (jobs by source, credits, TTS/lip‑sync/total cost estimates, actual cost when reported,
+  settled revenue, margin only in USD).
+
+### Verified
+- 0169 on embedded Postgres 18 (apply, re‑apply, `ai_lip_sync` accepted, unknown refused, existing
+  rows kept, validated). `tsc` clean · `next lint` clean (118 pre‑existing warnings, none new) ·
+  **vitest 4234 passed** (22 new in `lip-sync.test.ts`; nine pins retargeted to the shared predicate).
+- NOT run live: a real Lip Sync Pro generation (needs the worker deploy + a member's run); the fal.ai
+  side still needs `FAL_KEY`. The unit layer — the union, the quote, the adapters' payloads against the
+  live schemas, the fit, the tempo plan, the view — is proven.
 ## 2026‑09‑21 — fal.ai as a second AI provider: the router, Kling O1 Video Edit, Sync‑3, the run ledger (migration 0168) — and the "Get AI Pro" fault
 
 Owner's brief: integrate fal.ai as a SECOND provider behind a provider router, preserving Replicate

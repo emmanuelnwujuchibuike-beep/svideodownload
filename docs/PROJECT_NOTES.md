@@ -74,7 +74,7 @@ the ambiguous band, not a hard fail). **`.npmrc`: `onnxruntime-node-install-cuda
 — the package's postinstall downloads a ~250 MB CUDA tarball on linux/x64 and it
 failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
 
-### Part 11 — complimentary creations, paid per video after, the device rule (0162)
+### Part 11 — complimentary creations, paid per video after, the device rule (0162–0164, 0165)
 - **Data:** `ai_free_entitlements` (granted/used/restored, eligibility, the device it
   was granted on), `ai_free_uses` (UNIQUE per job: use number, the NORMAL price not
   charged, the FREE_TRIAL snapshot, consumed/settled/restored), `ai_device_associations`
@@ -119,6 +119,33 @@ failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
 - Sign‑up itself is Supabase Auth's client call; its per‑address rate limits are the
   sign‑up limiter (the admin switch records the policy). The free GRANT is what is
   farmed, and that is what the device + network rules bound.
+
+### ⛔ 2026-09-20 late — the migration runner stopped; 0162–0165 are not in production
+- Pushed four times (`ca2f077`, `39b251b`, `c33a59b`, `fe6e360`); nothing landed, not even a
+  file of plain `create table if not exists`. 0160 had applied within three minutes that
+  morning. The SQL applies cleanly with the Supabase CLI on a real Postgres (embedded, in the
+  session scratchpad) and every function behaves (pending without a cookie, device_limit for
+  the third account, the exemption lifts it, consume once per job, restore once, the funding
+  guard). The runner is the dashboard-side GitHub integration; it posts no status to GitHub.
+- Files now: **0162** tables/indexes/RLS · **0163** the five functions + their revokes in one
+  transaction · **0164** the drop of the 8-argument `claim_ai_job_start` · **0165**
+  `analytics_visitors_total` (was 0161). `lib/ai/job-store.ts` still falls back to the
+  8-argument claim on PGRST202/203, so paid processing is untouched.
+- **Owner:** Supabase → SQL editor → paste `supabase/manual/part11-apply-by-hand.sql` → Run
+  (idempotent; records the versions in the ledger; ends with `notify pgrst`) — or repair the
+  integration. Then `node scripts/_p11-wait-db.tmp.mjs 1` and `_p11b-probe.tmp.mjs real`.
+- Until it lands: every video is paid; the entitlement line is hidden — a read that cannot
+  decide (the first read before the device cookie, or the store unreadable) answers
+  `TEMPORARILY_UNAVAILABLE` and the balance route sets `enabled:false` for it, so no member
+  is told "not available on this account" over a fault; the visitors milestone cannot count
+  (the members milestone reads `profiles` and works).
+- ⚠️ A `select("*", { head: true, count: "exact" })` on a MISSING table answers
+  `error: null` — the deploy-wait probe said "0162 applied ✓" on that. Probe with
+  `.select("col").limit(1)`.
+- Real Wan 2.2 runs on production after the preflight loosening, both 15/15: Full Character
+  480p, 3 s trim → 54 s wall, $0.18, a real preflight verdict (face 0.93), output 464×832 with
+  audio, one settled charge; Upper Body standard, 3 s → 43 s, $0.90 at the code-default
+  $0.30/sec (the admin table sets it), the new adapter's scope settings on the prediction.
 
 ### Also today (owner asks)
 - Recharge sheet: no rate arithmetic — the secure checkout page shows the naira.

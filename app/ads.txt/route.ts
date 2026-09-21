@@ -1,5 +1,6 @@
 import { buildAdsTxt } from "@/lib/monetization/ads-txt";
 import {
+  builtInAdsensePublisherId,
   lastKnownAdsensePublisherId,
   readMonetizationSettings,
 } from "@/lib/monetization/settings";
@@ -127,7 +128,9 @@ const FALLBACK_PUBLISHER_ID = process.env.ADSENSE_PUBLISHER_ID ?? "";
   the file must contain them.
 */
 function resolvePublisherId(configured: string): string {
-  return configured.trim() || FALLBACK_PUBLISHER_ID || lastKnownAdsensePublisherId();
+  // settings → env → the last id this instance read → the id compiled into the build (2026-09-21: a cold
+  // instance during a database blip had nothing else, and answered 503 to a crawler that visits once a day)
+  return configured.trim() || FALLBACK_PUBLISHER_ID || lastKnownAdsensePublisherId() || builtInAdsensePublisherId();
 }
 
 export async function GET() {

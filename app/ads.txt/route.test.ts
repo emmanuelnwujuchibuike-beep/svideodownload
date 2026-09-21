@@ -25,9 +25,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const read = vi.fn();
 const lastKnown = vi.fn(() => "");
+// the id compiled into the build — "" in these tests so the 503/404 branches stay reachable and pinned
+const builtIn = vi.fn(() => "");
 vi.mock("@/lib/monetization/settings", () => ({
   readMonetizationSettings: () => read(),
   lastKnownAdsensePublisherId: () => lastKnown(),
+  builtInAdsensePublisherId: () => builtIn(),
 }));
 
 const PUB = "ca-pub-6455244673998965";
@@ -48,6 +51,8 @@ beforeEach(() => {
   read.mockReset();
   lastKnown.mockReset();
   lastKnown.mockReturnValue("");
+  builtIn.mockReset();
+  builtIn.mockReturnValue("");
   delete process.env.ADSENSE_PUBLISHER_ID;
 });
 
@@ -104,6 +109,29 @@ describe("/ads.txt", () => {
     const res = await get();
     expect(res.status).toBe(503);
     expect(res.headers.get("retry-after")).toBeTruthy();
+  });
+
+  /* 2026-09-21: a cold instance during a database blip had no settings, no env var and no last id — and answered 503 to a crawler that visits once a day. */
+  it("serves the record on a DEGRADED read from the id compiled into the build, when nothing else is known", async () => {
+    builtIn.mockReturnValue("pub-7009025003206297");
+    read.mockResolvedValue({ settings: settings(), degraded: true });
+    const res = await get();
+    expect(res.status).toBe(200);
+    await expect(res.text()).resolves.toContain("google.com, pub-7009025003206297, DIRECT, f08c47fec0942fa0");
+  });
+
+  it("the built-in id is the LAST resort — settings, then the env var, then the last id read, win over it", async () => {
+    builtIn.mockReturnValue("pub-0000000000000000");
+    process.env.ADSENSE_PUBLISHER_ID = PUB;
+    read.mockResolvedValue({ settings: settings(), degraded: true });
+    const res = await get();
+    await expect(res.text()).resolves.toContain(RECORD);
+  });
+
+  it("the id compiled into the build is the live account, and never blank", async () => {
+    const real = await vi.importActual<typeof import("@/lib/monetization/settings")>("@/lib/monetization/settings");
+    expect(real.BUILT_IN_ADSENSE_PUBLISHER_ID).toBe("pub-7009025003206297");
+    expect(real.builtInAdsensePublisherId()).toBe("pub-7009025003206297");
   });
 
   it("serves the record on a DEGRADED read when the env var can name the publisher", async () => {

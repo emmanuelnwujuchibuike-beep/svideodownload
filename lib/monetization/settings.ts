@@ -979,6 +979,29 @@ export function lastKnownAdsensePublisherId(): string {
   return lastKnownPublisherId;
 }
 
+/*
+  ── 🔴 THE PUBLISHER ID IS ALSO BUILT IN (2026-09-21) ────────────────────────
+
+  Owner, 2026-09-20: "my AdSense ads.txt is showing not found for 5 to 7 days."
+  Audited from outside as Google's own user agents, the file answered 200 with
+  the record every time — and the settings row, the env var and the last-known
+  id are ALL empty on a cold serverless instance during a database blip, which
+  is the one moment /ads.txt still answered 503 (Supabase's API gateway was
+  degraded from 09-17). Google fetches ads.txt about once a day; one 503 at that
+  moment is a day of "not found", and every manual check afterwards succeeds.
+
+  A publisher id is public — it is in the file and on every page's AdSense
+  script — so keeping it in the build is not a secret and is the one source
+  that exists on every instance at every moment. Settings win, then the env
+  var, then the last id read, then this. Change it here when the account changes.
+*/
+export const BUILT_IN_ADSENSE_PUBLISHER_ID = "pub-7009025003206297";
+
+/** The publisher id compiled into the build — the last resort, never blank in production. */
+export function builtInAdsensePublisherId(): string {
+  return BUILT_IN_ADSENSE_PUBLISHER_ID;
+}
+
 export interface MonetizationRead {
   settings: MonetizationSettings;
   /** True when the stored settings could not be read and these are defaults. */

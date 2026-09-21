@@ -74,6 +74,8 @@ export async function initializeTransaction(opts: {
   planCode: string;
   userId: string;
   callbackUrl: string;
+  /** 0167: extra metadata echoed back on every event of the subscription — the AI plans set purpose and ai_plan so the webhook routes them away from the site-plan sync. */
+  metadata?: Record<string, string>;
 }): Promise<string> {
   const amount = await planAmount(opts.planCode);
   const data = await paystack<{ data: { authorization_url: string } }>(
@@ -86,7 +88,7 @@ export async function initializeTransaction(opts: {
         // Required by the API; the plan amount governs the actual charge.
         ...(amount != null ? { amount } : {}),
         callback_url: opts.callbackUrl,
-        metadata: { user_id: opts.userId },
+        metadata: { ...(opts.metadata ?? {}), user_id: opts.userId },
       },
     },
   );

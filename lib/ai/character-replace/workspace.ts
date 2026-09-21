@@ -524,6 +524,8 @@ export function canStart(input: {
   config: CharacterReplacePublicConfig | null;
   available: boolean;
   balanceCents: number | null;
+  /** 0167: the member chose to pay this one from the wallet although credits exist. */
+  funding?: "credits" | "wallet" | null;
 }): boolean {
   const { project, pricing, config } = input;
   if (!config || !input.available) return false;
@@ -533,6 +535,17 @@ export function canStart(input: {
   if (pricing.status !== "quoted") return false;
   // Part 11 §7: a complimentary creation needs no balance; the server decides again at /start
   if (pricing.snapshot.billing?.complimentary) return true;
+  /*
+    0167: on an AI plan whose allowance covers this generation, the wallet
+    does not matter. Short of credits with the wallet NOT offered (the
+    operator's policy), the button is not a start at all — the sheet is.
+    Short of credits with the wallet offered, the wallet rule below applies.
+  */
+  const credits = pricing.snapshot.credits;
+  if (credits?.applicable) {
+    if (credits.affordable && input.funding !== "wallet") return true;
+    if (!credits.affordable && pricing.snapshot.walletOffered === false) return false;
+  }
   if (input.balanceCents === null || input.balanceCents < pricing.snapshot.totalCents) return false;
   return true;
 }

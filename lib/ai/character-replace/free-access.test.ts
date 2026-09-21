@@ -53,10 +53,11 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
   it("/start decides free vs paid itself, consumes atomically after the claim, and never reserves money for a free creation", () => {
     // 0166: THE start sequence lives in lib/ai/character-replace/start-job.ts (the route and the batch route both call it)
     const start = code("lib/ai/character-replace/start-job.ts");
-    const elig = start.indexOf("const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin });");
+    const elig = start.indexOf("const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin, plans: settings.frenzAiPlans });");
     const fits = start.indexOf("freeRequestQualifies(config, { mode: snapshot.mode, quality: snapshot.quality, durationMs: snapshot.durationMs,");
     const claim = start.indexOf("claimJobStart({");
-    const consume = start.indexOf("const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });");
+    // 2026-09-21: the consume carries the operator's CURRENT count (the pill said "1 remaining" after the admin lowered it)
+    const consume = start.indexOf("const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot, granted:");
     const reserve = start.indexOf("reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot })");
     expect(elig).toBeGreaterThan(-1);
     expect(fits).toBeGreaterThan(elig);
@@ -64,9 +65,10 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(consume).toBeGreaterThan(claim);
     expect(reserve).toBeGreaterThan(consume);
     // the balance check is skipped only for a complimentary creation; the claim carries the funding source and a zero charge
-    expect(start).toContain("if (!complimentary && balanceBefore < snapshot.totalCents) {");
-    expect(start).toContain('funding: complimentary ? "free" : "balance",');
-    expect(start).toContain("chargedCents: complimentary ? 0 : snapshot.totalCents,");
+    // 0167: nor for a generation paid with included credits
+    expect(start).toContain("if (!complimentary && !useCredits && balanceBefore < snapshot.totalCents) {");
+    expect(start).toContain('funding: complimentary ? "free" : useCredits ? "credits" : "balance",');
+    expect(start).toContain("chargedCents: complimentary || useCredits ? 0 : snapshot.totalCents,");
     // a refused free use (the race) reverts the claim and answers its own code
     expect(start).toContain('return refuse("CR_FREE_UNAVAILABLE");');
     // the audit records the NORMAL price beside "charged 0"
@@ -101,14 +103,15 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(funding).toContain('if (opts.job.funding_source === "free") {');
     expect(funding.indexOf("await restoreFreeUse(opts.job.id")).toBeLessThan(funding.indexOf("await refundCharacterReplaceCharge(opts.job.user_id, opts.job.id)"));
     const fin = code("server/services/ai-character-replace-finalize-service.ts");
-    expect(fin).toContain('job.funding_source === "free" ? await settleFreeUse(jobId) : await settleCharacterReplaceCharge(ownerId, jobId)');
+    // 0167: included plan credits settle on their own ledger between the two
+    expect(fin).toContain('job.funding_source === "free" ? await settleFreeUse(jobId) : job.funding_source === "credits" ? await settleAiCredits(jobId) : await settleCharacterReplaceCharge(ownerId, jobId)');
     // the claim function is told the funding source; the store passes it and falls back on an ambiguous overload too
     const store = code("lib/ai/job-store.ts");
     expect(store).toContain("p_funding: funding,");
     expect(store).toContain('error.code === "PGRST202" || error.code === "PGRST203"');
   });
   it("the routes answer the entitlement and a display-only billing fact; the client never computes either", () => {
-    expect(code("app/api/ai/character-replace/balance/route.ts")).toContain("const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request });");
+    expect(code("app/api/ai/character-replace/balance/route.ts")).toContain("const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request, plans: settings.frenzAiPlans });");
     expect(code("app/api/ai/character-replace/config/route.ts")).toContain('if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));');
     const quote = code("app/api/ai/character-replace/quote/route.ts");
     expect(quote).toContain("const complimentary = free.eligible && fit?.ok === true;");

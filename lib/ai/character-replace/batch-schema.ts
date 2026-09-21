@@ -52,6 +52,7 @@ export const startCharacterReplaceBatchSchema = z
             quote: startShape.quote,
             preflightToken: startShape.preflightToken,
             voice: startShape.voice,
+            funding: startShape.funding,
           })
           .strict(),
       )

@@ -9,9 +9,101 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑21 (Character Replace Part 12: multi‑video sessions — the queue, `waiting`, batches, AI → Processing; the docked Explore pill; the footer sentence)_
+_Last updated: 2026‑09‑21 (AI Pro & AI Max credits + 0167; Character Replace Part 12: multi‑video sessions — the queue, waiting, batches, AI → Processing)_
 
 ---
+
+## 2026‑09‑21 — AI Pro & AI Max: a dedicated AI subscription with included credits (migration 0167)
+
+Owner's brief: a premium AI subscription **separate from site Pro/Business**, a configurable
+one‑time free allowance, AI Pro (default $10/mo · 15 daily · 70 weekly credits) and AI Max
+($20/mo · 50 · 250), nothing hard‑coded, ONE credit engine, atomic reservation, daily + weekly
+limits with server‑side resets, insufficient‑credit UX with upgrade options, an admin
+**AI Plans & Credits** section, Paystack idempotent, wallet coexistence with a clear priority.
+AI Clean stays retired (owner, 09‑20) — the integration point is Character Replace's /start.
+
+### What the audit found (and reused)
+- Site plans (`profiles.plan`, Paystack plan codes in `plan_pricing`) drive downloads and the AI
+  concurrency audience; the AI wallet (`ai_product_balances/ledger`) pays per video; Part 11's
+  complimentary creations are consumed at /start. Every spend already ran through ONE sequence
+  (`startCharacterReplaceJob`, Part 12), so credits became a third funding branch in that sequence
+  rather than a second checkout.
+- Bug found on the way: the complimentary count was **frozen at grant time** (`granted` written once
+  per account), so the admin's "1 free" never reached a member granted at 2 — the pill said
+  "1 remaining" after the only free run. The operator's current count (per site plan) is now read
+  every time and `consume_free_use` takes `p_granted` (9‑arg dropped, 10‑arg created — never
+  overload, PostgREST answers PGRST203).
+
+### Design
+- **Migration `0167_ai_subscriptions_and_credits.sql`** (proven on embedded Postgres 18 first:
+  apply, re‑apply, ACLs, idempotent reserve per job, daily/weekly refusals, settle/release once):
+  `ai_subscriptions` (one row per member: plan `ai_pro|ai_max`, status, Paystack refs, period,
+  cancel‑at‑period‑end), `ai_credit_ledger` (ONE row per job: reserved/consumed/refunded, status
+  `reserved|settled|released`, `day_key`/`week_key`, the limits snapshot and the breakdown that
+  priced it), `ai_credit_usage`, `reserve_ai_credits` (advisory lock per member, both limits checked
+  inside it, `{ok:false, reason:'daily'|'weekly'}`), `settle_ai_credits`, `release_ai_credits`;
+  `claim_ai_job_start` accepts `'credits'`; the `ai_jobs.funding_source` check is widened LAST as
+  `not valid` + `validate constraint`. 🔴 The owner pasted an earlier draft by hand and hit **40P01
+  deadlock** at the first `create policy`: the migration runner and the editor held locks on
+  `ai_jobs` in opposite orders. The file now touches `ai_jobs` only at its end and documents why;
+  the runner applies it on push — nothing to paste.
+- **ONE credit engine** (`lib/ai/credits/engine.ts`): credits are a conversion of the priced total
+  every tool already produces — `max(min, round(priceCents / centsPerCredit × feature × mode ×
+  quality))` — with a breakdown per price line, so trim/duration/quality/mode/voice all count once
+  and a future tool is one price table away. `periods.ts` computes `dayKey`/`weekKey` and the
+  reset instants in the configured IANA zone (default Africa/Lagos, week starts Monday), DST‑safe.
+- **Config** lives in the landing settings row as `frenzAiPlans` (`lib/ai/credits/config.ts`,
+  `AI_PLANS_BOUNDS`, versioned, audited under the new `ai_plans` surface): `enabled`, the two plans
+  (price, interval, daily/weekly credits, Paystack plan code, label, blurb, enabled), `freeCreations`
+  per site plan (null = the Character Replace default), `credits` (cents per credit, minimum,
+  rounding, mode/quality/feature multipliers), `reset { timezone, weekStartsOn }`, `walletFallback`
+  `allow | ask | off`. The public view never carries plan codes.
+- **Funding order at /start:** complimentary → included credits → wallet. With an active AI plan
+  and enough credits the job is funded by credits (`funding_source 'credits'`, `charged_cents 0`,
+  `billing { type: "CREDITS", credits, plan }`); the reservation happens AFTER the claim and a
+  refusal reverts the claim (`CR_CREDITS_UNAVAILABLE`, 409). Short of credits: `ask` → the member
+  is told (`CR_CREDITS_REQUIRED`, 402) and may choose the wallet explicitly (`funding: "wallet"`);
+  `allow` → the wallet silently as before; `off` → never the wallet. Settle on success (finalizer),
+  release on failure/cancel via `releaseJobFunding` (the single undo; `refundFailedJobs=false`
+  withholds only wallet money — credits are always released because the member never got the
+  video). A refunded reservation and a re‑reservation of the same job are idempotent.
+- **Paystack:** `POST /api/ai/subscriptions/checkout` initializes a subscription transaction with
+  the plan code and `metadata.purpose = "frenz_ai_plan"`; `GET …/verify` calls Paystack, refuses
+  non‑success / wrong purpose / another member's reference and activates; the webhook routes AI plan
+  events (by purpose, plan code or `subscription_ref`) to `syncAiPlanEvent` BEFORE the site‑plan
+  sync, so a site plan can never be overwritten by an AI plan event or vice versa;
+  `…/manage` returns Paystack's own manage link. Activation is idempotent by reference.
+  ⚠️ The owner must paste the two Paystack plan codes (PLN_…) in the admin tab — until then the
+  plans read "soon" and checkout answers 503; the live purchase path has NOT been exercised.
+- **Concurrency:** an AI plan lifts the AI audience (`ai_pro → pro`, `ai_max → business`) for the
+  Part 12 limits without touching the site plan.
+- **UI:** the quote now carries `credits { applicable, required, breakdown, affordable, reason,
+  remaining/after today & this week, resets }` and `walletOffered`; the review step shows
+  "N credits from your plan … left today/this week", a complimentary creation shows only
+  "Total · Free" (no amounts — owner), and a shortfall turns the primary button into **Get more AI
+  credits** → `AiPlansSheet` (required · available today · this week · the plans from config ·
+  "Pay ₦X from my balance instead" when the policy offers it). The usage page has `AiCreditsCard`
+  (day/week rings, resets in the member's words, Manage/Upgrade, the "no plan" door) and takes the
+  Paystack return (`?ai_plan=<ref>` → verify → toast). Batches pass the same funding choice per
+  video; the board says "6 credits" / "credits returned".
+- **Admin:** **AI Plans & Credits** tab (`ai-plans-settings.tsx`, lazy) — master switch, both plans,
+  free creations per site plan, credit rules with a LIVE example computed by the real quote +
+  engine, reset zone/week start, wallet fallback; and the usage monitor (`ai-credits-monitor.tsx`,
+  filters by plan/status/member/day) reading `ai_credit_ledger` + `ai_subscriptions`.
+- New tables registered in `lib/platform/data-domains.ts` and `lib/portability/tables.ts`.
+
+### Verified
+- SQL on embedded Postgres 18: apply · re‑apply · ACLs (service_role only) · reserve idempotent per
+  job · daily and weekly refusals with the exact reason · settle once · release only from reserved ·
+  `consume_free_use(p_granted)` honours a lowered count.
+- `tsc` clean · `next lint` clean · **vitest 4170 passed** (21 new in `credits.test.ts`) · `next build`
+  green — `/admin` was 386 kB gz after the job table became a client component (> 368 kB ceiling);
+  the job table and the two new panels are `next/dynamic` now, 375 kB first load, budget test green.
+- Local `next start` against the live database BEFORE 0167 landed: `/api/ai/credits` 401 signed
+  out, 200 with the catalogue (no plan codes) and an empty entitlement; the quote answers
+  `credits.reason: "no_plan"`, `walletOffered: true`; checkout refuses a bad plan (400) and an
+  unconfigured one (503); verify refuses a bad reference (400). The with‑plan path is probed after
+  the push (`_p13-credits-probe.tmp.mjs plan`).
 
 ## 2026‑09‑21 — Character Replace Part 12: several videos in one session (the queue, `waiting`, batches; migration 0166)
 

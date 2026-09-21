@@ -54,6 +54,7 @@ export function CharacterReplaceReviewStep({
   onConsent,
   rechargeAsk = 0,
   batchPricing = null,
+  funding = null,
 }: {
   project: CharacterReplaceProject;
   config: CharacterReplacePublicConfig;
@@ -69,6 +70,8 @@ export function CharacterReplaceReviewStep({
   rechargeAsk?: number;
   /** 0166: with several videos, each one's own quote (null while pending) and the session's total. */
   batchPricing?: { complete: boolean; failed: boolean; totalCents: number; count: number; complimentaryCount: number; quotes: (PricingSnapshot | null)[] } | null;
+  /** 0167: the member chose the wallet for this one although credits exist. */
+  funding?: "credits" | "wallet" | null;
 }) {
   const consentId = useId();
   const character = project.character;
@@ -133,7 +136,7 @@ export function CharacterReplaceReviewStep({
 
       <div className="space-y-4 lg:sticky lg:top-24">
       {/* ── the price, live (Part 6 §12): every line, from the server ──── */}
-      <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} balanceCents={balance?.balanceCents ?? null} />
+      <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} balanceCents={balance?.balanceCents ?? null} funding={funding} />
 
       {/* 0166: the session — every video with its own price, and the total that "Process N videos" will charge over time */}
       {batchPricing && project.extraVideos.length > 0 ? (
@@ -153,7 +156,7 @@ export function CharacterReplaceReviewStep({
                     <span className="block truncate text-[13px] font-semibold" title={v.name}>{v.name}</span>
                     <span className="block text-[11.5px] text-muted-foreground">{secs !== null ? formatSeconds(secs) : "—"}{q?.billing?.complimentary ? " · complimentary" : ""}</span>
                   </span>
-                  <span className="text-[13px] font-semibold tabular-nums">{q ? (q.billing?.complimentary ? formatCents(0, symbol) : formatCents(q.totalCents, symbol)) : batchPricing.failed ? "—" : "…"}</span>
+                  <span className="text-[13px] font-semibold tabular-nums">{q ? (q.billing?.complimentary ? "Free" : formatCents(q.totalCents, symbol)) : batchPricing.failed ? "—" : "…"}</span>
                 </li>
               );
             })}

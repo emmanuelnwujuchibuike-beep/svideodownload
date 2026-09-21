@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
+import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
 import type { LandingSettings } from "@/lib/landing/settings";
 
 /*
@@ -58,4 +60,29 @@ export function AiBalanceAdjustLazy({ settings }: { settings: LandingSettings })
 
 export function CharacterReplaceProcessingLazy({ settings }: { settings: LandingSettings }) {
   return <CharacterReplaceProcessingPanel settings={settings} />;
+}
+
+// 0167: AI Plans & Credits — its own tab, its own chunk (the panel runs the credit engine and the pricing engine for its live example).
+const AiPlansSettingsPanel = dynamic(() => import("@/features/admin/ai-plans-settings").then((m) => m.AiPlansSettingsPanel), { loading: skeleton("Loading AI plans") });
+
+export function AiPlansSettingsLazy({ settings }: { settings: LandingSettings }) {
+  return <AiPlansSettingsPanel settings={settings} />;
+}
+
+/*
+  The two MONITORS are client components since 2026-09-21 (filter chips) and
+  render on the first tab, so they would otherwise sit in /admin's first-load
+  JS — the route budget (lib/perf/budget.test.ts) caught the job table doing
+  exactly that. As lazy chunks they are fetched right after hydration and
+  weigh nothing on the route itself; the rows are server-read props either way.
+*/
+const CharacterReplaceJobsTable = dynamic(() => import("@/features/admin/character-replace-jobs").then((m) => m.CharacterReplaceJobsTable), { loading: skeleton("Loading Character Replace jobs") });
+const AiCreditsMonitor = dynamic(() => import("@/features/admin/ai-credits-monitor").then((m) => m.AiCreditsMonitor), { loading: skeleton("Loading AI usage") });
+
+export function CharacterReplaceJobsTableLazy({ jobs, symbol }: { jobs: CharacterReplaceAdminJob[]; symbol: string }) {
+  return <CharacterReplaceJobsTable jobs={jobs} symbol={symbol} />;
+}
+
+export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {
+  return <AiCreditsMonitor rows={rows} stats={stats} symbol={symbol} />;
 }

@@ -232,8 +232,8 @@ export function CharacterReplaceBatchBoard({
                     {cr ? replacementModeLabel(cr.mode) : null}
                     {cr?.quality ? ` · ${cr.quality}` : null}
                     {job.source.size ? ` · ${formatBytes(job.source.size)}` : null}
-                    {cr ? ` · ${cr.billing === "FREE_TRIAL" ? "Complimentary" : cr.chargedCents !== null && cr.chargedCents > 0 ? formatCents(cr.chargedCents, symbol) : cr.normalPriceCents ? formatCents(cr.normalPriceCents, symbol) : ""}` : null}
-                    {cr?.refunded ? " · refunded" : cr?.refundPending ? " · refund on its way" : cr?.freeRestored ? " · creation restored" : null}
+                    {cr ? ` · ${cr.billing === "FREE_TRIAL" ? "Complimentary" : cr.billing === "CREDITS" ? `${cr.credits ?? "—"} credit${cr.credits === 1 ? "" : "s"}` : cr.chargedCents !== null && cr.chargedCents > 0 ? formatCents(cr.chargedCents, symbol) : cr.normalPriceCents ? formatCents(cr.normalPriceCents, symbol) : ""}` : null}
+                    {cr?.creditsReleased ? " · credits returned" : cr?.refunded ? " · refunded" : cr?.refundPending ? " · refund on its way" : cr?.freeRestored ? " · creation restored" : null}
                   </p>
                   {state.detail ? <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{state.detail}</p> : null}
                   {notes[job.id] ? <p className="mt-1 text-[12px] font-semibold text-rose-500">{notes[job.id]}</p> : null}

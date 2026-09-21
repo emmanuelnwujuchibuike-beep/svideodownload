@@ -3,7 +3,7 @@
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceQuote, CharacterReplaceVoiceSource, QuoteInput } from "@/lib/ai/character-replace/pricing";
-import type { CharacterReplaceBalance, CharacterReplaceBilling, CharacterReplacePreflight, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceBalance, CharacterReplaceBilling, CharacterReplaceCreditsView, CharacterReplacePreflight, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import type { AiJobView } from "@/lib/ai/jobs";
 
@@ -152,6 +152,8 @@ export async function startCharacterReplaceJob(
     consent: true;
     /** 2026-09-20: the pass the preflight route answered for these files — Start refuses without it. */
     preflightToken?: string;
+    /** 0167: pay this one from the wallet although credits exist (the operator's policy permitting). A preference, never an amount. */
+    funding?: "credits" | "wallet";
     /** Part 6: the voice in full — only with a new voice. */
     voice?: {
       source: CharacterReplaceVoiceSource;
@@ -298,6 +300,10 @@ export interface CharacterReplaceQuoteAnswer {
   shortfallCents: number;
   /** Part 11 §7: whether this video would be a complimentary creation. */
   billing?: CharacterReplaceBilling;
+  /** 0167: the credits this quote would take on the member's AI plan (null without one), and whether the wallet is offered when they fall short. */
+  credits?: CharacterReplaceCreditsView | null;
+  walletFallback?: "allow" | "ask" | "off";
+  walletOffered?: boolean;
 }
 
 /**
@@ -412,6 +418,8 @@ export type StartVoiceFields = {
   voiceConsent?: boolean;
 };
 
+export type StartFunding = "credits" | "wallet";
+
 export interface CharacterReplaceBatchSummary {
   id: string;
   size: number;
@@ -443,12 +451,12 @@ export async function createCharacterReplaceBatch(input: {
  */
 export async function startCharacterReplaceBatch(
   batchId: string,
-  input: { jobs: { jobId: string; quote: StartQuoteFields; preflightToken?: string; voice?: StartVoiceFields }[]; consent: true },
+  input: { jobs: { jobId: string; quote: StartQuoteFields; preflightToken?: string; voice?: StartVoiceFields; funding?: StartFunding }[]; consent: true },
 ): Promise<
   CharacterReplaceClientResult<{
     batch: CharacterReplaceBatchSummary;
     jobs: AiJobView[];
-    results: { jobId: string; ok: boolean; started: boolean; waiting: boolean; billing: "free" | "paid" | null; code: AiErrorCode | null; error: string | null; job: AiJobView | null }[];
+    results: { jobId: string; ok: boolean; started: boolean; waiting: boolean; billing: "free" | "paid" | "credits" | null; code: AiErrorCode | null; error: string | null; job: AiJobView | null }[];
     balanceCents: number | null;
   }>
 > {

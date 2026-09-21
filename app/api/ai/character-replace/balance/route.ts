@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     */
     const headers = new Headers({ "cache-control": "no-store" });
     if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
-    const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request });
+    const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request, plans: settings.frenzAiPlans });
     /*
       0166: the member's own processing figures, for the picker and the board
       — how many videos may run at once for THEM (their plan, an admin's

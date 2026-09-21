@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
+
 import { affordability, quoteCharacterReplace, validateQuoteInput } from "@/lib/ai/character-replace/pricing";
 import { quoteRequestSchema } from "@/lib/ai/character-replace/quote-schema";
 import { getCharacterReplaceFreeEligibility } from "@/lib/ai/character-replace/free-access";
@@ -96,10 +98,25 @@ export async function POST(request: Request) {
       the server's read, the fit is the operator's bounds, and /start decides
       both again before anything moves.
     */
-    const free = await getCharacterReplaceFreeEligibility({ subject, config, request });
+    const free = await getCharacterReplaceFreeEligibility({ subject, config, request, plans: settings.frenzAiPlans });
     const fit = free.eligible ? freeRequestQualifies(config, { mode: quote.mode, quality: quote.quality, durationMs: quote.durationMs, voiceMode: quote.voiceMode, voiceSource: quote.voiceSource, lipSyncMode: quote.lipSyncMode }) : null;
     const complimentary = free.eligible && fit?.ok === true;
+    /*
+      0167 (AI Pro / AI Max): the ESTIMATED credits for exactly these options,
+      through the one credit engine, with what would remain on both clocks —
+      shown before the member submits (brief § "BEFORE GENERATION"). The
+      server recalculates and reserves at /start; this block never reserves.
+    */
+    const plans = settings.frenzAiPlans;
+    const creditEntitlement = plans.enabled && !complimentary ? await getAiCreditEntitlement(subject.userId, plans) : null;
+    const credits = creditEntitlement
+      ? creditDecisionView(decideCredits(creditEntitlement, { feature: feature.id, priceCents: quote.totalCents, mode: quote.mode, quality: quote.quality, durationMs: quote.durationMs, lines: quote.lines.filter((l) => typeof l.amountCents === "number" && l.amountCents > 0).map((l) => ({ label: l.label, cents: l.amountCents as number })) }, plans))
+      : null;
+    const walletOffered = !credits || !credits.applicable || credits.affordable ? true : plans.walletFallback !== "off";
     return NextResponse.json({
+      credits,
+      walletFallback: plans.walletFallback,
+      walletOffered,
       quote,
       balanceCents,
       afterCents: complimentary ? balanceCents : money.afterCents,

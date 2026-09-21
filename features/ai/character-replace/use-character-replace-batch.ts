@@ -217,7 +217,7 @@ export function useCharacterReplaceBatch(ws: ReturnType<typeof useCharacterRepla
       wanted.map(async (v) => {
         const res = await getCharacterReplaceQuote({ ...base, selectedDurationMs: Math.round(v.metadata.durationMs ?? 0) }, controller.signal);
         if (!alive.current || controller.signal.aborted) return;
-        setExtraQuotes((q) => ({ ...q, [keyOf(v)]: { key: keyOf(v), status: res.ok ? "quoted" : "error", snapshot: res.ok ? { ...res.quote, billing: res.billing ?? null } : null, sig: baseSig } }));
+        setExtraQuotes((q) => ({ ...q, [keyOf(v)]: { key: keyOf(v), status: res.ok ? "quoted" : "error", snapshot: res.ok ? { ...res.quote, billing: res.billing ?? null, credits: res.credits ?? null, walletOffered: res.walletOffered !== false } : null, sig: baseSig } }));
       }),
     );
     return () => controller.abort();
@@ -383,7 +383,7 @@ export function useCharacterReplaceBatch(ws: ReturnType<typeof useCharacterRepla
     setLaunch({ phase: "starting", batchId, items: launch.items });
     const jobs = passing.map((it) => {
       const q = pricing.quotes[it.index];
-      return q ? { jobId: it.jobId!, quote: quoteFields(q), preflightToken: it.token!, voice: voiceBody() } : null;
+      return q ? { jobId: it.jobId!, quote: quoteFields(q), preflightToken: it.token!, voice: voiceBody(), ...(ws.funding ? { funding: ws.funding } : {}) } : null;
     });
     if (jobs.some((j) => !j)) {
       setLaunch({ phase: "error", code: "PRICE_CHANGED", message: "The price needs a refresh. Review and try again.", batchId });

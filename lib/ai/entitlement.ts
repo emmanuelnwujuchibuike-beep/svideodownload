@@ -12,7 +12,17 @@ import {
 import type { AiSubject } from "@/lib/ai/subject";
 import { AI_GUEST_IP_DAILY_CEILING } from "@/lib/ai/subject";
 import { getLandingSettings } from "@/lib/landing/settings";
+import { getActiveAiPlan } from "@/lib/ai/credits/subscription";
 import { getUserPlan } from "@/lib/monetization/plan";
+
+const AUDIENCE_RANK: Record<AiAudience, number> = { guest: 0, free: 1, pro: 2, business: 3, max_ai: 4 };
+
+/** The higher of the site audience and what the AI plan grants (ai_pro → pro, ai_max → business). Pure. */
+export function liftAudience(site: AiAudience, aiPlan: "ai_pro" | "ai_max" | null): AiAudience {
+  const granted: AiAudience | null = aiPlan === "ai_max" ? "business" : aiPlan === "ai_pro" ? "pro" : null;
+  if (!granted || site === "guest") return site;
+  return AUDIENCE_RANK[granted] > AUDIENCE_RANK[site] ? granted : site;
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -78,13 +88,25 @@ export async function getAiEntitlement(
   subject: AiSubject,
   feature: AiFeatureDef,
 ): Promise<AiEntitlement> {
-  const audience: AiAudience =
+  const siteAudience: AiAudience =
     subject.kind === "guest"
       ? "guest"
       : // 🔴 The plan comes from the EXISTING subscription helper, never from a
         // request. A second answer to "is this person Pro" is a second thing to
         // be wrong.
         audienceFromPlan(await getUserPlan(subject.userId));
+  /*
+    ── AI PRO / AI MAX LIFT THE AI AUDIENCE (0167) ────────────────────────────
+    Owner, 2026-09-21: "AI Pro should grant all AI features that are currently
+    classified as Pro/Business AI features. AI Max should inherit AI Pro
+    permissions … The entitlement system should correctly resolve the
+    combined permissions." A member's AI audience is therefore the HIGHER of
+    their site plan and their AI plan — AI Pro reads as at least `pro`, AI
+    Max as at least `business` — for everything keyed by audience here (the
+    per-plan concurrency, the policy rows). The site plan itself is untouched.
+  */
+  const aiPlan = subject.kind === "user" ? await getActiveAiPlan(subject.userId).catch(() => null) : null;
+  const audience: AiAudience = liftAudience(siteAudience, aiPlan);
 
   /*
     The guest and free allowances are operator settings (owner, 2026-09-08).

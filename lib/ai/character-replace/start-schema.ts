@@ -108,6 +108,14 @@ export const startCharacterReplaceJobSchema = z
      */
     preflightToken: z.string().min(16).max(2000).optional(),
     /**
+     * 0167 (AI Pro / AI Max): how the member wants THIS generation paid for
+     * when both routes exist — their included credits (the default while the
+     * allowance covers it) or the wallet. A preference, never an amount: the
+     * server decides whether credits cover it and refuses a wallet charge when
+     * the operator's policy says upgrade only.
+     */
+    funding: z.enum(["credits", "wallet"]).optional(),
+    /**
      * Part 6: the voice, in full. Only read when the quote says `new_voice`;
      * refused when it contradicts the quote (a TTS quote with no text, an
      * upload quote with text). The dialogue's LENGTH must equal the signed

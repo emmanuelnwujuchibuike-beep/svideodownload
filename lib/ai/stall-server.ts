@@ -56,7 +56,7 @@ export async function failStalledJob(
      * Null is fine and means "free": every row that predates migration 0150
      * was funded by the daily allowance.
      */
-    funding_source: "free" | "balance" | null;
+    funding_source: "free" | "balance" | "credits" | null;
   },
   now: number = Date.now(),
 ): Promise<boolean> {

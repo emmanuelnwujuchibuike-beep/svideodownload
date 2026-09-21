@@ -5,6 +5,7 @@ import {
   versionCharacterReplacePricing,
   type CharacterReplaceConfig,
 } from "@/lib/ai/character-replace/config";
+import { normalizeAiPlansConfig, versionAiPlans, type AiPlansConfig } from "@/lib/ai/credits/config";
 
 /**
  * Admin-configurable pieces of the public landing page, stored in the `settings`
@@ -297,6 +298,14 @@ export interface LandingSettings {
    * several of these values become money.
    */
   frenzAiCharacterReplace: CharacterReplaceConfig;
+  /**
+   * AI Pro / AI Max (2026-09-21): the two AI plans, their included credits,
+   * the one-time complimentary creations per site plan, the credit rules and
+   * the reset zone — under ONE key, like the tool above. The type and its
+   * normaliser live in lib/ai/credits/config.ts; this row stores and returns
+   * it, merged on the way in, clamped on the way out, versioned on change.
+   */
+  frenzAiPlans: AiPlansConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -351,6 +360,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiEngine: "classical",
   // The tool's own defaults — see lib/ai/character-replace/config.ts.
   frenzAiCharacterReplace: normalizeCharacterReplaceConfig(null),
+  frenzAiPlans: normalizeAiPlansConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -496,6 +506,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiEngine: normalizeEngine(raw.frenzAiEngine),
       frenzAiTileImageUrl: isAllowedImageUrl(raw.frenzAiTileImageUrl) ? raw.frenzAiTileImageUrl : "",
       frenzAiCharacterReplace: normalizeCharacterReplaceConfig(raw.frenzAiCharacterReplace),
+      frenzAiPlans: normalizeAiPlansConfig(raw.frenzAiPlans),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -534,8 +545,10 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans">> & {
   frenzAiCharacterReplace?: Record<string, unknown>;
+  /** AI Pro / AI Max: the same deep merge, so the plans panel can post one plan's figures without erasing the other's. */
+  frenzAiPlans?: Record<string, unknown>;
 };
 
 /**
@@ -562,7 +575,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -606,6 +619,11 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
       // Part 6 §27: who changed the prices and why, recorded with the superseded version.
       audit,
     ),
+    // AI Pro / AI Max: merged the same way; the version bumps only when an entitlement- or cost-bearing value changed.
+    frenzAiPlans: versionAiPlans(
+      current.frenzAiPlans,
+      normalizeAiPlansConfig(mergeCharacterReplacePatch(current.frenzAiPlans as unknown as Record<string, unknown>, (s.frenzAiPlans ?? {}) as Record<string, unknown>)),
+    ),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;
@@ -641,6 +659,23 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
         before: changedBefore,
         after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) },
       });
+    }
+  }
+  // The AI plans' own line in the same log (brief § "ADMIN CONFIGURATION SAFETY": audit which configuration was active).
+  if (s.frenzAiPlans) {
+    const before = current.frenzAiPlans as unknown as Record<string, unknown>;
+    const after = value.frenzAiPlans as unknown as Record<string, unknown>;
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const key of Object.keys(after)) {
+      if (key === "updatedAt") continue;
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+        changedBefore[key] = before[key];
+        changedAfter[key] = after[key];
+      }
+    }
+    if (Object.keys(changedAfter).length > 0) {
+      recordConfigChange({ actorId: audit.changedBy ?? null, surface: "ai_plans", targetId: "settings", action: "settings.update", before: changedBefore, after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) } });
     }
   }
 }

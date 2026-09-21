@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { summarizeBatch } from "@/lib/ai/character-replace/batch";
 import { freeUseStates } from "@/lib/ai/character-replace/free-access";
 import { characterReplaceRefundStates } from "@/lib/ai/character-replace/wallet";
+import { creditLedgerFor } from "@/lib/ai/credits/store";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, isActiveStatus, jobToView, type AiJobRow } from "@/lib/ai/jobs";
 import { getOwnJob, listOwnBatchJobs } from "@/lib/ai/job-store";
@@ -63,7 +64,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const charged = rows.filter((r) => !isActiveStatus(r.status) && (r.charged_cents ?? 0) > 0).map((r) => r.id);
     const states = await characterReplaceRefundStates(subject.userId, charged);
     const free = rows.filter((r) => r.funding_source === "free" && !isActiveStatus(r.status)).map((r) => r.id);
-    const freeStates = await freeUseStates(free);
+    const credited = rows.filter((r) => r.funding_source === "credits" && !isActiveStatus(r.status)).map((r) => r.id);
+    const [freeStates, creditRows] = await Promise.all([freeUseStates(free), creditLedgerFor(credited)]);
     for (const view of views) {
       if (!view.characterReplace) continue;
       if (charged.includes(view.id)) {
@@ -71,6 +73,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
       }
       if (free.includes(view.id)) view.characterReplace = { ...view.characterReplace, freeRestored: freeStates.get(view.id) === "restored" };
+      if (credited.includes(view.id)) {
+        const released = creditRows.get(view.id)?.status === "released";
+        view.characterReplace = { ...view.characterReplace, creditsReleased: released, refunded: released };
+      }
     }
     return NextResponse.json({ batch: summarizeBatch(id, views), jobs: views });
   } catch (e) {

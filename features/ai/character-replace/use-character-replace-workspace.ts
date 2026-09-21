@@ -289,7 +289,7 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
       const res = await getCharacterReplaceQuote(quoteInput, controller.signal);
       if (!alive.current || seq !== quoteSeq.current || controller.signal.aborted) return;
       if (res.ok) {
-        dispatch({ type: "pricing", pricing: { status: "quoted", snapshot: { ...res.quote, billing: res.billing ?? null } } });
+        dispatch({ type: "pricing", pricing: { status: "quoted", snapshot: { ...res.quote, billing: res.billing ?? null, credits: res.credits ?? null, walletOffered: res.walletOffered !== false } } });
         // The server read the wallet while quoting; the card shows the same figure.
         setLoads((l) => (l.balance && l.balance.balanceCents !== res.balanceCents ? { ...l, balance: { ...l.balance, balanceCents: res.balanceCents } } : l));
       } else {
@@ -545,6 +545,14 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
   const requestId = useRef<string | null>(null);
   const [launch, setLaunch] = useState<LaunchState>({ phase: "idle" });
   /*
+    0167: how the member wants THIS generation paid for when their AI plan's
+    credits do not cover it and the operator's policy offers the wallet —
+    null = credits when they cover it, the wallet otherwise as before;
+    "wallet" = the member chose the balance in the plans sheet. A
+    preference sent with the start; the server decides.
+  */
+  const [funding, setFunding] = useState<"credits" | "wallet" | null>(null);
+  /*
     Part 5 (§7): the finished attempt a retry is linked to. Set by `retryFrom`,
     sent once with the next /jobs create, then cleared — so a later, unrelated
     draft never inherits an old lineage.
@@ -706,6 +714,7 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
       },
       trim: trimmed && range ? { startMs: range.startMs, endMs: range.endMs } : null,
       consent: true,
+      ...(funding ? { funding } : {}),
       ...(voice.mode === "new_voice" && voice.source
         ? {
             voice:
@@ -723,6 +732,11 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
         setRetry((n) => n + 1);
       }
       if (started.code === "CR_BALANCE_REQUIRED") void loadBalance();
+      // 0167: the credits went to another start, or the allowance moved — the estimate is read again; the plans sheet opens from the workspace
+      if (started.code === "CR_CREDITS_UNAVAILABLE" || started.code === "CR_CREDITS_REQUIRED") {
+        dispatch({ type: "pricing", pricing: { status: "pending" } });
+        setRetry((n) => n + 1);
+      }
       // Part 11: the complimentary creation went to another start (a race) — the entitlement and the price are read again
       if (started.code === "CR_FREE_UNAVAILABLE") {
         void loadBalance();
@@ -739,6 +753,7 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
     }
     requestId.current = null;
     retryOf.current = null;
+    setFunding(null);
     void loadBalance();
     setLaunch({ phase: "idle" });
     // Part 7 §16: the photo is still in this browser's hand — the result may offer "Use same photo".
@@ -748,7 +763,7 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
       /* a refused write only hides the shortcut */
     }
     return started.job.id;
-  }, [launch, loadBalance, state.pricing, state.project]);
+  }, [funding, launch, loadBalance, state.pricing, state.project]);
 
   /** Back to the file that needs attention: the job is left behind (a new one is created next time) and the file is cleared. */
   const replaceMedia = useCallback((target: "reference" | "video" | "both") => {
@@ -817,6 +832,8 @@ export function useCharacterReplaceWorkspace(opts: { initialMode?: ReplacementMo
     requote,
     dismissTopupNotice,
     launch,
+    funding,
+    setFunding,
     start,
     confirm,
     replaceMedia,

@@ -299,8 +299,8 @@ export async function claimJobStart(input: {
   maxPerDay: number;
   chargedCents: number;
   metadata: Record<string, unknown>;
-  /** Part 11: a complimentary creation claims as `free` (charged 0, nothing reserved); the default is the wallet. */
-  funding?: "balance" | "free";
+  /** Part 11: a complimentary creation claims as `free` (charged 0, nothing reserved); 0167: included plan credits claim as `credits`; the default is the wallet. */
+  funding?: "balance" | "free" | "credits";
   /**
    * 0166 (multi-video): when the member's or the platform's cap refuses,
    * hold the job as `waiting` — funding and charge written, its place kept —
@@ -650,7 +650,7 @@ export interface JobPatch {
    * the charge succeeds — every later undo reads it rather than guessing. See
    * lib/ai/funding.ts for why guessing creates free videos.
    */
-  funding_source?: "free" | "balance" | null;
+  funding_source?: "free" | "balance" | "credits" | null;
   charged_cents?: number | null;
   result_size?: number | null;
   replicate_prediction_id?: string | null;

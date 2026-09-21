@@ -83,6 +83,19 @@ const modeSchema = z.object({
   provider: z.object({ model: z.string().max(160).optional() }).optional(),
 });
 
+const aiPlanSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    label: z.string().max(24).optional(),
+    priceCents: z.number().int().min(0).max(100_000_000).optional(),
+    interval: z.enum(["monthly", "yearly"]).optional(),
+    dailyCredits: z.number().int().min(0).max(100_000).optional(),
+    weeklyCredits: z.number().int().min(0).max(1_000_000).optional(),
+    paystackPlanCode: z.string().max(100).optional(),
+    blurb: z.string().max(160).optional(),
+  })
+  .strict();
+
 const schema = z.object({
   reelsPosterUrl: reelsPoster.optional(),
   feedGridImages: z.array(gridImage).max(FEED_GRID_SLOTS).optional(),
@@ -189,6 +202,39 @@ const schema = z.object({
     Two validators with two sets of bounds would drift; this one only refuses
     the wrong TYPE so the operator gets a field name back.
   */
+  /** 0167: AI Pro / AI Max, the one-time creations per site plan, the credit rules (bounds mirror AI_PLANS_BOUNDS). */
+  frenzAiPlans: z
+    .object({
+      enabled: z.boolean().optional(),
+      plans: z
+        .object({
+          ai_pro: aiPlanSchema.optional(),
+          ai_max: aiPlanSchema.optional(),
+        })
+        .optional(),
+      freeCreations: z
+        .object({
+          enabled: z.boolean().optional(),
+          free: z.number().int().min(0).max(100).nullable().optional(),
+          pro: z.number().int().min(0).max(100).nullable().optional(),
+          business: z.number().int().min(0).max(100).nullable().optional(),
+        })
+        .optional(),
+      credits: z
+        .object({
+          centsPerCredit: z.number().int().min(1).max(1_000_000).optional(),
+          minimumCredits: z.number().int().min(0).max(10_000).optional(),
+          rounding: z.enum(["ceil", "nearest"]).optional(),
+          modeMultiplier: z.record(z.string().max(40), z.number().min(0.1).max(20)).optional(),
+          qualityMultiplier: z.record(z.string().max(40), z.number().min(0.1).max(20)).optional(),
+          featureMultiplier: z.record(z.string().max(40), z.number().min(0.1).max(20)).optional(),
+        })
+        .optional(),
+      reset: z.object({ timezone: z.string().max(80).optional(), weekStartsOn: z.number().int().min(0).max(6).optional() }).optional(),
+      walletFallback: z.enum(["allow", "ask", "off"]).optional(),
+    })
+    .strict()
+    .optional(),
   frenzAiCharacterReplace: z
     .object({
       enabled: z.boolean().optional(),

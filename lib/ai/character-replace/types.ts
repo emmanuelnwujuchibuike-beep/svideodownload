@@ -299,6 +299,30 @@ export interface PricingSnapshot {
   rateLine: string;
   /** Part 11 §7: attached by the hook from the quote answer; never part of what is signed or handed back. */
   billing?: CharacterReplaceBilling | null;
+  /** 0167: the credits this quote would take on the member's AI plan, and what would remain — the server's estimate, re-decided at /start. Null without a plan. */
+  credits?: CharacterReplaceCreditsView | null;
+  /** 0167: whether the wallet is offered for this quote when the credits do not cover it (the operator's policy). */
+  walletOffered?: boolean;
+}
+
+/** The credits block the quote and the start answer carry (lib/ai/credits/entitlement.ts creditDecisionView). Display only. */
+export interface CharacterReplaceCreditsView {
+  applicable: boolean;
+  plan: "ai_pro" | "ai_max" | null;
+  required: number;
+  breakdown: { key: string; label: string; credits?: number; factor?: number; detail?: string | null }[];
+  affordable: boolean;
+  reason: "daily" | "weekly" | "no_plan" | "disabled" | null;
+  remainingToday: number;
+  remainingThisWeek: number;
+  afterToday: number;
+  afterThisWeek: number;
+  dailyLimit: number;
+  weeklyLimit: number;
+  usedToday: number;
+  usedThisWeek: number;
+  dayResetsAt: string;
+  weekResetsAt: string;
 }
 
 export interface PricingLine {

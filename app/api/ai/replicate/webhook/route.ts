@@ -364,7 +364,7 @@ async function failJob(
  * daily allowance, and a webhook has no session to read it from. `getUserPlan`
  * is a single indexed read and this path runs at most once per job.
  */
-async function refund(subject: AiSubject | null, feature: AiFeature, job?: { id: string; user_id: string | null; funding_source: "free" | "balance" | null }, cause: "failure" | "cancel" | "undo" = "undo") {
+async function refund(subject: AiSubject | null, feature: AiFeature, job?: { id: string; user_id: string | null; funding_source: "free" | "balance" | "credits" | null }, cause: "failure" | "cancel" | "undo" = "undo") {
   const def = aiFeature(feature);
   if (!def || !subject) return;
   const entitlement = await getAiEntitlement(subject, def);

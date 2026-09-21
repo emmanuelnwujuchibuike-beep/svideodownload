@@ -81,7 +81,7 @@ async function expireUnreservedWaiting(userId: string, now: number): Promise<num
   const admin = createAdminClient();
   const { data } = await admin.from("ai_jobs").select("id, user_id, guest_id, funding_source, metadata, created_at").eq("user_id", userId).eq("feature", FEATURE).eq("status", "waiting").limit(20);
   let expired = 0;
-  for (const row of (data ?? []) as { id: string; user_id: string | null; guest_id: string | null; funding_source: "free" | "balance" | null; metadata: Record<string, unknown> | null; created_at: string }[]) {
+  for (const row of (data ?? []) as { id: string; user_id: string | null; guest_id: string | null; funding_source: "free" | "balance" | "credits" | null; metadata: Record<string, unknown> | null; created_at: string }[]) {
     const queue = (row.metadata?.queue ?? null) as { queued_at?: unknown; reserved_at?: unknown } | null;
     if (queue?.reserved_at) continue;
     const queuedAt = typeof queue?.queued_at === "string" ? Date.parse(queue.queued_at) : Date.parse(row.created_at);

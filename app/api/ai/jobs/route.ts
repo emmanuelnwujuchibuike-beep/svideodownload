@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { freeUseStates } from "@/lib/ai/character-replace/free-access";
 import { characterReplaceRefundStates } from "@/lib/ai/character-replace/wallet";
+import { creditLedgerFor } from "@/lib/ai/credits/store";
 
 import { policyBlockEvent, screenAiJob } from "@/lib/ai/acceptable-use";
 import { extensionForUpload } from "@/lib/ai/media";
@@ -453,6 +454,14 @@ export async function GET(request: Request) {
       for (const view of views) {
         if (!view.characterReplace || !free.includes(view.id)) continue;
         view.characterReplace = { ...view.characterReplace, freeRestored: freeStates.get(view.id) === "restored" };
+      }
+      // 0167: credits that came back — from the credit ledger
+      const credited = rows.filter((r) => r.feature === "ai_character_replace" && r.funding_source === "credits" && !isActiveStatus(r.status)).map((r) => r.id);
+      const creditRows = await creditLedgerFor(credited);
+      for (const view of views) {
+        if (!view.characterReplace || !credited.includes(view.id)) continue;
+        const released = creditRows.get(view.id)?.status === "released";
+        view.characterReplace = { ...view.characterReplace, creditsReleased: released, refunded: released };
       }
     }
     return NextResponse.json({

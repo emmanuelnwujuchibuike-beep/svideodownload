@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
+import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
+import { takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
 import { StatementDetailSheet, symbolFor } from "@/features/ai/statement-detail-sheet";
 import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
@@ -61,6 +63,8 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
   const [ledger, setLedger] = useState<LedgerRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // 0167: bumps re-read the AI allowance (after a plan return)
+  const [creditsKey, setCreditsKey] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
   const [suggested, setSuggested] = useState<number | null>(null);
@@ -83,9 +87,15 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
       same contract the workspace keeps, so a recharge started HERE finishes
       here, with the new balance on screen.
     */
-    const reference = takeTopupReturnReference();
+    // 0167: the return from an AI plan checkout — verified by its reference on the server, never by the URL's word
+    const planReturn = takeAiPlanReturn();
+    const reference = planReturn ? null : takeTopupReturnReference();
     void (async () => {
-      if (reference) {
+      if (planReturn?.reference) {
+        const verified = await verifyAiPlanReturn(planReturn.reference);
+        setNotice(verified.ok ? (verified.activated ? `${verified.planLabel ?? "Your AI plan"} is active — ${verified.dailyLimit} credits a day, ${verified.weeklyLimit} a week.` : verified.status === "success" ? "Payment received — your plan will activate as soon as Paystack confirms it." : "Your payment wasn't completed. Nothing was charged.") : verified.error);
+        setCreditsKey((k) => k + 1);
+      } else if (reference) {
         const verified = await verifyCharacterReplaceTopup(reference);
         setNotice(verified.ok ? (verified.credited ? "Payment received — your balance has been updated." : verified.pending ? "Your payment is still being confirmed. This will update shortly." : null) : null);
       }
@@ -260,6 +270,9 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                 </div>
               ) : null}
             </section>
+
+            {/* ── 0167: the AI plan and its allowance — or the door to one ─────── */}
+            <AiCreditsCard className="mt-4" refreshKey={creditsKey} returnTo="/studio/ai/usage" />
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (

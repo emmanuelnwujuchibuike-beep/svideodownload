@@ -4,6 +4,7 @@ import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharg
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
 
 export const runtime = "nodejs";
@@ -205,7 +206,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
+  /*
+    ── AN AI PLAN (0167) IS A SUBSCRIPTION TOO, AND IT IS NOT THE SITE PLAN ──
+    Routed by its purpose (set at checkout, echoed back), by one of the AI
+    plan codes, or by a subscription code already on ai_subscriptions —
+    BEFORE the site-plan sync, so an AI Max charge can never rewrite a
+    member's Pro/Business row or their profile role. The write is idempotent
+    by member and reference (lib/ai/credits/subscription.ts).
+  */
   if (HANDLED.has(event.event)) {
+    try {
+      const plans = (await getLandingSettings()).frenzAiPlans;
+      if (await isAiPlanEvent(event.data, plans)) {
+        await syncAiPlanEvent(event.event, event.data, plans);
+        return NextResponse.json({ received: true, aiPlan: true });
+      }
+    } catch (e) {
+      console.error("[paystack] ai plan sync threw", { event: event.event, error: String(e).slice(0, 200) });
+      // A redelivery can succeed; the site-plan sync must not see this event.
+      return NextResponse.json({ error: "ai plan sync failed" }, { status: 500 });
+    }
     try {
       await syncPaystackEvent(event.event, event.data);
     } catch {

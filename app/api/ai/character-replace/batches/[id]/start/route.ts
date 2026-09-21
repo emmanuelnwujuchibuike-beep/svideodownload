@@ -6,6 +6,7 @@ import { getCharacterReplaceFreeEligibility } from "@/lib/ai/character-replace/f
 import { requestQueuePump } from "@/lib/ai/character-replace/queue-signal";
 import { loadStartShared, startCharacterReplaceJob } from "@/lib/ai/character-replace/start-job";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
+import { getActiveAiPlan } from "@/lib/ai/credits/subscription";
 import { aiErrorBody, aiErrorMessage, aiErrorStatus, isAiJobError, storedErrorMessage, type AiErrorCode } from "@/lib/ai/errors";
 import { aiFeature, jobToView, type AiJobView } from "@/lib/ai/jobs";
 import { listOwnBatchJobs } from "@/lib/ai/job-store";
@@ -56,7 +57,7 @@ interface StartResult {
   ok: boolean;
   started: boolean;
   waiting: boolean;
-  billing: "free" | "paid" | null;
+  billing: "free" | "paid" | "credits" | null;
   code: AiErrorCode | null;
   error: string | null;
   job: AiJobView | null;
@@ -97,7 +98,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     /* ── the pre-check: can the balance cover the paid part? ─────────────── */
     const pending = parsed.data.jobs.filter((j) => byId.get(j.jobId)?.status === "queued");
-    const [balance, eligibility] = await Promise.all([getCharacterReplaceBalanceCents(subject.userId).catch(() => null), getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin })]);
+    const [balance, eligibility] = await Promise.all([getCharacterReplaceBalanceCents(subject.userId).catch(() => null), getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin, plans: shared.settings.frenzAiPlans })]);
     if (balance === null) return fail("INTERNAL_ERROR");
     // Null = unlimited (an administrator); otherwise the complimentary creations cover the FIRST videos (the per-video rule decides for real).
     const freeLeft = eligibility.eligible ? eligibility.remainingFreeUses : 0;
@@ -105,7 +106,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       .map((j) => j.quote.totalCents)
       .slice(freeLeft === null ? pending.length : Math.min(freeLeft, pending.length))
       .reduce((sum, cents) => sum + cents, 0);
-    if (paidCents > balance) {
+    /*
+      0167: a member on an AI plan pays with included credits first, per
+      video, inside THE start — the wallet pre-check would refuse a batch
+      their allowance covers. So it applies only when the wallet is the
+      route: no active plan, or the member chose the wallet for these.
+    */
+    const aiPlan = config.enabled && shared.settings.frenzAiPlans.enabled ? await getActiveAiPlan(subject.userId) : null;
+    const walletRoute = !aiPlan || parsed.data.jobs.some((j) => j.funding === "wallet");
+    if (walletRoute && paidCents > balance) {
       return fail("CR_BALANCE_REQUIRED", { balanceCents: balance, requiredCents: paidCents, shortfallCents: paidCents - balance, currency: shared.settings.frenzAiCurrency, videos: pending.length });
     }
 
@@ -118,7 +127,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         subject,
         request,
         jobId: item.jobId,
-        body: { quote: item.quote, trim: null, consent: true, preflightToken: item.preflightToken, voice: item.voice },
+        body: { quote: item.quote, trim: null, consent: true, preflightToken: item.preflightToken, voice: item.voice, ...(item.funding ? { funding: item.funding } : {}) },
         queue: true,
         shared,
         via: "batch",
@@ -126,7 +135,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!outcome.ok) {
         results.push({ jobId: item.jobId, ok: false, started: false, waiting: false, billing: null, code: outcome.code, error: typeof outcome.extra?.error === "string" ? outcome.extra.error : aiErrorMessage(outcome.code), job: null });
         // A refused balance ends the run: every later video would refuse the same way, and the member should recharge once, not N times.
-        if (outcome.code === "CR_BALANCE_REQUIRED" || outcome.code === "CR_DAILY_LIMIT" || outcome.code === "CR_BUSY" || outcome.code === "CR_MAINTENANCE") break;
+        if (outcome.code === "CR_BALANCE_REQUIRED" || outcome.code === "CR_CREDITS_REQUIRED" || outcome.code === "CR_DAILY_LIMIT" || outcome.code === "CR_BUSY" || outcome.code === "CR_MAINTENANCE") break;
         continue;
       }
       if ("alreadyStarted" in outcome) {

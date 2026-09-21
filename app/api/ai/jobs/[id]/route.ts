@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
+import { creditLedgerFor } from "@/lib/ai/credits/store";
 import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
 import { getOwnJob } from "@/lib/ai/job-store";
 import { isActiveStatus, jobToView, primaryAiFeature, type AiJobRow, type AiJobView } from "@/lib/ai/jobs";
@@ -60,6 +61,12 @@ async function viewWithMoney(row: AiJobRow): Promise<AiJobView> {
   if (view.characterReplace && terminal && (row.charged_cents ?? 0) > 0) {
     const state = await characterReplaceRefundState(row.user_id, row.id);
     view.characterReplace = { ...view.characterReplace, refunded: state === "refunded", refundPending: state === "pending" };
+  }
+  // 0167: a job paid with included credits — whether they came back, from the credit ledger, never a status
+  if (view.characterReplace && terminal && row.funding_source === "credits") {
+    const ledger = await creditLedgerFor([row.id]);
+    const released = ledger.get(row.id)?.status === "released";
+    view.characterReplace = { ...view.characterReplace, creditsReleased: released, refunded: released };
   }
   return view;
 }

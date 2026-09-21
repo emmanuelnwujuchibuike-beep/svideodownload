@@ -139,6 +139,9 @@ export type AiErrorCode =
   | "CR_QUEUE_FULL"
   | "CR_BATCH_TOO_LARGE"
   | "CR_QUEUE_OFF"
+  /* 0167 (AI Pro / AI Max): the included allowance does not cover this generation; the wallet is not offered for it */
+  | "CR_CREDITS_REQUIRED"
+  | "CR_CREDITS_UNAVAILABLE"
   | "CR_MAINTENANCE"
   | "QUOTE_EXPIRED"
   /** 2026-09-20: Start was called without a passed preflight for exactly these files — nothing reserved. */
@@ -260,6 +263,8 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   CR_QUEUE_FULL: { status: 409, message: "You already have the maximum number of videos in progress. Wait for one to finish, then add more — nothing was charged." },
   CR_BATCH_TOO_LARGE: { status: 400, message: "That's more videos than can be processed in one go. Remove a few and try again." },
   CR_QUEUE_OFF: { status: 409, message: "Processing several videos at once isn't available right now. Create them one at a time." },
+  CR_CREDITS_REQUIRED: { status: 402, message: "Not enough AI credits for this generation." },
+  CR_CREDITS_UNAVAILABLE: { status: 409, message: "Your AI credits were just used by another generation. Check the price and try again — nothing was charged." },
   CR_MAINTENANCE: { status: 503, message: "Character Replace is being looked after right now. Your finished videos are still here — new videos will be back shortly." },
   QUOTE_EXPIRED: { status: 409, message: "That price has expired. Check the new price and try again." },
   PREFLIGHT_REQUIRED: { status: 409, message: "Let us check your media first — it only takes a moment, and nothing is charged." },

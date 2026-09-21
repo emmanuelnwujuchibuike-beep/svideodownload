@@ -516,7 +516,7 @@ export interface AiJobRow {
    * lib/ai/funding.ts for why releasing a slot and refunding money are not
    * interchangeable, and why guessing wrong creates free videos.
    */
-  funding_source: "free" | "balance" | null;
+  funding_source: "free" | "balance" | "credits" | null;
   /** What was deducted, in minor units. Null for a free job. */
   charged_cents: number | null;
   source_size: number | null;
@@ -630,7 +630,11 @@ export interface AiJobView {
      * the NORMAL price it would have cost; `freeRestored` is set by the read
      * routes from the audit row when the creation came back after a failure.
      */
-    billing: "FREE_TRIAL" | "PAID" | null;
+    billing: "FREE_TRIAL" | "PAID" | "CREDITS" | null;
+    /** 0167: the included plan credits this job reserved (settled when delivered, released when it did not). */
+    credits: number | null;
+    /** 0167: from the credit ledger — the credits came back after a failure. Set by the read routes. */
+    creditsReleased?: boolean;
     normalPriceCents: number | null;
     freeRestored?: boolean;
     voiceMode: "original" | "new_voice";
@@ -789,7 +793,8 @@ function characterReplaceView(row: AiJobRow): AiJobView["characterReplace"] {
     chargedCents: charged,
     currency: typeof quote?.currency === "string" ? quote.currency : null,
     refunded: (row.status === "failed" || row.status === "cancelled" || row.status === "expired") && (charged ?? 0) > 0,
-    billing: billing?.type === "FREE_TRIAL" ? "FREE_TRIAL" : billing?.type === "PAID" || row.funding_source === "balance" ? "PAID" : row.funding_source === "free" ? "FREE_TRIAL" : null,
+    billing: billing?.type === "FREE_TRIAL" ? "FREE_TRIAL" : billing?.type === "CREDITS" || row.funding_source === "credits" ? "CREDITS" : billing?.type === "PAID" || row.funding_source === "balance" ? "PAID" : row.funding_source === "free" ? "FREE_TRIAL" : null,
+    credits: num((billing as { credits?: unknown } | null)?.credits),
     normalPriceCents: num(billing?.normalPriceCents) ?? num(quote?.totalCents) ?? charged,
     voiceMode: settings.voiceMode === "new_voice" ? "new_voice" : "original",
     lipSyncMode: settings.lipSyncMode === "standard" || settings.lipSyncMode === "studio" ? settings.lipSyncMode : null,

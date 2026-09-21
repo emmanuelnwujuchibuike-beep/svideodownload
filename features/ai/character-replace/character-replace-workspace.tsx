@@ -6,6 +6,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CharacterReplaceBatchBoard } from "@/features/ai/character-replace/batch-board";
+import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
+import { getAiCredits } from "@/lib/ai/credits/client";
+import type { AiPlansPublic } from "@/lib/ai/credits/config";
 import { CharacterReplaceBatchLaunchPanel } from "@/features/ai/character-replace/batch-launch-panel";
 import { CharacterReplacePreflightPanel } from "@/features/ai/character-replace/preflight-panel";
 import { CharacterReplaceProcessing } from "@/features/ai/character-replace/processing";
@@ -184,7 +187,28 @@ export function CharacterReplaceWorkspace({
     config,
     available: loads.available === true,
     balanceCents: loads.balance?.balanceCents ?? null,
+    funding: ws.funding,
   });
+  /*
+    0167: the credits moment. When the quote says the member's AI plan does
+    not cover this generation, the primary button opens the plans sheet
+    (required · available today · available this week, the plans from the
+    operator's configuration, and — policy permitting — "pay from my
+    balance instead", which sets the funding choice and re-arms the start).
+  */
+  const quoteCredits = state.pricing.status === "quoted" ? (state.pricing.snapshot.credits ?? null) : null;
+  const creditsShort = !!quoteCredits?.applicable && !quoteCredits.affordable && ws.funding !== "wallet";
+  const creditsCover = !!quoteCredits?.applicable && quoteCredits.affordable && ws.funding !== "wallet";
+  const [plansSheet, setPlansSheet] = useState(false);
+  const [plansCatalogue, setPlansCatalogue] = useState<AiPlansPublic | null>(null);
+  const openPlans = useCallback(() => {
+    haptic("medium");
+    setPlansSheet(true);
+    if (!plansCatalogue) void getAiCredits().then((r) => r.ok && setPlansCatalogue(r.plans));
+  }, [plansCatalogue]);
+  useEffect(() => {
+    if (ws.launch.phase === "error" && ws.launch.code === "CR_CREDITS_REQUIRED") openPlans();
+  }, [openPlans, ws.launch]);
   const processingAvailable = loads.processingAvailable === true;
   const batchLaunching = batch.launch.phase !== "idle" && batch.launch.phase !== "error";
   const launching = (ws.launch.phase !== "idle" && ws.launch.phase !== "error") || batchLaunching;
@@ -581,6 +605,7 @@ export function CharacterReplaceWorkspace({
                     }}
                     rechargeAsk={rechargeAsk}
                     batchPricing={batch.isBatch ? batch.pricing : null}
+                    funding={ws.funding}
                   />
                 )}
               </div>
@@ -621,7 +646,19 @@ export function CharacterReplaceWorkspace({
 
               <div className="min-w-0 flex-1" />
 
-              {step === "review" && shortOfBalance && project.consent && !launching ? (
+              {step === "review" && creditsShort && project.consent && !launching ? (
+                <button
+                  type="button"
+                  onClick={openPlans}
+                  className={cn(
+                    "inline-flex min-h-[48px] items-center gap-2 rounded-full bg-foreground px-6 text-[14px] font-bold text-background",
+                    "transition motion-safe:hover:-translate-y-0.5 active:scale-[0.99]",
+                  )}
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  Get more AI credits
+                </button>
+              ) : step === "review" && shortOfBalance && project.consent && !launching ? (
                 <button
                   type="button"
                   onClick={() => setRechargeAsk((n) => n + 1)}
@@ -654,6 +691,8 @@ export function CharacterReplaceWorkspace({
                         : `Process ${batch.count} Videos`
                       : quotedTotal?.billing?.complimentary
                         ? "Create Video · Complimentary"
+                        : creditsCover && quoteCredits
+                          ? `Create Video · ${quoteCredits.required} credit${quoteCredits.required === 1 ? "" : "s"}`
                         : quotedTotal
                           ? `Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}`
                           : "Create Video"}
@@ -697,6 +736,10 @@ export function CharacterReplaceWorkspace({
                             ? `${batch.count} videos, same photo and settings, each at full length.${batch.pricing.complimentaryCount ? ` ${batch.pricing.complimentaryCount} complimentary.` : ""} Charged per video as each one starts; the rest wait in your own line.`
                         : state.pricing.snapshot.billing?.complimentary
                           ? "Your complimentary creation will be used for this video. Nothing is charged."
+                          : creditsShort && quoteCredits
+                            ? `Not enough AI credits: this needs ${quoteCredits.required}, you have ${quoteCredits.remainingToday} today and ${quoteCredits.remainingThisWeek} this week.`
+                            : creditsCover && quoteCredits
+                              ? `${quoteCredits.required} credit${quoteCredits.required === 1 ? "" : "s"} from your plan when processing starts — ${quoteCredits.afterToday} left today, ${quoteCredits.afterThisWeek} this week.`
                           : loads.balance && loads.balance.balanceCents < state.pricing.snapshot.totalCents
                             ? "Recharge your balance to start."
                             : "You'll be charged the amount shown when processing starts."}
@@ -705,6 +748,24 @@ export function CharacterReplaceWorkspace({
           </>
         )}
       </div>
+      {plansSheet ? (
+        <AiPlansSheet
+          open={plansSheet}
+          onClose={() => {
+            setPlansSheet(false);
+            if (ws.launch.phase === "error") ws.clearLaunchError();
+          }}
+          plans={plansCatalogue}
+          currentPlan={quoteCredits?.plan ?? null}
+          shortfall={quoteCredits && !quoteCredits.affordable ? { ...quoteCredits, walletOffered: state.pricing.status === "quoted" ? state.pricing.snapshot.walletOffered !== false : false, priceLabel: quotedTotal ? formatCents(quotedTotal.totalCents, quotedTotal.symbol) : null } : null}
+          returnTo={basePath}
+          onPayFromWallet={() => {
+            ws.setFunding("wallet");
+            setPlansSheet(false);
+            if (ws.launch.phase === "error") ws.clearLaunchError();
+          }}
+        />
+      ) : null}
     </FrenzAIEnvironment>
   );
 }

@@ -36,6 +36,7 @@ export function VideoGenerationCostPreview({
   symbol,
   onRetry,
   balanceCents = null,
+  funding = null,
   compact = false,
   className,
 }: {
@@ -46,6 +47,8 @@ export function VideoGenerationCostPreview({
   onRetry?: () => void;
   /** The member's Character Replace balance, minor units — the review step passes it; the settings step does not. */
   balanceCents?: number | null;
+  /** 0167: the member chose the wallet for this one although credits exist. */
+  funding?: "credits" | "wallet" | null;
   /** The settings step's version: no disclosure, no balance rows. */
   compact?: boolean;
   className?: string;
@@ -62,6 +65,9 @@ export function VideoGenerationCostPreview({
   const trimmed = trimmedSeconds(project);
   // Part 11 §7: a complimentary creation shows the normal price and charges nothing; the balance is untouched
   const complimentary = snapshot?.billing?.complimentary === true;
+  // 0167: on an AI plan, the generation costs credits — the server's estimate, with what would remain on both clocks
+  const credits = !complimentary && snapshot?.credits?.applicable ? snapshot.credits : null;
+  const creditsCover = !!credits && credits.affordable && funding !== "wallet";
   const after = snapshot && balanceCents !== null ? (complimentary ? balanceCents : balanceCents - snapshot.totalCents) : null;
   const draft = summaryLines(project, config);
   const voiceLine = draft.find((l) => l.key === "voice");
@@ -81,6 +87,10 @@ export function VideoGenerationCostPreview({
         <p className={cn("text-right text-[22px] font-bold leading-none tabular-nums tracking-[-0.02em] transition-opacity", pricing.status === "stale" && "opacity-50")}>
           {complimentary ? (
             <span className="text-gradient">FREE</span>
+          ) : creditsCover && credits ? (
+            <span>
+              {credits.required} <span className="text-[13px] font-semibold text-muted-foreground">credit{credits.required === 1 ? "" : "s"}</span>
+            </span>
           ) : (
             (total ?? <span className="text-[18px] text-muted-foreground">{pricing.status === "pending" ? "…" : "—"}</span>)
           )}
@@ -88,28 +98,41 @@ export function VideoGenerationCostPreview({
       </div>
 
       {/* ── the lines ─────────────────────────────────────────────────────── */}
+      {/*
+        Owner, 2026-09-21: a complimentary creation shows NO amounts — not the
+        normal price, not a rate, not the balance — only what is being made
+        and one line: Total · Free. The normal price still rides on the audit
+        row for the operator; the member sees a gift, not a discount.
+      */}
       <dl className={cn("mt-3 divide-y divide-border/60 border-t border-border/60 px-4 text-[13px]", dim && "opacity-70")}>
         <Row label="Video duration" value={snapshot ? `${(Math.round(snapshot.durationMs / 100) / 10).toFixed(1)} sec` : seconds !== null ? formatSeconds(seconds) : "—"} />
         <Row label="Quality" value={qualityLabel} />
         <Row
           label={modeLabel}
-          value={snapshot ? snapshot.rateLine : pricing.status === "pending" || pricing.status === "stale" ? "…" : "—"}
+          value={complimentary ? "Included" : snapshot ? snapshot.rateLine : pricing.status === "pending" || pricing.status === "stale" ? "…" : "—"}
         />
-        {snapshot && snapshot.basePriceCents > 0 ? <Row label="Processing" value="" amount={formatCents(snapshot.basePriceCents, sym)} /> : null}
-        {project.voice.mode === "new_voice" ? <Row label="Voice" value={voiceLine?.value ?? ""} amount={snapshot ? (snapshot.voiceCents > 0 ? formatCents(snapshot.voiceCents, sym) : "Included") : null} /> : null}
+        {!complimentary && snapshot && snapshot.basePriceCents > 0 ? <Row label="Processing" value="" amount={formatCents(snapshot.basePriceCents, sym)} /> : null}
+        {project.voice.mode === "new_voice" ? <Row label="Voice" value={voiceLine?.value ?? ""} amount={complimentary ? "Included" : snapshot ? (snapshot.voiceCents > 0 ? formatCents(snapshot.voiceCents, sym) : "Included") : null} /> : null}
         {project.voice.mode === "new_voice" && project.lipSync.tier ? (
-          <Row label={project.lipSync.tier === "studio" ? "Premium Lip Sync" : "Lip Sync"} value={lipLine?.value ?? ""} amount={snapshot ? (snapshot.lipSyncCents > 0 ? formatCents(snapshot.lipSyncCents, sym) : "Included") : null} />
+          <Row label={project.lipSync.tier === "studio" ? "Premium Lip Sync" : "Lip Sync"} value={lipLine?.value ?? ""} amount={complimentary ? "Included" : snapshot ? (snapshot.lipSyncCents > 0 ? formatCents(snapshot.lipSyncCents, sym) : "Included") : null} />
         ) : null}
-        {snapshot?.minimumApplied ? <Row label="Minimum charge" value="applies to a short video" amount={formatCents(snapshot.minimumChargeCents, sym)} /> : null}
-        {complimentary ? (
-          <>
-            <Row label="Normal price" value="" amount={total ?? "—"} />
-            <Row label="Today's creation" value="" amount="FREE" strong tone="ok" />
-          </>
-        ) : (
-          <Row label="Total" value="" amount={total ?? "—"} strong />
-        )}
-        {!compact && balanceCents !== null ? (
+        {!complimentary && snapshot?.minimumApplied ? <Row label="Minimum charge" value="applies to a short video" amount={formatCents(snapshot.minimumChargeCents, sym)} /> : null}
+        {complimentary ? <Row label="Total" value="" amount="Free" strong tone="ok" /> : creditsCover && credits ? <Row label="Estimated AI usage" value={`${total ?? ""}`} amount={`${credits.required} credit${credits.required === 1 ? "" : "s"}`} strong tone="ok" /> : <Row label="Total" value="" amount={total ?? "—"} strong />}
+        {credits ? (
+          creditsCover ? (
+            <>
+              <Row label="Remaining after · today" value="" amount={`${credits.afterToday} / ${credits.dailyLimit}`} />
+              <Row label="Remaining after · this week" value="" amount={`${credits.afterThisWeek} / ${credits.weeklyLimit}`} />
+            </>
+          ) : (
+            <>
+              <Row label="AI credits required" value="" amount={String(credits.required)} tone="warn" />
+              <Row label="Available today" value="" amount={`${credits.remainingToday} / ${credits.dailyLimit}`} tone={credits.reason === "daily" ? "warn" : undefined} />
+              <Row label="Available this week" value="" amount={`${credits.remainingThisWeek} / ${credits.weeklyLimit}`} tone={credits.reason === "weekly" ? "warn" : undefined} />
+            </>
+          )
+        ) : null}
+        {!compact && !complimentary && !creditsCover && balanceCents !== null ? (
           <>
             <Row label="Current balance" value="" amount={formatCents(balanceCents, sym)} />
             {after !== null ? (
@@ -131,6 +154,12 @@ export function VideoGenerationCostPreview({
                 ? "Add a photo and a video to see a price."
                 : complimentary
                   ? "Your complimentary creation will be used for this video. Nothing is charged."
+                  : creditsCover && credits
+                    ? `Based on ${credits.breakdown.filter((l) => typeof l.credits === "number").map((l) => l.label).join(", ") || "your settings"}. The credits are taken from your plan when processing starts and come back if it can't finish.`
+                    : credits && !credits.affordable
+                      ? snapshot?.walletOffered === false
+                        ? "Not enough AI credits for this generation. Upgrade your plan, or wait for the allowance to reset."
+                        : "Not enough AI credits for this generation. You can upgrade, or pay this one from your balance."
                   : snapshot?.billing?.notFreeBecause
                     ? `${snapshot.billing.notFreeBecause} You'll only be charged this amount when processing starts.`
                     : "You'll only be charged this amount when processing starts."}

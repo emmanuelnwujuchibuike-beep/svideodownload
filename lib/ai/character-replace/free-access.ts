@@ -3,6 +3,8 @@ import "server-only";
 import { createHmac, randomBytes } from "node:crypto";
 
 import { getAdminUser } from "@/lib/admin/guard";
+import { freeCreationsFor, type AiPlansConfig } from "@/lib/ai/credits/config";
+import { getUserPlan } from "@/lib/monetization/plan";
 import type { CharacterReplaceConfig } from "@/lib/ai/character-replace/config";
 import { freeAccessLimitsView } from "@/lib/ai/character-replace/free-access-rules";
 import type { CharacterReplaceQuote } from "@/lib/ai/character-replace/pricing";
@@ -116,12 +118,27 @@ export async function getCharacterReplaceFreeEligibility(opts: {
   request: Request;
   /** Pre-resolved when the caller already checked; otherwise the dashboard's role check runs here. */
   isAdmin?: boolean;
+  /**
+   * 2026-09-21: the AI Plans configuration — the count per SITE plan (Free /
+   * Pro / Business), falling back to the Character Replace setting. Absent =
+   * the Character Replace setting alone (an older caller).
+   */
+  plans?: AiPlansConfig | null;
 }): Promise<FreeEligibility> {
   const { config } = opts;
   const limits = freeAccessLimitsView(config);
   const off = (reason: FreeEligibilityReason): FreeEligibility => ({ eligible: false, remainingFreeUses: 0, granted: 0, used: 0, reason, deviceRiskState: "unknown", requiresVerification: false, limits });
   if (opts.subject.kind !== "user") return off("ACCOUNT_NOT_ELIGIBLE");
-  if (!config.freeAccess.enabled || config.freeAccess.creationsPerAccount <= 0) return off("DISABLED_BY_ADMIN");
+  /*
+    ── THE COUNT IS THE OPERATOR'S NOW (owner, 2026-09-21) ──────────────────
+    The admin set 1, a member granted 2 earlier had used 1, and the pill said
+    "1 remaining": `granted` was frozen at grant time. The entitlement is the
+    CURRENT configured count for the member's site plan — lowering it applies
+    at once, raising it applies at once — and the row keeps counting uses.
+  */
+  const sitePlan = opts.plans ? await getUserPlan(opts.subject.userId).catch(() => "free" as const) : "free";
+  const configured = opts.plans ? freeCreationsFor(opts.plans, sitePlan, config.freeAccess.creationsPerAccount) : config.freeAccess.creationsPerAccount;
+  if (!config.freeAccess.enabled || configured <= 0) return off("DISABLED_BY_ADMIN");
 
   const isAdmin = opts.isAdmin ?? (config.antiAbuse.adminExempt ? !!(await getAdminUser().catch(() => null)) : false);
   if (isAdmin && config.antiAbuse.adminExempt) {
@@ -134,7 +151,7 @@ export async function getCharacterReplaceFreeEligibility(opts: {
   const { data, error } = await createAdminClient().rpc("grant_free_entitlement", {
     p_user_id: opts.subject.userId,
     p_product: FREE_PRODUCT,
-    p_count: config.freeAccess.creationsPerAccount,
+    p_count: configured,
     p_device_hash: dHash,
     p_network_hash: nHash,
     p_max_per_device: detect ? config.antiAbuse.maxFreeAccountsPerDevice : 0,
@@ -149,7 +166,7 @@ export async function getCharacterReplaceFreeEligibility(opts: {
   }
   const row = (Array.isArray(data) ? data[0] : data) as { granted: number; used: number; restored: number; eligibility: string } | undefined;
   if (!row) return off("TEMPORARILY_UNAVAILABLE");
-  const remaining = Math.max(0, Number(row.granted) - Number(row.used));
+  const remaining = Math.max(0, configured - Number(row.used));
   if (row.eligibility === "device_limit") {
     return { eligible: false, remainingFreeUses: 0, granted: 0, used: 0, reason: config.antiAbuse.verificationAfterLimit ? "REQUIRES_VERIFICATION" : "DEVICE_LIMIT_REACHED", deviceRiskState: "limit_reached", requiresVerification: config.antiAbuse.verificationAfterLimit, limits };
   }
@@ -160,7 +177,7 @@ export async function getCharacterReplaceFreeEligibility(opts: {
   return {
     eligible: remaining > 0,
     remainingFreeUses: remaining,
-    granted: Number(row.granted),
+    granted: configured,
     used: Number(row.used),
     reason: remaining > 0 ? "ELIGIBLE" : "FREE_USES_EXHAUSTED",
     deviceRiskState: "normal",
@@ -195,8 +212,8 @@ export function freeEligibilityMessage(e: FreeEligibility): string {
 export type FreeUseOutcome = { ok: true; useNumber: number; remaining: number; already: boolean } | { ok: false; reason: "none" | "exhausted" | "restored" | "error"; remaining: number };
 
 /** Consume one complimentary creation for a job — atomic in the database, one per job, refused when exhausted. */
-export async function consumeFreeUse(opts: { userId: string; jobId: string; snapshot: CharacterReplaceQuote & Record<string, unknown> }): Promise<FreeUseOutcome> {
-  const { data, error } = await createAdminClient().rpc("consume_free_use", {
+export async function consumeFreeUse(opts: { userId: string; jobId: string; snapshot: CharacterReplaceQuote & Record<string, unknown>; granted?: number | null }): Promise<FreeUseOutcome> {
+  const args = {
     p_user_id: opts.userId,
     p_product: FREE_PRODUCT,
     p_job_id: opts.jobId,
@@ -206,7 +223,10 @@ export async function consumeFreeUse(opts: { userId: string; jobId: string; snap
     p_normal_price: opts.snapshot.totalCents,
     p_currency: opts.snapshot.currency,
     p_snapshot: { ...opts.snapshot, billingType: "FREE_TRIAL", normalPriceCents: opts.snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1 },
-  });
+  };
+  // 0167: the operator's current count decides "exhausted"; before the migration lands the 9-arg function (granted at grant time) still answers
+  let { data, error } = await createAdminClient().rpc("consume_free_use", { ...args, p_granted: typeof opts.granted === "number" ? opts.granted : null });
+  if (error && (error.code === "PGRST202" || error.code === "PGRST203")) ({ data, error } = await createAdminClient().rpc("consume_free_use", args));
   if (error) {
     console.error("[cr/free] consume failed", { jobId: opts.jobId, message: error.message });
     return { ok: false, reason: "error", remaining: 0 };

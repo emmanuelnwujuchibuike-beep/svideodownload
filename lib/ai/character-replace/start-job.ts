@@ -14,6 +14,8 @@ import { replacementProviderFor } from "@/lib/ai/character-replace/providers/rou
 import type { StartCharacterReplaceJobRequest } from "@/lib/ai/character-replace/start-schema";
 import { verifyStartQuote } from "@/lib/ai/character-replace/start-verify";
 import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
+import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
+import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
 import { getAiEntitlement, type AiEntitlement } from "@/lib/ai/entitlement";
 import { type AiErrorCode } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -90,7 +92,9 @@ export type StartOutcome =
       /** True when the job is paid for and holding its place in the member's line (0166). */
       waiting: boolean;
       balanceCents: number;
-      billing: "free" | "paid";
+      billing: "free" | "paid" | "credits";
+      /** 0167: the credits this generation reserved, and what is left on both clocks — for the answer, never for a decision. */
+      credits: ReturnType<typeof creditDecisionView> | null;
     }
   | { ok: true; job: AiJobRow; started: false; waiting: false; balanceCents: null; billing: null; alreadyStarted: true }
   | StartRefusal;
@@ -259,17 +263,51 @@ export async function startCharacterReplaceJob(input: {
     exactly as computed and signed: it is what the audit row records as
     "not charged". Nothing here touches the wallet.
   */
-  const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin });
+  const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin, plans: settings.frenzAiPlans });
   const fits = eligibility.eligible
     ? freeRequestQualifies(config, { mode: snapshot.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, voiceMode: snapshot.voiceMode, voiceSource: snapshot.voiceSource, lipSyncMode: snapshot.lipSyncMode })
     : null;
   const complimentary = eligibility.eligible && fits?.ok === true && videoObject.size <= config.freeAccess.maxUploadBytes;
 
+  /*
+    ── C¾ · INCLUDED CREDITS? (AI Pro / AI Max, 2026-09-21) ─────────────────
+    The funding order is complimentary → included credits → the wallet.
+    The plan comes from ai_subscriptions, the limits from the operator's
+    plan configuration now, the usage from the ledger under today's and this
+    week's keys — and the credits a generation costs are the priced total
+    through the one credit engine. The member's body may PREFER the wallet;
+    it cannot name an amount, a plan or a balance.
+
+    When the allowance does not cover it, the operator's policy decides what
+    a plan member is offered: `allow` = the wallet pays as it always did;
+    `ask` = the member is told the shortfall and chooses (the client sends
+    funding: "wallet" to pay from the balance); `off` = upgrade only. A
+    member on no plan never reaches this: the wallet is their route as before.
+  */
+  const plans = settings.frenzAiPlans;
+  let creditDecision: CreditDecision | null = null;
+  let useCredits = false;
+  if (!complimentary && plans.enabled) {
+    const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
+    if (creditEntitlement.plan) {
+      creditDecision = decideCredits(creditEntitlement, { feature: feature.id, priceCents: snapshot.totalCents, mode: snapshot.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, lines: snapshot.lines?.filter((l) => typeof l.amountCents === "number" && l.amountCents > 0).map((l) => ({ label: l.label, cents: l.amountCents as number })) }, plans);
+      const wantsWallet = body.funding === "wallet";
+      if (creditDecision.affordable && !wantsWallet) {
+        useCredits = true;
+      } else if (!wantsWallet && plans.walletFallback !== "allow") {
+        // Not enough on one of the two clocks, and the wallet is not the silent answer: say exactly what is short (brief § "INSUFFICIENT CREDIT UX").
+        return refuse("CR_CREDITS_REQUIRED", { credits: creditDecisionView(creditDecision), walletFallback: plans.walletFallback, priceCents: snapshot.totalCents, currency: money.currency });
+      } else if (wantsWallet && plans.walletFallback === "off") {
+        return refuse("CR_CREDITS_REQUIRED", { credits: creditDecisionView(creditDecision), walletFallback: plans.walletFallback, priceCents: snapshot.totalCents, currency: money.currency });
+      }
+    }
+  }
+
   /* ── the balance read, before the claim ─────────────────────────────────── */
   const balanceBefore = await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
   if (balanceBefore === null) return refuse("INTERNAL_ERROR");
-  if (!complimentary && balanceBefore < snapshot.totalCents) {
-    return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: snapshot.totalCents - balanceBefore, currency: money.currency });
+  if (!complimentary && !useCredits && balanceBefore < snapshot.totalCents) {
+    return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: snapshot.totalCents - balanceBefore, currency: money.currency, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
   }
 
   /* ── D · claim ─────────────────────────────────────────────────────────── */
@@ -366,10 +404,12 @@ export async function startCharacterReplaceJob(input: {
     quote_id: snapshot.id,
     // §16: the provider/model the router chose at Start (the submit stage records what ACTUALLY ran in `provider`).
     provider_plan: { id: plannedProvider.id, model: plannedProvider.model, scope: REPLACEMENT_SCOPE[snapshot.mode] },
-    // Part 11 §7: how this job is paid for — the normal price is recorded either way
+    // Part 11 §7 / 0167: how this job is paid for — the normal price is recorded either way
     billing: complimentary
       ? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }
-      : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency },
+      : useCredits && creditDecision
+        ? { type: "CREDITS", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 0, currency: snapshot.currency, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan, creditsConfigVersion: creditDecision.estimate.configVersion }
+        : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency },
     audio: audioMeta,
     pipeline,
     provider_cost_estimate: costEstimate ? { ...costEstimate, perSecondUsdCents: modeView.providerCostPerSecondUsdCents } : null,
@@ -403,9 +443,9 @@ export async function startCharacterReplaceJob(input: {
     maxActivePerUser: memberConcurrency(config, shared),
     maxActiveGlobal: config.limits.maxActiveJobsGlobal,
     maxPerDay: config.limits.maxJobsPerUserPerDay,
-    chargedCents: complimentary ? 0 : snapshot.totalCents,
+    chargedCents: complimentary || useCredits ? 0 : snapshot.totalCents,
     metadata: startMetadata,
-    funding: complimentary ? "free" : "balance",
+    funding: complimentary ? "free" : useCredits ? "credits" : "balance",
     queue: input.queue,
   });
   if (claim === "user_limit") return refuse("CR_ACTIVE_LIMIT");
@@ -436,7 +476,7 @@ export async function startCharacterReplaceJob(input: {
       refused when the last one was taken by a race (two tabs, a replay).
       A refusal puts the claim back — nothing ran, nothing was charged.
     */
-    const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });
+    const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot, granted: eligibility.remainingFreeUses === null ? null : eligibility.granted });
     if (!use.ok) {
       const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});
       console.warn("[cr/start] complimentary use refused — claim reverted", { jobId: job.id, subject: subject.key, reason: use.reason, reverted });
@@ -444,6 +484,28 @@ export async function startCharacterReplaceJob(input: {
     }
     balanceAfter = balanceBefore;
     console.info("[cr/start] complimentary creation used", { jobId: job.id, userId: ownerId, useNumber: use.useNumber, remaining: use.remaining, normalPriceCents: snapshot.totalCents, mode: meta.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, waiting });
+  } else if (useCredits && creditDecision && creditDecision.plan) {
+    /*
+      ── THE ATOMIC CREDIT RESERVATION (0167) ────────────────────────────────
+      One database function: the member's rows locked, both period sums taken
+      inside the lock, both limits checked, one row written — or the refusal
+      named. A refusal (two tabs racing the last credits) puts the claim back;
+      nothing ran and nothing was reserved. Idempotent per job: a replay of
+      this request answers the reservation it already made.
+    */
+    const periods = currentPeriods(plans);
+    const reservation = await reserveAiCredits({ userId: ownerId, jobId: job.id, feature: feature.id, plan: creditDecision.plan, estimate: creditDecision.estimate, dailyLimit: creditDecision.dailyLimit, weeklyLimit: creditDecision.weeklyLimit, periods, config: plans }).catch((e) => {
+      console.error("[cr/start] credit reservation threw", { jobId: job.id, error: String(e).slice(0, 200) });
+      return null;
+    });
+    if (!reservation || !reservation.ok) {
+      const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});
+      console.warn("[cr/start] credit reservation refused — claim reverted", { jobId: job.id, subject: subject.key, reason: reservation ? reservation.reason : "error", reverted });
+      if (!reservation) return refuse("INTERNAL_ERROR");
+      return refuse("CR_CREDITS_UNAVAILABLE", { credits: { ...creditDecisionView(creditDecision), usedToday: reservation.usedToday, usedThisWeek: reservation.usedThisWeek, reason: reservation.reason, affordable: false } });
+    }
+    balanceAfter = balanceBefore;
+    console.info("[cr/start] included credits reserved", { jobId: job.id, userId: ownerId, plan: creditDecision.plan, credits: reservation.credits, idempotent: reservation.idempotent, usedToday: reservation.usedToday, usedThisWeek: reservation.usedThisWeek, dailyLimit: creditDecision.dailyLimit, weeklyLimit: creditDecision.weeklyLimit, normalPriceCents: snapshot.totalCents, mode: meta.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, configVersion: creditDecision.estimate.configVersion, waiting });
   } else {
     try {
       balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });
@@ -470,10 +532,10 @@ export async function startCharacterReplaceJob(input: {
       refund has already handled the money: nothing further to do.
     */
     const stamped = await confirmQueueReservation(job.id, claimed.metadata ?? startMetadata);
-    await recordJobEvent(job.id, "queue.waiting", { reason: (claimed.metadata?.queue as { reason?: unknown } | undefined)?.reason ?? null, chargedCents: complimentary ? 0 : snapshot.totalCents, billing: complimentary ? "FREE_TRIAL" : "PAID", stamped, via: input.via ?? "single" });
+    await recordJobEvent(job.id, "queue.waiting", { reason: (claimed.metadata?.queue as { reason?: unknown } | undefined)?.reason ?? null, chargedCents: complimentary || useCredits ? 0 : snapshot.totalCents, billing: complimentary ? "FREE_TRIAL" : useCredits ? "CREDITS" : "PAID", stamped, via: input.via ?? "single" });
     const now = (await getOwnJob(subject, job.id)) ?? claimed;
     console.info("[cr/start] reserved and waiting for a slot", { jobId: job.id, userId: ownerId, mode: meta.mode, chargedCents: complimentary ? 0 : snapshot.totalCents, billing: complimentary ? "FREE_TRIAL" : "PAID", balanceAfterCents: balanceAfter, stamped, transition: "queued -> waiting" });
-    return { ok: true, job: now, started: false, waiting: true, balanceCents: balanceAfter, billing: complimentary ? "free" : "paid" };
+    return { ok: true, job: now, started: false, waiting: true, balanceCents: balanceAfter, billing: complimentary ? "free" : useCredits ? "credits" : "paid", credits: creditDecision ? creditDecisionView(creditDecision) : null };
   }
 
   /* ── E/F · hand off ────────────────────────────────────────────────────── */
@@ -500,13 +562,13 @@ export async function startCharacterReplaceJob(input: {
     quality: snapshot.quality,
     durationMs: snapshot.durationMs,
     trimmed: !!body.trim,
-    chargedCents: complimentary ? 0 : snapshot.totalCents,
-    billing: complimentary ? "FREE_TRIAL" : "PAID",
+    chargedCents: complimentary || useCredits ? 0 : snapshot.totalCents,
+    billing: complimentary ? "FREE_TRIAL" : useCredits ? "CREDITS" : "PAID",
     pricingVersion: snapshot.pricingConfigVersion,
     quoteId: snapshot.id.slice(0, 12),
     balanceAfterCents: balanceAfter,
     via: input.via ?? "single",
     transition: "queued -> acquiring",
   });
-  return { ok: true, job: claimed, started: true, waiting: false, balanceCents: balanceAfter, billing: complimentary ? "free" : "paid" };
+  return { ok: true, job: claimed, started: true, waiting: false, balanceCents: balanceAfter, billing: complimentary ? "free" : useCredits ? "credits" : "paid", credits: creditDecision ? creditDecisionView(creditDecision) : null };
 }

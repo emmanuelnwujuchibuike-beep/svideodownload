@@ -3,6 +3,7 @@ import "server-only";
 import { chargeAiBalance, refundAiCharge } from "@/lib/ai/balance";
 import { restoreFreeUse } from "@/lib/ai/character-replace/free-access";
 import { requestQueuePump } from "@/lib/ai/character-replace/queue-signal";
+import { releaseAiCredits } from "@/lib/ai/credits/store";
 import { refundCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -208,6 +209,11 @@ export async function releaseJobFunding(opts: {
       // Part 11: a complimentary creation comes back as an ENTITLEMENT, once (restore_free_use); a paid one as money, once. Never both.
       if (opts.job.funding_source === "free") {
         await restoreFreeUse(opts.job.id, "job undone");
+        return;
+      }
+      // 0167: included plan credits come back through the credit ledger, once (a settled row never does).
+      if (opts.job.funding_source === "credits") {
+        await releaseAiCredits(opts.job.id, `job undone (${opts.cause ?? "undo"})`);
         return;
       }
       if (opts.job.user_id) await refundCharacterReplaceCharge(opts.job.user_id, opts.job.id);

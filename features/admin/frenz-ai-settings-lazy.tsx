@@ -39,6 +39,10 @@ const CharacterReplacePricingPanel = dynamic(
 const AiBalanceAdjustPanel = dynamic(() => import("@/features/admin/ai-balance-adjust").then((m) => m.AiBalanceAdjustPanel), {
   loading: skeleton("Loading balance adjustments"),
 });
+// 0166: AI → Processing — concurrency, the queue, retries, refunds (its own tab, its own chunk).
+const CharacterReplaceProcessingPanel = dynamic(() => import("@/features/admin/character-replace-processing").then((m) => m.CharacterReplaceProcessingPanel), {
+  loading: skeleton("Loading processing settings"),
+});
 
 export function FrenzAISettingsLazy({ settings }: { settings: LandingSettings }) {
   return <FrenzAISettings settings={settings} />;
@@ -50,4 +54,8 @@ export function CharacterReplacePricingLazy({ settings }: { settings: LandingSet
 
 export function AiBalanceAdjustLazy({ settings }: { settings: LandingSettings }) {
   return <AiBalanceAdjustPanel settings={settings} />;
+}
+
+export function CharacterReplaceProcessingLazy({ settings }: { settings: LandingSettings }) {
+  return <CharacterReplaceProcessingPanel settings={settings} />;
 }

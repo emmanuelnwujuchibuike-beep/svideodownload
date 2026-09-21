@@ -171,7 +171,9 @@ export function CharacterReplaceProcessing({
               <p className="mt-1 text-[12.5px] text-muted-foreground">About {eta(job.estimatedSecondsRemaining)} left</p>
             ) : (
               <p className="mt-1 text-[12.5px] text-muted-foreground">
-                Step {Math.min(steps.length, steps.filter((s) => s.state === "done").length + 1)} of {steps.length}
+                {job.status === "waiting"
+                  ? "Your other videos are using your processing slots. This one starts by itself when one frees up."
+                  : `Step ${Math.min(steps.length, steps.filter((s) => s.state === "done").length + 1)} of ${steps.length}`}
               </p>
             )}
           </div>
@@ -280,6 +282,8 @@ function stageWord(status: ProcessingJob["status"]): string {
       return "Uploading";
     case "queued":
       return "Starting";
+    case "waiting":
+      return "In your queue";
     case "processing":
       return "In progress";
     case "finalizing":
@@ -298,6 +302,9 @@ function headline(job: ProcessingJob): string {
       return job.progress !== null ? `Uploading your media · ${Math.round(job.progress * 100)}%` : "Uploading your media";
     case "queued":
       return "Your creation is in the queue";
+    // 0166: paid for, waiting for one of the member's slots — nothing is running yet, and the sentence says so.
+    case "waiting":
+      return "Waiting for your next slot";
     case "processing":
       return "Replacing the character";
     case "finalizing":

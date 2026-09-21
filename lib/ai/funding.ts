@@ -2,7 +2,10 @@ import "server-only";
 
 import { chargeAiBalance, refundAiCharge } from "@/lib/ai/balance";
 import { restoreFreeUse } from "@/lib/ai/character-replace/free-access";
+import { requestQueuePump } from "@/lib/ai/character-replace/queue-signal";
 import { refundCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
+import { recordJobEvent } from "@/lib/ai/job-events";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { decideFunding, type AiFundingSource } from "@/lib/ai/economy";
 import type { AiFeature, AiJobRow } from "@/lib/ai/jobs";
 import type { AiSubject } from "@/lib/ai/subject";
@@ -163,6 +166,15 @@ export async function releaseJobFunding(opts: {
   subject: AiSubject;
   feature: AiFeature;
   dailyLimit: number;
+  /**
+   * 0166: WHY the job is being undone. `failure` = the job ended without a
+   * result (provider, worker, stall); `cancel` = the member stopped it;
+   * `undo` = nothing ever ran (a refused hand-off, a reverted claim). The
+   * operator's "Failed-job refund" switch applies to `failure` ONLY — a
+   * cancelled or never-run job always gets its money back. Absent = `undo`,
+   * the safe direction for any caller written before the switch existed.
+   */
+  cause?: "failure" | "cancel" | "undo";
 }): Promise<void> {
   /*
     ── 🔴 CHARACTER REPLACE IS FUNDED FROM THE PRODUCT WALLET (Part 4, §13) ──
@@ -175,13 +187,35 @@ export async function releaseJobFunding(opts: {
     refunding twice. It never touches the daily allowance: this tool has none.
   */
   if (opts.feature === "ai_character_replace") {
-    // Part 11: a complimentary creation comes back as an ENTITLEMENT, once (restore_free_use); a paid one as money, once. Never both.
-    if (opts.job.funding_source === "free") {
-      await restoreFreeUse(opts.job.id, "job undone");
+    try {
+      /*
+        ── 0166: THE OPERATOR'S "FAILED-JOB REFUND" SWITCH ────────────────────
+        On (the default, and the Part 4 rule): every failure refunds, once.
+        Off: a FAILED job's reservation is left on the ledger as `reserved`
+        for the operator to refund by hand (the admin "refund" action), and
+        the audit row says so. Cancels and never-run jobs are not failures
+        and always come back — the switch cannot keep a member's money for
+        work that was never attempted.
+      */
+      if (opts.cause === "failure") {
+        const settings = await getLandingSettings().catch(() => null);
+        if (settings && settings.frenzAiCharacterReplace.processing.refundFailedJobs === false) {
+          await recordJobEvent(opts.job.id, "refund.withheld", { reason: "processing.refundFailedJobs is off — refund by hand from the admin monitor", funding: opts.job.funding_source });
+          console.warn("[ai/funding] refund WITHHELD by the operator's switch", { jobId: opts.job.id, funding: opts.job.funding_source });
+          return;
+        }
+      }
+      // Part 11: a complimentary creation comes back as an ENTITLEMENT, once (restore_free_use); a paid one as money, once. Never both.
+      if (opts.job.funding_source === "free") {
+        await restoreFreeUse(opts.job.id, "job undone");
+        return;
+      }
+      if (opts.job.user_id) await refundCharacterReplaceCharge(opts.job.user_id, opts.job.id);
       return;
+    } finally {
+      // 0166: a slot just freed for this member — their next waiting video may start (never awaited, never throws into the undo).
+      if (opts.job.user_id) requestQueuePump(opts.job.user_id, `release:${opts.cause ?? "undo"}`);
     }
-    if (opts.job.user_id) await refundCharacterReplaceCharge(opts.job.user_id, opts.job.id);
-    return;
   }
   const source = opts.job.funding_source;
 

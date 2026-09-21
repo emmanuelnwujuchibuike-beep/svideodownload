@@ -2,13 +2,14 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { FINALIZE_LEASE_SECONDS, FINALIZE_MAX_ATTEMPTS, finalizeBackoffMs, isTransientFinalizeFailure } from "@/lib/ai/character-replace/finalize-policy";
+import { FINALIZE_LEASE_SECONDS, finalizeBackoffMs, finalizeMaxAttempts, isTransientFinalizeFailure } from "@/lib/ai/character-replace/finalize-policy";
 import { readCharacterReplaceMeta, readPipeline } from "@/lib/ai/character-replace/job-meta";
 import { isTrustedProviderOutputUrl } from "@/lib/ai/character-replace/model";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { settleFreeUse } from "@/lib/ai/character-replace/free-access";
 import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
+import { requestQueuePump } from "@/lib/ai/character-replace/queue-signal";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import { recordJobEvent } from "@/lib/ai/job-events";
@@ -17,6 +18,7 @@ import { notifyAiJobFailed, notifyAiJobFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
 import { probeColor } from "@/server/services/ai-color-probe";
 import { aiErrorMessage } from "@/lib/ai/errors";
+import { getLandingSettings } from "@/lib/landing/settings";
 import {
   cleanupFinalizationFiles,
   downloadToFile,
@@ -87,7 +89,9 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
   const ownerId = subjectOwnerId(owner);
   const meta = readCharacterReplaceMeta(job.metadata);
 
-  const claim = await claimFinalization(jobId, { leaseSeconds: FINALIZE_LEASE_SECONDS, maxAttempts: FINALIZE_MAX_ATTEMPTS });
+  // 0166: the retry budget is the operator's (AI → Processing → Automatic retries); the default when the read fails.
+  const maxAttempts = finalizeMaxAttempts(await getLandingSettings().then((s) => s.frenzAiCharacterReplace).catch(() => null));
+  const claim = await claimFinalization(jobId, { leaseSeconds: FINALIZE_LEASE_SECONDS, maxAttempts });
   if (!claim.claimed) {
     if (claim.reason === "exhausted" && job.status === "finalizing") {
       // Every allowed attempt has run. End it honestly, once.
@@ -228,6 +232,8 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
       await recordJobEvent(jobId, "finalize.completed", { attempt, bytes: stored.bytes, durationMs: actualMs, mode: meta?.mode ?? "full_character", stages: pipeline?.stages ?? null, voiceSwapped, settled, elapsedMs: Date.now() - startedAt });
       // 🔴 Only now — the result is in OUR bucket and the row says completed (§11).
       await notifyAiJobFinished({ userId: ownerId, jobId, feature: feature.id, audioRestored: audioExpected ? finalProbe.hasAudio : null, durationMs: Date.now() - startedAt });
+      // 0166: a slot just freed — the member's next waiting video may start (the frontend pumps; never awaited).
+      requestQueuePump(ownerId, "completed");
     }
     console.info("[cr/finalize] completed", {
       jobId,
@@ -250,7 +256,7 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
   } catch (e) {
     const failure = e instanceof CrFinalizeFailure ? e : new CrFinalizeFailure("AI_FINALIZATION_FAILED", String(e), "system");
     const transient = isTransientFinalizeFailure(failure.code, failure.detail);
-    if (transient && attempt < FINALIZE_MAX_ATTEMPTS) {
+    if (transient && attempt < maxAttempts) {
       /*
         Keep the provider's success. Release the lease, say when to try again,
         and leave the row in `finalizing` — the sweep and the poll both know
@@ -297,7 +303,7 @@ async function failFinalize(job: AiJobRow, failure: CrFinalizeFailure, opts: { e
   const subject = subjectFromRow(job);
   if (updated && subject) {
     // Stage I — refund exactly once (idempotent per job).
-    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0 });
+    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0, cause: "failure" });
     await recordJobEvent(job.id, "refund.issued", { reason: failure.code, chargedCents: updated.charged_cents, from: "finalize" });
     if (subject.kind === "user") {
       await notifyAiJobFailed({ userId: subject.userId, jobId: job.id, feature: "ai_character_replace", message: aiErrorMessage("PROCESSING_FAILED"), errorCode: failure.code });

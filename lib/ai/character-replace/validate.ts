@@ -317,7 +317,9 @@ export type ReadinessIssue =
   | "trim-too-long"
   | "trim-too-short"
   | "trim-invalid"
-  | "quality-unavailable";
+  | "quality-unavailable"
+  /** 0166: a 2nd … Nth video longer than the ceiling — it cannot be trimmed in a batch. */
+  | "extra-video-too-long";
 
 /**
  * Whether the two files and the kept range are a complete, valid input — the
@@ -346,6 +348,13 @@ export function inputReadiness(
     }
   }
   if (config && !qualityOffered(config, project.mode, project.settings.quality)) issues.push("quality-unavailable");
+  // 0166: every extra video runs at full length, so each must fit the ceiling as it is (the picker refuses longer ones; this is the belt).
+  for (const extra of project.extraVideos) {
+    const ms = extra.metadata.durationMs;
+    if (ms === null) issues.push("video-unmeasured");
+    else if (ms > limits.video.maxDurationMs + 50) issues.push("extra-video-too-long");
+    else if (ms < limits.video.minDurationMs - 50) issues.push("trim-too-short");
+  }
   return { ready: issues.length === 0, issues };
 }
 

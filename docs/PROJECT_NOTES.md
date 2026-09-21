@@ -9,9 +9,98 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑20 (Character Replace: four scopes + the scope page, the media preflight, Part 11 complimentary creations + the device rule; growth milestone emails)_
+_Last updated: 2026‑09‑21 (Character Replace Part 12: multi‑video sessions — the queue, `waiting`, batches, AI → Processing; the docked Explore pill; the footer sentence)_
 
 ---
+
+## 2026‑09‑21 — Character Replace Part 12: several videos in one session (the queue, `waiting`, batches; migration 0166)
+
+Owner's brief: process MULTIPLE videos in one session, with a per‑plan concurrency limit,
+individual jobs per video, server‑controlled queueing, idempotent billing, a premium
+multi‑job board, admin **AI → Processing** settings and a filtered job monitor. The audit
+came first; the design reused everything that existed and added exactly one new state.
+
+### What the audit found (and reused)
+- Every video was already **one `ai_jobs` row** with its own prediction, ledger reservation,
+  retries, audit events and lease‑based finalization. The per‑member concurrency cap was already
+  enforced **inside one advisory lock** at `/start` (`claim_ai_job_start`): FREE 1 · PRO 2 ·
+  BUSINESS 3 (hard‑coded in `lib/ai/policy.ts`), tightened by one admin cap + a global cap + a
+  daily cap. A member over the cap was **refused** — there was no place to wait.
+- Billing: reserve → settle/refund on `ai_product_ledger`, idempotent per job;
+  2 complimentary creations (Part 11) consumed atomically; `releaseJobFunding` the one undo.
+- Blockers: the create route capped open jobs at the concurrency and **expired every other
+  draft** on each create; the create limiter is 6/min; a job had no batch identity; the UI was
+  strictly one video. AI Clean is retired (owner, 09‑20) — this targets Character Replace.
+
+### Design (smallest safe change)
+- **Migration `0166_ai_batches_and_queue.sql`** (proven on an embedded Postgres 18 with a
+  two‑connection race test before any TypeScript was written): `batch_id`/`batch_index` columns +
+  index; the status **`waiting`** (= paid for / complimentary consumed, validated, holding its place
+  until a slot frees — distinct from `queued`, a draft the abandoned sweep expires); the 9‑arg
+  `claim_ai_job_start` DROPPED and recreated with `p_queue boolean` (a cap refusal → `waiting`
+  instead of `user_limit`; the daily cap counts waiting rows; a member with a waiting row joins the
+  line rather than jumping it); `admit_ai_waiting_jobs(user, feature, max_user, max_global, limit)`
+  under the SAME lock moves the next **reserved** waiting rows to `acquiring` and returns the ids.
+  🔴 Admission requires `metadata.queue.reserved_at`, written by /start only after the money
+  moved — otherwise the pump could admit a row between its claim and its reservation.
+- **`lib/ai/character-replace/start-job.ts`** — the /start body, moved verbatim into a function
+  (`startCharacterReplaceJob`) so the single route and the batch route run the identical spend
+  sequence. **`open-job.ts`** — the create route's checks, shared by the single create, the batch
+  create and the retry route. Both old routes are thin wrappers now (tests retargeted).
+- **The queue pump** (`queue.ts`, `queue-signal.ts`): runs on the FRONTEND (provider credentials
+  live there); the worker asks through `POST /api/internal/ai/queue` (worker‑secret). Called from
+  `releaseJobFunding` (every failure/cancel, both hosts), the finalizer's completion, /start after a
+  `waiting` verdict, the batch start, and the 10‑minute reconcile sweep as the safety net. A
+  transient hand‑off miss leaves the job `acquiring` with `prepare_dispatch: "failed"` and the sweep
+  re‑dispatches; only a refused (401/403/404) hand‑off ends it with a refund. Unreserved waiting rows
+  older than 5 minutes (a crash between claim and reserve) are ended by the pump.
+- **Routes:** `POST /batches` (N drafts, one photo, idempotent on `batchRequestId`, per‑job
+  `client_request_id` = `<batchRequestId>:<index>`, keeps its own batch's drafts when superseding),
+  `POST /batches/[id]/start` (per‑video quote + preflight token, the shared voice; a balance
+  pre‑check on the paid total; every video through THE start with `queue: true`), `GET /batches/[id]`
+  (one poll for N jobs + the same self‑healing step the single read runs), `GET /batches?active=1`,
+  `POST /jobs/[id]/retry` (a new attempt whose inputs are **copied server‑side** from the failed
+  job's folder — no re‑upload from the board). Error codes `CR_QUEUE_FULL`, `CR_BATCH_TOO_LARGE`,
+  `CR_QUEUE_OFF`.
+- **Config `processing` block** (admin **AI → Processing** tab, `CHARACTER_REPLACE_PROCESSING_BOUNDS`):
+  `queueEnabled` (default on), `concurrency { free 1, pro 2, business 3, maxAi 3, admin 3 }`,
+  `maxVideosPerBatch 5` (one submission AND the member's open‑jobs ceiling), `autoRetryCount 3`
+  (the finalization budget), `jobTimeoutMinutes 45` (the processing stall deadline; floor 20),
+  `refundFailedJobs` (off = a FAILED job's reservation is left for the admin "refund" action; cancels
+  and never‑run jobs always come back — `releaseJobFunding` got a `cause`). `concurrencyLimitFor()`
+  is the one resolver (/start, pump, balance route). The global cap and the per‑member override are
+  the existing `limits` fields, surfaced on the same tab.
+- **UI:** the video step takes several files (multiple + drop, a list with thumb/name/size/length,
+  remove one, clear all, add more; a video longer than the ceiling is refused in a batch because the
+  trim is a single‑video feature); a quote per extra video; "Process N Videos · ₦X"; the launch panel
+  (per‑video upload %, check, pass/attention; drop the failed and process the rest); the **board**
+  (`batch-board.tsx`, one poll via `use-batch-watch.ts`): summary "3 videos · 2 processing · 1
+  waiting", per‑card truthful words (Waiting in queue · Preparing · Processing · Finishing · Ready ·
+  Didn't finish · Cancelled), NO percentages, Download / Download all (through the download manager,
+  no ZIP), Remove from queue / Cancel, Retry (copied inputs → preflight → fresh quote → start),
+  Delete. `?batch=` opens the board; the workspace asks `GET /batches?active=1` on open and offers
+  "You have N videos in progress". History tiles carry `index/size` and open the board while a
+  session is live. The single‑job processing screen knows `waiting` ("Waiting for your next slot").
+- **Admin job monitor:** now a client table with filter chips (All · Queued · Waiting · Processing ·
+  Completed · Failed · Cancelled) and Batch · File · Plan · Created/Started/Completed · took/waited ·
+  attempt columns (`lib/ai/admin-job-view.ts` is the pure type + summary; `admin-stats.ts` stays
+  server‑only).
+- Also today (owner): the welcome page's **Explore AI Studio** pill is docked above the bottom nav
+  (`sticky`, `--frenz-bottomnav-h`, outside the `overflow-hidden` environment — a sticky element
+  inside one sticks to that box, not the viewport; gradient backdrop so the text fades rather than
+  cuts); footer sentence → "Save or edit only content you have the right to save or edit."; the
+  balance client mapper now passes `freeAccess` through (it was dropped since Part 11 — the
+  complimentary line never showed).
+
+### Verified
+- SQL: embedded Postgres 18 — apply, re‑apply (idempotent), ACLs (service_role only), cap 2 with a
+  batch of 5 (claimed·claimed·waiting×3), unreserved rows never admitted, FIFO, two racing admits =
+  exactly 2, global cap, daily cap counting waiting rows, free funding, bad funding raises.
+- `tsc` clean · `next lint` clean (only pre‑existing warnings) · **vitest 4153 passed** (31 new in
+  `part12.test.ts`) · `next build` green (`/create` 235 kB first load, unchanged).
+- Local `next start` + Playwright (iPhone 14): the dock measures 56 px, sits above the nav at every
+  scroll position and rests at the end; `/api/ai/character-replace/config` answers `batch`;
+  `/balance` answers `processing { concurrency, maxVideosPerBatch, openJobs, canAdd }`.
 
 ## 2026‑09‑20 — Character Replace: the four scopes, the scope page, the preflight, and Part 11 (complimentary creations + the device rule)
 

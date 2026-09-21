@@ -73,7 +73,7 @@ import { createClient } from "@/lib/supabase/server";
  * only one of them is checked by the compiler.
  */
 const JOB_COLUMNS =
-  "id, user_id, guest_id, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, funding_source, charged_cents, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata";
+  "id, user_id, guest_id, batch_id, batch_index, feature, provider, model, model_version, status, client_request_id, source_path, result_path, poster_path, funding_source, charged_cents, source_size, result_size, result_duration, result_mime_type, audio_restored, source_duration, source_mime_type, source_kind, source_url, replicate_prediction_id, error_code, created_at, started_at, completed_at, expires_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata";
 
 /**
  * Claim the right to announce this job. True exactly once, ever.
@@ -288,7 +288,7 @@ export async function countActiveJobs(subject: AiSubject, feature: AiFeature): P
  * The verdict is a word, never a throw: the route answers each one with its
  * own honest code and charges nothing for any of them.
  */
-export type StartClaimVerdict = "claimed" | "lost" | "user_limit" | "global_limit" | "daily_limit";
+export type StartClaimVerdict = "claimed" | "waiting" | "lost" | "user_limit" | "global_limit" | "daily_limit";
 
 export async function claimJobStart(input: {
   jobId: string;
@@ -301,9 +301,17 @@ export async function claimJobStart(input: {
   metadata: Record<string, unknown>;
   /** Part 11: a complimentary creation claims as `free` (charged 0, nothing reserved); the default is the wallet. */
   funding?: "balance" | "free";
+  /**
+   * 0166 (multi-video): when the member's or the platform's cap refuses,
+   * hold the job as `waiting` — funding and charge written, its place kept —
+   * instead of answering `user_limit`/`global_limit`. The queue pump admits
+   * it when a slot frees. Default false: the single-video behaviour of Parts
+   * 8–11, unchanged.
+   */
+  queue?: boolean;
 }): Promise<StartClaimVerdict> {
   const funding = input.funding ?? "balance";
-  const { data, error } = await createAdminClient().rpc("claim_ai_job_start", {
+  const args = {
     p_job_id: input.jobId,
     p_user_id: input.userId,
     p_feature: input.feature,
@@ -313,7 +321,20 @@ export async function claimJobStart(input: {
     p_charged: input.chargedCents,
     p_metadata: input.metadata,
     p_funding: funding,
-  });
+  };
+  let { data, error } = await createAdminClient().rpc("claim_ai_job_start", { ...args, p_queue: input.queue === true });
+  if (error && (error.code === "PGRST202" || error.code === "PGRST203" || /claim_ai_job_start/.test(error.message))) {
+    /*
+      0166 not applied yet: the 9-argument claim of 0163 is still the one in
+      the database. Calling it is EXACTLY the pre-queue behaviour (the limits
+      inside the lock, `user_limit` when full) — so a deploy that lands
+      minutes before its migration refuses honestly instead of over-admitting.
+      A queued start cannot be honoured without the function; the caller sees
+      `user_limit` and the batch route says the queue is not available yet.
+    */
+    console.warn("[ai/jobs] 10-arg claim_ai_job_start missing — using the 0163 claim (apply 0166)", { jobId: input.jobId, code: error.code });
+    ({ data, error } = await createAdminClient().rpc("claim_ai_job_start", args));
+  }
   if (error) {
     /*
       0158 not applied yet (PGRST202 = no such function): the deploy and the
@@ -335,8 +356,89 @@ export async function claimJobStart(input: {
     throw new AiJobError("INTERNAL_ERROR", error.message);
   }
   const verdict = typeof data === "string" ? data : "";
-  if (verdict === "claimed" || verdict === "lost" || verdict === "user_limit" || verdict === "global_limit" || verdict === "daily_limit") return verdict;
+  if (verdict === "claimed" || verdict === "waiting" || verdict === "lost" || verdict === "user_limit" || verdict === "global_limit" || verdict === "daily_limit") return verdict;
   throw new AiJobError("INTERNAL_ERROR", `unexpected start claim verdict: ${verdict}`);
+}
+
+/**
+ * ── 0166: ADMISSION FROM THE QUEUE ──────────────────────────────────────────
+ *
+ * `admit_ai_waiting_jobs` takes the SAME advisory lock as the start claim,
+ * counts what is running for the member and for the platform, and moves the
+ * member's next waiting rows (created order, then batch order) to
+ * `acquiring` — as many as the free slots allow, never more. Two jobs
+ * finishing in the same instant call this twice; the lock serialises them
+ * and the second finds the slots taken. The ids come back for the caller to
+ * hand to the worker, one dispatch each (lib/ai/character-replace/queue.ts).
+ *
+ * Never throws for a missing function: before 0166 there is no queue and
+ * therefore nothing to admit.
+ */
+export async function admitWaitingJobs(input: { userId: string; feature: AiFeature; maxActivePerUser: number; maxActiveGlobal: number; limit?: number }): Promise<string[]> {
+  const { data, error } = await createAdminClient().rpc("admit_ai_waiting_jobs", {
+    p_user_id: input.userId,
+    p_feature: input.feature,
+    p_max_user: Math.max(0, Math.floor(input.maxActivePerUser)),
+    p_max_global: Math.max(0, Math.floor(input.maxActiveGlobal)),
+    p_limit: Math.max(1, Math.min(50, Math.floor(input.limit ?? 10))),
+  });
+  if (error) {
+    if (error.code === "PGRST202" || /admit_ai_waiting_jobs/.test(error.message)) {
+      console.warn("[ai/jobs] admit_ai_waiting_jobs missing — nothing admitted (apply 0166)", { userId: input.userId, code: error.code });
+      return [];
+    }
+    console.error("[ai/jobs] queue admission failed", { userId: input.userId, code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .map((r) => (typeof r === "string" ? r : r && typeof r === "object" && typeof (r as { admit_ai_waiting_jobs?: unknown }).admit_ai_waiting_jobs === "string" ? (r as { admit_ai_waiting_jobs: string }).admit_ai_waiting_jobs : null))
+    .filter((id): id is string => !!id);
+}
+
+/** Every member with a waiting row, oldest wait first — the sweep pumps each one. */
+export async function listWaitingUserIds(feature: AiFeature, limit = 100): Promise<string[]> {
+  const { data, error } = await createAdminClient().from("ai_jobs").select("user_id").eq("feature", feature).eq("status", "waiting").order("created_at", { ascending: true }).limit(Math.max(1, Math.min(1000, limit)));
+  if (error) {
+    console.error("[ai/jobs] waiting users failed", { message: error.message });
+    return [];
+  }
+  return [...new Set((data ?? []).map((r) => (r as { user_id: string | null }).user_id).filter((id): id is string => !!id))];
+}
+
+/**
+ * A batch's jobs, read AS the member (RLS scopes the rows), in batch order.
+ * Every row here carries the same `batch_id`, which is only ever written by
+ * the batch create route for the member who owns it.
+ */
+export async function listOwnBatchJobs(subject: AiSubject, batchId: string): Promise<AiJobRow[]> {
+  const { db, column, value } = await subjectScope(subject);
+  const { data, error } = await db.from("ai_jobs").select(JOB_COLUMNS).eq(column, value).eq("batch_id", batchId).order("batch_index", { ascending: true }).order("created_at", { ascending: true }).limit(100);
+  if (error) {
+    console.error("[ai/jobs] batch read failed", { code: error.code, message: error.message });
+    throw new AiJobError("INTERNAL_ERROR", error.message);
+  }
+  return (data ?? []) as AiJobRow[];
+}
+
+/** The member's most recent batch that still has a job in flight — for "you have videos processing" on return. */
+export async function findOwnActiveBatchId(subject: AiSubject, feature: AiFeature): Promise<string | null> {
+  const { db, column, value } = await subjectScope(subject);
+  const { data, error } = await db
+    .from("ai_jobs")
+    .select("batch_id, created_at")
+    .eq(column, value)
+    .eq("feature", feature)
+    .not("batch_id", "is", null)
+    .in("status", [...AI_ACTIVE_STATUSES].filter((st) => st !== "queued"))
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.error("[ai/jobs] active batch read failed", { code: error.code, message: error.message });
+    return null;
+  }
+  return (data as { batch_id: string | null } | null)?.batch_id ?? null;
 }
 
 /**
@@ -351,11 +453,34 @@ export async function revertJobStartClaim(jobId: string, metadata: Record<string
     .from("ai_jobs")
     .update({ status: "queued", funding_source: null, charged_cents: null, started_at: null, metadata })
     .eq("id", jobId)
-    .eq("status", "acquiring")
+    // 0166: a queue claim (`waiting`) whose reservation then failed goes back the same way.
+    .in("status", ["acquiring", "waiting"])
     .is("replicate_prediction_id", null)
     .select("id");
   if (error) {
     console.error("[ai/jobs] start claim revert failed", { jobId, code: error.code, message: error.message });
+    return false;
+  }
+  return (data?.length ?? 0) === 1;
+}
+
+/**
+ * 0166: the money has moved for a WAITING job — mark it admissible. The pump
+ * (`admit_ai_waiting_jobs`) only ever admits rows carrying this stamp, so a
+ * waiting row whose reservation is still in flight, or failed, can never be
+ * handed to the worker. Guarded on `waiting`: a row already admitted, ended
+ * or reverted is left alone (and reported so the caller can react).
+ */
+export async function confirmQueueReservation(jobId: string, metadata: Record<string, unknown>): Promise<boolean> {
+  const queue = (metadata.queue && typeof metadata.queue === "object" ? (metadata.queue as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const { data, error } = await createAdminClient()
+    .from("ai_jobs")
+    .update({ metadata: { ...metadata, queue: { ...queue, reserved_at: new Date().toISOString() } } })
+    .eq("id", jobId)
+    .eq("status", "waiting")
+    .select("id");
+  if (error) {
+    console.error("[ai/jobs] queue reservation confirm failed", { jobId, code: error.code, message: error.message });
     return false;
   }
   return (data?.length ?? 0) === 1;
@@ -699,7 +824,8 @@ export async function listRecoverableJobs(limit = 50): Promise<AiJobRow[]> {
   const { data, error } = await admin
     .from("ai_jobs")
     .select(JOB_COLUMNS)
-    .in("status", ["queued", "acquiring", "processing", "finalizing"])
+    // 0166: `waiting` rides along — the registry's list, never a hand-written one (the 24 h ceiling on a wait lives in lib/ai/stall.ts).
+    .in("status", [...AI_ACTIVE_STATUSES])
     .order("created_at", { ascending: true })
     .limit(Math.max(1, Math.min(200, limit)));
   if (error) {

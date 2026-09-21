@@ -242,7 +242,7 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
       const updated = await transitionJob(job.id, ["queued", "processing"], "cancelled", {
         completed_at: new Date(now).toISOString(),
       });
-      if (updated) await refund(job);
+      if (updated) await refund(job, "cancel");
       return !!updated;
     }
 
@@ -285,7 +285,7 @@ async function failFrom(job: AiJobRow, code: string, detail: string | null | und
   });
   if (!updated) return false;
 
-  await refund(job);
+  await refund(job, "failure");
 
   const subject = subjectFromRow(job);
   if (subject?.kind === "user") {
@@ -304,7 +304,7 @@ async function failFrom(job: AiJobRow, code: string, detail: string | null | und
 }
 
 /** Give the slot back. Ours or the provider's, so it is free. */
-async function refund(job: AiJobRow): Promise<void> {
+async function refund(job: AiJobRow, cause: "failure" | "cancel" | "undo" = "undo"): Promise<void> {
   const def = aiFeature(job.feature);
   const subject = subjectFromRow(job);
   if (!def || !subject) return;
@@ -315,7 +315,7 @@ async function refund(job: AiJobRow): Promise<void> {
       one gets its daily slot back. Releasing a slot for a paid job would create
       a free video — see lib/ai/funding.ts.
     */
-    await releaseJobFunding({ job, subject, feature: def.id, dailyLimit: entitlement.dailyLimit });
+    await releaseJobFunding({ job, subject, feature: def.id, dailyLimit: entitlement.dailyLimit, cause });
   } catch (e) {
     console.error("[ai/reconcile] refund failed", { jobId: job.id, error: String(e) });
   }

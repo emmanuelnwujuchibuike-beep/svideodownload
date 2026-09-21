@@ -495,7 +495,7 @@ async function failPrepare(job: AiJobRow, failure: PrepareFailure): Promise<void
   await recordJobEvent(job.id, "prepare.failed", { code: failure.code, category: failure.category, ended: !!updated });
   const subject = subjectFromRow(job);
   if (updated && subject) {
-    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0 });
+    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0, cause: "failure" });
     await recordJobEvent(job.id, "refund.issued", { reason: failure.code, chargedCents: updated.charged_cents, from: "prepare" });
     if (subject.kind === "user") {
       await notifyAiJobFailed({

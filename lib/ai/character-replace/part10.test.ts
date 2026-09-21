@@ -26,7 +26,7 @@ describe("a never-started draft is not a stalled job (found 2026-09-20)", () => 
   it("failStalledJob returns before the deadline table for a Character Replace `queued` row", () => {
     const stall = code("lib/ai/stall-server.ts");
     const guard = stall.indexOf('if (job.feature === "ai_character_replace" && job.status === "queued") return false;');
-    const deadline = stall.indexOf("const over = stalledForMs(job, now);");
+    const deadline = stall.indexOf("const over = stalledForMs(job, now, overrides);");
     expect(guard).toBeGreaterThan(-1);
     expect(deadline).toBeGreaterThan(guard);
   });
@@ -46,7 +46,8 @@ describe("a never-started draft is not a stalled job (found 2026-09-20)", () => 
     const create = code("app/api/ai/character-replace/jobs/route.ts");
     const existing = create.indexOf("const existing = await findJobByRequestId(subject, clientRequestId);");
     const supersede = create.indexOf("await supersedeOwnDrafts(ownerId, feature.id);");
-    const count = create.indexOf("const active = await countActiveJobs(subject, feature.id);");
+    // 0166: the count is the open-jobs ceiling (queue on) or the Part 8 rule (queue off) — both after the supersede
+    const count = create.indexOf("await countOpenJobs(subject, feature, { includeDrafts: false });");
     expect(existing).toBeGreaterThan(-1);
     expect(supersede).toBeGreaterThan(existing);
     expect(count).toBeGreaterThan(supersede);
@@ -107,13 +108,14 @@ describe("safe launch mode (§25)", () => {
     expect(config).toContain("available: config.enabled && entitlement.allowed && launched,");
     expect(config).toContain("unavailableReason: config.enabled && entitlement.allowed && !launched ? LAUNCH_INTERNAL_MESSAGE : null,");
 
-    const create = code("app/api/ai/character-replace/jobs/route.ts");
-    const createGate = create.indexOf('if (!(await launchAllows(config, subject))) return fail("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });');
+    // 0166: the gate lives in the shared open core (openGate) — before any ticket is minted (mintUploadTickets, further down the same file)
+    const create = code("lib/ai/character-replace/open-job.ts");
+    const createGate = create.indexOf('if (!(await launchAllows(config, subject))) return refuse("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });');
     expect(createGate).toBeGreaterThan(-1);
     expect(createGate).toBeLessThan(create.indexOf("createSourceUploadTicket("));
 
-    const start = code("app/api/ai/character-replace/jobs/[id]/start/route.ts");
-    const startGate = start.indexOf('if (!(await launchAllows(config, subject))) return fail("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });');
+    const start = code("lib/ai/character-replace/start-job.ts");
+    const startGate = start.indexOf('if (!(await launchAllows(config, subject))) return refuse("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });');
     expect(startGate).toBeGreaterThan(-1);
     expect(startGate).toBeLessThan(start.indexOf("reserveCharacterReplaceCharge("));
     expect(startGate).toBeLessThan(start.indexOf("claimJobStart("));

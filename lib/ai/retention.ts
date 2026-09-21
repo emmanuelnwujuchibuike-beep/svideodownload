@@ -316,17 +316,18 @@ export async function retireRefusedDraft(row: Pick<AiJobRow, "id" | "source_path
  * the write. Best-effort: a storage hiccup is logged and the row still moves,
  * so a member is never blocked by our own housekeeping.
  */
-export async function supersedeOwnDrafts(userId: string, feature: AiJobRow["feature"], now: Date = new Date()): Promise<number> {
+export async function supersedeOwnDrafts(userId: string, feature: AiJobRow["feature"], now: Date = new Date(), opts: { keepBatchId?: string | null } = {}): Promise<number> {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let query = admin
     .from("ai_jobs")
     .select("id, source_path")
     .eq("user_id", userId)
     .eq("feature", feature)
     .eq("status", "queued")
-    .is("started_at", null)
-    .order("created_at", { ascending: true })
-    .limit(20);
+    .is("started_at", null);
+  // 0166: a multi-video session opens its drafts one after another — the ones already opened for THIS batch are not "abandoned".
+  if (opts.keepBatchId) query = query.or(`batch_id.is.null,batch_id.neq.${opts.keepBatchId}`);
+  const { data, error } = await query.order("created_at", { ascending: true }).limit(20);
   if (error) {
     console.error("[ai/retention] draft lookup failed", { userId, feature, message: error.message });
     return 0;

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { concurrencyLimitFor } from "@/lib/ai/character-replace/config";
 import { deviceCookieHeader, freeEligibilityMessage, getCharacterReplaceFreeEligibility, newDeviceId, readDeviceId } from "@/lib/ai/character-replace/free-access";
+import { countOpenJobs } from "@/lib/ai/character-replace/open-job";
+import { getAiEntitlement } from "@/lib/ai/entitlement";
+import { getAdminUser } from "@/lib/admin/require-admin";
 import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -55,8 +59,26 @@ export async function GET(request: Request) {
     const headers = new Headers({ "cache-control": "no-store" });
     if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
     const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request });
+    /*
+      0166: the member's own processing figures, for the picker and the board
+      — how many videos may run at once for THEM (their plan, an admin's
+      figure, the operator's caps), how many may be open, how many are open
+      now. Display only; the claim and the pump decide with the same function.
+    */
+    const [feature, adminUser] = [aiFeature("ai_character_replace"), await getAdminUser().catch(() => null)];
+    const entitlement = feature ? await getAiEntitlement(subject, feature) : null;
+    const processing = settings.frenzAiCharacterReplace.processing;
+    const concurrency = entitlement ? concurrencyLimitFor(settings.frenzAiCharacterReplace, { audience: entitlement.audience, isAdmin: !!adminUser, policyMaxConcurrent: entitlement.maxConcurrent }) : 1;
+    const openJobs = feature ? await countOpenJobs(subject, feature, { includeDrafts: false }).catch(() => 0) : 0;
     return NextResponse.json(
       {
+        processing: {
+          queueEnabled: processing.queueEnabled,
+          concurrency,
+          maxVideosPerBatch: processing.maxVideosPerBatch,
+          openJobs,
+          canAdd: processing.queueEnabled ? Math.max(0, processing.maxVideosPerBatch - openJobs) : Math.max(0, concurrency - openJobs),
+        },
         freeAccess: {
           // a transient verdict (first read before the cookie, or a store fault) shows nothing rather than a refusal
           enabled: settings.frenzAiCharacterReplace.freeAccess.enabled && free.reason !== "TEMPORARILY_UNAVAILABLE",

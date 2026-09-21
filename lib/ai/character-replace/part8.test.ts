@@ -143,15 +143,16 @@ describe("the kill switches and the limits are configuration (§2, §4, §8)", (
 });
 
 describe("/start: switches → breaker → claim (limits, one lock) → reserve → revert on a failed reserve (§4, §5, §7)", () => {
-  const start = code("app/api/ai/character-replace/jobs/[id]/start/route.ts");
+  // 0166: the sequence lives in lib/ai/character-replace/start-job.ts; the route is a wrapper around it
+  const start = code("lib/ai/character-replace/start-job.ts");
   it("the order of the gates is the order money is protected in", () => {
     const at = (needle: string) => {
       const i = start.indexOf(needle);
       expect(i, needle).toBeGreaterThan(0);
       return i;
     };
-    const maintenance = at('if (config.ops.maintenanceMode) return fail("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });');
-    const paused = at('if (!config.ops.processingEnabled) return fail("CR_BUSY");');
+    const maintenance = at('if (config.ops.maintenanceMode) return refuse("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });');
+    const paused = at('if (!config.ops.processingEnabled) return refuse("CR_BUSY");');
     const breaker = at("const { open } = await providerHealthFor(models);");
     const claim = at("const claim = await claimJobStart({");
     const reserve = at("balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });");
@@ -168,9 +169,9 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
     // the old order is gone: no reservation before the claim
     expect(start.slice(0, claim)).not.toContain("reserveCharacterReplaceCharge(");
     // every limit verdict answers its own code
-    expect(start).toContain('if (claim === "user_limit") return fail("CR_ACTIVE_LIMIT");');
-    expect(start).toContain('if (claim === "daily_limit") return fail("CR_DAILY_LIMIT");');
-    expect(start).toContain('return fail("CR_BUSY");');
+    expect(start).toContain('if (claim === "user_limit") return refuse("CR_ACTIVE_LIMIT");');
+    expect(start).toContain('if (claim === "daily_limit") return refuse("CR_DAILY_LIMIT");');
+    expect(start).toContain('return refuse("CR_BUSY");');
   });
   it("the claim is one SQL function under an advisory lock, revoked from the browser roles", () => {
     const sql = src("supabase/migrations/0158_ai_hardening.sql");
@@ -186,12 +187,13 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
   it("the store falls back to the plain CAS only when the function is missing, and the revert is guarded on acquiring + no prediction", () => {
     const store = code("lib/ai/job-store.ts");
     expect(store).toContain('if (error.code === "PGRST202" || error.code === "PGRST203" || /claim_ai_job_start/.test(error.message)) {');
-    expect(store).toContain('.eq("status", "acquiring")\n    .is("replicate_prediction_id", null)');
+    // 0166: a waiting claim reverts the same way; still guarded on no prediction
+    expect(store).toContain('.in("status", ["acquiring", "waiting"])\n    .is("replicate_prediction_id", null)');
   });
   it("creation refuses on the switches too, and the config route folds them into processingAvailable", () => {
-    const create = code("app/api/ai/character-replace/jobs/route.ts");
-    expect(create).toContain('if (config.ops.maintenanceMode) return fail("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });');
-    expect(create).toContain('if (!config.ops.processingEnabled) return fail("CR_BUSY");');
+    const create = code("lib/ai/character-replace/open-job.ts");
+    expect(create).toContain('if (config.ops.maintenanceMode) return refuse("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });');
+    expect(create).toContain('if (!config.ops.processingEnabled) return refuse("CR_BUSY");');
     const cfg = code("app/api/ai/character-replace/config/route.ts");
     expect(cfg).toContain("processingAvailable: hasProviderFor(feature) && hasWorker && cr.ops.processingEnabled && !cr.ops.maintenanceMode,");
   });

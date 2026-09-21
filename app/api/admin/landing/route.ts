@@ -330,6 +330,25 @@ const schema = z.object({
           maxJobsPerUserPerDay: z.number().int().min(0).max(10_000).optional(),
         })
         .optional(),
+      /** 0166 (multi-video): the AI → Processing section. Bounds mirror CHARACTER_REPLACE_PROCESSING_BOUNDS. */
+      processing: z
+        .object({
+          queueEnabled: z.boolean().optional(),
+          concurrency: z
+            .object({
+              free: z.number().int().min(1).max(10).optional(),
+              pro: z.number().int().min(1).max(10).optional(),
+              business: z.number().int().min(1).max(10).optional(),
+              maxAi: z.number().int().min(1).max(10).optional(),
+              admin: z.number().int().min(1).max(20).optional(),
+            })
+            .optional(),
+          maxVideosPerBatch: z.number().int().min(1).max(20).optional(),
+          autoRetryCount: z.number().int().min(1).max(5).optional(),
+          jobTimeoutMinutes: z.number().int().min(20).max(180).optional(),
+          refundFailedJobs: z.boolean().optional(),
+        })
+        .optional(),
       /** Part 8 §25: local minor units per US dollar, for the margin warnings. */
       localMinorUnitsPerUsd: z.number().int().min(0).max(100_000_000).optional(),
       /** Part 6 §27: why the prices changed. Recorded in the pricing history beside the admin's id; never stored as a setting. */

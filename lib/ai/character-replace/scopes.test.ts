@@ -59,7 +59,7 @@ describe("the photo's shape against the scope (brief §3, §14) — deterministi
     expect(hook).toContain("const framing = validatePhotoFraming(size, state.project.mode);");
     expect(code("features/ai/character-replace/step-photo.tsx")).toContain("guidance={{ best: copy.photo.best, example:");
     expect(code("features/ai/character-replace/media-picker.tsx")).toContain('error === "image-wrong-framing" || error === "image-too-small"');
-    expect(code("app/api/ai/character-replace/jobs/route.ts")).toContain("const framingVerdict = validatePhotoFraming({ width: image.width, height: image.height }, mode);");
+    expect(code("lib/ai/character-replace/open-job.ts")).toContain("const framingVerdict = validatePhotoFraming({ width: image.width, height: image.height }, mode);");
     const worker = code("server/services/ai-character-replace-prepare-service.ts");
     expect(worker).toContain("const framing = validatePhotoFraming({ width: probe.width, height: probe.height }, mode.mode);");
     expect(worker.indexOf("validatePhotoFraming(")).toBeLessThan(worker.indexOf("const cut = await runPrepare(args);"));
@@ -164,7 +164,7 @@ describe("pricing depends on the scope (brief §6–§8)", () => {
 
 describe("the immutable snapshot and the job's plan (brief §11, §16)", () => {
   it("/start writes scope, provider, model, original length, the trim and the rates beside the signed quote, and a provider_plan on the job", () => {
-    const start = code("app/api/ai/character-replace/jobs/[id]/start/route.ts");
+    const start = code("lib/ai/character-replace/start-job.ts");
     for (const k of ["replacementMode: snapshot.mode", "scope: REPLACEMENT_SCOPE[snapshot.mode]", "provider: plannedProvider.id", "providerModel: plannedProvider.model", "originalDurationMs: meta.video.durationMs", "selectedStartMs: selected.startMs", "selectedEndMs: selected.endMs", "selectedDurationMs: snapshot.durationMs", "outputQuality: snapshot.quality", "modeBasePriceCents: snapshot.modeBasePriceCents", "modePerSecondRateCents: snapshot.qualityRateCents", "lipSyncRateCents: snapshot.lipSyncRateCents", "voiceRateCents: snapshot.voiceRateCents", "totalPriceCents: snapshot.totalCents"]) {
       expect(start, k).toContain(k);
     }

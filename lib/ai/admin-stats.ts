@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import { AI_JOB_STATUSES, isActiveStatus, type AiJobStatus } from "@/lib/ai/jobs";
 import { stalledForMs } from "@/lib/ai/stall";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -145,87 +146,15 @@ export async function getAiAdminStats(): Promise<AiAdminStats | null> {
 
 /* ───────────────────── Character Replace jobs (Part 4, §29) ─────────────────── */
 
-/**
- * One row per recent Character Replace job, for the operator: status, the
- * provider's state as we recorded it, duration, quality, what was charged,
- * whether it came back, the prediction id, the timestamps. Read with the
- * service role, shaped here so the panel never sees a storage path.
- */
-export interface CharacterReplaceAdminJob {
-  id: string;
-  createdAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  status: AiJobStatus;
-  userId: string | null;
-  quality: string | null;
-  durationMs: number | null;
-  trimmed: boolean;
-  chargedCents: number | null;
-  currency: string | null;
-  refunded: boolean;
-  predictionId: string | null;
-  modelVersion: string | null;
-  errorCode: string | null;
-  failureCategory: string | null;
-  /* ── Part 5 (§35): the background's own bookkeeping ── */
-  attempt: number;
-  finalizeAttempts: number;
-  finalizeNextAt: string | null;
-  finalizeError: string | null;
-  /** How long the worker's finalization took, when it finished. */
-  finalizeMs: number | null;
-  notifiedAt: string | null;
-  notifyPending: boolean;
-  /** Past the stage's deadline, or a finalization retry waiting with no lease. */
-  stuck: boolean;
-  /* ── Part 6: which replacement, which provider stage, what it cost us ── */
-  mode: "face_only" | "skin_face" | "upper_body" | "full_character";
-  /** The model of the CURRENT stage's prediction (`ai_jobs.model`). */
-  model: string | null;
-  /** "voice" | "replace" | "lipsync" | "finalize" — the pipeline's current stage, or null for a single-stage row. */
-  stage: string | null;
-  voiceSource: "upload" | "tts" | null;
-  lipSyncMode: string | null;
-  /** The operator's estimate of the provider bill, US cents. Null when no estimate was configured. */
-  providerCostUsdCents: number | null;
-  /** The quoted per-second customer rate, minor units. */
-  rateCents: number | null;
-}
-
-/** The counts the operator wants at a glance (§35), from the rows already read. Pure. */
-export function summarizeCharacterReplaceJobs(jobs: CharacterReplaceAdminJob[], now: number = Date.now()): {
-  active: number;
-  queued: number;
-  processing: number;
-  finalizing: number;
-  completed24h: number;
-  failed24h: number;
-  refunded24h: number;
-  stuck: number;
-  retrying: number;
-} {
-  const dayAgo = now - 24 * 60 * 60_000;
-  const recent = (j: CharacterReplaceAdminJob) => Date.parse(j.completedAt ?? j.createdAt) >= dayAgo;
-  return {
-    active: jobs.filter((j) => isActiveStatus(j.status)).length,
-    queued: jobs.filter((j) => j.status === "queued" || j.status === "acquiring").length,
-    processing: jobs.filter((j) => j.status === "processing").length,
-    finalizing: jobs.filter((j) => j.status === "finalizing").length,
-    completed24h: jobs.filter((j) => j.status === "completed" && recent(j)).length,
-    failed24h: jobs.filter((j) => (j.status === "failed" || j.status === "expired") && recent(j)).length,
-    refunded24h: jobs.filter((j) => j.refunded && recent(j)).length,
-    stuck: jobs.filter((j) => j.stuck).length,
-    retrying: jobs.filter((j) => j.status === "finalizing" && j.finalizeAttempts > 0 && !!j.finalizeNextAt).length,
-  };
-}
+// The row type and the glance summary live in lib/ai/admin-job-view.ts (pure) since 0166 — the job monitor is a client component now.
+export { summarizeCharacterReplaceJobs, type CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 
 export async function listCharacterReplaceAdminJobs(limit = 30): Promise<CharacterReplaceAdminJob[]> {
   try {
     const db = createAdminClient();
     const { data, error } = await db
       .from("ai_jobs")
-      .select("id, user_id, status, charged_cents, replicate_prediction_id, model, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata")
+      .select("id, user_id, status, charged_cents, replicate_prediction_id, model, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata, batch_id, batch_index")
       .eq("feature", "ai_character_replace")
       .order("created_at", { ascending: false })
       .limit(Math.max(1, Math.min(100, limit)));
@@ -248,6 +177,8 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
       finalize_next_at: string | null;
       finalize_error: string | null;
       metadata: Record<string, unknown> | null;
+      batch_id?: string | null;
+      batch_index?: number | null;
     }[];
     const now = Date.now();
     const jobIds = rows.map((r) => r.id);
@@ -273,7 +204,19 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
       const pipeline = (m.pipeline ?? null) as { current?: unknown } | null;
       const audio = (m.audio ?? null) as { source?: unknown } | null;
       const cost = (m.provider_cost_estimate ?? null) as { totalUsdCents?: unknown } | null;
+      const batch = (m.batch ?? null) as { size?: unknown } | null;
+      const queue = (m.queue ?? null) as { queued_at?: unknown; admitted_at?: unknown } | null;
+      const queuedAt = typeof queue?.queued_at === "string" ? Date.parse(queue.queued_at) : NaN;
+      const admittedAt = typeof queue?.admitted_at === "string" ? Date.parse(queue.admitted_at) : NaN;
+      const billing = (m.billing ?? null) as { type?: unknown } | null;
       return {
+        batchId: r.batch_id ?? null,
+        batchIndex: typeof r.batch_index === "number" ? r.batch_index : null,
+        batchSize: num(batch?.size),
+        audience: typeof m.audience === "string" ? m.audience : null,
+        waitedMs: Number.isFinite(queuedAt) ? Math.max(0, (Number.isFinite(admittedAt) ? admittedAt : r.status === "waiting" ? now : queuedAt) - queuedAt) : null,
+        fileName: typeof m.source_name === "string" ? m.source_name : null,
+        billing: billing?.type === "FREE_TRIAL" ? "FREE_TRIAL" : billing?.type === "PAID" ? "PAID" : null,
         mode: m.mode === "face_only" || m.mode === "skin_face" || m.mode === "upper_body" ? m.mode : "full_character",
         model: r.model,
         stage: typeof pipeline?.current === "string" ? pipeline.current : null,

@@ -469,6 +469,29 @@ export interface CharacterReplaceConfig {
     maxJobsPerUserPerDay: number;
   };
   /**
+   * ── MULTI-VIDEO PROCESSING (owner, 2026-09-21; migration 0166) ────────────
+   * The admin's "AI → Processing" section. `concurrency` is how many videos
+   * one member may have RUNNING at once, per plan — the numbers that used to
+   * live only in lib/ai/policy.ts (Free 1 · Pro 2 · Business 3), now the
+   * operator's, still tightened by `limits.maxActiveJobsPerUser` when that is
+   * set. `admin` applies to administrators whatever their plan. With the queue
+   * on, a member over their cap WAITS (status `waiting`) instead of being
+   * refused; off restores the Part 8 refusal. `maxVideosPerBatch` bounds one
+   * submission AND the member's open jobs (drafts + waiting + running).
+   * `autoRetryCount` is the finalization retry budget; `jobTimeoutMinutes`
+   * the processing deadline the stall sweep applies (floor 20 — lib/ai/stall.ts);
+   * `refundFailedJobs` off leaves a failed job's reservation for the operator
+   * to refund by hand (the admin "refund" action) instead of automatically.
+   */
+  processing: {
+    queueEnabled: boolean;
+    concurrency: { free: number; pro: number; business: number; maxAi: number; admin: number };
+    maxVideosPerBatch: number;
+    autoRetryCount: number;
+    jobTimeoutMinutes: number;
+    refundFailedJobs: boolean;
+  };
+  /**
    * §25: local minor units per ONE US dollar (₦1,500 = 150,000 kobo), so the
    * admin form can compare a tier's price with the provider's USD cost and
    * warn when the margin is thin. 0 = unknown, no warnings. Since 2026-09-20
@@ -758,8 +781,27 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
     circuitBreaker: { enabled: true, failureThreshold: 5, windowSeconds: 600, cooldownSeconds: 300 },
   },
   limits: { maxActiveJobsPerUser: 0, maxActiveJobsGlobal: 25, maxJobsPerUserPerDay: 0 },
+  // The plan caps exactly as lib/ai/policy.ts shipped them, so a settings row that has never been saved changes nothing.
+  processing: {
+    queueEnabled: true,
+    concurrency: { free: 1, pro: 2, business: 3, maxAi: 3, admin: 3 },
+    maxVideosPerBatch: 5,
+    autoRetryCount: 3,
+    jobTimeoutMinutes: 45,
+    refundFailedJobs: true,
+  },
   localMinorUnitsPerUsd: 0,
 };
+
+/** The hard bounds the admin form and the normaliser share (brief §16: "do not expose dangerous unrestricted values"). */
+export const CHARACTER_REPLACE_PROCESSING_BOUNDS = {
+  concurrency: { min: 1, max: 10 },
+  adminConcurrency: { min: 1, max: 20 },
+  maxVideosPerBatch: { min: 1, max: 20 },
+  autoRetryCount: { min: 1, max: 5 },
+  /** 20 = the floor every stall deadline keeps (lib/ai/stall.ts); 180 = three hours, past any honest run. */
+  jobTimeoutMinutes: { min: 20, max: 180 },
+} as const;
 
 /* ───────────────────────────── normaliser ────────────────────────────────── */
 
@@ -948,6 +990,9 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
   const opsRaw = isRecord(raw.ops) ? raw.ops : {};
   const breakerRaw = isRecord(opsRaw.circuitBreaker) ? opsRaw.circuitBreaker : {};
   const limitsRaw = isRecord(raw.limits) ? raw.limits : {};
+  const processingRaw = isRecord(raw.processing) ? raw.processing : {};
+  const concurrencyRaw = isRecord(processingRaw.concurrency) ? processingRaw.concurrency : {};
+  const pb = CHARACTER_REPLACE_PROCESSING_BOUNDS;
 
   return {
     enabled: bool(raw.enabled, d.enabled),
@@ -1075,6 +1120,20 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
       maxActiveJobsPerUser: int(limitsRaw.maxActiveJobsPerUser, d.limits.maxActiveJobsPerUser, 0, 100),
       maxActiveJobsGlobal: int(limitsRaw.maxActiveJobsGlobal, d.limits.maxActiveJobsGlobal, 0, 10_000),
       maxJobsPerUserPerDay: int(limitsRaw.maxJobsPerUserPerDay, d.limits.maxJobsPerUserPerDay, 0, 10_000),
+    },
+    processing: {
+      queueEnabled: bool(processingRaw.queueEnabled, d.processing.queueEnabled),
+      concurrency: {
+        free: int(concurrencyRaw.free, d.processing.concurrency.free, pb.concurrency.min, pb.concurrency.max),
+        pro: int(concurrencyRaw.pro, d.processing.concurrency.pro, pb.concurrency.min, pb.concurrency.max),
+        business: int(concurrencyRaw.business, d.processing.concurrency.business, pb.concurrency.min, pb.concurrency.max),
+        maxAi: int(concurrencyRaw.maxAi, d.processing.concurrency.maxAi, pb.concurrency.min, pb.concurrency.max),
+        admin: int(concurrencyRaw.admin, d.processing.concurrency.admin, pb.adminConcurrency.min, pb.adminConcurrency.max),
+      },
+      maxVideosPerBatch: int(processingRaw.maxVideosPerBatch, d.processing.maxVideosPerBatch, pb.maxVideosPerBatch.min, pb.maxVideosPerBatch.max),
+      autoRetryCount: int(processingRaw.autoRetryCount, d.processing.autoRetryCount, pb.autoRetryCount.min, pb.autoRetryCount.max),
+      jobTimeoutMinutes: int(processingRaw.jobTimeoutMinutes, d.processing.jobTimeoutMinutes, pb.jobTimeoutMinutes.min, pb.jobTimeoutMinutes.max),
+      refundFailedJobs: bool(processingRaw.refundFailedJobs, d.processing.refundFailedJobs),
     },
     localMinorUnitsPerUsd: int(raw.localMinorUnitsPerUsd, d.localMinorUnitsPerUsd, 0, 100_000_000),
   };
@@ -1319,6 +1378,12 @@ export interface CharacterReplacePublicConfig {
   lipSyncMaximumDurationSeconds: number;
   /** Part 7 §21: how long a result is kept, and how long a saved one — printed, never assumed. */
   retention: { resultHours: number; savedResultDays: number };
+  /**
+   * 0166: the multi-video picker's ceiling and whether over-cap videos wait
+   * in line or are refused. The member's own concurrency is NOT here — it is
+   * the balance route's (it depends on who is asking); this is the tool's.
+   */
+  batch: { maxVideos: number; queueEnabled: boolean };
 }
 
 export type CharacterReplacePublicVoice = Pick<CharacterReplaceVoice, "id" | "label" | "blurb" | "languages" | "gender" | "age">;
@@ -1449,7 +1514,23 @@ export function publicCharacterReplaceConfig(
     },
     lipSyncMaximumDurationSeconds: Math.min(config.lipSyncMaximumDurationSeconds, config.maximumDurationSeconds),
     retention: config.retention,
+    batch: { maxVideos: config.processing.maxVideosPerBatch, queueEnabled: config.processing.queueEnabled },
   };
+}
+
+/**
+ * ── HOW MANY VIDEOS ONE MEMBER MAY RUN AT ONCE (0166) ───────────────────────
+ *
+ * The operator's per-plan number (defaulting to the plan policy's own), an
+ * administrator's own figure when the member is one, and — as before — the
+ * single `limits.maxActiveJobsPerUser` cap tightening whichever applies.
+ * Pure, so the claim, the pump and the balance route cannot disagree.
+ */
+export function concurrencyLimitFor(config: CharacterReplaceConfig, who: { audience: "guest" | "free" | "pro" | "business" | "max_ai"; isAdmin: boolean; policyMaxConcurrent: number }): number {
+  const c = config.processing.concurrency;
+  const byPlan = who.isAdmin ? c.admin : who.audience === "pro" ? c.pro : who.audience === "business" ? c.business : who.audience === "max_ai" ? c.maxAi : who.audience === "free" ? c.free : Math.max(1, who.policyMaxConcurrent);
+  const plan = Math.max(1, Math.floor(byPlan) || Math.max(1, who.policyMaxConcurrent));
+  return config.limits.maxActiveJobsPerUser > 0 ? Math.min(config.limits.maxActiveJobsPerUser, plan) : plan;
 }
 
 /**

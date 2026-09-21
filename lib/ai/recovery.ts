@@ -1,20 +1,23 @@
 import "server-only";
 
-import { FINALIZE_MAX_ATTEMPTS as MAX_FINALIZE_ATTEMPTS } from "@/lib/ai/character-replace/finalize-policy";
+import { finalizeMaxAttempts } from "@/lib/ai/character-replace/finalize-policy";
 import { readPipeline } from "@/lib/ai/character-replace/job-meta";
 import { isProviderStage, nextStage } from "@/lib/ai/character-replace/pipeline";
 import { aiErrorMessage } from "@/lib/ai/errors";
+import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch";
+import { pumpCharacterReplaceQueue } from "@/lib/ai/character-replace/queue";
 import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
 import { aiFeature } from "@/lib/ai/jobs";
 import { submitJobToProvider } from "@/lib/ai/submit";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
-import { listNotifyPendingJobs, listRecoverableJobs, transitionJob } from "@/lib/ai/job-store";
+import { listNotifyPendingJobs, listRecoverableJobs, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-store";
 import { type AiJobRow } from "@/lib/ai/jobs";
 import { notifyAiJobFailed, notifyAiJobFromRow } from "@/lib/ai/notify";
 import { reconcileWithProvider } from "@/lib/ai/reconcile";
 import { failStalledJob } from "@/lib/ai/stall-server";
 import { subjectFromRow } from "@/lib/ai/subject";
+import { getLandingSettings } from "@/lib/landing/settings";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -100,7 +103,9 @@ export async function recoverJob(row: AiJobRow, now: number = Date.now()): Promi
     /* ── a finalization in progress or waiting its turn ──────────────────── */
     if (row.status === "finalizing" && retryable) {
       if (leased) return "working";
-      if (row.finalize_attempts >= MAX_FINALIZE_ATTEMPTS || providerOutputExpired(row, now)) {
+      // 0166: the operator's retry budget (AI → Processing), the constant when the read fails.
+      const maxAttempts = finalizeMaxAttempts(await getLandingSettings().then((s) => s.frenzAiCharacterReplace).catch(() => null));
+      if (row.finalize_attempts >= maxAttempts || providerOutputExpired(row, now)) {
         return (await giveUpFinalization(row, now)) ? "gave-up" : "none";
       }
       if (!due) return "none";
@@ -138,6 +143,17 @@ export async function recoverJob(row: AiJobRow, now: number = Date.now()): Promi
           return "redispatch-failed";
         }
       }
+    }
+
+    /* ── 0166: admitted from the queue, but the worker never took it ──────── */
+    if (row.status === "acquiring" && retryable && meta.prepare_dispatch === "failed" && !row.replicate_prediction_id) {
+      const notedAt = typeof meta.noted_at === "string" ? Date.parse(meta.noted_at) : NaN;
+      if (Number.isFinite(notedAt) && now - notedAt < STAGE_SUBMIT_GRACE_MS) return "working";
+      // The prepare service is idempotent on status: a request the worker DID get earlier finds nothing to do the second time.
+      const dispatch = await dispatchPreparation(row.id);
+      await noteJobDiagnostic(row.id, { prepare_dispatch: dispatch.dispatched ? "ok" : "failed", prepare_detail: dispatch.dispatched ? null : dispatch.detail.slice(0, 300), prepare_from: "sweep" });
+      await recordJobEvent(row.id, "reconcile.redispatched", { from: "acquiring", kind: "prepare", dispatched: dispatch.dispatched, ...(dispatch.dispatched ? {} : { reason: dispatch.reason }) });
+      return dispatch.dispatched ? "redispatched" : "redispatch-failed";
     }
 
     /* ── the provider finished; did the worker ever hear? ────────────────── */
@@ -213,7 +229,7 @@ export async function giveUpFinalization(row: AiJobRow, now: number = Date.now()
   const subject = subjectFromRow(updated);
   if (subject) {
     try {
-      await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0 });
+      await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0, cause: "failure" });
       await recordJobEvent(row.id, "refund.issued", { reason: "FINAL_UPLOAD_FAILED", chargedCents: updated.charged_cents, from: "recovery" });
     } catch (e) {
       console.error("[ai/recovery] refund failed", { jobId: row.id, error: String(e).slice(0, 200) });
@@ -230,6 +246,8 @@ export interface SweepReport {
   scanned: number;
   actions: Record<RecoveryAction, number>;
   notifiedPending: number;
+  /** 0166: the queue pump's pass — members with a waiting row, jobs admitted, hand-offs. */
+  queue: { users: number; admitted: number; dispatched: number; failed: number; expired: number; skipped: string | null };
   ms: number;
 }
 
@@ -259,7 +277,21 @@ export async function sweepAiJobs(now: number = Date.now()): Promise<SweepReport
   }
   actions.notified += notifiedPending;
 
-  const report = { scanned: rows.length, actions, notifiedPending, ms: Date.now() - startedAt };
+  /*
+    0166: the safety net for the queue. Every live path pumps the moment a
+    slot frees; this pass catches whatever they missed — a pump request the
+    worker could not deliver, a processing pause the operator just lifted, a
+    stalled job the step above just ended.
+  */
+  let queue: SweepReport["queue"] = { users: 0, admitted: 0, dispatched: 0, failed: 0, expired: 0, skipped: null };
+  try {
+    const pumped = await pumpCharacterReplaceQueue({ reason: "sweep", now });
+    queue = { users: pumped.users, admitted: pumped.admitted.length, dispatched: pumped.dispatched, failed: pumped.failed, expired: pumped.expired, skipped: pumped.skipped };
+  } catch (e) {
+    console.error("[ai/recovery] queue pump threw", { error: String(e).slice(0, 200) });
+  }
+
+  const report = { scanned: rows.length, actions, notifiedPending, queue, ms: Date.now() - startedAt };
   console.info("[ai/recovery] sweep", report);
   return report;
 }

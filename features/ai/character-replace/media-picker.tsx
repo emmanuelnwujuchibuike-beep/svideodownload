@@ -29,6 +29,8 @@ export function CharacterReplaceMediaPicker({
   error,
   guidance = null,
   onPick,
+  onPickMany,
+  multiple = false,
   className,
 }: {
   kind: "photo" | "video";
@@ -42,6 +44,9 @@ export function CharacterReplaceMediaPicker({
   /** 2026-09-20: what the chosen replacement type needs from the photo, shown under a refusal with the drawn example one tap away. */
   guidance?: { best: string; example: ReactNode } | null;
   onPick: (file: File) => void;
+  /** 0166 (multi-video): with `multiple`, every chosen or dropped file at once. Falls back to `onPick` per file when absent. */
+  onPickMany?: (files: File[]) => void;
+  multiple?: boolean;
   className?: string;
 }) {
   const inputId = useId();
@@ -52,12 +57,15 @@ export function CharacterReplaceMediaPicker({
 
   const take = useCallback(
     (files: FileList | null) => {
-      const file = files?.[0];
-      if (file && !busy) onPick(file);
+      const list = files ? Array.from(files) : [];
+      if (list.length && !busy) {
+        if (multiple && onPickMany) onPickMany(list);
+        else if (list[0]) onPick(list[0]);
+      }
       // So the same file can be chosen again after a refusal.
       if (inputRef.current) inputRef.current.value = "";
     },
-    [busy, onPick],
+    [busy, multiple, onPick, onPickMany],
   );
 
   const onDragEnter = (e: DragEvent) => {
@@ -86,6 +94,7 @@ export function CharacterReplaceMediaPicker({
         id={inputId}
         type="file"
         accept={accept}
+        multiple={multiple}
         className="peer sr-only"
         disabled={busy}
         onChange={(e) => take(e.target.files)}

@@ -234,7 +234,7 @@ async function failAdvance(job: AiJobRow, stage: PipelineStage, failure: Advance
   await recordJobEvent(job.id, "advance.failed", { from: stage, code: failure.code, kind: failure.kind, ended: !!updated });
   const subject = subjectFromRow(job);
   if (updated && subject) {
-    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0 });
+    await releaseJobFunding({ job: updated, subject, feature: "ai_character_replace", dailyLimit: 0, cause: "failure" });
     await recordJobEvent(job.id, "refund.issued", { reason: failure.code, chargedCents: updated.charged_cents, from: "advance" });
     if (subject.kind === "user") {
       const code: AiErrorCode =

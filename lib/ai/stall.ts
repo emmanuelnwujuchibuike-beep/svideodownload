@@ -54,9 +54,18 @@ import { isActiveStatus, type AiJobStatus } from "@/lib/ai/jobs";
  * is honest about what we can actually measure, and errs long.
  */
 export const AI_STALL_DEADLINE_MS: Record<
-  "queued" | "acquiring" | "processing" | "finalizing",
+  "queued" | "waiting" | "acquiring" | "processing" | "finalizing",
   number
 > = {
+  /*
+    0166: a job in the member's own line. Nothing runs for it, nothing bills
+    for it, and it is admitted the moment a slot frees — so the only reason
+    it could sit here for a DAY is that processing was paused by the operator
+    or every slot was held by jobs the sweep could not end. A day is the
+    ceiling on holding a member's money for work that never began: after it
+    the job ends as failed and the reservation goes back.
+  */
+  waiting: 24 * 60 * 60 * 1000,
   /*
     A queued job is waiting for its own uploader. The browser holds the file
     and PUTs it straight to storage, so this covers a slow phone on a bad
@@ -116,10 +125,22 @@ export interface StallableJob {
  * Pure, so the numbers above can be tested without a database or a clock.
  * `now` is injected for the same reason.
  */
-export function stalledForMs(job: StallableJob, now: number = Date.now()): number | null {
+/** 0166: the operator's job timeout (AI → Processing) overrides the `processing` deadline; never below the table's own floor. */
+export type StallOverrides = Partial<Record<keyof typeof AI_STALL_DEADLINE_MS, number>>;
+
+export function stallDeadlineMs(status: keyof typeof AI_STALL_DEADLINE_MS, overrides?: StallOverrides): number {
+  const base = AI_STALL_DEADLINE_MS[status];
+  const override = overrides?.[status];
+  // The 20-minute floor every stage keeps (stall.test.ts): a shorter override is ignored, not obeyed.
+  return typeof override === "number" && Number.isFinite(override) && override >= 20 * 60 * 1000 ? override : base;
+}
+
+export function stalledForMs(job: StallableJob, now: number = Date.now(), overrides?: StallOverrides): number | null {
   if (!isActiveStatus(job.status)) return null;
 
-  const deadline = AI_STALL_DEADLINE_MS[job.status as keyof typeof AI_STALL_DEADLINE_MS];
+  const key = job.status as keyof typeof AI_STALL_DEADLINE_MS;
+  if (!(key in AI_STALL_DEADLINE_MS)) return null;
+  const deadline = stallDeadlineMs(key, overrides);
   if (!deadline) return null;
 
   /*
@@ -148,7 +169,7 @@ export function stalledForMs(job: StallableJob, now: number = Date.now()): numbe
   */
   const stageStart = job.status === "processing" ? stageStartedAt(job.metadata) : null;
   const since =
-    job.status === "queued" || job.status === "acquiring"
+    job.status === "queued" || job.status === "waiting" || job.status === "acquiring"
       ? job.created_at
       : (stageStart ?? job.started_at ?? job.created_at);
   const startedAt = Date.parse(since);

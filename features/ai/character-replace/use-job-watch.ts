@@ -128,7 +128,8 @@ export function useJobWatch(jobId: string | null) {
         // charge yet) and `acquiring` (our worker is still trimming; the
         // reservation goes back in full). Once processing has begun the
         // provider has been paid for.
-        canCancel: job.status === "queued" || job.status === "acquiring",
+        // 0166: a WAITING job has not been handed to anybody either — cancelling it gives the whole reservation back.
+        canCancel: job.status === "queued" || job.status === "waiting" || job.status === "acquiring",
         message: job.status === "failed" || job.status === "cancelled" ? (job.error?.message ?? null) : null,
       }
     : null;

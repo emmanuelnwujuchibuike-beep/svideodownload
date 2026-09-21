@@ -4,8 +4,9 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, type AiFeature } from "@/lib/ai/jobs";
 import { transitionJob } from "@/lib/ai/job-store";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
-import { AI_STALL_DEADLINE_MS, stalledForMs, type StallableJob } from "@/lib/ai/stall";
+import { AI_STALL_DEADLINE_MS, stalledForMs, type StallableJob, stallDeadlineMs, type StallOverrides } from "@/lib/ai/stall";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { releaseJobFunding } from "@/lib/ai/funding";
 
@@ -29,6 +30,16 @@ import { releaseJobFunding } from "@/lib/ai/funding";
  * returns null — so exactly one refund is issued, by the database, not by
  * whichever check happened to run first.
  */
+/** The operator's processing deadline, read from the cached settings; the defaults when the read fails. */
+async function processingOverrides(): Promise<StallOverrides | undefined> {
+  try {
+    const settings = await getLandingSettings();
+    return { processing: settings.frenzAiCharacterReplace.processing.jobTimeoutMinutes * 60_000 };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function failStalledJob(
   job: StallableJob & {
     user_id?: string | null;
@@ -65,7 +76,9 @@ export async function failStalledJob(
     other stages are untouched.
   */
   if (job.feature === "ai_character_replace" && job.status === "queued") return false;
-  const over = stalledForMs(job, now);
+  // 0166: the operator's "Job timeout" (AI → Processing) is the processing deadline for Character Replace; the table's floor still applies.
+  const overrides = job.feature === "ai_character_replace" ? await processingOverrides() : undefined;
+  const over = stalledForMs(job, now, overrides);
   if (over === null) return false;
 
   const def = aiFeature(job.feature);
@@ -73,7 +86,7 @@ export async function failStalledJob(
 
   const ended = await transitionJob(job.id, [job.status], "failed", {
     error_code: "PROVIDER_TIMEOUT",
-    error_message: `no provider callback ${Math.round((over + AI_STALL_DEADLINE_MS[job.status as "queued" | "processing" | "finalizing"]) / 60000)}m after ${job.status === "queued" ? "creation" : "start"}`,
+    error_message: `no provider callback ${Math.round((over + stallDeadlineMs(job.status as "queued" | "waiting" | "acquiring" | "processing" | "finalizing", overrides)) / 60000)}m after ${job.status === "queued" || job.status === "waiting" ? "creation" : "start"}`,
     completed_at: new Date(now).toISOString(),
   });
 
@@ -91,6 +104,7 @@ export async function failStalledJob(
       // Money back for a paid job, a daily slot for a free one — the row says
       // which, because guessing creates free videos (lib/ai/funding.ts).
       await releaseJobFunding({
+        cause: "failure",
         job: { id: job.id, user_id: job.user_id ?? null, funding_source: job.funding_source },
         subject,
         feature: def.id as AiFeature,

@@ -213,6 +213,8 @@ export function advance(pipeline: PipelineMeta, from: PipelineStage, to: Pipelin
  */
 export type CharacterReplaceStageName =
   | "READY"
+  /** 0166: paid for, in the member's own line for a processing slot. */
+  | "WAITING"
   | "VALIDATING"
   | "PREPARING"
   | "AUDIO_PREPARING"
@@ -233,7 +235,7 @@ export type CharacterReplaceStageName =
   | "CANCELLED";
 
 export function stageName(input: {
-  status: "queued" | "acquiring" | "processing" | "finalizing" | "completed" | "failed" | "cancelled" | "expired" | "deleted";
+  status: "queued" | "waiting" | "acquiring" | "processing" | "finalizing" | "completed" | "failed" | "cancelled" | "expired" | "deleted";
   pipeline: PipelineMeta | null;
   /** From the ledger (Part 5 §29): whether a failed job's charge is still reserved or has come back. */
   refund: "none" | "settled" | "pending" | "refunded";
@@ -243,6 +245,7 @@ export function stageName(input: {
   if (status === "cancelled" || status === "deleted") return "CANCELLED";
   if (status === "failed" || status === "expired") return input.refund === "refunded" ? "REFUNDED" : input.refund === "pending" ? "REFUND_PENDING" : "FAILED";
   if (status === "queued") return "READY";
+  if (status === "waiting") return "WAITING";
   if (status === "acquiring") return "PREPARING";
   if (status === "finalizing") return "FINALIZING";
   // processing: which provider stage, and how far
@@ -268,7 +271,7 @@ export interface StageStep {
 }
 
 export function stageSteps(input: {
-  status: "preparing" | "uploading" | "queued" | "processing" | "finalizing" | "complete" | "failed" | "refunded" | "cancelled" | "deleted";
+  status: "preparing" | "uploading" | "queued" | "waiting" | "processing" | "finalizing" | "complete" | "failed" | "refunded" | "cancelled" | "deleted";
   pipeline: PipelineMeta | null;
   mode: ReplacementMode;
 }): StageStep[] {
@@ -292,6 +295,9 @@ export function stageSteps(input: {
   };
   if (input.status === "preparing" || input.status === "uploading" || input.status === "queued") {
     mark("prepare", "doing");
+  } else if (input.status === "waiting") {
+    // 0166: nothing is being done yet — every step is still to come; the headline says why.
+    /* all todo */
   } else if (input.status === "processing") {
     const current = input.pipeline?.current ?? "replace";
     const key: StageStep["key"] = current === "finalize" ? "finalize" : current;

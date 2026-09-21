@@ -6,6 +6,16 @@
 
 /** Attempts before a finalization is given up. Replicate keeps the output about an hour; three fits inside it. */
 export const FINALIZE_MAX_ATTEMPTS = 3;
+
+/**
+ * 0166: the operator's "Automatic retries" (AI → Processing) is the budget;
+ * the constant above is its default and the floor/ceiling live in the
+ * config normaliser (1–5). Pure — the caller reads the settings.
+ */
+export function finalizeMaxAttempts(config?: { processing?: { autoRetryCount?: number } } | null): number {
+  const n = config?.processing?.autoRetryCount;
+  return typeof n === "number" && Number.isFinite(n) && n >= 1 && n <= 5 ? Math.floor(n) : FINALIZE_MAX_ATTEMPTS;
+}
 /** One finalizer owns the job this long. A 60 s clip with a colour pass is minutes; a crashed worker frees it by expiry. */
 export const FINALIZE_LEASE_SECONDS = 15 * 60;
 /** Backoff before attempt 2 and 3. Short first — a storage blip clears in seconds — longer after. */

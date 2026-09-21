@@ -51,8 +51,9 @@ describe("the operator's bounds for a complimentary creation (§5, §21)", () =>
 
 describe("the server is authoritative (§3, §4, §16, §17)", () => {
   it("/start decides free vs paid itself, consumes atomically after the claim, and never reserves money for a free creation", () => {
-    const start = code("app/api/ai/character-replace/jobs/[id]/start/route.ts");
-    const elig = start.indexOf("const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request });");
+    // 0166: THE start sequence lives in lib/ai/character-replace/start-job.ts (the route and the batch route both call it)
+    const start = code("lib/ai/character-replace/start-job.ts");
+    const elig = start.indexOf("const eligibility = await getCharacterReplaceFreeEligibility({ subject, config, request, isAdmin: shared.isAdmin });");
     const fits = start.indexOf("freeRequestQualifies(config, { mode: snapshot.mode, quality: snapshot.quality, durationMs: snapshot.durationMs,");
     const claim = start.indexOf("claimJobStart({");
     const consume = start.indexOf("const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });");
@@ -67,7 +68,7 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(start).toContain('funding: complimentary ? "free" : "balance",');
     expect(start).toContain("chargedCents: complimentary ? 0 : snapshot.totalCents,");
     // a refused free use (the race) reverts the claim and answers its own code
-    expect(start).toContain('return fail("CR_FREE_UNAVAILABLE");');
+    expect(start).toContain('return refuse("CR_FREE_UNAVAILABLE");');
     // the audit records the NORMAL price beside "charged 0"
     expect(start).toContain('? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }');
     // nothing in the body decides any of it

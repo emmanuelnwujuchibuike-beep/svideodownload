@@ -183,6 +183,10 @@ interface BalanceResponse {
   maxTopupCents: number;
   checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
   ledger: CharacterReplaceTransaction[];
+  /** 0166: the member's own processing figures (display only). */
+  processing?: { queueEnabled: boolean; concurrency: number; maxVideosPerBatch: number; openJobs: number; canAdd: number } | null;
+  /** Part 11 §6: the complimentary creations. (Was answered by the route but dropped by this mapper until 2026-09-21 — the balance card never showed the line.) */
+  freeAccess?: CharacterReplaceBalance["freeAccess"];
 }
 
 /**
@@ -217,6 +221,8 @@ export async function getCharacterReplaceBalance(opts?: { ledger?: number }): Pr
     minTopupCents: res.minTopupCents,
     maxTopupCents: res.maxTopupCents,
     checkout: res.checkout ?? null,
+    processing: res.processing ?? null,
+    freeAccess: res.freeAccess ?? null,
   };
   writeCachedCharacterReplaceBalance(balance);
   return { ok: true, balance, transactions: res.ledger ?? [] };
@@ -388,4 +394,83 @@ export function takeTopupReturnReference(): string | null {
   const clean = `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`;
   window.history.replaceState(window.history.state, "", clean);
   return reference;
+}
+
+/* ─────────────────────── 0166: the multi-video session ──────────────────── */
+
+export type StartQuoteFields = Pick<
+  CharacterReplaceQuote,
+  "id" | "product" | "currency" | "pricingConfigVersion" | "durationMs" | "mode" | "quality" | "voiceMode" | "voiceSource" | "ttsCharacters" | "voiceChange" | "lipSyncMode" | "totalCents" | "expiresAt"
+>;
+export type StartVoiceFields = {
+  source: CharacterReplaceVoiceSource;
+  text?: string;
+  languageCode?: string;
+  voiceId?: string;
+  changeVoiceId?: string;
+  trimToFit?: boolean;
+  voiceConsent?: boolean;
+};
+
+export interface CharacterReplaceBatchSummary {
+  id: string;
+  size: number;
+  counts: { waiting: number; processing: number; completed: number; failed: number; cancelled: number; drafts: number };
+  active: boolean;
+}
+
+/**
+ * Open N jobs at once — one photo, N videos, the same settings — and receive
+ * each job's upload tickets. Nothing is charged. Idempotent on
+ * `batchRequestId`: a retry returns the jobs already opened, fresh tickets.
+ */
+export async function createCharacterReplaceBatch(input: {
+  batchRequestId: string;
+  mode?: ReplacementMode;
+  photo: { name: string; mimeType: string; size: number; width: number; height: number };
+  references?: { name: string; mimeType: string; size: number; width: number; height: number }[];
+  audio?: { name: string; mimeType: string; size: number; durationMs: number | null };
+  videos: { name: string; mimeType: string; size: number; durationMs: number; width: number; height: number; hasAudio: boolean }[];
+}): Promise<CharacterReplaceClientResult<{ batchId: string; size: number; jobs: { job: AiJobView; created: boolean; uploads: CharacterReplaceUploadTickets }[] }>> {
+  return request("/api/ai/character-replace/batches", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+}
+
+/**
+ * "Process N videos": every job's signed quote and preflight pass, the
+ * shared voice choice. The server runs THE start per video, in order — the
+ * first take the member's free slots, the rest wait in line, paid for.
+ * A replay reserves nothing twice.
+ */
+export async function startCharacterReplaceBatch(
+  batchId: string,
+  input: { jobs: { jobId: string; quote: StartQuoteFields; preflightToken?: string; voice?: StartVoiceFields }[]; consent: true },
+): Promise<
+  CharacterReplaceClientResult<{
+    batch: CharacterReplaceBatchSummary;
+    jobs: AiJobView[];
+    results: { jobId: string; ok: boolean; started: boolean; waiting: boolean; billing: "free" | "paid" | null; code: AiErrorCode | null; error: string | null; job: AiJobView | null }[];
+    balanceCents: number | null;
+  }>
+> {
+  return request(`/api/ai/character-replace/batches/${encodeURIComponent(batchId)}/start`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
+}
+
+/** One poll for every video in the session — the board draws itself from this and nothing else. */
+export async function getCharacterReplaceBatch(batchId: string, signal?: AbortSignal): Promise<CharacterReplaceClientResult<{ batch: CharacterReplaceBatchSummary; jobs: AiJobView[] }>> {
+  return request(`/api/ai/character-replace/batches/${encodeURIComponent(batchId)}`, { signal });
+}
+
+/** The member's most recent session with a video still in flight — so a return to the page finds it. */
+export async function getActiveCharacterReplaceBatch(): Promise<CharacterReplaceClientResult<{ batch: { id: string; size: number } | null; jobs?: AiJobView[] }>> {
+  return request("/api/ai/character-replace/batches?active=1");
+}
+
+/**
+ * A new attempt of a failed video with its files copied server-side — no
+ * re-upload. The new job is a draft: preflight it, then start it (with a
+ * fresh quote) through the batch start route. `filesGone` in the refusal
+ * means retention already removed the inputs: choose the video again.
+ */
+export async function retryCharacterReplaceJob(jobId: string): Promise<CharacterReplaceClientResult<{ job: AiJobView; created: boolean; filesGone?: boolean }>> {
+  return request(`/api/ai/character-replace/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" });
 }

@@ -9,7 +9,7 @@ import { VideoGenerationCostPreview } from "@/features/ai/character-replace/vide
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import { REPLACEMENT_MODE_COPY } from "@/lib/ai/character-replace/modes";
 import { affordability } from "@/lib/ai/character-replace/pricing";
-import type { CharacterReplaceBalance, CharacterReplaceProject, PricingState } from "@/lib/ai/character-replace/types";
+import type { CharacterReplaceBalance, CharacterReplaceProject, PricingSnapshot, PricingState } from "@/lib/ai/character-replace/types";
 import { formatSeconds, selectedDurationSeconds } from "@/lib/ai/character-replace/workspace";
 import { formatCents } from "@/lib/ai/economy";
 import { formatResolution } from "@/lib/ai/media";
@@ -53,6 +53,7 @@ export function CharacterReplaceReviewStep({
   returnTo,
   onConsent,
   rechargeAsk = 0,
+  batchPricing = null,
 }: {
   project: CharacterReplaceProject;
   config: CharacterReplacePublicConfig;
@@ -66,6 +67,8 @@ export function CharacterReplaceReviewStep({
   onConsent: (value: boolean) => void;
   /** Part 9 §13: bumped by the footer's "Recharge to continue" — each bump opens the recharge sheet. */
   rechargeAsk?: number;
+  /** 0166: with several videos, each one's own quote (null while pending) and the session's total. */
+  batchPricing?: { complete: boolean; failed: boolean; totalCents: number; count: number; complimentaryCount: number; quotes: (PricingSnapshot | null)[] } | null;
 }) {
   const consentId = useId();
   const character = project.character;
@@ -131,6 +134,35 @@ export function CharacterReplaceReviewStep({
       <div className="space-y-4 lg:sticky lg:top-24">
       {/* ── the price, live (Part 6 §12): every line, from the server ──── */}
       <VideoGenerationCostPreview project={project} config={config} pricing={pricing} symbol={symbol} onRetry={onRetryQuote} balanceCents={balance?.balanceCents ?? null} />
+
+      {/* 0166: the session — every video with its own price, and the total that "Process N videos" will charge over time */}
+      {batchPricing && project.extraVideos.length > 0 ? (
+        <div className="rounded-[1.35rem] border border-border/70 bg-card">
+          <div className="flex items-baseline justify-between px-4 pt-3.5">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{batchPricing.count} videos in this session</p>
+            <p className="text-[15px] font-bold tabular-nums">{batchPricing.complete ? formatCents(batchPricing.totalCents, symbol) : "…"}</p>
+          </div>
+          <ul className="mt-2 divide-y divide-border/60">
+            {[project.video, ...project.extraVideos].filter((v): v is NonNullable<typeof v> => !!v).map((v, i) => {
+              const q = batchPricing.quotes[i] ?? null;
+              const secs = v.metadata.durationMs === null ? null : v.metadata.durationMs / 1000;
+              return (
+                <li key={`${v.name}|${v.size}`} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-secondary px-1.5 text-[11px] font-bold tabular-nums text-muted-foreground">{i + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-semibold" title={v.name}>{v.name}</span>
+                    <span className="block text-[11.5px] text-muted-foreground">{secs !== null ? formatSeconds(secs) : "—"}{q?.billing?.complimentary ? " · complimentary" : ""}</span>
+                  </span>
+                  <span className="text-[13px] font-semibold tabular-nums">{q ? (q.billing?.complimentary ? formatCents(0, symbol) : formatCents(q.totalCents, symbol)) : batchPricing.failed ? "—" : "…"}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="px-4 pb-3.5 pt-2 text-[11.5px] leading-relaxed text-muted-foreground">
+            Same photo and settings for every video, each at full length. Your plan runs {balance?.processing?.concurrency ?? 1} at a time; the rest wait in your own line and start by themselves — you can close the app.
+          </p>
+        </div>
+      ) : null}
 
       <CharacterReplaceBalanceCard
         balance={balance}

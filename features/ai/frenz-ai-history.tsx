@@ -92,6 +92,7 @@ export function FrenzAIHistory({
   showHeading = true,
   groupByDay = false,
   resultHref = (id) => `/studio/ai/character-replace/result/${encodeURIComponent(id)}`,
+  batchHref = (id) => `/studio/ai/character-replace/create?batch=${encodeURIComponent(id)}`,
 }: {
   className?: string;
   /**
@@ -102,6 +103,8 @@ export function FrenzAIHistory({
    * the player.
    */
   resultHref?: (jobId: string) => string;
+  /** 0166: where a tile of a multi-video session still in flight goes — the session's board, every video at once. */
+  batchHref?: (batchId: string) => string;
   /**
    * Break the list into Today / Yesterday / This week / Last week / Earlier.
    *
@@ -210,7 +213,8 @@ export function FrenzAIHistory({
   const open = (job: AiJobView) => {
     haptic("selection");
     if (job.feature === "ai_character_replace") {
-      router.push(resultHref(job.id));
+      // 0166: a video of a session still running opens the whole session; a finished one opens its own result.
+      router.push(job.batch && isActiveStatus(job.status) ? batchHref(job.batch.id) : resultHref(job.id));
       return;
     }
     setOpenJob(job);
@@ -617,6 +621,13 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
         that are NOT ready, which is the same judgement the download tile makes
         when it badges only failed and cancelled records.
       */}
+      {/* 0166: the video's place in its multi-video session */}
+      {job.batch ? (
+        <span aria-hidden className="pointer-events-none absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
+          {job.batch.index}
+          {job.batch.size ? `/${job.batch.size}` : ""}
+        </span>
+      ) : null}
       {chip.tone !== "good" ? (
         <span
           className={cn(

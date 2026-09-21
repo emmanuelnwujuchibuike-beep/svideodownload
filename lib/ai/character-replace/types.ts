@@ -221,6 +221,13 @@ export interface CharacterReplaceProject {
   /** Extra identity photos for Skin + Face (up to the mode's maximum minus one). Always empty for the other modes. */
   references: readonly CharacterAsset[];
   video: SourceVideo | null;
+  /**
+   * 0166 (multi-video): the 2nd … Nth video of the session. The first stays
+   * `video` so every step, rule and price built for one video keeps working;
+   * these ride beside it with the same photo and settings. Each runs at full
+   * length — the trim belongs to a single video.
+   */
+  extraVideos: readonly SourceVideo[];
   settings: VideoSettings;
   voice: VoiceSettings;
   lipSync: LipSyncSettings;
@@ -345,6 +352,8 @@ export interface CharacterReplaceBalance {
   checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
   /** Part 11 §6: the complimentary creations, as the server answered them. Display only — /start decides. */
   freeAccess?: CharacterReplaceFreeAccess | null;
+  /** 0166: the member's own processing figures — how many videos run at once for them, how many may be open, how many are. Display only. */
+  processing?: { queueEnabled: boolean; concurrency: number; maxVideosPerBatch: number; openJobs: number; canAdd: number } | null;
 }
 
 /** The member's complimentary creations (Part 11). `remaining` null = unlimited (an administrator). */
@@ -422,6 +431,8 @@ export type ProcessingStatus =
   | "preparing"
   | "uploading"
   | "queued"
+  /** 0166: paid for, in the member's own line for a processing slot. */
+  | "waiting"
   | "processing"
   | "finalizing"
   | "complete"
@@ -435,6 +446,7 @@ export const PROCESSING_STATUSES: readonly ProcessingStatus[] = [
   "preparing",
   "uploading",
   "queued",
+  "waiting",
   "processing",
   "finalizing",
   "complete",
@@ -483,6 +495,8 @@ export function processingStatusFor(status: AiJobStatus): ProcessingStatus {
     case "queued":
     case "acquiring":
       return "queued";
+    case "waiting":
+      return "waiting";
     case "processing":
       return "processing";
     case "finalizing":

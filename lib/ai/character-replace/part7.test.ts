@@ -124,7 +124,9 @@ describe("the result route and the deep link (§19, §23–§24)", () => {
   });
   it("history opens Character Replace rows through the result route, every status", () => {
     const history = src("features/ai/frenz-ai-history.tsx");
-    expect(history).toContain('if (job.feature === "ai_character_replace") {\n      router.push(resultHref(job.id));');
+    // 0166: a video of a session still in flight opens the whole session's board; a finished one opens its own result
+    expect(history).toContain('if (job.feature === "ai_character_replace") {');
+    expect(history).toContain("router.push(job.batch && isActiveStatus(job.status) ? batchHref(job.batch.id) : resultHref(job.id));");
     expect(history).toContain('const opens = playable || job.feature === "ai_character_replace";');
     expect(history).toContain('cr?.refunded ? " · Refunded ✓"');
   });
@@ -158,7 +160,7 @@ describe("the view (§6, §12) and the save (§9)", () => {
     expect(c.retention).toEqual({ resultHours: 720, savedResultDays: 1 });
     const pub = publicCharacterReplaceConfig(CHARACTER_REPLACE_DEFAULTS, { code: "NGN", symbol: "₦" }, true);
     expect(pub.retention).toEqual({ resultHours: 72, savedResultDays: 30 });
-    expect(src("app/api/ai/character-replace/jobs/route.ts")).toContain("config.retention.resultHours * 3_600_000");
+    expect(src("lib/ai/character-replace/open-job.ts")).toContain("config.retention.resultHours * 3_600_000");
   });
 });
 

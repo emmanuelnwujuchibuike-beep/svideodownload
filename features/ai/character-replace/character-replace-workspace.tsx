@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { CharacterReplaceBatchBoard } from "@/features/ai/character-replace/batch-board";
+import { CharacterReplaceBatchLaunchPanel } from "@/features/ai/character-replace/batch-launch-panel";
 import { CharacterReplacePreflightPanel } from "@/features/ai/character-replace/preflight-panel";
 import { CharacterReplaceProcessing } from "@/features/ai/character-replace/processing";
 import { CharacterReplaceResultScreen } from "@/features/ai/character-replace/result";
@@ -14,11 +16,13 @@ import { CharacterReplaceSettingsStep } from "@/features/ai/character-replace/st
 import { CharacterReplaceVideoStep } from "@/features/ai/character-replace/step-video";
 import { CharacterReplaceVoiceStep } from "@/features/ai/character-replace/step-voice";
 import { CharacterReplaceStepper } from "@/features/ai/character-replace/stepper";
+import { useCharacterReplaceBatch } from "@/features/ai/character-replace/use-character-replace-batch";
 import { useCharacterReplaceWorkspace } from "@/features/ai/character-replace/use-character-replace-workspace";
 import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
+import { getActiveCharacterReplaceBatch } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceResult, ProcessingJob } from "@/lib/ai/character-replace/types";
 import { inputReadiness } from "@/lib/ai/character-replace/validate";
 import {
@@ -74,6 +78,7 @@ export function CharacterReplaceWorkspace({
   aiHref = "/ai",
   historyHref = "/ai/history",
   initialJobId = null,
+  initialBatchId = null,
   initialMode = null,
   modeHref,
 }: {
@@ -83,6 +88,8 @@ export function CharacterReplaceWorkspace({
   historyHref?: string;
   /** Part 7: the job this page was opened FOR (the result route). Ownership was checked server-side before render. */
   initialJobId?: string | null;
+  /** 0166: the multi-video session this page was opened for (`?batch=`); the board reads it as the member, so a stranger's id is "not found". */
+  initialBatchId?: string | null;
   /** 2026-09-20: the scope chosen on its own page (`?mode=` on the create route). The workspace opens on the photo step with it. */
   initialMode?: ReplacementMode | null;
   /** The scope page — where "Change", "Replace" and stepper step 1 go. */
@@ -92,6 +99,25 @@ export function CharacterReplaceWorkspace({
   const ws = useCharacterReplaceWorkspace({ initialMode });
   const { state, loads, send } = ws;
   const { project, step } = state;
+  // 0166: the multi-video session — several videos beside the first, their quotes, the batch launch.
+  const batch = useCharacterReplaceBatch(ws);
+  const [watchedBatchId, setWatchedBatchId] = useState<string | null>(initialBatchId);
+  /*
+    Brief §14: a member who comes back finds their videos where they left
+    them. Asked once on open when no job or batch was named — the server
+    answers with the most recent session still in flight, or nothing.
+  */
+  const [activeBatch, setActiveBatch] = useState<{ id: string; size: number } | null>(null);
+  useEffect(() => {
+    if (initialJobId || initialBatchId) return;
+    let cancelled = false;
+    void getActiveCharacterReplaceBatch().then((res) => {
+      if (!cancelled && res.ok && res.batch) setActiveBatch(res.batch);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialBatchId, initialJobId]);
 
   /*
     `?job=` is the push notification's own link. Read once from `location`
@@ -105,13 +131,16 @@ export function CharacterReplaceWorkspace({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("job");
+    const batchParam = params.get("batch");
     const wanted = params.get("preview");
     if (id) setWatchedJobId(id);
+    if (batchParam && /^[0-9a-fA-F-]{36}$/.test(batchParam)) setWatchedBatchId(batchParam);
     // 🔴 Development only. Compiled out of a production bundle: Next inlines
     // NODE_ENV, so this branch is dead code there and the param is ignored.
     if (process.env.NODE_ENV !== "production" && wanted) setPreview(wanted);
-    if (id || wanted) {
+    if (id || wanted || batchParam) {
       params.delete("job");
+      params.delete("batch");
       params.delete("preview");
       const rest = params.toString();
       window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
@@ -157,8 +186,17 @@ export function CharacterReplaceWorkspace({
     balanceCents: loads.balance?.balanceCents ?? null,
   });
   const processingAvailable = loads.processingAvailable === true;
-  const launching = ws.launch.phase !== "idle" && ws.launch.phase !== "error";
-  const startAllowed = readyToStart && processingAvailable && !launching;
+  const batchLaunching = batch.launch.phase !== "idle" && batch.launch.phase !== "error";
+  const launching = (ws.launch.phase !== "idle" && ws.launch.phase !== "error") || batchLaunching;
+  /*
+    0166: with several videos the gate is the same one N times — every video
+    quoted, and the balance covering the paid ones (the complimentary ones
+    cost nothing; the server decides each again at start).
+  */
+  const batchReady =
+    !batch.isBatch ||
+    (!!batch.pricing?.complete && (loads.balance?.balanceCents ?? 0) >= batch.pricing.quotes.reduce((sum, q) => sum + (q && !q.billing?.complimentary ? q.totalCents : 0), 0));
+  const startAllowed = readyToStart && processingAvailable && !launching && batchReady;
   /*
     Part 9 §13: the button names the action and the price — "Create Video ·
     ₦450.00" — never a bare "Start". Short of balance it becomes "Recharge to
@@ -168,15 +206,43 @@ export function CharacterReplaceWorkspace({
   */
   const quotedTotal = state.pricing.status === "quoted" || state.pricing.status === "stale" ? state.pricing.snapshot : null;
   const balanceKnown = loads.balance?.balanceCents ?? null;
-  const shortOfBalance = !!quotedTotal && !quotedTotal.billing?.complimentary && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;
+  const batchPaidCents = batch.isBatch && batch.pricing ? batch.pricing.quotes.reduce((sum, q) => sum + (q && !q.billing?.complimentary ? q.totalCents : 0), 0) : null;
+  const shortOfBalance = batch.isBatch
+    ? batchPaidCents !== null && balanceKnown !== null && balanceKnown < batchPaidCents
+    : !!quotedTotal && !quotedTotal.billing?.complimentary && balanceKnown !== null && balanceKnown < quotedTotal.totalCents;
   const [rechargeAsk, setRechargeAsk] = useState(0);
 
   const onStart = useCallback(async () => {
     haptic("medium");
+    // 0166: more than one video → the batch launch (create N → upload → check each); one video → exactly the Part 4 path.
+    if (batch.isBatch) {
+      await batch.startBatch();
+      return;
+    }
     // create → upload → "Checking your media…"; the reservation waits for the member's confirm below
     const id = await ws.start();
     if (id) setWatchedJobId(id);
-  }, [ws]);
+  }, [batch, ws]);
+  const onConfirmBatch = useCallback(async () => {
+    const started = await batch.confirmBatch();
+    if (started) {
+      // The session is the server's now; the draft keeps the photo for the next one (Part 7 §16).
+      send({ type: "reset/keep-photo" });
+      setWatchedBatchId(started.batchId);
+    }
+  }, [batch, send]);
+  const onDropFailedAndConfirm = useCallback(async () => {
+    const started = await batch.dropFailedAndConfirm();
+    if (started) {
+      send({ type: "reset/keep-photo" });
+      setWatchedBatchId(started.batchId);
+    }
+  }, [batch, send]);
+  const leaveBatch = useCallback(() => {
+    setWatchedBatchId(null);
+    setActiveBatch(null);
+    if (initialBatchId) window.history.replaceState(window.history.state, "", basePath);
+  }, [basePath, initialBatchId]);
   const onConfirm = useCallback(async () => {
     const id = await ws.confirm();
     if (id) setWatchedJobId(id);
@@ -270,7 +336,45 @@ export function CharacterReplaceWorkspace({
       <div className="px-1 pb-2">
         <FrenzAICrumb tool="Character Replace" />
 
-        {terminalNotice ? (
+        {watchedBatchId ? (
+          /* 0166: the multi-video board — every video of the session, from the server */
+          <>
+            <Headline title="Your" highlight="videos." subtitle={null} />
+            <CharacterReplaceBatchBoard
+              batchId={watchedBatchId}
+              symbol={loads.balance?.symbol ?? config?.symbol ?? "₦"}
+              historyHref={historyHref}
+              resultHrefFor={(id) => `${basePath.replace(/\/create$/, "")}/result/${encodeURIComponent(id)}`}
+              onLeave={leaveBatch}
+              onRetryInEditor={(id) => {
+                leaveBatch();
+                ws.retryFrom(id);
+              }}
+              className="mt-5"
+            />
+          </>
+        ) : batch.launch.phase !== "idle" ? (
+          <>
+            <Headline title={batch.launch.phase === "ready" ? "Ready to" : batch.launch.phase === "attention" ? "Almost" : "Preparing your"} highlight={batch.launch.phase === "ready" ? "process." : batch.launch.phase === "attention" ? "there." : "videos."} subtitle={null} />
+            <CharacterReplaceBatchLaunchPanel
+              launch={batch.launch}
+              totalCents={batch.pricing?.complete ? batch.pricing.totalCents : null}
+              complimentaryCount={batch.pricing?.complimentaryCount ?? 0}
+              symbol={loads.balance?.symbol ?? config?.symbol ?? "₦"}
+              balanceCents={loads.balance?.balanceCents ?? null}
+              onConfirm={() => void onConfirmBatch()}
+              onDropFailedAndConfirm={() => void onDropFailedAndConfirm()}
+              onBack={() => {
+                haptic("selection");
+                batch.cancelLaunch();
+              }}
+              onRetry={() => {
+                batch.clearLaunchError();
+                void batch.startBatch();
+              }}
+            />
+          </>
+        ) : terminalNotice ? (
           <>
             <Headline title={terminalNotice.title.split(" ").slice(0, -1).join(" ")} highlight={terminalNotice.title.split(" ").slice(-1)[0] + "."} subtitle={null} />
             <TerminalNotice body={terminalNotice.body} historyHref={historyHref} onNew={() => leaveJob()} />
@@ -338,6 +442,26 @@ export function CharacterReplaceWorkspace({
             <StepHeader title={WORKSPACE_STEPS[index]?.title ?? ""} mode={project.mode} modeHref={modeHref} />
 
             <CharacterReplaceStepper current={step} furthest={furthestStep(project)} onGo={goTo} className="mt-5" />
+            {activeBatch ? (
+              /* 0166 §14: the session still in flight, found on return — one tap back to its board */
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("selection");
+                  setWatchedBatchId(activeBatch.id);
+                }}
+                className="mt-4 flex w-full items-center gap-3 rounded-2xl border border-primary/25 bg-primary/[0.06] px-4 py-3 text-left transition hover:border-primary/40 active:scale-[0.995]"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13.5px] font-bold">You have {activeBatch.size} video{activeBatch.size === 1 ? "" : "s"} in progress</span>
+                  <span className="block text-[12px] text-muted-foreground">See where each one is, download the finished ones.</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              </button>
+            ) : null}
             {loads.processingNotice ? (
               /* Part 8 §2, §30: the operator's notice, shown before a single file is chosen — not only at Start. */
               <div role="status" className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px] font-medium leading-relaxed text-foreground">
@@ -370,6 +494,17 @@ export function CharacterReplaceWorkspace({
                     config={config}
                     onPick={(f) => void ws.pickVideo(f)}
                     onClear={ws.clearVideo}
+                    batch={{
+                      multiAllowed: batch.multiAllowed,
+                      maxVideos: batch.maxVideos,
+                      canAdd: batch.canAdd,
+                      extras: project.extraVideos,
+                      pickErrors: batch.pickErrors,
+                      onPickMany: (files) => void batch.pickVideos(files),
+                      onRemoveExtra: batch.removeExtra,
+                      onClearAll: batch.clearAll,
+                      onDismissErrors: batch.clearPickErrors,
+                    }}
                   />
                 ) : !config ? (
                   <ConfigWait error={loads.configError} />
@@ -445,6 +580,7 @@ export function CharacterReplaceWorkspace({
                       send({ type: "consent", value });
                     }}
                     rechargeAsk={rechargeAsk}
+                    batchPricing={batch.isBatch ? batch.pricing : null}
                   />
                 )}
               </div>
@@ -510,7 +646,17 @@ export function CharacterReplaceWorkspace({
                   )}
                 >
                   <Sparkles className="h-4 w-4" aria-hidden />
-                  {launching ? "Starting…" : quotedTotal?.billing?.complimentary ? "Create Video · Complimentary" : quotedTotal ? `Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}` : "Create Video"}
+                  {launching
+                    ? "Starting…"
+                    : batch.isBatch
+                      ? batch.pricing?.complete
+                        ? `Process ${batch.count} Videos · ${formatCents(batch.pricing.totalCents, quotedTotal?.symbol ?? loads.balance?.symbol ?? "₦")}`
+                        : `Process ${batch.count} Videos`
+                      : quotedTotal?.billing?.complimentary
+                        ? "Create Video · Complimentary"
+                        : quotedTotal
+                          ? `Create Video · ${formatCents(quotedTotal.totalCents, quotedTotal.symbol)}`
+                          : "Create Video"}
                 </button>
               ) : (
                 <button
@@ -543,6 +689,12 @@ export function CharacterReplaceWorkspace({
                       ? "We couldn't price this video yet."
                       : state.pricing.status !== "quoted"
                         ? "Getting the exact price…"
+                        : batch.isBatch && batch.pricing && !batch.pricing.complete
+                          ? batch.pricing.failed
+                            ? "We couldn't price one of the videos yet."
+                            : "Pricing each video…"
+                          : batch.isBatch && batch.pricing
+                            ? `${batch.count} videos, same photo and settings, each at full length.${batch.pricing.complimentaryCount ? ` ${batch.pricing.complimentaryCount} complimentary.` : ""} Charged per video as each one starts; the rest wait in your own line.`
                         : state.pricing.snapshot.billing?.complimentary
                           ? "Your complimentary creation will be used for this video. Nothing is charged."
                           : loads.balance && loads.balance.balanceCents < state.pricing.snapshot.totalCents

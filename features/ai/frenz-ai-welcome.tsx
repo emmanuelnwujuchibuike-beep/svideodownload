@@ -137,6 +137,7 @@ export function FrenzAIWelcome({
   const available = entitlement ? entitlement.offered : true;
 
   return (
+    <>
     <FrenzAIEnvironment
       stage="idle"
       className="relative overflow-hidden rounded-[1.75rem]"
@@ -250,36 +251,63 @@ export function FrenzAIWelcome({
             ))}
           </ul>
 
-          {/* ── EXPLORE AI STUDIO — the one primary action on the page ────── */}
-          {available ? (
-            <Link
-              href={characterReplaceHref}
-              className={cn(
-                "ai-cta group mt-5 flex min-h-[56px] w-full items-center justify-center gap-2.5 px-7",
-                "text-[16.5px] font-semibold tracking-[-0.01em]",
-                "transition-transform duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.985]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-              )}
-            >
-              <Sparkles className="h-[18px] w-[18px] opacity-80" aria-hidden />
-              Explore AI Studio
-              <ArrowRight
-                className="h-[18px] w-[18px] transition-transform motion-safe:group-hover:translate-x-0.5"
-                aria-hidden
-              />
-              <LinkPendingStripe />
-            </Link>
-          ) : (
+          {!available ? (
             <p className="mt-5 rounded-full bg-secondary px-5 py-3.5 text-center text-[13.5px] font-semibold text-muted-foreground">
               Not available right now. Check back soon.
             </p>
-          )}
-          <p className="mt-3 text-center text-[12px] leading-snug text-muted-foreground">
+          ) : null}
+          <p className="mt-4 text-center text-[12px] leading-snug text-muted-foreground">
             Upload media or enter text and the tool creates a new result with
             AI. Processing time and credits vary by tool.
           </p>
         </section>
       </div>
     </FrenzAIEnvironment>
+
+    {/*
+      ── EXPLORE AI STUDIO — the one primary action, always in reach ──────────
+      Owner, 2026-09-21: "make the Explore AI Studio button stick on top of the
+      bottom nav in the AI welcome page even when the user scrolls down or up,
+      and it shouldn't obstruct the write-up much."
+
+      `sticky` against the page, docked at `--frenz-bottomnav-h` (the nav's
+      measured height, 0 where none is mounted) — the same dock the workspace
+      action bar uses. It rides above the text while the page scrolls and
+      settles into its own place at the end, so nothing is ever covered for
+      good. OUTSIDE the environment on purpose: that wrapper is
+      `overflow-hidden`, and a sticky element inside an overflow-hidden
+      ancestor sticks to that box instead of the viewport.
+
+      The backdrop is a short gradient into the page background rather than a
+      solid bar — the text beneath fades under it instead of being cut off.
+    */}
+    {available ? (
+      <div
+        className="pointer-events-none sticky z-20 -mx-1 -mb-3 px-1 pb-3 pt-7"
+        style={{
+          bottom: "var(--frenz-bottomnav-h, 0px)",
+          background: "linear-gradient(to top, hsl(var(--background)) 0%, hsl(var(--background) / 0.92) 55%, transparent 100%)",
+        }}
+      >
+        <Link
+          href={characterReplaceHref}
+          className={cn(
+            "ai-cta group pointer-events-auto flex min-h-[56px] w-full items-center justify-center gap-2.5 px-7",
+            "text-[16.5px] font-semibold tracking-[-0.01em] shadow-[0_18px_40px_-20px_rgba(79,70,229,0.55)]",
+            "transition-transform duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.985]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          )}
+        >
+          <Sparkles className="h-[18px] w-[18px] opacity-80" aria-hidden />
+          Explore AI Studio
+          <ArrowRight
+            className="h-[18px] w-[18px] transition-transform motion-safe:group-hover:translate-x-0.5"
+            aria-hidden
+          />
+          <LinkPendingStripe />
+        </Link>
+      </div>
+    ) : null}
+    </>
   );
 }

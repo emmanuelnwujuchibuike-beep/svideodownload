@@ -160,6 +160,12 @@ export type AnalyticsEventType =
   /** The replacement-scope brief §20 (2026-09-20): which scope was chosen; a price the balance did not cover (bucketed shortfall). Ids and buckets only. */
   | "character_replace_mode_selected"
   | "character_replace_balance_short"
+  /** 0166 (multi-video): how many videos were added, submitted, confirmed; a cancel or retry from the board. Counts only. */
+  | "character_replace_videos_added"
+  | "character_replace_batch_started"
+  | "character_replace_batch_confirmed"
+  | "character_replace_batch_cancel"
+  | "character_replace_batch_retry"
   | "custom";
 
 /** A download's lifecycle status, mirrored into `analytics_downloads.status`. */

@@ -63,7 +63,7 @@ export const en = {
     decision, and doing both in one pass is how copy changes ship unreviewed.
   */
   "footer.copyright":
-    "© {year} Frenz. Please respect platform terms and copyright. Download only content you have the right to save.",
+    "© {year} Frenz. Please respect platform terms and copyright. Save or edit only content you have the right to save or edit.",
   "footer.builtWith": "Built with precision & care.",
 
 } as const;

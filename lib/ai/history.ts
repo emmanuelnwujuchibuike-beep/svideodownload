@@ -146,6 +146,8 @@ export type AiHistoryTone = "active" | "good" | "muted" | "warn";
 
 const TONES: Record<AiJobStatus, { label: string; tone: AiHistoryTone }> = {
   queued: { label: "Queued", tone: "active" },
+  // 0166: paid for, in the member's own line — its turn comes by itself.
+  waiting: { label: "Waiting", tone: "active" },
   // Part 6: our worker is fetching a pasted link. Said as what it is, because a
   // row that said "Working" would claim the AI had started when it has not.
   acquiring: { label: "Fetching", tone: "active" },

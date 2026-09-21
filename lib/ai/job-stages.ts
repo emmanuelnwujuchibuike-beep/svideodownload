@@ -42,6 +42,8 @@ export type AiJobStage =
   /** Our worker is fetching a pasted link (Part 6). Not the same as uploading. */
   | "acquiring"
   | "queued"
+  /** 0166: paid for and in line for one of the member's processing slots. Nothing is running for it yet. */
+  | "waiting"
   | "processing"
   | "finalizing"
   | "completed"
@@ -117,7 +119,9 @@ export function pathState(stage: AiJobStage): Record<string, "done" | "doing" | 
     // The same slot: "your video is arriving". Which of the two words the
     // tracker prints is `aiCleanPath`'s job, not this one's.
     mark(["uploading"], "doing");
-  } else if (stage === "queued") {
+  } else if (stage === "queued" || stage === "waiting") {
+    // A waiting job (0166) is in the same place on the path — the upload is
+    // done and the line is what it is in — for longer, and honestly so.
     mark(["uploading"], "done");
     mark(["queued"], "doing");
   } else if (stage === "processing") {
@@ -208,6 +212,11 @@ function progressFor(
       // Toward `processing`'s floor. Queue time at the provider was measured at
       // ~19s, so this reaches most of the way there in about half a minute.
       return creepToward(0.35, 0.58, elapsedMs ?? 0, 25_000);
+    case "waiting":
+      // 0166: NOTHING is running for a waiting job and nothing about it moves
+      // on its own until a slot frees, so there is no figure to give. Null
+      // draws the indeterminate stripe — the honest picture (brief §9).
+      return null;
     case "processing":
       /*
         The long one, and the one the owner watched sit still. A whole job was
@@ -260,6 +269,15 @@ const LABELS: Record<AiJobStatus, { label: string; detail: string | null }> = {
   queued: {
     label: "Queued",
     detail: "Your video is in line. This usually starts within a few seconds.",
+  },
+  /*
+    0166: the member's own line. Their other videos are using the slots their
+    plan allows; this one is paid for and starts by itself when one frees.
+    Said plainly — no percentage, no estimate we cannot measure.
+  */
+  waiting: {
+    label: "Waiting in queue",
+    detail: "Your other videos are processing. This one starts automatically when a slot frees up — you can close the app.",
   },
   /*
     🔴 SAID IN THE MEMBER'S TERMS, AND HONESTLY.
@@ -320,7 +338,7 @@ export function stageFor(input: StageInput): StageView {
     the whole thing stays a pure function and can be tested without a clock.
   */
   const since = Date.parse(
-    (stage === "queued" ? job.createdAt : (job.startedAt ?? job.createdAt)) ?? "",
+    (stage === "queued" || stage === "waiting" ? job.createdAt : (job.startedAt ?? job.createdAt)) ?? "",
   );
   const elapsedMs = Number.isFinite(since) ? (input.now ?? Date.now()) - since : null;
 

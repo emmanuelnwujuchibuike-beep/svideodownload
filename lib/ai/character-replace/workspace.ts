@@ -103,6 +103,7 @@ export const EMPTY_PROJECT: CharacterReplaceProject = {
   character: null,
   references: [],
   video: null,
+  extraVideos: [],
   settings: { quality: "720p", trim: null },
   voice: EMPTY_VOICE,
   lipSync: { tier: null },
@@ -135,6 +136,10 @@ export type WorkspaceAction =
   | { type: "video/invalid"; code: string }
   | { type: "video/error"; code: string }
   | { type: "video/clear" }
+  /* 0166 (multi-video): more videos beside the first, each at full length */
+  | { type: "videos/add"; videos: SourceVideo[] }
+  | { type: "videos/remove"; index: number }
+  | { type: "videos/clear" }
   | { type: "quality"; quality: CharacterReplaceAnyQuality }
   | { type: "trim"; start: number; end: number }
   | { type: "trim/clear" }
@@ -261,18 +266,62 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
         pricing: { status: "idle" },
         project: { ...state.project, video: null, settings: { ...state.project.settings, trim: null } },
       };
-    case "video/clear":
+    case "video/clear": {
+      // 0166: with more videos picked, removing the first promotes the next one — the session is not lost.
+      const [next, ...rest] = state.project.extraVideos;
+      if (next) {
+        return {
+          ...state,
+          video: { status: "ready" },
+          pricing: markStale(state.pricing),
+          project: { ...state.project, video: next, extraVideos: rest, settings: { ...state.project.settings, trim: null } },
+        };
+      }
       return {
         ...state,
         video: { status: "empty" },
         pricing: { status: "idle" },
         project: { ...state.project, video: null, settings: { ...state.project.settings, trim: null } },
       };
+    }
+    /* ── 0166: the multi-video session ──────────────────────────────────── */
+    case "videos/add": {
+      // No duplicates by name + size; the trim goes — in a batch every video runs at full length.
+      const seen = new Set([state.project.video, ...state.project.extraVideos].filter(Boolean).map((v) => `${v!.name}|${v!.size}`));
+      // …and no duplicates within the pick itself (a folder chosen twice)
+      const fresh = action.videos.filter((v) => {
+        const key = `${v.name}|${v.size}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (!fresh.length) return state;
+      const [first, ...others] = fresh;
+      const primary = state.project.video ?? first!;
+      const extras = state.project.video ? [...state.project.extraVideos, ...fresh] : [...state.project.extraVideos, ...others];
+      return {
+        ...state,
+        video: { status: "ready" },
+        pricing: markStale(state.pricing),
+        project: { ...state.project, video: primary, extraVideos: extras, settings: { ...state.project.settings, trim: extras.length ? null : state.project.settings.trim } },
+      };
+    }
+    case "videos/remove":
+      return { ...state, project: { ...state.project, extraVideos: state.project.extraVideos.filter((_, i) => i !== action.index) } };
+    case "videos/clear":
+      return {
+        ...state,
+        video: { status: "empty" },
+        pricing: { status: "idle" },
+        project: { ...state.project, video: null, extraVideos: [], settings: { ...state.project.settings, trim: null } },
+      };
 
     /* ── settings ───────────────────────────────────────────────────────── */
     case "quality":
       return { ...state, pricing: markStale(state.pricing), project: { ...state.project, settings: { ...state.project.settings, quality: action.quality } } };
     case "trim": {
+      // 0166: no trim in a multi-video session — the handles are per video and there is more than one.
+      if (state.project.extraVideos.length > 0) return state;
       const durationMs = state.project.video?.metadata.durationMs ?? null;
       const duration = durationMs === null ? null : durationMs / 1000;
       const start = Math.max(0, Math.min(action.start, action.end));

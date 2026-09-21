@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-stats";
+import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
+import { isActiveStatus } from "@/lib/ai/jobs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,7 +27,8 @@ const LABEL: Record<Action, string> = {
 };
 
 function available(job: CharacterReplaceAdminJob): Action[] {
-  const active = job.status === "queued" || job.status === "acquiring" || job.status === "processing" || job.status === "finalizing";
+  // The registry's answer, never a hand-written list (0166 added `waiting`).
+  const active = isActiveStatus(job.status);
   const out: Action[] = [];
   if ((job.status === "processing" || job.status === "finalizing") && (job.finalizeAttempts > 0 || job.stuck || job.status === "finalizing")) out.push("retry_finalization");
   if ((job.status === "queued" || job.status === "processing") && job.predictionId) out.push("reconcile");

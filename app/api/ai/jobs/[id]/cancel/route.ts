@@ -130,7 +130,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const entitlement = await getAiEntitlement(subject, feature);
       // Character Replace: the reserved charge goes back to the product wallet, once (lib/ai/funding.ts).
       if (feature.id === "ai_character_replace") {
-        await releaseJobFunding({ job: updated, subject, feature: feature.id, dailyLimit: entitlement.dailyLimit });
+        await releaseJobFunding({ job: updated, subject, feature: feature.id, dailyLimit: entitlement.dailyLimit, cause: "cancel" });
       } else {
         await releaseAiUsage(subject, feature.id, entitlement.dailyLimit);
       }

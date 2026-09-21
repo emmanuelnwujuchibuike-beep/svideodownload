@@ -25,6 +25,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * provider's stack trace, never a signed URL, never a member's file name.
  */
 export type AiJobEventKind =
+  /* 0166 (multi-video): the member's own line — paid for, admitted, or ended without running */
+  | "queue.waiting"
+  | "queue.admitted"
+  | "queue.dispatch_failed"
+  | "queue.expired"
+  | "batch.created"
+  | "refund.withheld"
   | "webhook.received"
   | "webhook.ignored"
   | "provider.submitted"

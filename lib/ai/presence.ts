@@ -96,6 +96,8 @@ const BY_STAGE: Record<AiJobStage, PresenceLevel> = {
   idle: "calm",
   uploading: "focused",
   queued: "working",
+  // 0166: in line and paid for — the environment is attentive, not exerting.
+  waiting: "focused",
   processing: "working",
   // Our own worker, and the end is in sight — the one moment the environment
   // is allowed to be at its brightest.

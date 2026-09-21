@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { summarizeCharacterReplaceJobs, type CharacterReplaceAdminJob } from "../admin-stats";
+import { summarizeCharacterReplaceJobs, type CharacterReplaceAdminJob } from "../admin-job-view";
 import { aiNotificationCopy } from "../notification-copy";
 import { FINALIZE_BACKOFF_MS, FINALIZE_LEASE_SECONDS, FINALIZE_MAX_ATTEMPTS, finalizeBackoffMs, isTransientFinalizeFailure } from "./finalize-policy";
 import { createCharacterReplaceJobSchema } from "./start-schema";
@@ -55,7 +55,9 @@ describe("the finalizer — a lease, and nobody is told 'ready' before the file 
   const s = src("server/services/ai-character-replace-finalize-service.ts");
 
   it("claims through the lease, not a bare status transition", () => {
-    expect(s).toContain("claimFinalization(jobId, { leaseSeconds: FINALIZE_LEASE_SECONDS, maxAttempts: FINALIZE_MAX_ATTEMPTS })");
+    // 0166: the budget is the operator's (AI → Processing → Automatic retries), the constant its default
+    expect(s).toContain("const maxAttempts = finalizeMaxAttempts(await getLandingSettings().then((s) => s.frenzAiCharacterReplace).catch(() => null));");
+    expect(s).toContain("claimFinalization(jobId, { leaseSeconds: FINALIZE_LEASE_SECONDS, maxAttempts })");
     expect(s).not.toMatch(/transitionJob\(jobId, \["processing"\], "finalizing"\)/);
   });
 
@@ -72,7 +74,7 @@ describe("the finalizer — a lease, and nobody is told 'ready' before the file 
 
   it("a transient failure schedules a retry and keeps the provider URL; only a permanent one or the last attempt refunds", () => {
     expect(s).toContain("isTransientFinalizeFailure(failure.code, failure.detail)");
-    expect(s).toContain("if (transient && attempt < FINALIZE_MAX_ATTEMPTS) {");
+    expect(s).toContain("if (transient && attempt < maxAttempts) {");
     expect(s).toContain("scheduleFinalizationRetry(jobId, { nextAt");
     // The retry branch returns before failFinalize is reached.
     const retry = s.indexOf("scheduleFinalizationRetry(jobId, { nextAt");
@@ -249,11 +251,13 @@ describe("a retry is a new attempt of the same project — never a rewrite", () 
     expect(createCharacterReplaceJobSchema.safeParse({ ...base, attempt: 2 }).success).toBe(false);
   });
   it("the route verifies the link is the member's own finished job and numbers the new row", () => {
-    const s = src("app/api/ai/character-replace/jobs/route.ts");
+    // 0166: the lineage is resolved and written in lib/ai/character-replace/open-job.ts, shared by the single, batch and retry routes
+    const s = src("lib/ai/character-replace/open-job.ts");
     expect(s).toContain("getOwnJob(subject, retryOf)");
-    expect(s).toContain('if (isActiveStatus(prior.status)) return fail("JOB_ALREADY_PROCESSING")');
-    expect(s).toContain("attempt: lineage?.attempt ?? 1");
-    expect(s).toContain("retry_of: lineage?.retryOf ?? null");
+    expect(s).toContain('if (isActiveStatus(prior.status)) return refuse("JOB_ALREADY_PROCESSING")');
+    expect(s).toContain("attempt: input.lineage?.attempt ?? 1");
+    expect(s).toContain("retry_of: input.lineage?.retryOf ?? null");
+    expect(src("app/api/ai/character-replace/jobs/route.ts")).toContain("resolveLineage(subject, feature, retryOf)");
   });
   it("the workspace keeps the draft on Try again and links the next start", () => {
     const hook = src("features/ai/character-replace/use-character-replace-workspace.ts");
@@ -323,6 +327,13 @@ describe("summarizeCharacterReplaceJobs", () => {
     lipSyncMode: null,
     providerCostUsdCents: null,
     rateCents: null,
+    batchId: null,
+    batchIndex: null,
+    batchSize: null,
+    audience: null,
+    waitedMs: null,
+    fileName: null,
+    billing: null,
     ...over,
   });
   it("counts what the operator asked for", () => {

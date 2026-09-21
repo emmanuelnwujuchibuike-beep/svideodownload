@@ -56,6 +56,19 @@ export type AiFeature =
 export type AiJobStatus =
   | "queued"
   /**
+   * PAID FOR — or a complimentary creation consumed — validated, and holding
+   * its place until one of the member's processing slots is free (migration
+   * 0166, multi-video sessions). Written only by `claim_ai_job_start` when the
+   * queue is on and the concurrency cap refused; left only by the queue pump
+   * (`admit_ai_waiting_jobs` → `acquiring`), a cancel, a stall or an expiry.
+   *
+   * 🔴 Not `queued`. A queued row is a DRAFT: nothing charged, uploads maybe
+   * unfinished, expired by the draft sweep after thirty minutes. A waiting row
+   * holds the member's money and must survive that sweep — one word for both
+   * would have been the bug.
+   */
+  | "waiting"
+  /**
    * OUR worker is fetching the member's video from a link they pasted (Part 6).
    * The provider has not been asked for anything, so nothing is billable yet.
    *
@@ -91,6 +104,7 @@ export type AiProviderId = "replicate";
 
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",
+  "waiting",
   "acquiring",
   "processing",
   "finalizing",
@@ -104,6 +118,7 @@ export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
 /** A job that is still going to change. Everything else is terminal. */
 export const AI_ACTIVE_STATUSES: readonly AiJobStatus[] = [
   "queued",
+  "waiting",
   "acquiring",
   "processing",
   "finalizing",
@@ -128,7 +143,13 @@ const TRANSITIONS: Record<AiJobStatus, readonly AiJobStatus[]> = {
     the time /start runs. A LINK goes to `acquiring` first, because the bytes do
     not exist yet and our worker has to go and get them.
   */
-  queued: ["acquiring", "processing", "failed", "cancelled", "expired"],
+  queued: ["waiting", "acquiring", "processing", "failed", "cancelled", "expired"],
+  /*
+    0166: a waiting job leaves the line for the worker (`acquiring`, via the
+    queue pump) or ends without ever running. It may NOT skip to `processing`:
+    the trim/preparation on the worker is not optional because a job waited.
+  */
+  waiting: ["acquiring", "failed", "cancelled", "expired"],
   /*
     🔴 `acquiring` may NOT reach `finalizing` or `completed`. The only forward
     move is `processing`, which is the moment the provider is actually asked to
@@ -462,6 +483,16 @@ export interface AiJobRow {
   user_id: string | null;
   /** The signed guest identifier. Null for a signed-in member; exactly one of the two is set. */
   guest_id: string | null;
+  /**
+   * Multi-video session (0166): the batch this job was created in and its
+   * 1-based position. Null on a single video and on every row before the
+   * column. A batch is a LABEL over independent jobs — progress is an
+   * aggregate over the rows, never a row of its own. Optional in the type for
+   * the same reason `source_kind` is nullable: a row read by a build newer
+   * than its migration comes back without the column.
+   */
+  batch_id?: string | null;
+  batch_index?: number | null;
   feature: AiFeature;
   provider: AiProviderId;
   model: string | null;
@@ -576,6 +607,8 @@ export interface AiJobView {
   };
   /** A stable code and a written sentence. Never the provider's own words. */
   error: { code: string; message: string } | null;
+  /** 0166: the multi-video session this job belongs to; null (or absent on an older view) for a single video. */
+  batch?: { id: string; index: number; size: number | null } | null;
   /**
    * Character Replace (Part 4): what the result screen and the history show.
    * Read from the row's metadata contract; absent for any other tool. Never
@@ -694,6 +727,13 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
       hasPoster: !!row.poster_path,
     },
     error: row.error_code ? { code: row.error_code, message: errorMessageFor(row.error_code) } : null,
+    batch: row.batch_id
+      ? {
+          id: row.batch_id,
+          index: typeof row.batch_index === "number" ? row.batch_index : 1,
+          size: typeof (row.metadata?.batch as { size?: unknown } | undefined)?.size === "number" ? ((row.metadata!.batch as { size: number }).size) : null,
+        }
+      : null,
     characterReplace: characterReplaceView(row),
   };
 }

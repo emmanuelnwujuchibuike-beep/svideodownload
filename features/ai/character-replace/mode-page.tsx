@@ -3,8 +3,9 @@
 import { ArrowLeft, ChevronRight, Clock3, Gift, PersonStanding, ScanFace, Shirt, Sparkles, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { FLOW_TOOL_HINT, FrenzAIToolsGrid } from "@/features/ai/frenz-ai-tools-grid";
 import { getCharacterReplaceBalance, getCharacterReplaceConfig } from "@/lib/ai/character-replace/client";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
@@ -81,6 +82,10 @@ export function CharacterReplaceModePage({
   const [legacyJob, setLegacyJob] = useState(false);
   // Part 11 §6: the complimentary creations, from the balance read (the server's answer; never computed here)
   const [free, setFree] = useState<CharacterReplaceFreeAccess | null>(null);
+  // owner, 2026-09-20: the AI Tools grid lives here too. A flow tool (lip sync, voice, speech) is chosen
+  // AFTER the scope, so tapping one brings the scopes back into view with the sentence that says where it is.
+  const [hint, setHint] = useState<string | null>(null);
+  const scopesRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // an older `?job=` link: the create page hosts the workspace, which reads the id from the URL
@@ -137,6 +142,14 @@ export function CharacterReplaceModePage({
         ) : null}
       </header>
 
+      {/* the hint and the scopes scroll together when a flow tool below is tapped */}
+      <div ref={scopesRef} className="scroll-mt-24">
+      {hint ? (
+        <p role="status" className="mt-5 flex items-start gap-2 rounded-2xl bg-primary/[0.07] px-3.5 py-2.5 text-[12.5px] font-semibold leading-snug text-foreground">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+          {hint}
+        </p>
+      ) : null}
       {unavailable ? (
         <div className="mt-6 rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center">
           <h2 className="text-[17px] font-bold tracking-[-0.01em]">Character Replace isn&apos;t available right now</h2>
@@ -209,10 +222,26 @@ export function CharacterReplaceModePage({
           })}
         </ul>
       )}
+      </div>
 
       <p className="mt-5 text-center text-[12.5px] leading-relaxed text-muted-foreground">
         Your photo and video stay on your device until you press Create Video. Nothing is charged before that.
       </p>
+
+      {/* the AI Tools beyond the scopes above — the scopes ARE this page, so they are not drawn twice */}
+      {!unavailable ? (
+        <FrenzAIToolsGrid
+          characterReplaceHref={createPath.replace(/\/create$/, "")}
+          historyHref={historyHref}
+          include="beyond-scopes"
+          onFlowTool={(id) => {
+            setHint(FLOW_TOOL_HINT[id]);
+            haptic("selection");
+            scopesRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+          }}
+          className="mt-8"
+        />
+      ) : null}
 
       <div className="mt-6 flex items-center justify-between">
         <Link href={aiHref} className="btn-lux min-h-[44px] border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground">

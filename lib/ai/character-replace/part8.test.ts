@@ -240,10 +240,17 @@ describe("the Continue gate reads the mode's own tiers (owner, 2026-09-14)", () 
 
 describe("the doors open instantly or say they are opening (owner, 2026-09-14)", () => {
   it("Explore AI Studio, the tool cards and the crumb prefetch by default and carry the pending stripe", () => {
-    // 2026-09-20: the welcome page holds every door itself (the entry card and the tool grid are gone)
+    // 2026-09-20: the welcome page holds the CTA and the balance door; the AI Tools grid is shared with the studio page
     const welcome = src("features/ai/frenz-ai-welcome.tsx");
     expect(welcome).not.toContain("prefetch={false}");
-    expect(welcome.split("<LinkPendingStripe />").length - 1).toBeGreaterThanOrEqual(3); // the CTA, every tool card, the balance door
+    expect(welcome.split("<LinkPendingStripe />").length - 1).toBeGreaterThanOrEqual(2); // the CTA, the balance door
+    const grid = src("features/ai/frenz-ai-tools-grid.tsx");
+    expect(grid).not.toContain("prefetch={false}");
+    expect(grid).toContain("<LinkPendingStripe />");
+    // on the studio page the flow tools are buttons, never a link to the page they are on (a same-route link is a dead tap)
+    expect(grid).toMatch(/onFlowTool &&s*(tool.id === "lip_sync" || tool.id === "voice_replace" || tool.id === "tts")/);
+    expect(grid).toContain('<button type="button" onClick={() => onFlowTool(id)} className={CARD}>');
+    expect(src("features/ai/character-replace/mode-page.tsx")).toContain('include="beyond-scopes"');
     expect(src("features/ai/frenz-ai-chrome.tsx")).not.toContain("prefetch={false}");
     const stripe = src("features/navigation/link-pending-stripe.tsx");
     expect(stripe).toContain("useLinkStatus");

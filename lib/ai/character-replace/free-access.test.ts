@@ -74,12 +74,17 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(code("lib/ai/character-replace/start-schema.ts")).not.toMatch(/free|complimentary|deviceId|isAdmin/i);
   });
   it("the entitlement is decided by the database under a device lock, from a server-set cookie's hash — never a browser value", () => {
-    const sql = src("supabase/migrations/0162_ai_free_creations.sql");
-    expect(sql).toContain("perform pg_advisory_xact_lock(hashtext('ai_free:' || coalesce(p_device_hash, 'no-device')));");
-    expect(sql).toContain("select * into v_row from public.ai_free_entitlements where user_id = p_user_id and product = p_product for update;");
-    expect(sql).toContain("create unique index if not exists ai_free_uses_job_uniq on public.ai_free_uses (job_id);");
-    expect(sql).toContain("where job_id = p_job_id and status = 'consumed'");
-    expect(sql).toContain("execute format('revoke all on function %s from public, anon, authenticated', fn);");
+    // 0162 = the tables, 0163 = the functions + their revokes in one transaction, 0164 = the old overload dropped
+    const tables = src("supabase/migrations/0162_ai_free_creations.sql");
+    const fns = src("supabase/migrations/0163_ai_free_creations_functions.sql");
+    expect(tables).toContain("create unique index if not exists ai_free_uses_job_uniq on public.ai_free_uses (job_id);");
+    expect(tables).not.toMatch(/^(as|do) \$\$/m); // plain DDL only — no function body, no do-block
+    expect(fns).toContain("perform pg_advisory_xact_lock(hashtext('ai_free:' || coalesce(p_device_hash, 'no-device')));");
+    expect(fns).toContain("select * into v_row from public.ai_free_entitlements where user_id = p_user_id and product = p_product for update;");
+    expect(fns).toContain("where job_id = p_job_id and status = 'consumed'");
+    expect(fns).toContain("execute format('revoke all on function %s from public, anon, authenticated', fn);");
+    expect(fns.indexOf("execute format('revoke all on function")).toBeGreaterThan(fns.lastIndexOf("create or replace function"));
+    expect(src("supabase/migrations/0164_ai_free_creations_grants.sql")).toContain("execute 'drop function if exists public.claim_ai_job_start(uuid, uuid, text, integer, integer, integer, bigint, jsonb)';");
     const free = code("lib/ai/character-replace/free-access.ts");
     expect(free).toContain('import "server-only"');
     expect(free).toContain("HttpOnly; Secure; SameSite=Lax");

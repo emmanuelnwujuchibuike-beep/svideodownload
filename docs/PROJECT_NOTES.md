@@ -175,6 +175,39 @@ failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
   (production, or `E2E_SITE=http://localhost:3011`; a local `next start` reloads once — the
   probe retries its measurements).
 
+### Later the same evening — the welcome is the front door, Explore AI Studio is the studio (`81ff227`)
+- Owner: no hero figure (the headline takes the width); "remove the AI tools down to AI credits from
+  the welcome page; let it be the main Explore AI Studio page; remove the AI structure and use the
+  grid that has all AI features, including the ones that will be built in the next session."
+- **Welcome** (`features/ai/frenz-ai-welcome.tsx`): AI STUDIO · headline · one line · the studio card
+  · the 56 px pill. Nothing below it.
+- **Explore AI Studio** (`features/ai/frenz-ai-explore.tsx`, on BOTH `/studio/ai/character-replace`
+  and `/ai/character-replace`): the grid of every feature (`features/ai/frenz-ai-tools-grid.tsx` —
+  `aiToolCards()` is the table of contents; a feature built next session is one more row), HOW IT
+  WORKS, AI CREDITS & USAGE (+ plan chip/allowance bar), the Part 11 entitlement pill, the back
+  link. The four scopes are the first four cards (→ `/create?mode=`); Lip Sync / Voice Replace /
+  Text to Speech are buttons that show where they are chosen and bring the scopes into view (never a
+  same-route link); a switched-off scope is drawn, not offered; `?job=` legacy links still open the
+  workspace. The "What do you want to replace?" page (`mode-page.tsx`) is DELETED.
+- 🔴 **Found: the Studio-shell scope route bounced every member to Creator Studio.** It was
+  `force-static` under `app/(app)/studio/layout.tsx`, which calls `getUser()`; the layout's
+  redirect was prerendered INTO the page (`.next/server/app/studio/ai/character-replace.meta` →
+  `location: /login?next=/studio`). The owner never saw it because their phone uses the `/ai`
+  twin. The route is `force-dynamic` now (its own `FrenzAIExploreSkeleton`); pinned in
+  `scopes.test.ts`. Rule: never `force-static` a page under a layout that reads cookies.
+- **Preflight refusal (`a00722a`):** a refused verdict now retires the draft at once
+  (`retireRefusedDraft` → `expireDrafts`; event `preflight.refused`), and a draft that expired before
+  it was ever started is not history (`job-store.ts` list: `status.neq.expired,started_at.not.is.null`).
+  Owner had seen the refused job sit as "queued" and open as if completing.
+- **ads.txt audit (`6fa61af`):** fetched as Mediapartners-Google/Googlebot/HEAD/HTTP1.1 — 200
+  text/plain, `google.com, pub-7009025003206297, DIRECT, f08c47fec0942fa0`, apex + www + http→https,
+  12/12 ≈ 0.7 s; settings hold `ca-pub-7009025003206297` and the same adsTxt line; robots.txt
+  disallows only `/api/ /admin/ /ai /ai/` (a prefix that never matches `/ads.txt`). Not a repo
+  cause. Now `Allow: /ads.txt` by name in every group + `app/robots.test.ts`. ⚠️ On 08-31 the file
+  served pub-**6455244673998965** — if the AdSense account saying "not found" is that one, its line
+  is simply gone. Owner: press Check now in AdSense; Cloudflare → Security → Events for blocks of
+  Google's crawler; set `ADSENSE_PUBLISHER_ID` on Vercel. The /ai disallow is lifted in a coming part.
+
 ### Also today (owner asks)
 - Recharge sheet: no rate arithmetic — the secure checkout page shows the naira.
 - Usage page: Character Replace only (the retired AI Clean allowance meters are gone).

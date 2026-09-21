@@ -752,6 +752,74 @@
     animation-play-state: var(--ai-play, running);
   }
 
+  /* ── "Explore AI Studio" — the welcome page's one action (2026-09-20) ────
+     A pill with ambient light: purple → lavender-white → blue. The light is a
+     layer 140% wide moved by a transform (compositor only, no repaint), one
+     pass every 9 s, back and forth; the window always holds purple on the
+     left and blue on the right — only the white centre travels. It stops with the environment (`--ai-play`
+     on a hidden tab) and under reduced motion. The text is near-black: the
+     centre of the pill never leaves the lavender band at any point of the
+     cycle, so the contrast holds without a shadow. Two static layers finish
+     it — a top sheen (glass) and a hairline inside the edge. */
+  .ai-cta {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 9999px;
+    color: #0b0f1a;
+    box-shadow:
+      0 14px 34px -14px rgba(124, 58, 237, 0.45),
+      0 10px 30px -16px rgba(59, 130, 246, 0.5);
+  }
+  .ai-cta::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 140%;
+    z-index: -1;
+    background: linear-gradient(
+      100deg,
+      #8b5cf6 0%,
+      #b9a8fb 18%,
+      #ece8ff 40%,
+      #f7f5ff 50%,
+      #e2e9ff 60%,
+      #a9c2fb 82%,
+      #5b8cf6 100%
+    );
+    animation: ai-cta-ambient 9s ease-in-out infinite alternate;
+    animation-play-state: var(--ai-play, running);
+    will-change: transform;
+  }
+  .ai-cta::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.14) 46%,
+      rgba(255, 255, 255, 0) 52%,
+      rgba(255, 255, 255, 0.06) 100%
+    );
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  }
+  @keyframes ai-cta-ambient {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(-28.6%, 0, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ai-cta::before {
+      animation: none;
+      transform: translate3d(-14.3%, 0, 0);
+    }
+  }
+
   /* Loading stripe — the indeterminate bar shown inside a route's loading.tsx
      (Next Suspense fallback) by PageLoader. Pure CSS; nothing here or in that
      component touches navigation/prefetch. */
@@ -1815,13 +1883,20 @@ html[data-a11y-bold="on"] body {
   font-weight: calc(400 + var(--a11y-font-weight-boost));
 }
 
-/* Minimum tap target. `0px` by default means the rule is inert until asked
-   for, so nothing shifts for the people who never open these settings. */
-button,
-a[href],
-[role="button"],
-input[type="checkbox"],
-input[type="radio"] {
+/* Minimum tap target — only while the preference is on.
+
+   🔴 2026-09-20: this used to be an always-on `a[href] { min-height:
+   var(--a11y-tap-min) }` with the variable at 0px "so the rule is inert".
+   It was not inert: `a[href]` (0,1,1) out-specifies every `.min-h-*`
+   utility (0,1,0), so every link in the app silently lost its min-height —
+   the Frenz AI call to action measured 26px against a declared 56px. The
+   rule now exists only under the attribute the preference writes, where it
+   should win over an author's smaller minimum, and is absent otherwise. */
+html[data-a11y-tap="large"] button,
+html[data-a11y-tap="large"] a[href],
+html[data-a11y-tap="large"] [role="button"],
+html[data-a11y-tap="large"] input[type="checkbox"],
+html[data-a11y-tap="large"] input[type="radio"] {
   min-height: var(--a11y-tap-min);
   min-width: var(--a11y-tap-min);
 }

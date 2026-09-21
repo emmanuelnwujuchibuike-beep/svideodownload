@@ -78,8 +78,8 @@ describe("the words a first-time user reads", () => {
     expect(WORKSPACE_STEPS.map((s) => s.label)).toEqual(["Replace", "Photo", "Video", "Quality", "Voice", "Review"]);
     expect(WORKSPACE_STEPS[0]?.title).toBe("What do you want to replace?");
   });
-  it("no provider or model name on the entry card, the workspace or the result", () => {
-    for (const f of ["features/ai/character-replace/character-replace-entry.tsx", "features/ai/character-replace/step-settings.tsx", "features/ai/character-replace/step-voice.tsx", "features/ai/character-replace/result.tsx", "features/ai/character-replace/processing.tsx"]) {
+  it("no provider or model name on the welcome page, the workspace or the result", () => {
+    for (const f of ["features/ai/frenz-ai-welcome.tsx", "features/ai/character-replace/step-settings.tsx", "features/ai/character-replace/step-voice.tsx", "features/ai/character-replace/result.tsx", "features/ai/character-replace/processing.tsx"]) {
       expect(code(f), f).not.toMatch(/Wan 2\.2|xrunda|prunaai|lipsync-2|minimax|replicate/i);
     }
   });
@@ -106,7 +106,7 @@ describe("the words a first-time user reads", () => {
     expect(review).toContain("What this means");
     const result = src("features/ai/character-replace/result.tsx");
     expect(result).toContain("AI-generated transformation · made with Frenz AI");
-    for (const f of ["features/ai/character-replace/result.tsx", "features/ai/character-replace/character-replace-entry.tsx"]) expect(src(f)).not.toMatch(/undetectable|100% perfect|exactly like real life/i);
+    for (const f of ["features/ai/character-replace/result.tsx", "features/ai/frenz-ai-welcome.tsx"]) expect(src(f)).not.toMatch(/undetectable|100% perfect|exactly like real life/i);
   });
 });
 

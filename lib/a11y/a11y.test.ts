@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { A11Y_BOOT_JS, cssVariables, dataAttributes } from "./apply";
@@ -269,9 +272,18 @@ describe("apply — one definition, two callers", () => {
     for (const key of Object.keys(cssVariables(DEFAULT_A11Y))) {
       expect(A11Y_BOOT_JS, `boot script never sets ${key}`).toContain(key);
     }
-    for (const attr of ["data-a11y-contrast", "data-a11y-transparency", "data-a11y-bold", "data-a11y-motion"]) {
+    for (const attr of ["data-a11y-contrast", "data-a11y-transparency", "data-a11y-bold", "data-a11y-motion", "data-a11y-tap"]) {
       expect(A11Y_BOOT_JS, `boot script never sets ${attr}`).toContain(attr);
     }
+  });
+
+  it("the tap floor exists only under the attribute — an always-on a[href] rule out-specified every min-h utility (2026-09-20)", () => {
+    expect(dataAttributes(DEFAULT_A11Y)["data-a11y-tap"]).toBe("normal");
+    expect(dataAttributes({ ...DEFAULT_A11Y, tapTargets: "large" })["data-a11y-tap"]).toBe("large");
+    const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+    expect(css).toContain('html[data-a11y-tap="large"] a[href],');
+    expect(css).not.toMatch(/^a[href],$/m);
+    expect(readFileSync(join(process.cwd(), "features/account/accessibility-center.tsx"), "utf8")).toContain('"data-a11y-motion", "data-a11y-tap"]');
   });
 
   it("the boot script removes the motion attribute for 'system'", () => {

@@ -239,13 +239,11 @@ describe("the Continue gate reads the mode's own tiers (owner, 2026-09-14)", () 
 });
 
 describe("the doors open instantly or say they are opening (owner, 2026-09-14)", () => {
-  it("Start Creating, the tool cards and the crumb prefetch by default and carry the pending stripe", () => {
-    const entry = src("features/ai/character-replace/character-replace-entry.tsx");
-    expect(entry).not.toContain("prefetch={false}");
-    expect(entry).toContain("<LinkPendingStripe />");
-    const grid = src("features/ai/frenz-ai-tool-grid.tsx");
-    expect(grid).not.toContain("prefetch={false}");
-    expect(grid).toContain("<LinkPendingStripe />");
+  it("Explore AI Studio, the tool cards and the crumb prefetch by default and carry the pending stripe", () => {
+    // 2026-09-20: the welcome page holds every door itself (the entry card and the tool grid are gone)
+    const welcome = src("features/ai/frenz-ai-welcome.tsx");
+    expect(welcome).not.toContain("prefetch={false}");
+    expect(welcome.split("<LinkPendingStripe />").length - 1).toBeGreaterThanOrEqual(3); // the CTA, every tool card, the balance door
     expect(src("features/ai/frenz-ai-chrome.tsx")).not.toContain("prefetch={false}");
     const stripe = src("features/navigation/link-pending-stripe.tsx");
     expect(stripe).toContain("useLinkStatus");

@@ -76,7 +76,7 @@ export function AccessibilityCenter() {
       not the same as clearing it from the element — without this the attribute
       would survive being switched back and the OS would stay overridden.
     */
-    const managed = ["data-a11y-contrast", "data-a11y-transparency", "data-a11y-bold", "data-a11y-motion"];
+    const managed = ["data-a11y-contrast", "data-a11y-transparency", "data-a11y-bold", "data-a11y-motion", "data-a11y-tap"];
     const attrs = dataAttributes(next);
     for (const name of managed) {
       const value = attrs[name];

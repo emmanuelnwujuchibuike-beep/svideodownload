@@ -77,6 +77,12 @@ export function dataAttributes(p: A11yPreferences): Record<string, string> {
     */
     ...(p.motion === "system" ? {} : { "data-a11y-motion": p.motion }),
     "data-a11y-bold": p.boldText ? "on" : "off",
+    /*
+      The tap floor is an attribute as well as a variable: the stylesheet needs
+      to SELECT on it, because an always-present `a[href] { min-height: 0px }`
+      out-specifies every utility class on every link (found 2026-09-20).
+    */
+    "data-a11y-tap": p.tapTargets === "large" ? "large" : "normal",
   };
 }
 
@@ -107,6 +113,7 @@ s.setProperty('--a11y-filter',!f||f==='none'?'none':f==='grayscale'?'grayscale(1
 d.setAttribute('data-a11y-contrast',p.highContrast?'high':'normal');
 d.setAttribute('data-a11y-transparency',p.reduceTransparency?'reduce':'normal');
 d.setAttribute('data-a11y-bold',p.boldText?'on':'off');
+d.setAttribute('data-a11y-tap',p.tapTargets==='large'?'large':'normal');
 if(p.motion==='reduce'||p.motion==='full')d.setAttribute('data-a11y-motion',p.motion);
 else d.removeAttribute('data-a11y-motion');
 }catch(e){}})();`;

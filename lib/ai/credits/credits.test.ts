@@ -273,3 +273,17 @@ describe("the migration (0167)", () => {
     expect(preview).toContain('complimentary ? <Row label="Total" value="" amount="Free" strong tone="ok" />');
   });
 });
+
+describe("the plan code is a PLN_ code or nothing (2026-09-21)", () => {
+  it("a payment-page slug is dropped — the plan reads coming soon instead of failing at Paystack", () => {
+    const c = normalizeAiPlansConfig({ plans: { ai_pro: { paystackPlanCode: "kbizwxe4g4" }, ai_max: { paystackPlanCode: "PLN_x1y2z3w4" } } });
+    expect(c.plans.ai_pro.paystackPlanCode).toBe("");
+    expect(c.plans.ai_max.paystackPlanCode).toBe("PLN_x1y2z3w4");
+  });
+  it("the checkout route names a plan Paystack does not know and never answers 502 (Cloudflare replaces an origin 502 with its own page)", () => {
+    const route = readFileSync(join(process.cwd(), "app/api/ai/subscriptions/checkout/route.ts"), "utf8");
+    expect(route).toContain("isPaystackPlanNotFound(e)");
+    expect(route).toContain('"PLAN_NOT_CONFIGURED"');
+    expect(route).not.toMatch(/status: 502/);
+  });
+});

@@ -35,6 +35,8 @@ export type AiJobEventKind =
   | "webhook.received"
   | "webhook.ignored"
   | "provider.submitted"
+  /** 2026-09-21 (fal.ai): the router refused the decided vendor for this job — unsupported scope, paused, unconfigured, or an input the model's own limits reject (the admin diagnostic, §4). */
+  | "provider.refused"
   | "prepare.started"
   | "prepare.failed"
   /** 2026-09-20: the media preflight ran — the measurements ride in the detail for tuning (brief §26). */

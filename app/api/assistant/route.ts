@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     if (!res.ok) {
       return NextResponse.json(
         { error: "The assistant is busy right now. Please try again." },
-        { status: 502 },
+        { status: 503 },
       );
     }
 
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "The assistant is unreachable right now. Please try again." },
-      { status: 502 },
+      { status: 503 },
     );
   }
 }

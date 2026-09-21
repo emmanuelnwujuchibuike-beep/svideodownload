@@ -110,6 +110,8 @@ const PLATFORM_MAX_PIXELS = 3840 * 2160;
 export function characterReplaceLimits(config: CharacterReplacePublicConfig | null, mode: ReplacementMode = "full_character"): CharacterReplaceLimits {
   // Full Character's ceilings ARE the top-level fields (Parts 1–5); the two new modes carry their own.
   const m = mode === "full_character" ? null : (config?.modes?.find((x) => x.id === mode) ?? null);
+  // 2026-09-21: the engine behind a scope may tighten the length window (the router writes it on the public mode, Full Character included).
+  const routed = config?.modes?.find((x) => x.id === mode) ?? null;
   return {
     photo: {
       maxBytes: AI_IMAGE_MAX_BYTES,
@@ -120,8 +122,8 @@ export function characterReplaceLimits(config: CharacterReplacePublicConfig | nu
       maxBytes: Math.min(PLATFORM_MAX_VIDEO_BYTES, m?.maximumUploadBytes ?? config?.maximumUploadBytes ?? PLATFORM_MAX_VIDEO_BYTES),
       formats: CHARACTER_REPLACE_VIDEO_FORMATS,
       maxPixels: Math.min(PLATFORM_MAX_PIXELS, m?.maximumPixels ?? config?.maximumPixels ?? PLATFORM_MAX_PIXELS),
-      maxDurationMs: Math.round((m?.maximumDurationSeconds ?? config?.maximumDurationSeconds ?? 120) * 1000),
-      minDurationMs: Math.round((config?.trim.minimumSeconds ?? 1) * 1000),
+      maxDurationMs: Math.round(Math.min(...[routed?.maximumDurationSeconds, m?.maximumDurationSeconds, config?.maximumDurationSeconds].filter((v): v is number => typeof v === "number"), ...(config ? [] : [120])) * 1000),
+      minDurationMs: Math.round(Math.max(routed?.minimumDurationSeconds ?? 0, config?.trim.minimumSeconds ?? 1) * 1000),
       minEdge: 240,
     },
     trim: { enabled: config?.trim.enabled ?? true },

@@ -1,9 +1,14 @@
 import "server-only";
 
 import { withCircuit } from "@/lib/ai/character-replace/circuit";
-import { providerReferencePaths, readCharacterReplaceMeta, readPipeline, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
+import { providerReferencePaths, readCharacterReplaceMeta, readPipeline, readProviderPlan, stageVendor, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
 import { markSubmitted, planPipeline, type PipelineMeta, type PipelineStage } from "@/lib/ai/character-replace/pipeline";
+import { falKlingEditProvider } from "@/lib/ai/character-replace/providers/fal-kling-edit";
 import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
+import { modelConfigFor, providerRunEstimateUsdCents } from "@/lib/ai/providers/config";
+import { providerFor } from "@/lib/ai/providers";
+import { openProviderRun } from "@/lib/ai/providers/runs";
+import { falSync3Provider } from "@/lib/ai/voice/fal-sync3";
 import { AiJobError } from "@/lib/ai/errors";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import type { AiJobRow, AiJobStatus } from "@/lib/ai/jobs";
@@ -12,9 +17,9 @@ import { pathBelongsTo } from "@/lib/ai/storage";
 import { signSourceUrl } from "@/lib/ai/storage-server";
 import { lipSyncProviderFor } from "@/lib/ai/voice/lipsync-provider";
 import { textToSpeechProviderFor, ttsRunsInWorker } from "@/lib/ai/voice/tts-provider";
+import { modeConfig } from "@/lib/ai/character-replace/config";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
-import { replicateProvider } from "@/lib/ai/replicate/provider";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -65,8 +70,6 @@ export async function submitCharacterReplaceJob(
   job: AiJobRow,
   opts: { from: readonly AiJobStatus[]; origin?: string },
 ): Promise<{ submission: CharacterReplaceSubmission; row: AiJobRow | null }> {
-  if (!replicateProvider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", "character replace provider is not configured");
-
   // Re-read: the worker wrote `prepared` (or a stage's stored output) after the caller's copy of the row was taken.
   const fresh = (await getJobAsService(job.id)) ?? job;
   const meta = readCharacterReplaceMeta(fresh.metadata);
@@ -94,8 +97,23 @@ export async function submitCharacterReplaceJob(
   const settings = await getLandingSettings();
   const config = settings.frenzAiCharacterReplace;
   const origin = (opts.origin ?? process.env.NEXT_PUBLIC_SITE_URL ?? SITE_URL).replace(/\/$/, "");
-  const webhookUrl = `${origin}/api/ai/replicate/webhook`;
+  /*
+    ── 2026-09-21: WHICH VENDOR — the ROW's plan, never today's switch (§21) ──
+    /start wrote the router's decision on the row (`provider_plan`); this
+    step reads it. An operator moving the switch while this job waited for a
+    slot changes nothing here. A row from before the router has no plan and
+    runs on Replicate, exactly as it always did. The webhook URL follows the
+    vendor: Replicate reports to its route, fal.ai to /api/webhooks/fal.
+  */
+  const plan = readProviderPlan(fresh.metadata);
+  const providers = settings.frenzAiProviders;
+  const vendor = stage === "voice" ? "replicate" : stageVendor(fresh, stage);
+  const generic = providerFor(vendor);
+  if (!generic || !generic.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `the ${vendor} provider is not configured on this deployment`);
+  const webhookUrl = vendor === "fal" ? `${origin}/api/webhooks/fal` : `${origin}/api/ai/replicate/webhook`;
   const now = new Date().toISOString();
+  const submitStarted = Date.now();
+  let costEstimateUsdCents: number | null = null;
 
   let created: { reference: string; model: string; modelVersion: string | null; settings: Record<string, unknown>; mergeAudio: boolean };
   let providerNote: CharacterReplaceJobMeta["provider"] | undefined;
@@ -121,9 +139,11 @@ export async function submitCharacterReplaceJob(
       if (!pathBelongsTo(p, fresh.user_id, fresh.id)) throw new AiJobError("INTERNAL_ERROR", "a media path failed ownership");
     }
     // 2026-09-20: the adapter the OPERATOR configured for this scope (providers/router.ts), never a name from a request.
-    const provider = replacementProviderFor(meta.mode, config);
+    // 2026-09-21: on fal.ai, the Kling O1 Video Edit adapter — the plan on the row decided, at Start.
+    const provider = vendor === "fal" ? falKlingEditProvider(modelConfigFor(providers, "character_replace", "fal"), providers.features.character_replace.falScopes) : replacementProviderFor(meta.mode, config);
     if (!provider.supportsMode(meta.mode)) throw new AiJobError("FEATURE_UNAVAILABLE", `no configured provider serves ${meta.mode}`);
     if (!provider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `${meta.mode} provider is not configured`);
+    costEstimateUsdCents = vendor === "fal" ? providerRunEstimateUsdCents(modelConfigFor(providers, "character_replace", "fal"), meta.prepared.durationMs) : provider.estimateProcessingCostUsdCents(meta.prepared.durationMs, modeConfigCost(config, meta.mode));
     /*
       §8 (Part 4): keep the original audio in the model's output when the
       source HAS audio and the member kept their original voice. A new voice
@@ -131,6 +151,7 @@ export async function submitCharacterReplaceJob(
       carries it); asking the model to keep it now would only be undone.
     */
     const keepOriginalAudio = meta.prepared.hasAudio && meta.settings.voiceMode === "original";
+    const prepared = meta.prepared;
     const [videoUrl, ...referenceImageUrls] = await Promise.all([signSourceUrl(meta.prepared.path), ...refs.map((p) => signSourceUrl(p))]);
     const sub = await withCircuit(provider.model, config.ops.circuitBreaker, () =>
       provider.createPrediction({
@@ -142,6 +163,8 @@ export async function submitCharacterReplaceJob(
         keepOriginalAudio,
         goFast: config.providerGoFast === true,
         webhookUrl,
+        // the measured facts of the prepared file — an adapter with documented limits (Kling) re-checks them before anything is sent
+        facts: { durationMs: prepared.durationMs, width: prepared.width, height: prepared.height, bytes: prepared.bytes, fps: prepared.fps ?? null },
       }),
     );
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: sub.mergeAudio };
@@ -162,8 +185,9 @@ export async function submitCharacterReplaceJob(
     const tierId = meta.settings.lipSyncMode;
     const tier = tierId ? config.lipSync.find((l) => l.id === tierId) : null;
     if (!tier) throw new AiJobError("INTERNAL_ERROR", "lip sync stage without a tier");
-    const provider = lipSyncProviderFor(tier.model);
-    if (!provider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `lip-sync model ${tier.model} is not configured`);
+    const provider = vendor === "fal" ? falSync3Provider(modelConfigFor(providers, "lip_sync", "fal")) : lipSyncProviderFor(tier.model);
+    if (!provider.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `lip-sync model ${provider.model} is not configured`);
+    costEstimateUsdCents = vendor === "fal" ? providerRunEstimateUsdCents(modelConfigFor(providers, "lip_sync", "fal"), meta.prepared.durationMs) : null;
     const [videoUrl, audioUrl] = await Promise.all([signSourceUrl(replaced), signSourceUrl(wav)]);
     const sub = await withCircuit(provider.model, config.ops.circuitBreaker, () =>
       provider.createPrediction({ jobId: fresh.id, videoUrl, audioUrl, syncMode: config.audio.syncMode, webhookUrl }),
@@ -171,7 +195,7 @@ export async function submitCharacterReplaceJob(
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: true };
   }
 
-  const nextPipeline = markSubmitted(pipeline, stage, { predictionId: created.reference, provider: { id: "replicate", model: created.model, version: created.modelVersion }, at: now });
+  const nextPipeline = markSubmitted(pipeline, stage, { predictionId: created.reference, provider: { id: vendor, model: created.model, version: created.modelVersion }, at: now });
   const row = await transitionJob(
     fresh.id,
     opts.from,
@@ -192,14 +216,32 @@ export async function submitCharacterReplaceJob(
     { predictionId: previousId },
   );
 
-  await recordJobEvent(job.id, "provider.submitted", { stage, predictionId: created.reference, model: created.model, version: created.modelVersion });
+  await recordJobEvent(job.id, "provider.submitted", { stage, provider: vendor, predictionId: created.reference, model: created.model, version: created.modelVersion });
+  // §19 / §20: one row per provider request — the estimate at submission, the outcome from the webhook or the reconciler.
+  await openProviderRun({
+    jobId: fresh.id,
+    userId: fresh.user_id,
+    feature: "ai_character_replace",
+    mode: meta.mode,
+    stage,
+    provider: vendor,
+    model: created.model,
+    modelVersion: created.modelVersion,
+    providerJobId: created.reference,
+    test: plan?.test === true,
+    latencyMs: Date.now() - submitStarted,
+    inputDurationMs: meta.prepared.durationMs,
+    inputResolution: `${meta.prepared.width}x${meta.prepared.height}`,
+    costEstimateUsdCents,
+    metadata: { quality: meta.settings.quality, settings: created.settings, providersVersion: plan?.providersVersion ?? null },
+  });
   console.info("[cr/submit] prediction created", {
     jobId: fresh.id,
     userId: fresh.user_id,
     feature: "ai_character_replace",
     mode: meta.mode,
     stage,
-    provider: "replicate",
+    provider: vendor,
     predictionId: created.reference,
     model: created.model,
     modelVersion: created.modelVersion,
@@ -213,12 +255,17 @@ export async function submitCharacterReplaceJob(
   });
 
   if (!row) {
-    // The claim lost (cancelled meanwhile, or a duplicate callback). Do not leave a paid run going.
-    await replicateProvider.cancel(created.reference).catch(() => false);
+    // The claim lost (cancelled meanwhile, or a duplicate callback). Do not leave a paid run going — at whichever vendor holds it.
+    await generic.cancel(created.reference, { model: created.model }).catch(() => false);
   }
 
   return {
     submission: { reference: created.reference, model: created.model, modelVersion: created.modelVersion, stage, settings: created.settings, mergeAudio: created.mergeAudio },
     row,
   };
+}
+
+/** The operator's per-second provider figure for a scope (the Replicate side's estimate basis; fal.ai has its own cost profile). */
+function modeConfigCost(config: Parameters<typeof modeConfig>[0], mode: Parameters<typeof modeConfig>[1]): number {
+  return modeConfig(config, mode).providerCostPerSecondUsdCents;
 }

@@ -35,6 +35,6 @@ export async function POST() {
     const url = await subscriptionManageLink(code);
     return NextResponse.json({ url });
   } catch {
-    return NextResponse.json({ error: "Couldn't open billing. Try again." }, { status: 502 });
+    return NextResponse.json({ error: "Couldn't open billing. Try again." }, { status: 503 });
   }
 }

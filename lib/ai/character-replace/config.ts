@@ -1414,6 +1414,16 @@ export interface CharacterReplacePublicMode {
    */
   priceLine: string | null;
   photo: { best: string; framing: "portrait" | "head_shoulders" | "half_body" | "full_body" };
+  /**
+   * 2026-09-21 (the fal.ai brief §5, §29): the shortest clip the engine behind
+   * this scope takes, when it has one (Kling: 3 s). Absent = the tool's trim
+   * minimum. The trim step's guard reads this beside `maximumDurationSeconds`,
+   * which the router lowers to the engine's ceiling (10 s) — so a longer video
+   * is sent through the existing trim workflow, never cut in silence.
+   */
+  minimumDurationSeconds?: number;
+  /** The member's sentence when the scope is off because of the engine behind it (§4) — never the vendor's name. */
+  unavailableNote?: string | null;
 }
 
 /**

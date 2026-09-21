@@ -53,6 +53,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ url });
   } catch {
-    return NextResponse.json({ error: "Couldn't start checkout. Please try again." }, { status: 502 });
+    return NextResponse.json({ error: "Couldn't start checkout. Please try again." }, { status: 503 });
   }
 }

@@ -22,7 +22,7 @@ export async function POST() {
 
   const notificationUrl = `${SITE_URL}/api/webhooks/stream`;
   const result = await configureStreamWebhook(notificationUrl);
-  if (!result) return NextResponse.json({ ok: false, error: "Cloudflare rejected the webhook config." }, { status: 502 });
+  if (!result) return NextResponse.json({ ok: false, error: "Cloudflare rejected the webhook config." }, { status: 503 });
 
   return NextResponse.json({
     ok: true,

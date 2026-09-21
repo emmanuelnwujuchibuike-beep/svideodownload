@@ -45,7 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!url) return NextResponse.json({ ok: false, skipped: "no-pullable-url" });
 
   const uid = await copyToStream(url, post.publisher_id as string);
-  if (!uid) return NextResponse.json({ ok: false, error: "Stream ingest failed." }, { status: 502 });
+  if (!uid) return NextResponse.json({ ok: false, error: "Stream ingest failed." }, { status: 503 });
 
   try {
     await db.from("posts").update({ stream_uid: uid }).eq("id", id);

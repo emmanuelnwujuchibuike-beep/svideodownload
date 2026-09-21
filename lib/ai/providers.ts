@@ -1,5 +1,6 @@
 import "server-only";
 
+import { falProvider } from "@/lib/ai/fal/provider";
 import { hasProviderFor, providerFor, registerAiProvider } from "@/lib/ai/provider";
 import { replicateProvider } from "@/lib/ai/replicate/provider";
 
@@ -25,5 +26,12 @@ import { replicateProvider } from "@/lib/ai/replicate/provider";
  * exactly like the honest answer and would be debugged for hours.
  */
 registerAiProvider(replicateProvider);
+/*
+  2026-09-21 (the fal.ai brief): the second adapter. Registered for the paths
+  that route by a job ROW's provider (reconcile, cancel, the stall sweep);
+  new submissions choose between the two through lib/ai/providers/resolve.ts,
+  never through this registry's feature default.
+*/
+registerAiProvider(falProvider);
 
 export { hasProviderFor, providerFor };

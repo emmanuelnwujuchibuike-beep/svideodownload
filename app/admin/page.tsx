@@ -175,8 +175,9 @@ import { CharacterReplaceProvidersPanel } from "@/features/admin/character-repla
 import { listProviderHealth } from "@/lib/ai/character-replace/circuit";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiProvidersPanelLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
+import { loadAiProvidersPanel } from "@/lib/ai/providers/admin";
 import { getAiAdminStats, getCharacterReplaceFreeAccessStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
@@ -912,7 +913,7 @@ async function FrenzAISection() {
   // Part 11 §19: the complimentary-creation figures, beside the health panel
   const freeStats = await getCharacterReplaceFreeAccessStats(landing.frenzAiCurrency);
   // 0167: the AI plans' usage and figures (read once, rendered under their own tab)
-  const [creditRows, planStats] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null)]);
+  const [creditRows, planStats, providerPanel] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProvidersPanel(landing)]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -952,7 +953,17 @@ async function FrenzAISection() {
           ),
         },
         /* Part 8 §7, §21, §22: the breaker's state per model and the settings audit trail — server-rendered, one small button. */
-        { id: "providers", label: "Providers & changes", content: <CharacterReplaceProvidersPanel providers={providers} changes={changes} /> },
+        /* 2026-09-21 (the fal.ai brief): the provider switch per feature, the models, the pauses, health, the comparison, the test buttons — then the breaker's state and the audit trail. */
+        {
+          id: "providers",
+          label: "Providers",
+          content: (
+            <div className="space-y-6">
+              <AiProvidersPanelLazy {...providerPanel} />
+              <CharacterReplaceProvidersPanel providers={providers} changes={changes} />
+            </div>
+          ),
+        },
         { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },
         { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },
       ]}

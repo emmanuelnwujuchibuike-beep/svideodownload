@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
+import type { AiProvidersPanelProps } from "@/features/admin/ai-providers-settings";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
 import type { LandingSettings } from "@/lib/landing/settings";
 
@@ -81,6 +82,13 @@ const AiCreditsMonitor = dynamic(() => import("@/features/admin/ai-credits-monit
 
 export function CharacterReplaceJobsTableLazy({ jobs, symbol }: { jobs: CharacterReplaceAdminJob[]; symbol: string }) {
   return <CharacterReplaceJobsTable jobs={jobs} symbol={symbol} />;
+}
+
+// 2026-09-21 (the fal.ai brief §10, §20, §26, §27): the provider switch, the models, health, the comparison — one chunk, fetched when the tab opens.
+const AiProvidersPanel = dynamic(() => import("@/features/admin/ai-providers-settings").then((m) => m.AiProvidersPanel), { loading: skeleton("Loading providers") });
+
+export function AiProvidersPanelLazy(props: AiProvidersPanelProps) {
+  return <AiProvidersPanel {...props} />;
 }
 
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {

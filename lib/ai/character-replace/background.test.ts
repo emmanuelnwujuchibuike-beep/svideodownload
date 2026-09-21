@@ -171,19 +171,23 @@ describe("the recovery sweep — the same functions the live paths use, and noth
 /* ───────────────────────── the webhook (§9) ─────────────────────────────── */
 
 describe("the webhook — verified, located by a unique id, idempotent, audited", () => {
+  // 2026-09-21: the route verifies Replicate's signature; the sequence after it is lib/ai/webhook-handler.ts, shared with /api/webhooks/fal.
   const s = src("app/api/ai/replicate/webhook/route.ts");
+  const h = src("lib/ai/webhook-handler.ts");
   it("verifies the raw bytes before anything, and answers 200 to a refusal", () => {
     expect(s.indexOf("await request.text()")).toBeLessThan(s.indexOf("verifyReplicateWebhook({"));
-    expect(s.indexOf("verifyReplicateWebhook({")).toBeLessThan(s.indexOf("findJobByPredictionId("));
+    expect(s.indexOf("verifyReplicateWebhook({")).toBeLessThan(s.indexOf("handleProviderCallback("));
+    expect(h.indexOf("findJobByPredictionId(")).toBeGreaterThan(0);
   });
   it("records received vs ignored (duplicate / out of order) before any transition", () => {
-    const audit = s.indexOf('stale ? "webhook.ignored" : "webhook.received"');
+    const audit = h.indexOf('stale ? "webhook.ignored" : "webhook.received"');
     expect(audit).toBeGreaterThan(0);
-    expect(audit).toBeLessThan(s.indexOf('transitionJob(job.id, ["queued"], "processing"'));
+    expect(audit).toBeLessThan(h.indexOf('transitionJob(job.id, ["queued"], "processing"'));
   });
   it("every state change is a compare-and-set from the statuses it may leave", () => {
-    expect(s).toContain('transitionJob(jobId, ["queued", "processing"], "failed"');
-    expect(s).toContain('transitionJob(job.id, ["queued", "processing"], "cancelled"');
+    expect(h).toContain('transitionJob(jobId, ["queued", "processing"], "failed"');
+    expect(h).toContain('transitionJob(job.id, ["queued", "processing"], "cancelled"');
+    expect(h).not.toMatch(/\.update\(\{ status:/);
     expect(s).not.toMatch(/\.update\(\{ status:/);
   });
 });
@@ -322,6 +326,8 @@ describe("summarizeCharacterReplaceJobs", () => {
     stuck: false,
     mode: "full_character",
     model: null,
+    provider: "replicate",
+    test: false,
     stage: null,
     voiceSource: null,
     lipSyncMode: null,
@@ -390,7 +396,9 @@ describe("Video Ready — the master is the model's output, shown and saved with
   it("the prepare service tone-maps nothing and tags nothing", () => {
     const s = src("server/services/ai-character-replace-prepare-service.ts");
     expect(s).not.toMatch(/isHdrSource|toneMapped|hdr:/);
-    expect(s).toContain("const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null };");
+    // 2026-09-21: the plan gained a provider PROFILE (the Kling geometry) — still only the trim, the size and, for Kling, the rate
+    expect(s).toContain("const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null, profile,");
+    expect(s).not.toMatch(/zscale|tonemap|colorspace=|-color_primaries/);
   });
   it("the download route redirects to the stored bytes — no video passes through a function", () => {
     const s = src("app/api/ai/jobs/[id]/result/route.ts");

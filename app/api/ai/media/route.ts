@@ -193,7 +193,7 @@ export async function POST(request: Request) {
     });
     if (!res.ok) {
       // The upstream body can carry account details; it never reaches the client.
-      return NextResponse.json({ error: "Frenz AI couldn't answer that one." }, { status: 502 });
+      return NextResponse.json({ error: "Frenz AI couldn't answer that one." }, { status: 503 });
     }
     const json = (await res.json()) as { content?: { type: string; text?: string }[] };
     const out = (json.content ?? [])
@@ -201,7 +201,7 @@ export async function POST(request: Request) {
       .map((c) => c.text ?? "")
       .join("")
       .trim();
-    if (!out) return NextResponse.json({ error: "Frenz AI couldn't answer that one." }, { status: 502 });
+    if (!out) return NextResponse.json({ error: "Frenz AI couldn't answer that one." }, { status: 503 });
 
     return NextResponse.json({
       result: out,
@@ -210,6 +210,6 @@ export async function POST(request: Request) {
       credits: { used: quota.used, limit: quota.limit },
     });
   } catch {
-    return NextResponse.json({ error: "Frenz AI couldn't answer that one." }, { status: 502 });
+    return NextResponse.json({ error: "Frenz AI couldn't answer that one." }, { status: 503 });
   }
 }

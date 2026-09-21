@@ -154,7 +154,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
     const db = createAdminClient();
     const { data, error } = await db
       .from("ai_jobs")
-      .select("id, user_id, status, charged_cents, replicate_prediction_id, model, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata, batch_id, batch_index")
+      .select("id, user_id, status, charged_cents, provider, replicate_prediction_id, model, model_version, error_code, created_at, started_at, completed_at, notified_at, finalize_attempts, finalize_lease_until, finalize_next_at, finalize_error, metadata, batch_id, batch_index")
       .eq("feature", "ai_character_replace")
       .order("created_at", { ascending: false })
       .limit(Math.max(1, Math.min(100, limit)));
@@ -164,6 +164,7 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
       user_id: string | null;
       status: AiJobStatus;
       charged_cents: number | null;
+      provider: string | null;
       replicate_prediction_id: string | null;
       model: string | null;
       model_version: string | null;
@@ -219,6 +220,9 @@ export async function listCharacterReplaceAdminJobs(limit = 30): Promise<Charact
         billing: billing?.type === "FREE_TRIAL" ? "FREE_TRIAL" : billing?.type === "PAID" ? "PAID" : null,
         mode: m.mode === "face_only" || m.mode === "skin_face" || m.mode === "upper_body" ? m.mode : "full_character",
         model: r.model,
+        // 2026-09-21: the vendor the job runs on (its own, for ever) and whether it is an admin TEST run
+        provider: r.provider === "fal" ? "fal" : "replicate",
+        test: (m.provider_plan as { test?: unknown } | null | undefined)?.test === true,
         stage: typeof pipeline?.current === "string" ? pipeline.current : null,
         voiceSource: settings.voiceMode === "new_voice" && (audio?.source === "upload" || audio?.source === "tts") ? audio.source : null,
         lipSyncMode: typeof settings.lipSyncMode === "string" ? settings.lipSyncMode : null,

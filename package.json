@@ -39,6 +39,7 @@
     "deps:audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
+    "@fal-ai/client": "^1.10.1",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.2",
     "@supabase/ssr": "^0.5.2",

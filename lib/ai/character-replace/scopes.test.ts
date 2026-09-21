@@ -102,7 +102,8 @@ describe("provider routing is configuration, never a request (brief §4, §12)",
     // the fallback adapter is the code default, and submit checks supportsMode first
     expect(replacementProviderFor("upper_body", config).supportsMode("upper_body")).toBe(true);
     const submit = code("lib/ai/character-replace/submit.ts");
-    expect(submit).toContain("const provider = replacementProviderFor(meta.mode, config);");
+    // 2026-09-21: on the Replicate side the per-scope router still decides; on fal.ai the Kling adapter — chosen by the ROW's plan, never a request
+    expect(submit).toContain(": replacementProviderFor(meta.mode, config);");
     expect(submit).toContain("if (!provider.supportsMode(meta.mode)) throw new AiJobError(");
   });
   it("every adapter declares its capabilities and a linear cost estimate; the customer never sees them", () => {
@@ -169,9 +170,10 @@ describe("the immutable snapshot and the job's plan (brief §11, §16)", () => {
       expect(start, k).toContain(k);
     }
     expect(start).toContain("reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot })");
-    expect(start).toContain("provider_plan: { id: plannedProvider.id, model: plannedProvider.model, scope: REPLACEMENT_SCOPE[snapshot.mode] },");
-    // the plan is read from configuration at Start — never from the body
-    expect(start).toContain("const plannedProvider = replacementProviderFor(meta.mode, config);");
+    for (const k of ["id: plannedProvider.id,", "model: plannedProvider.model,", "scope: REPLACEMENT_SCOPE[snapshot.mode],"]) expect(start, k).toContain(k);
+    // the plan is read from configuration at Start — never from the body (2026-09-21: through the provider router)
+    expect(start).toContain("const route = resolveReplacementRoute(meta.mode, config, settings.frenzAiProviders);");
+    expect(start).toContain("const plannedProvider = route.adapter;");
   });
 });
 

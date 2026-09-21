@@ -7,7 +7,7 @@ import { voiceCapabilities } from "@/lib/ai/voice/capabilities";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
-import { hasProviderFor } from "@/lib/ai/providers";
+import { applyProviderRoutes, characterReplaceProviderReady } from "@/lib/ai/providers/resolve";
 import { hasWorker } from "@/lib/worker";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
@@ -61,14 +61,19 @@ export async function GET(request: Request) {
     const cr = settings.frenzAiCharacterReplace;
     // Part 10 §25: in `internal` launch mode only administrators may make a new video; everyone else reads "not yet".
     const launched = await launchAllows(cr, subject);
-    const config = publicCharacterReplaceConfig(
-      settings.frenzAiCharacterReplace,
-      { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
-      // Part 3: the engine exists (lib/ai/character-replace/pricing.ts) and
-      // POST /api/ai/character-replace/quote answers with the server's price.
-      true,
-      // 2026-09-20: a voice feature whose provider key is missing here is not offered (it would be refused at Start)
-      voiceCapabilities(cr),
+    // 2026-09-21: the engine behind each scope applied — a scope the decided vendor cannot serve is drawn disabled; a scope on Kling carries its 3–10 s window. No vendor is named.
+    const config = applyProviderRoutes(
+      publicCharacterReplaceConfig(
+        settings.frenzAiCharacterReplace,
+        { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) },
+        // Part 3: the engine exists (lib/ai/character-replace/pricing.ts) and
+        // POST /api/ai/character-replace/quote answers with the server's price.
+        true,
+        // 2026-09-20: a voice feature whose provider key is missing here is not offered (it would be refused at Start)
+        voiceCapabilities(cr),
+      ),
+      cr,
+      settings.frenzAiProviders,
     );
     // Part 11 §14: the device id is a server-set, httpOnly cookie planted on the first read; the entitlement is decided against it later
     const headers = new Headers();
@@ -90,7 +95,7 @@ export async function GET(request: Request) {
         provider token is present and the worker that trims is reachable. The
         workspace enables Start on this, never on a constant.
       */
-      processingAvailable: hasProviderFor(feature) && hasWorker && cr.ops.processingEnabled && !cr.ops.maintenanceMode,
+      processingAvailable: characterReplaceProviderReady(settings) && hasWorker && cr.ops.processingEnabled && !cr.ops.maintenanceMode,
       /*
         Part 8 §2, §30: why Start is off, in the operator's words when it is
         maintenance. The workspace shows this instead of a generic "not

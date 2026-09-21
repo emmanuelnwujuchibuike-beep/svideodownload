@@ -66,6 +66,11 @@ export interface AiProviderSubmission {
   modelTier: AiModelTier;
 }
 
+/** What a poll or a cancel needs beside the reference — the ROW's model, for a provider that addresses work by endpoint. */
+export interface AiProviderContext {
+  model?: string | null;
+}
+
 /** What a provider says about work it is holding. */
 export interface AiProviderState {
   /** The provider's own id for this work — stored on the job. */
@@ -105,10 +110,14 @@ export interface AiProvider {
   supports(feature: AiFeature): boolean;
   /** Start work. Returns a reference immediately — never the result. */
   submit(input: AiProviderSubmission): Promise<AiProviderState>;
-  /** Ask about work already submitted. */
-  poll(reference: string): Promise<AiProviderState>;
+  /**
+   * Ask about work already submitted. `context.model` is the job row's model:
+   * a fal.ai request is addressed by endpoint + request id (2026-09-21), so
+   * the endpoint travels with the reference; Replicate ignores it.
+   */
+  poll(reference: string, context?: AiProviderContext): Promise<AiProviderState>;
   /** Stop work, best effort. A provider that cannot cancel says so by returning false. */
-  cancel(reference: string): Promise<boolean>;
+  cancel(reference: string, context?: AiProviderContext): Promise<boolean>;
   /**
    * Turn a verified callback body into a state.
    *

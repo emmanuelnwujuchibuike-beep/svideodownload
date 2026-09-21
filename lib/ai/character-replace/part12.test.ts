@@ -188,8 +188,9 @@ describe("the queue pump and the slot releases", () => {
     // the failure sites say so; the cancel sites say cancel
     for (const f of ["server/services/ai-character-replace-prepare-service.ts", "server/services/ai-character-replace-advance-service.ts", "server/services/ai-character-replace-finalize-service.ts", "lib/ai/stall-server.ts"]) expect(code(f)).toContain('cause: "failure"');
     expect(code("app/api/ai/jobs/[id]/cancel/route.ts")).toContain('cause: "cancel"');
-    expect(code("app/api/ai/replicate/webhook/route.ts")).toContain('await refund(subjectFromRow(job), feature.id, updated, "cancel")');
-    expect(code("app/api/ai/replicate/webhook/route.ts")).toContain('await refund(subject, feature, updated, "failure")');
+    // 2026-09-21: the webhook sequence is the shared handler (both vendors' routes call it)
+    expect(code("lib/ai/webhook-handler.ts")).toContain('await refund(subjectFromRow(job), feature.id, updated, "cancel")');
+    expect(code("lib/ai/webhook-handler.ts")).toContain('await refund(subject, feature, updated, "failure")');
   });
   it("the spend sequence lives in one place and both routes call it", () => {
     const core = code("lib/ai/character-replace/start-job.ts");

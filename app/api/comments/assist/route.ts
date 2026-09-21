@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       }),
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) return NextResponse.json({ error: "Couldn't reach the assistant. Try again." }, { status: 502 });
+    if (!res.ok) return NextResponse.json({ error: "Couldn't reach the assistant. Try again." }, { status: 503 });
 
     const data = (await res.json()) as { content?: { type: string; text?: string }[] };
     const text = data.content
@@ -94,10 +94,10 @@ export async function POST(request: Request) {
       .map((b) => b.text ?? "")
       .join("")
       .trim();
-    if (!text) return NextResponse.json({ error: "Couldn't get a suggestion. Try again." }, { status: 502 });
+    if (!text) return NextResponse.json({ error: "Couldn't get a suggestion. Try again." }, { status: 503 });
 
     return NextResponse.json({ text: text.slice(0, 1000) });
   } catch {
-    return NextResponse.json({ error: "The assistant is unreachable right now." }, { status: 502 });
+    return NextResponse.json({ error: "The assistant is unreachable right now." }, { status: 503 });
   }
 }

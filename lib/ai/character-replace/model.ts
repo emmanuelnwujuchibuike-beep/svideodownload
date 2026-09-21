@@ -97,7 +97,9 @@ export function isTrustedProviderOutputUrl(url: string): boolean {
     const u = new URL(url);
     if (u.protocol !== "https:") return false;
     const host = u.hostname.toLowerCase();
-    return host === "replicate.delivery" || host.endsWith(".replicate.delivery") || host === "replicate.com" || host.endsWith(".replicate.com");
+    if (host === "replicate.delivery" || host.endsWith(".replicate.delivery") || host === "replicate.com" || host.endsWith(".replicate.com")) return true;
+    // 2026-09-21: fal.ai delivers from fal.media (v3.fal.media, v3b.fal.media, …).
+    return host === "fal.media" || host.endsWith(".fal.media");
   } catch {
     return false;
   }

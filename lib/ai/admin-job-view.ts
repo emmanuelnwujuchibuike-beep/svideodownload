@@ -46,6 +46,10 @@ export interface CharacterReplaceAdminJob {
   mode: "face_only" | "skin_face" | "upper_body" | "full_character";
   /** The model of the CURRENT stage's prediction (`ai_jobs.model`). */
   model: string | null;
+  /** 2026-09-21: which vendor ran (runs) it — recorded at Start, never moved. */
+  provider: "replicate" | "fal";
+  /** An admin's TEST run (the providers tab switch) — counted apart in the ledgers. */
+  test: boolean;
   /** "voice" | "replace" | "lipsync" | "finalize" — the pipeline's current stage, or null for a single-stage row. */
   stage: string | null;
   voiceSource: "upload" | "tts" | null;

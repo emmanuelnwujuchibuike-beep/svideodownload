@@ -84,7 +84,8 @@ describe("a refused handoff is permanent, and must end the job", () => {
   });
 
   it.each([
-    ["app/api/ai/replicate/webhook/route.ts", "the webhook"],
+    // 2026-09-21: both webhook routes (Replicate, fal.ai) hand a verified state to this one handler
+    ["lib/ai/webhook-handler.ts", "the webhook handler"],
     ["lib/ai/reconcile.ts", "the reconciler"],
   ])("%s ends the job on a refusal rather than orphaning it", (rel) => {
     const src = readFileSync(join(ROOT, rel), "utf8");

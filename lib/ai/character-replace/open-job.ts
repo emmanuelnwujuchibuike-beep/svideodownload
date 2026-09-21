@@ -11,7 +11,7 @@ import type { AiErrorCode } from "@/lib/ai/errors";
 import { AI_ACTIVE_STATUSES, isActiveStatus, type AiFeatureDef, type AiJobRow } from "@/lib/ai/jobs";
 import { createJob, getOwnJob, reserveSourcePath } from "@/lib/ai/job-store";
 import { audioExtensionForUpload, extensionForUpload, imageExtensionForUpload } from "@/lib/ai/media";
-import { hasProviderFor } from "@/lib/ai/providers";
+import { applyProviderRoutes, characterReplaceProviderReady, resolveReplacementRoute } from "@/lib/ai/providers/resolve";
 import { createSourceUploadTicket, type UploadTicket } from "@/lib/ai/storage-server";
 import { subjectOwnerId, type AiSubject } from "@/lib/ai/subject";
 import { validateAudioFile } from "@/lib/ai/voice/audio-validate";
@@ -56,9 +56,9 @@ function refuse(code: AiErrorCode, extra?: Record<string, unknown>): OpenRefusal
 
 /** The gate every create passes before any file is looked at: the tool is on, this member may use it, nothing is paused. */
 export async function openGate(ctx: Omit<OpenContext, "publicConfig">, mode: ReplacementMode): Promise<OpenRefusal | { ok: true; publicConfig: CharacterReplacePublicConfig }> {
-  const { config, entitlement, settings, subject, feature } = ctx;
-  // The provider AND the worker: a job that could not be prepared or submitted is not opened.
-  if (!hasProviderFor(feature) || !hasWorker) return refuse("FEATURE_UNAVAILABLE", { error: "The AI service isn't connected yet." });
+  const { config, entitlement, settings, subject } = ctx;
+  // The provider AND the worker: a job that could not be prepared or submitted is not opened. 2026-09-21: "the provider" is whichever the router decides for this tool.
+  if (!characterReplaceProviderReady(settings) || !hasWorker) return refuse("FEATURE_UNAVAILABLE", { error: "The AI service isn't connected yet." });
   // Part 10 §25: in `internal` launch mode only administrators may open a project; refused before any upload ticket exists.
   if (!(await launchAllows(config, subject))) return refuse("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });
   if (!config.enabled || !entitlement.allowed) return refuse("FEATURE_UNAVAILABLE");
@@ -67,7 +67,13 @@ export async function openGate(ctx: Omit<OpenContext, "publicConfig">, mode: Rep
   if (!config.ops.processingEnabled) return refuse("CR_BUSY");
   const modeView = modeConfig(config, mode);
   if (!modeView.enabled) return refuse("FEATURE_UNAVAILABLE", { error: `${replacementModeLabel(mode)} isn't available right now.` });
-  const publicConfig = publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true, voiceCapabilities(config));
+  // 2026-09-21 (§4): a scope the decided engine cannot serve is refused before any upload ticket exists — nothing to pay for, an admin diagnostic in the log.
+  const route = resolveReplacementRoute(mode, config, settings.frenzAiProviders);
+  if (!route.supported || route.paused || !route.configured) {
+    console.warn("[cr/open] refused — provider route", { subject: subject.key, mode, vendor: route.vendor, reason: route.diagnostic });
+    return refuse(route.supported ? "PROVIDER_UNAVAILABLE" : "CR_SCOPE_UNAVAILABLE", { error: route.memberMessage ?? undefined });
+  }
+  const publicConfig = applyProviderRoutes(publicCharacterReplaceConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true, voiceCapabilities(config)), config, settings.frenzAiProviders);
   return { ok: true, publicConfig };
 }
 

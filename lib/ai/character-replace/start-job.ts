@@ -10,7 +10,8 @@ import { REPLACEMENT_SCOPE } from "@/lib/ai/character-replace/modes";
 import { planPipeline } from "@/lib/ai/character-replace/pipeline";
 import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch";
 import { providerCostEstimateUsdCents } from "@/lib/ai/character-replace/pricing";
-import { replacementProviderFor } from "@/lib/ai/character-replace/providers/router";
+import { klingSelectionVerdict } from "@/lib/ai/character-replace/providers/kling-input";
+import { characterReplaceProviderReady, resolveLipSyncRoute, resolveReplacementRoute } from "@/lib/ai/providers/resolve";
 import type { StartCharacterReplaceJobRequest } from "@/lib/ai/character-replace/start-schema";
 import { verifyStartQuote } from "@/lib/ai/character-replace/start-verify";
 import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
@@ -21,14 +22,13 @@ import { type AiErrorCode } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { aiFeature, type AiFeatureDef, type AiJobRow } from "@/lib/ai/jobs";
-import { claimJobStart, confirmQueueReservation, getOwnJob, revertJobStartClaim, transitionJob } from "@/lib/ai/job-store";
+import { claimJobStart, confirmQueueReservation, getOwnJob, revertJobStartClaim, stampJobProvider, transitionJob } from "@/lib/ai/job-store";
 import { AI_IMAGE_MAX_BYTES } from "@/lib/ai/media";
 import { preflightGate } from "@/lib/ai/preflight/gate";
-import { hasProviderFor } from "@/lib/ai/providers";
 import { pathBelongsTo } from "@/lib/ai/storage";
 import { statSourceObject } from "@/lib/ai/storage-server";
 import { subjectOwnerId, type AiSubject } from "@/lib/ai/subject";
-import { lipSyncProviderFor, lipSyncProviderUsdCentsPerSecond } from "@/lib/ai/voice/lipsync-provider";
+import { lipSyncProviderUsdCentsPerSecond } from "@/lib/ai/voice/lipsync-provider";
 import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
 import { voiceChangeProviderFor } from "@/lib/ai/voice/voice-change-provider";
 import { getAdminUser } from "@/lib/admin/require-admin";
@@ -153,7 +153,7 @@ export async function startCharacterReplaceJob(input: {
     // Already started (a second press, a refresh, a retried batch request): say where it is, charge nothing.
     return { ok: true, job, started: false, waiting: false, balanceCents: null, billing: null, alreadyStarted: true };
   }
-  if (!hasProviderFor(feature) || !hasWorker) return refuse("FEATURE_UNAVAILABLE");
+  if (!hasWorker) return refuse("FEATURE_UNAVAILABLE");
 
   const meta = readCharacterReplaceMeta(job.metadata);
   if (!meta) {
@@ -181,6 +181,23 @@ export async function startCharacterReplaceJob(input: {
   if (!(await launchAllows(config, subject))) return refuse("FEATURE_UNAVAILABLE", { error: LAUNCH_INTERNAL_MESSAGE });
   const modeView = modeConfig(config, meta.mode);
   if (!modeView.enabled) return refuse("FEATURE_UNAVAILABLE");
+  /*
+    ── 2026-09-21: WHICH PROVIDER, DECIDED HERE AND WRITTEN ON THE ROW ───
+    The router (lib/ai/providers/resolve.ts) reads the operator's switch —
+    Replicate or fal.ai for Character Replace, Replicate or fal.ai for the
+    lip-sync stage — and the job records the answer at the claim below
+    (`provider_plan`, the `provider` column). A scope the decided vendor's
+    model does not serve, a paused vendor, a vendor without its key: refused
+    NOW with a sentence, nothing reserved, an admin diagnostic on the row's
+    events. No automatic fallback (§22).
+  */
+  if (!characterReplaceProviderReady(settings)) return refuse("FEATURE_UNAVAILABLE");
+  const route = resolveReplacementRoute(meta.mode, config, settings.frenzAiProviders);
+  if (!route.adapter || !route.supported || route.paused || !route.configured) {
+    await recordJobEvent(job.id, "provider.refused", { vendor: route.vendor, model: route.model, mode: meta.mode, supported: route.supported, paused: route.paused, configured: route.configured, reason: route.diagnostic });
+    console.warn("[cr/start] refused — provider route", { jobId: job.id, subject: subject.key, vendor: route.vendor, mode: meta.mode, reason: route.diagnostic });
+    return refuse(route.supported ? "PROVIDER_UNAVAILABLE" : "CR_SCOPE_UNAVAILABLE", { error: route.memberMessage ?? undefined });
+  }
   /*
     ── Part 8 §2: THE KILL SWITCHES ─────────────────────────────────────
     Maintenance refuses new work with the operator's own sentence; a
@@ -245,9 +262,28 @@ export async function startCharacterReplaceJob(input: {
     if (audioObject.size > config.audio.maximumUploadBytes) return refuse("FILE_TOO_LARGE");
   }
   if (voice?.source === "tts" && !ttsProvider.isConfigured()) return refuse("FEATURE_UNAVAILABLE", { error: "Generating a voice isn't available right now." });
+  let lipSyncRoute: ReturnType<typeof resolveLipSyncRoute> | null = null;
   if (snapshot.lipSyncMode) {
     const tier = config.lipSync.find((l) => l.id === snapshot.lipSyncMode);
-    if (!tier || !lipSyncProviderFor(tier.model).isConfigured()) return refuse("FEATURE_UNAVAILABLE", { error: "Lip sync isn't available right now." });
+    lipSyncRoute = tier ? resolveLipSyncRoute(tier.model, settings.frenzAiProviders) : null;
+    if (!tier || !lipSyncRoute || !lipSyncRoute.configured || lipSyncRoute.paused) {
+      if (lipSyncRoute) await recordJobEvent(job.id, "provider.refused", { vendor: lipSyncRoute.vendor, model: lipSyncRoute.model, stage: "lipsync", paused: lipSyncRoute.paused, configured: lipSyncRoute.configured, reason: lipSyncRoute.diagnostic });
+      return refuse("FEATURE_UNAVAILABLE", { error: "Lip sync isn't available right now." });
+    }
+  }
+  /*
+    ── §5 / §29: THE MODEL'S OWN INPUT LIMITS, BEFORE BILLING ────────────
+    Kling O1 Video Edit takes 3–10 s of MP4/MOV under 200 MB. The SELECTED
+    length (after the member's trim) is what will be sent, so it is what is
+    checked; a longer video is never cut here — the sentence sends the
+    member to the trim step. Nothing has been reserved at this point.
+  */
+  if (route.vendor === "fal") {
+    const verdict = klingSelectionVerdict({ selectedDurationMs: snapshot.durationMs, mime: meta.video.mime, bytes: videoObject.size });
+    if (!verdict.ok) {
+      await recordJobEvent(job.id, "provider.refused", { vendor: "fal", model: route.model, mode: meta.mode, reason: `input: ${verdict.code}`, selectedDurationMs: snapshot.durationMs });
+      return refuse("CR_ENGINE_LIMIT", { error: verdict.message, limit: verdict.code });
+    }
   }
   // The trim must lie inside the video the browser measured; the worker re-measures and re-checks.
   if (body.trim && body.trim.endMs > meta.video.durationMs + 500) return refuse("INVALID_INPUT", { error: "The trim runs past the end of the video." });
@@ -358,7 +394,7 @@ export async function startCharacterReplaceJob(input: {
   */
   if (config.ops.circuitBreaker.enabled) {
     const models = pipeline.stages
-      .map((stage) => (stage === "voice" ? config.tts.model : stage === "replace" ? replacementProviderFor(meta.mode, config).model : stage === "lipsync" ? lipTierModel : ""))
+      .map((stage) => (stage === "voice" ? config.tts.model : stage === "replace" ? route.model : stage === "lipsync" ? (lipSyncRoute?.model ?? lipTierModel) : ""))
       .filter((m) => m.length > 0);
     const { open } = await providerHealthFor(models);
     if (open.length > 0) {
@@ -376,7 +412,7 @@ export async function startCharacterReplaceJob(input: {
     Written on the ledger row (`snapshot`) and on the job (`provider_plan`)
     so a price or provider change tomorrow never rewrites what ran today.
   */
-  const plannedProvider = replacementProviderFor(meta.mode, config);
+  const plannedProvider = route.adapter;
   const selected = selectedRangeOf({ video: meta.video, trim: body.trim });
   const ledgerSnapshot = {
     ...snapshot,
@@ -402,8 +438,18 @@ export async function startCharacterReplaceJob(input: {
     settings: { quality: snapshot.quality, voiceMode: snapshot.voiceMode, lipSyncMode: snapshot.lipSyncMode },
     quote: snapshot,
     quote_id: snapshot.id,
-    // §16: the provider/model the router chose at Start (the submit stage records what ACTUALLY ran in `provider`).
-    provider_plan: { id: plannedProvider.id, model: plannedProvider.model, scope: REPLACEMENT_SCOPE[snapshot.mode] },
+    // §16 / 2026-09-21 §21: the provider/model the router chose at Start — for the replacement AND the lip-sync stage — under the providers configuration's version. The submit stage records what ACTUALLY ran in `provider`; a later switch never moves this job.
+    provider_plan: {
+      id: plannedProvider.id,
+      model: plannedProvider.model,
+      version: plannedProvider.version || null,
+      scope: REPLACEMENT_SCOPE[snapshot.mode],
+      lipSync: lipSyncRoute ? { id: lipSyncRoute.vendor, model: lipSyncRoute.model, version: lipSyncRoute.version } : null,
+      providersVersion: settings.frenzAiProviders.version,
+      decidedAt: new Date().toISOString(),
+      // §27: a job an admin creates is a TEST run in the ledgers (admins are never charged anyway)
+      test: shared.isAdmin && settings.frenzAiProviders.adminJobsAreTests,
+    },
     // Part 11 §7 / 0167: how this job is paid for — the normal price is recorded either way
     billing: complimentary
       ? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }
@@ -466,6 +512,9 @@ export async function startCharacterReplaceJob(input: {
     const now = claimed ?? (await getOwnJob(subject, job.id));
     return { ok: true, job: now ?? job, started: false, waiting: false, balanceCents: null, billing: null, alreadyStarted: true };
   }
+
+  // 2026-09-21 §21: the row says which vendor will run it, for ever (the metadata's provider_plan is the full record; this column is what the routers read).
+  await stampJobProvider(job.id, plannedProvider.id, plannedProvider.model);
 
   /* ── C · reserve ───────────────────────────────────────────────────────── */
   let balanceAfter: number;

@@ -83,6 +83,22 @@ const modeSchema = z.object({
   provider: z.object({ model: z.string().max(160).optional() }).optional(),
 });
 
+const providerModelSchema = z
+  .object({
+    model: z.string().max(200).optional(),
+    version: z.string().max(120).optional(),
+    enabled: z.boolean().optional(),
+    maxDurationSeconds: z.number().int().min(1).max(600).nullable().optional(),
+    maxEdgePx: z.number().int().min(256).max(4096).nullable().optional(),
+    creditMultiplier: z.number().min(0.1).max(10).optional(),
+    costUsdCentsPerSecond: z.number().min(0).max(100_000).optional(),
+    costUsdCentsPerRun: z.number().min(0).max(100_000).optional(),
+    maxConcurrent: z.number().int().min(0).max(100).optional(),
+    timeoutMinutes: z.number().int().min(0).max(240).optional(),
+    retryCount: z.number().int().min(0).max(5).optional(),
+    notes: z.string().max(400).optional(),
+  })
+  .strict();
 const aiPlanSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -232,6 +248,34 @@ const schema = z.object({
         .optional(),
       reset: z.object({ timezone: z.string().max(80).optional(), weekStartsOn: z.number().int().min(0).max(6).optional() }).optional(),
       walletFallback: z.enum(["allow", "ask", "off"]).optional(),
+    })
+    .strict()
+    .optional(),
+  /**
+   * 2026-09-21 (the fal.ai brief §10, §11): the provider switch and the model
+   * configuration. Text to Speech and Voice Replace take NO provider field —
+   * they are ElevenLabs by construction; a patch naming one is refused here
+   * (strict) and ignored by the normaliser. Bounds mirror AI_PROVIDERS_BOUNDS.
+   */
+  frenzAiProviders: z
+    .object({
+      features: z
+        .object({
+          character_replace: z
+            .object({
+              provider: z.enum(["replicate", "fal"]).optional(),
+              unsupportedScopes: z.enum(["unavailable", "replicate"]).optional(),
+              falScopes: z.object({ upper_body: z.boolean().optional(), full_character: z.boolean().optional() }).strict().optional(),
+            })
+            .strict()
+            .optional(),
+          lip_sync: z.object({ provider: z.enum(["replicate", "fal"]).optional() }).strict().optional(),
+        })
+        .strict()
+        .optional(),
+      models: z.record(z.enum(["character_replace:replicate", "character_replace:fal", "lip_sync:replicate", "lip_sync:fal"]), providerModelSchema).optional(),
+      paused: z.object({ replicate: z.boolean().optional(), fal: z.boolean().optional() }).strict().optional(),
+      adminJobsAreTests: z.boolean().optional(),
     })
     .strict()
     .optional(),

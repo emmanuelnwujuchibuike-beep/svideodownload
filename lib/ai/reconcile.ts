@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readPipeline } from "@/lib/ai/character-replace/job-meta";
+import { readPipeline, jobVendor } from "@/lib/ai/character-replace/job-meta";
 import { isProviderStage, markFailed, markSucceeded, nextStage, type PipelineMeta, type PipelineStage } from "@/lib/ai/character-replace/pipeline";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorMessage } from "@/lib/ai/errors";
@@ -9,6 +9,7 @@ import { aiFeature, type AiJobRow, type AiJobStatus } from "@/lib/ai/jobs";
 import { getJobAsService, recordProviderOutput, transitionJob, noteJobDiagnostic, writeProcessingMetadata } from "@/lib/ai/job-store";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { providerFor } from "@/lib/ai/providers";
+import { closeProviderRun } from "@/lib/ai/providers/runs";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { releaseJobFunding } from "@/lib/ai/funding";
 
@@ -105,7 +106,8 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
 
   const feature = aiFeature(job.feature);
   if (!feature) return false;
-  const provider = providerFor(feature.provider);
+  // 2026-09-21: the vendor holding THIS job's request (a job keeps its provider; the current stage's record says which), never the feature's default.
+  const provider = providerFor(job.feature === "ai_character_replace" ? jobVendor(job) : feature.provider);
   if (!provider || !provider.isConfigured()) return false;
 
   /*
@@ -135,7 +137,7 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
   lastChecked.set(job.id, now);
 
   try {
-    const state = await provider.poll(job.replicate_prediction_id);
+    const state = await provider.poll(job.replicate_prediction_id, { model: job.model });
 
     /* ── still working. The common answer, and it is good news. ──────────── */
     if (state.status === "queued" || state.status === "processing") {
@@ -151,10 +153,14 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
     }
 
     /* ── finished, and we were never told ─────────────────────────────────── */
+    // 0168: the run ledger learns the outcome from here when the webhook went missing (the same (provider, id) row — never a second one).
+    const vendor = job.feature === "ai_character_replace" ? jobVendor(job) : "replicate";
     if (state.status === "completed") {
       if (!state.resultUrl) {
+        await closeProviderRun(vendor, job.replicate_prediction_id, { status: "failed", errorCode: "PROVIDER_ERROR", errorDetail: state.detail ?? "succeeded with no usable output" });
         return await failFrom(job, "PROVIDER_ERROR", "succeeded with no usable output");
       }
+      await closeProviderRun(vendor, job.replicate_prediction_id, { status: "succeeded", outputRef: state.resultUrl });
 
       // Written BEFORE anything is dispatched, so a worker call that never
       // lands still leaves a job that can be finalized later rather than one
@@ -235,13 +241,16 @@ export async function reconcileWithProvider(job: AiJobRow, now: number = Date.no
     if (state.status === "failed") {
       // Which stage failed, for the operator — before the status moves, so the note survives the CAS.
       if (pipeline && stage) await recordStage(job, pipeline, (p) => markFailed(p, stage, state.detail ?? "provider failed", new Date(now).toISOString()));
-      return await failFrom(job, stage === "voice" ? "VOICE_GENERATION_FAILED" : stage === "lipsync" ? "LIPSYNC_FAILED" : "PROCESSING_FAILED", state.detail);
+      const code = stage === "voice" ? "VOICE_GENERATION_FAILED" : stage === "lipsync" ? "LIPSYNC_FAILED" : "PROCESSING_FAILED";
+      await closeProviderRun(vendor, job.replicate_prediction_id, { status: "failed", errorCode: code, errorDetail: state.detail });
+      return await failFrom(job, code, state.detail);
     }
 
     if (state.status === "cancelled") {
       const updated = await transitionJob(job.id, ["queued", "processing"], "cancelled", {
         completed_at: new Date(now).toISOString(),
       });
+      await closeProviderRun(vendor, job.replicate_prediction_id, { status: "cancelled" });
       if (updated) await refund(job, "cancel");
       return !!updated;
     }

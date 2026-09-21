@@ -1,19 +1,8 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-import { readPipeline } from "@/lib/ai/character-replace/job-meta";
-import { isProviderStage, markFailed, markProcessing, markSucceeded, nextStage } from "@/lib/ai/character-replace/pipeline";
-import { aiErrorMessage } from "@/lib/ai/errors";
-import { aiFeature, isActiveStatus, type AiFeature } from "@/lib/ai/jobs";
-import { recordJobEvent } from "@/lib/ai/job-events";
-import { findJobByPredictionId, getJobAsService, noteJobDiagnostic, recordProviderOutput, transitionJob, writeProcessingMetadata } from "@/lib/ai/job-store";
 import { stateFromWebhookBody } from "@/lib/ai/replicate/provider";
 import { readWebhookHeaders, verifyReplicateWebhook } from "@/lib/ai/replicate/signature";
-import { getAiEntitlement } from "@/lib/ai/entitlement";
-import { dispatchAdvance, dispatchFinalization } from "@/lib/ai/finalize-dispatch";
-import { notifyAiJobFailed } from "@/lib/ai/notify";
-import { subjectFromRow, type AiSubject } from "@/lib/ai/subject";
-import { releaseAiUsage } from "@/lib/ai/usage";
-import { releaseJobFunding } from "@/lib/ai/funding";
+import { handleProviderCallback } from "@/lib/ai/webhook-handler";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +16,7 @@ export const maxDuration = 30;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  POST /api/ai/replicate/webhook — the only way a job ever finishes
+ *  POST /api/ai/replicate/webhook — how a Replicate job finishes
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * ── 🔴 THIS ENDPOINT IS PUBLIC, SO THE SIGNATURE IS THE WHOLE SECURITY MODEL ─
@@ -44,12 +33,13 @@ export const maxDuration = 30;
  *   3. the prediction id is looked up against a UNIQUE column, so one callback
  *      resolves to exactly one job.
  *
- * ── Idempotency is the database's job, not a flag here ───────────────────────
+ * ── The handling is shared (2026-09-21) ────────────────────────────────────
  *
- * Replicate retries. `transitionJob` is a compare-and-set: it updates only from
- * the statuses a job is allowed to leave, so the second delivery of the same
- * callback matches no row and changes nothing. That is what stops a retry
- * double-charging usage, re-copying the file, or reopening a finished job.
+ * Everything after verification — the stage bookkeeping, the CAS transitions
+ * that make retries harmless, the hand-off to the worker, the refund-once on
+ * failure — is lib/ai/webhook-handler.ts, the same function the fal.ai route
+ * calls. This route's own job is Replicate's signature and Replicate's body
+ * shape, nothing else. Behaviour is what it was before the split.
  *
  * ── Always 200, even when we refuse ──────────────────────────────────────────
  *
@@ -61,19 +51,14 @@ export const maxDuration = 30;
 export async function POST(request: Request) {
   const secret = process.env.REPLICATE_WEBHOOK_SECRET?.trim();
   if (!secret) {
-    // Nothing may be accepted without the means to check it. Loud on our side,
-    // silent on theirs.
+    // Nothing may be accepted without the means to check it. Loud on our side, silent on theirs.
     console.error("[ai/webhook] REPLICATE_WEBHOOK_SECRET is not set — refusing every delivery");
     return NextResponse.json({ ok: false }, { status: 200 });
   }
 
   // 🔴 text(), not json(). The signature covers these exact bytes.
   const rawBody = await request.text();
-  const verdict = verifyReplicateWebhook({
-    headers: readWebhookHeaders(request.headers),
-    rawBody,
-    secret,
-  });
+  const verdict = verifyReplicateWebhook({ headers: readWebhookHeaders(request.headers), rawBody, secret });
 
   if (!verdict.valid) {
     console.warn("[ai/webhook] rejected", { reason: verdict.reason });
@@ -92,286 +77,6 @@ export async function POST(request: Request) {
   const state = stateFromWebhookBody(body);
   if (!state) return NextResponse.json({ ok: false }, { status: 200 });
 
-  try {
-    const job = await findJobByPredictionId(state.reference);
-    if (!job) {
-      // Verified, but about a prediction we do not know. Nothing to do, and no
-      // retry will change that.
-      console.warn("[ai/webhook] no job for prediction", { predictionId: state.reference });
-      return NextResponse.json({ ok: true, matched: false }, { status: 200 });
-    }
-
-    const feature = aiFeature(job.feature);
-    if (!feature) return NextResponse.json({ ok: true }, { status: 200 });
-
-    /*
-      The audit row (Part 5, §36). `ignored` when the job is already past the
-      status this delivery could move — a duplicate or an out-of-order one —
-      which the compare-and-set below turns into a no-op regardless; the row
-      just says so. Ownership is the prediction id's: it is UNIQUE per job, so
-      a verified delivery cannot name somebody else's row.
-    */
-    const stale = !isActiveStatus(job.status);
-    await recordJobEvent(job.id, stale ? "webhook.ignored" : "webhook.received", {
-      providerStatus: state.status,
-      jobStatus: job.status,
-      predictionId: state.reference,
-      ...(stale ? { reason: "job already terminal (duplicate or out of order)" } : {}),
-    });
-
-    /*
-      ── Part 6: WHICH STAGE this delivery is about ─────────────────────────
-      A multi-stage Character Replace job carries a pipeline; the prediction
-      id on the row is the CURRENT stage's, and this delivery was matched by
-      it, so `pipeline.current` is the stage that finished. When the stage
-      after it is another provider stage, the worker "advances" the job
-      (brings the output home, submits the next); when it is our own
-      finalization, the Part 5 path below runs unchanged.
-    */
-    const pipeline = job.feature === "ai_character_replace" ? readPipeline(job.metadata) : null;
-    const stage = pipeline?.current ?? null;
-    const following = pipeline && stage ? nextStage(pipeline, stage) : null;
-    const intermediate = !!pipeline && !!stage && isProviderStage(stage) && !!following && isProviderStage(following);
-
-    /* ── still running ────────────────────────────────────────────────────── */
-    if (state.status === "processing" || state.status === "queued") {
-      await transitionJob(job.id, ["queued"], "processing", {
-        started_at: job.started_at ?? new Date().toISOString(),
-      });
-      if (pipeline && stage && job.status === "processing") {
-        // The stage record says "processing" — for the tracker's "working" state. Best-effort, guarded by the prediction id.
-        const current = await getJobAsService(job.id);
-        if (current?.replicate_prediction_id === state.reference) {
-          await writeProcessingMetadata(job.id, state.reference, { ...(current.metadata ?? {}), pipeline: markProcessing(readPipeline(current.metadata) ?? pipeline, stage) }).catch(() => null);
-        }
-      }
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
-    /* ── finished, one way or another ─────────────────────────────────────── */
-    if (state.status === "completed") {
-      /*
-        ── 🔴 THE PROVIDER FINISHING IS NOT THE JOB FINISHING ──────────────────
-
-        The model returns video with NO AUDIO. Marking this completed would hand
-        the member a silent video, which is why the state machine no longer
-        allows processing -> completed at all (lib/ai/jobs.ts).
-
-        So this route does the two cheap, durable things — record where the
-        output is, and ask the worker to finish — and nothing else. It moves no
-        video: a 100 MB transfer inside a webhook is memory this platform bills
-        by the millisecond, and a webhook that runs long is a webhook Replicate
-        gives up on and redelivers.
-      */
-      const outputUrl = state.resultUrl;
-      if (!outputUrl) {
-        // Replicate says it succeeded and there is no video in the output.
-        // Treated as a provider failure and refunded — the member has nothing
-        // either way, and the fault is not theirs.
-        return await failJob(job.id, subjectFromRow(job), feature.id, "PROVIDER_ERROR", "succeeded with no usable output");
-      }
-
-      try {
-        // Written BEFORE the response, so a dispatch that never lands leaves a
-        // job that can still be finalized later rather than one that has lost
-        // the only link to its own output.
-        await recordProviderOutput(job.id, outputUrl);
-        if (pipeline && stage) {
-          // The stage record: succeeded, with its output, and — for an intermediate stage — the advance the worker owes.
-          const current = await getJobAsService(job.id);
-          if (current?.replicate_prediction_id === state.reference && current.status === "processing") {
-            const moved = markSucceeded(readPipeline(current.metadata) ?? pipeline, stage, outputUrl, new Date().toISOString());
-            await writeProcessingMetadata(job.id, state.reference, { ...(current.metadata ?? {}), pipeline: moved });
-          }
-        }
-      } catch (e) {
-        // Our database, our problem — 500 asks for the redelivery that fixes it.
-        console.error("[ai/webhook] could not record provider output", { jobId: job.id, error: String(e) });
-        return NextResponse.json({ ok: false }, { status: 500 });
-      }
-
-      if (intermediate) {
-        /*
-          ── Part 6: an intermediate stage finished ───────────────────────────
-          The worker downloads, validates and stores this stage's output and
-          asks the frontend to submit the next stage (server/services/
-          ai-character-replace-advance-service.ts). Same shape as the
-          finalization hand-off below: after the response, refusal ends the
-          job, transient failures are left to the recovery sweep, which
-          re-dispatches while `pipeline.pending_advance` is set.
-        */
-        after(async () => {
-          const dispatch = await dispatchAdvance(job.id);
-          console.info("[ai/webhook] advance dispatched", { jobId: job.id, userId: job.user_id, stage, next: following, predictionId: state.reference, dispatched: dispatch.dispatched, ...(dispatch.dispatched ? {} : { reason: dispatch.reason }) });
-          await noteJobDiagnostic(job.id, {
-            advance_dispatch: dispatch.dispatched ? "ok" : dispatch.reason,
-            advance_detail: dispatch.dispatched ? null : ("detail" in dispatch ? dispatch.detail : null),
-            advance_from: "webhook",
-          });
-          if (dispatch.dispatched === false && dispatch.reason === "refused") {
-            console.error("[ai/webhook] worker REFUSED the advance — ending the job", { jobId: job.id, status: dispatch.status, detail: dispatch.detail });
-            await failJob(job.id, subjectFromRow(job), feature.id, "FINALIZER_UNAVAILABLE", dispatch.detail);
-          }
-        });
-        return NextResponse.json({ ok: true }, { status: 200 });
-      }
-
-      /*
-        Fired AFTER the response. `after()` is how this platform allows work to
-        continue past a returned response — without it the function is frozen
-        the moment we answer and the worker is never called. The job stays
-        `processing` until the worker CLAIMS it with a compare-and-set, which
-        is what makes two deliveries of this callback safe.
-      */
-      after(async () => {
-        const dispatch = await dispatchFinalization(job.id);
-        console.info("[ai/webhook] finalization dispatched", {
-          jobId: job.id,
-          userId: job.user_id,
-          feature: feature.id,
-          predictionId: state.reference,
-          modelVersion: state.modelVersion,
-          dispatched: dispatch.dispatched,
-          ...(dispatch.dispatched ? {} : { reason: dispatch.reason }),
-          ...(dispatch.dispatched === false && dispatch.reason === "refused"
-            ? { status: dispatch.status, detail: dispatch.detail }
-            : {}),
-        });
-
-        /*
-          ── 🔴 A REFUSED HANDOFF ENDS THE JOB. IT USED TO ORPHAN IT. ────────
-
-          This block previously logged the outcome and stopped. When the worker
-          refused, the job stayed `processing` with nowhere left to go: we had
-          already answered Replicate 200 so it never redelivered, and the only
-          thing that would eventually touch the row was the 45-minute stall
-          deadline — by which time Replicate had expired the output file, so
-          the member got "succeeded with no usable output", which is both
-          confusing and untrue.
-
-          That was the whole bug. Every AI Clean job ever created died in this
-          silence.
-
-          A 403/404 from our own worker cannot improve on a retry, so the job
-          ends NOW with an honest error and the allowance goes back. Transient
-          failures are deliberately NOT ended here — `no-worker` and `failed`
-          leave the job for the reconciler, which is exactly what that path is
-          for.
-        */
-        // 🔴 On the ROW, not only in a log — see noteJobDiagnostic.
-        await noteJobDiagnostic(job.id, {
-          finalize_dispatch: dispatch.dispatched ? "ok" : dispatch.reason,
-          finalize_detail: dispatch.dispatched ? null : ("detail" in dispatch ? dispatch.detail : null),
-          finalize_from: "webhook",
-        });
-
-        if (dispatch.dispatched === false && dispatch.reason === "refused") {
-          console.error("[ai/webhook] worker REFUSED the finalization — ending the job", {
-            jobId: job.id,
-            status: dispatch.status,
-            detail: dispatch.detail,
-          });
-          await failJob(job.id, subjectFromRow(job), feature.id, "FINALIZER_UNAVAILABLE", dispatch.detail);
-        }
-      });
-
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
-    if (state.status === "failed") {
-      if (pipeline && stage) {
-        // Which stage failed, for the operator — before the status moves, so the note is not lost to a CAS.
-        const current = await getJobAsService(job.id);
-        if (current?.replicate_prediction_id === state.reference && current.status === "processing") {
-          await writeProcessingMetadata(job.id, state.reference, { ...(current.metadata ?? {}), pipeline: markFailed(readPipeline(current.metadata) ?? pipeline, stage, state.detail ?? "provider failed", new Date().toISOString()) }).catch(() => null);
-        }
-      }
-      return await failJob(job.id, subjectFromRow(job), feature.id, stage === "voice" ? "VOICE_GENERATION_FAILED" : stage === "lipsync" ? "LIPSYNC_FAILED" : "PROCESSING_FAILED", state.detail);
-    }
-
-    if (state.status === "cancelled") {
-      const updated = await transitionJob(job.id, ["queued", "processing"], "cancelled", {
-        completed_at: new Date().toISOString(),
-      });
-      if (updated) {
-        // A cancelled run still consumed provider time, but the member asked for
-        // it to stop and got nothing — the slot goes back.
-        await refund(subjectFromRow(job), feature.id, updated, "cancel");
-      }
-      return NextResponse.json({ ok: true }, { status: 200 });
-    }
-
-    return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (e) {
-    console.error("[ai/webhook] threw", { predictionId: state.reference, error: String(e) });
-    // Our side broke. 500 asks for the retry that might succeed.
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
-}
-
-/** Mark it failed, refund the slot, and never store the provider's words. */
-async function failJob(
-  jobId: string,
-  // 🔴 Null only if the row somehow has neither owner, which the check
-  // constraint forbids. Typed nullable anyway: a refund credited to the wrong
-  // subject is worse than one that is skipped and logged.
-  subject: AiSubject | null,
-  feature: AiFeature,
-  code: string,
-  detail: string | null | undefined,
-) {
-  const updated = await transitionJob(jobId, ["queued", "processing"], "failed", {
-    error_code: code,
-    // Operator-facing only. `jobToView` never selects this column into a
-    // response, so a provider's stack trace cannot reach a browser.
-    error_message: detail ? detail.slice(0, 2000) : null,
-    completed_at: new Date().toISOString(),
-  });
-
-  if (updated) {
-    await refund(subject, feature, updated, "failure");
-    /*
-      The provider gave up on a job the member is probably no longer watching —
-      this model runs for minutes, so a silent failure is indistinguishable
-      from one still running. The refund is stated in the sentence because
-      "it failed" alone reads as "and it cost me one of my two".
-    */
-    // A guest has nowhere to receive a push; they see it when they return.
-    if (subject?.kind === "user") {
-      await notifyAiJobFailed({
-        userId: subject.userId,
-        jobId,
-        feature,
-        message: aiErrorMessage(code === "PROVIDER_UNAVAILABLE" ? "PROVIDER_UNAVAILABLE" : "PROCESSING_FAILED"),
-      });
-    }
-    console.error("[ai/webhook] failed", {
-      jobId,
-      subject: subject?.key ?? null,
-      feature,
-      code,
-      transition: "-> failed",
-      released: true,
-    });
-  }
-  return NextResponse.json({ ok: true }, { status: 200 });
-}
-
-/**
- * Give the slot back.
- *
- * The entitlement is re-resolved because the refund cap is the member's own
- * daily allowance, and a webhook has no session to read it from. `getUserPlan`
- * is a single indexed read and this path runs at most once per job.
- */
-async function refund(subject: AiSubject | null, feature: AiFeature, job?: { id: string; user_id: string | null; funding_source: "free" | "balance" | "credits" | null }, cause: "failure" | "cancel" | "undo" = "undo") {
-  const def = aiFeature(feature);
-  if (!def || !subject) return;
-  const entitlement = await getAiEntitlement(subject, def);
-  // Character Replace: the product-wallet refund, exactly once (lib/ai/funding.ts).
-  if (job && feature === "ai_character_replace") {
-    await releaseJobFunding({ job, subject, feature, dailyLimit: entitlement.dailyLimit, cause });
-    return;
-  }
-  await releaseAiUsage(subject, feature, entitlement.dailyLimit);
+  const answer = await handleProviderCallback(state, { provider: "replicate", log: "ai/webhook" });
+  return NextResponse.json(answer.body, { status: answer.status });
 }

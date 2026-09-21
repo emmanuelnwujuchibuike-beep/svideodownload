@@ -173,6 +173,7 @@ export const OWNER_COLUMN: Record<string, string> = {
   /* 0167: the AI plan and every credit transaction under it are the member's own record. */
   ai_subscriptions: "user_id",
   ai_credit_ledger: "user_id",
+  ai_provider_runs: "user_id",
   /*
     Every complimentary creation you used (0162): the job, which of your free
     uses it was, the normal price you were NOT charged, and whether it was

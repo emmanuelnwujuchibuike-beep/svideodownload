@@ -332,7 +332,7 @@ describe("every path that undoes a Character Replace job refunds through the ONE
   it.each([
     "lib/ai/character-replace/start-job.ts",
     "lib/ai/character-replace/queue.ts",
-    "app/api/ai/replicate/webhook/route.ts",
+    "lib/ai/webhook-handler.ts",
     "app/api/ai/jobs/[id]/cancel/route.ts",
     "lib/ai/reconcile.ts",
     "lib/ai/stall-server.ts",

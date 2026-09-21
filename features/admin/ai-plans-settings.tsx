@@ -64,6 +64,25 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [weekStartsOn, setWeekStartsOn] = useState(String(cfg.reset.weekStartsOn));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // 2026-09-21: "Check with Paystack" — what the code really is before it is saved (a payment-page slug was pasted here once)
+  const [codeCheck, setCodeCheck] = useState<Record<AiPlanId, { busy: boolean; text: string | null; ok: boolean }>>({ ai_pro: { busy: false, text: null, ok: false }, ai_max: { busy: false, text: null, ok: false } });
+  const checkCode = async (id: AiPlanId) => {
+    const code = plans[id].code.trim();
+    setCodeCheck((c) => ({ ...c, [id]: { busy: true, text: null, ok: false } }));
+    try {
+      const res = await fetch("/api/admin/ai/plans/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; plan?: { name: string; amount: number; currency: string; interval: string; active: boolean } } | null;
+      if (json?.ok && json.plan) {
+        const major = (json.plan.amount / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        const shown = `${symbol}${plans[id].price || "0"}`;
+        setCodeCheck((c) => ({ ...c, [id]: { busy: false, ok: true, text: `Paystack: "${json.plan!.name}" — ${json.plan!.currency} ${major} ${json.plan!.interval}${json.plan!.active ? "" : " (archived!)"}. The card shows ${shown}/${plans[id].interval === "yearly" ? "year" : "month"}${json.plan!.currency !== settings.frenzAiCurrency ? " — a different currency; members are charged Paystack's amount." : "."}` } }));
+      } else {
+        setCodeCheck((c) => ({ ...c, [id]: { busy: false, ok: false, text: json?.error ?? "Paystack did not answer." } }));
+      }
+    } catch {
+      setCodeCheck((c) => ({ ...c, [id]: { busy: false, ok: false, text: "Network error." } }));
+    }
+  };
 
   const payload = useMemo(
     () => ({
@@ -199,8 +218,15 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                         <option value="yearly">Yearly</option>
                       </select>
                     </Field>
-                    <Field id={`${id}-code`} label="Paystack plan code" hint="PLN_… from the Paystack dashboard. Empty = coming soon.">
-                      <input id={`${id}-code`} value={p.code} onChange={(e) => set({ code: e.target.value })} className={input} placeholder="PLN_…" />
+                    <Field id={`${id}-code`} label="Paystack plan code" hint="Paystack dashboard → Payments → Plans → the plan → Plan code (PLN_…). Not the payment-page link. Empty = coming soon.">
+                      <div className="mt-1 flex gap-2">
+                        <input id={`${id}-code`} value={p.code} onChange={(e) => set({ code: e.target.value })} className={cn(input, "mt-0 min-w-0 flex-1")} placeholder="PLN_…" />
+                        <button type="button" onClick={() => checkCode(id)} disabled={codeCheck[id].busy || !p.code.trim()} className="shrink-0 rounded-xl border border-border px-3 text-xs font-semibold disabled:opacity-50">
+                          {codeCheck[id].busy ? "Checking…" : "Check with Paystack"}
+                        </button>
+                      </div>
+                      {p.code.trim() && !/^PLN_[A-Za-z0-9]{4,60}$/.test(p.code.trim()) ? <span className="mt-1 block text-[11px] text-rose-600">Not a plan code — it must start with PLN_. Saving will leave the plan as “coming soon”.</span> : null}
+                      {codeCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", codeCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{codeCheck[id].text}</span> : null}
                     </Field>
                     <Field id={`${id}-daily`} label="Daily credits"><input id={`${id}-daily`} inputMode="numeric" value={p.daily} onChange={(e) => set({ daily: e.target.value })} className={input} /></Field>
                     <Field id={`${id}-weekly`} label="Weekly credits" hint="Both must cover a generation."><input id={`${id}-weekly`} inputMode="numeric" value={p.weekly} onChange={(e) => set({ weekly: e.target.value })} className={input} /></Field>

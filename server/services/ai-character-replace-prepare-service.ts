@@ -3,7 +3,10 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { buildPrepareArgs, isKnownPrepareArg, type PreparePlan } from "@/lib/ai/character-replace/ffmpeg";
+import { buildPrepareArgs, isKnownPrepareArg, klingFrameRate, type PreparePlan } from "@/lib/ai/character-replace/ffmpeg";
+import { readProviderPlan } from "@/lib/ai/character-replace/job-meta";
+import { applyProviderRoutes } from "@/lib/ai/providers/resolve";
+import { validateKlingElementImage, validateKlingInputFacts } from "@/lib/ai/character-replace/providers/kling-input";
 import { durationWithinTolerance, readCharacterReplaceMeta, referencePaths, selectedRangeOf, type CharacterReplaceJobMeta } from "@/lib/ai/character-replace/job-meta";
 import { buildReferenceImageArgs, isKnownReferenceImageArg, type ReferenceImagePlan } from "@/lib/ai/character-replace/ffmpeg";
 import { modeConfig, publicCharacterReplaceConfig } from "@/lib/ai/character-replace/config";
@@ -131,7 +134,7 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     // The same ceilings the browser and /start applied, from the same source — the MODE's own (Part 6).
     const mode = modeConfig(crConfig, meta.mode);
     const limits = characterReplaceLimits(
-      publicCharacterReplaceConfig(crConfig, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true),
+      applyProviderRoutes(publicCharacterReplaceConfig(crConfig, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, true), crConfig, settings.frenzAiProviders),
       meta.mode,
     );
 
@@ -193,7 +196,15 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
       file the model receives — see lib/ai/character-replace/ffmpeg.ts.
     */
     const color = await probeColor(videoFile);
-    const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null };
+    /*
+      2026-09-21: the geometry the ROW's provider needs. A job the router sent
+      to fal.ai (Kling O1 Video Edit) gets the Kling profile — both edges ≥
+      720, long edge ≤ 2160, 24–60 fps; everything else is the plan Part 4
+      shipped. Decided by the plan written at Start, never by today's switch.
+    */
+    const providerPlan = readProviderPlan(job.metadata);
+    const profile: NonNullable<PreparePlan["profile"]> = providerPlan?.id === "fal" ? "kling" : "default";
+    const plan: PreparePlan = { input: videoFile, output: preparedFile, startMs: range.startMs, endMs: trimmed ? range.endMs : null, profile, ...(profile === "kling" ? { frameRate: klingFrameRate(videoProbe.frameRate) } : {}) };
     const args = buildPrepareArgs(plan);
     for (const arg of args) {
       if (!isKnownPrepareArg(arg, plan)) throw new PrepareFailure("PREPARATION_FAILED", `refusing an unknown ffmpeg argument`, "system");
@@ -210,6 +221,11 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
     const preparedMs = Math.round(preparedProbe.durationSeconds * 1000);
     if (!durationWithinTolerance(meta.quote.durationMs, preparedMs)) {
       throw new PrepareFailure("DURATION_MISMATCH", `priced ${meta.quote.durationMs} ms, prepared ${preparedMs} ms`);
+    }
+    if (profile === "kling") {
+      // §5: the file the model will receive, against every documented limit — a violation ends the job here (refunded), nothing is submitted.
+      const verdict = validateKlingInputFacts({ durationMs: preparedMs, width: preparedProbe.width ?? 0, height: preparedProbe.height ?? 0, bytes: preparedStat.size, fps: preparedProbe.frameRate ?? null });
+      if (!verdict.ok) throw new PrepareFailure("UNSUPPORTED_SOURCE", `the prepared video is outside the model's limits: ${verdict.reason}`);
     }
 
     /*
@@ -245,6 +261,11 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
         if (!encStat || encStat.size <= 0) throw new Error("ffmpeg wrote nothing");
         const encProbe = await probeMedia(out);
         if (!encProbe?.width || !encProbe.height) throw new Error("the re-encoded image could not be decoded");
+        if (profile === "kling") {
+          // Kling's element limits (≥ 300 px, aspect 0.40–2.50, ≤ 10 MB): a photo outside them ends the job here, refunded — never a paid-for refusal at the provider.
+          const element = validateKlingElementImage({ width: encProbe.width, height: encProbe.height, bytes: encStat.size });
+          if (!element.ok) throw new PrepareFailure("INVALID_INPUT", `reference image ${i + 1} is outside the model's element limits: ${element.reason}`);
+        }
         const key = aiPreparedReferenceKey(job.user_id, feature.id, job.id, i + 1);
         if (!pathBelongsTo(key, job.user_id, job.id)) throw new Error("refusing a prepared path that failed ownership");
         const upImg = await createAdminClient().storage.from(AI_SOURCE_BUCKET).upload(key, await readFile(out), { contentType: "image/jpeg", upsert: true });
@@ -252,6 +273,7 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
         preparedPath = key;
         await recordJobEvent(job.id, "reference.prepared", { index: i + 1, width: encProbe.width, height: encProbe.height, bytes: encStat.size, inputBytes: imageByteCounts[i] ?? null });
       } catch (e) {
+        if (e instanceof PrepareFailure) throw e;
         console.warn("[cr/prepare] reference image not normalised — sending the upload as-is", { jobId: job.id, index: i + 1, error: String(e).slice(0, 200) });
         await recordJobEvent(job.id, "reference.prepare_failed", { index: i + 1, detail: String(e).slice(0, 200) });
       }
@@ -445,6 +467,8 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
             hasAudio: preparedProbe.hasAudio,
             bytes: preparedStat.size,
             trimmed,
+            fps: preparedProbe.frameRate ?? null,
+            profile,
           },
           prepared_ms: Date.now() - startedAt,
         },

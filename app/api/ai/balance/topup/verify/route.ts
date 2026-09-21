@@ -290,7 +290,7 @@ export async function POST(request: Request) {
     try {
       return NextResponse.json({ credited: false, balanceCents: await getCharacterReplaceBalanceCents(user.id) });
     } catch {
-      return NextResponse.json({ error: "We couldn't check that payment. Try again." }, { status: 502 });
+      return NextResponse.json({ error: "We couldn't check that payment. Try again." }, { status: 503 });
     }
   }
 }

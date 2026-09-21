@@ -4,6 +4,7 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { AI_ACTIVE_STATUSES, aiFeature, isActiveStatus, jobToView, primaryAiFeature } from "@/lib/ai/jobs";
 import { getOwnJob, transitionJob } from "@/lib/ai/job-store";
+import { jobVendor } from "@/lib/ai/character-replace/job-meta";
 import { providerFor } from "@/lib/ai/providers";
 import { releaseAiUsage } from "@/lib/ai/usage";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -115,11 +116,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const feature = aiFeature(job.feature);
 
     if (job.replicate_prediction_id && feature) {
-      const provider = providerFor(feature.provider);
+      // 2026-09-21: the vendor holding THIS job's request — a job keeps its provider for ever.
+      const provider = providerFor(job.feature === "ai_character_replace" ? jobVendor(job) : feature.provider);
       // Best effort, and never allowed to stop the cancellation: the member's
       // intent is recorded either way, and a prediction we could not reach is
       // the provider's problem, not theirs.
-      if (provider) await provider.cancel(job.replicate_prediction_id).catch(() => false);
+      if (provider) await provider.cancel(job.replicate_prediction_id, { model: job.model }).catch(() => false);
     }
 
     const updated = await transitionJob(job.id, [...AI_ACTIVE_STATUSES], "cancelled", {

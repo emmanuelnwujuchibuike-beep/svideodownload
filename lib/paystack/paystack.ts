@@ -286,3 +286,39 @@ export interface PaystackEventData {
   channel?: string | null;
   paid_at?: string | null;
 }
+
+/**
+ * ── 2026-09-21: WHAT PAYSTACK HOLDS FOR A PLAN CODE ─────────────────────────
+ * The owner pasted a payment-page slug where a `PLN_…` plan code belongs, and
+ * every "Get AI Pro" answered "Plan not found" behind a generic sentence.
+ * The admin panel's "Check with Paystack" reads the plan back so a wrong code
+ * is caught at the moment it is typed: the name, the amount, the currency and
+ * the interval Paystack will actually charge. Never the secret.
+ */
+export interface PaystackPlanFacts {
+  planCode: string;
+  name: string;
+  /** In the subunit of the plan's currency (kobo for NGN, cents for USD). */
+  amount: number;
+  currency: string;
+  interval: string;
+  active: boolean;
+}
+
+export async function readPaystackPlan(planCode: string): Promise<PaystackPlanFacts> {
+  const p = await paystack<{ data: { plan_code?: string; name?: string; amount?: number; currency?: string; interval?: string; is_deleted?: boolean; is_archived?: boolean } }>(`/plan/${encodeURIComponent(planCode)}`);
+  const d = p.data ?? {};
+  return {
+    planCode: typeof d.plan_code === "string" ? d.plan_code : planCode,
+    name: typeof d.name === "string" ? d.name : "",
+    amount: typeof d.amount === "number" ? d.amount : 0,
+    currency: typeof d.currency === "string" ? d.currency : "",
+    interval: typeof d.interval === "string" ? d.interval : "",
+    active: !d.is_deleted && !d.is_archived,
+  };
+}
+
+/** Paystack's own words for a plan code it does not know — the checkout route names the cause instead of "try again". */
+export function isPaystackPlanNotFound(e: unknown): boolean {
+  return /plan (id\/code specified is invalid|not found)/i.test(String(e));
+}

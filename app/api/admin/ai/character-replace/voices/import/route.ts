@@ -39,7 +39,7 @@ export async function POST() {
   } catch (e) {
     const kind = e instanceof ElevenLabsError ? e.kind : "provider";
     console.error("[admin/cr/voices/import] list failed", { admin: admin.id, kind, detail: String(e).slice(0, 300) });
-    return NextResponse.json({ error: kind === "auth" ? "ElevenLabs refused the key. Check ELEVENLABS_API_KEY." : "ElevenLabs didn't answer. Try again in a moment." }, { status: 502 });
+    return NextResponse.json({ error: kind === "auth" ? "ElevenLabs refused the key. Check ELEVENLABS_API_KEY." : "ElevenLabs didn't answer. Try again in a moment." }, { status: 503 });
   }
 
   const settings = await getLandingSettings();

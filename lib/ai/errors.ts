@@ -142,6 +142,9 @@ export type AiErrorCode =
   /* 0167 (AI Pro / AI Max): the included allowance does not cover this generation; the wallet is not offered for it */
   | "CR_CREDITS_REQUIRED"
   | "CR_CREDITS_UNAVAILABLE"
+  /* 2026-09-21 (the fal.ai brief): a scope the active provider's model does not serve; the model's own input limit (a length the trim step fixes) */
+  | "CR_SCOPE_UNAVAILABLE"
+  | "CR_ENGINE_LIMIT"
   | "CR_MAINTENANCE"
   | "QUOTE_EXPIRED"
   /** 2026-09-20: Start was called without a passed preflight for exactly these files — nothing reserved. */
@@ -265,6 +268,8 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   CR_QUEUE_OFF: { status: 409, message: "Processing several videos at once isn't available right now. Create them one at a time." },
   CR_CREDITS_REQUIRED: { status: 402, message: "Not enough AI credits for this generation." },
   CR_CREDITS_UNAVAILABLE: { status: 409, message: "Your AI credits were just used by another generation. Check the price and try again — nothing was charged." },
+  CR_SCOPE_UNAVAILABLE: { status: 409, message: "This scope isn't available with the current engine. Try another scope, or check back soon — nothing has been charged." },
+  CR_ENGINE_LIMIT: { status: 400, message: "This engine works on clips of up to 10 seconds. Trim your video and try again — nothing has been charged." },
   CR_MAINTENANCE: { status: 503, message: "Character Replace is being looked after right now. Your finished videos are still here — new videos will be back shortly." },
   QUOTE_EXPIRED: { status: 409, message: "That price has expired. Check the new price and try again." },
   PREFLIGHT_REQUIRED: { status: 409, message: "Let us check your media first — it only takes a moment, and nothing is charged." },

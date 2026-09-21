@@ -66,7 +66,7 @@ export interface LipSyncSubmission {
 }
 
 export interface LipSyncProvider {
-  readonly id: "replicate";
+  readonly id: "replicate" | "fal";
   readonly model: string;
   readonly version: string;
   isConfigured(): boolean;

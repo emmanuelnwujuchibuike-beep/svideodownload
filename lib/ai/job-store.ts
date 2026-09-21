@@ -11,6 +11,7 @@ import {
   type AiJobRow,
   type AiJobSourceInput,
   type AiJobStatus,
+  type AiProviderId,
 } from "@/lib/ai/jobs";
 import type { AiSubject } from "@/lib/ai/subject";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -459,6 +460,29 @@ export async function revertJobStartClaim(jobId: string, metadata: Record<string
     .select("id");
   if (error) {
     console.error("[ai/jobs] start claim revert failed", { jobId, code: error.code, message: error.message });
+    return false;
+  }
+  return (data?.length ?? 0) === 1;
+}
+
+/**
+ * 2026-09-21 (the fal.ai brief §21): the vendor the router decided at Start,
+ * written on the ROW right after the claim. The reconciler, the cancel route,
+ * the stall sweep and the monitors route by this column, so a job started on
+ * fal.ai stays a fal.ai job however the operator's switch moves afterwards.
+ * Guarded on the two post-claim statuses: a row that has already been
+ * handed to a provider is never re-labelled.
+ */
+export async function stampJobProvider(jobId: string, provider: AiProviderId, model: string | null): Promise<boolean> {
+  const { data, error } = await createAdminClient()
+    .from("ai_jobs")
+    .update({ provider, ...(model ? { model } : {}) })
+    .eq("id", jobId)
+    .in("status", ["acquiring", "waiting"])
+    .is("replicate_prediction_id", null)
+    .select("id");
+  if (error) {
+    console.error("[ai/jobs] provider stamp failed", { jobId, provider, code: error.code, message: error.message });
     return false;
   }
   return (data?.length ?? 0) === 1;

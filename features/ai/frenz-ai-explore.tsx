@@ -200,7 +200,7 @@ export function FrenzAIExplore({
   const disabled: Partial<Record<AiToolId, string>> = {};
   if (config)
     for (const m of config.modes)
-      if (!m.enabled) disabled[m.id] = "Not available right now.";
+      if (!m.enabled) disabled[m.id] = m.unavailableNote ?? "Not available right now.";
 
   return (
     <div className="pb-24">

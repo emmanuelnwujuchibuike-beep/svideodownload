@@ -41,6 +41,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ activated: true, plan: outcome.plan, planLabel: settings.frenzAiPlans.plans[outcome.plan].label, dailyLimit: entitlement.dailyLimit, weeklyLimit: entitlement.weeklyLimit });
   } catch (e) {
     console.error("[ai/plans] verify threw", { userId: user.id, reference, error: String(e).slice(0, 200) });
-    return NextResponse.json({ error: "We couldn't confirm the payment yet. It will activate automatically once Paystack confirms it." }, { status: 502 });
+    return NextResponse.json({ error: "We couldn't confirm the payment yet. It will activate automatically once Paystack confirms it." }, { status: 503 });
   }
 }

@@ -31,6 +31,31 @@ export const PREPARE_MAX_LONG_EDGE = 1920;
 const SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(iw,${PREPARE_MAX_LONG_EDGE})/2)*2,-2)':h='if(gt(iw,ih),-2,trunc(min(ih,${PREPARE_MAX_LONG_EDGE})/2)*2)'`;
 
 /*
+  ── 2026-09-21: THE KLING PROFILE (fal.ai, Kling O1 Video Edit) ─────────────
+  The model documents 720–2160 px on BOTH edges and 24–60 fps. The default
+  plan caps the long edge and leaves the rest; a 21:9 clip at 1280 wide is
+  548 tall and would be refused after it was paid for. So a job routed to
+  Kling gets: the short edge raised to 720 when it is under (a mild upscale
+  of the member's own frames — no crop, no cut), the long edge capped at
+  2160, both even; and the frame rate clamped into the window with `-r`
+  (a 15 fps screen recording becomes 24; 120 fps slow motion becomes 60).
+  Still nothing but the trim, the size and the rate — no colour work.
+*/
+export const KLING_MIN_EDGE = 720;
+export const KLING_MAX_LONG_EDGE = 2160;
+const KLING_SCALE_FILTER = `scale=w='if(gt(iw,ih),trunc(min(max(iw,${KLING_MIN_EDGE}*iw/ih),${KLING_MAX_LONG_EDGE})/2)*2,-2)':h='if(gt(iw,ih),-2,trunc(min(max(ih,${KLING_MIN_EDGE}*ih/iw),${KLING_MAX_LONG_EDGE})/2)*2)'`;
+
+export type PrepareProfile = "default" | "kling";
+
+/** The frame rate the Kling profile asks ffmpeg for: the source's own when it is inside 24–60, else the nearest edge; null = leave it. */
+export function klingFrameRate(sourceFps: number | null | undefined): number | null {
+  if (typeof sourceFps !== "number" || !Number.isFinite(sourceFps) || sourceFps <= 0) return 30;
+  if (sourceFps < 24) return 24;
+  if (sourceFps > 60) return 60;
+  return null;
+}
+
+/*
   ── 🔴 NOTHING TOUCHES THE PICTURE BUT THE TRIM AND THE SIZE (owner, 2026-09-14) ──
 
   "The result and filter should be purely natural from replicate." Two
@@ -63,6 +88,11 @@ export const PREPARE_CONSTANT_ARGS = new Set<string>([
   "0:a?",
   "-vf",
   SCALE_FILTER,
+  KLING_SCALE_FILTER,
+  "-r",
+  "24",
+  "30",
+  "60",
   "-c:v",
   "libx264",
   "-preset",
@@ -93,6 +123,10 @@ export interface PreparePlan {
   /** The kept range, integer milliseconds. `null` end = to the end of the file. */
   startMs: number;
   endMs: number | null;
+  /** 2026-09-21: which geometry the provider needs. Absent = the default (Replicate's models). */
+  profile?: PrepareProfile;
+  /** The Kling profile's frame rate (`klingFrameRate`); null/absent = the source's own. */
+  frameRate?: number | null;
 }
 
 /** Milliseconds → the seconds string ffmpeg reads, three decimals, no locale. */
@@ -109,10 +143,15 @@ export function buildPrepareArgs(plan: PreparePlan): string[] {
   if (plan.startMs > 0) args.push("-ss", secondsArg(plan.startMs));
   args.push("-i", plan.input);
   if (plan.endMs !== null) args.push("-t", secondsArg(plan.endMs - plan.startMs));
+  const kling = plan.profile === "kling";
   args.push(
     "-map", "0:v:0",
     "-map", "0:a?",
-    "-vf", SCALE_FILTER,
+    "-vf", kling ? KLING_SCALE_FILTER : SCALE_FILTER,
+  );
+  // Only the three rates the profile can ask for are in the known set; anything else is refused by isKnownPrepareArg.
+  if (kling && (plan.frameRate === 24 || plan.frameRate === 30 || plan.frameRate === 60)) args.push("-r", String(plan.frameRate));
+  args.push(
     "-c:v", "libx264",
     "-preset", "veryfast",
     "-crf", "20",

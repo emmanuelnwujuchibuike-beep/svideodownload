@@ -162,9 +162,17 @@ function multipliers(v: unknown, fallback: Record<string, number>): Record<strin
   }
   return out;
 }
-/** A Paystack plan code is `PLN_` + base62; anything else is kept only if it is a plausible token (a test code). */
+/**
+ * A Paystack plan code is `PLN_` + base62 — nothing else is one. 2026-09-21:
+ * a payment-page slug was saved here and every checkout answered "Plan not
+ * found"; the normaliser now drops anything that is not a plan code, so the
+ * plan reads "coming soon" instead of failing at the payment page.
+ */
+export function isPaystackPlanCode(v: unknown): v is string {
+  return typeof v === "string" && /^PLN_[A-Za-z0-9]{4,60}$/.test(v.trim());
+}
 function planCode(v: unknown): string {
-  return typeof v === "string" && /^[A-Za-z0-9_-]{0,100}$/.test(v.trim()) ? v.trim() : "";
+  return isPaystackPlanCode(v) ? v.trim() : "";
 }
 /** An IANA zone the runtime knows; otherwise the default (a typo must not stop every day from rolling over). */
 export function validTimezone(v: unknown, fallback: string): string {

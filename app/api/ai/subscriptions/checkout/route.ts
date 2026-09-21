@@ -5,7 +5,7 @@ import { aiPlanRank } from "@/lib/ai/credits/config";
 import { AI_PLAN_PURPOSE } from "@/lib/ai/credits/paystack";
 import { getAiSubscription } from "@/lib/ai/credits/subscription";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { initializeTransaction, paystackEnabled } from "@/lib/paystack/paystack";
+import { initializeTransaction, isPaystackPlanNotFound, paystackEnabled } from "@/lib/paystack/paystack";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { SITE_URL } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
@@ -68,7 +68,23 @@ export async function POST(request: Request) {
     console.info("[ai/plans] checkout started", { userId: user.id, plan: parsed.data.plan });
     return NextResponse.json({ url });
   } catch (e) {
-    console.error("[ai/plans] checkout failed", { userId: user.id, plan: parsed.data.plan, error: String(e).slice(0, 200) });
-    return NextResponse.json({ error: "Couldn't start checkout. Please try again." }, { status: 502 });
+    /*
+      ── 🔴 NEVER 502 FROM HERE (2026-09-21) ────────────────────────────────
+      Cloudflare replaces an origin 502 with its own HTML error page, so the
+      JSON sentence below never reached the sheet — the member saw a generic
+      "Something went wrong". 503 passes through. And the usual cause is
+      named: a plan code Paystack does not know (the owner had pasted a
+      payment-page slug where a PLN_… code belongs) is a configuration
+      fault, told to the operator in the log and to the member honestly.
+    */
+    const planNotFound = isPaystackPlanNotFound(e);
+    console.error("[ai/plans] checkout failed", { userId: user.id, plan: parsed.data.plan, planNotFound, error: String(e).slice(0, 200) });
+    return NextResponse.json(
+      {
+        error: planNotFound ? "This plan isn't set up for purchase yet — we're on it. Nothing was charged." : "Couldn't start checkout. Please try again in a moment.",
+        code: planNotFound ? "PLAN_NOT_CONFIGURED" : "PAYMENT_PROVIDER",
+      },
+      { status: 503 },
+    );
   }
 }

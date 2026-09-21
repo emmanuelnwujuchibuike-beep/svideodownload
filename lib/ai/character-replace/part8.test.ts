@@ -51,7 +51,7 @@ describe("the reconciler is stage-aware (Part 8)", () => {
     const r = code("lib/ai/reconcile.ts");
     // the guard runs BEFORE the provider is asked
     const guard = r.indexOf("if (!inFlight || (record.predictionId && record.predictionId !== job.replicate_prediction_id)) return false;");
-    const poll = r.indexOf("const state = await provider.poll(job.replicate_prediction_id);");
+    const poll = r.indexOf("const state = await provider.poll(job.replicate_prediction_id, { model: job.model });");
     expect(guard).toBeGreaterThan(0);
     expect(poll).toBeGreaterThan(guard);
     // an intermediate stage goes to the advance, never the finalizer
@@ -195,7 +195,8 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
     expect(create).toContain('if (config.ops.maintenanceMode) return refuse("CR_MAINTENANCE", { error: config.ops.maintenanceMessage });');
     expect(create).toContain('if (!config.ops.processingEnabled) return refuse("CR_BUSY");');
     const cfg = code("app/api/ai/character-replace/config/route.ts");
-    expect(cfg).toContain("processingAvailable: hasProviderFor(feature) && hasWorker && cr.ops.processingEnabled && !cr.ops.maintenanceMode,");
+    // 2026-09-21: "the provider" is whichever the router decides for the tool (Replicate or fal.ai), never the registry's feature default
+    expect(cfg).toContain("processingAvailable: characterReplaceProviderReady(settings) && hasWorker && cr.ops.processingEnabled && !cr.ops.maintenanceMode,");
   });
 });
 

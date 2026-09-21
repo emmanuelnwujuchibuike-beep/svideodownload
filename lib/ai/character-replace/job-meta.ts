@@ -45,7 +45,7 @@ const image = z.object({
 const stageRecord = z
   .object({
     status: z.enum(["pending", "submitted", "processing", "succeeded", "failed"]),
-    provider: z.object({ id: z.literal("replicate"), model: z.string(), version: z.string().nullable() }).nullable().optional(),
+    provider: z.object({ id: z.enum(["replicate", "fal"]), model: z.string(), version: z.string().nullable() }).nullable().optional(),
     predictionId: z.string().nullable().optional(),
     submittedAt: z.string().nullable().optional(),
     finishedAt: z.string().nullable().optional(),
@@ -105,6 +105,10 @@ export const characterReplaceJobMetaSchema = z
         hasAudio: z.boolean(),
         bytes: z.number().int().positive(),
         trimmed: z.boolean(),
+        /** 2026-09-21: the prepared file's frame rate, for adapters with a documented fps window (Kling: 24–60). Absent on older rows. */
+        fps: z.number().positive().nullable().optional(),
+        /** 2026-09-21: which prepare profile made the file — "kling" = both edges ≥ 720, fps clamped. */
+        profile: z.enum(["default", "kling"]).optional(),
       })
       .nullable(),
     /**
@@ -260,4 +264,74 @@ export function referencePaths(meta: Pick<CharacterReplaceJobMeta, "character" |
  */
 export function providerReferencePaths(meta: Pick<CharacterReplaceJobMeta, "character" | "references">): string[] {
   return [meta.character.preparedPath ?? meta.character.path, ...meta.references.map((r) => r.preparedPath ?? r.path)];
+}
+
+/* ───────────────────────── 2026-09-21: the provider plan ─────────────────── */
+
+/** The router's decision written at Start (start-job.ts `provider_plan`), read by every later step. */
+export interface ProviderPlan {
+  id: "replicate" | "fal";
+  model: string;
+  version: string | null;
+  lipSync: { id: "replicate" | "fal"; model: string; version: string | null } | null;
+  providersVersion: number | null;
+  test: boolean;
+}
+
+const providerPlanSchema = z
+  .object({
+    id: z.enum(["replicate", "fal"]).default("replicate"),
+    model: z.string().default(""),
+    version: z.string().nullable().optional(),
+    lipSync: z.object({ id: z.enum(["replicate", "fal"]), model: z.string(), version: z.string().nullable().optional() }).nullable().optional(),
+    providersVersion: z.number().int().nullable().optional(),
+    test: z.boolean().optional(),
+  })
+  .passthrough();
+
+/**
+ * The plan on a row, or null for a row started before the router existed —
+ * such a row ran on Replicate (its `provider` column says so), and the
+ * callers treat null exactly that way. A job never re-asks the router.
+ */
+export function readProviderPlan(metadata: unknown): ProviderPlan | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const raw = (metadata as Record<string, unknown>).provider_plan;
+  const parsed = providerPlanSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const p = parsed.data;
+  return {
+    id: p.id,
+    model: p.model,
+    version: p.version ?? null,
+    lipSync: p.lipSync ? { id: p.lipSync.id, model: p.lipSync.model, version: p.lipSync.version ?? null } : null,
+    providersVersion: p.providersVersion ?? null,
+    test: p.test === true,
+  };
+}
+
+/** The vendor a stage of THIS job runs on — the plan first, the row's column second, Replicate last (a row from before the router). */
+export function stageVendor(row: { provider?: string | null; metadata?: unknown }, stage: "replace" | "lipsync" | "voice"): "replicate" | "fal" {
+  const plan = readProviderPlan(row.metadata);
+  if (stage === "lipsync") return plan?.lipSync?.id ?? "replicate";
+  if (stage === "voice") return "replicate";
+  if (plan) return plan.id;
+  return row.provider === "fal" ? "fal" : "replicate";
+}
+
+/**
+ * The vendor holding the request CURRENTLY on the row — for the reconciler,
+ * the cancel route and the stall sweep. The pipeline's current stage record
+ * (written at submission, the record of what actually ran) first; the plan
+ * second; the row's column last. A row from before the router is Replicate.
+ */
+export function jobVendor(row: { provider?: string | null; metadata?: unknown }): "replicate" | "fal" {
+  const pipeline = readPipeline(row.metadata);
+  const stage = pipeline?.current;
+  if (pipeline && stage && stage !== "finalize") {
+    const recorded = pipeline.records[stage]?.provider?.id;
+    if (recorded === "fal" || recorded === "replicate") return recorded;
+    return stageVendor(row, stage);
+  }
+  return row.provider === "fal" ? "fal" : "replicate";
 }

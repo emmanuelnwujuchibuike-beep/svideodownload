@@ -9,10 +9,128 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑21 (AI Pro & AI Max credits + 0167; Character Replace Part 12: multi‑video sessions — the queue, waiting, batches, AI → Processing)_
+_Last updated: 2026‑09‑21 (fal.ai as a second provider + 0168; the Get AI Pro fault; AI Pro & AI Max credits + 0167; Character Replace Part 12)_
 
 ---
 
+## 2026‑09‑21 — fal.ai as a second AI provider: the router, Kling O1 Video Edit, Sync‑3, the run ledger (migration 0168) — and the "Get AI Pro" fault
+
+Owner's brief: integrate fal.ai as a SECOND provider behind a provider router, preserving Replicate
+completely; the admin switches Character Replace and Lip Sync between Replicate and fal.ai to
+compare them on real workloads; ElevenLabs stays the only voice provider (locked); AI Clean stays
+removed; Character Replace on fal.ai = **Kling O1 Video Edit** (NOT Wan through another door); Lip
+Sync on fal.ai = **Sync‑3**; no faked capability; Kling's input limits enforced before billing; no
+automatic fallback; a provider‑run ledger, a factual comparison (no winner), health, an admin test.
+
+### What the audit found (and reused)
+- Every provider call already went through seams: `ReplacementProvider` per model behind a per‑scope
+  router (`providers/router.ts`, chosen by the model name on the pricing tab), `LipSyncProvider` per
+  tier, `TextToSpeechProvider` (ElevenLabs in the worker), the generic `AiProvider` registry for
+  poll/cancel, and ONE webhook route whose post‑verification body was provider‑agnostic. The job row
+  already carried `provider`, `model`, `model_version`, the provider's id (`replicate_prediction_id`
+  — the column name stays; it holds a fal request id too), timestamps and `error_code`.
+- What was missing: a vendor‑level switch, the fal adapters, a second webhook, per‑run economics.
+
+### Design
+- **Migration `0168_ai_provider_runs.sql`** (proven on embedded Postgres 18 — apply, re‑apply, ACLs,
+  the unique (provider, provider_job_id), estimate ≠ actual, a job delete keeps the run): the
+  provider‑run ledger `ai_provider_runs` (one row per request handed to a vendor — replace stage,
+  lip‑sync stage, admin test; provider, model, request id, timings, submit latency, the operator's
+  cost ESTIMATE and a separate actual, error, output ref, `test`), service role only; and the
+  `ai_jobs_provider_chk` widened to ('replicate','fal') — LAST, `not valid` + `validate` (the 0167
+  deadlock lesson).
+- **Configuration `frenzAiProviders`** (`lib/ai/providers/config.ts`, in the landing settings row,
+  versioned, audited under `ai_providers`): `features.character_replace.provider` and
+  `features.lip_sync.provider` (replicate | fal); `text_to_speech` and `voice_change` have NO provider
+  field the normaliser reads — ElevenLabs by construction; `models[feature:vendor]` (model/endpoint,
+  version, enabled, max duration/edge, credit multiplier (1 = provider‑independent credits, §18),
+  cost per second / per run for the estimate, max concurrent, timeout, retries, notes) — a Wan
+  endpoint on the fal side is refused; `paused` per vendor (emergency control); `fallback: "off"`;
+  `adminJobsAreTests`; `falScopes` (Kling may serve Full Character and Upper Body — Face Only and
+  Face + Head are face‑swap tasks it does not claim and cannot be switched on) and
+  `unsupportedScopes` (unavailable while fal is active, or explicitly kept on Replicate).
+- **The router** (`lib/ai/providers/resolve.ts`): `resolveReplacementRoute(mode, cr, providers)` →
+  vendor, adapter, supported/configured/paused, the operator's diagnostic, the member's sentence, the
+  engine's limits; `resolveLipSyncRoute(tierModel, providers)`; `resolveProvider(feature)`;
+  `characterReplaceProviderReady(settings)` (the create gate / `processingAvailable`);
+  `applyProviderRoutes(publicConfig)` (a scope the decided engine cannot serve is drawn disabled
+  with its sentence; a scope on Kling carries `minimumDurationSeconds: 3` and
+  `maximumDurationSeconds: 10`, so the EXISTING trim workflow guards it — never a silent cut).
+  🔴 Decided ONCE, at /start, before the claim; written on the row (`provider_plan` with the
+  replace and lip‑sync vendors, models, versions, the providers version, `test`; and the `provider`
+  column via `stampJobProvider`). Prepare, submit, the reconciler and cancel read the ROW
+  (`readProviderPlan`, `stageVendor`, `jobVendor`) — a switch mid‑flight moves nothing. No fallback.
+- **fal.ai** (`lib/ai/fal/`): `client.ts` — the only file that reads `FAL_KEY` (server‑only, a
+  credentials resolver, never logged), `@fal-ai/client` queue only (`submit` with `webhookUrl`,
+  `status`, `result`, `cancel`), error classification (401/403 key · 402/429 account · 422 input),
+  `falCredentialCheck` (a status read on an impossible id: 404/422 = key good + endpoint exists);
+  `signature.ts` — fal's ED25519 scheme (`X-Fal-Webhook-*` headers, message = requestId \n userId \n
+  timestamp \n sha256hex(body), ±5 min, JWKS from rest.fal.ai, any live key), verified in the test
+  with a generated key pair; `jwks.ts` — 24 h cache, one refresh on a miss; `status.ts` — IN_QUEUE /
+  IN_PROGRESS / COMPLETED, `status:"OK"` + `payload.video.url` → completed, `"ERROR"` → failed;
+  `provider.ts` — the generic adapter (poll/cancel by endpoint + request id) registered beside
+  Replicate. Output hosts: fal.media joins replicate.delivery in `isTrustedProviderOutputUrl`.
+- **Kling O1 Video Edit** (`providers/kling-input.ts` pure + `fal-kling-edit.ts`): the schema read
+  on 09‑21 — `prompt`, `video_url` (MP4/MOV, 3–10.05 s, 720–2160 px, ≤ 200 MB, 24–60 fps),
+  `elements[{frontal_image_url, reference_image_urls?}]`, `image_urls`, `keep_audio`; the member's
+  photo is ELEMENT 1, extra photos its other angles, nothing in `image_urls`; one prompt per claimed
+  scope ("Replace the person in the video with @Element1 … keep the original movements, expressions,
+  timing, camera, framing, composition, lighting, environment…"); `klingSelectionVerdict` BEFORE
+  billing (length/container/size → `CR_ENGINE_LIMIT` 400 with the trim sentence; the quote refuses
+  a > 10 s selection the same way); `validateKlingInputFacts` on the PREPARED file before submission;
+  `validateKlingElementImage` on the re‑encoded reference. The worker's prepare plan gained a
+  **Kling profile** (`ffmpeg.ts`): both edges ≥ 720, long edge ≤ 2160, `-r` clamped into 24–60 — still
+  only the trim, the size and the rate. Tiers claimed: Full Character 720p (1080p when enabled),
+  Upper Body High.
+- **Sync‑3** (`lib/ai/voice/fal-sync3.ts`): `video_url`, `audio_url`, `sync_mode` (silence | loop |
+  bounce from the operator; never cut_off/remap; the `options` block is not sent). Audio‑driven only:
+  text becomes audio through ElevenLabs in the worker exactly as before; Sync‑3 never sees text.
+- **One webhook handler** (`lib/ai/webhook-handler.ts`): the Replicate route's post‑verification
+  body moved verbatim; both routes verify their own signature on the raw bytes, normalise, and call
+  it. It refuses a delivery for another vendor's job, keeps every CAS, closes the run‑ledger row,
+  refunds once. **`POST /api/webhooks/fal`** is the second route.
+- **Submit** routes by the row's plan: the Kling adapter or the per‑scope Replicate adapter for the
+  replace stage, Sync‑3 or the tier's Sync Labs model for lip sync; the webhook URL follows the
+  vendor; the run ledger opens a row with the estimate (`openProviderRun`); a lost claim cancels at
+  whichever vendor holds the run. The reconciler and the cancel route resolve `providerFor(jobVendor)`
+  and pass `{ model }` (a fal request is addressed by endpoint + id) and close the run row.
+- **Admin → AI → Providers** (`ai-providers-settings.tsx`, lazy): the switch per feature (TTS and
+  Voice Replace shown LOCKED to ElevenLabs; no AI Clean row), the Kling scope controls, emergency
+  pauses, "admin jobs are tests"; the model configuration per feature/provider with **Test provider**
+  (`POST /api/admin/ai/providers/test`: credentials + model configuration, recorded as a TEST run —
+  Replicate `/account`, fal status‑read probe, ElevenLabs `/voices`; nothing is submitted, no
+  member's credits); provider health (key present, last success/failure, recent error, 24 h counts,
+  submit latency, active for); the comparison (jobs, success, failed, rate, avg queue / processing /
+  total, estimated vs actual cost, failure codes — per feature/provider/model, tests apart, no score).
+  The job monitor shows the vendor and a TEST badge. The breaker table and the audit trail follow.
+- Catalogues updated (`data-domains`, `portability/tables`); errors `CR_SCOPE_UNAVAILABLE` (409),
+  `CR_ENGINE_LIMIT` (400); event `provider.refused` (the admin diagnostic for §4).
+
+### The "Get AI Pro" fault (owner, 09‑21 evening)
+- Reproduced on production with a throwaway member: the checkout route answered **502 with
+  Cloudflare's HTML page** — Cloudflare replaces an origin 502 with its own error page, so our JSON
+  sentence never reached the sheet ("Something went wrong"). Asked Paystack directly: the saved
+  "plan codes" were 10‑character **payment‑page slugs**, and Paystack answered "Plan not found".
+- Fixes: the normaliser keeps only a real `PLN_…` code (anything else → "coming soon", never a
+  failing checkout); the admin field says where the code lives and has **Check with Paystack**
+  (`POST /api/admin/ai/plans/verify` → the plan's name, amount, currency, interval, archived);
+  the checkout names the cause (`PLAN_NOT_CONFIGURED`, 503 — never 502); every other JSON API
+  answer that used 502 now uses 503 (the download family keeps 502: its manager keys on it).
+  ⚠️ The owner must paste the `PLN_…` codes from Paystack → Payments → Plans, and note the plan's
+  currency: a live Nigerian account bills the plan's NGN amount whatever the card shows in USD.
+
+### Verified
+- SQL on embedded Postgres 18 (0168): apply · re‑apply · a fal row accepted · an unknown provider
+  refused · unique per (provider, request id) · test runs without a job · estimate stays estimate ·
+  service role only · RLS.
+- `tsc` clean · `next lint` clean (116 pre‑existing warnings, none new) · **vitest 4212 passed**
+  (40 new in `providers.test.ts`, 2 in `credits.test.ts`; the webhook/route pins retargeted to the
+  shared handler) · `next build` — see below.
+- NOT verified: a live fal.ai run. `FAL_KEY` is not set anywhere yet (local or Vercel); the Kling
+  adapter, Sync‑3 adapter and the fal webhook are proven at the unit level (input mapping, limits,
+  signature scheme against a generated key pair, status normalisation) and by the source pins. The
+  first live run is the owner's: set `FAL_KEY` on Vercel, press Test provider, switch Character
+  Replace to fal.ai, create a Full Character job as an admin (a TEST run, never charged).
 ## 2026‑09‑21 — AI Pro & AI Max: a dedicated AI subscription with included credits (migration 0167)
 
 Owner's brief: a premium AI subscription **separate from site Pro/Business**, a configurable

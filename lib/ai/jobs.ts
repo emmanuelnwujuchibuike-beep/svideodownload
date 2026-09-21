@@ -99,8 +99,9 @@ export type AiJobStatus =
    */
   | "deleted";
 
-/** Mirrors `ai_jobs_provider_chk`. */
-export type AiProviderId = "replicate";
+/** Mirrors `ai_jobs_provider_chk` (0168: 'fal' joined 'replicate'). A job keeps its provider for ever. */
+export type AiProviderId = "replicate" | "fal";
+export const AI_PROVIDER_IDS: readonly AiProviderId[] = ["replicate", "fal"];
 
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",

@@ -72,7 +72,7 @@ export async function POST(request: Request) {
               ? "The default onboarding@resend.dev sender may only deliver to the Resend account owner's own address. Either sign the Resend account up with that recipient, or verify a domain and set ALERT_EMAIL_FROM."
               : "ALERT_EMAIL_FROM must be a sender on a domain verified in Resend.",
         },
-        { status: 502 },
+        { status: 503 },
       );
     }
     return NextResponse.json({ ok: true, metrics: data.metrics.length, warnings: data.warnings });

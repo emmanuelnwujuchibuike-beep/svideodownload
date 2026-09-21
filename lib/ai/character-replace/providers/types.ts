@@ -25,6 +25,12 @@ export interface ReplacementRequest {
   keepOriginalAudio: boolean;
   goFast: boolean;
   webhookUrl: string;
+  /**
+   * 2026-09-21: the facts the worker measured on the PREPARED file. An
+   * adapter with documented input limits (Kling O1 on fal.ai) re-checks them
+   * at the moment of submission so nothing guaranteed to fail is paid for.
+   */
+  facts?: { durationMs: number; width: number; height: number; bytes: number; fps?: number | null } | null;
 }
 
 export interface ReplacementSubmission {
@@ -55,7 +61,7 @@ export interface ReplacementCapabilities {
 }
 
 export interface ReplacementProvider {
-  readonly id: "replicate";
+  readonly id: "replicate" | "fal";
   /** The scope this adapter was written for; `capabilities.modes` lists every scope it can serve. */
   readonly mode: ReplacementMode;
   readonly model: string;

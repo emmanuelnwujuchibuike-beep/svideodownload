@@ -175,6 +175,8 @@ export function CharacterReplaceJobsTable({ jobs, symbol }: { jobs: CharacterRep
                       {j.voiceSource ? <span className="ml-1 text-muted-foreground">{j.voiceSource === "tts" ? "voice: text" : "voice: upload"}</span> : null}
                       {j.lipSyncMode ? <span className="ml-1 text-muted-foreground">· {j.lipSyncMode} lip sync</span> : null}
                       {j.model ? <span className="block font-mono text-[10px] text-muted-foreground/80">{j.model}</span> : null}
+                      <span className={cn("mt-0.5 inline-block rounded-full px-1.5 py-0.5 font-sans text-[10px] font-semibold", j.provider === "fal" ? "bg-violet-500/12 text-violet-700 dark:text-violet-300" : "bg-secondary text-foreground")}>{j.provider === "fal" ? "fal.ai" : "Replicate"}</span>
+                      {j.test ? <span className="ml-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase text-amber-700 dark:text-amber-300">test</span> : null}
                     </td>
                     <td className="py-2 pr-3">{j.quality ?? "—"}</td>
                     <td className="py-2 pr-3 tabular-nums">

@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 
 import { affordability, quoteCharacterReplace, validateQuoteInput } from "@/lib/ai/character-replace/pricing";
+import { klingSelectionVerdict } from "@/lib/ai/character-replace/providers/kling-input";
+import { resolveReplacementRoute } from "@/lib/ai/providers/resolve";
 import { quoteRequestSchema } from "@/lib/ai/character-replace/quote-schema";
 import { getCharacterReplaceFreeEligibility } from "@/lib/ai/character-replace/free-access";
 import { freeRequestQualifies } from "@/lib/ai/character-replace/free-access-rules";
@@ -78,6 +80,15 @@ export async function POST(request: Request) {
       return NextResponse.json(aiErrorBody("INVALID_INPUT", { error: verdict.reason }), {
         status: aiErrorStatus("INVALID_INPUT"),
       });
+    }
+    // 2026-09-21 (§5, §29): a scope routed to Kling O1 prices only a 3–10 s selection; a longer video is sent to the trim step, never cut.
+    const route = resolveReplacementRoute(parsed.data.mode ?? "full_character", config, settings.frenzAiProviders);
+    if (!route.supported) {
+      return NextResponse.json(aiErrorBody("CR_SCOPE_UNAVAILABLE", { error: route.memberMessage ?? undefined }), { status: aiErrorStatus("CR_SCOPE_UNAVAILABLE") });
+    }
+    if (route.vendor === "fal") {
+      const window = klingSelectionVerdict({ selectedDurationMs: parsed.data.selectedDurationMs, mime: null, bytes: null });
+      if (!window.ok) return NextResponse.json(aiErrorBody("CR_ENGINE_LIMIT", { error: window.message, limit: window.code }), { status: aiErrorStatus("CR_ENGINE_LIMIT") });
     }
     const quote = quoteCharacterReplace(parsed.data, config, {
       currency: settings.frenzAiCurrency,

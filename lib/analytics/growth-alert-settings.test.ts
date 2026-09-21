@@ -31,6 +31,6 @@ describe("growth milestone emails (owner, 2026-09-20)", () => {
     expect(code("app/api/analytics/collect/route.ts")).toContain("if (Math.random() < 0.02) after(() => checkGrowthMilestones().catch(() => undefined));");
     // the admin route is guarded and the counter is revoked from the browser roles
     expect(code("app/api/admin/growth-alerts/route.ts")).toContain("const admin = await getAdminUser();");
-    expect(readFileSync(join(process.cwd(), "supabase/migrations/0161_analytics_visitors_total.sql"), "utf8")).toContain("revoke all on function public.analytics_visitors_total() from public, anon, authenticated");
+    expect(readFileSync(join(process.cwd(), "supabase/migrations/0165_analytics_visitors_total.sql"), "utf8")).toContain("revoke all on function public.analytics_visitors_total() from public, anon, authenticated");
   });
 });

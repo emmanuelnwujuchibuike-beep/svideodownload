@@ -126,7 +126,7 @@ failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
 - Profile menu: no "Soon" rows (Cloud Storage, Marketplace removed).
 - Growth milestone emails: "🎉 N visitors / members on FrenzSave" every N (default
   1,000, admin‑configurable beside the download milestone), checked by the daily digest
-  run and sampled from the analytics collector; `analytics_visitors_total()` (0161).
+  run and sampled from the analytics collector; `analytics_visitors_total()` (0165, renumbered from 0161).
 
 ---
 

@@ -7,6 +7,7 @@ import { getOwnJob } from "@/lib/ai/job-store";
 import { PREFLIGHT_STRICT, readPreflightRecord, recordMatches, VALIDATOR_UNAVAILABLE } from "@/lib/ai/preflight/gate";
 import { PREFLIGHT_VALIDATOR_VERSION } from "@/lib/ai/preflight/config";
 import { recordJobEvent } from "@/lib/ai/job-events";
+import { retireRefusedDraft } from "@/lib/ai/retention";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PREFLIGHT_TIPS, preflightChecklist, preflightHeadline, preflightIssues, preflightWarnings } from "@/lib/ai/preflight/messages";
 import { objectFingerprint, signPreflightToken } from "@/lib/ai/preflight/token";
@@ -185,5 +186,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // the pass is bound to the objects the WORKER saw; if they differ from what this route just saw, no token (a replaced file mid-check)
   const bound = record.media.reference === claims.reference && record.media.video === claims.video;
   const token = record.result.valid && bound ? signPreflightToken(claims) : null;
+  if (!record.result.valid) {
+    // 🔴 a refusal is the end of THIS draft: the member replaces the file and the workspace opens a new job.
+    // Left `queued`, it sat in history as a job in progress and opened as one (owner, 2026-09-20).
+    const retired = await retireRefusedDraft({ id: job.id, source_path: job.source_path });
+    await recordJobEvent(job.id, "preflight.refused", { errors: record.result.errors.slice(0, 6), retired });
+  }
   return NextResponse.json(shape(record, token), { headers: { "cache-control": "private, no-store" } });
 }

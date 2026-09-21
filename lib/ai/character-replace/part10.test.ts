@@ -58,6 +58,29 @@ describe("a never-started draft is not a stalled job (found 2026-09-20)", () => 
   });
 });
 
+describe("a refused preflight retires the draft at once (owner, 2026-09-20: it read as queued and opened as completing)", () => {
+  it("the preflight route expires the draft on a negative verdict and records preflight.refused; a pass and a pass-through never do", () => {
+    const route = code("app/api/ai/character-replace/jobs/[id]/preflight/route.ts");
+    const refuse = route.indexOf("if (!record.result.valid) {");
+    expect(refuse).toBeGreaterThan(-1);
+    expect(route.slice(refuse)).toContain("await retireRefusedDraft({ id: job.id, source_path: job.source_path });");
+    expect(route.slice(refuse)).toContain('await recordJobEvent(job.id, "preflight.refused",');
+    // after the token decision, so a refusal is never mistaken for a pass
+    expect(refuse).toBeGreaterThan(route.indexOf("const token = record.result.valid && bound ? signPreflightToken(claims) : null;"));
+    // the pass-through branch (the checker could not run) keeps the draft — it may pass next time
+    expect(route.slice(0, refuse)).not.toContain("retireRefusedDraft(");
+    const retention = code("lib/ai/retention.ts");
+    expect(retention).toContain("export async function retireRefusedDraft(row: Pick<AiJobRow, \"id\" | \"source_path\">, now: Date = new Date()): Promise<boolean> {");
+    expect(retention).toContain("const done = await expireDrafts(createAdminClient(), [row], now);");
+    expect(code("lib/ai/job-events.ts")).toContain('| "preflight.refused"');
+  });
+  it("a draft that expired before it was ever started is not history — a started job that expired still is", () => {
+    const store = code("lib/ai/job-store.ts");
+    expect(store).toContain('query = query.or("status.neq.expired,started_at.not.is.null");');
+    expect(store.indexOf('query = query.or("status.neq.expired,started_at.not.is.null");')).toBeGreaterThan(store.indexOf('else query = query.neq("status", "deleted");'));
+  });
+});
+
 describe("safe launch mode (§25)", () => {
   it("two modes, production by default, and anything else normalises to production", () => {
     expect(CHARACTER_REPLACE_LAUNCH_MODES).toEqual(["production", "internal"]);

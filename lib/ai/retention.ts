@@ -282,6 +282,24 @@ async function expireDrafts(
 }
 
 /**
+ * ── A REFUSED PREFLIGHT RETIRES THE DRAFT AT ONCE (2026-09-20) ──────────────
+ *
+ * Owner: "I tested a wrong reference image; it rejected the input and said put
+ * the right image — yet it still reads as queued in the background, and when I
+ * click it from history it starts loading like it is completing." The draft
+ * stayed `queued` after the refusal (nothing had started it), so history drew
+ * it as a job in progress and opening it watched a row that would never move.
+ * The workspace creates a NEW job once the file is replaced, so the refused
+ * one has no future: it is expired here the way the sweep would have expired
+ * it a day later — uploads gone, row `expired`, nothing to refund because
+ * nothing was reserved. Guarded on `queued` + never started, like the sweep.
+ */
+export async function retireRefusedDraft(row: Pick<AiJobRow, "id" | "source_path">, now: Date = new Date()): Promise<boolean> {
+  const done = await expireDrafts(createAdminClient(), [row], now);
+  return done.expired === 1;
+}
+
+/**
  * ── A NEW PROJECT SUPERSEDES THE MEMBER'S ABANDONED DRAFTS (Part 10) ─────────
  *
  * A Character Replace row is opened at Create and stays `queued` until the

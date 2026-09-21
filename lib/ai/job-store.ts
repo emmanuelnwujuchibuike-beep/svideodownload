@@ -231,6 +231,9 @@ export async function listOwnJobs(
   else if (opts.statuses && opts.statuses.length > 0) query = query.in("status", [...opts.statuses]);
   // Part 7 §20: a deleted result is out of every tab — "All" included — unless a caller asks for it by name.
   else query = query.neq("status", "deleted");
+  // 2026-09-20: a draft that expired before it was ever started (a refused preflight, an abandoned upload,
+  // a superseded project) was never a creation — it is not history. A started job that expired still is.
+  query = query.or("status.neq.expired,started_at.not.is.null");
 
   const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
   if (cursor) {

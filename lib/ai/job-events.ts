@@ -33,6 +33,8 @@ export type AiJobEventKind =
   /** 2026-09-20: the media preflight ran — the measurements ride in the detail for tuning (brief §26). */
   | "preflight.completed"
   | "preflight.skipped"
+  /** 2026-09-20: the check said no — the draft is retired on the spot, never a "queued" ghost in history. */
+  | "preflight.refused"
   /* Part 6: the voice, and the hand-over between provider stages */
   | "audio.prepared"
   | "audio.rejected"

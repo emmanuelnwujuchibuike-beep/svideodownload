@@ -21,18 +21,16 @@ import { cn } from "@/lib/utils";
  *  AI TOOLS — one compact card per door, on the welcome page AND the studio
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, 2026-09-20: "make this AI tool section in the landing page be in the
- * AI studio page." One component, two hosts:
- *
- *   · the welcome page shows all eight — the four scopes open the workspace on
- *     that scope (`/create?mode=`), Lip Sync / Voice Replace / Text to Speech
- *     open the studio (they are steps of every creation), history is history;
- *   · the studio (scope) page shows the four that are NOT its own scope cards —
- *     the scopes are already the page, and a second door to each three inches
- *     lower is the "cluster" the owner has ruled out. There, the three flow
- *     tools cannot link to the page they are on (a same-route link is a dead
- *     tap), so they are buttons that hand the intent back to the page, which
- *     scrolls the scopes into view and says where the tool is chosen.
+ * Owner, 2026-09-20: "Put the entire AI tool section down to AI credits and
+ * usage in the Explore AI Studio page… use the grid that has all AI features,
+ * including the ones that will be built in the next session." So this grid is
+ * the studio's table of contents: one row per feature in `aiToolCards`, and
+ * a feature built later is one more row. The four scopes open the workspace on
+ * that scope (`/create?mode=`); Lip Sync / Voice Replace / Text to Speech are
+ * steps of every creation, so on the Explore page they are buttons that hand
+ * the intent back — the page shows where the tool is chosen and brings the
+ * scope cards into view — never a link to the page they are on (a same-route
+ * link is a dead tap). History is history.
  *
  * Voice CLONING is not offered (lib/ai/voice/tts-provider.ts §6) and there is
  * no text-to-audio tool, so neither is a card. No provider or model is named.
@@ -165,14 +163,17 @@ export function FrenzAIToolsGrid({
   historyHref,
   include = "all",
   onFlowTool,
+  disabled,
   className,
 }: {
   characterReplaceHref: string;
   historyHref: string;
-  /** "all" on the welcome page; "beyond-scopes" on the studio page, whose own cards are the scopes. */
+  /** "all" — the Explore page; "beyond-scopes" is kept for a host that draws the scopes itself. */
   include?: "all" | "beyond-scopes";
   /** When given, a flow tool (Lip Sync, Voice Replace, Text to Speech) is a button that hands its id back instead of a link. */
   onFlowTool?: (id: "lip_sync" | "voice_replace" | "tts") => void;
+  /** Tools the operator has switched off, with the sentence to show instead of a door. */
+  disabled?: Partial<Record<AiToolId, string>>;
   className?: string;
 }) {
   const cards = aiToolCards(characterReplaceHref, historyHref).filter(
@@ -199,7 +200,11 @@ export function FrenzAIToolsGrid({
       >
         {cards.map((tool) => (
           <li key={tool.id} className="min-w-0">
-            <ToolCardView tool={tool} onFlowTool={onFlowTool} />
+            <ToolCardView
+              tool={tool}
+              onFlowTool={onFlowTool}
+              disabledNote={disabled?.[tool.id] ?? null}
+            />
           </li>
         ))}
       </ul>
@@ -215,11 +220,35 @@ const CARD =
 function ToolCardView({
   tool,
   onFlowTool,
+  disabledNote,
 }: {
   tool: AiToolCard;
   onFlowTool?: (id: "lip_sync" | "voice_replace" | "tts") => void;
+  disabledNote: string | null;
 }) {
   const { icon: Icon, href, name, blurb, tint } = tool;
+  if (disabledNote) {
+    return (
+      <div className={cn(CARD, "opacity-60")} aria-disabled>
+        <div className="flex items-start justify-between gap-2">
+          <span
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem]",
+              tint,
+            )}
+          >
+            <Icon className="h-[18px] w-[18px]" aria-hidden />
+          </span>
+        </div>
+        <h3 className="mt-2.5 text-[13.5px] font-bold leading-tight tracking-[-0.01em]">
+          {name}
+        </h3>
+        <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
+          {disabledNote}
+        </p>
+      </div>
+    );
+  }
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">

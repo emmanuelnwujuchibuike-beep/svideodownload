@@ -17,9 +17,6 @@ import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { FrenzAIAllowanceBar } from "@/features/ai/frenz-ai-chrome";
-import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
-import { FrenzAIToolsGrid } from "@/features/ai/frenz-ai-tools-grid";
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
 import {
@@ -38,19 +35,18 @@ import { cn } from "@/lib/utils";
  *
  *   AI STUDIO · the headline · one supporting line
  *   THE STUDIO CARD · the four capability groups · Explore AI Studio
- *   AI TOOLS · one compact card per door
- *   HOW IT WORKS · three steps
- *   AI CREDITS & USAGE · the balance door, with the plan chip when there is one
+ *
+ * Nothing below the button (owner, later the same day: "remove the AI tools
+ * down to AI credits from the welcome page; let it be the main Explore AI
+ * Studio page") — the grid of every feature, the three steps and credits &
+ * usage live on the Explore page (features/ai/frenz-ai-explore.tsx), which
+ * the button opens.
  *
  * ── What the page says is what the product does ─────────────────────────────
  *
- * Every card here is a real door. The four replacement scopes open the
- * workspace on that scope (`/create?mode=`); voice replacement, text to speech
- * and lip sync are steps of every creation, so their cards open the studio's
- * entry — the scope page — where the flow begins. Voice CLONING is not offered
- * (lib/ai/voice/tts-provider.ts §6) and there is no text-to-audio tool, so
- * neither is named: a card that leads nowhere is a claim, not a feature.
- * No provider or model is named anywhere on this page (Part 9 §7).
+ * Voice CLONING is not offered (lib/ai/voice/tts-provider.ts §6) and there is
+ * no text-to-audio tool, so neither is named: a card that leads nowhere is a
+ * claim, not a feature. No provider or model is named on this page (Part 9 §7).
  *
  * ── The performance rule ────────────────────────────────────────────────────
  *
@@ -100,32 +96,11 @@ const CATEGORIES = [
   },
 ] as const;
 
-const HOW = [
-  {
-    icon: MousePointerClick,
-    title: "Choose a tool",
-    detail: "Select the AI tool you need.",
-  },
-  {
-    icon: ImagePlus,
-    title: "Add your media",
-    detail: "Upload your video, image, audio or text.",
-  },
-  {
-    icon: Sparkles,
-    title: "Create & preview",
-    detail: "Generate your result and review it.",
-  },
-] as const;
-
 export function FrenzAIWelcome({
   characterReplaceHref = "/studio/ai/character-replace",
-  historyHref = "/studio/ai/history",
-  usageHref = "/studio/ai/usage",
 }: {
+  /** Explore AI Studio — the one door on this page. */
   characterReplaceHref?: string;
-  historyHref?: string;
-  usageHref?: string;
 }) {
   /*
     Painted from the last answer first (owner, 2026-09-13: "this section
@@ -303,94 +278,6 @@ export function FrenzAIWelcome({
             Upload media or enter text and the tool creates a new result with
             AI. Processing time and credits vary by tool.
           </p>
-        </section>
-
-        {/* ── AI TOOLS — the same grid the studio page carries (features/ai/frenz-ai-tools-grid.tsx) ── */}
-        <FrenzAIToolsGrid
-          characterReplaceHref={characterReplaceHref}
-          historyHref={historyHref}
-          className="mt-7"
-        />
-
-        {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
-        <section aria-labelledby="ai-how-title" className="mt-7">
-          <h2
-            id="ai-how-title"
-            className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground"
-          >
-            How it works
-          </h2>
-          <ol className="mt-2.5 grid grid-cols-3 gap-2 sm:gap-2.5">
-            {HOW.map((step, i) => (
-              <li
-                key={step.title}
-                className="rounded-[1.15rem] bg-card/90 px-3 py-3 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:px-4 sm:py-4"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">
-                    {i + 1}
-                  </span>
-                  <step.icon className="h-4 w-4 text-primary" aria-hidden />
-                </div>
-                <p className="mt-2.5 text-[12.5px] font-bold leading-tight tracking-[-0.01em] sm:text-[13.5px]">
-                  {step.title}
-                </p>
-                <p className="mt-1 text-[11px] leading-snug text-muted-foreground sm:text-[12px]">
-                  {step.detail}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        {/* ── AI CREDITS & USAGE ───────────────────────────────────────────── */}
-        <section aria-labelledby="ai-credits-title" className="mt-7">
-          <h2
-            id="ai-credits-title"
-            className="px-1 text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground"
-          >
-            Your AI balance
-          </h2>
-          <Link
-            href={usageHref}
-            className={cn(
-              "group mt-2.5 flex items-center gap-3 rounded-[1.25rem] bg-card/95 p-3.5 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:p-4",
-              "shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.995]",
-            )}
-          >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.8rem] bg-primary/[0.09] text-primary">
-              <Wallet className="h-[18px] w-[18px]" aria-hidden />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-bold leading-tight tracking-[-0.01em]">
-                AI Credits &amp; Usage
-              </span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground sm:text-[12px]">
-                Each AI tool uses credits based on processing requirements.
-                Check your balance before creating.
-              </span>
-            </span>
-            <FrenzAITierLabel
-              entitlement={entitlement}
-              className="hidden shrink-0 sm:inline-flex"
-            />
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-foreground/70 transition group-hover:bg-secondary/80">
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            </span>
-            <LinkPendingStripe />
-          </Link>
-          {/*
-            Kept, explicitly (owner, 2026-09-09: "Do not remove the existing plan
-            description and the amount left and used"). The bar draws nothing for a
-            balance-funded product and the chip only for a paid plan — so nothing
-            here is ever an empty box.
-          */}
-          <FrenzAIAllowanceBar entitlement={entitlement} className="mt-2.5" />
-          <FrenzAITierLabel
-            entitlement={entitlement}
-            variant="row"
-            className="mt-2.5 sm:hidden"
-          />
         </section>
       </div>
     </FrenzAIEnvironment>

@@ -1,5 +1,5 @@
-import { CharacterReplaceCreateSkeleton } from "@/features/ai/ai-skeletons";
+import { FrenzAIExploreSkeleton } from "@/features/ai/ai-skeletons";
 
 export default function Loading() {
-  return <CharacterReplaceCreateSkeleton />;
+  return <FrenzAIExploreSkeleton />;
 }

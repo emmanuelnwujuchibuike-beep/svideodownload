@@ -143,7 +143,7 @@ export default async function PublicFrenzAIPage() {
           hard-coding inside the component is what lets a single design serve
           both doors — the Studio page passes nothing and gets the Studio routes.
         */}
-        <FrenzAIWelcome characterReplaceHref="/ai/character-replace" historyHref="/ai/history" usageHref="/ai/usage" />
+        <FrenzAIWelcome characterReplaceHref="/ai/character-replace" />
       </main>
       {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
       <SiteFooterMinimal />

@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 
 import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
-import { CharacterReplaceModePage } from "@/features/ai/character-replace/mode-page";
+import { FrenzAIExplore } from "@/features/ai/frenz-ai-explore";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  /ai/character-replace — "What do you want to replace?", signed-in door
+ *  /ai/character-replace — Explore AI Studio, signed-in door
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Owner, 2026-09-13 (Part 1, §2): inside the existing authenticated Frenz AI
@@ -22,11 +22,14 @@ import { CharacterReplaceModePage } from "@/features/ai/character-replace/mode-p
  *     without a `getUser()` round-trip), and every AI endpoint refuses an
  *     anonymous subject on its own.
  *
- * 2026-09-20: this is the scope page (the four replacement types); the
- * workspace lives at /ai/character-replace/create.
+ * 2026-09-20: this is Explore AI Studio — the grid of every AI feature, how
+ * it works, credits & usage (owner: "remove the AI structure and use the grid
+ * that has all AI features"); the workspace lives at /ai/character-replace/create.
+ * Static is safe HERE: this group's header reads no cookie, the middleware
+ * guards `/ai` — unlike the Studio-shell twin, whose layout calls getUser().
  */
 export const metadata: Metadata = {
-  title: "Character Replace",
+  title: "Explore AI Studio",
   robots: { index: false, follow: false, nocache: true },
 };
 
@@ -40,7 +43,7 @@ export default function PublicCharacterReplacePage() {
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
         style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
-        <CharacterReplaceModePage createPath="/ai/character-replace/create" aiHref="/ai" historyHref="/ai/history" />
+        <FrenzAIExplore createPath="/ai/character-replace/create" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" />
       </main>
       <SiteFooterMinimal />
     </>

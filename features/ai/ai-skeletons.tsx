@@ -62,6 +62,33 @@ export function FrenzAIPageSkeleton() {
 }
 
 /**
+ * Explore AI Studio (2026-09-20): the crumb, the headline, then the grid of
+ * tool cards — the shape of features/ai/frenz-ai-explore.tsx. The Studio-shell
+ * route renders per request, so this is what a cold tap paints first.
+ */
+export function FrenzAIExploreSkeleton() {
+  return (
+    <SkeletonSection label="Opening AI Studio">
+      <div className="mt-4">
+        <Skeleton className="h-3 w-32 rounded-full" />
+        <Skeleton className="mt-3 h-9 w-64 max-w-full" />
+        <Skeleton className="mt-3 h-4 w-80 max-w-full" />
+      </div>
+      <Skeleton className="mt-6 h-3 w-16 rounded-full" />
+      <div className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="rounded-[1.2rem] border border-border/70 p-3" aria-hidden>
+            <Skeleton className="h-9 w-9 rounded-[0.7rem]" />
+            <Skeleton className="mt-3 h-4 w-24" />
+            <Skeleton className="mt-2 h-3 w-full" />
+          </div>
+        ))}
+      </div>
+    </SkeletonSection>
+  );
+}
+
+/**
  * Character Replace: the crumb and headline, the stepper, then the first
  * step's picker — the shape the workspace opens in, so the swap is silent.
  */

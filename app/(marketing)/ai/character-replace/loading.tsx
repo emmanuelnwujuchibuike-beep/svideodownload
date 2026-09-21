@@ -1,5 +1,5 @@
 import { SiteHeader } from "@/components/layout/site-header";
-import { CharacterReplaceSkeleton } from "@/features/ai/ai-skeletons";
+import { FrenzAIExploreSkeleton } from "@/features/ai/ai-skeletons";
 
 /**
  * The tap has to answer, even when the route cannot yet — see the note on
@@ -14,7 +14,7 @@ export default function Loading() {
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
         style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
-        <CharacterReplaceSkeleton />
+        <FrenzAIExploreSkeleton />
       </main>
     </>
   );

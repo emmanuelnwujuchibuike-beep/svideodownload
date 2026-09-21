@@ -36,7 +36,7 @@ describe("the customer vocabulary is the brief's, the stored ids are stable", ()
     expect(replacementPhotoGuidance("full_character")).toMatchObject({ best: "Best results: full-body photo with one person clearly visible.", framing: "full_body" });
   });
   it("no customer-facing copy names a model", () => {
-    const text = JSON.stringify(REPLACEMENT_MODE_COPY) + src("features/ai/character-replace/mode-page.tsx") + src("features/ai/character-replace/input-direction.tsx") + src("features/ai/character-replace/tutorial-example.tsx");
+    const text = JSON.stringify(REPLACEMENT_MODE_COPY) + src("features/ai/frenz-ai-explore.tsx") + src("features/ai/frenz-ai-tools-grid.tsx") + src("features/ai/character-replace/input-direction.tsx") + src("features/ai/character-replace/tutorial-example.tsx");
     expect(text).not.toMatch(/xrunda|prunaai|wan-video|Wan 2\.2|Roop/);
   });
 });
@@ -208,13 +208,14 @@ describe("history and results name the scope (brief §17, §18)", () => {
   });
 });
 
-describe("the scope has its own page (owner, 2026-09-20)", () => {
-  it("the tool's root route is the static scope page; the workspace lives at /create with the scope in the query; both groups", () => {
+describe("the studio has its own page (owner, 2026-09-20 — Explore AI Studio replaced the scope page the same evening)", () => {
+  it("the tool's root route is Explore AI Studio; the workspace lives at /create with the scope in the query; both groups", () => {
     for (const p of ["app/(app)/studio/ai/character-replace/page.tsx", "app/(marketing)/ai/character-replace/page.tsx"]) {
-      const page = code(p);
-      expect(page, p).toContain('export const dynamic = "force-static";');
-      expect(page, p).toContain("<CharacterReplaceModePage createPath=");
+      expect(code(p), p).toContain("<FrenzAIExplore createPath=");
     }
+    // 🔴 never static under the Studio shell: its layout calls getUser(), and a prerendered redirect sent every member to Creator Studio
+    expect(code("app/(app)/studio/ai/character-replace/page.tsx")).toContain('export const dynamic = "force-dynamic";');
+    expect(code("app/(marketing)/ai/character-replace/page.tsx")).toContain('export const dynamic = "force-static";');
     for (const p of ["app/(app)/studio/ai/character-replace/create/page.tsx", "app/(marketing)/ai/character-replace/create/page.tsx"]) {
       const page = code(p);
       expect(page, p).toContain("initialMode={isReplacementMode(mode) ? mode : null}");
@@ -227,13 +228,14 @@ describe("the scope has its own page (owner, 2026-09-20)", () => {
     expect(code("lib/ai/character-replace/topup-server.ts")).toContain('"/studio/ai/character-replace/create"');
     expect(code("lib/ai/character-replace/topup-server.ts")).toContain('"/ai/character-replace/create"');
   });
-  it("the scope page prefetches every create link on landing, paints prices from a cached config, and sends an older ?job= link to the create page", () => {
-    const page = code("features/ai/character-replace/mode-page.tsx");
+  it("the Explore page prefetches every create link on landing, paints from a cached config, sends an older ?job= link to the create page, and its scope cards open the workspace on that scope", () => {
+    const page = code("features/ai/frenz-ai-explore.tsx");
     expect(page).toContain("router.prefetch(createPath);");
-    expect(page).toContain("for (const m of REPLACEMENT_MODES) router.prefetch(`${createPath}?mode=${m}`);");
+    expect(page).toMatch(/for \(const m of REPLACEMENT_MODES\)\s*router\.prefetch\(`\$\{createPath\}\?mode=\$\{m\}`\);/);
     expect(page).toContain("const cached = readCachedConfig();");
     expect(page).toContain("router.replace(`${createPath}?job=${encodeURIComponent(job)}`);");
-    expect(page).toContain("href={`${createPath}?mode=${id}`}");
+    const grid = code("features/ai/frenz-ai-tools-grid.tsx");
+    for (const m of ["face_only", "skin_face", "upper_body", "full_character"]) expect(grid).toContain("href: `${create}?mode=" + m + "`,");
     // the workspace's step 1 is a navigation to the scope page, and the photo step's back goes there too
     const ws = code("features/ai/character-replace/character-replace-workspace.tsx");
     expect(ws).toContain('if (next === "mode") {');

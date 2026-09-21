@@ -45,6 +45,19 @@ export default function robots(): MetadataRoute.Robots {
     real HTML to anonymous visitors by design.
   */
   const disallow = ["/api/", "/admin/", "/ai", "/ai/"];
+  /*
+    ── 🔴 ads.txt IS ALWAYS FETCHABLE, AND SAYS SO (2026-09-20) ────────────────
+
+    Owner: AdSense reported "ads.txt not found" for days and suspected the /ai
+    rule above. Audited from outside as Mediapartners-Google and Googlebot:
+    /ads.txt answers 200 text/plain with the record on apex, www and http→https,
+    and "/ai" is a path prefix that never matches "/ads.txt". The rule could not
+    have caused it — but a crawler reading a longer Allow beside the Disallows
+    has no judgement call left to make, so the file is named here explicitly.
+    Nothing in this file ever blocks a Google crawler; the AI-page rule is lifted
+    in a coming part when those pages are indexed.
+  */
+  const allow = ["/", "/ads.txt"];
   const aiAgents = [
     "GPTBot",
     "OAI-SearchBot",
@@ -59,8 +72,8 @@ export default function robots(): MetadataRoute.Robots {
 
   return {
     rules: [
-      { userAgent: "*", allow: "/", disallow },
-      ...aiAgents.map((userAgent) => ({ userAgent, allow: "/", disallow })),
+      { userAgent: "*", allow, disallow },
+      ...aiAgents.map((userAgent) => ({ userAgent, allow, disallow })),
     ],
     // posts-sitemap.xml (every public post) and news-sitemap.xml (category
     // "news" posts from the last 48h, Google News format) are DB-backed

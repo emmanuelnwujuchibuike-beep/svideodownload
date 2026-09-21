@@ -58,7 +58,8 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         freeAccess: {
-          enabled: settings.frenzAiCharacterReplace.freeAccess.enabled,
+          // a transient verdict (first read before the cookie, or a store fault) shows nothing rather than a refusal
+          enabled: settings.frenzAiCharacterReplace.freeAccess.enabled && free.reason !== "TEMPORARILY_UNAVAILABLE",
           eligible: free.eligible,
           remaining: free.remainingFreeUses,
           granted: free.granted,

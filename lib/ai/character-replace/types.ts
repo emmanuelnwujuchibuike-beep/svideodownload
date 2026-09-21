@@ -354,7 +354,7 @@ export interface CharacterReplaceFreeAccess {
   remaining: number | null;
   granted: number;
   used: number;
-  reason: "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "ACCOUNT_NOT_ELIGIBLE";
+  reason: "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "ACCOUNT_NOT_ELIGIBLE" | "TEMPORARILY_UNAVAILABLE";
   requiresVerification: boolean;
   message: string;
   limits: { maxDurationSeconds: number; maxQualityRank: number; allowedModes: readonly ReplacementMode[]; allowTts: boolean; allowUploadedVoice: boolean; allowLipSync: boolean };

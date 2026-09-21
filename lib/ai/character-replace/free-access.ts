@@ -84,7 +84,14 @@ export function networkHash(request: Request): string | null {
   return hmac(`${coarse}|${family}`, "network");
 }
 
-export type FreeEligibilityReason = "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "ACCOUNT_NOT_ELIGIBLE";
+/**
+ * TEMPORARILY_UNAVAILABLE is the one transient verdict: the device cookie is
+ * not on this request yet (the read that plants it), or the entitlement store
+ * could not be read. Nothing is granted, nothing is refused for good, and the
+ * member is told nothing — the balance route hides the line rather than
+ * announcing "not available on this account" over a fault or a first read.
+ */
+export type FreeEligibilityReason = "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "ACCOUNT_NOT_ELIGIBLE" | "TEMPORARILY_UNAVAILABLE";
 
 export interface FreeEligibility {
   eligible: boolean;
@@ -138,15 +145,17 @@ export async function getCharacterReplaceFreeEligibility(opts: {
   if (error) {
     // 0162 not applied yet, or a database fault: no free creation is granted blind, and paid processing is unaffected.
     console.error("[cr/free] eligibility read failed", { userId: opts.subject.userId, code: error.code, message: error.message });
-    return off("ACCOUNT_NOT_ELIGIBLE");
+    return off("TEMPORARILY_UNAVAILABLE");
   }
   const row = (Array.isArray(data) ? data[0] : data) as { granted: number; used: number; restored: number; eligibility: string } | undefined;
-  if (!row) return off("ACCOUNT_NOT_ELIGIBLE");
+  if (!row) return off("TEMPORARILY_UNAVAILABLE");
   const remaining = Math.max(0, Number(row.granted) - Number(row.used));
   if (row.eligibility === "device_limit") {
     return { eligible: false, remainingFreeUses: 0, granted: 0, used: 0, reason: config.antiAbuse.verificationAfterLimit ? "REQUIRES_VERIFICATION" : "DEVICE_LIMIT_REACHED", deviceRiskState: "limit_reached", requiresVerification: config.antiAbuse.verificationAfterLimit, limits };
   }
-  if (row.eligibility === "review" || row.eligibility === "pending") return { eligible: false, remainingFreeUses: 0, granted: 0, used: 0, reason: "ACCOUNT_NOT_ELIGIBLE", deviceRiskState: row.eligibility === "pending" ? "unknown" : "review", requiresVerification: false, limits };
+  // "pending" = no device cookie on this request yet (the read that plants it); the next read decides.
+  if (row.eligibility === "pending") return off("TEMPORARILY_UNAVAILABLE");
+  if (row.eligibility === "review") return { ...off("ACCOUNT_NOT_ELIGIBLE"), deviceRiskState: "review" };
   if (row.eligibility !== "eligible") return { ...off("ACCOUNT_NOT_ELIGIBLE"), granted: Number(row.granted), used: Number(row.used) };
   return {
     eligible: remaining > 0,
@@ -176,6 +185,8 @@ export function freeEligibilityMessage(e: FreeEligibility): string {
     case "DISABLED_BY_ADMIN":
     case "ACCOUNT_NOT_ELIGIBLE":
       return "Complimentary creations aren't available on this account.";
+    case "TEMPORARILY_UNAVAILABLE":
+      return "Complimentary creations will show here shortly.";
   }
 }
 

@@ -90,8 +90,10 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(free).toContain("HttpOnly; Secure; SameSite=Lax");
     expect(free).toContain('return id ? hmac(id, "device") : null;');
     expect(free).toContain("const isAdmin = opts.isAdmin ?? (config.antiAbuse.adminExempt ? !!(await getAdminUser().catch(() => null)) : false);");
-    // a database fault never grants blind
-    expect(free).toContain('return off("ACCOUNT_NOT_ELIGIBLE");');
+    // a database fault never grants blind — and never tells the member they are ineligible: the line is hidden
+    expect(free).toContain('return off("TEMPORARILY_UNAVAILABLE");');
+    expect(free).toContain('if (row.eligibility === "pending") return off("TEMPORARILY_UNAVAILABLE");');
+    expect(code("app/api/ai/character-replace/balance/route.ts")).toContain('enabled: settings.frenzAiCharacterReplace.freeAccess.enabled && free.reason !== "TEMPORARILY_UNAVAILABLE",');
   });
   it("undo paths restore the entitlement once and never touch the wallet for a free job; completion settles the use", () => {
     const funding = code("lib/ai/funding.ts");

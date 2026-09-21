@@ -207,6 +207,12 @@ failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
   served pub-**6455244673998965** — if the AdSense account saying "not found" is that one, its line
   is simply gone. Owner: press Check now in AdSense; Cloudflare → Security → Events for blocks of
   Google's crawler; set `ADSENSE_PUBLISHER_ID` on Vercel. The /ai disallow is lifted in a coming part.
+- Owner confirmed the main account IS pub-7009025003206297 (the pub-id theory is dead). Edge: no
+  challenge for any client (empty UA, python-requests, curl, Google UAs); IPv6 = Cloudflare anycast
+  (untestable from here, no v6 uplink); www is a direct Vercel CNAME (200 too). The one branch that
+  could fail a crawl — a cold instance during a DB blip with no settings/env/last-id → 503 — is
+  closed (`2b7cd41`): `BUILT_IN_ADSENSE_PUBLISHER_ID` in `lib/monetization/settings.ts` is the last
+  resort, so every fetch answers 200 with the record. Change it there when the account changes.
 
 ### Also today (owner asks)
 - Recharge sheet: no rate arithmetic — the secure checkout page shows the naira.

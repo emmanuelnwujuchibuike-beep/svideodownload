@@ -147,6 +147,34 @@ failed the Vercel build (`19c5eca`); the CPU provider is all the preflight uses.
   audio, one settled charge; Upper Body standard, 3 s → 43 s, $0.90 at the code-default
   $0.30/sec (the admin table sets it), the new adapter's scope settings on the prediction.
 
+### The Frenz AI welcome page, rebuilt as the studio's front door (2026-09-20, `9822a4d`)
+- From the owner's reference screen: AI STUDIO · "Create. Transform. Perfect." · one line;
+  the studio card (mark, "Frenz AI Studio / All-in-one AI creation suite", four capability
+  groups — Character & Face, Voice, Video, Audio — each a dot-marked list + one sentence);
+  the 56 px "Explore AI Studio" pill; AI TOOLS (eight compact cards, two columns on a phone,
+  four on desktop); HOW IT WORKS (three steps); YOUR AI BALANCE (the credits & usage door,
+  the plan chip beside it when there is one). `features/ai/frenz-ai-welcome.tsx`; the entry
+  card and the tool grid files are gone, their pins moved.
+- **What it names is what exists:** the four scopes open `/create?mode=`; Lip Sync, Voice
+  Replace and Text to Speech open the scope page (they are steps of every creation). Voice
+  CLONING is not offered (`lib/ai/voice/tts-provider.ts` §6) and there is no text-to-audio
+  tool, so neither is on the page although the brief listed both. Upper Body is on the page
+  although the brief omitted it.
+- **The pill:** `.ai-cta` in globals.css — a 140 %-wide light layer moved by `transform`
+  (compositor only), 9 s per pass, alternate; purple stays on the left and blue on the right,
+  only the white centre travels, so near-black text keeps its contrast at every point; paused
+  by `--ai-play` on a hidden tab, `animation: none` under reduced motion; glass sheen + inner
+  hairline as static layers. Measured 56 px on iPhone 14, Pixel 7 and desktop.
+- 🔴 **Found on the way — the a11y tap-target rule was never inert.** `a[href] { min-height:
+  var(--a11y-tap-min) }` at `0px` (0,1,1) out-specified every `.min-h-*` utility (0,1,0) on
+  every link in the app; the old "Start Creating" measured 26 px against a declared 56 px. The
+  rule now exists only under `html[data-a11y-tap="large"]`, written by the boot script and the
+  settings UI (`lib/a11y/apply.ts`, `features/account/accessibility-center.tsx`); pinned in
+  `lib/a11y/a11y.test.ts`. Any link that looked shorter than its `min-h-*` class is fixed with it.
+- Route JS for `/studio/ai`: 3.73 kB. Probe: `scripts/_ai-welcome-shots.tmp.mjs [outDir]`
+  (production, or `E2E_SITE=http://localhost:3011`; a local `next start` reloads once — the
+  probe retries its measurements).
+
 ### Also today (owner asks)
 - Recharge sheet: no rate arithmetic — the secure checkout page shows the naira.
 - Usage page: Character Replace only (the retired AI Clean allowance meters are gone).

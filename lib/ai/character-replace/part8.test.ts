@@ -253,8 +253,11 @@ describe("the doors open instantly or say they are opening (owner, 2026-09-14)",
     const grid = src("features/ai/frenz-ai-tools-grid.tsx");
     expect(grid).not.toContain("prefetch={false}");
     expect(grid).toContain("<LinkPendingStripe />");
-    // on the studio page the flow tools are buttons, never a link to the page they are on (a same-route link is a dead tap)
-    expect(grid).toMatch(/onFlowTool &&s*(tool.id === "lip_sync" || tool.id === "voice_replace" || tool.id === "tts")/);
+    // on the studio page the flow tool (Voice Replace) is a button, never a link to the page it is on (a same-route link is a dead tap);
+    // 2026-09-21: Lip Sync and Text to Speech are no longer scroll buttons — Lip Sync Pro and Text to Audio are their own doors
+    expect(grid).toContain('if (onFlowTool && tool.flow && tool.id === "voice_replace") {');
+    expect(grid).not.toContain('id: "lip_sync",');
+    expect(grid).not.toContain('id: "tts",');
     expect(grid).toContain('<button type="button" onClick={() => onFlowTool(id)} className={CARD}>');
     expect(src("features/ai/frenz-ai-explore.tsx")).toContain("<FrenzAIToolsGrid");
     expect(src("features/ai/frenz-ai-chrome.tsx")).not.toContain("prefetch={false}");

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 import { haptic } from "@/lib/motion/haptics";
+import { PanelVisibleProvider, useAdminPanelVisible } from "@/features/admin/live/panel-visibility";
 import { cn } from "@/lib/utils";
 
 /**
@@ -185,6 +186,23 @@ export function AdminSubsections({
   unmountInactive?: boolean;
 }) {
   const [active, setActive] = useState(groups[0]?.id ?? "");
+  /*
+    ── 🔴 A HIDDEN SUB-TAB MUST ALSO BE A QUIET ONE (owner, 2026-09-27) ──────
+    "all shouldn't poll at once, only each section should poll when I click on
+    it and when I enter another section the previous should stop polling."
+
+    `AdminPanel` already does this for the OUTER sections: it provides
+    `PanelVisibleProvider` and `useAdminLive` unsubscribes when its panel is
+    off screen. This component did the same hiding — `hidden` plus mounted
+    children, so a form keeps its half-typed state — but it never provided
+    the context. So every polling widget inside an UNSELECTED sub-tab of a
+    VISIBLE section kept its subscription: mounted, invisible, and still
+    billing a request on every tick.
+
+    ANDed with the ancestor's value rather than set outright, or opening a
+    sub-tab inside a hidden section would wake it up again.
+  */
+  const ancestorVisible = useAdminPanelVisible();
 
   // One group is not a choice — render it plainly rather than growing a tab bar
   // that can only ever select what is already showing. Same rule the reels tab
@@ -211,7 +229,7 @@ export function AdminSubsections({
             hidden={!selected}
             className={cn(!selected && "hidden")}
           >
-            {group.content}
+            <PanelVisibleProvider value={ancestorVisible && selected}>{group.content}</PanelVisibleProvider>
           </div>
         );
       })}

@@ -143,3 +143,38 @@ describe("admin dashboard cost safety", () => {
     expect(source(SCHEDULER)).toMatch(/entries\.delete\(key\)/);
   });
 });
+
+/**
+ * ── A HIDDEN SUB-TAB MUST ALSO BE A QUIET ONE (owner, 2026-09-27) ───────────
+ *
+ * "all shouldn't poll at once, only each section should poll when I click on it
+ * and when I enter another section the previous should stop polling."
+ *
+ * `AdminPanel` had always provided the visibility context for the OUTER
+ * sections. `AdminSubsections` hid its inactive sub-tabs the same way — CSS,
+ * children still mounted, so a half-typed form survives — but never provided
+ * the context. Every polling widget inside an unselected sub-tab of a visible
+ * section therefore kept its subscription: invisible, and still billing a
+ * request on every tick.
+ *
+ * Source-level, like the guards above: the point is that the NEXT tab group
+ * cannot quietly reintroduce it.
+ */
+describe("only the section you are looking at polls", () => {
+  const tabs = readFileSync(join(process.cwd(), "features", "admin", "section-tabs.tsx"), "utf8");
+
+  it("🔴 AdminSubsections provides visibility to its panels", () => {
+    expect(tabs).toContain("PanelVisibleProvider");
+  });
+
+  /* ANDed, or opening a sub-tab inside a hidden section would wake it up. */
+  it("🔴 and ANDs it with the ancestor rather than setting it outright", () => {
+    expect(tabs).toContain("ancestorVisible && selected");
+    expect(tabs).toContain("useAdminPanelVisible()");
+  });
+
+  it("the panel that owns the outer sections still provides it too", () => {
+    const shell = readFileSync(join(process.cwd(), "features", "admin", "admin-shell.tsx"), "utf8");
+    expect(shell).toContain("PanelVisibleProvider");
+  });
+});

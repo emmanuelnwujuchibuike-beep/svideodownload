@@ -1,3 +1,4 @@
+import { replicateProvider } from "@/lib/ai/replicate/provider";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -263,5 +264,41 @@ describe("the job view", () => {
     expect(view.lipSync).toMatchObject({ speechSource: "text", speechPath: "tts", voiceId: "warm", languageCode: "en", speed: 1.2, textLength: 12, expression: "expressive", activeSpeaker: true, selectedDurationMs: 10_000, chargedCents: 250, billing: "PAID" });
     expect(JSON.stringify(view)).not.toContain("SECRET WORDS");
     expect(view.characterReplace).toBeNull();
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  EVERY LIP SYNC JOB FAILED AT A GATE THAT NEVER MENTIONED IT (2026-09-27)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner: "Lip sync is showing this" — SUBMIT_FAILED on screen.
+ *
+ * `submitJobToProvider` asks `provider.supports(feature.id)` BEFORE it reaches
+ * the per-feature branches, and `ai_lip_sync` was never added to that list when
+ * Lip Sync Pro shipped. So the generic gate threw FEATURE_UNAVAILABLE for every
+ * lip-sync job and the branch that knows how to submit one was unreachable.
+ *
+ * Measured on production: 5 of 5 recent lip-sync jobs `failed/SUBMIT_FAILED`
+ * against 6 completed Character Replace jobs in the same window — the one
+ * feature missing from the list was the one feature that never worked. It
+ * failed LATE (after the charge, after the worker made the speech), which is
+ * why it was expensive to miss.
+ */
+describe("the provider gate every submission passes first", () => {
+  it("supports the three features that actually run on Replicate", () => {
+    expect(replicateProvider.supports("ai_lip_sync")).toBe(true);
+    expect(replicateProvider.supports("ai_character_replace")).toBe(true);
+    expect(replicateProvider.supports("ai_clean")).toBe(true);
+  });
+
+  /* Not a rubber stamp: a feature with no Replicate submission must still be refused. */
+  it("does not claim the ones that never reach a Replicate prediction", () => {
+    expect(replicateProvider.supports("ai_upscale")).toBe(false);
+    expect(replicateProvider.supports("ai_generate")).toBe(false);
+  });
+
+  it("the registry points Lip Sync at the vendor whose gate now admits it", () => {
+    expect(AI_FEATURES.find((f) => f.id === "ai_lip_sync")?.provider).toBe("replicate");
   });
 });

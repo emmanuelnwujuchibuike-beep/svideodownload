@@ -179,8 +179,31 @@ export const replicateProvider: AiProvider = {
     lists `ai_character_replace` here. Until it does, no Character Replace
     job can reach `/predictions`, and no provider spend can happen from it.
   */
+  /*
+    🔴 EVERY LIP SYNC JOB FAILED BECAUSE OF THIS LIST (owner, 2026-09-27:
+    "Lip sync is showing this", with SUBMIT_FAILED on screen).
+
+    `submitJobToProvider` checks `provider.supports(feature.id)` BEFORE it
+    reaches the per-feature branches — and `ai_lip_sync` was never added here
+    when Lip Sync Pro shipped. So the generic gate threw FEATURE_UNAVAILABLE
+    for every single lip-sync job, and the branch that knows how to submit one
+    was unreachable. Measured on production: 5 of 5 recent jobs
+    `failed / SUBMIT_FAILED`, against 6 completed Character Replace jobs in the
+    same window — the one feature missing from this line was the one feature
+    that never worked.
+
+    It failed LATE, which is why it was expensive to miss: the member was
+    charged, the worker downloaded and trimmed the video and made the speech
+    (`audio.prepared` in the events), and only then did the submit ask this
+    question. The refund fired correctly every time, so nobody lost money — the
+    feature simply never ran.
+
+    A feature belongs here when Replicate is the vendor that runs it, whether
+    or not the submission shape is this file's: `ai_character_replace` and
+    `ai_lip_sync` both have their own, and both must pass this gate first.
+  */
   supports(feature) {
-    return feature === "ai_clean" || feature === "ai_character_replace";
+    return feature === "ai_clean" || feature === "ai_character_replace" || feature === "ai_lip_sync";
   },
 
   async submit(input: AiProviderSubmission): Promise<AiProviderState> {

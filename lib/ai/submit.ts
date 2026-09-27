@@ -72,9 +72,21 @@ export async function submitJobToProvider(
   feature: AiFeatureDef,
   opts: { from: readonly AiJobStatus[]; origin?: string },
 ): Promise<{ submission: ProviderSubmission; row: AiJobRow | null }> {
+  /*
+    🔴 THESE TWO COME FIRST, AND THAT IS THE POINT (2026-09-27). They used to
+    sit below the generic provider gate, which meant the gate answered for them
+    — the same unhelpful "no configured provider for this feature" that hid the
+    Lip Sync bug for a week. Neither tool is ever submitted through this path,
+    so the honest sentence should be the one that is thrown.
+  */
+  // Voice Cloning: the clone is made inside /start's after(); a retry would risk a SECOND provider voice for one job (lib/ai/voice-clone/run.ts).
+  if (feature.id === "ai_voice_clone") throw new AiJobError("FEATURE_UNAVAILABLE", "a voice clone is made at /start, never re-submitted");
+  // Text to Audio (2026-09-21): the prediction (or the direct call) is made inside Generate; nothing re-submits it.
+  if (feature.id === "ai_text_to_audio") throw new AiJobError("FEATURE_UNAVAILABLE", "a Text to Audio job is submitted at Generate, never re-submitted");
+
   const provider = providerFor(feature.provider);
   if (!provider || !provider.isConfigured() || !provider.supports(feature.id)) {
-    throw new AiJobError("FEATURE_UNAVAILABLE", "no configured provider for this feature");
+    throw new AiJobError("FEATURE_UNAVAILABLE", `no configured provider for ${feature.id}`);
   }
 
   /*
@@ -84,10 +96,6 @@ export async function submitJobToProvider(
     lib/ai/character-replace/provider.ts; the transition and the claim are
     the same compare-and-set this function makes.
   */
-  // Voice Cloning (2026-09-27): the clone is made inside /start's after(); a retry would risk a SECOND provider voice for one job (lib/ai/voice-clone/run.ts).
-  if (feature.id === "ai_voice_clone") throw new AiJobError("FEATURE_UNAVAILABLE", "a voice clone is made at /start, never re-submitted");
-  // Text to Audio (2026-09-21): the prediction (or the direct call) is made inside Generate; nothing re-submits it.
-  if (feature.id === "ai_text_to_audio") throw new AiJobError("FEATURE_UNAVAILABLE", "a Text to Audio job is submitted at Generate, never re-submitted");
   // Lip Sync Pro (2026-09-21): its own stage submission, the same compare-and-set.
   if (feature.id === "ai_lip_sync") {
     const { submission, row } = await submitLipSyncJob(job, opts);

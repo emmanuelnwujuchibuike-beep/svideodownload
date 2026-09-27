@@ -541,10 +541,18 @@ function JobStage({ job, missing, previewUrl, onCancel, onAnother, historyHref, 
 
   if (!isActiveStatus(job.status)) {
     const ended = job.status === "cancelled" ? "Stopped." : job.status === "expired" ? "This video expired." : "This one didn't finish.";
+    /*
+      🔴 "This one didn't finish. That job didn't finish." — the owner's
+      screenshot, 2026-09-27. The lead-in above and `storedErrorMessage`'s
+      fallback for an UNKNOWN code say the same thing in different words, and
+      concatenating them read like a stutter. A message that adds nothing is
+      dropped; a real one (a rejected file, a length mismatch) still shows.
+    */
+    const detail = job.error?.message && !/didn't finish/i.test(job.error.message) ? job.error.message : "";
     return (
       <div className="space-y-4">
         <Notice tone={job.status === "failed" ? "error" : "muted"}>
-          {ended} {job.error?.message ?? ""} {refundLine ?? ""}
+          {[ended, detail, refundLine ?? ""].filter(Boolean).join(" ")}
         </Notice>
         <Link href={basePath} onClick={onAnother} className="ai-cta inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
           <RefreshCcw className="h-4 w-4" aria-hidden /> Try again

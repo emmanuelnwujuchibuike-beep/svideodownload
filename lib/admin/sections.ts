@@ -146,6 +146,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     blurb: "Every notable event as it happens — downloads, ad clicks, subscriptions, installs — including signed-out visitors.",
   },
   {
+    id: "people",
+    label: "Signed-in members",
+    category: "platform",
+    icon: "UserCheck",
+    blurb:
+      "Every member seen active while signed in, and the detailed activity behind each one. Not a presence list: this database has no session table, so it counts recorded activity, not who has a tab open.",
+  },
+  {
     id: "subscribers",
     label: "Subscribers",
     category: "platform",

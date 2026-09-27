@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
   Star,
   Telescope,
+  UserCheck,
   Users,
   Wrench,
   type LucideIcon,
@@ -115,6 +116,7 @@ const ICONS: Record<string, LucideIcon> = {
   SlidersHorizontal,
   Star,
   Telescope,
+  UserCheck,
   Users,
   Wrench,
 };

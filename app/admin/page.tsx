@@ -155,6 +155,7 @@ import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
+import { SignedInUsers } from "@/features/admin/signed-in-users";
 import { UserModeration } from "@/features/admin/user-moderation";
 import { AppealsQueue } from "@/features/admin/appeals-queue";
 import { MomentumEditor } from "@/features/admin/momentum-editor";
@@ -513,6 +514,19 @@ export default async function AdminPage() {
                 },
               ]}
             />
+          </AdminPanel>
+
+          {/*
+            Signed-in members (owner, 2026-09-27: "a place in admin dashboard
+            where I can see all signed in users and detailed activities").
+
+            A pure client island — it reads /api/admin/people on the shared
+            scheduler, so there is NO server query here to hold the page up,
+            and it stops polling the moment another section is opened because
+            `useAdminLive` unsubscribes when its panel is hidden.
+          */}
+          <AdminPanel id="people">
+            <SignedInUsers />
           </AdminPanel>
 
           <AdminPanel id="subscribers">

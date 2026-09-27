@@ -479,9 +479,32 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
     };
 
     /** One RPC call. Returns null (never throws) when the function is absent. */
+    /*
+      ── WHY A FAILURE IS NOW REMEMBERED, NOT JUST COUNTED (2026-09-27) ──────
+
+      This helper threw the error away and returned null, so every possible
+      failure arrived at the same place looking identical — and the banner
+      downstream reported all of them as `Run migration 0115`.
+
+      🔴 THE OWNER SAW THAT MESSAGE WHILE 0115 WAS APPLIED AND WORKING. The
+      real cause was a statement timeout: 0172's index build and publication
+      change briefly made these aggregates take ~23s, and a timeout is not a
+      missing function. Being told to run a migration that is already applied
+      sends the one person who can fix it to the one place that cannot.
+
+      So the code is kept and used to tell the two apart. `42883` is Postgres
+      for 'function does not exist' and `PGRST202` is PostgREST's own version
+      of it; `57014` is a cancelled statement.
+    */
+    // An array, not a `let`: TypeScript narrows a nullable `let` that is only
+    // ever reassigned inside a callback to `never` at the read site.
+    const rpcErrors: { code: string | null; message: string }[] = [];
     const rpc = async <T>(name: string, args: Record<string, unknown>): Promise<T[] | null> => {
       const { data, error } = await db.rpc(name, args);
-      if (error) return null;
+      if (error) {
+        rpcErrors.push({ code: error.code ?? null, message: error.message ?? String(error) });
+        return null;
+      }
       return (data ?? []) as T[];
     };
 
@@ -522,7 +545,22 @@ export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummar
       exists to remove. The flag drives a banner instead.
     */
     if (!totals) {
-      return { ...empty, rpcHealth: { exactAggregates: false, note: "Run migration 0115 — exact analytics aggregates are unavailable." } };
+      /*
+        Three different notes, because they need three different actions: apply
+        a migration, wait and reload, or go and read the error. A single
+        catch-all message was actively misleading — see the helper above.
+      */
+      const firstError = rpcErrors[0] ?? null;
+      const code = firstError?.code ?? null;
+      const missing = code === "42883" || code === "PGRST202";
+      const timedOut = code === "57014";
+      const note =
+        missing
+          ? "Run migration 0115 — exact analytics aggregates are unavailable."
+          : timedOut
+            ? "The analytics aggregates timed out — the database is busy. Reload in a moment; nothing is wrong with the data."
+            : `Exact analytics aggregates could not be read${firstError ? ` (${firstError.code ?? "error"}: ${firstError.message})` : ""}.`;
+      return { ...empty, rpcHealth: { exactAggregates: false, note } };
     }
 
     const t = totals[0] ?? {

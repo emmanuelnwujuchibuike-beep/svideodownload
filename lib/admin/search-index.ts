@@ -230,6 +230,13 @@ export const ADMIN_SETTING_ENTRIES: AdminSearchEntry[] = [
     keywords: ["flag", "feature", "toggle", "rollout", "enable", "disable"],
   },
   {
+    id: "people",
+    label: "Signed-in members and their activity",
+    section: "people",
+    hint: "Signed-in members",
+    keywords: ["user", "users", "member", "members", "signed in", "logged in", "online", "active", "who", "activity", "session", "sessions", "people"],
+  },
+  {
     id: "moderation",
     label: "Reported content queue",
     section: "moderation",

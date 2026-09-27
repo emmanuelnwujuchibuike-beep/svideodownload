@@ -176,9 +176,31 @@ describe("the pipeline fixes are still in place", () => {
   });
 
   it("clamps a client clock so a wrong device time cannot park events in the future", () => {
-    const collect = read("app/api/analytics/collect/route.ts");
-    expect(collect).toContain("occurredAtIso");
-    expect(collect).toMatch(/Math\.min\(Math\.max\(/);
+    /*
+      ── THE CLAMP MOVED INTO POSTGRES (0172, 2026-09-27) ──────────────────
+
+      It used to be `occurredAtIso` in the collect route, because that route
+      was the ingest path. The browser now calls `track_events()` directly —
+      there is no Vercel function in front of the write any more — so the
+      guarantee has to be asserted where it now lives, or this test would
+      pass forever against a file that no longer stores anything.
+
+      The property is unchanged and still the point: a wrong or forged device
+      clock cannot park rows in the future, where they would sit at the top of
+      every recent query, nor before the 24-hour floor, where they would
+      vanish from every window.
+    */
+    const sql = read("supabase/migrations/0172_direct_event_ingest.sql");
+    expect(sql).toMatch(/least\(/);
+    expect(sql).toMatch(/greatest\(/);
+    expect(sql).toContain("v_now - interval '24 hours'");
+    // `received_at` is the server's own clock and is never taken from the payload.
+    expect(sql).toMatch(/v_now\s+timestamptz\s*:=\s*now\(\)/);
+    // And the identity is derived, never accepted — the 0141 law. Comment
+    // lines are stripped first: the migration documents the very trap this
+    // asserts against, so its own prose would fail the check.
+    expect(sql).toMatch(/v_uid\s+uuid\s*:=\s*auth\.uid\(\)/);
+    expect(sql.replace(/^\s*--.*$/gm, "")).not.toMatch(/p_user_id/);
   });
 
   it("emits download_cancelled — it was declared but never sent", () => {

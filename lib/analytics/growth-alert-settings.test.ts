@@ -28,7 +28,15 @@ describe("growth milestone emails (owner, 2026-09-20)", () => {
     expect(svc).toContain("const GROWTH_CHECK_THROTTLE_MS = 10 * 60_000;");
     expect(svc).toContain('supabase.rpc("analytics_visitors_total")');
     expect(code("app/api/cron/digest/route.ts")).toContain("checkGrowthMilestones({ force: true })");
-    expect(code("app/api/analytics/collect/route.ts")).toContain("if (Math.random() < 0.02) after(() => checkGrowthMilestones().catch(() => undefined));");
+    /*
+      0.5, not 0.02, since 2026-09-27. The collect route used to see every
+      batch from every visitor; it now sees terminal download events only
+      (~3.7% of volume), so the old one-in-fifty rate would have cut this
+      check to near zero. The absolute frequency is what matters, and
+      `checkGrowthMilestones` throttles itself to one count per instance per
+      ten minutes regardless.
+    */
+    expect(code("app/api/analytics/collect/route.ts")).toContain("if (Math.random() < 0.5) after(() => checkGrowthMilestones().catch(() => undefined));");
     // the admin route is guarded and the counter is revoked from the browser roles
     expect(code("app/api/admin/growth-alerts/route.ts")).toContain("const admin = await getAdminUser();");
     expect(readFileSync(join(process.cwd(), "supabase/migrations/0165_analytics_visitors_total.sql"), "utf8")).toContain("revoke all on function public.analytics_visitors_total() from public, anon, authenticated");

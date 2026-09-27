@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { AI_ACTIVE_STATUSES, AI_JOB_STATUSES, canTransition, jobToView, type AiJobRow } from "@/lib/ai/jobs";
+import { featureOf } from "@/lib/analytics/features";
 import { historyChip, statusesForFilter } from "@/lib/ai/history";
 import { CHARACTER_REPLACE_DEFAULTS, normalizeCharacterReplaceConfig, publicCharacterReplaceConfig } from "./config";
 import { stageName } from "./pipeline";
@@ -173,10 +174,23 @@ describe("money and analytics on the result page (§33–§34)", () => {
     // the properties sent are the mode/quality/view — never a URL, a name or the dialogue
     expect(r).not.toMatch(/track\([^)]*(previewUrl|source\.name|text)/);
     const types = src("lib/analytics/types.ts");
-    const collect = src("app/api/analytics/collect/route.ts");
+    /*
+      ── THE SECOND HALF OF THIS CHECK MOVED (0172, 2026-09-27) ────────────
+
+      It used to assert the event appeared in the collect route's zod enum,
+      because that enum was the gate every event had to pass. Ingest now goes
+      straight from the browser to Postgres, and the collect route validates
+      only the three download events that can raise an admin alert — so the
+      old assertion would now fail for a correct implementation.
+
+      What replaces it is stronger than a string match on a route file: the
+      event has to CLASSIFY, i.e. `featureOf` must route it to the AI
+      section. An AI event that classified as null would reach no admin
+      subscription at all, which looks exactly like nothing happening.
+    */
     for (const e of ["character_replace_result_viewed", "character_replace_retry_clicked"]) {
       expect(types).toContain(`"${e}"`);
-      expect(collect).toContain(`"${e}"`);
+      expect(featureOf(e), `${e} must reach the AI section`).toBe("ai");
     }
   });
   it("share never mints a public link; download goes through the one manager", () => {

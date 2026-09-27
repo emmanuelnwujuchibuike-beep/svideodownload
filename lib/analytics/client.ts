@@ -1,14 +1,31 @@
 "use client";
 
+import { featureOf } from "./features";
+import { postIngest, primeIdentity } from "./ingest";
 import type { AnalyticsEventInput, AnalyticsEventType, DownloadStatus } from "./types";
 
 /**
  * Enterprise Analytics — the client collector (Phase 1).
  *
  * Generates the stable IDs (a persistent Visitor ID, a rolling Session ID), stamps
- * each event with its own UUID (dedup key), batches events, and flushes them to the
- * collect endpoint — with a `sendBeacon` on page-hide so nothing is lost on exit.
- * Every browser API is guarded, so importing this on the server is a harmless no-op.
+ * each event with its own UUID (dedup key), batches events, and flushes them —
+ * with a keepalive write on page-hide so nothing is lost on exit. Every browser API
+ * is guarded, so importing this on the server is a harmless no-op.
+ *
+ * ── 🔴 THE FLUSH NO LONGER GOES THROUGH VERCEL (2026-09-27) ─────────────────
+ *
+ * Owner: "reduce Vercel Observability event usage/cost." Batches went to
+ * `/api/analytics/collect`, a Node function whose only job was to forward rows to
+ * Supabase — 22,121 invocations' worth in seven days, each also producing a
+ * request log entry, and request logs are what the meter counts.
+ *
+ * They now go straight to `track_events` on Postgres (see ./ingest). Everything
+ * else about this file — the ids, the 3s debounce, the 12-event batch, the
+ * re-queue on failure, the dwell accounting, the opt-out — is unchanged, because
+ * none of it was the problem.
+ *
+ * The collect route survives in ONE narrow role: the admin alerts on a bad
+ * download outcome, which need server-side push and email. See `reportOutcome`.
  */
 
 const VISITOR_KEY = "frenz_vid";
@@ -18,7 +35,17 @@ const OPT_OUT_KEY = "frenz_analytics_off";
 const SESSION_WINDOW_MS = 30 * 60 * 1000; // 30-minute inactivity window
 const FLUSH_DEBOUNCE_MS = 3000;
 const MAX_BATCH = 12;
-const ENDPOINT = "/api/analytics/collect";
+/*
+  The alerts-only remnant of the old ingest endpoint. Called for terminal
+  download events ONLY — roughly 3.7% of events by volume — because a failed
+  download has to reach the owner by push and email, and neither can be sent
+  from a browser. It no longer writes anything: the rows are already in
+  Postgres by the time this is called.
+*/
+const ALERT_ENDPOINT = "/api/analytics/collect";
+/** Per-session enrichment the browser cannot derive. See /api/analytics/context. */
+const CONTEXT_ENDPOINT = "/api/analytics/context";
+const CONTEXT_KEY = "frenz_actx";
 
 const hasWindow = typeof window !== "undefined";
 
@@ -111,6 +138,81 @@ function ensureSession(): { id: string; started: boolean } {
 let queue: AnalyticsEventInput[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
+/* ───────────────────── the enrichment the browser cannot derive ──────────── */
+
+/**
+ * Geo, device and the bot verdict, for THIS session.
+ *
+ * The old collect route derived these per request, from headers only a server
+ * sees. Writing straight to Postgres means they have to be carried, so they are
+ * fetched once per session from an edge route that does nothing else and logs
+ * nothing (see app/api/analytics/context/route.ts) and cached under the session
+ * id — a new session re-fetches, because a visitor can move.
+ *
+ * ⚠️ THIS IS THE ONE PLACE THE MIGRATION LOSES GROUND, AND IT IS WORTH NAMING.
+ * These fields used to be unforgeable per event. They are now stamped once by
+ * the server and relayed by the client, so a hostile visitor could alter their
+ * own country or clear their own bot flag. `user_id` and `received_at` stay
+ * unforgeable because Postgres computes them inside `track_events`. The
+ * alternative — a server round-trip per batch — is the cost being removed.
+ */
+interface SessionContext {
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  device: string | null;
+  browser: string | null;
+  os: string | null;
+  isBot: boolean;
+}
+
+let context: SessionContext | null = null;
+let contextFetch: Promise<void> | null = null;
+
+function cachedContext(sessionId: string): SessionContext | null {
+  try {
+    const raw = sessionStorage.getItem(CONTEXT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { sid?: string; ctx?: SessionContext };
+    // Keyed by session id so a NEW session does not inherit the old one's geo.
+    return parsed?.sid === sessionId && parsed.ctx ? parsed.ctx : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensure the context is in hand. Idempotent, never throws, never blocks a
+ * caller that cannot wait — a flush with no context still sends, with null geo,
+ * because an event without a country beats no event.
+ */
+function ensureContext(sessionId: string): Promise<void> {
+  if (context || contextFetch) return contextFetch ?? Promise.resolve();
+  const cached = cachedContext(sessionId);
+  if (cached) {
+    context = cached;
+    return Promise.resolve();
+  }
+  contextFetch = (async () => {
+    try {
+      const res = await fetch(CONTEXT_ENDPOINT, { cache: "no-store" });
+      if (!res.ok) return;
+      const ctx = (await res.json()) as SessionContext;
+      context = ctx;
+      try {
+        sessionStorage.setItem(CONTEXT_KEY, JSON.stringify({ sid: sessionId, ctx }));
+      } catch {
+        /* storage blocked — refetched next load, which is one call, not a failure */
+      }
+    } catch {
+      /* offline or blocked — events still send, without geo */
+    } finally {
+      contextFetch = null;
+    }
+  })();
+  return contextFetch;
+}
+
 function build(type: AnalyticsEventType, sessionId: string, props?: Record<string, unknown>, downloadId?: string | null): AnalyticsEventInput {
   return {
     eventId: uuid(),
@@ -137,7 +239,135 @@ function scheduleFlush(): void {
   }, FLUSH_DEBOUNCE_MS);
 }
 
-async function flush(useBeacon = false): Promise<void> {
+/** The download lifecycle statuses that own a canonical `analytics_downloads` row. */
+const STATUS_FROM_TYPE: Partial<Record<AnalyticsEventType, DownloadStatus>> = {
+  download_requested: "requested",
+  download_started: "started",
+  download_preparing: "preparing",
+  download_completed: "completed",
+  download_failed: "failed",
+  download_cancelled: "cancelled",
+};
+
+/** One queued event as the `track_events` payload wants it: snake_case, ISO time. */
+function toRow(e: AnalyticsEventInput, ctx: SessionContext | null): Record<string, unknown> {
+  return {
+    event_id: e.eventId,
+    event_type: e.type,
+    visitor_id: e.visitorId,
+    session_id: e.sessionId,
+    download_id: e.downloadId ?? null,
+    /*
+      ISO, not epoch ms, because the function parses a timestamptz. It never
+      TRUSTS this value — it clamps it to [now-24h, now] — so this only fixes
+      the ordering of events within one batch.
+    */
+    occurred_at: new Date(e.occurredAt).toISOString(),
+    path: e.path ?? null,
+    referrer: e.referrer ?? null,
+    country: ctx?.country ?? null,
+    region: ctx?.region ?? null,
+    city: ctx?.city ?? null,
+    device: ctx?.device ?? null,
+    browser: ctx?.browser ?? null,
+    os: ctx?.os ?? null,
+    is_bot: ctx?.isBot ?? false,
+    // Derived from the event name, never hand-listed — see ./features.
+    feature: featureOf(e.type),
+    properties: e.properties ?? {},
+  };
+}
+
+/**
+ * The canonical per-download rows this batch implies.
+ *
+ * Within a batch the LATEST event by its own clock wins, not the last in array
+ * order — and `track_download_state` enforces the same rule ACROSS batches via
+ * `last_event_at`. That pairing is load-bearing: the queue re-queues a failed
+ * batch to the FRONT, so a retried batch is delivered after the one behind it,
+ * and a plain last-write-wins upsert reverted completed downloads to
+ * 'requested' and nulled their file size.
+ */
+function downloadRowsFor(
+  batch: AnalyticsEventInput[],
+  ctx: SessionContext | null,
+): Record<string, unknown>[] {
+  const rows = new Map<string, Record<string, unknown>>();
+  for (const e of batch) {
+    const status = STATUS_FROM_TYPE[e.type];
+    if (!status || !e.downloadId) continue;
+    const props = e.properties ?? {};
+    const at = new Date(e.occurredAt).toISOString();
+    const existing = rows.get(e.downloadId);
+    if (existing && String(existing.last_event_at) > at) continue;
+    rows.set(e.downloadId, {
+      download_id: e.downloadId,
+      visitor_id: e.visitorId,
+      session_id: e.sessionId,
+      platform: props.platform ?? null,
+      media_kind: props.mediaKind ?? null,
+      quality: props.quality ?? null,
+      status,
+      error_reason: props.errorReason ?? null,
+      file_size: props.fileSize ?? null,
+      duration_ms: props.durationMs ?? null,
+      retry_of: props.retryOf ?? null,
+      batch_id: props.batchId ?? null,
+      link_key: props.linkKey ?? null,
+      country: ctx?.country ?? null,
+      device: ctx?.device ?? null,
+      is_bot: ctx?.isBot ?? false,
+      last_event_at: at,
+    });
+  }
+  return [...rows.values()];
+}
+
+/**
+ * Tell the server about a download that failed, was cancelled, or succeeded
+ * only after retrying — the three things the owner is alerted about by push and
+ * email, neither of which a browser can send.
+ *
+ * 🔴 THIS IS THE ONLY REMAINING VERCEL CALL ON THE EVENT PATH, and it is
+ * deliberately rare: terminal download events are ~3.7% of volume. It writes
+ * nothing, because the rows are already in Postgres by now — so when it fails,
+ * the data is still correct and only a notification is missed.
+ */
+function reportOutcome(batch: AnalyticsEventInput[], unloading: boolean): void {
+  const notable = batch.filter((e) => {
+    if (!e.downloadId) return false;
+    const status = STATUS_FROM_TYPE[e.type];
+    if (status === "failed" || status === "cancelled") return true;
+    /*
+      A success that needed more than one attempt. `attempts` is sent on
+      completion only; anything <= 1 is the normal case and must not alert —
+      the owner is not told about the thing that is supposed to happen.
+    */
+    if (status !== "completed") return false;
+    const attempts = (e.properties ?? {}).attempts;
+    return typeof attempts === "number" && attempts > 1;
+  });
+  if (notable.length === 0) return;
+  const body = JSON.stringify({ events: notable, alertsOnly: true });
+  try {
+    void fetch(ALERT_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    if (unloading && hasWindow && navigator.sendBeacon) {
+      try {
+        navigator.sendBeacon(ALERT_ENDPOINT, new Blob([body], { type: "application/json" }));
+      } catch {
+        /* best effort — an alert is never worth an error in the page */
+      }
+    }
+  }
+}
+
+async function flush(unloading = false): Promise<void> {
   if (queue.length === 0) return;
   const batch = queue;
   queue = [];
@@ -145,18 +375,49 @@ async function flush(useBeacon = false): Promise<void> {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
-  const body = JSON.stringify({ events: batch });
-  try {
-    if (useBeacon && hasWindow && navigator.sendBeacon) {
-      const ok = navigator.sendBeacon(ENDPOINT, new Blob([body], { type: "application/json" }));
-      if (!ok) queue.unshift(...batch);
-      return;
+
+  /*
+    Wait for the enrichment on a NORMAL flush only. A normal flush happens 3
+    seconds after an event at the earliest, so awaiting a request that is
+    almost always already cached costs nothing anyone can perceive. On the way
+    out there is nothing to await with, so whatever is cached is what is sent.
+  */
+  if (!unloading) {
+    try {
+      await ensureContext(batch[0]!.sessionId);
+    } catch {
+      /* enrichment is never allowed to block the send */
     }
-    const res = await fetch(ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true });
-    if (!res.ok) queue.unshift(...batch); // server hiccup — retry on the next flush
-  } catch {
-    queue.unshift(...batch); // offline — retry on the next flush
   }
+  const ctx = context;
+
+  const ok = await postIngest(
+    "track_events",
+    { p_events: batch.map((e) => toRow(e, ctx)) },
+    unloading,
+  );
+  if (!ok) {
+    /*
+      Put it back at the FRONT and try on the next flush — the same contract
+      the old endpoint had. `on conflict (event_id) do nothing` is what makes
+      the replay exactly-once rather than a double count.
+    */
+    queue.unshift(...batch);
+    return;
+  }
+
+  /*
+    The canonical download rows go in a SECOND call, after the events landed.
+    Deliberately not folded into one RPC: the event log is the source of truth
+    and must never be lost because a derived upsert failed. Most flushes carry
+    no download at all and make no second call.
+  */
+  const rows = downloadRowsFor(batch, ctx);
+  if (rows.length > 0) {
+    void postIngest("track_download_state", { p_rows: rows }, unloading);
+  }
+
+  reportOutcome(batch, unloading);
 }
 
 /** Core: enqueue an event (opening a session_start first if a new session began). */
@@ -303,6 +564,22 @@ export function trackDownload(
 // Flush on the way out so queued events aren't lost. `pagehide` fires on both real
 // unloads and iOS bfcache freezes; a hidden `visibilitychange` covers backgrounding.
 if (hasWindow) {
+  /*
+    Learn who this is, now.
+
+    The member's access token is what makes `auth.uid()` resolve inside
+    `track_events`, and it can only be read asynchronously — while the flush that
+    matters most, on `pagehide`, has nothing to await with. So it is primed here,
+    on module load, which is already after hydration because this whole module
+    arrives through a dynamic import.
+
+    ⚠️ The window this leaves: a member who lands and leaves within the few
+    hundred milliseconds before the session resolves has that first page view
+    attributed to a guest. The alternative is blocking the first flush on auth,
+    and analytics does not get to put itself in front of the page.
+  */
+  void primeIdentity();
+
   window.addEventListener("pagehide", () => {
     closeDwell(); // the last page of a session reports its real time, not zero
     void flush(true);

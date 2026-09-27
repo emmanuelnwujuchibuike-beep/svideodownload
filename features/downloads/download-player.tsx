@@ -4,7 +4,7 @@ import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loade
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import {
@@ -136,6 +136,25 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   // (owner). `dragY` follows a downward swipe so the clip dismisses like a story.
   const [controlsVisible, setControlsVisible] = useState(false);
   const [dragY, setDragY] = useState(0);
+  /*
+    ── SAVE TO DEVICE GETS OUT OF THE WAY (owner, 2026-09-27) ───────────────
+    "Make the save to device button to hide after 4 secs of no screen touch
+    interaction and it should show when a new video start and hide after 4
+    secs of no screen touch interaction."
+
+    The rest of this player already treats the media as the content and the
+    chrome as temporary — the play glyph shows briefly, a hold clears the
+    screen entirely. The one thing that never left was the white pill at the
+    bottom, sitting over every clip for its whole length.
+
+    🔴 It hides by OPACITY and keeps `pointer-events-none` while hidden, not
+    by unmounting: a button that unmounts mid-fade eats the tap that was
+    already travelling toward it, and re-mounting it on the next touch would
+    animate from nothing every time. Hidden it is invisible and untappable;
+    the next touch anywhere brings it straight back.
+  */
+  const [saveVisible, setSaveVisible] = useState(true);
+  const saveTimer = useRef<number | null>(null);
   /*
     ── Press-and-hold = full clear screen (owner, 2026-08-16: "the story and
     history should show full clear screen on press and hold") ────────────────
@@ -403,10 +422,35 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     playerNext();
   };
 
+  /** Show the Save pill and restart its four seconds. Every touch calls this. */
+  const bumpSave = useCallback(() => {
+    setSaveVisible(true);
+    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      setSaveVisible(false);
+    }, 4000);
+  }, []);
+
+  /*
+    A NEW CLIP STARTS THE CLOCK AGAIN — the owner asked for it explicitly, and
+    it is also the only way the button is discoverable: advancing through a
+    queue is not a touch, so without this the pill would stay hidden for every
+    clip after the first.
+  */
+  useEffect(() => {
+    bumpSave();
+    return () => {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+    };
+  }, [rec.id, bumpSave]);
+
   /* One gesture surface over the media: a near-stationary press is a TAP (its x
    * position picks previous / play-pause / next); a downward drag is a SWIPE that
    * follows the finger and, past the threshold, exits — exactly like a story. */
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    // any touch on the media brings the pill back and restarts its four seconds
+    bumpSave();
     gesture.current = { x: e.clientX, y: e.clientY, t: Date.now() };
     setDragY(0);
     // A hold that survives 220ms without turning into a drag (cancelled below)
@@ -797,14 +841,20 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       {url && !error ? (
         <div
           className={cn(
-            "pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] transition-opacity duration-150",
-            holding && "opacity-0",
+            "pointer-events-none fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] transition-opacity duration-300",
+            (holding || !saveVisible) && "opacity-0",
           )}
         >
           <button
             type="button"
             onClick={saveToDeviceNow}
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-elevated transition active:scale-95"
+            // hidden means untappable: a 0-opacity button still takes the tap that was meant for the media
+            tabIndex={saveVisible ? 0 : -1}
+            aria-hidden={!saveVisible}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-elevated transition active:scale-95",
+              saveVisible ? "pointer-events-auto" : "pointer-events-none",
+            )}
           >
             {savedToDevice ? (
               <>

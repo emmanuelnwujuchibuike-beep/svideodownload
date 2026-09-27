@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Share2, Trash2, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, Download, ExternalLink, Globe2, Heart, Link2, Loader2, MessageCircle, MoreVertical, Play, Share2, Trash2 } from "lucide-react";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -108,6 +108,64 @@ export function DownloadPlayer() {
  * scrubber, and every action folded into the ••• menu — no persistent bottom
  * action bar competing with the content the way Stories/Reels never do.
  */
+/*
+  ── THE SIGNED-IN AVATAR, ONCE PER TAB ────────────────────────────────────
+  Owner, 2026-09-27: "avatar should show when is on sign in Download page
+  where users have signed in."
+
+  Module-level, not component state: this player remounts on EVERY clip (it
+  is keyed by record id), and a per-mount fetch would hit auth and profiles
+  again for each swipe through a queue. Resolved once, reused, and left null
+  for a signed-out visitor — whose history is local and has no owner to show.
+*/
+let viewerAvatarCache: { url: string | null } | null = null;
+
+function useViewerAvatar(): string | null {
+  const [url, setUrl] = useState<string | null>(viewerAvatarCache?.url ?? null);
+  useEffect(() => {
+    if (viewerAvatarCache) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const { data } = await createClient().auth.getUser();
+        const user = data.user;
+        if (!user) {
+          viewerAvatarCache = { url: null };
+          return;
+        }
+        const meta = (user.user_metadata ?? {}) as { avatar_url?: unknown };
+        let found = typeof meta.avatar_url === "string" ? meta.avatar_url : null;
+        if (!found) {
+          const { data: profile } = await createClient().from("profiles").select("avatar_url").eq("id", user.id).maybeSingle();
+          const a = (profile as { avatar_url?: unknown } | null)?.avatar_url;
+          found = typeof a === "string" && a ? a : null;
+        }
+        viewerAvatarCache = { url: found };
+        if (alive) setUrl(found);
+      } catch {
+        // a viewer with no avatar is the normal case, not an error worth showing
+        viewerAvatarCache = { url: null };
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return url;
+}
+
+/** "2 days ago" — when this clip was saved, in the words a history row uses. */
+function savedAgo(at: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - at) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(at).toLocaleDateString();
+}
+
 function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number; total: number }) {
   const router = useRouter();
   const [url, setUrl] = useState<string | null>(null);
@@ -136,6 +194,79 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   // (owner). `dragY` follows a downward swipe so the clip dismisses like a story.
   const [controlsVisible, setControlsVisible] = useState(false);
   const [dragY, setDragY] = useState(0);
+  const viewerAvatar = useViewerAvatar();
+  /*
+    ── DRAG THE BAR TO SEEK (owner, 2026-09-27) ──────────────────────────────
+    "make users can fast forward or backward video by dragging the progress
+    bar."
+
+    🔴 THE BAR HAS ITS OWN GESTURE, SEPARATE FROM THE MEDIA'S. The surface
+    below already arbitrates tap-vs-swipe-vs-hold for previous/next/pause, and
+    a drag that means "seek" must never be read as one of those. So the bar
+    sits ABOVE it (z-30), captures the pointer, and is `touch-none` while a
+    video is loaded — the browser's own scroll/refresh gesture would otherwise
+    steal a horizontal drag that starts near the top of the screen.
+
+    The hit area is padded (`py-3 -my-3`) without moving the 1px line: a bar
+    that is literally one pixel tall is a bar nobody can grab on a phone.
+
+    While scrubbing the fill drops its width transition — otherwise the bar
+    eases toward each new position and lags the finger by a frame.
+  */
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [scrubbing, setScrubbing] = useState(false);
+  const wasPlaying = useRef(false);
+
+  /** Seek to wherever x falls across the CURRENT item's segment. */
+  const seekToClientX = useCallback(
+    (clientX: number) => {
+      const bar = barRef.current;
+      const video = videoRef.current;
+      if (!bar || !video) return;
+      const rect = bar.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      /*
+        The bar shows one segment per queued item, so the CURRENT clip owns
+        only its own slice of the width. Seeking has to map x within that
+        slice, not across the whole bar, or a two-item queue would scrub at
+        double speed.
+      */
+      const gap = 4; // the flex gap, in px, matching `gap-1`
+      const segment = (rect.width - gap * (total - 1)) / total;
+      const left = rect.left + index * (segment + gap);
+      const fraction = Math.min(1, Math.max(0, (clientX - left) / segment));
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+      if (duration <= 0) return;
+      video.currentTime = fraction * duration;
+      setProgress(fraction * 100);
+    },
+    [index, total],
+  );
+
+  const onScrubDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (rec.kind !== "video" || !url) return;
+    const video = videoRef.current;
+    if (!video) return;
+    e.stopPropagation(); // never let the media surface read this as a tap
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    wasPlaying.current = !video.paused;
+    video.pause();
+    setScrubbing(true);
+    bumpSave();
+    seekToClientX(e.clientX);
+  };
+  const onScrubMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!scrubbing) return;
+    e.stopPropagation();
+    seekToClientX(e.clientX);
+  };
+  const endScrub = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!scrubbing) return;
+    e.stopPropagation();
+    setScrubbing(false);
+    // resume only if it was playing when the drag began — a paused clip stays paused
+    if (wasPlaying.current) void videoRef.current?.play().catch(() => {});
+  };
   /*
     ── SAVE TO DEVICE GETS OUT OF THE WAY (owner, 2026-09-27) ───────────────
     "Make the save to device button to hide after 4 secs of no screen touch
@@ -646,86 +777,94 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           "the story and history should show full clear screen on press and
           hold") — same treatment as the story viewer's equivalent bar. */}
       <div
+        ref={barRef}
+        onPointerDown={onScrubDown}
+        onPointerMove={onScrubMove}
+        onPointerUp={endScrub}
+        onPointerCancel={endScrub}
         className={cn(
-          "absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-20 flex gap-1 transition-opacity duration-150",
+          "absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-30 flex gap-1 transition-opacity duration-150",
+          rec.kind === "video" && url ? "cursor-pointer touch-none py-3 -my-3" : "",
           holding && "opacity-0",
         )}
       >
         {Array.from({ length: total }).map((_, i) => (
           <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
             <span
-              className="block h-full rounded-full bg-white"
+              className={cn("block h-full rounded-full bg-white", scrubbing ? "" : "transition-[width] duration-150")}
               style={{ width: `${i < index ? 100 : i === index ? (rec.kind === "video" ? progress : 100) : 0}%` }}
             />
           </span>
         ))}
       </div>
 
-      {/* X (dismiss) and ••• (menu) sit on OPPOSITE top corners, both below the
-          safe area so they never jam under the island. */}
-      <button
-        type="button"
-        onClick={closePlayer}
-        aria-label="Close"
-        className={cn(
-          "fixed left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-opacity duration-150",
-          holding && "pointer-events-none opacity-0",
-        )}
-      >
-        <X className="h-5 w-5" />
-      </button>
-      <button
-        type="button"
-        onClick={() => setMoreOpen(true)}
-        aria-label="More options"
-        className={cn(
-          "fixed right-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition-opacity duration-150",
-          holding && "pointer-events-none opacity-0",
-        )}
-      >
-        <MoreVertical className="h-5 w-5" />
-      </button>
-
       {/*
-        Title / position — TAP TO READ THE WHOLE CAPTION.
+        ── THE HEADER (owner, 2026-09-27) ───────────────────────────────────
+        "The title should be at the top below the progress bar and the avatar
+        and type and date downloaded." Story-viewer chrome: back, who saved
+        it, what it is and when — on ONE line under the segments, instead of
+        two buttons floating in opposite corners with the title at the foot
+        of the screen.
 
-        It was `pointer-events-none` + `truncate`, so a long caption was cut off
-        here exactly as it is on the grid tile, and the "…more" cue on that tile
-        led to another truncation. Now the line is a real control: collapsed it
-        reads as before, expanded it shows the caption in full and scrolls if it
-        is long.
-
-        It stays inset between the close and menu buttons so it can never
-        overlap either, and the expanded panel gets its own scrim — white text
-        over arbitrary video frames is otherwise unreadable.
+        No reply or reaction row: this is the member's OWN history, and there
+        is nobody to reply to.
       */}
       <div
         className={cn(
-          "absolute inset-x-16 top-[calc(2rem+var(--frenz-safe-top))] z-10 transition-opacity duration-150",
+          "absolute inset-x-0 top-[calc(1.35rem+var(--frenz-safe-top))] z-20 flex items-center gap-2.5 px-3 transition-opacity duration-150",
           holding && "pointer-events-none opacity-0",
         )}
       >
+        <button type="button" onClick={closePlayer} aria-label="Close" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white">
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        {viewerAvatar ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a signed URL from the member's own profile, not a known-size asset
+          <img src={viewerAvatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/30" />
+        ) : null}
         <button
           type="button"
           onClick={() => setCaptionOpen((v) => !v)}
           aria-expanded={captionOpen}
           aria-label={captionOpen ? "Hide caption" : "Show full caption"}
+          className="min-w-0 flex-1 text-left"
+        >
+          <span className="block truncate text-[14px] font-semibold leading-tight text-white">{rec.title}</span>
+          <span className="block truncate text-[11.5px] leading-tight text-white/70">
+            {rec.kind === "video" ? "Video" : rec.kind === "audio" ? "Audio" : "Image"}
+            {rec.platformName ? ` · ${rec.platformName}` : ""} · {savedAgo(rec.createdAt)}
+          </span>
+        </button>
+        <button type="button" onClick={() => setMoreOpen(true)} aria-label="More options" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white">
+          <MoreVertical className="h-5 w-5" />
+        </button>
+      </div>
+      {/*
+        THE FULL CAPTION, WHEN ASKED FOR (2026-09-27).
+
+        The collapsed title used to live here, floating over the middle of the
+        screen between the two corner buttons. It is now the header's own
+        first line, so this is only what the header cannot hold: the whole
+        caption, opened by tapping that line, scrolling when it is long, with
+        its own scrim because white text over an arbitrary video frame is
+        unreadable.
+      */}
+      {captionOpen ? (
+        <button
+          type="button"
+          onClick={() => setCaptionOpen(false)}
+          aria-label="Hide caption"
           className={cn(
-            "block w-full rounded-xl text-center text-sm font-medium text-white/90 transition",
-            captionOpen && "max-h-[40vh] overflow-y-auto overscroll-contain bg-black/70 p-3 text-left backdrop-blur-md",
+            "absolute inset-x-3 top-[calc(4.6rem+var(--frenz-safe-top))] z-20 max-h-[40vh] overflow-y-auto overscroll-contain rounded-2xl bg-black/70 p-3 text-left backdrop-blur-md transition-opacity duration-150",
+            holding && "pointer-events-none opacity-0",
           )}
         >
-          <span className={cn(captionOpen ? "whitespace-pre-wrap break-words" : "block truncate")}>
+          <span className="block whitespace-pre-wrap break-words text-sm font-medium text-white/90">
             {rec.title}
             {total > 1 ? <span className="text-white/60"> · {index + 1}/{total}</span> : null}
           </span>
-          {/* Only offered when there is genuinely more to see. */}
-          {!captionOpen && rec.title.length > 40 ? (
-            <span className="mt-0.5 block text-[11px] font-semibold text-white/60">…more</span>
-          ) : null}
         </button>
-      </div>
-
+      ) : null}
       {/* The stage — full-bleed media. object-contain never crops the width or
           over-stretches beyond the source: it letterboxes on black, and the bottom
           extends all the way to the true viewport edge (owner, 2026-08-16: "so it

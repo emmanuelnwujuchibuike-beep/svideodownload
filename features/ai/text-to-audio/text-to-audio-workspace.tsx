@@ -64,6 +64,19 @@ export function TextToAudioWorkspace({
   const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);
   const [rechargeSheet, setRechargeSheet] = useState(false);
+  /*
+    🔴 THE VOICE LIST IS NOT IN THE DOM UNTIL IT IS ASKED FOR (owner,
+    2026-09-27: "make the language and voice selection not show on text to
+    audio, it should show when the voice and Language button is click, so the
+    text to audio page is light and opens fast on first loading").
+
+    Twenty-one catalogue voices plus the member's own clones is twenty-odd
+    cards, each with an icon and two lines — the single heaviest thing on a
+    page whose job is a text box and a button. Almost nobody changes the voice
+    on the way to their first generation, so it renders as ONE summary row and
+    the list is mounted only on the tap that asks for it.
+  */
+  const [voicePicker, setVoicePicker] = useState(false);
   const [plansCatalogue, setPlansCatalogue] = useState<AiPlansPublic | null>(null);
   const openPlans = useCallback(() => {
     haptic("medium");
@@ -97,6 +110,7 @@ export function TextToAudioWorkspace({
   const voices = cfg?.voices ?? [];
   const voice = voices.find((v) => v.id === ws.voiceId) ?? null;
   const languages = useMemo(() => (cfg?.languages ?? []).filter((l) => !voice || !voice.languages.length || voice.languages.includes(l.code)), [cfg?.languages, voice]);
+  const selectedLanguage = useMemo(() => languages.find((l) => l.code === ws.languageCode) ?? null, [languages, ws.languageCode]);
   const envStage: "idle" | "processing" | "completed" = watching && job ? (isActiveStatus(job.status) ? "processing" : job.status === "completed" ? "completed" : "idle") : "idle";
 
   return (
@@ -164,6 +178,27 @@ export function TextToAudioWorkspace({
             <Section n={2} title="Voice & language">
               {voices.length === 0 ? (
                 <Notice tone="muted">No voice is set up for this tool yet.</Notice>
+              ) : !voicePicker ? (
+                /* Closed: one row saying what is chosen, and nothing else mounted. */
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("selection");
+                    setVoicePicker(true);
+                  }}
+                  className="flex min-h-[60px] w-full items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left transition hover:bg-secondary/40"
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <Mic className="h-4 w-4" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{voice?.label ?? "Choose a voice"}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {[selectedLanguage?.label, cfg?.deliveryChoice && ws.delivery ? TTS_DELIVERY_LABEL[ws.delivery].label : null].filter(Boolean).join(" · ") || "Tap to choose"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[12px] font-semibold text-primary">Change</span>
+                </button>
               ) : (
                 <>
                   {voices.some((v) => v.own) ? (
@@ -230,6 +265,16 @@ export function TextToAudioWorkspace({
                       </select>
                     </label>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("selection");
+                      setVoicePicker(false);
+                    }}
+                    className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center rounded-2xl bg-secondary px-4 text-[13px] font-bold"
+                  >
+                    Done
+                  </button>
                 </>
               )}
             </Section>

@@ -89,34 +89,34 @@ export function FrenzAiFab() {
       title="Frenz AI"
       onClick={() => haptic("light")}
       className={cn(
-        "group fixed right-4 z-30 flex h-[60px] w-[60px] items-center justify-center rounded-full text-white sm:right-6",
+        /*
+          ── 🔴 FLAT, AND STILL (owner, 2026-09-27) ──────────────────────────
+          "make the Ai button widget in the history page to be light and
+          professional like this, and no animation" — with a reference of one
+          solid blue disc and a single white glyph.
+
+          What went: a conic rim that turned for ever, a three-stop gradient,
+          an inset gloss, an inner shadow, a hover lift and a white "AI"
+          badge pinned to the corner. Each was defensible on its own and
+          together they read as a toy on a page whose job is a list of files.
+
+          What stays: the press feedback. `active:scale-95` is a response to
+          a touch, not decoration — removing it would make the button feel
+          dead rather than calm, and it costs nothing while idle.
+
+          The slide-out-of-the-way transform stays for the same reason: it
+          only runs when the page scrolls, and without it the button has to
+          either cover content or disappear instantly.
+        */
+        "fixed right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full sm:right-6",
+        "bg-[#3b4ee8] text-white",
         "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform motion-reduce:transition-none",
-        "active:scale-95 motion-safe:hover:-translate-y-0.5",
+        "active:scale-95",
         dir === "down" && "translate-y-[calc(100%+var(--frenz-bottomnav-h,0px)+3rem)]",
       )}
       style={{ bottom: "max(1.5rem, calc(var(--frenz-bottomnav-h, 0px) + 1rem))" }}
     >
-      {/* the conic rim — a slow-turning light on the edge of the disc */}
-      <span aria-hidden className="frenz-fab-rim pointer-events-none absolute inset-0 rounded-full" />
-      {/* the disc */}
-      <span
-        aria-hidden
-        className={cn(
-          // No drop shadow (owner, 2026-09-14: "remove the shadow from the Ai button widget") — the rim and the gloss carry the depth.
-          "absolute inset-[3px] rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500",
-          "shadow-[0_1px_0_rgb(255_255_255/0.4)_inset,0_-6px_14px_rgb(0_0_0/0.18)_inset]",
-        )}
-      />
-      {/* the gloss */}
-      <span aria-hidden className="pointer-events-none absolute inset-[3px] rounded-full bg-[radial-gradient(60%_45%_at_50%_18%,rgb(255_255_255/0.45),transparent_70%)]" />
-      <WandSparkles className="relative h-[26px] w-[26px] drop-shadow-[0_1px_1px_rgb(0_0_0/0.3)]" strokeWidth={2.1} />
-      {/* the "AI" badge */}
-      <span
-        aria-hidden
-        className="absolute -right-0.5 -top-0.5 rounded-full border border-white/70 bg-white px-1.5 py-[1px] text-[9px] font-black leading-none tracking-[0.06em] text-indigo-600"
-      >
-        AI
-      </span>
+      <WandSparkles className="h-6 w-6" strokeWidth={2} />
       <span className="sr-only">Frenz AI</span>
     </Link>
   );

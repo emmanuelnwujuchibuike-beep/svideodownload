@@ -244,7 +244,8 @@ export default async function AdminPage() {
     bottom of this file, streaming in while the operator is already reading and
     able to navigate.
   */
-  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, revenueSeries, visitorSummary, visitorSplit, multiLink, rewardNetworks, networkCaps, multiLinkStats] =
+  // the three holes are the streamed reads that left this list — see RevenueSection
+  const [revenue, subscribers, pricing, planLimits, promo, monetization, affiliates, adRecords, analytics, , , , multiLink, rewardNetworks, networkCaps, multiLinkStats] =
     await Promise.all([
       fetchRevenueStats(),
       fetchSubscribers(),
@@ -255,9 +256,20 @@ export default async function AdminPage() {
       listAffiliates(),
       listAds(),
       fetchMonetizationAnalytics(),
-      // 90 days once; the range control narrows the already-fetched window rather
-      // than refetching, so switching 7/30/90 costs no round-trip.
-      getRevenueSeries(90),
+      /*
+        🔴 THE THREE SLOWEST READS LEFT THIS LIST (owner, 2026-09-27: "admin
+        dashboard doesn't prefetch and it takes time to load when opening",
+        "the button doesn't respond immediately on click when the page just
+        opened", and "visitors doesn't show until I refresh").
+
+        Measured against production that day: analytics_traffic_totals 5.8 s,
+        analytics_timeseries 4.1 s, analytics_page_traffic 4.1 s — about six
+        seconds wall-clock in parallel. They sat in THIS array, so the whole
+        admin page awaited them before rendering a single pixel: nothing
+        painted and nothing was clickable for as long as the slowest
+        analytics query took. They now stream inside RevenueSection below.
+      */
+      Promise.resolve(null),
       // Visitors come from the ANALYTICS summary, not the monetization one —
       // different object, and only this one carries a timeseries.
       // 90d, matching getRevenueSeries(90) above. These were 30 while the
@@ -266,8 +278,8 @@ export default async function AdminPage() {
       // 2026-08-26). Both are exact aggregates over the window — see the doc
       // comment on getVisitorSplitSeries for why only the un-migrated FALLBACK
       // path stays at 30.
-      getAnalyticsSummary("90d").catch(() => null),
-      getVisitorSplitSeries(90).catch(() => null),
+      Promise.resolve(null),
+      Promise.resolve(null),
       // Multi-Link batch downloader policy (source ceilings, daily batches,
       // reward requirement) — a plan-limit sibling, so it sits in the same
       // Pricing & limits panel as LimitsEditor rather than a panel of its own.
@@ -355,40 +367,14 @@ export default async function AdminPage() {
             own internal tab bar over the six chart groups.
           */}
           <AdminPanel id="monetization">
-            <RevenueOverview
-              revenue={revenue}
-              analytics={analytics}
-              /*
-                Page views beside the ad numbers they are earned against
-                (owner, 2026-09-02). Reuses the 90d summary already fetched for
-                the visitor charts below — no extra query.
-              */
-              traffic={
-                visitorSummary
-                  ? {
-                      pageViews: visitorSummary.pageViews,
-                      uniqueVisitors: visitorSummary.uniqueVisitors,
-                      cpmUsd: visitorSummary.ads.cpmUsd,
-                      adRevenueUsd: visitorSummary.ads.revenueUsd,
-                      series: visitorSummary.timeseries.buckets.map((b) => ({
-                        date: b.t.slice(0, 10),
-                        pageViews: b.pageViews,
-                      })),
-                    }
-                  : null
-              }
-            />
-            <RevenueCharts
-              series={revenueSeries}
-              mrr={revenue?.mrr ?? 0}
-              currency={revenue?.currency ?? "$"}
-              mrrComplete={revenue?.mrrComplete ?? true}
-              visitors={visitorSummary?.timeseries.buckets.map((b) => ({
-                date: b.t.slice(0, 10),
-                visitors: b.visitors,
-              }))}
-              visitorSplit={visitorSplit?.days}
-            />
+            {/*
+              Streams on its own: the shell, the tabs and every other panel
+              are interactive while the analytics queries are still running,
+              and the charts arrive when they arrive.
+            */}
+            <Suspense fallback={<RevenueSectionSkeleton />}>
+              <RevenueSection revenue={revenue} analytics={analytics} />
+            </Suspense>
             <DigestPanel />
           </AdminPanel>
 
@@ -985,6 +971,84 @@ async function FrenzAISection() {
         { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },
       ]}
     />
+  );
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  REVENUE & ENGAGEMENT — streamed, because its queries are seconds long
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-27: "When I enter the admin dashboard, visitors doesn't show
+ * until I refresh that's when it shows."
+ *
+ * 🔴 IT WAS NOT A CACHE — IT WAS A SWALLOWED FAILURE. getAnalyticsSummary
+ * catches everything and returns a fully zero-filled summary ("tables not
+ * migrated yet, or a transient error"), so a slow or failed read does not look
+ * like an error: it looks like a real answer that happens to be zero. That is
+ * why the chart read "0 in the last 90 days" beside a New-visitors chart with
+ * 3,174 in it — the second comes from a different call, which had succeeded.
+ *
+ * Two things follow. The reads are awaited HERE, so the rest of the dashboard
+ * no longer waits ~6 s for them. And when the summary comes back with
+ * exactAggregates:false the panel SAYS the figures could not be read, instead
+ * of drawing a flat zero line and letting an operator believe it.
+ */
+async function RevenueSection({
+  revenue,
+  analytics,
+}: {
+  revenue: Awaited<ReturnType<typeof fetchRevenueStats>>;
+  analytics: Awaited<ReturnType<typeof fetchMonetizationAnalytics>>;
+}) {
+  const [revenueSeries, visitorSummary, visitorSplit] = await Promise.all([
+    getRevenueSeries(90),
+    getAnalyticsSummary("90d").catch(() => null),
+    getVisitorSplitSeries(90).catch(() => null),
+  ]);
+  // The summary's own health flag: false means the numbers below are not real.
+  const unavailable = !visitorSummary || visitorSummary.rpcHealth.exactAggregates === false;
+  return (
+    <>
+      <RevenueOverview
+        revenue={revenue}
+        analytics={analytics}
+        traffic={
+          visitorSummary && !unavailable
+            ? {
+                pageViews: visitorSummary.pageViews,
+                uniqueVisitors: visitorSummary.uniqueVisitors,
+                cpmUsd: visitorSummary.ads.cpmUsd,
+                adRevenueUsd: visitorSummary.ads.revenueUsd,
+                series: visitorSummary.timeseries.buckets.map((b) => ({ date: b.t.slice(0, 10), pageViews: b.pageViews })),
+              }
+            : null
+        }
+      />
+      {unavailable ? (
+        <p className="rounded-2xl bg-amber-500/10 px-4 py-3 text-[12.5px] font-medium text-amber-700 dark:text-amber-300">
+          Visitor figures could not be read just now{visitorSummary?.rpcHealth.note ? ` — ${visitorSummary.rpcHealth.note}` : ""}. Reload to try again — they are not zero, they are unknown.
+        </p>
+      ) : null}
+      <RevenueCharts
+        series={revenueSeries}
+        mrr={revenue?.mrr ?? 0}
+        currency={revenue?.currency ?? "$"}
+        mrrComplete={revenue?.mrrComplete ?? true}
+        visitors={unavailable ? undefined : visitorSummary?.timeseries.buckets.map((b) => ({ date: b.t.slice(0, 10), visitors: b.visitors }))}
+        visitorSplit={visitorSplit?.days}
+      />
+      <DigestPanel />
+    </>
+  );
+}
+
+function RevenueSectionSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading revenue and engagement">
+      <div className="h-32 animate-pulse rounded-3xl border border-border bg-card" />
+      <div className="h-80 animate-pulse rounded-3xl border border-border bg-card" />
+    </div>
   );
 }
 

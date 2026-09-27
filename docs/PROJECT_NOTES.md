@@ -9,7 +9,87 @@ GitHub.
 > gitignored `.env.local` and must never be committed. This file records what
 > things are and why — never their secret values.
 
-_Last updated: 2026‑09‑21 (Lip Sync Pro + 0169; fal.ai as a second provider + 0168; the Get AI Pro fault; AI Pro & AI Max credits + 0167; Character Replace Part 12)_
+_Last updated: 2026‑09‑21 (Text to Audio + the Audio Library + 0170; Lip Sync Pro + 0169; fal.ai as a second provider + 0168; the Get AI Pro fault; AI Pro & AI Max credits + 0167; Character Replace Part 12)_
+
+---
+
+## 2026‑09‑21 — Text to Audio as a standalone tool, the Audio Library, and the grouped Explore grid (migration 0170)
+
+Owner's brief: "Update the Frenz AI AI‑tools architecture so that Text‑to‑Audio and Lip Sync Pro become
+completely standalone features with independent processing and billing… the text to speech should also
+switch to the Replicate ElevenLabs v3 or the direct ElevenLabs API in the admin dashboard. The text to
+audio should have a free of 500 characters a month to free and all sub users. Note the Ai features
+should never break the performance, page navigation or button responsiveness." Plus the fault report
+that started it: "the lip sync button in the explore page is not clicking and the lip sync pro button is
+showing page not found."
+
+### The Explore fault (fixed first, `728fc7f`)
+Not the unapplied migrations. Explore mounts on BOTH doors; on the marketing one
+(`/ai/character-replace`) `aiToolCards()` derived the Lip Sync Pro href as `/ai/lip-sync`, and only
+`/studio/ai/lip-sync` existed — a 404. The old "Lip Sync" card was a scroll‑to‑scope BUTTON by design (a
+same‑route link is a dead tap), so it read as a door that did nothing. Fix: the two marketing twins
+(`app/(marketing)/ai/lip-sync/…`), the `lip_sync` and `tts` flow cards removed (they are their own tools
+now), Voice Replace left as the one flow button, and the grid regrouped — **Audio tools · Video tools ·
+Transformation tools · Yours** — with the brief's one‑liners.
+
+### Text to Audio (feature `ai_text_to_audio`, migration 0170)
+- **Never a video pipeline.** No upload, no scope, no ffmpeg, no worker. One request — `POST
+  /api/ai/text-to-audio/jobs` — verifies, prices, funds, submits; the result is an MP3 in the results
+  bucket and a row in the member's Audio Library. A test pins that the unit's code never mentions a
+  video model, a prepare service or the worker.
+- **The admin switch** (`frenzAiTextToAudio.route`): the **direct ElevenLabs API** (default,
+  synchronous — the audio comes back in the request and is stored in `after()`) or **ElevenLabs through
+  Replicate** (a prediction, the webhook, the same finalizer). Decided ONCE at Generate and written on
+  the row; no fall‑through to the other route. 2026‑09‑27, owner: no further Replicate/fal work — direct
+  is the default and the recommended route.
+- **Its own billing** (`lib/ai/text-to-audio/pricing.ts`): `billable = characters − freeCovered`,
+  `speech = ceil(billable × perCharacter × quality)`, `+ perRequest`, `max(…, minimum)`. A generation the
+  allowance covers in full is FREE and the minimum never applies to it. Server‑authoritative: the browser
+  echoes only the total and the pricing version, and a difference is `PRICE_CHANGED` with the fresh quote.
+- **500 free characters a month** (`ai_tta_free_usage`, two `security definer` functions under a
+  per‑member advisory lock, service‑role only). Taken at Generate BEFORE the price is fixed; given back
+  once on every refusal after that (`giveBack` / `endUnclaimed`) and on every later failure through
+  `releaseJobFunding` → `releaseFreeCharactersForJob`, which claims a `released` mark on the row with a
+  conditional update so the webhook, the sweep and the finalizer cannot each return the same characters.
+  The month key is the operator's zone (the credit reset zone), not the device's.
+- **The Audio Library** (`ai_audio_assets`): name, duration, voice, date, character count, play,
+  download, rename, delete, "Use in Lip Sync Pro". The object lives in the job's own folder in the
+  results bucket, so `pathBelongsTo` proves ownership and the retention sweep already deletes it; a
+  delete goes through `deleteAiJobResult`, so the history tile and the library always agree.
+- **The duration is measured, not guessed**: `lib/ai/text-to-audio/mp3-duration.ts` walks the MPEG
+  frames (no ffmpeg on the frontend) and an output that is not MPEG audio fails the job.
+- **Lip Sync Pro reuses it** (§4): a third speech source, `{ source: "library", assetId }` — the server
+  copies the asset into the job's folder, marks `origin: "library"`, mints no upload ticket, and prices it
+  exactly as an uploaded file: the lip sync only, never a TTS line. "Use in Lip Sync Pro" is
+  `?audio=<assetId>` on all four Lip Sync pages.
+- **One job system**: the same `ai_jobs` rows, the ONE Frenz AI wallet, the credit ledger, the CAS
+  transitions, the recovery sweep, the stall sweep, pushes and history. `isWalletFundedFeature` now
+  covers all three tools, and `tool_id` is stamped on every new row (text_to_audio, lip_sync,
+  face_replace, face_skin_replace, upper_body_replace, character_replace).
+- **Admin → AI → Text to Audio**: the route switch first, the model per route, price per character, per
+  generation, provider cost, quality and credit multipliers, the minimum, the free characters, the text
+  ceilings, the voices and languages, the library retention — and the numbers (generations, characters,
+  free vs billable, credits, revenue, cost estimate vs reported, library size, members using the
+  allowance).
+- **Performance**: the library fetches one list and each row's signed URL only when its play button is
+  pressed (`preload="none"`); the estimate is debounced and abortable; the admin panel is lazy. No route
+  crossed the weight budget (`/studio/ai/text-to-audio` 157 kB, `/ai/text-to-audio` 197 kB, `/ai/audio`
+  163 kB).
+
+### Verified
+- `tsc` clean · `next lint` clean (116 pre‑existing warnings, none new, none in the new files) ·
+  **vitest 4259 passed** (28 new in `text-to-audio.test.ts`; two registry pins retargeted) · `next build`
+  green.
+- On a local `next start` against the live database, as a throwaway member: 0170's two tables present and
+  the feature check accepting `ai_text_to_audio`; config 200 with 500 free characters, 21 voices, 12
+  languages and no route/model/vendor name in the body; quote of 800 characters = 500 free + 300 billable
+  = 150 minor units with 0 free left after; the 5,000‑character model ceiling enforced; empty text
+  refused; Generate 201 with `billing=free` and 30 characters taken. With a deliberately invalid
+  ELEVENLABS key the synthesis failed → the job ended `failed / VOICE_GENERATION_FAILED`, the free‑usage
+  row went back to **0 used**, no wallet ledger row was written and no library row was created — the undo
+  proven once, end to end.
+- NOT run: a real generation with a valid key (no `ELEVENLABS_API_KEY` on this machine), and therefore no
+  real MP3, asset row or "Use in Lip Sync Pro" round trip on production.
 
 ---
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
+import { resultExtensionFor, resultFileName, resultSuffixFor } from "@/lib/ai/media";
 import { primaryAiFeature } from "@/lib/ai/jobs";
 import { aiErrorBody, aiErrorStatus, isAiJobError } from "@/lib/ai/errors";
 import { getOwnJob } from "@/lib/ai/job-store";
@@ -125,7 +125,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       typeof job.metadata?.source_name === "string" ? job.metadata.source_name : null;
     const signed = await signResultUrl(
       job.result_path,
-      wantsDownload ? resultFileName(sourceName, resultSuffixFor(job.feature)) : undefined,
+      wantsDownload ? resultFileName(sourceName, resultSuffixFor(job.feature), resultExtensionFor(job.result_mime_type)) : undefined,
     );
 
     /*

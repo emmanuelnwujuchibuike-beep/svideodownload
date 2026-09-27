@@ -13,11 +13,14 @@ export const metadata: Metadata = { title: "Lip Sync Pro" };
  * sign-in and back. Never static under the studio (the cookie-reading layout
  * would prerender the redirect).
  */
-export default async function StudioLipSyncPage() {
+export default async function StudioLipSyncPage({ searchParams }: { searchParams: Promise<{ audio?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/lip-sync");
-  return <LipSyncWorkspace basePath="/studio/ai/lip-sync" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" />;
+  // 2026-09-21: "Use in Lip Sync Pro" from the Audio Library arrives as ?audio=<assetId>
+  const { audio } = await searchParams;
+  const initialAssetId = typeof audio === "string" && /^[0-9a-fA-F-]{36}$/.test(audio) ? audio : null;
+  return <LipSyncWorkspace basePath="/studio/ai/lip-sync" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" audioHref="/studio/ai/audio" initialAssetId={initialAssetId} />;
 }

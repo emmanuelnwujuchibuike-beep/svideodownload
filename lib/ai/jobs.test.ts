@@ -31,8 +31,8 @@ import {
 const feature = aiFeature("ai_character_replace")!;
 
 describe("the feature registry", () => {
-  it("has Character Replace first, Lip Sync Pro beside it (2026-09-21), and nothing else", () => {
-    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync"]);
+  it("has Character Replace first, then the standalone tools (2026-09-21), and nothing else", () => {
+    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio"]);
     expect(primaryAiFeature().id).toBe("ai_character_replace");
   });
 

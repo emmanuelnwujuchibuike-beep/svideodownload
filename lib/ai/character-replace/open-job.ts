@@ -226,6 +226,8 @@ export async function openCharacterReplaceJob(
       metadata: {
         ...(result.row.metadata ?? {}),
         tool: "character_replace",
+        // the brief §9: one tool id per OPERATION — the scope decides which (lib/ai/jobs.ts toolIdFor)
+        tool_id: mode === "face_only" ? "face_replace" : mode === "skin_face" ? "face_skin_replace" : mode === "upper_body" ? "upper_body_replace" : "character_replace",
         attempt: input.lineage?.attempt ?? 1,
         project_id: input.lineage?.projectId ?? result.row.id,
         retry_of: input.lineage?.retryOf ?? null,

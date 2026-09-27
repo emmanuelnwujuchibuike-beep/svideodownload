@@ -29,6 +29,9 @@ export const lipSyncSpeechSchema = z.discriminatedUnion("source", [
   z.object({
     source: z.literal("audio"),
     upload: z.object({ path: z.string().min(1), mime: z.string().min(1), size: z.number().int().positive(), durationMs: z.number().int().positive().nullable(), name: z.string().max(200) }),
+    /** 2026-09-21: "upload" = the member's file; "library" = a saved Text to Audio result copied into this job's folder. */
+    origin: z.enum(["upload", "library"]).optional(),
+    assetId: z.string().uuid().nullable().optional(),
   }),
 ]);
 

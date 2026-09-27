@@ -8,6 +8,7 @@ import {
 import { normalizeAiPlansConfig, versionAiPlans, type AiPlansConfig } from "@/lib/ai/credits/config";
 import { normalizeAiProvidersConfig, versionAiProviders, type AiProvidersConfig } from "@/lib/ai/providers/config";
 import { normalizeLipSyncConfig, versionLipSyncConfig, type LipSyncProConfig } from "@/lib/ai/lip-sync/config";
+import { normalizeTextToAudioConfig, versionTextToAudioConfig, type TextToAudioConfig } from "@/lib/ai/text-to-audio/config";
 
 /**
  * Admin-configurable pieces of the public landing page, stored in the `settings`
@@ -318,6 +319,8 @@ export interface LandingSettings {
   frenzAiProviders: AiProvidersConfig;
   /** Lip Sync Pro (2026-09-21): the tool's own configuration — lib/ai/lip-sync/config.ts owns the type. */
   frenzAiLipSync: LipSyncProConfig;
+  /** Text to Audio (2026-09-21): the standalone tool's configuration — lib/ai/text-to-audio/config.ts owns the type. */
+  frenzAiTextToAudio: TextToAudioConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -375,6 +378,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiPlans: normalizeAiPlansConfig(null),
   frenzAiProviders: normalizeAiProvidersConfig(null),
   frenzAiLipSync: normalizeLipSyncConfig(null),
+  frenzAiTextToAudio: normalizeTextToAudioConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -523,6 +527,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiPlans: normalizeAiPlansConfig(raw.frenzAiPlans),
       frenzAiProviders: normalizeAiProvidersConfig(raw.frenzAiProviders),
       frenzAiLipSync: normalizeLipSyncConfig(raw.frenzAiLipSync),
+      frenzAiTextToAudio: normalizeTextToAudioConfig(raw.frenzAiTextToAudio),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -561,9 +566,11 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio">> & {
   /** Lip Sync Pro: the same deep merge. */
   frenzAiLipSync?: Record<string, unknown>;
+  /** Text to Audio: the same deep merge. */
+  frenzAiTextToAudio?: Record<string, unknown>;
   frenzAiCharacterReplace?: Record<string, unknown>;
   /** AI Pro / AI Max: the same deep merge, so the plans panel can post one plan's figures without erasing the other's. */
   frenzAiPlans?: Record<string, unknown>;
@@ -595,7 +602,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -654,6 +661,10 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
       current.frenzAiLipSync,
       normalizeLipSyncConfig(mergeCharacterReplacePatch(current.frenzAiLipSync as unknown as Record<string, unknown>, (s.frenzAiLipSync ?? {}) as Record<string, unknown>)),
     ),
+    frenzAiTextToAudio: versionTextToAudioConfig(
+      current.frenzAiTextToAudio,
+      normalizeTextToAudioConfig(mergeCharacterReplacePatch(current.frenzAiTextToAudio as unknown as Record<string, unknown>, (s.frenzAiTextToAudio ?? {}) as Record<string, unknown>)),
+    ),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;
@@ -689,6 +700,23 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
         before: changedBefore,
         after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) },
       });
+    }
+  }
+  // Text to Audio's own line in the log.
+  if (s.frenzAiTextToAudio) {
+    const before = current.frenzAiTextToAudio as unknown as Record<string, unknown>;
+    const after = value.frenzAiTextToAudio as unknown as Record<string, unknown>;
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const key of Object.keys(after)) {
+      if (key === "updatedAt" || key === "pricingUpdatedAt" || key === "version" || key === "pricingVersion") continue;
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+        changedBefore[key] = before[key];
+        changedAfter[key] = after[key];
+      }
+    }
+    if (Object.keys(changedAfter).length > 0) {
+      recordConfigChange({ actorId: audit.changedBy ?? null, surface: "text_to_audio", targetId: "settings", action: "settings.update", before: changedBefore, after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) } });
     }
   }
   // Lip Sync Pro's own line in the log.

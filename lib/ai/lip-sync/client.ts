@@ -88,7 +88,7 @@ export interface LipSyncQuoteAnswer {
   speech: { path: "native" | "tts" | "audio"; estimateMs: number | null; mismatch: "speech_longer" | "speech_shorter" | null; policy: LipSyncDurationPolicy };
 }
 
-export function getLipSyncQuote(input: { selectedDurationMs: number; speechSource: "text" | "audio"; textCharacters?: number; speed?: number }, signal?: AbortSignal): Promise<LipSyncClientResult<LipSyncQuoteAnswer>> {
+export function getLipSyncQuote(input: { selectedDurationMs: number; speechSource: "text" | "audio" | "library"; textCharacters?: number; speed?: number }, signal?: AbortSignal): Promise<LipSyncClientResult<LipSyncQuoteAnswer>> {
   return request("/api/ai/lip-sync/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input), signal });
 }
 
@@ -98,7 +98,11 @@ export interface LipSyncUploadTicket {
   expiresIn: number;
 }
 
-export type LipSyncSpeechInput = { source: "text"; text: string; voiceId?: string | null; languageCode?: string | null; speed?: number } | { source: "audio"; audio: { name: string; mimeType: string; size: number; durationMs: number | null } };
+export type LipSyncSpeechInput =
+  | { source: "text"; text: string; voiceId?: string | null; languageCode?: string | null; speed?: number }
+  | { source: "audio"; audio: { name: string; mimeType: string; size: number; durationMs: number | null } }
+  /** 2026-09-21: a saved audio from the Audio Library — nothing to upload, and the audio is not charged again. */
+  | { source: "library"; assetId: string };
 
 export function createLipSyncJob(input: {
   clientRequestId: string;

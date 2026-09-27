@@ -154,6 +154,10 @@ export type AnalyticsEventType =
   | "character_replace_result_viewed"
   | "lip_sync_generate_clicked"
   | "lip_sync_result_viewed"
+  /** Text to Audio (2026-09-21): a generation pressed, a result played, a library row reused in Lip Sync Pro. Counts only — never the text. */
+  | "text_to_audio_generate_clicked"
+  | "text_to_audio_played"
+  | "audio_library_reused"
   | "character_replace_video_played"
   | "character_replace_download_clicked"
   | "character_replace_saved"

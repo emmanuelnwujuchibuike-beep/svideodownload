@@ -49,7 +49,9 @@ export async function POST(request: Request) {
     if (!entitlement.allowed || !config.enabled) return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), { status: aiErrorStatus("FEATURE_UNAVAILABLE") });
     const route = resolveLipSyncProRoute(config, settings.frenzAiProviders);
     if (!route.adapter || !route.enabled || !route.configured || route.paused) return NextResponse.json(aiErrorBody("PROVIDER_UNAVAILABLE"), { status: aiErrorStatus("PROVIDER_UNAVAILABLE") });
-    const { selectedDurationMs, speechSource } = parsed.data;
+    const { selectedDurationMs } = parsed.data;
+    // 2026-09-21: a saved Audio Library file is priced exactly as an uploaded one — the audio itself was paid for when it was made
+    const speechSource = parsed.data.speechSource === "library" ? "audio" : parsed.data.speechSource;
     const speechPath = planSpeechPath(speechSource, route.adapter);
     if (speechSource === "text" && !textPathReady(config, route.adapter)) return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE", { error: "Typing what they should say isn't available right now." }), { status: aiErrorStatus("FEATURE_UNAVAILABLE") });
     const caps = route.adapter.capabilities;

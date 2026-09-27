@@ -48,6 +48,8 @@ export type AiFeature =
   | "ai_character_replace"
   /** 2026-09-21: Lip Sync Pro — a source video and ONE speech source (text, or an uploaded audio file); migration 0169. */
   | "ai_lip_sync"
+  /** 2026-09-21: Text to Audio — text → ElevenLabs v3 → an audio asset in the member's Audio Library; no video anywhere; migration 0170. */
+  | "ai_text_to_audio"
   | "ai_image_clean"
   | "ai_upscale"
   | "ai_caption"
@@ -324,6 +326,29 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     maxDurationSeconds: 120,
     retentionHours: 72,
   },
+  {
+    /*
+      ── TEXT TO AUDIO (2026-09-21, the owner's brief) ────────────────────────
+      Text → ElevenLabs v3 (through Replicate, or the direct API — the
+      operator's switch) → an MP3 in the member's Audio Library, named,
+      previewable, downloadable, reusable in Lip Sync Pro without a second
+      charge. Never a video pipeline: no Wan, no lip sync, no replace. Its own
+      billing (characters, the model's price, a minimum), 500 free characters a
+      month for every member, then credits or the wallet. Contract:
+      lib/ai/text-to-audio/job-meta.ts. Config: lib/ai/text-to-audio/config.ts.
+    */
+    id: "ai_text_to_audio",
+    label: "Text to Audio",
+    provider: "replicate",
+    requires: "replicate",
+    // the Replicate route's MP3 is brought home and stored by the worker; the direct route stores in-request
+    needsFinalizer: true,
+    freeDailyJobs: 0,
+    mimeTypes: [],
+    maxBytes: 0,
+    maxDurationSeconds: 0,
+    retentionHours: 24 * 365,
+  },
 ] as const;
 
 /**
@@ -334,9 +359,26 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
  * `feature === "ai_character_replace"` asks this instead (2026-09-21), so
  * Lip Sync Pro joined without a second copy of any of it.
  */
-export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync"];
-export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" {
-  return feature === "ai_character_replace" || feature === "ai_lip_sync";
+export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio"];
+export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" {
+  return feature === "ai_character_replace" || feature === "ai_lip_sync" || feature === "ai_text_to_audio";
+}
+
+/**
+ * The owner's tool ids (2026-09-21 brief §9): one per OPERATION, so an audio
+ * generation, a lip sync and each replacement scope are separate lines in
+ * billing and analytics. Pure on the row: the feature, then the scope.
+ */
+export type AiToolId = "text_to_audio" | "lip_sync" | "face_replace" | "face_skin_replace" | "upper_body_replace" | "character_replace" | "ai_clean_legacy" | "unknown";
+export function toolIdFor(row: { feature: string; metadata?: Record<string, unknown> | null }): AiToolId {
+  if (row.feature === "ai_text_to_audio") return "text_to_audio";
+  if (row.feature === "ai_lip_sync") return "lip_sync";
+  if (row.feature === "ai_character_replace") {
+    const mode = row.metadata?.mode;
+    return mode === "face_only" ? "face_replace" : mode === "skin_face" ? "face_skin_replace" : mode === "upper_body" ? "upper_body_replace" : "character_replace";
+  }
+  if (row.feature === "ai_clean") return "ai_clean_legacy";
+  return "unknown";
 }
 
 const FEATURES_BY_ID = new Map(AI_FEATURES.map((f) => [f.id, f]));
@@ -738,12 +780,38 @@ export interface AiJobView {
     activeSpeaker: boolean;
     /** Whether the text was spoken by the lip-sync model itself ("native") or made by the voice provider first ("tts"). */
     speechPath: "native" | "tts" | "audio";
+    /** 2026-09-21: an audio job's file was the member's upload, or a saved Text to Audio result from their library. */
+    speechOrigin: "upload" | "library" | null;
     pipeline: { stages: readonly ("voice" | "lipsync" | "finalize")[]; current: "voice" | "lipsync" | "finalize"; records: Partial<Record<"voice" | "lipsync" | "finalize", "pending" | "submitted" | "processing" | "succeeded" | "failed">> } | null;
     savedAt: string | null;
     output: { width: number | null; height: number | null; frameRate: number | null } | null;
   } | null;
+  /**
+   * Text to Audio (2026-09-21): the facts the workspace and the library
+   * show. Never the text itself, a path, a provider id or a URL.
+   */
+  textToAudio?: {
+    /** The member's name for the audio. */
+    name: string;
+    characters: number;
+    voiceId: string | null;
+    languageCode: string | null;
+    /** How many of this month's free characters covered it. */
+    freeCharactersCovered: number;
+    chargedCents: number | null;
+    currency: string | null;
+    normalPriceCents: number | null;
+    billing: "FREE_ALLOWANCE" | "PAID" | "CREDITS" | null;
+    credits: number | null;
+    refunded: boolean;
+    /** The stored file's measured length; null until it is stored (or when it could not be measured). */
+    durationMs: number | null;
+    bytes: number | null;
+    /** The Audio Library row this job produced, once saved. */
+    assetId: string | null;
+  } | null;
 }
-/* `characterReplace` / `lipSync` are optional on the type so fixtures and other tools' views need not name them; the mapper always sets them. */
+/* `characterReplace` / `lipSync` / `textToAudio` are optional on the type so fixtures and other tools' views need not name them; the mapper always sets them. */
 
 /**
  * The row, reduced to what may leave the server.
@@ -815,6 +883,34 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
       : null,
     characterReplace: characterReplaceView(row),
     lipSync: lipSyncView(row),
+    textToAudio: textToAudioView(row),
+  };
+}
+
+function textToAudioView(row: AiJobRow): AiJobView["textToAudio"] {
+  const m = row.metadata;
+  if (!m || m.tool !== "text_to_audio") return null;
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const quote = (m.quote ?? null) as { currency?: unknown; totalCents?: unknown; freeCharactersCovered?: unknown } | null;
+  const billing = (m.billing ?? null) as { type?: unknown; normalPriceCents?: unknown; credits?: unknown } | null;
+  const free = (m.free_characters ?? null) as { covered?: unknown } | null;
+  const output = (m.output ?? null) as { durationMs?: unknown; bytes?: unknown } | null;
+  const charged = row.charged_cents ?? null;
+  return {
+    name: typeof m.name === "string" && m.name ? m.name : "Audio",
+    characters: num(m.characters) ?? (typeof m.text === "string" ? m.text.length : 0),
+    voiceId: typeof m.voiceId === "string" ? m.voiceId : null,
+    languageCode: typeof m.languageCode === "string" ? m.languageCode : null,
+    freeCharactersCovered: num(free?.covered) ?? num(quote?.freeCharactersCovered) ?? 0,
+    chargedCents: charged,
+    currency: typeof quote?.currency === "string" ? quote.currency : null,
+    normalPriceCents: num(billing?.normalPriceCents) ?? num(quote?.totalCents) ?? charged,
+    billing: billing?.type === "FREE_ALLOWANCE" || row.funding_source === "free" ? "FREE_ALLOWANCE" : billing?.type === "CREDITS" || row.funding_source === "credits" ? "CREDITS" : billing?.type === "PAID" || row.funding_source === "balance" ? "PAID" : null,
+    credits: num(billing?.credits),
+    refunded: (row.status === "failed" || row.status === "cancelled" || row.status === "expired") && ((charged ?? 0) > 0 || (num(free?.covered) ?? 0) > 0),
+    durationMs: num(output?.durationMs) ?? (typeof row.result_duration === "number" ? Math.round(row.result_duration * 1000) : null),
+    bytes: num(output?.bytes) ?? row.result_size,
+    assetId: typeof m.asset_id === "string" ? m.asset_id : null,
   };
 }
 
@@ -822,7 +918,7 @@ function lipSyncView(row: AiJobRow): AiJobView["lipSync"] {
   const m = row.metadata;
   if (!m || m.tool !== "lip_sync") return null;
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-  const speech = (m.speech ?? {}) as { source?: unknown; text?: unknown; voiceId?: unknown; languageCode?: unknown; speed?: unknown; path?: unknown };
+  const speech = (m.speech ?? {}) as { source?: unknown; text?: unknown; voiceId?: unknown; languageCode?: unknown; speed?: unknown; path?: unknown; origin?: unknown };
   const settings = (m.settings ?? {}) as { expression?: unknown; activeSpeaker?: unknown };
   const prepared = (m.prepared ?? null) as { durationMs?: unknown } | null;
   const quote = (m.quote ?? null) as { durationMs?: unknown; currency?: unknown; totalCents?: unknown } | null;
@@ -865,6 +961,7 @@ function lipSyncView(row: AiJobRow): AiJobView["lipSync"] {
     expression: settings.expression === "natural" || settings.expression === "balanced" || settings.expression === "expressive" ? settings.expression : null,
     activeSpeaker: settings.activeSpeaker === true,
     speechPath: source === "audio" ? "audio" : speech.path === "native" ? "native" : "tts",
+    speechOrigin: source === "audio" ? (speech.origin === "library" ? "library" : "upload") : null,
     pipeline,
     savedAt: typeof m.saved_at === "string" ? m.saved_at : null,
     output: output ? { width: num(output.width), height: num(output.height), frameRate: num(output.frameRate) } : null,

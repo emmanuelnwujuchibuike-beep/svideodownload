@@ -222,6 +222,11 @@ export function FrenzAIHistory({
       router.push(resultHref(job.id).replace("/character-replace/result/", "/lip-sync/result/"));
       return;
     }
+    if (job.feature === "ai_text_to_audio") {
+      // Text to Audio (2026-09-21): the workspace shows this generation (its player, its library row)
+      router.push(resultHref(job.id).replace(/\/character-replace\/result\/.*$/, `/text-to-audio?job=${encodeURIComponent(job.id)}`));
+      return;
+    }
     setOpenJob(job);
   };
 

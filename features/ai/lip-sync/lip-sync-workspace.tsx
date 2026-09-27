@@ -40,8 +40,8 @@ import { cn } from "@/lib/utils";
  * (§12): expression only where the model has a temperature, active speaker
  * only where it can detect one, speed only where it means something.
  */
-export function LipSyncWorkspace({ basePath, aiHref, historyHref, usageHref, initialJobId = null }: { basePath: string; aiHref: string; historyHref: string; usageHref: string; initialJobId?: string | null }) {
-  const ws = useLipSyncWorkspace({ initialJobId });
+export function LipSyncWorkspace({ basePath, aiHref, historyHref, usageHref, initialJobId = null, initialAssetId = null, audioHref }: { basePath: string; aiHref: string; historyHref: string; usageHref: string; initialJobId?: string | null; initialAssetId?: string | null; audioHref?: string }) {
+  const ws = useLipSyncWorkspace({ initialJobId, initialAssetId });
   const cfg = ws.config?.config ?? null;
   const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);
@@ -136,6 +136,10 @@ export function LipSyncWorkspace({ basePath, aiHref, historyHref, usageHref, ini
                 ) : null}
                 {cfg?.audioMode.enabled ? (
                   <SourceTab active={ws.source === "audio"} onClick={() => ws.setSource("audio")} icon={<FileAudio className="h-4 w-4" aria-hidden />} label="Upload audio" hint="Your own recording" />
+                ) : null}
+                {/* 2026-09-21 (§4): audio the member already made — reused, never charged twice */}
+                {cfg?.audioMode.enabled ? (
+                  <SourceTab active={ws.source === "library"} onClick={() => ws.setSource("library")} icon={<AudioLines className="h-4 w-4" aria-hidden />} label="Saved audio" hint="From your Audio Library" />
                 ) : null}
               </div>
               {!cfg?.textMode.enabled && !cfg?.audioMode.enabled ? <Notice tone="muted">Neither speech source is available right now.</Notice> : null}
@@ -237,7 +241,57 @@ export function LipSyncWorkspace({ basePath, aiHref, historyHref, usageHref, ini
                 </div>
               ) : null}
 
-              {(cfg?.expression.enabled || cfg?.activeSpeaker.enabled) && (ws.source === "audio" ? !!ws.audio : ws.text.trim().length > 0) ? (
+              {ws.source === "library" && cfg?.audioMode.enabled ? (
+                <div className="mt-4">
+                  {ws.libraryError ? (
+                    <Notice tone="error">
+                      {ws.libraryError}{" "}
+                      <button type="button" onClick={() => void ws.reloadLibrary()} className="font-semibold underline underline-offset-2">
+                        Try again
+                      </button>
+                    </Notice>
+                  ) : ws.library === null ? (
+                    <div className="h-20 animate-pulse rounded-2xl bg-secondary/60" aria-busy="true" aria-label="Loading your audio" />
+                  ) : ws.library.length === 0 ? (
+                    <Notice tone="muted">
+                      Your Audio Library is empty.{" "}
+                      {audioHref ? (
+                        <Link href={audioHref} className="font-semibold underline underline-offset-2">
+                          Make audio from text
+                        </Link>
+                      ) : null}
+                    </Notice>
+                  ) : (
+                    <ul className="space-y-2">
+                      {ws.library.map((a) => (
+                        <li key={a.id}>
+                          <button
+                            type="button"
+                            onClick={() => ws.setAssetId(a.id)}
+                            aria-pressed={ws.assetId === a.id}
+                            className={cn("flex w-full min-h-[60px] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition", ws.assetId === a.id ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                          >
+                            <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", ws.assetId === a.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                              <AudioLines className="h-4 w-4" aria-hidden />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold">{a.name}</span>
+                              <span className={cn("block text-[11px]", ws.assetId === a.id ? "text-background/75" : "text-muted-foreground")}>
+                                {a.durationMs ? `${Math.max(1, Math.round(a.durationMs / 1000))} s · ` : ""}
+                                {a.characters.toLocaleString("en-US")} characters
+                              </span>
+                            </span>
+                            {ws.assetId === a.id ? <Check className="h-4 w-4 shrink-0" aria-hidden /> : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-[11px] text-muted-foreground">Saved audio is reused as it is — you are not charged for the audio again, only for the lip sync.</p>
+                </div>
+              ) : null}
+
+              {(cfg?.expression.enabled || cfg?.activeSpeaker.enabled) && (ws.source === "text" ? ws.text.trim().length > 0 : ws.source === "library" ? !!ws.assetId : !!ws.audio) ? (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   {cfg?.expression.enabled ? (
                     <div>

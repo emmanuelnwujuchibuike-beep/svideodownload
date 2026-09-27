@@ -8,6 +8,7 @@ import { track } from "@/lib/analytics/client";
 import { newClientRequestId, uploadSource } from "@/lib/ai/client";
 import { createLipSyncJob, getLipSyncConfig, getLipSyncQuote, quoteFieldsForStart, startLipSyncJob, type LipSyncConfigAnswer, type LipSyncQuoteAnswer } from "@/lib/ai/lip-sync/client";
 import type { LipSyncExpression } from "@/lib/ai/lip-sync/config";
+import { listAudioLibrary, type AudioAssetItem } from "@/lib/ai/text-to-audio/client";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -25,7 +26,8 @@ import type { LipSyncExpression } from "@/lib/ai/lip-sync/config";
  *   launch   create → upload (measured progress) → start → the job's own
  *            poll (use-job-watch) until it ends
  */
-export type SpeechSource = "text" | "audio";
+/** 2026-09-21 (§4): a third source — audio the member already made with Text to Audio, reused at no extra charge. */
+export type SpeechSource = "text" | "audio" | "library";
 
 export interface LipSyncVideo {
   file: File;
@@ -43,19 +45,22 @@ export interface LipSyncAudio {
 
 export type LaunchPhase = { phase: "idle" } | { phase: "creating" } | { phase: "uploading"; progress: number } | { phase: "starting" } | { phase: "error"; code: string; message: string; extra?: Record<string, unknown> };
 
-export function useLipSyncWorkspace(opts: { initialJobId?: string | null }) {
+export function useLipSyncWorkspace(opts: { initialJobId?: string | null; initialAssetId?: string | null }) {
   const [config, setConfig] = useState<LipSyncConfigAnswer | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [video, setVideo] = useState<LipSyncVideo | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [trimStartMs, setTrimStartMs] = useState(0);
-  const [source, setSourceState] = useState<SpeechSource>("text");
+  const [source, setSourceState] = useState<SpeechSource>(opts.initialAssetId ? "library" : "text");
   const [text, setText] = useState("");
   const [voiceId, setVoiceId] = useState<string | null>(null);
   const [languageCode, setLanguageCode] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [audio, setAudio] = useState<LipSyncAudio | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [library, setLibrary] = useState<AudioAssetItem[] | null>(null);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [assetId, setAssetId] = useState<string | null>(opts.initialAssetId ?? null);
   const [expression, setExpression] = useState<LipSyncExpression | null>(null);
   const [activeSpeaker, setActiveSpeaker] = useState<boolean | null>(null);
   const [quote, setQuote] = useState<{ status: "idle" } | { status: "pending" } | { status: "quoted"; answer: LipSyncQuoteAnswer } | { status: "error"; code: string; message: string; extra?: Record<string, unknown> }>({ status: "idle" });
@@ -120,11 +125,24 @@ export function useLipSyncWorkspace(opts: { initialJobId?: string | null }) {
     setQuote({ status: "idle" });
   }, []);
 
-  /* ── the speech source (§3: one or the other) ──────────────────────────── */
+  /* ── the Audio Library (§4): loaded once, when it is first needed ──────── */
+  const loadLibrary = useCallback(async () => {
+    const res = await listAudioLibrary(50);
+    if (res.ok) {
+      setLibrary(res.assets);
+      setLibraryError(null);
+    } else setLibraryError(res.error);
+  }, []);
+  useEffect(() => {
+    if (source === "library" && library === null) void loadLibrary();
+  }, [source, library, loadLibrary]);
+
+  /* ── the speech source (§3: exactly one) ───────────────────────────────── */
   const setSource = useCallback((next: SpeechSource) => {
     setSourceState(next);
     setQuote({ status: "idle" });
   }, []);
+  const asset = library?.find((a) => a.id === assetId) ?? null;
   const pickAudio = useCallback(
     async (file: File) => {
       setAudioError(null);
@@ -172,7 +190,8 @@ export function useLipSyncWorkspace(opts: { initialJobId?: string | null }) {
   /* ── the estimate, from the server (§14 step 3) ────────────────────────── */
   const textReady = source === "text" && text.trim().length >= (config?.config.textMode.minimumCharacters ?? 1);
   const audioReady = source === "audio" && !!audio;
-  const inputsReady = !!video && (textReady || audioReady);
+  const libraryReady = source === "library" && !!assetId;
+  const inputsReady = !!video && (textReady || audioReady || libraryReady);
   useEffect(() => {
     if (!inputsReady || !config?.config.enabled) {
       setQuote({ status: "idle" });
@@ -204,7 +223,12 @@ export function useLipSyncWorkspace(opts: { initialJobId?: string | null }) {
     const created = await createLipSyncJob({
       clientRequestId: requestId.current,
       video: { name: video.file.name, mimeType: video.file.type || "video/mp4", size: video.file.size, durationMs: video.durationMs, width: video.width, height: video.height, hasAudio: video.hasAudio },
-      speech: source === "text" ? { source: "text", text: text.trim(), voiceId, languageCode, speed } : { source: "audio", audio: { name: audio!.file.name, mimeType: audio!.file.type || "audio/mpeg", size: audio!.file.size, durationMs: audio!.durationMs } },
+      speech:
+        source === "text"
+          ? { source: "text", text: text.trim(), voiceId, languageCode, speed }
+          : source === "library"
+            ? { source: "library", assetId: assetId! }
+            : { source: "audio", audio: { name: audio!.file.name, mimeType: audio!.file.type || "audio/mpeg", size: audio!.file.size, durationMs: audio!.durationMs } },
       settings: { expression: config.config.expression.enabled ? (expression ?? config.config.expression.default) : null, activeSpeaker: config.config.activeSpeaker.enabled ? (activeSpeaker ?? config.config.activeSpeaker.default) : false },
     });
     if (!created.ok) {
@@ -238,7 +262,7 @@ export function useLipSyncWorkspace(opts: { initialJobId?: string | null }) {
     requestId.current = null;
     setLaunch({ phase: "idle" });
     setJobId(id);
-  }, [video, quote, config, source, selectedMs, text, voiceId, languageCode, speed, audio, expression, activeSpeaker, trim, funding]);
+  }, [video, quote, config, source, selectedMs, text, voiceId, languageCode, speed, audio, assetId, expression, activeSpeaker, trim, funding]);
 
   const reset = useCallback(() => {
     setJobId(null);
@@ -277,6 +301,12 @@ export function useLipSyncWorkspace(opts: { initialJobId?: string | null }) {
     audioError,
     pickAudio,
     clearAudio,
+    library,
+    libraryError,
+    reloadLibrary: loadLibrary,
+    assetId,
+    setAssetId,
+    asset,
     expression,
     setExpression,
     activeSpeaker,

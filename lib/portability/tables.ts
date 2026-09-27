@@ -174,6 +174,9 @@ export const OWNER_COLUMN: Record<string, string> = {
   ai_subscriptions: "user_id",
   ai_credit_ledger: "user_id",
   ai_provider_runs: "user_id",
+  // 0170 — the Audio Library and the monthly free characters of Text to Audio
+  ai_audio_assets: "user_id",
+  ai_tta_free_usage: "user_id",
   /*
     Every complimentary creation you used (0162): the job, which of your free
     uses it was, the normal price you were NOT charged, and whether it was

@@ -81,7 +81,7 @@ export const FLOW_TOOL_HINT: Record<FlowToolId, string> = {
 };
 
 /** The Audio tools' doors open with their pages (the Text to Audio commit); a card never links to a page that does not exist yet. */
-const AUDIO_TOOLS_OPEN = false;
+const AUDIO_TOOLS_OPEN = true;
 
 export function aiToolCards(
   characterReplaceHref: string,

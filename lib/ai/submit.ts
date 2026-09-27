@@ -84,6 +84,8 @@ export async function submitJobToProvider(
     lib/ai/character-replace/provider.ts; the transition and the claim are
     the same compare-and-set this function makes.
   */
+  // Text to Audio (2026-09-21): the prediction (or the direct call) is made inside Generate; nothing re-submits it.
+  if (feature.id === "ai_text_to_audio") throw new AiJobError("FEATURE_UNAVAILABLE", "a Text to Audio job is submitted at Generate, never re-submitted");
   // Lip Sync Pro (2026-09-21): its own stage submission, the same compare-and-set.
   if (feature.id === "ai_lip_sync") {
     const { submission, row } = await submitLipSyncJob(job, opts);

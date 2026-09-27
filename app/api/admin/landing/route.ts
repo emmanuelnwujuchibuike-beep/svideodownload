@@ -310,6 +310,43 @@ const schema = z.object({
     })
     .strict()
     .optional(),
+  /**
+   * Text to Audio (2026-09-21): the route switch — Replicate ElevenLabs v3 or
+   * the direct ElevenLabs API — the model under each route, the prices, the
+   * monthly free characters. Bounds mirror TEXT_TO_AUDIO_BOUNDS; the
+   * normaliser refuses a model id the route does not offer.
+   */
+  frenzAiTextToAudio: z
+    .object({
+      enabled: z.boolean().optional(),
+      route: z.enum(["replicate", "elevenlabs"]).optional(),
+      models: z
+        .record(
+          z.enum(["replicate", "elevenlabs"]),
+          z
+            .object({
+              model: z.string().max(100).optional(),
+              enabled: z.boolean().optional(),
+              perCharacterCents: z.number().min(0).max(100_000).optional(),
+              perRequestCents: z.number().int().min(0).max(100_000_000).optional(),
+              providerCostPerCharacterUsdCents: z.number().min(0).max(1000).optional(),
+              qualityMultiplier: z.number().min(0.1).max(10).optional(),
+              creditMultiplier: z.number().min(0.1).max(10).optional(),
+              notes: z.string().max(400).optional(),
+            })
+            .strict(),
+        )
+        .optional(),
+      minimumChargeCents: z.number().int().min(0).max(100_000_000).optional(),
+      maximumCharacters: z.number().int().min(1).max(40_000).optional(),
+      minimumCharacters: z.number().int().min(1).max(40_000).optional(),
+      freeCharactersPerMonth: z.number().int().min(0).max(1_000_000).optional(),
+      voiceIds: z.array(z.string().max(80)).max(200).optional(),
+      languageCodes: z.array(z.string().max(16)).max(200).optional(),
+      libraryRetentionDays: z.number().int().min(0).max(3650).optional(),
+    })
+    .strict()
+    .optional(),
   frenzAiCharacterReplace: z
     .object({
       enabled: z.boolean().optional(),

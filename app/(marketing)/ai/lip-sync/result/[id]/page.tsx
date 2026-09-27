@@ -17,7 +17,7 @@ export default async function PublicLipSyncResultPage({ params }: { params: Prom
     <>
       <SiteHeader landing />
       <main className="container max-w-3xl px-3 pb-10 sm:pb-14" style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}>
-        <LipSyncWorkspace basePath="/ai/lip-sync" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" initialJobId={id} />
+        <LipSyncWorkspace basePath="/ai/lip-sync" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" audioHref="/ai/audio" initialJobId={id} />
       </main>
       <AIDownloadOverlay />
       <SiteFooterMinimal />

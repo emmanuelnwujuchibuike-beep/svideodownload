@@ -50,7 +50,10 @@ export const lipSyncSpeechAudio = z
   })
   .strict();
 
-export const lipSyncSpeechInput = z.discriminatedUnion("source", [lipSyncSpeechText, lipSyncSpeechAudio]);
+/** 2026-09-21 (the standalone-tools brief §4): a saved audio from the member's Audio Library — no upload, no second charge for the audio. */
+export const lipSyncSpeechLibrary = z.object({ source: z.literal("library"), assetId: z.string().uuid() }).strict();
+
+export const lipSyncSpeechInput = z.discriminatedUnion("source", [lipSyncSpeechText, lipSyncSpeechAudio, lipSyncSpeechLibrary]);
 
 export const createLipSyncJobSchema = z
   .object({
@@ -72,7 +75,7 @@ export type CreateLipSyncJobRequest = z.infer<typeof createLipSyncJobSchema>;
 export const lipSyncQuoteRequestSchema = z
   .object({
     selectedDurationMs: z.number().int().positive().max(6 * 60 * 60 * 1000),
-    speechSource: z.enum(["text", "audio"]),
+    speechSource: z.enum(["text", "audio", "library"]),
     textCharacters: z.number().int().nonnegative().max(5_000).optional(),
     speed: z.number().min(0.5).max(3).optional(),
   })

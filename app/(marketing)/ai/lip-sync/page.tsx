@@ -15,12 +15,14 @@ import { LipSyncWorkspace } from "@/features/ai/lip-sync/lip-sync-workspace";
 export const metadata: Metadata = { title: "Lip Sync Pro", robots: { index: false, follow: false, nocache: true } };
 export const dynamic = "force-dynamic";
 
-export default function PublicLipSyncPage() {
+export default async function PublicLipSyncPage({ searchParams }: { searchParams: Promise<{ audio?: string }> }) {
+  const { audio } = await searchParams;
+  const initialAssetId = typeof audio === "string" && /^[0-9a-fA-F-]{36}$/.test(audio) ? audio : null;
   return (
     <>
       <SiteHeader landing />
       <main className="container max-w-3xl px-3 pb-10 sm:pb-14" style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}>
-        <LipSyncWorkspace basePath="/ai/lip-sync" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" />
+        <LipSyncWorkspace basePath="/ai/lip-sync" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" audioHref="/ai/audio" initialAssetId={initialAssetId} />
       </main>
       <AIDownloadOverlay />
       <SiteFooterMinimal />

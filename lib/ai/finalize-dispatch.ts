@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getJobAsService } from "@/lib/ai/job-store";
 import { hasWorker, WORKER_SECRET, WORKER_URL } from "@/lib/worker";
 
 /**
@@ -60,6 +61,21 @@ export type DispatchResult =
  * into a 500 that makes Replicate redeliver.
  */
 export async function dispatchFinalization(jobId: string): Promise<DispatchResult> {
+  /*
+    ── Text to Audio (2026-09-21) finishes HERE, not on the worker ───────────
+    Its output is one small MP3 and its finalizer needs no ffmpeg, so the
+    webhook, the reconciler and the recovery pass — every caller of this
+    function — run it in-process instead of asking the Railway machine. The
+    same lease claim and the same attempt budget guard it; a transient
+    failure is scheduled for the sweep like a worker's would be.
+  */
+  const row = await getJobAsService(jobId).catch(() => null);
+  if (row?.feature === "ai_text_to_audio") {
+    const { finalizeTextToAudioJob } = await import("@/lib/ai/text-to-audio/finalize");
+    const outcome = await finalizeTextToAudioJob(jobId);
+    if (outcome.ok) return { dispatched: true };
+    return outcome.retry ? { dispatched: true, retry: true } : { dispatched: false, reason: "failed", detail: `${outcome.code}: ${outcome.detail}`.slice(0, 300) };
+  }
   return dispatchToWorker("/api/internal/ai/finalize", jobId);
 }
 

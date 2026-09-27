@@ -5,7 +5,7 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus, isAiJobError, storedErrorMessage } from "@/lib/ai/errors";
 import { aiFeature, isValidClientRequestId, jobToView } from "@/lib/ai/jobs";
 import { findJobByRequestId, getOwnJob } from "@/lib/ai/job-store";
-import { countOpenLipSyncJobs, openLipSyncGate, openLipSyncJob, screenLipSyncFacts, validateLipSyncFacts } from "@/lib/ai/lip-sync/open-job";
+import { countOpenLipSyncJobs, openLipSyncGate, openLipSyncJob, resolveLipSyncFacts, screenLipSyncFacts, validateLipSyncFacts } from "@/lib/ai/lip-sync/open-job";
 import { createLipSyncJobSchema } from "@/lib/ai/lip-sync/schemas";
 import { supersedeOwnDrafts } from "@/lib/ai/retention";
 import { subjectOwnerId } from "@/lib/ai/subject";
@@ -49,15 +49,19 @@ export async function POST(request: Request) {
     const both = !!speech && typeof speech === "object" && "text" in (speech as object) && "audio" in (speech as object);
     return fail("INVALID_INPUT", { error: both ? "Choose one: type what they should say, or upload an audio file — not both." : !speech ? "Choose a speech source: type text, or upload an audio file." : undefined });
   }
-  const { clientRequestId, retryOf, ...facts } = parsed.data;
+  const { clientRequestId, retryOf, ...given } = parsed.data;
   if (!isValidClientRequestId(clientRequestId)) return fail("INVALID_INPUT");
 
   try {
     const [settings, entitlement, adminUser] = await Promise.all([getLandingSettings(), getAiEntitlement(subject, feature), getAdminUser().catch(() => null)]);
     const config = settings.frenzAiLipSync;
-    const gate = await openLipSyncGate({ subject, feature, settings, entitlement, config }, facts.speech.source);
+    const gate = await openLipSyncGate({ subject, feature, settings, entitlement, config }, given.speech.source);
     if (!gate.ok) return fail(gate.code, gate.extra);
     const ctx = { subject, feature, settings, entitlement, config, publicConfig: gate.publicConfig };
+    // 2026-09-21 (§4): a library source is the member's own saved audio — resolved here, never re-charged
+    const resolved = await resolveLipSyncFacts(subject, given);
+    if ("ok" in resolved) return fail(resolved.code, resolved.extra);
+    const facts = resolved;
     const invalid = validateLipSyncFacts(ctx, facts);
     if (invalid) return fail(invalid.code, invalid.extra);
     const blocked = screenLipSyncFacts(subject.key, facts);
@@ -84,7 +88,7 @@ export async function POST(request: Request) {
     }
     const opened = await openLipSyncJob(ctx, { clientRequestId, facts, lineage });
     if ("ok" in opened) return fail(opened.code, opened.extra);
-    console.info("[lipsync/jobs] opened", { jobId: opened.row.id, userId: ownerId, source: facts.speech.source, durationMs: facts.video.durationMs, retryOf: retryOf ?? null });
+    console.info("[lipsync/jobs] opened", { jobId: opened.row.id, userId: ownerId, source: given.speech.source, library: facts.library?.id ?? null, durationMs: facts.video.durationMs, retryOf: retryOf ?? null });
     return NextResponse.json({ job: jobToView(opened.row, storedErrorMessage), created: opened.created, uploads: opened.uploads }, { status: opened.created ? 201 : 200 });
   } catch (e) {
     if (isAiJobError(e)) return fail(e.code);

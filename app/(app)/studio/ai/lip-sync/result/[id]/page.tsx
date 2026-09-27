@@ -25,5 +25,5 @@ export default async function LipSyncResultPage({ params }: { params: Promise<{ 
   if (!user) redirect(`/login?next=${encodeURIComponent(`/studio/ai/lip-sync/result/${id}`)}`);
   const job = await getOwnJob(userSubject(user.id), id);
   if (!job || job.feature !== "ai_lip_sync") notFound();
-  return <LipSyncWorkspace basePath="/studio/ai/lip-sync" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" initialJobId={id} />;
+  return <LipSyncWorkspace basePath="/studio/ai/lip-sync" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" audioHref="/studio/ai/audio" initialJobId={id} />;
 }

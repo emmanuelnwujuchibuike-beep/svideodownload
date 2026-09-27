@@ -206,6 +206,13 @@ export async function releaseJobFunding(opts: {
           return;
         }
       }
+      // Text to Audio (0170): the month's free characters this job took come back too — guarded once on the row (lib/ai/text-to-audio/free.ts).
+      if (opts.feature === "ai_text_to_audio") {
+        const { releaseFreeCharactersForJob } = await import("@/lib/ai/text-to-audio/free");
+        await releaseFreeCharactersForJob(opts.job.id, `job undone (${opts.cause ?? "undo"})`).catch((e) => console.error("[ai/funding] free characters release failed", { jobId: opts.job.id, error: String(e).slice(0, 200) }));
+        // a generation the allowance covered in full reserved nothing else
+        if (opts.job.funding_source === "free") return;
+      }
       // Part 11: a complimentary creation comes back as an ENTITLEMENT, once (restore_free_use); a paid one as money, once. Never both.
       if (opts.job.funding_source === "free") {
         await restoreFreeUse(opts.job.id, "job undone");

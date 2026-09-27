@@ -6,6 +6,7 @@ import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiProvidersPanelProps } from "@/features/admin/ai-providers-settings";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
+import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import type { LandingSettings } from "@/lib/landing/settings";
 
 /*
@@ -97,6 +98,13 @@ const LipSyncSettingsPanel = dynamic(() => import("@/features/admin/lip-sync-set
 
 export function LipSyncSettingsLazy(props: { settings: LandingSettings; stats: LipSyncAdminStats | null; voices: { id: string; label: string; provider: string }[]; languages: { code: string; label: string }[] }) {
   return <LipSyncSettingsPanel {...props} />;
+}
+
+// Text to Audio (2026-09-21): AI → Text to Audio — the route switch (direct ElevenLabs API | Replicate), the model, the prices, the monthly free characters, the numbers.
+const TextToAudioSettings = dynamic(() => import("@/features/admin/text-to-audio-settings").then((m) => m.TextToAudioSettingsPanel), { loading: skeleton("Loading Text to Audio") });
+
+export function TextToAudioSettingsLazy(props: { settings: LandingSettings; stats: TextToAudioAdminStats | null; voices: { id: string; label: string; provider: string }[]; languages: { code: string; label: string }[] }) {
+  return <TextToAudioSettings {...props} />;
 }
 
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {

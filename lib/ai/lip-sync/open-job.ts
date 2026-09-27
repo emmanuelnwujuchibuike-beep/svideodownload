@@ -11,8 +11,10 @@ import { LIP_SYNC_AUDIO_FORMATS, type LipSyncProConfig, type LipSyncPublicConfig
 import { planSpeechPath, publicLipSyncConfig, resolveLipSyncProRoute, textPathReady } from "@/lib/ai/lip-sync/providers/router";
 import type { CreateLipSyncJobRequest } from "@/lib/ai/lip-sync/schemas";
 import { audioExtensionForUpload, extensionForUpload } from "@/lib/ai/media";
+import { AI_SOURCE_BUCKET, aiVoiceKey } from "@/lib/ai/storage";
 import { createSourceUploadTicket, type UploadTicket } from "@/lib/ai/storage-server";
 import { subjectOwnerId, type AiSubject } from "@/lib/ai/subject";
+import { getAudioAsset, readAudioAssetBytes, type AudioAssetRow } from "@/lib/ai/text-to-audio/assets";
 import { aiCurrencySymbol, type LandingSettings } from "@/lib/landing/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasWorker } from "@/lib/worker";
@@ -46,11 +48,28 @@ export interface LipSyncOpenedJob {
   uploads: { video: UploadTicket; audio: UploadTicket | null };
 }
 export type LipSyncCreateFacts = Omit<CreateLipSyncJobRequest, "clientRequestId" | "retryOf">;
+/** The facts after a `library` source has been resolved: the speech is an audio described by the asset, and the asset rides along. */
+export type LipSyncResolvedFacts = Omit<LipSyncCreateFacts, "speech"> & { speech: Extract<LipSyncCreateFacts["speech"], { source: "text" | "audio" }>; library: AudioAssetRow | null };
 
 const refuse = (code: AiErrorCode, extra?: Record<string, unknown>): LipSyncOpenRefusal => ({ ok: false, code, extra });
 
 /** The gate every create passes: the tool is on for this member, a provider can run it, the worker is there, nothing is paused. */
-export async function openLipSyncGate(ctx: Omit<LipSyncOpenContext, "publicConfig">, source: "text" | "audio"): Promise<LipSyncOpenRefusal | { ok: true; publicConfig: LipSyncPublicConfig }> {
+/**
+ * 2026-09-21 (§4): a `library` speech source becomes an `audio` one whose
+ * file is the member's own saved Text to Audio result. The asset is read
+ * under the member's id (somebody else's answers as none), its facts stand
+ * in for the upload's, and NO TTS line is ever priced for it — the audio was
+ * paid for when it was made.
+ */
+export async function resolveLipSyncFacts(subject: AiSubject & { kind: "user" }, facts: LipSyncCreateFacts): Promise<LipSyncResolvedFacts | LipSyncOpenRefusal> {
+  if (facts.speech.source !== "library") return { ...facts, speech: facts.speech, library: null };
+  const asset = await getAudioAsset(subjectOwnerId(subject), facts.speech.assetId);
+  if (!asset) return refuse("JOB_NOT_FOUND", { error: "That audio isn't in your library any more. Choose another, or upload a file." });
+  const ext = asset.mime === "audio/wav" || asset.mime === "audio/x-wav" ? "wav" : asset.mime === "audio/mp4" ? "m4a" : "mp3";
+  return { ...facts, speech: { source: "audio", audio: { name: `${asset.name}.${ext}`, mimeType: asset.mime, size: Math.max(1, asset.bytes), durationMs: asset.duration_ms && asset.duration_ms > 0 ? asset.duration_ms : null } }, library: asset };
+}
+
+export async function openLipSyncGate(ctx: Omit<LipSyncOpenContext, "publicConfig">, source: "text" | "audio" | "library"): Promise<LipSyncOpenRefusal | { ok: true; publicConfig: LipSyncPublicConfig }> {
   const { config, entitlement, settings, subject } = ctx;
   const cr = settings.frenzAiCharacterReplace;
   if (!hasWorker) return refuse("FEATURE_UNAVAILABLE", { error: "The AI service isn't connected yet." });
@@ -65,12 +84,12 @@ export async function openLipSyncGate(ctx: Omit<LipSyncOpenContext, "publicConfi
     return refuse("PROVIDER_UNAVAILABLE", { error: "Lip Sync Pro is temporarily unavailable. Try again in a few minutes — nothing has been charged." });
   }
   if (source === "text" && !textPathReady(config, route.adapter)) return refuse("FEATURE_UNAVAILABLE", { error: "Typing what they should say isn't available right now. Upload an audio file instead." });
-  if (source === "audio" && (!config.audioMode.enabled || !route.adapter.capabilities.supports_audio)) return refuse("FEATURE_UNAVAILABLE", { error: "Uploading your own audio isn't available right now." });
+  if ((source === "audio" || source === "library") && (!config.audioMode.enabled || !route.adapter.capabilities.supports_audio)) return refuse("FEATURE_UNAVAILABLE", { error: source === "library" ? "Using saved audio isn't available right now." : "Uploading your own audio isn't available right now." });
   return { ok: true, publicConfig: publicLipSyncConfig(config, settings.frenzAiProviders, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }) };
 }
 
 /** The browser's facts, checked again against the operator's ceilings — sizes, kinds, lengths (§16). The worker measures the real files later. */
-export function validateLipSyncFacts(ctx: LipSyncOpenContext, facts: LipSyncCreateFacts): LipSyncOpenRefusal | null {
+export function validateLipSyncFacts(ctx: LipSyncOpenContext, facts: LipSyncResolvedFacts): LipSyncOpenRefusal | null {
   const { config, publicConfig } = ctx;
   const v = facts.video;
   const videoType = v.mimeType.toLowerCase().split(";")[0]!.trim();
@@ -93,7 +112,7 @@ export function validateLipSyncFacts(ctx: LipSyncOpenContext, facts: LipSyncCrea
     const type = a.mimeType.toLowerCase().split(";")[0]!.trim();
     const ext = (a.name.split(".").pop() ?? "").toLowerCase();
     const known = LIP_SYNC_AUDIO_FORMATS.filter((f) => config.audioMode.formats.includes(f.id)).some((f) => f.mimeTypes.includes(type) || f.extensions.includes(ext));
-    if (!known) return refuse("UNSUPPORTED_FORMAT", { error: `Audio can be ${config.audioMode.formats.map((f) => f.toUpperCase()).join(", ")}.` });
+    if (!known && !facts.library) return refuse("UNSUPPORTED_FORMAT", { error: `Audio can be ${config.audioMode.formats.map((f) => f.toUpperCase()).join(", ")}.` });
     if (a.size <= 0) return refuse("INVALID_INPUT", { error: "That audio file is empty." });
     if (a.size > config.audioMode.maximumUploadBytes) return refuse("FILE_TOO_LARGE", { error: "That audio file is too large." });
     if (a.durationMs !== null && a.durationMs > config.audioMode.maximumDurationSeconds * 1000) return refuse("INVALID_INPUT", { error: `Audio can be up to ${config.audioMode.maximumDurationSeconds} seconds.` });
@@ -102,7 +121,7 @@ export function validateLipSyncFacts(ctx: LipSyncOpenContext, facts: LipSyncCrea
 }
 
 /** The acceptable-use screen reads the member's text (the filenames, and the dialogue itself). */
-export function screenLipSyncFacts(subjectKey: string, facts: LipSyncCreateFacts): LipSyncOpenRefusal | null {
+export function screenLipSyncFacts(subjectKey: string, facts: LipSyncResolvedFacts): LipSyncOpenRefusal | null {
   const words = facts.speech.source === "text" ? facts.speech.text : facts.speech.audio.name;
   const policy = screenAiJob({ sourceName: `${facts.video.name} ${words}`.trim(), sourceUrl: null, sourceKind: "upload" });
   if (!policy.allowed) {
@@ -118,15 +137,26 @@ export async function countOpenLipSyncJobs(subject: AiSubject & { kind: "user" }
   return count ?? 0;
 }
 
-export async function mintLipSyncUploadTickets(ownerId: string, feature: AiFeatureDef, jobId: string, facts: LipSyncCreateFacts): Promise<LipSyncOpenedJob["uploads"]> {
+export async function mintLipSyncUploadTickets(ownerId: string, feature: AiFeatureDef, jobId: string, facts: LipSyncResolvedFacts): Promise<LipSyncOpenedJob["uploads"]> {
   const [video, audio] = await Promise.all([
     createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: extensionForUpload(facts.video.name, facts.video.mimeType), role: "source" }),
-    facts.speech.source === "audio" ? createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: audioExtensionForUpload(facts.speech.audio.name, facts.speech.audio.mimeType), role: "voice" }) : Promise.resolve(null),
+    // a library audio is copied by the server (below) — the member has nothing to upload for it
+    facts.speech.source === "audio" && !facts.library ? createSourceUploadTicket({ userId: ownerId, feature: feature.id, jobId, extension: audioExtensionForUpload(facts.speech.audio.name, facts.speech.audio.mimeType), role: "voice" }) : Promise.resolve(null),
   ]);
   return { video, audio };
 }
 
-export async function openLipSyncJob(ctx: LipSyncOpenContext, input: { clientRequestId: string; facts: LipSyncCreateFacts; lineage: { projectId: string; attempt: number; retryOf: string } | null }): Promise<LipSyncOpenedJob | LipSyncOpenRefusal> {
+/** Copy a library asset into the job's own source folder, so every later step (ownership, prepare, retention) treats it as the job's audio. */
+async function copyLibraryAudioIntoJob(ownerId: string, feature: AiFeatureDef, jobId: string, asset: AudioAssetRow, maxBytes: number): Promise<{ path: string; size: number }> {
+  const bytes = await readAudioAssetBytes(asset, maxBytes);
+  const ext = asset.mime === "audio/wav" || asset.mime === "audio/x-wav" ? "wav" : asset.mime === "audio/mp4" ? "m4a" : "mp3";
+  const path = aiVoiceKey(ownerId, feature.id, jobId, ext);
+  const { error } = await createAdminClient().storage.from(AI_SOURCE_BUCKET).upload(path, bytes, { contentType: asset.mime, upsert: true });
+  if (error) throw new Error(error.message);
+  return { path, size: bytes.byteLength };
+}
+
+export async function openLipSyncJob(ctx: LipSyncOpenContext, input: { clientRequestId: string; facts: LipSyncResolvedFacts; lineage: { projectId: string; attempt: number; retryOf: string } | null }): Promise<LipSyncOpenedJob | LipSyncOpenRefusal> {
   const { subject, feature, config, settings } = ctx;
   const { facts } = input;
   const ownerId = subjectOwnerId(subject);
@@ -146,6 +176,15 @@ export async function openLipSyncJob(ctx: LipSyncOpenContext, input: { clientReq
   }
   const uploads = await mintLipSyncUploadTickets(ownerId, feature, result.row.id, facts);
   await reserveSourcePath(result.row.id, uploads.video.path);
+  let libraryCopy: { path: string; size: number } | null = null;
+  if (facts.library) {
+    try {
+      libraryCopy = await copyLibraryAudioIntoJob(ownerId, feature, result.row.id, facts.library, config.audioMode.maximumUploadBytes);
+    } catch (e) {
+      console.error("[lipsync/jobs] library audio copy failed", { jobId: result.row.id, assetId: facts.library.id, error: String(e).slice(0, 200) });
+      return refuse("STORAGE_ERROR", { error: "That saved audio couldn't be read. Try again in a moment." });
+    }
+  }
   const { data, error } = await createAdminClient()
     .from("ai_jobs")
     .update({
@@ -153,6 +192,7 @@ export async function openLipSyncJob(ctx: LipSyncOpenContext, input: { clientReq
       metadata: {
         ...(result.row.metadata ?? {}),
         tool: "lip_sync",
+        tool_id: "lip_sync",
         attempt: input.lineage?.attempt ?? 1,
         project_id: input.lineage?.projectId ?? result.row.id,
         retry_of: input.lineage?.retryOf ?? null,
@@ -160,7 +200,9 @@ export async function openLipSyncJob(ctx: LipSyncOpenContext, input: { clientReq
         speech:
           facts.speech.source === "text"
             ? { source: "text", text: facts.speech.text.trim(), voiceId: facts.speech.voiceId ?? null, providerVoiceId: null, languageCode: facts.speech.languageCode ?? null, speed: facts.speech.speed ?? config.textMode.speed.default, path }
-            : { source: "audio", upload: { path: uploads.audio!.path, mime: facts.speech.audio.mimeType.toLowerCase(), size: facts.speech.audio.size, durationMs: facts.speech.audio.durationMs, name: facts.speech.audio.name.slice(0, 200) } },
+            : libraryCopy && facts.library
+              ? { source: "audio", upload: { path: libraryCopy.path, mime: facts.library.mime.toLowerCase(), size: libraryCopy.size, durationMs: facts.speech.audio.durationMs, name: facts.speech.audio.name.slice(0, 200) }, origin: "library", assetId: facts.library.id }
+              : { source: "audio", upload: { path: uploads.audio!.path, mime: facts.speech.audio.mimeType.toLowerCase(), size: facts.speech.audio.size, durationMs: facts.speech.audio.durationMs, name: facts.speech.audio.name.slice(0, 200) }, origin: "upload", assetId: null },
         settings: {
           expression: config.expression.enabled && route.adapter?.capabilities.supports_temperature ? (facts.settings?.expression ?? config.expression.default) : null,
           activeSpeaker: config.activeSpeaker.enabled && route.adapter?.capabilities.supports_active_speaker ? (facts.settings?.activeSpeaker ?? config.activeSpeaker.default) : false,

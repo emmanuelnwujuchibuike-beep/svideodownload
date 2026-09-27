@@ -324,7 +324,7 @@ export function audioExtensionForUpload(name: string | undefined, mimeType: stri
  * every Yoruba, Igbo, Vietnamese or Hindi name it touches. On a product built
  * in Nigeria that is not an edge case, it is the common one.
  */
-export function resultFileName(sourceName: string | null, suffix = "frenz-ai"): string {
+export function resultFileName(sourceName: string | null, suffix = "frenz-ai", ext: "mp4" | "mp3" | "wav" | "m4a" = "mp4"): string {
   const base = (sourceName ?? "")
     .replace(/\.[^.]*$/, "")
     .replace(/[^\p{L}\p{M}\p{N} ._-]/gu, "")
@@ -332,7 +332,16 @@ export function resultFileName(sourceName: string | null, suffix = "frenz-ai"): 
     .replace(/-+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "")
     .slice(0, 60);
-  return base ? `${base}-${suffix}.mp4` : "frenz-ai-video.mp4";
+  return base ? `${base}-${suffix}.${ext}` : ext === "mp4" ? "frenz-ai-video.mp4" : `frenz-ai-audio.${ext}`;
+}
+
+/** The download extension for a stored result, from its recorded MIME type (2026-09-21: Text to Audio results are MP3s). */
+export function resultExtensionFor(mime: string | null | undefined): "mp4" | "mp3" | "wav" | "m4a" {
+  const t = (mime ?? "").toLowerCase();
+  if (t === "audio/mpeg" || t === "audio/mp3") return "mp3";
+  if (t === "audio/wav" || t === "audio/x-wav") return "wav";
+  if (t === "audio/mp4" || t === "audio/m4a" || t === "audio/x-m4a") return "m4a";
+  return "mp4";
 }
 
 /**
@@ -347,6 +356,8 @@ export function resultSuffixFor(feature: string): string {
       return "replaced";
     case "ai_clean":
       return "cleaned";
+    case "ai_text_to_audio":
+      return "audio";
     default:
       return "frenz-ai";
   }

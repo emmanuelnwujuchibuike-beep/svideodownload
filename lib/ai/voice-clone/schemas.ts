@@ -35,6 +35,23 @@ export const createVoiceCloneJobSchema = z
     description: z.string().trim().max(300).optional(),
     /** 1–25 here; the operator's own maximum is applied after. */
     samples: z.array(voiceCloneSampleFacts).min(1).max(25),
+    /**
+     * 2026-09-27: the four things the vendor's own clone form asks for —
+     * language, accent, gender, age. Free-form strings are refused by
+     * `normalizeVoiceCloneLabels`, which checks each one against the list the
+     * interface offered: these end up on a voice that is a real person's
+     * likeness, and a free-text field there is a free-text field on somebody's
+     * identity.
+     */
+    labels: z
+      .object({
+        language: z.string().max(24).nullable().optional(),
+        accent: z.string().max(24).nullable().optional(),
+        gender: z.string().max(16).nullable().optional(),
+        age: z.string().max(16).nullable().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type CreateVoiceCloneJobRequest = z.infer<typeof createVoiceCloneJobSchema>;

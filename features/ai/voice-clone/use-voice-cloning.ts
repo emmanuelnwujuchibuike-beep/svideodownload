@@ -12,6 +12,7 @@ import {
   uploadVoiceSample,
   type VcConfigAnswer,
 } from "@/lib/ai/voice-clone/client";
+import { EMPTY_VOICE_CLONE_LABELS, type VoiceCloneLabels } from "@/lib/ai/voice-clone/labels";
 import { track } from "@/lib/analytics/client";
 
 /**
@@ -56,6 +57,13 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
   const [configError, setConfigError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  /*
+    2026-09-27: the four the vendor's own clone form asks for. They describe the
+    voice on the account and in the library; the accent itself still comes from
+    the recordings (lib/ai/voice-clone/labels.ts).
+  */
+  const [labels, setLabels] = useState<VoiceCloneLabels>(EMPTY_VOICE_CLONE_LABELS);
+  const setLabel = useCallback((key: keyof VoiceCloneLabels, value: string | null) => setLabels((l) => ({ ...l, [key]: value })), []);
   const [samples, setSamples] = useState<PickedSample[]>([]);
   /** What the picker refused, said where the member is looking rather than after an upload. */
   const [pickError, setPickError] = useState<string | null>(null);
@@ -125,6 +133,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
       name: name.trim(),
       ...(description.trim() ? { description: description.trim() } : {}),
       samples: samples.map((s) => ({ name: s.file.name, mimeType: s.file.type || "audio/mpeg", size: s.file.size, durationMs: s.durationMs })),
+      labels,
     });
     if (!draft.ok) {
       setState({ phase: "error", code: draft.code, message: draft.error, extra: draft.extra });
@@ -158,7 +167,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
     requestId.current = null;
     setState({ phase: "idle" });
     setJobId(started.job.id);
-  }, [ready, config, samples, name, description, consentName, funding, loadConfig]);
+  }, [ready, config, samples, name, description, labels, consentName, funding, loadConfig]);
 
   const reset = useCallback(() => {
     setJobId(null);
@@ -167,6 +176,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
     setSamples([]);
     setName("");
     setDescription("");
+    setLabels(EMPTY_VOICE_CLONE_LABELS);
     setAgreed(false);
     setConsentName("");
     setFunding(null);
@@ -183,6 +193,8 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
     setName,
     description,
     setDescription,
+    labels,
+    setLabel,
     samples,
     addFiles,
     removeSample,

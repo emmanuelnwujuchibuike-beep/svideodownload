@@ -9,6 +9,7 @@ import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
 import { useVoiceCloning } from "@/features/ai/voice-clone/use-voice-cloning";
 import { VoiceLibrary } from "@/features/ai/voice-clone/voice-library";
 import { getAiCredits } from "@/lib/ai/credits/client";
+import { VOICE_CLONE_ACCENTS, VOICE_CLONE_AGES, VOICE_CLONE_GENDERS, VOICE_CLONE_LANGUAGES, type VoiceCloneLabels } from "@/lib/ai/voice-clone/labels";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
 import { formatCents } from "@/lib/ai/economy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
@@ -220,6 +221,26 @@ export function VoiceCloningWorkspace({
                   className="min-h-[44px] w-full rounded-2xl border border-border bg-card px-3.5 text-[14px] outline-none focus:border-foreground"
                 />
               </label>
+
+              {/*
+                🔴 THE FOUR THE VENDOR'S OWN FORM ASKS FOR (owner, 2026-09-27:
+                "isn't accurate like the main eleven lab … that has full Control
+                of the voice cloning"). Language, Accent, Gender, Age — stored on
+                the voice and sent to the provider with it.
+
+                ⚠️ Said plainly under the row, because it would be easy to read
+                these as knobs that reshape the audio: the ACCENT comes from the
+                recordings. These describe the voice; they do not retune it.
+              */}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <LabelSelect label="Language" value={ws.labels.language} options={VOICE_CLONE_LANGUAGES} onChange={(v) => ws.setLabel("language", v)} />
+                <LabelSelect label="Accent" value={ws.labels.accent} options={VOICE_CLONE_ACCENTS} onChange={(v) => ws.setLabel("accent", v)} />
+                <LabelSelect label="Gender" value={ws.labels.gender} options={VOICE_CLONE_GENDERS} onChange={(v) => ws.setLabel("gender", v)} />
+                <LabelSelect label="Age" value={ws.labels.age} options={VOICE_CLONE_AGES} onChange={(v) => ws.setLabel("age", v)} />
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                These describe the voice on your account and make it findable later. The accent itself comes from your recordings — record in the voice you want to hear back.
+              </p>
             </Section>
 
             {/* ── 3 · the rights ─────────────────────────────────────────────
@@ -468,6 +489,37 @@ function Section({ n, title, children }: { n: number; title: string; children: R
       </h2>
       {children}
     </section>
+  );
+}
+
+function LabelSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  options: readonly { value: string; label: string }[];
+  onChange: (v: string | null) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[12px] font-semibold">{label}</span>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="min-h-[44px] w-full rounded-2xl border border-border bg-card px-3 text-sm outline-none focus:border-foreground"
+      >
+        {/* Optional on purpose — a member who does not know their own accent's name should not be forced to pick one. */}
+        <option value="">Not set</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

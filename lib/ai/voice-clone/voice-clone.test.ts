@@ -15,6 +15,7 @@ import {
   voiceCloneSlotsFor,
 } from "@/lib/ai/voice-clone/config";
 import { readVoiceCloneDraft, readVoiceCloneMeta } from "@/lib/ai/voice-clone/job-meta";
+import { describeVoiceCloneLabels, normalizeVoiceCloneLabels, providerLabels, VOICE_CLONE_ACCENTS, VOICE_CLONE_AGES, VOICE_CLONE_GENDERS, VOICE_CLONE_LANGUAGES } from "@/lib/ai/voice-clone/labels";
 import { publicVoiceCloneQuote, quoteVoiceClone, voiceCloneMonthKey } from "@/lib/ai/voice-clone/pricing";
 import { createVoiceCloneJobSchema, startVoiceCloneJobSchema } from "@/lib/ai/voice-clone/schemas";
 import { cloneIdFromVoiceId, isCloneVoiceId, voiceIdForClone } from "@/lib/ai/voice-clone/usable";
@@ -381,5 +382,59 @@ describe("the status road a finished clone takes", () => {
   it("a library row that cannot be written removes the vendor's voice rather than leaking a slot", () => {
     const run = readFileSync(path.join(process.cwd(), "lib", "ai", "voice-clone", "run.ts"), "utf8");
     expect(run).toContain("provider.remove(made.providerVoiceId)");
+  });
+});
+
+/**
+ * ── THE VENDOR'S OWN FORM ASKS FOR FOUR THINGS (owner, 2026-09-27) ──────────
+ *
+ * "The voice cloning still isn't accurate like the main eleven lab in my
+ * screenshot that has full Control of the voice cloning" — the screenshot being
+ * ElevenLabs' Instant Voice Clone form: Language, Accent, Gender, Age.
+ *
+ * This product asked for none of them and sent the vendor two labels of its own
+ * bookkeeping, so a Nigerian voice arrived unlabelled.
+ */
+describe("what the member says the voice is", () => {
+  it("keeps only values the interface actually offered", () => {
+    const out = normalizeVoiceCloneLabels({ language: "pcm", accent: "nigerian", gender: "male", age: "middle_aged" });
+    expect(out).toEqual({ language: "pcm", accent: "nigerian", gender: "male", age: "middle_aged" });
+  });
+
+  /* 🔴 These land on a voice that is a real person's likeness. A free-text
+     field there is a free-text field on somebody's identity. */
+  it("drops anything invented, rather than passing it to the vendor", () => {
+    const out = normalizeVoiceCloneLabels({ language: "<script>", accent: "klingon", gender: "yes", age: 42 });
+    expect(out).toEqual({ language: null, accent: null, gender: null, age: null });
+  });
+
+  it("treats an absent block as all-unset rather than throwing", () => {
+    expect(normalizeVoiceCloneLabels(null)).toEqual({ language: null, accent: null, gender: null, age: null });
+    expect(normalizeVoiceCloneLabels(undefined)).toEqual({ language: null, accent: null, gender: null, age: null });
+  });
+
+  it("sends the operator's two tags plus only the labels that were set", () => {
+    expect(providerLabels({ language: "en", accent: "nigerian", gender: null, age: null }, "abcd1234")).toEqual({
+      source: "frenz-ai",
+      owner: "abcd1234",
+      language: "en",
+      accent: "nigerian",
+    });
+  });
+
+  it("describes a voice the way the library row reads", () => {
+    expect(describeVoiceCloneLabels({ language: "en", accent: "nigerian", gender: "male", age: "middle_aged" })).toBe("Nigerian · Male · Middle aged");
+    expect(describeVoiceCloneLabels({ language: null, accent: null, gender: null, age: null })).toBe("");
+  });
+
+  it("offers Nigerian and Pidgin, which is what this was asked for", () => {
+    expect(VOICE_CLONE_ACCENTS.some((a) => a.value === "nigerian")).toBe(true);
+    expect(VOICE_CLONE_LANGUAGES.some((l) => l.value === "pcm")).toBe(true);
+  });
+
+  it("every offered value is unique, so a select cannot show two identical options", () => {
+    for (const list of [VOICE_CLONE_ACCENTS, VOICE_CLONE_AGES, VOICE_CLONE_GENDERS, VOICE_CLONE_LANGUAGES]) {
+      expect(new Set(list.map((o) => o.value)).size).toBe(list.length);
+    }
   });
 });

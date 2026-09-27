@@ -46,6 +46,17 @@ export const voiceCloneMetaSchema = z
     name: z.string().min(1).max(60),
     description: z.string().max(300),
     samples: z.array(voiceCloneSampleSchema).min(1),
+    /** 2026-09-27: what the member said the voice IS — language, accent, gender, age. */
+    labels: z
+      .object({
+        language: z.string().nullable(),
+        accent: z.string().nullable(),
+        gender: z.string().nullable(),
+        age: z.string().nullable(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
     quote: z.custom<VoiceCloneQuote>((v) => !!v && typeof v === "object" && typeof (v as { totalCents?: unknown }).totalCents === "number").nullable(),
     billing: z
       .object({

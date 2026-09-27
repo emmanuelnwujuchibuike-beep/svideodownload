@@ -121,6 +121,7 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14.5px] font-bold tracking-[-0.01em]">{voice.name}</p>
                   <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                    {voice.describedAs ? `${voice.describedAs} · ` : ""}
                     {voice.sampleCount} recording{voice.sampleCount === 1 ? "" : "s"}
                     {voice.sampleSeconds ? ` · ${Math.round(voice.sampleSeconds)} s` : ""} · {new Date(voice.createdAt).toLocaleDateString()}
                     {voice.lastUsedAt ? ` · used ${new Date(voice.lastUsedAt).toLocaleDateString()}` : ""}

@@ -11,6 +11,7 @@ import { subjectOwnerId, type AiSubject } from "@/lib/ai/subject";
 import { voiceCloneFormatAllowed, voiceCloneSlotsFor, type VoiceCloneConfig } from "@/lib/ai/voice-clone/config";
 import { countLiveClones, countLiveClonesForAccount } from "@/lib/ai/voice-clone/clones";
 import { defaultVoiceName } from "@/lib/ai/voice-clone/job-meta";
+import { normalizeVoiceCloneLabels } from "@/lib/ai/voice-clone/labels";
 import { resolveVoiceCloneProvider } from "@/lib/ai/voice-clone/provider";
 import type { CreateVoiceCloneJobRequest } from "@/lib/ai/voice-clone/schemas";
 import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/wallet/server";
@@ -207,6 +208,8 @@ export async function createVoiceCloneJob(ctx: VoiceCloneCreateContext, body: Cr
         tool_id: "voice_clone",
         name,
         description,
+        // checked against the offered lists; anything else is dropped rather than sent to the vendor
+        labels: normalizeVoiceCloneLabels(body.labels),
         samples: body.samples.map((s, i) => ({ path: tickets[i]!.path, mime: s.mimeType.toLowerCase(), size: s.size, durationMs: s.durationMs ?? null, name: s.name.slice(0, 200) })),
         quote: null,
         billing: null,

@@ -12,6 +12,7 @@ import { AI_SOURCE_BUCKET } from "@/lib/ai/storage";
 import { subjectFromRow } from "@/lib/ai/subject";
 import { createVoiceClone, getVoiceCloneByJob } from "@/lib/ai/voice-clone/clones";
 import { readVoiceCloneMeta } from "@/lib/ai/voice-clone/job-meta";
+import { EMPTY_VOICE_CLONE_LABELS, normalizeVoiceCloneLabels, providerLabels } from "@/lib/ai/voice-clone/labels";
 import { voiceCloneProviderFor, type VoiceCloneSample } from "@/lib/ai/voice-clone/provider";
 import { settleAiWalletCharge } from "@/lib/ai/wallet/server";
 import { getLandingSettings } from "@/lib/landing/settings";
@@ -106,12 +107,20 @@ export async function runVoiceClone(jobId: string): Promise<VoiceCloneRunResult>
     }
 
     /* ── the voice ──────────────────────────────────────────────────────── */
+    /*
+      🔴 THE LABELS THE VENDOR'S OWN FORM ASKS FOR (2026-09-27). This used to
+      send `{ source, owner }` and nothing else, so a Nigerian voice arrived at
+      the vendor unlabelled — the owner's "isn't accurate like the main eleven
+      lab … that has full Control". The accent itself is learned from the
+      audio; these describe the voice on the account and in the member's
+      library (lib/ai/voice-clone/labels.ts is honest about the difference).
+    */
+    const labels = normalizeVoiceCloneLabels(meta.labels ?? null);
     const made = await provider.clone({
       name: meta.name,
       description: meta.description,
       samples,
-      // the provider's own labels, so whoever looks after the account can tell a member's clone from a library voice
-      labels: { source: "frenz-ai", owner: ownerId.slice(0, 8) },
+      labels: providerLabels(labels, ownerId.slice(0, 8)),
     });
 
     await openProviderRun({
@@ -158,8 +167,8 @@ export async function runVoiceClone(jobId: string): Promise<VoiceCloneRunResult>
       sampleSeconds: typeof job.metadata?.sample_seconds === "number" ? job.metadata.sample_seconds : null,
       previewPath: first?.path ?? null,
       previewMime: first?.mime ?? null,
-      languageCode: null,
-      labels: {},
+      languageCode: labels.language,
+      labels: labels as unknown as Record<string, unknown>,
       consent: meta.consent ?? { at: new Date().toISOString(), name: "", statement: config.consentStatement },
     }).catch(async (e) => {
       await provider.remove(made.providerVoiceId).catch((cleanup) => console.error("[vc/run] orphan voice left at the vendor", { jobId: job.id, providerVoiceId: made.providerVoiceId, error: String(cleanup).slice(0, 200) }));

@@ -5,6 +5,7 @@ import { recordJobEvent } from "@/lib/ai/job-events";
 import { getJobAsService } from "@/lib/ai/job-store";
 import { AI_SIGNED_URL_TTL_SECONDS, AI_SOURCE_BUCKET, pathBelongsTo, pathBelongsToOwner } from "@/lib/ai/storage";
 import type { VoiceCloneConfig } from "@/lib/ai/voice-clone/config";
+import { describeVoiceCloneLabels, normalizeVoiceCloneLabels } from "@/lib/ai/voice-clone/labels";
 import { voiceCloneProviderFor } from "@/lib/ai/voice-clone/provider";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -73,6 +74,8 @@ export interface VoiceCloneView {
   createdAt: string;
   lastUsedAt: string | null;
   consentAt: string;
+  /** "Nigerian · Male · Middle aged", or "" — what the member said the voice is. */
+  describedAs: string;
 }
 
 export function voiceCloneToView(c: VoiceCloneRow): VoiceCloneView {
@@ -88,6 +91,7 @@ export function voiceCloneToView(c: VoiceCloneRow): VoiceCloneView {
     createdAt: c.created_at,
     lastUsedAt: c.last_used_at,
     consentAt: c.consent_at,
+    describedAs: describeVoiceCloneLabels(normalizeVoiceCloneLabels(c.labels)),
   };
 }
 

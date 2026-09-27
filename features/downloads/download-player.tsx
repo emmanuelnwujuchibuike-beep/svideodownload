@@ -167,6 +167,21 @@ function savedAgo(at: number): string {
 }
 
 function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number; total: number }) {
+  /*
+    🔴 WHY THE BAR WAS INVISIBLE (owner, twice: "I didn't see the progress bar
+    at the top of the history viewer").
+
+    `total` is `queue.items.length`. The segments were rendered with
+    `Array.from({ length: total })`, so a queue of ZERO produced zero
+    segments — an empty flex row, 0px tall, indistinguishable from a bar that
+    was never there. Nothing else on screen depends on `total`, so there was
+    no second symptom to notice.
+
+    A lone clip is one segment, which is what the comment below it always
+    claimed ("a single segment for a lone clip") and what it now actually
+    does. The seek maths uses the same floor so a drag cannot divide by zero.
+  */
+  const segments = Math.max(total, 1);
   const router = useRouter();
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -232,7 +247,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         double speed.
       */
       const gap = 4; // the flex gap, in px, matching `gap-1`
-      const segment = (rect.width - gap * (total - 1)) / total;
+      const segment = (rect.width - gap * (segments - 1)) / segments;
       const left = rect.left + index * (segment + gap);
       const fraction = Math.min(1, Math.max(0, (clientX - left) / segment));
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
@@ -240,7 +255,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       video.currentTime = fraction * duration;
       setProgress(fraction * 100);
     },
-    [index, total],
+    [index, segments],
   );
 
   const onScrubDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -717,8 +732,27 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rec.kind, index, total]);
 
-  // Follows a downward swipe (translate + a slight fade) then snaps back on release.
-  const mediaDragStyle: CSSProperties = {
+  /*
+    ── THE WHOLE VIEWER FOLLOWS THE DRAG, NOT JUST THE MEDIA ─────────────────
+    Owner, 2026-09-27: "drag down to exit, it's supposed to pull down the whole
+    media viewer page not just the media card."
+
+    This style was applied to the `<img>` / `<video>` alone, so a downward drag
+    slid the picture out of a viewer whose header, progress bar and black
+    backdrop stayed nailed in place — the clip appeared to fall out of a frame
+    rather than the sheet being pulled away. Every native story viewer moves the
+    whole surface, which is what makes the gesture read as "dismiss" instead of
+    "move the photo".
+
+    It is applied to the dialog now. Two consequences worth knowing:
+      • A transform makes the dialog the containing block for any `fixed`
+        descendant. Every piece of chrome here is `absolute` within it already,
+        so they travel with it — which is the point.
+      • The backdrop is deliberately NOT faded with it. The page behind must not
+        start showing through until the drag is actually released as a dismiss,
+        or an abandoned drag flashes the list underneath.
+  */
+  const viewerDragStyle: CSSProperties = {
     transform: dragY ? `translateY(${dragY}px)` : undefined,
     transition: dragY ? "none" : "transform 0.22s ease, opacity 0.22s ease",
     opacity: dragY ? Math.max(0.35, 1 - dragY / 600) : undefined,
@@ -764,7 +798,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         `showModal` fallback path above — in the top layer it is ignored.
       */
       className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-black/95 p-0 backdrop:bg-black/95"
-      style={{ zIndex: 2147483646 }}
+      style={{ zIndex: 2147483646, ...viewerDragStyle }}
       aria-label={rec.title}
     >
       {/* Status — segmented, like Stories/WhatsApp: one bar per queued item, the
@@ -783,7 +817,12 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         onPointerUp={endScrub}
         onPointerCancel={endScrub}
         className={cn(
-          "absolute inset-x-3 top-[calc(0.55rem+var(--frenz-safe-top))] z-30 flex gap-1 transition-opacity duration-150",
+          /*
+            z-40, above the header's z-20 and the caption panel. The bar is the
+            one piece of chrome that must never be coverable — it is both the
+            position readout and the seek control.
+          */
+          "absolute inset-x-3 top-[calc(0.55rem+var(--frenz-safe-top))] z-40 flex gap-1 transition-opacity duration-150",
           /*
             🔴 THE HIT AREA MUST NOT REACH THE HEADER (owner, 2026-09-27: "I
             didnt see the progress bar at the top of the history viewer").
@@ -797,9 +836,9 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           holding && "opacity-0",
         )}
       >
-        {Array.from({ length: total }).map((_, i) => (
+        {Array.from({ length: segments }).map((_, i) => (
           // the track carries its own shadow so the line reads on a bright frame as well as on the black bands
-          <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35 shadow-[0_0_2px_rgb(0_0_0/0.5)]">
+          <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/45 shadow-[0_0_3px_rgb(0_0_0/0.6)]">
             <span
               className={cn("block h-full rounded-full bg-white", scrubbing ? "" : "transition-[width] duration-150")}
               style={{ width: `${i < index ? 100 : i === index ? (rec.kind === "video" ? progress : 100) : 0}%` }}
@@ -918,7 +957,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           </div>
         ) : url && rec.kind === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={rec.title} className="h-full w-full object-contain" style={mediaDragStyle} />
+          <img src={url} alt={rec.title} className="h-full w-full object-contain" />
         ) : url ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -927,7 +966,6 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             autoPlay
             playsInline
             className="h-full w-full bg-black object-contain"
-            style={mediaDragStyle}
             onEnded={() => playerClipEnded()}
             onPlay={() => { setPaused(false); hideControls(); }}
             onPause={() => { setPaused(true); revealControls(); }}

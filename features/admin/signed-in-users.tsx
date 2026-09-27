@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { MemberActivityItem, SignedInRoster, SignedInUser } from "@/lib/admin/people";
 import { adminJson, useAdminLive } from "./live/use-admin-live";
+import { useFeatureStream } from "./live/use-feature-stream";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -83,6 +84,29 @@ export function SignedInUsers() {
     quiet: useCallback((v: SignedInRoster) => v.users.length === 0, []),
   });
 
+  /*
+    ── THE PER-SECTION REALTIME STREAM (owner, 2026-09-27) ───────────────────
+    "Admin → Users should subscribe only to relevant user events … when the
+    admin leaves that section, immediately unsubscribe."
+
+    Used as a FRESHNESS SIGNAL, not as a second list. The roster is an
+    aggregate — sessions counted, features tallied, profiles joined — and
+    folding raw inserts into it client-side would produce a second, subtly
+    different answer to the same question. So the stream only says "something
+    happened since you looked", and the 60s refresh remains the one source of
+    the numbers.
+
+    It unsubscribes with the panel, because `useFeatureStream` reads the same
+    visibility context `useAdminLive` does.
+  */
+  const { events: liveEvents, connected } = useFeatureStream("traffic", { limit: 40 });
+  const [seenAt, setSeenAt] = useState<number>(() => Date.now());
+  useEffect(() => {
+    // Each refresh of the roster is the moment it was last accurate.
+    if (data) setSeenAt(Date.now());
+  }, [data]);
+  const sinceRefresh = liveEvents.filter((e) => new Date(e.at).getTime() > seenAt).length;
+
   const users = data?.users ?? [];
   const liveNow = users.filter((u) => isLive(u.lastSeen)).length;
 
@@ -92,6 +116,13 @@ export function SignedInUsers() {
         <h2 className="flex items-center gap-2 font-semibold">
           <Users className="h-5 w-5 text-primary" /> Signed-in members
         </h2>
+        <div className="flex items-center gap-2">
+        {connected ? (
+          <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-600 dark:text-emerald-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {sinceRefresh > 0 ? `${sinceRefresh} new` : "Live"}
+          </span>
+        ) : null}
         <div className="flex gap-1 rounded-full bg-secondary/50 p-1">
           {WINDOWS.map((w) => (
             <button
@@ -106,6 +137,7 @@ export function SignedInUsers() {
               {w.label}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -238,6 +270,29 @@ function Mini({ label, value }: { label: string; value: string }) {
  * hour ago is not watching it change, and this dashboard has cost the owner
  * real money on exactly that kind of assumption before.
  */
+/**
+ * One member, as a near-fullscreen modal.
+ *
+ * Owner, 2026-09-27: "Clicking on a sign in user profile in admin dashboard
+ * should show a clear understandable data that are arranged and it should show
+ * as a modal almost full screen not to come at the bottom of the page."
+ *
+ * It was an inline block appended under the list, which on a phone meant the
+ * answer to "who is this?" appeared below the fold, under everything that had
+ * prompted the question — so tapping a row looked like nothing had happened.
+ *
+ * ── What the arrangement is for ─────────────────────────────────────────────
+ *
+ * Three bands, in the order the questions get asked: WHO (identity and account
+ * state), WHAT IN TOTAL (the counted summary), then WHAT EXACTLY (the
+ * timeline). The raw event properties stay, on the same reasoning the live feed
+ * was rebuilt for in August: reducing a row to one line throws away the thing
+ * an operator opened it to find.
+ *
+ * Fetched once on open and never polled — nobody is watching an hour-old
+ * timeline change, and this dashboard has cost real money on that assumption
+ * before.
+ */
 function MemberDetail({ user, hours, onClose }: { user: SignedInUser; hours: number; onClose: () => void }) {
   const [items, setItems] = useState<MemberActivityItem[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -258,82 +313,185 @@ function MemberDetail({ user, hours, onClose }: { user: SignedInUser; hours: num
     };
   }, [user.userId, hours]);
 
+  /*
+    Escape closes, and the page behind does not scroll while this is open. Both
+    restored on unmount — a modal that leaves `overflow: hidden` behind locks
+    the whole dashboard.
+  */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [onClose]);
+
+  const windowLabel = hours >= 24 ? `${Math.round(hours / 24)}d` : `${hours}h`;
+
   return (
-    <div className="mt-5 rounded-2xl border border-border/70 bg-secondary/20 p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold">
-            {user.displayName || (user.handle ? `@${user.handle}` : "Member")}
-          </h3>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <MonitorSmartphone className="h-3 w-3" />
-              {[user.device, user.browser, user.os].filter(Boolean).join(" · ") || "unknown device"}
-            </span>
-            {user.country ? <span>{[user.city, user.country].filter(Boolean).join(", ")}</span> : null}
-            <span>last seen {ago(user.lastSeen)}</span>
-          </p>
+    <div
+      className="fixed inset-0 z-[120] flex items-stretch justify-center bg-black/55 p-2 backdrop-blur-sm sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Activity for ${user.displayName || user.handle || "member"}`}
+      /* A tap on the backdrop closes; a tap inside must not bubble out to it. */
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-2xl"
+      >
+        {/* ── WHO ── */}
+        <div className="flex items-start gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
+          <Avatar user={user} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <h3 className="truncate text-[16px] font-semibold">
+                {user.displayName || (user.handle ? `@${user.handle}` : "Member")}
+              </h3>
+              {isLive(user.lastSeen) ? (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
+                </span>
+              ) : null}
+              {user.isAdmin ? <Tag tone="bg-primary/12 text-primary">Admin</Tag> : null}
+              {user.isSuspended ? <Tag tone="bg-red-500/12 text-red-600">Suspended</Tag> : null}
+              {user.isHidden ? <Tag tone="bg-amber-500/12 text-amber-600">Hidden</Tag> : null}
+            </div>
+            <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+              {user.handle ? `@${user.handle} · ` : ""}
+              {user.userId}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close member activity"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card text-muted-foreground"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
 
-      {user.isSuspended || user.isHidden ? (
-        <p className="mb-3 flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
-          <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-          This account is {user.isSuspended ? "suspended" : "hidden"}. Moderation lives in the Moderation section.
-        </p>
-      ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          {user.isSuspended || user.isHidden ? (
+            <p className="mb-4 flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
+              <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+              This account is {user.isSuspended ? "suspended" : "hidden"}. Moderation actions live in the Moderation
+              section — nothing here changes an account.
+            </p>
+          ) : null}
 
-      {failed ? (
-        <p className="py-4 text-center text-[13px] text-muted-foreground">Could not read this member&apos;s activity.</p>
-      ) : !items ? (
-        <p className="flex items-center justify-center gap-2 py-4 text-[13px] text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading…
-        </p>
-      ) : items.length === 0 ? (
-        <p className="py-4 text-center text-[13px] text-muted-foreground">Nothing recorded in this window.</p>
-      ) : (
-        <ol className="max-h-[420px] space-y-1 overflow-y-auto pr-1">
-          {items.map((it) => (
-            <li key={it.eventId} className="rounded-xl bg-card px-3 py-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-[13px] font-medium">{it.label}</span>
-                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{ago(it.at)}</span>
-              </div>
-              <p className="truncate text-[11.5px] text-muted-foreground">
-                {it.feature ? (
+          {/* ── WHAT, IN TOTAL ── */}
+          <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Last {windowLabel}
+          </h4>
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Fact label="Events" value={formatCompactNumber(user.events)} />
+            <Fact label="Sessions" value={formatCompactNumber(user.sessions)} />
+            <Fact label="Page views" value={formatCompactNumber(user.pageViews)} />
+            <Fact label="Downloads" value={formatCompactNumber(user.downloads)} />
+          </dl>
+
+          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Fact label="Last seen" value={ago(user.lastSeen)} />
+            <Fact label="First seen in window" value={ago(user.firstSeenInWindow)} />
+            <Fact label="Device" value={[user.device, user.os].filter(Boolean).join(" · ") || "—"} />
+            <Fact label="Browser" value={user.browser || "—"} />
+          </dl>
+
+          <dl className="mt-2 grid grid-cols-2 gap-2">
+            <Fact label="Location" value={[user.city, user.country].filter(Boolean).join(", ") || "—"} />
+            <Fact label="Last page" value={user.lastPath || "—"} mono />
+          </dl>
+
+          {user.features.length > 0 ? (
+            <>
+              <h4 className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                Where they spent it
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {user.features.map((f) => (
                   <span
+                    key={f.feature}
                     className={cn(
-                      "mr-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                      FEATURE_TONE[it.feature] ?? "bg-secondary",
+                      "rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                      FEATURE_TONE[f.feature] ?? "bg-secondary text-muted-foreground",
                     )}
                   >
-                    {it.feature}
+                    {f.feature} · {f.count}
                   </span>
-                ) : null}
-                {it.path ?? "—"}
-              </p>
-              {/*
-                Whatever the event actually carried. The live feed was rebuilt in
-                August precisely because reducing a row to one line threw away
-                everything an operator opens it to find.
-              */}
-              {it.properties ? (
-                <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[10.5px] leading-snug text-muted-foreground">
-                  {JSON.stringify(it.properties)}
-                </pre>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      )}
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {/* ── WHAT, EXACTLY ── */}
+          <h4 className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+            Activity, newest first
+          </h4>
+
+          {failed ? (
+            <p className="rounded-2xl bg-secondary/40 px-4 py-6 text-center text-[13px] text-muted-foreground">
+              Could not read this member&apos;s activity.
+            </p>
+          ) : !items ? (
+            <p className="flex items-center justify-center gap-2 rounded-2xl bg-secondary/40 px-4 py-6 text-[13px] text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading…
+            </p>
+          ) : items.length === 0 ? (
+            <p className="rounded-2xl bg-secondary/40 px-4 py-6 text-center text-[13px] text-muted-foreground">
+              Nothing recorded in this window.
+            </p>
+          ) : (
+            <ol className="space-y-1.5">
+              {items.map((it) => (
+                <li key={it.eventId} className="rounded-xl border border-border/50 bg-secondary/20 px-3 py-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {it.feature ? (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                            FEATURE_TONE[it.feature] ?? "bg-secondary",
+                          )}
+                        >
+                          {it.feature}
+                        </span>
+                      ) : null}
+                      <span className="truncate text-[13px] font-medium">{it.label}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{ago(it.at)}</span>
+                  </div>
+                  {it.path ? (
+                    <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{it.path}</p>
+                  ) : null}
+                  {it.properties ? (
+                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10.5px] leading-snug text-muted-foreground">
+                      {JSON.stringify(it.properties, null, 1)}
+                    </pre>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One labelled figure. `mono` for values that are paths or ids, never for counts. */
+function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-xl border border-border/50 bg-secondary/25 px-3 py-2">
+      <dt className="text-[10.5px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className={cn("truncate text-[13.5px] font-semibold", mono && "font-mono text-[12px]")}>{value}</dd>
     </div>
   );
 }

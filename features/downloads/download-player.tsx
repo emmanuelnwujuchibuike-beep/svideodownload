@@ -783,13 +783,23 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         onPointerUp={endScrub}
         onPointerCancel={endScrub}
         className={cn(
-          "absolute inset-x-3 top-[calc(0.5rem+var(--frenz-safe-top))] z-30 flex gap-1 transition-opacity duration-150",
-          rec.kind === "video" && url ? "cursor-pointer touch-none py-3 -my-3" : "",
+          "absolute inset-x-3 top-[calc(0.55rem+var(--frenz-safe-top))] z-30 flex gap-1 transition-opacity duration-150",
+          /*
+            🔴 THE HIT AREA MUST NOT REACH THE HEADER (owner, 2026-09-27: "I
+            didnt see the progress bar at the top of the history viewer").
+
+            It was py-3 — 12px above and below a 4px line — on a z-30 element
+            sitting over a z-20 header whose buttons start ~22px down. So the
+            bar was invisible AND it was swallowing taps meant for Back and the
+            menu. 8px is still a comfortable grab and clears the row below.
+          */
+          rec.kind === "video" && url ? "cursor-pointer touch-none py-2 -my-2" : "",
           holding && "opacity-0",
         )}
       >
         {Array.from({ length: total }).map((_, i) => (
-          <span key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
+          // the track carries its own shadow so the line reads on a bright frame as well as on the black bands
+          <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/35 shadow-[0_0_2px_rgb(0_0_0/0.5)]">
             <span
               className={cn("block h-full rounded-full bg-white", scrubbing ? "" : "transition-[width] duration-150")}
               style={{ width: `${i < index ? 100 : i === index ? (rec.kind === "video" ? progress : 100) : 0}%` }}
@@ -811,7 +821,8 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       */}
       <div
         className={cn(
-          "absolute inset-x-0 top-[calc(1.35rem+var(--frenz-safe-top))] z-20 flex items-center gap-2.5 px-3 transition-opacity duration-150",
+          // clears the bar (0.55rem) plus its 8px grab padding, so neither steals the other's touches
+          "absolute inset-x-0 top-[calc(1.9rem+var(--frenz-safe-top))] z-20 flex items-center gap-2.5 px-3 transition-opacity duration-150",
           holding && "pointer-events-none opacity-0",
         )}
       >
@@ -855,7 +866,7 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           onClick={() => setCaptionOpen(false)}
           aria-label="Hide caption"
           className={cn(
-            "absolute inset-x-3 top-[calc(4.6rem+var(--frenz-safe-top))] z-20 max-h-[40vh] overflow-y-auto overscroll-contain rounded-2xl bg-black/70 p-3 text-left backdrop-blur-md transition-opacity duration-150",
+            "absolute inset-x-3 top-[calc(5.1rem+var(--frenz-safe-top))] z-20 max-h-[40vh] overflow-y-auto overscroll-contain rounded-2xl bg-black/70 p-3 text-left backdrop-blur-md transition-opacity duration-150",
             holding && "pointer-events-none opacity-0",
           )}
         >

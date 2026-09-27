@@ -44,7 +44,14 @@ export const textToAudioMetaSchema = z
     languageCode: z.string().max(16).nullable(),
     route: z.enum(["replicate", "elevenlabs"]),
     model: z.string().min(1).max(120),
-    /** 2026-09-27: the delivery the member chose, and the numbers it resolved to — what the provider was actually told. */
+    /*
+      2026-09-27: the delivery the member chose, and the operator numbers it
+      resolved to. ⚠️ These are the values BEFORE the per-model clamp — v3 takes
+      stability 0/0.5/1 and ignores `style`, so a row saying `stability 0.3,
+      style 0.55` was sent `stability 0.5` and no style at all
+      (lib/ai/voice/voice-settings.ts `clampVoiceSettings`). Stored unclamped
+      on purpose: it records what was ASKED for, which survives a model change.
+    */
     delivery: z.enum(["natural", "expressive", "calm"]).nullable().optional(),
     voice_settings: z.object({ stability: z.number(), similarityBoost: z.number(), style: z.number(), speakerBoost: z.boolean(), speed: z.number() }).passthrough().nullable().optional(),
     quote: z.custom<TextToAudioQuote>((v) => !!v && typeof v === "object" && typeof (v as { totalCents?: unknown }).totalCents === "number").nullable(),

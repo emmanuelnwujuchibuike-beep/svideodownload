@@ -8,9 +8,11 @@ import { SearchCommitProvider } from "@/features/search/search-commit";
 import { SearchResultsView } from "@/features/search/search-results-view";
 import {
   clearRecentSearches,
+  isRecentSearchEnabled,
   pushRecentSearch,
   readRecentSearches,
   removeRecentSearch,
+  setRecentSearchEnabled,
 } from "@/features/search/recent-searches";
 import { emptySearchResult, type SearchResult, type SearchType } from "@/lib/social/search";
 import { cn } from "@/lib/utils";
@@ -88,6 +90,15 @@ export function SearchExperience({
   const [result, setResult] = useState<SearchResult>(initialResult);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [recents, setRecents] = useState<string[]>([]);
+  /*
+    2026-09-27: whether this device keeps a search history at all, and
+    whether the field is focused — the second is what decides if the recent
+    list is shown UNDER the field ("make recent previous search show below
+    the placeholder when a user want to search again") rather than only far
+    down the page under the discovery row.
+  */
+  const [historyOn, setHistoryOn] = useState(true);
+  const [fieldFocused, setFieldFocused] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const cache = useRef(new Map<string, SearchResult>([[`${initialQuery}:${initialType}`, initialResult]]));
@@ -95,7 +106,10 @@ export function SearchExperience({
 
   // localStorage is read after mount, never during render — reading it in the
   // render pass would make the server and client HTML disagree.
-  useEffect(() => setRecents(readRecentSearches()), []);
+  useEffect(() => {
+    setHistoryOn(isRecentSearchEnabled());
+    setRecents(readRecentSearches());
+  }, []);
 
   // One listener for the life of the screen, and it only aborts. Nothing here
   // is registered on `window`.
@@ -243,7 +257,18 @@ export function SearchExperience({
       <div
         className="sticky top-0 z-20 -mx-3 bg-[hsl(var(--frenz-canvas))] px-3 pb-1 pt-[var(--frenz-safe-top)] sm:-mx-4 sm:px-4 lg:top-[calc(4rem+var(--frenz-safe-top)+var(--frenz-announce-h,0px))] lg:pt-1"
       >
-        <div className="flex items-center gap-2">
+        {/*
+          ── THE TABS SIT ABOVE THE FIELD (owner, 2026-09-27) ────────────────
+          "Bring the search down below the top, users and all NAV, so it sits
+          below." Top / Users / Videos / Sounds / Hashtags is the coarse
+          choice and the field refines it, so the field reading second
+          matches the order the decision is actually made in — and it puts
+          the input nearer the thumb on a phone, which is where the typing
+          happens.
+        */}
+        <SearchTabs active={type} onPick={pickTab} />
+
+        <div className="mt-1.5 flex items-center gap-2">
         <form role="search" onSubmit={submit} className="relative min-w-0 flex-1">
           <label htmlFor="frenz-search" className="sr-only">
             Search Frenzsave
@@ -257,6 +282,15 @@ export function SearchExperience({
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onFocus={() => setFieldFocused(true)}
+            /*
+              A blur that closes the list immediately would fire BEFORE the
+              tap on a suggestion registers, so the tap would land on
+              nothing. The list itself blocks the blur (pointer-down is
+              prevented on it); this only has to cover the case where the
+              member taps somewhere else entirely.
+            */
+            onBlur={() => setFieldFocused(false)}
             type="search"
             inputMode="search"
             enterKeyHint="search"
@@ -305,7 +339,52 @@ export function SearchExperience({
         </span>
         </div>
 
-        <SearchTabs active={type} onPick={pickTab} />
+        {/*
+          ── RECENTS, RIGHT UNDER THE FIELD (owner, 2026-09-27) ──────────────
+          "make recent previous search show below the placeholder when a user
+          want to search again." They were only ever at the foot of the page,
+          under the discovery row — which is not where someone who has just
+          tapped the field is looking.
+
+          Shown while the field has focus and nothing has been typed yet:
+          once there is a query the member is past their history. It is
+          inside the sticky header so it travels with the field rather than
+          being scrolled away from it.
+        */}
+        {fieldFocused && historyOn && !input.trim() && recents.length > 0 ? (
+          <div
+            // keeps the field focused so the tap lands on the item, not on a closing list
+            onPointerDown={(e) => e.preventDefault()}
+            className="mt-1.5 overflow-hidden rounded-[18px] bg-card shadow-[0_8px_28px_-18px_rgb(15_23_42/0.45)] ring-1 ring-black/[0.04] dark:ring-white/10"
+          >
+            <ul>
+              {recents.slice(0, 5).map((t) => (
+                <li key={t} className="flex items-center transition-colors duration-150 hover:bg-secondary/60">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFieldFocused(false);
+                      commit(t);
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left"
+                  >
+                    <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="truncate text-[14px]">{t}</span>
+                  </button>
+                  {/* one term at a time, without turning the whole history off */}
+                  <button
+                    type="button"
+                    onClick={() => setRecents(removeRecentSearch(t))}
+                    aria-label={`Remove ${t} from recent searches`}
+                    className="mr-1.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -329,13 +408,45 @@ export function SearchExperience({
         ) : (
           <div className="space-y-3.5">
             {discoveryRow}
-            {recents.length > 0 ? (
+            {historyOn && recents.length > 0 ? (
               <RecentSearches
                 terms={recents}
                 onPick={(t) => commit(t)}
                 onRemove={(t) => setRecents(removeRecentSearch(t))}
                 onClearAll={() => setRecents(clearRecentSearches())}
+                historyOn={historyOn}
+                onToggleHistory={() => {
+                  const next = !historyOn;
+                  setHistoryOn(next);
+                  setRecents(setRecentSearchEnabled(next));
+                }}
               />
+            ) : null}
+            {/*
+              With the history off there is no list to hang the switch on, so
+              the way back has to exist on its own — otherwise turning it off
+              is a one-way door.
+            */}
+            {!historyOn ? (
+              <section className="rounded-[22px] border border-border/70 bg-card px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-[17px] w-[17px] shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-[15px] font-semibold">Search history is off</h2>
+                    <p className="text-[12.5px] leading-snug text-muted-foreground">What you search stays on this device and is not being saved.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryOn(true);
+                      setRecents(setRecentSearchEnabled(true));
+                    }}
+                    className="srch-press shrink-0 rounded-full bg-secondary px-3.5 py-2 text-[13px] font-semibold"
+                  >
+                    Turn on
+                  </button>
+                </div>
+              </section>
             ) : null}
             {trendingTerms.length > 0 ? <TrendingSearches terms={trendingTerms} onPick={(t) => commit(t)} /> : null}
             {discover}
@@ -444,23 +555,43 @@ function RecentSearches({
   onPick,
   onRemove,
   onClearAll,
+  historyOn,
+  onToggleHistory,
 }: {
   terms: string[];
   onPick: (t: string) => void;
   onRemove: (t: string) => void;
   onClearAll: () => void;
+  historyOn: boolean;
+  onToggleHistory: () => void;
 }) {
   return (
     <section className="rounded-[22px] border border-border/70 bg-card px-1.5 py-2.5">
       <div className="flex items-center gap-2.5 px-2.5 pb-1.5">
         <Clock className="h-[17px] w-[17px] text-muted-foreground" aria-hidden />
         <h2 className="flex-1 text-[15px] font-semibold">Recent</h2>
+        {/*
+          TWO CONTROLS, NOT ONE. Clearing is "forget what I searched";
+          switching off is "stop remembering from now on". The owner asked
+          for both separately, and conflating them would make a member who
+          wants one accept the other.
+        */}
         <button
           type="button"
           onClick={onClearAll}
           className="srch-press rounded-lg px-1 py-0.5 text-[13px] font-semibold text-primary"
         >
           Clear all
+        </button>
+        <button
+          type="button"
+          onClick={onToggleHistory}
+          role="switch"
+          aria-checked={historyOn}
+          aria-label="Save search history on this device"
+          className="srch-press rounded-lg px-1 py-0.5 text-[13px] font-semibold text-muted-foreground"
+        >
+          Turn off
         </button>
       </div>
       <ul>

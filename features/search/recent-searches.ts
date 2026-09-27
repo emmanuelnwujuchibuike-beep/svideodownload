@@ -43,6 +43,8 @@ export function readRecentSearches(): string[] {
 export function pushRecentSearch(term: string): string[] {
   const trimmed = term.trim();
   if (!trimmed) return read();
+  // the switch is checked HERE, at the one place that writes, so no caller can forget it
+  if (!isRecentSearchEnabled()) return [];
   const lower = trimmed.toLowerCase();
   return write([trimmed, ...read().filter((t) => t.toLowerCase() !== lower)]);
 }
@@ -54,4 +56,44 @@ export function removeRecentSearch(term: string): string[] {
 
 export function clearRecentSearches(): string[] {
   return write([]);
+}
+
+/**
+ * ── TURNING THE HISTORY OFF (owner, 2026-09-27) ────────────────────────────
+ *
+ * "users should be able to turn of search history in search page. And users
+ * should be able to clear previous search without turning off the previous
+ * search."
+ *
+ * Two separate controls, deliberately: clearing is "forget what I searched",
+ * switching off is "stop remembering from now on". Conflating them — the
+ * common shortcut — means a member who wants one has to accept the other.
+ *
+ * Switching OFF also clears what is already stored. Leaving the old list
+ * behind while promising not to record would be the wrong half of the promise:
+ * the setting reads as "don't keep my searches", not "keep the old ones".
+ *
+ * Defaults to ON, and a device that cannot read the preference is treated as
+ * ON — the list is a convenience and failing closed here would silently break
+ * it for anyone in private mode.
+ */
+const PREF_KEY = "frenz:recent-searches-enabled";
+
+export function isRecentSearchEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(PREF_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+/** Returns the list as it stands afterwards — empty when switching off. */
+export function setRecentSearchEnabled(on: boolean): string[] {
+  try {
+    window.localStorage.setItem(PREF_KEY, on ? "1" : "0");
+  } catch {
+    /* private mode — the preference simply does not persist */
+  }
+  return on ? read() : clearRecentSearches();
 }

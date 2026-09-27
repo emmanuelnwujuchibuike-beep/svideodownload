@@ -336,7 +336,8 @@ export async function prepareCharacterReplaceJob(jobId: string): Promise<Prepare
         const ttsFile = path.join(dir, "voice-tts.bin");
         let made: { bytes: Buffer; mime: string };
         try {
-          made = await provider.synthesize({ jobId: job.id, text: meta.audio.tts.text, languageCode: meta.audio.tts.languageCode, providerVoiceId: meta.audio.tts.providerVoiceId });
+          // 2026-09-27: the operator's delivery dials, read from the same settings row the model came from
+          made = await provider.synthesize({ jobId: job.id, text: meta.audio.tts.text, languageCode: meta.audio.tts.languageCode, providerVoiceId: meta.audio.tts.providerVoiceId, voiceSettings: crConfig.tts.voiceSettings });
         } catch (e) {
           await recordJobEvent(job.id, "audio.rejected", { code: "TTS_FAILED", detail: String(e).slice(0, 200), source: "tts", provider: provider.id });
           // the provider refused the request itself (too long, an unknown voice) → the member's input; anything else is ours or the provider's

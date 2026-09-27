@@ -84,6 +84,8 @@ const capabilities = (): AiCapabilities => {
     // its credentials. `hasProviderFor` reads the same registry the start route
     // dispatches through, so the answer here cannot differ from the answer there.
     replicate: hasProviderFor(primary),
+    // 2026-09-27: Voice Cloning's vendor. Read here for the same reason as the line above — the server is the one thing that knows what is configured.
+    elevenlabs: !!process.env.ELEVENLABS_API_KEY?.trim(),
     // The ffmpeg worker. A job that cannot be finalized must never be started —
     // see the note on AiCapabilities.finalizer.
     finalizer: hasWorker,

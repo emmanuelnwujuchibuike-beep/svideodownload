@@ -206,6 +206,8 @@ const MEDIA_NOUN: Record<AiFeature, string> = {
   ai_character_replace: "video",
   ai_lip_sync: "video",
   ai_text_to_audio: "audio",
+  // a clone produces a VOICE, not a file — "your voice is ready"
+  ai_voice_clone: "voice",
   /*
     🔴 THE COMPILER FOUND THESE, WHICH IS WHY THE RECORD IS TOTAL. The first
     draft of this file listed `ai_clean` alone and typechecked as an object

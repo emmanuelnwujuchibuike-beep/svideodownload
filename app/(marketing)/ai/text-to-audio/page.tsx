@@ -14,14 +14,15 @@ import { TextToAudioWorkspace } from "@/features/ai/text-to-audio/text-to-audio-
 export const metadata: Metadata = { title: "Text to Audio", robots: { index: false, follow: false, nocache: true } };
 export const dynamic = "force-dynamic";
 
-export default async function PublicTextToAudioPage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
-  const { job } = await searchParams;
+export default async function PublicTextToAudioPage({ searchParams }: { searchParams: Promise<{ job?: string; voice?: string }> }) {
+  const { job, voice } = await searchParams;
   const initialJobId = typeof job === "string" && /^[0-9a-fA-F-]{36}$/.test(job) ? job : null;
+  const initialVoiceId = typeof voice === "string" && /^clone:[0-9a-fA-F-]{36}$/.test(voice) ? voice : null;
   return (
     <>
       <SiteHeader landing />
       <main className="container max-w-3xl px-3 pb-10 sm:pb-14" style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}>
-        <TextToAudioWorkspace basePath="/ai/text-to-audio" aiHref="/ai" libraryHref="/ai/audio" lipSyncHref="/ai/lip-sync" historyHref="/ai/history" usageHref="/ai/usage" initialJobId={initialJobId} />
+        <TextToAudioWorkspace basePath="/ai/text-to-audio" aiHref="/ai" libraryHref="/ai/audio" lipSyncHref="/ai/lip-sync" historyHref="/ai/history" usageHref="/ai/usage" initialJobId={initialJobId} initialVoiceId={initialVoiceId} />
       </main>
       <AIDownloadOverlay />
       <SiteFooterMinimal />

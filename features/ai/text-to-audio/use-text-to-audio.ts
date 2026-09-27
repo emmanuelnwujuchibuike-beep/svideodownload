@@ -6,6 +6,7 @@ import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
 import { newClientRequestId } from "@/lib/ai/client";
 import { generateTextToAudio, getTextToAudioConfig, getTextToAudioQuote, type TtaConfigAnswer, type TtaQuoteAnswer } from "@/lib/ai/text-to-audio/client";
 import { track } from "@/lib/analytics/client";
+import type { TtsDelivery } from "@/lib/ai/voice/voice-settings";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -21,13 +22,20 @@ import { track } from "@/lib/analytics/client";
  */
 export type TtaLaunch = { phase: "idle" } | { phase: "generating" } | { phase: "error"; code: string; message: string; extra?: Record<string, unknown> };
 
-export function useTextToAudio(opts: { initialJobId?: string | null }) {
+export function useTextToAudio(opts: { initialJobId?: string | null; initialVoiceId?: string | null }) {
   const [config, setConfig] = useState<TtaConfigAnswer | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [name, setName] = useState("");
-  const [voiceId, setVoiceId] = useState<string | null>(null);
+  const [voiceId, setVoiceId] = useState<string | null>(opts.initialVoiceId ?? null);
   const [languageCode, setLanguageCode] = useState<string | null>(null);
+  /*
+    2026-09-27: the delivery. Null until the config says which one starts
+    selected — the operator's default, not this file's opinion. The price does
+    not depend on it, so it is deliberately NOT in the quote's dependencies:
+    changing the delivery must not re-price and must not clear the estimate.
+  */
+  const [delivery, setDelivery] = useState<TtsDelivery | null>(null);
   const [funding, setFunding] = useState<"credits" | "wallet" | null>(null);
   const [quote, setQuote] = useState<{ status: "idle" } | { status: "pending" } | { status: "quoted"; answer: TtaQuoteAnswer } | { status: "error"; code: string; message: string }>({ status: "idle" });
   const [launch, setLaunch] = useState<TtaLaunch>({ phase: "idle" });
@@ -42,6 +50,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null }) {
       setConfig(res);
       setConfigError(null);
       setVoiceId((v) => v ?? res.config.voices[0]?.id ?? null);
+      setDelivery((d) => d ?? res.config.defaultDelivery ?? "natural");
       setLanguageCode((l) => l ?? res.config.voices[0]?.languages[0] ?? res.config.languages[0]?.code ?? null);
     } else setConfigError(res.error);
   }, []);
@@ -88,6 +97,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null }) {
       ...(name.trim() ? { name: name.trim() } : {}),
       voiceId,
       languageCode,
+      ...(config?.config.deliveryChoice && delivery ? { delivery } : {}),
       quote: { totalCents: quote.answer.quote.totalCents, pricingConfigVersion: quote.answer.quote.pricingConfigVersion },
       ...(funding ? { funding } : {}),
     });
@@ -102,7 +112,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null }) {
     requestId.current = null;
     setLaunch({ phase: "idle" });
     setJobId(res.job.id);
-  }, [ready, quote, text, name, voiceId, languageCode, funding, characters]);
+  }, [ready, quote, text, name, voiceId, languageCode, delivery, config?.config.deliveryChoice, funding, characters]);
 
   const reset = useCallback(() => {
     setJobId(null);
@@ -127,6 +137,8 @@ export function useTextToAudio(opts: { initialJobId?: string | null }) {
     setVoiceId,
     languageCode,
     setLanguageCode,
+    delivery,
+    setDelivery,
     characters,
     maximum,
     minimum,

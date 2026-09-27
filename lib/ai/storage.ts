@@ -100,6 +100,17 @@ export function aiReferenceKey(userId: string, feature: AiFeature, jobId: string
 export function aiVoiceKey(userId: string, feature: AiFeature, jobId: string, ext: string): string {
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/voice.${safeExt(ext)}`;
 }
+/**
+ * Voice Cloning (2026-09-27): a job folder holds one object per SAMPLE the
+ * member gave us — `sample-1.mp3`, `sample-2.wav`, … Same prefix as
+ * everything else, so `pathBelongsTo` answers for them and the retention
+ * sweep removes them with the rest of the folder. Index 1 is also the voice's
+ * preview: the member hears back the audio they actually supplied.
+ */
+export function aiVoiceSampleKey(userId: string, feature: AiFeature, jobId: string, index: number, ext: string): string {
+  const n = Math.max(1, Math.min(25, Math.floor(index)));
+  return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/sample-${n}.${safeExt(ext)}`;
+}
 export function aiVoicePreparedKey(userId: string, feature: AiFeature, jobId: string): string {
   return `${safeSegment(userId)}/${safeSegment(feature)}/${safeSegment(jobId)}/voice-prepared.wav`;
 }
@@ -148,6 +159,34 @@ export function pathBelongsTo(path: string, userId: string, jobId: string): bool
   const segments = path.split("/");
   if (segments.length !== 4) return false;
   return segments[0] === safeSegment(userId) && segments[2] === safeSegment(jobId);
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  OWNERSHIP WITHOUT A JOB ID (2026-09-27)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * `pathBelongsTo` needs BOTH the owner and the job, which is right everywhere a
+ * job is the thing being acted on. Voice Cloning has one case where it is not:
+ * a voice OUTLIVES the job that made it, and `ai_voice_clones.job_id` is
+ * `on delete set null` — so deleting a voice whose job row is long gone has an
+ * owner but no job id, and `pathBelongsTo(path, user, "")` answers FALSE.
+ *
+ * 🔴 That mattered. Without this function the delete path silently skipped the
+ * object removal for exactly those voices, leaving a member's VOICE RECORDINGS
+ * in the bucket after the product told them the voice and its recordings were
+ * gone. Caught in the security pass before this shipped.
+ *
+ * It checks strictly less than `pathBelongsTo` and is used only where there is
+ * strictly less to check: the first segment must still be this member's own
+ * prefix, the shape must still be exactly four segments, and traversal is still
+ * refused. A caller that HAS a job id must use `pathBelongsTo`.
+ */
+export function pathBelongsToOwner(path: string, userId: string): boolean {
+  if (!path || path.includes("..") || path.startsWith("/")) return false;
+  const segments = path.split("/");
+  if (segments.length !== 4) return false;
+  return segments[0] === safeSegment(userId);
 }
 
 /**

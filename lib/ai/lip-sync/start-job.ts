@@ -22,6 +22,8 @@ import { pathBelongsTo } from "@/lib/ai/storage";
 import { statSourceObject } from "@/lib/ai/storage-server";
 import { subjectOwnerId, type AiSubject } from "@/lib/ai/subject";
 import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
+import { resolveOwnClone, touchVoiceClone } from "@/lib/ai/voice-clone/clones";
+import { cloneIdFromVoiceId, isCloneVoiceId } from "@/lib/ai/voice-clone/usable";
 import { getAdminUser } from "@/lib/admin/require-admin";
 import { getLandingSettings, type LandingSettings } from "@/lib/landing/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -137,15 +139,29 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
       speechPatch = { providerVoiceId: wanted?.id ?? null, languageCode: language, speed, path: "native" };
     } else {
       const tts = textToSpeechProviderFor(config.tts.model);
+      /*
+        2026-09-27: a `clone:<uuid>` voice is one of the MEMBER'S OWN, looked up
+        in their library scoped by their user id. Only the direct ElevenLabs
+        adapter can speak one; the Replicate wrapper's voices are fixed names.
+      */
+      let clone: { id: string; providerVoiceId: string } | null = null;
+      if (isCloneVoiceId(spoken.voiceId)) {
+        if (tts.id !== "elevenlabs" || !settings.frenzAiVoiceClone.enabled) return refuse("INVALID_INPUT", { error: "Your own voices aren't available here right now. Choose one of the voices offered." });
+        const cloneId = cloneIdFromVoiceId(spoken.voiceId!);
+        const row = cloneId ? await resolveOwnClone(ownerId, cloneId) : null;
+        if (!row) return refuse("INVALID_INPUT", { error: "That voice isn't in your library any more. Choose another." });
+        clone = { id: row.id, providerVoiceId: row.provider_voice_id };
+      }
       // the voice provider's catalogue (Character Replace's voices), the configured provider's rows only
-      const voice = spoken.voiceId ? cr.voices.find((v) => v.id === spoken.voiceId && v.provider === tts.id) : null;
-      if (spoken.voiceId && !voice) return refuse("INVALID_INPUT", { error: "Choose one of the voices offered." });
+      const voice = !clone && spoken.voiceId ? cr.voices.find((v) => v.id === spoken.voiceId && v.provider === tts.id) : null;
+      if (!clone && spoken.voiceId && !voice) return refuse("INVALID_INPUT", { error: "Choose one of the voices offered." });
       const language = spoken.languageCode ?? voice?.languages[0] ?? "en";
       if (!tts.supportedLanguages().includes(language)) return refuse("INVALID_INPUT", { error: "That language isn't offered right now." });
       if (voice && voice.languages.length && !voice.languages.includes(language)) return refuse("INVALID_INPUT", { error: "That voice doesn't speak that language." });
       if (config.languageCodes.length && !config.languageCodes.includes(language)) return refuse("INVALID_INPUT", { error: "That language isn't offered right now." });
       if (voice && config.voiceIds.length && !config.voiceIds.includes(voice.id)) return refuse("INVALID_INPUT", { error: "Choose one of the voices offered." });
-      speechPatch = { providerVoiceId: voice?.providerVoiceId || null, languageCode: language, speed, path: "tts" };
+      speechPatch = { providerVoiceId: clone ? clone.providerVoiceId : voice?.providerVoiceId || null, languageCode: language, speed, path: "tts", ...(clone ? { clone_id: clone.id } : {}) };
+      if (clone) void touchVoiceClone(clone.id).catch(() => null);
     }
   }
 

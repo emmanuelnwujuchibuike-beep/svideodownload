@@ -344,6 +344,53 @@ const schema = z.object({
       voiceIds: z.array(z.string().max(80)).max(200).optional(),
       languageCodes: z.array(z.string().max(16)).max(200).optional(),
       libraryRetentionDays: z.number().int().min(0).max(3650).optional(),
+      /** 2026-09-27: the delivery dials. Bounds mirror lib/ai/voice/voice-settings.ts; the adapters clamp again per model. */
+      voiceSettings: z
+        .object({
+          stability: z.number().min(0).max(1).optional(),
+          similarityBoost: z.number().min(0).max(1).optional(),
+          style: z.number().min(0).max(1).optional(),
+          speakerBoost: z.boolean().optional(),
+          speed: z.number().min(0.7).max(1.2).optional(),
+        })
+        .strict()
+        .optional(),
+      deliveryChoice: z.boolean().optional(),
+      defaultDelivery: z.enum(["natural", "expressive", "calm"]).optional(),
+    })
+    .strict()
+    .optional(),
+  /**
+   * Voice Cloning (2026-09-27): the slots, the price per voice, the recording
+   * limits, the rights confirmation. Bounds mirror VOICE_CLONE_BOUNDS; the
+   * normaliser clamps again and refuses an unknown format.
+   */
+  frenzAiVoiceClone: z
+    .object({
+      enabled: z.boolean().optional(),
+      model: z.string().max(120).optional(),
+      perCloneCents: z.number().int().min(0).max(100_000_000).optional(),
+      minimumChargeCents: z.number().int().min(0).max(100_000_000).optional(),
+      providerCostPerCloneUsdCents: z.number().min(0).max(100_000).optional(),
+      creditMultiplier: z.number().min(0.1).max(10).optional(),
+      freeClonesPerMonth: z.number().int().min(0).max(1000).optional(),
+      slots: z.record(z.enum(["free", "pro", "business", "admin"]), z.number().int().min(0).max(500)).optional(),
+      accountVoiceCap: z.number().int().min(0).max(100_000).optional(),
+      samples: z
+        .object({
+          minimum: z.number().int().min(1).max(25).optional(),
+          maximum: z.number().int().min(1).max(25).optional(),
+          maximumBytes: z.number().int().min(64 * 1024).max(50 * 1024 * 1024).optional(),
+          maximumTotalBytes: z.number().int().min(64 * 1024).max(200 * 1024 * 1024).optional(),
+          minimumSecondsTotal: z.number().int().min(1).max(3600).optional(),
+          maximumSecondsEach: z.number().int().min(1).max(3600).optional(),
+          formats: z.array(z.string().max(8)).max(20).optional(),
+        })
+        .strict()
+        .optional(),
+      sampleRetentionDays: z.number().int().min(0).max(3650).optional(),
+      consentStatement: z.string().max(600).optional(),
+      requireConsentName: z.boolean().optional(),
     })
     .strict()
     .optional(),

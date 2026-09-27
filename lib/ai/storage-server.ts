@@ -13,6 +13,7 @@ import {
   aiResultKey,
   aiSourceKey,
   aiVoiceKey,
+  aiVoiceSampleKey,
 } from "@/lib/ai/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -73,9 +74,9 @@ export async function createSourceUploadTicket(opts: {
   feature: AiFeature;
   jobId: string;
   extension: string;
-  /** Which object in the job folder: the video (default), the character image, an extra reference (Part 6), or the replacement audio (Part 6). */
-  role?: "source" | "character" | "reference" | "voice";
-  /** For `reference`: 2 or 3 — the position among the identity photos. */
+  /** Which object in the job folder: the video (default), the character image, an extra reference (Part 6), the replacement audio (Part 6), or a voice-cloning sample (2026-09-27). */
+  role?: "source" | "character" | "reference" | "voice" | "voice_sample";
+  /** For `reference`: 2 or 3 — the position among the identity photos. For `voice_sample`: 1…25. */
   index?: number;
 }): Promise<UploadTicket> {
   const path =
@@ -85,7 +86,9 @@ export async function createSourceUploadTicket(opts: {
         ? aiReferenceKey(opts.userId, opts.feature, opts.jobId, opts.index ?? 2, opts.extension)
         : opts.role === "voice"
           ? aiVoiceKey(opts.userId, opts.feature, opts.jobId, opts.extension)
-          : aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
+          : opts.role === "voice_sample"
+            ? aiVoiceSampleKey(opts.userId, opts.feature, opts.jobId, opts.index ?? 1, opts.extension)
+            : aiSourceKey(opts.userId, opts.feature, opts.jobId, opts.extension);
   const admin = createAdminClient();
   /*
     🔴 `upsert: true` (2026-09-14). A retry after a half-finished upload —

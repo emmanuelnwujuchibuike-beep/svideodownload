@@ -12,6 +12,8 @@ import { ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { hasWorker } from "@/lib/worker";
+import { subjectOwnerId } from "@/lib/ai/subject";
+import { usableCloneOptions, type UsableCloneOption } from "@/lib/ai/voice-clone/usable";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     const route = resolveLipSyncProRoute(ls, settings.frenzAiProviders);
     const path = planSpeechPath("text", route.adapter);
     // the voices and languages the text path can honour
-    let voices: { id: string; label: string; blurb: string; languages: readonly string[]; gender: string; age?: string }[] = [];
+    let voices: { id: string; label: string; blurb: string; languages: readonly string[]; gender: string; age?: string; own?: boolean }[] = [];
     let languages: { code: string; label: string; native: string }[] = [];
     if (path === "native" && route.adapter?.nativeVoices) {
       voices = route.adapter.nativeVoices.filter((v) => !ls.voiceIds.length || ls.voiceIds.includes(v.id)).map((v) => ({ id: v.id, label: v.label, blurb: v.language === "zh" ? "Chinese" : "English", languages: [v.language], gender: v.gender }));
@@ -50,6 +52,16 @@ export async function GET(request: Request) {
       const provider = voiceProviderForModel(ls.tts.model);
       const spoken = new Set(ttsSupportedLanguagesFor(ls.tts.model));
       voices = cr.voices.filter((v) => v.provider === provider && (!ls.voiceIds.length || ls.voiceIds.includes(v.id))).map((v) => ({ id: v.id, label: v.label, blurb: v.blurb, languages: v.languages, gender: v.gender, age: v.age }));
+      /*
+        2026-09-27: the member's own cloned voices, first in the list. Only on
+        the DIRECT ElevenLabs route (`provider === "elevenlabs_api"`) — the
+        Replicate wrapper's voices are 26 fixed names and a clone has none of
+        them (lib/ai/voice-clone/usable.ts).
+      */
+      if (subject.kind === "user" && provider === "elevenlabs_api" && settings.frenzAiVoiceClone.enabled) {
+        const own = await usableCloneOptions(subjectOwnerId(subject), { allowed: true });
+        voices = [...own.map((o: UsableCloneOption) => ({ id: o.id, label: o.label, blurb: o.blurb, languages: o.languages, gender: o.gender, own: true })), ...voices];
+      }
       languages = cr.languages.filter((l) => spoken.has(l.code) && (!ls.languageCodes.length || ls.languageCodes.includes(l.code)));
     }
     const headers = new Headers();

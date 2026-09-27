@@ -12,6 +12,7 @@ import { getAiCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
 import { formatCents } from "@/lib/ai/economy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
+import { TTS_DELIVERIES, TTS_DELIVERY_LABEL } from "@/lib/ai/voice/voice-settings";
 import { track } from "@/lib/analytics/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -37,8 +38,27 @@ import { cn } from "@/lib/utils";
  * onward: "Use in Lip Sync Pro", which opens that tool with this audio
  * already chosen — and the brief's rule that it is NOT charged again.
  */
-export function TextToAudioWorkspace({ basePath, aiHref, libraryHref, lipSyncHref, historyHref, usageHref, initialJobId = null }: { basePath: string; aiHref: string; libraryHref: string; lipSyncHref: string; historyHref: string; usageHref: string; initialJobId?: string | null }) {
-  const ws = useTextToAudio({ initialJobId });
+export function TextToAudioWorkspace({
+  basePath,
+  aiHref,
+  libraryHref,
+  lipSyncHref,
+  historyHref,
+  usageHref,
+  initialJobId = null,
+  initialVoiceId = null,
+}: {
+  basePath: string;
+  aiHref: string;
+  libraryHref: string;
+  lipSyncHref: string;
+  historyHref: string;
+  usageHref: string;
+  initialJobId?: string | null;
+  /** 2026-09-27: `clone:<uuid>` from the Voice Library's "Make audio with it". */
+  initialVoiceId?: string | null;
+}) {
+  const ws = useTextToAudio({ initialJobId, initialVoiceId });
   const cfg = ws.config?.config ?? null;
   const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);
@@ -134,6 +154,7 @@ export function TextToAudioWorkspace({ basePath, aiHref, libraryHref, lipSyncHre
                 <Notice tone="muted">No voice is set up for this tool yet.</Notice>
               ) : (
                 <>
+                  {voices.some((v) => v.own) ? <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Your voices</p> : null}
                   <div className="grid gap-2 sm:grid-cols-2">
                     {voices.map((v) => (
                       <button
@@ -157,6 +178,28 @@ export function TextToAudioWorkspace({ basePath, aiHref, libraryHref, lipSyncHre
                       </button>
                     ))}
                   </div>
+                  {cfg?.deliveryChoice ? (
+                    <div className="mt-3">
+                      <p className="mb-1.5 text-[12px] font-semibold">Delivery</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {TTS_DELIVERIES.map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => {
+                              haptic("selection");
+                              ws.setDelivery(d);
+                            }}
+                            aria-pressed={ws.delivery === d}
+                            className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition", ws.delivery === d ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                          >
+                            <span className="block text-[12.5px] font-bold">{TTS_DELIVERY_LABEL[d].label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">{ws.delivery ? TTS_DELIVERY_LABEL[ws.delivery].blurb : null}</p>
+                    </div>
+                  ) : null}
                   {languages.length > 1 ? (
                     <label className="mt-3 block">
                       <span className="mb-1.5 block text-[12px] font-semibold">Language</span>

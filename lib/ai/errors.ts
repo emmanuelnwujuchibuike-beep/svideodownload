@@ -165,6 +165,18 @@ export type AiErrorCode =
   | "VOICE_GENERATION_FAILED"
   | "LIPSYNC_FAILED"
   /*
+    ── Voice Cloning, 2026-09-27 ─────────────────────────────────────────────
+    Three, because the three causes need three different sentences and only one
+    of them is the member's to fix.
+      REJECTED  the samples are the problem — they can record better ones
+      LIMIT     their own voice slots are full — they can delete one
+      CAPACITY  the platform's slots are full — nobody's fault but ours
+    Every one of them refunds, including the month's free voice.
+  */
+  | "VOICE_CLONE_REJECTED"
+  | "VOICE_CLONE_LIMIT"
+  | "VOICE_CLONE_CAPACITY"
+  /*
     Not in the owner's list, which was written as examples. It is here because
     without it the create path has no honest code for "the database refused to
     record your job": `PROCESSING_FAILED` would claim work was attempted,
@@ -282,6 +294,9 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   AUDIO_TOO_SHORT: { status: 422, message: "The voice is much shorter than the selected video. Nothing was charged — use longer audio or trim the video." },
   VOICE_GENERATION_FAILED: { status: 500, message: "We couldn't generate the voice. Your balance wasn't charged — you can try again." },
   LIPSYNC_FAILED: { status: 500, message: "We couldn't synchronise the speech. Your balance wasn't charged — you can try again." },
+  VOICE_CLONE_REJECTED: { status: 422, message: "We couldn't build a voice from those recordings. Nothing was charged — try clearer audio of one person speaking, with no music behind it." },
+  VOICE_CLONE_LIMIT: { status: 409, message: "You've used all your voice slots. Delete a voice you no longer need, then try again — nothing was charged." },
+  VOICE_CLONE_CAPACITY: { status: 503, message: "We can't take new voices right now. Try again a little later — nothing was charged." },
   INTERNAL_ERROR: { status: 500, message: "Something went wrong. Nothing was charged — try again in a moment." },
 };
 

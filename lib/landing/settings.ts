@@ -9,6 +9,7 @@ import { normalizeAiPlansConfig, versionAiPlans, type AiPlansConfig } from "@/li
 import { normalizeAiProvidersConfig, versionAiProviders, type AiProvidersConfig } from "@/lib/ai/providers/config";
 import { normalizeLipSyncConfig, versionLipSyncConfig, type LipSyncProConfig } from "@/lib/ai/lip-sync/config";
 import { normalizeTextToAudioConfig, versionTextToAudioConfig, type TextToAudioConfig } from "@/lib/ai/text-to-audio/config";
+import { normalizeVoiceCloneConfig, versionVoiceCloneConfig, type VoiceCloneConfig } from "@/lib/ai/voice-clone/config";
 
 /**
  * Admin-configurable pieces of the public landing page, stored in the `settings`
@@ -321,6 +322,8 @@ export interface LandingSettings {
   frenzAiLipSync: LipSyncProConfig;
   /** Text to Audio (2026-09-21): the standalone tool's configuration — lib/ai/text-to-audio/config.ts owns the type. */
   frenzAiTextToAudio: TextToAudioConfig;
+  /** Voice Cloning (2026-09-27): the standalone tool's configuration — lib/ai/voice-clone/config.ts owns the type. */
+  frenzAiVoiceClone: VoiceCloneConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -379,6 +382,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiProviders: normalizeAiProvidersConfig(null),
   frenzAiLipSync: normalizeLipSyncConfig(null),
   frenzAiTextToAudio: normalizeTextToAudioConfig(null),
+  frenzAiVoiceClone: normalizeVoiceCloneConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -528,6 +532,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiProviders: normalizeAiProvidersConfig(raw.frenzAiProviders),
       frenzAiLipSync: normalizeLipSyncConfig(raw.frenzAiLipSync),
       frenzAiTextToAudio: normalizeTextToAudioConfig(raw.frenzAiTextToAudio),
+      frenzAiVoiceClone: normalizeVoiceCloneConfig(raw.frenzAiVoiceClone),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -566,7 +571,9 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">> & {
+  /** Voice Cloning: the same deep merge — the panel posts the slots without erasing the sample limits. */
+  frenzAiVoiceClone?: Record<string, unknown>;
   /** Lip Sync Pro: the same deep merge. */
   frenzAiLipSync?: Record<string, unknown>;
   /** Text to Audio: the same deep merge. */
@@ -602,7 +609,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -665,6 +672,11 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
       current.frenzAiTextToAudio,
       normalizeTextToAudioConfig(mergeCharacterReplacePatch(current.frenzAiTextToAudio as unknown as Record<string, unknown>, (s.frenzAiTextToAudio ?? {}) as Record<string, unknown>)),
     ),
+    // Voice Cloning: merged the same way; the pricing version bumps on a price-bearing change, the version on any change.
+    frenzAiVoiceClone: versionVoiceCloneConfig(
+      current.frenzAiVoiceClone,
+      normalizeVoiceCloneConfig(mergeCharacterReplacePatch(current.frenzAiVoiceClone as unknown as Record<string, unknown>, (s.frenzAiVoiceClone ?? {}) as Record<string, unknown>)),
+    ),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;
@@ -700,6 +712,23 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
         before: changedBefore,
         after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) },
       });
+    }
+  }
+  // Voice Cloning's own line in the log — the slots, the prices, the consent wording.
+  if (s.frenzAiVoiceClone) {
+    const before = current.frenzAiVoiceClone as unknown as Record<string, unknown>;
+    const after = value.frenzAiVoiceClone as unknown as Record<string, unknown>;
+    const changedBefore: Record<string, unknown> = {};
+    const changedAfter: Record<string, unknown> = {};
+    for (const key of Object.keys(after)) {
+      if (key === "updatedAt" || key === "pricingUpdatedAt" || key === "version" || key === "pricingVersion") continue;
+      if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+        changedBefore[key] = before[key];
+        changedAfter[key] = after[key];
+      }
+    }
+    if (Object.keys(changedAfter).length > 0) {
+      recordConfigChange({ actorId: audit.changedBy ?? null, surface: "voice_clone", targetId: "settings", action: "settings.update", before: changedBefore, after: { ...changedAfter, ...(audit.reason ? { _reason: audit.reason } : {}) } });
     }
   }
   // Text to Audio's own line in the log.

@@ -118,6 +118,7 @@ function workspaceUrlFor(feature: string, jobId: string): string {
   if (feature === "ai_character_replace") return `${SITE_URL}/studio/ai/character-replace/result/${encodeURIComponent(jobId)}`;
   if (feature === "ai_lip_sync") return `${SITE_URL}/studio/ai/lip-sync/result/${encodeURIComponent(jobId)}`;
   if (feature === "ai_text_to_audio") return `${SITE_URL}/studio/ai/text-to-audio${q}`;
+  if (feature === "ai_voice_clone") return `${SITE_URL}/studio/ai/voice-cloning${q}`;
   return `${SITE_URL}/studio/ai/history${q}`;
 }
 

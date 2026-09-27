@@ -103,7 +103,8 @@ export const PROVIDER_FEATURE_DEFS: readonly ProviderFeatureDef[] = [
     locked: "elevenlabs",
     models: { elevenlabs: "ElevenLabs speech-to-speech (catalogue voices)" },
     built: true,
-    note: "ElevenLabs only. Not switchable. Voice cloning of a member's own voice is not offered.",
+    // 2026-09-27: cloning IS offered now — its own tool, its own consent record, its own tab (lib/ai/voice-clone/*).
+    note: "ElevenLabs only. Not switchable. Voice Cloning is a separate tool with its own settings (AI → Voice Cloning).",
   },
 ];
 

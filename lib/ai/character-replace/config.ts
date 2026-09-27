@@ -54,6 +54,7 @@ import {
   type VoiceGender,
 } from "@/lib/ai/voice/elevenlabs-models";
 import { ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
+import { normalizeTtsVoiceSettings, TTS_VOICE_SETTINGS_DEFAULTS, type TtsVoiceSettings } from "@/lib/ai/voice/voice-settings";
 
 /* ───────────────────────────── qualities ─────────────────────────────────── */
 
@@ -256,6 +257,20 @@ export interface CharacterReplaceTtsConfig {
     model: string;
     perSecondCents: number;
   };
+  /**
+   * 🔴 2026-09-27 — THE DIALS NOBODY WAS SENDING. Owner: "i test the text to
+   * speech now and i think is not realistic enough, sounds like ai, isnt it the
+   * realistic multilingual v2 and v3?" It WAS v3. What was missing was this:
+   * the voice step and the voice changer sent the text and the model and
+   * nothing else, so every line ran at the provider's conservative defaults
+   * with the expressiveness dial at ZERO. lib/ai/voice/voice-settings.ts owns
+   * the numbers and knows which model reads which of them.
+   *
+   * No member control here on purpose: a replacement's voice is one step of a
+   * creation, not a product of its own, so the operator's numbers apply to
+   * every one of them. Text to Audio is where a member chooses a delivery.
+   */
+  voiceSettings: TtsVoiceSettings;
 }
 
 /* ───────────────────────────── the object ────────────────────────────────── */
@@ -770,6 +785,7 @@ export const CHARACTER_REPLACE_DEFAULTS: CharacterReplaceConfig = {
     minimumCharacters: 1,
     maximumCharacters: 1_000,
     voiceChange: { enabled: true, model: ELEVENLABS_DEFAULT_STS_MODEL, perSecondCents: 0 },
+    voiceSettings: TTS_VOICE_SETTINGS_DEFAULTS,
   },
   lipSyncMaximumDurationSeconds: 60,
   retention: { resultHours: 72, savedResultDays: 30 },
@@ -1088,6 +1104,7 @@ export function normalizeCharacterReplaceConfig(raw: unknown): CharacterReplaceC
         int(ttsRaw.minimumCharacters, d.tts.minimumCharacters, 1, 10_000),
         int(ttsRaw.maximumCharacters, d.tts.maximumCharacters, 1, 10_000),
       ),
+      voiceSettings: normalizeTtsVoiceSettings(ttsRaw.voiceSettings, d.tts.voiceSettings),
       voiceChange: (() => {
         const vc = isRecord(ttsRaw.voiceChange) ? ttsRaw.voiceChange : {};
         const model = modelName(vc.model, d.tts.voiceChange.model);

@@ -6,6 +6,7 @@ import { createReplicatePrediction, toState } from "@/lib/ai/replicate/provider"
 import { elevenLabsConfigured, elevenLabsTextToSpeech } from "@/lib/ai/voice/elevenlabs";
 import { elevenLabsReplicateModel, elevenLabsTtsModel, ELEVENLABS_REPLICATE_VOICE_NAMES } from "@/lib/ai/voice/elevenlabs-models";
 import { minimaxLanguageHint, ttsSupportedLanguagesFor } from "@/lib/ai/voice/tts-languages";
+import { clampVoiceSettings, type TtsVoiceSettings } from "@/lib/ai/voice/voice-settings";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -26,15 +27,27 @@ import { minimaxLanguageHint, ttsSupportedLanguagesFor } from "@/lib/ai/voice/tt
  * Replicate, or a vendor of its own — implements the same interface and is
  * chosen by the model name the operator configured.
  *
- * ── 🔴 VOICE CLONING IS NOT OFFERED (§6) ────────────────────────────────────
+ * ── 🔴 WHERE A VOICE ID MAY COME FROM (revised 2026-09-27) ──────────────────
  *
- * MiniMax accepts a `voice_id` returned by its voice-cloning model. This
- * adapter only ever sends a voice from the OPERATOR'S CATALOGUE (config.ts
- * `voices[].providerVoiceId`, one of the provider's system voices), never a
- * value a member typed. "Create videos using your own voice or voices you
- * have permission to use" is served by the upload path; a cloned voice is
- * not a workflow this product has, and there is no field through which a
- * clone id could arrive.
+ * This section used to read "VOICE CLONING IS NOT OFFERED (§6)". It is offered
+ * now: Voice Cloning shipped as a standalone tool with its own consent record
+ * (lib/ai/voice-clone/*), and the owner asked for it on 2026-09-27.
+ *
+ * The rule that mattered has NOT changed, and it is worth stating precisely
+ * because it is easy to think the new feature broke it:
+ *
+ *   A `providerVoiceId` reaching an adapter is always a value the SERVER
+ *   looked up. Never one a browser typed.
+ *
+ * There are now two places it can be looked up FROM:
+ *   · the operator's catalogue (config.ts `voices[].providerVoiceId`) — one of
+ *     the provider's system voices; and
+ *   · `ai_voice_clones`, scoped by the asking member's own user id — a voice
+ *     THEY made and consented to (lib/ai/voice-clone/usable.ts explains why
+ *     the `clone:` prefix is a boundary rather than a convenience).
+ *
+ * The MiniMax adapter still takes catalogue rows only: its clone ids come from
+ * a different vendor's cloning model, which this product does not use.
  */
 
 export interface TextToSpeechRequest {
@@ -44,6 +57,15 @@ export interface TextToSpeechRequest {
   languageCode: string;
   /** The provider's own voice id from the operator's catalogue, or null for the provider's default. */
   providerVoiceId: string | null;
+  /**
+   * 2026-09-27: HOW it is delivered — stability, similarity, expressiveness.
+   * Absent means the provider's own defaults, which is what every generation
+   * before this date got and why the owner heard "sounds like ai"
+   * (lib/ai/voice/voice-settings.ts). The caller resolves the member's chosen
+   * delivery against the operator's numbers; nothing numeric comes from a
+   * browser.
+   */
+  voiceSettings?: TtsVoiceSettings | null;
   webhookUrl: string;
 }
 
@@ -191,15 +213,37 @@ export interface ReplicateElevenLabsInput {
   prompt: string;
   voice: string;
   language_code: string;
+  stability?: number;
+  similarity_boost?: number;
+  style?: number;
+  speed?: number;
 }
 
-export const REPLICATE_ELEVENLABS_INPUT_FIELDS = ["prompt", "voice", "language_code"] as const;
+export const REPLICATE_ELEVENLABS_INPUT_FIELDS = ["prompt", "voice", "language_code", "stability", "similarity_boost", "style", "speed"] as const;
 
-/** Pure, exposed for tests: the text, a voice NAME from the schema's enum, the language. Nothing else — stability, style and speed stay the model's defaults. */
-export function buildReplicateElevenLabsInput(req: { text: string; languageCode: string; providerVoiceId: string | null }): ReplicateElevenLabsInput {
+/**
+ * Pure, exposed for tests: the text, a voice NAME from the schema's enum, the
+ * language — and, since 2026-09-27, the delivery.
+ *
+ * 🔴 This comment used to end "Nothing else is sent — stability, style and
+ * speed stay the model's defaults", and that sentence was the bug the owner
+ * heard as "sounds like ai". The wrapper exposes the same four dials the
+ * direct API does; `style` at its default of zero is a reading, not a
+ * performance. The values are clamped per model, and `use_speaker_boost` is
+ * left out because this wrapper's schema does not carry it.
+ */
+export function buildReplicateElevenLabsInput(req: { text: string; languageCode: string; providerVoiceId: string | null; voiceSettings?: TtsVoiceSettings | null }, model = "elevenlabs/v3"): ReplicateElevenLabsInput {
   const voice = req.providerVoiceId ?? "";
   if (!ELEVENLABS_REPLICATE_VOICE_NAMES.includes(voice)) throw new AiJobError("INVALID_INPUT", `${voice || "(none)"} is not a voice the Replicate model accepts`);
-  return { prompt: req.text, voice, language_code: req.languageCode.toLowerCase() };
+  const input: ReplicateElevenLabsInput = { prompt: req.text, voice, language_code: req.languageCode.toLowerCase() };
+  if (req.voiceSettings) {
+    const v = clampVoiceSettings(req.voiceSettings, model);
+    input.stability = v.stability;
+    input.similarity_boost = v.similarity_boost;
+    if (v.style !== undefined) input.style = v.style;
+    if (v.speed !== undefined) input.speed = v.speed;
+  }
+  return input;
 }
 
 /**
@@ -224,7 +268,7 @@ export function replicateElevenLabsProvider(model: string): TextToSpeechProvider
       return spec ? spec.languages : [];
     },
     buildInput(req) {
-      return buildReplicateElevenLabsInput(req) as unknown as Record<string, unknown>;
+      return buildReplicateElevenLabsInput(req, model) as unknown as Record<string, unknown>;
     },
     async createPrediction(req) {
       if (!this.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `text-to-speech model ${model} is not configured`);
@@ -248,8 +292,9 @@ export function replicateElevenLabsProvider(model: string): TextToSpeechProvider
  * the audio, so this adapter `synthesize`s and never creates a prediction;
  * the worker calls it during prepare and fits the MP3 to the video exactly
  * as it fits an upload. The voice is always a catalogue row's
- * `providerVoiceId` — the same no-cloning rule as MiniMax: there is no field
- * through which a member's own voice id could arrive.
+ * `providerVoiceId` — or, since 2026-09-27, a voice from the member's OWN
+ * library, resolved server-side against their user id before it reaches here.
+ * Either way the value was looked up by the server, never typed by a browser.
  */
 export function elevenLabsProvider(model: string): TextToSpeechProvider {
   const spec = elevenLabsTtsModel(model);
@@ -268,6 +313,7 @@ export function elevenLabsProvider(model: string): TextToSpeechProvider {
       if (!spec) throw new AiJobError("FEATURE_UNAVAILABLE", `no text-to-speech adapter for ${model}`);
       const body: Record<string, unknown> = { text: req.text, model_id: spec.modelId, voice_id: req.providerVoiceId ?? "" };
       if (spec.languageCodeParam) body.language_code = req.languageCode.toLowerCase();
+      if (req.voiceSettings) body.voice_settings = clampVoiceSettings(req.voiceSettings, spec.modelId);
       return body;
     },
     createPrediction: async () => {
@@ -279,7 +325,7 @@ export function elevenLabsProvider(model: string): TextToSpeechProvider {
       // the Replicate route's rows carry NAMES ("Rachel"); the API wants an id ("21m00Tcm4TlvDq8ikWAM") — press Import voices for a direct model
       if (ELEVENLABS_REPLICATE_VOICE_NAMES.includes(req.providerVoiceId)) throw new AiJobError("INVALID_INPUT", `"${req.providerVoiceId}" is a Replicate voice name, not an ElevenLabs voice id — import the account's voices for a direct model`);
       if (req.text.length > spec.maxCharacters) throw new AiJobError("INVALID_INPUT", `${model} takes at most ${spec.maxCharacters} characters`);
-      return elevenLabsTextToSpeech({ text: req.text, modelId: spec.modelId, providerVoiceId: req.providerVoiceId, languageCode: req.languageCode, languageCodeParam: spec.languageCodeParam });
+      return elevenLabsTextToSpeech({ text: req.text, modelId: spec.modelId, providerVoiceId: req.providerVoiceId, languageCode: req.languageCode, languageCodeParam: spec.languageCodeParam, voiceSettings: req.voiceSettings ?? null });
     },
   };
 }

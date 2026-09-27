@@ -50,6 +50,8 @@ export type AiFeature =
   | "ai_lip_sync"
   /** 2026-09-21: Text to Audio — text → ElevenLabs v3 → an audio asset in the member's Audio Library; no video anywhere; migration 0170. */
   | "ai_text_to_audio"
+  /** 2026-09-27: Voice Cloning — the member's own audio samples → a voice they own, usable in Text to Audio and Lip Sync Pro; migration 0171. */
+  | "ai_voice_clone"
   | "ai_image_clean"
   | "ai_upscale"
   | "ai_caption"
@@ -221,7 +223,7 @@ export interface AiFeatureDef {
    * The provider capability this feature needs. A feature whose capability is
    * not configured is refused up front rather than queued into a void.
    */
-  requires: "replicate";
+  requires: "replicate" | "elevenlabs";
   /**
    * Whether a finished provider output still needs OUR worker before it is
    * deliverable. True for AI Clean: the model returns video with no audio, so
@@ -349,6 +351,42 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     maxDurationSeconds: 0,
     retentionHours: 24 * 365,
   },
+  {
+    /*
+      ── VOICE CLONING (2026-09-27, the owner's brief) ────────────────────────
+      The member's own recordings → a voice they own, kept in their Voice
+      Library and usable in Text to Audio and Lip Sync Pro. Instant cloning
+      through the DIRECT ElevenLabs API: no prediction, no webhook, no worker
+      and no ffmpeg — the vendor answers with a voice id in the request that
+      asked for it. Contract: lib/ai/voice-clone/job-meta.ts. Config:
+      lib/ai/voice-clone/config.ts. The voice itself outlives the job, in
+      `ai_voice_clones`.
+
+      🔴 `requires: "elevenlabs"`, not "replicate" — the FIRST feature in this
+      registry that does. Gating it on a Replicate token would refuse cloning on
+      a deployment that has everything cloning needs, and accept it on one that
+      has none of it.
+
+      🔴 `needsFinalizer: false` — also a first. There is no file to bring home:
+      the result is a row. A tool that declared a finalizer it does not use would
+      be refused on a deployment with no worker, for a reason that does not
+      apply to it.
+
+      `maxBytes` is the ceiling on ONE sample; the operator's own limits
+      (config.samples) are tighter and are what a member actually meets.
+    */
+    id: "ai_voice_clone",
+    label: "Voice Cloning",
+    provider: "replicate",
+    requires: "elevenlabs",
+    needsFinalizer: false,
+    freeDailyJobs: 0,
+    mimeTypes: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/webm", "audio/ogg", "audio/flac", "audio/x-flac"],
+    maxBytes: 50 * 1024 * 1024,
+    maxDurationSeconds: 0,
+    // the JOB's retention; the VOICE it made is kept until the member deletes it
+    retentionHours: 24 * 365,
+  },
 ] as const;
 
 /**
@@ -359,9 +397,9 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
  * `feature === "ai_character_replace"` asks this instead (2026-09-21), so
  * Lip Sync Pro joined without a second copy of any of it.
  */
-export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio"];
-export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" {
-  return feature === "ai_character_replace" || feature === "ai_lip_sync" || feature === "ai_text_to_audio";
+export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone"];
+export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" | "ai_voice_clone" {
+  return feature === "ai_character_replace" || feature === "ai_lip_sync" || feature === "ai_text_to_audio" || feature === "ai_voice_clone";
 }
 
 /**
@@ -369,9 +407,10 @@ export function isWalletFundedFeature(feature: string | null | undefined): featu
  * generation, a lip sync and each replacement scope are separate lines in
  * billing and analytics. Pure on the row: the feature, then the scope.
  */
-export type AiToolId = "text_to_audio" | "lip_sync" | "face_replace" | "face_skin_replace" | "upper_body_replace" | "character_replace" | "ai_clean_legacy" | "unknown";
+export type AiToolId = "text_to_audio" | "voice_clone" | "lip_sync" | "face_replace" | "face_skin_replace" | "upper_body_replace" | "character_replace" | "ai_clean_legacy" | "unknown";
 export function toolIdFor(row: { feature: string; metadata?: Record<string, unknown> | null }): AiToolId {
   if (row.feature === "ai_text_to_audio") return "text_to_audio";
+  if (row.feature === "ai_voice_clone") return "voice_clone";
   if (row.feature === "ai_lip_sync") return "lip_sync";
   if (row.feature === "ai_character_replace") {
     const mode = row.metadata?.mode;
@@ -417,6 +456,13 @@ export interface AiCapabilities {
   /** A Replicate token is configured. */
   replicate: boolean;
   /**
+   * An ElevenLabs key is configured (2026-09-27). Voice Cloning needs THIS and
+   * not Replicate: it is the first feature here whose provider is a different
+   * vendor, and gating it on the wrong one would answer wrongly in both
+   * directions.
+   */
+  elevenlabs: boolean;
+  /**
    * A worker that can run ffmpeg is reachable (lib/worker.ts).
    *
    * 🔴 Checked at CREATION, not at the end. Without it the pipeline would run
@@ -452,6 +498,10 @@ export function featureAvailability(
   feature: AiFeatureDef,
   caps: AiCapabilities,
 ): AiFeatureAvailability {
+  if (feature.requires === "elevenlabs" && !caps.elevenlabs) {
+    if (caps.allowUndispatched) return { available: true, dispatchable: false };
+    return { available: false, reason: "The AI service isn't connected yet." };
+  }
   if (feature.requires === "replicate" && !caps.replicate) {
     if (caps.allowUndispatched) return { available: true, dispatchable: false };
     return {
@@ -810,8 +860,31 @@ export interface AiJobView {
     /** The Audio Library row this job produced, once saved. */
     assetId: string | null;
   } | null;
+  /**
+   * Voice Cloning (2026-09-27): the facts the workspace and the Voice Library
+   * show. Never the provider, never the provider's voice id, never a path —
+   * and never the consent statement's own wording, which is the operator's
+   * record rather than something to re-show on a tile.
+   */
+  voiceClone?: {
+    name: string;
+    description: string;
+    sampleCount: number;
+    sampleSeconds: number | null;
+    chargedCents: number | null;
+    currency: string | null;
+    normalPriceCents: number | null;
+    billing: "FREE_ALLOWANCE" | "PAID" | "CREDITS" | null;
+    credits: number | null;
+    refunded: boolean;
+    /** Whether the month's free voice covered it. */
+    freeCovered: boolean;
+    /** The Voice Library row this job produced, once the voice exists. */
+    cloneId: string | null;
+    consentAt: string | null;
+  } | null;
 }
-/* `characterReplace` / `lipSync` / `textToAudio` are optional on the type so fixtures and other tools' views need not name them; the mapper always sets them. */
+/* `characterReplace` / `lipSync` / `textToAudio` / `voiceClone` are optional on the type so fixtures and other tools' views need not name them; the mapper always sets them. */
 
 /**
  * The row, reduced to what may leave the server.
@@ -884,6 +957,35 @@ export function jobToView(row: AiJobRow, errorMessageFor: (code: string) => stri
     characterReplace: characterReplaceView(row),
     lipSync: lipSyncView(row),
     textToAudio: textToAudioView(row),
+    voiceClone: voiceCloneView(row),
+  };
+}
+
+function voiceCloneView(row: AiJobRow): AiJobView["voiceClone"] {
+  const m = row.metadata;
+  if (!m || m.tool !== "voice_clone") return null;
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const quote = (m.quote ?? null) as { currency?: unknown; totalCents?: unknown; freeCovered?: unknown } | null;
+  const billing = (m.billing ?? null) as { type?: unknown; normalPriceCents?: unknown; credits?: unknown } | null;
+  const free = (m.free_clones ?? null) as { covered?: unknown } | null;
+  const samples = Array.isArray(m.samples) ? m.samples : [];
+  const consent = (m.consent ?? null) as { at?: unknown } | null;
+  const charged = row.charged_cents ?? null;
+  const covered = (num(free?.covered) ?? 0) > 0 || quote?.freeCovered === true;
+  return {
+    name: typeof m.name === "string" && m.name ? m.name : "Voice",
+    description: typeof m.description === "string" ? m.description : "",
+    sampleCount: samples.length,
+    sampleSeconds: num(m.sample_seconds),
+    chargedCents: charged,
+    currency: typeof quote?.currency === "string" ? quote.currency : null,
+    normalPriceCents: num(billing?.normalPriceCents) ?? num(quote?.totalCents) ?? charged,
+    billing: billing?.type === "FREE_ALLOWANCE" || row.funding_source === "free" ? "FREE_ALLOWANCE" : billing?.type === "CREDITS" || row.funding_source === "credits" ? "CREDITS" : billing?.type === "PAID" || row.funding_source === "balance" ? "PAID" : null,
+    credits: num(billing?.credits),
+    refunded: (row.status === "failed" || row.status === "cancelled" || row.status === "expired") && ((charged ?? 0) > 0 || covered),
+    freeCovered: covered,
+    cloneId: typeof m.clone_id === "string" ? m.clone_id : null,
+    consentAt: typeof consent?.at === "string" ? consent.at : null,
   };
 }
 

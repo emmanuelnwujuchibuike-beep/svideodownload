@@ -6,6 +6,7 @@ import { useState } from "react";
 import { formatCents } from "@/lib/ai/economy";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import { TEXT_TO_AUDIO_MODEL_IDS, type TextToAudioConfig, type TextToAudioRoute } from "@/lib/ai/text-to-audio/config";
+import { TTS_DELIVERIES, TTS_DELIVERY_LABEL, voiceSettingsCapability } from "@/lib/ai/voice/voice-settings";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,14 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
   const [voiceIds, setVoiceIds] = useState<string[]>([...cfg.voiceIds]);
   const [languageCodes, setLanguageCodes] = useState<string[]>([...cfg.languageCodes]);
   const [retention, setRetention] = useState(String(cfg.libraryRetentionDays));
+  /* 2026-09-27: the delivery — the dials that had never been sent (lib/ai/voice/voice-settings.ts). */
+  const [stability, setStability] = useState(String(cfg.voiceSettings.stability));
+  const [similarity, setSimilarity] = useState(String(cfg.voiceSettings.similarityBoost));
+  const [style, setStyle] = useState(String(cfg.voiceSettings.style));
+  const [speakerBoost, setSpeakerBoost] = useState(cfg.voiceSettings.speakerBoost);
+  const [speed, setSpeed] = useState(String(cfg.voiceSettings.speed));
+  const [deliveryChoice, setDeliveryChoice] = useState(cfg.deliveryChoice);
+  const [defaultDelivery, setDefaultDelivery] = useState(cfg.defaultDelivery);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -96,6 +105,15 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
         voiceIds,
         languageCodes,
         libraryRetentionDays: int(retention, cfg.libraryRetentionDays),
+        voiceSettings: {
+          stability: num(stability, cfg.voiceSettings.stability),
+          similarityBoost: num(similarity, cfg.voiceSettings.similarityBoost),
+          style: num(style, cfg.voiceSettings.style),
+          speakerBoost,
+          speed: num(speed, cfg.voiceSettings.speed),
+        },
+        deliveryChoice,
+        defaultDelivery,
       };
       const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzAiTextToAudio: payload }) });
       const json = await res.json().catch(() => ({}));
@@ -112,6 +130,10 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
   const select = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const usd = (c: number | null) => (c === null ? "—" : `$${(c / 100).toFixed(2)}`);
   const catalogue = voices.filter((v) => v.provider === (route === "replicate" ? "elevenlabs" : "elevenlabs_api"));
+  /* Which dials the ACTIVE model reads — the same function the adapters clamp with, so the panel cannot claim otherwise. */
+  const capability = voiceSettingsCapability(models[route].model);
+  const modelReads = ["stability" + (capability.stabilityChoices.length ? ` (${capability.stabilityChoices.join(" / ")} only)` : ""), "similarity", capability.style ? "expressiveness" : null, capability.speakerBoost ? "speaker boost" : null, capability.speed ? "speed" : null].filter((x): x is string => !!x);
+  const modelIgnores = [!capability.style ? "expressiveness" : null, !capability.speakerBoost ? "speaker boost" : null, !capability.speed ? "speed" : null].filter((x): x is string => !!x);
 
   return (
     <div className="space-y-6">
@@ -193,6 +215,59 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
               </Field>
               <Field label="Library retention (days)" hint="0 = keep for ever.">
                 <input inputMode="numeric" value={retention} onChange={(e) => setRetention(e.target.value)} className={input} />
+              </Field>
+            </div>
+          </div>
+
+          {/* ── 2026-09-27 · how it is delivered ─────────────────────────────
+              🔴 THE FIX FOR "SOUNDS LIKE AI". Owner, 2026-09-27: "i test the
+              text to speech now and i think is not realistic enough, sounds
+              like ai, isnt it the realistic multilingual v2 and v3?" It WAS v3.
+              What was missing was this whole block: both adapters used to send
+              the text and the model and nothing else, so every generation ran
+              at the provider's conservative defaults with the expressiveness
+              dial at ZERO — which is a reading, not a performance. */}
+          <div className="rounded-2xl border border-border/70 p-4">
+            <p className="text-sm font-semibold">How the voice is delivered</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              These decide whether a generation sounds like a person or like a reading. Before 2026-09-27 none of them were sent, so every generation used the provider&apos;s defaults with{" "}
+              <strong>expressiveness at zero</strong>. Lower stability = more variation and emotion; higher = steadier across a long text.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <Field label="Stability (0–1)" hint="v3 takes only 0, 0.5 or 1 — the nearest is sent.">
+                <input inputMode="decimal" value={stability} onChange={(e) => setStability(e.target.value)} className={input} />
+              </Field>
+              <Field label="Similarity (0–1)" hint="How closely it holds to the voice.">
+                <input inputMode="decimal" value={similarity} onChange={(e) => setSimilarity(e.target.value)} className={input} />
+              </Field>
+              <Field label="Expressiveness (0–1)" hint="0 is a reading. Not read by v3.">
+                <input inputMode="decimal" value={style} onChange={(e) => setStyle(e.target.value)} className={input} />
+              </Field>
+              <Field label="Speed (0.7–1.2)" hint="Turbo / Flash v2.5 only.">
+                <input inputMode="decimal" value={speed} onChange={(e) => setSpeed(e.target.value)} className={input} />
+              </Field>
+              <Field label="Speaker boost" hint="Clarity toward the voice. Not read by v3.">
+                <select value={speakerBoost ? "on" : "off"} onChange={(e) => setSpeakerBoost(e.target.value === "on")} className={select}>
+                  <option value="on">On</option>
+                  <option value="off">Off</option>
+                </select>
+              </Field>
+            </div>
+            {/* What the ACTIVE model actually reads — so a number typed into a field this model ignores is not a mystery. */}
+            <p className="mt-3 rounded-xl bg-secondary/60 px-3 py-2 text-[11px] text-muted-foreground">
+              <strong>{models[route].model}</strong> reads {modelReads.join(", ")}.
+              {modelIgnores.length ? ` It ignores ${modelIgnores.join(", ")} — those fields are left out of the request rather than sent.` : ""}
+            </p>
+            <div className="mt-4 space-y-3">
+              <Toggle label="Let members choose the delivery" hint="Offers Natural / Expressive / Calm in the workspace. Off: every generation uses the numbers above." checked={deliveryChoice} onChange={setDeliveryChoice} />
+              <Field label="Default delivery" hint="What a member gets before they choose — and what everyone gets when the choice is off.">
+                <select value={defaultDelivery} onChange={(e) => setDefaultDelivery(e.target.value as typeof defaultDelivery)} className={select}>
+                  {TTS_DELIVERIES.map((d) => (
+                    <option key={d} value={d}>
+                      {TTS_DELIVERY_LABEL[d].label} — {TTS_DELIVERY_LABEL[d].blurb}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
           </div>

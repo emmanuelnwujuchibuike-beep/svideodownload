@@ -44,9 +44,11 @@ import { cn } from "@/lib/utils";
  *
  * ── What the page says is what the product does ─────────────────────────────
  *
- * Voice CLONING is not offered (lib/ai/voice/tts-provider.ts §6) and there is
- * no text-to-audio tool, so neither is named: a card that leads nowhere is a
- * claim, not a feature. No provider or model is named on this page (Part 9 §7).
+ * Both of the things this note used to say were missing have shipped: Text to
+ * Audio (2026-09-21) and Voice Cloning (2026-09-27). The rule behind the note
+ * still holds and is the reason to keep reading it — a card that leads nowhere
+ * is a claim, not a feature, so nothing is named here until its page exists. No
+ * provider or model is named on this page (Part 9 §7).
  *
  * ── The performance rule ────────────────────────────────────────────────────
  *

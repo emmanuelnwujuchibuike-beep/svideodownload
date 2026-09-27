@@ -3,6 +3,7 @@ import "server-only";
 import { AiJobError } from "@/lib/ai/errors";
 import { elevenLabsConfigured, elevenLabsSpeechToSpeech } from "@/lib/ai/voice/elevenlabs";
 import { elevenLabsStsModel } from "@/lib/ai/voice/elevenlabs-models";
+import type { TtsVoiceSettings } from "@/lib/ai/voice/voice-settings";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -32,6 +33,8 @@ export interface VoiceChangeRequest {
   audioMime: string;
   /** The catalogue voice's provider id. */
   providerVoiceId: string;
+  /** 2026-09-27: the same delivery dials the text route now sends (lib/ai/voice/voice-settings.ts). */
+  voiceSettings?: TtsVoiceSettings | null;
 }
 
 export interface VoiceChangeProvider {
@@ -57,7 +60,7 @@ export function elevenLabsVoiceChangeProvider(model: string): VoiceChangeProvide
     async convert(req) {
       if (!spec || !elevenLabsConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `voice-change model ${model} is not configured`);
       if (!req.providerVoiceId) throw new AiJobError("INVALID_INPUT", "a voice change needs the catalogue's provider voice id");
-      return elevenLabsSpeechToSpeech({ audio: req.audio, audioMime: req.audioMime, filename: "voice.wav", modelId: spec.modelId, providerVoiceId: req.providerVoiceId });
+      return elevenLabsSpeechToSpeech({ audio: req.audio, audioMime: req.audioMime, filename: "voice.wav", modelId: spec.modelId, providerVoiceId: req.providerVoiceId, voiceSettings: req.voiceSettings ?? null });
     },
   };
 }

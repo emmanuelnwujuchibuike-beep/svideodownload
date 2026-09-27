@@ -17,13 +17,16 @@ import { claimJobStart, createJob, findJobByRequestId, getOwnJob, revertJobStart
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import { openProviderRun } from "@/lib/ai/providers/runs";
 import { subjectOwnerId, type AiSubject } from "@/lib/ai/subject";
-import { catalogueProviderForRoute, resolveTextToAudioRoute, type TextToAudioResolvedRoute } from "@/lib/ai/text-to-audio/route";
+import { catalogueProviderForRoute, resolveTextToAudioRoute, routeAllowsClones, type TextToAudioResolvedRoute } from "@/lib/ai/text-to-audio/route";
+import { touchVoiceClone } from "@/lib/ai/voice-clone/clones";
+import { cloneIdFromVoiceId, isCloneVoiceId } from "@/lib/ai/voice-clone/usable";
 import { finalizeTextToAudioJob, runDirectTextToAudio } from "@/lib/ai/text-to-audio/finalize";
 import { consumeFreeCharacters, readFreeCharacters } from "@/lib/ai/text-to-audio/free";
 import { defaultAudioName } from "@/lib/ai/text-to-audio/job-meta";
 import { countTextToAudioCharacters, publicTextToAudioQuote, quoteTextToAudio, textToAudioCredits, textToAudioMonthKey, type TextToAudioQuote } from "@/lib/ai/text-to-audio/pricing";
 import type { CreateTextToAudioJobRequest } from "@/lib/ai/text-to-audio/schemas";
 import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
+import { voiceSettingsForDelivery, type TtsDelivery } from "@/lib/ai/voice/voice-settings";
 import { getLandingSettings, type LandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -130,22 +133,49 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
     console.info("[tta/generate] policy block", policyBlockEvent(policy.reason, subject.key));
     return refuse("POLICY_BLOCKED");
   }
+  /*
+    ── 2026-09-27 · the member's own voice ───────────────────────────────────
+    A `clone:<uuid>` id is looked up in THEIR library, scoped by their user id
+    (lib/ai/voice-clone/usable.ts explains why the prefix is a boundary rather
+    than a convenience). Somebody else's clone, a half-made one and a deleted
+    one all answer as no voice at all — and the Replicate route refuses the
+    idea outright, because a clone has no name in its fixed enum.
+  */
+  let clone: { id: string; name: string; providerVoiceId: string } | null = null;
+  if (isCloneVoiceId(body.voiceId)) {
+    if (!routeAllowsClones(resolved.route)) return refuse("INVALID_INPUT", { error: "Your own voices aren't available right now. Choose one of the voices offered." });
+    if (!settings.frenzAiVoiceClone.enabled) return refuse("INVALID_INPUT", { error: "Your own voices aren't available right now. Choose one of the voices offered." });
+    const id = cloneIdFromVoiceId(body.voiceId!);
+    const { resolveOwnClone } = await import("@/lib/ai/voice-clone/clones");
+    const row = id ? await resolveOwnClone(ownerId, id) : null;
+    if (!row) return refuse("INVALID_INPUT", { error: "That voice isn't in your library any more. Choose another." });
+    clone = { id: row.id, name: row.name, providerVoiceId: row.provider_voice_id };
+  }
   // the voice and the language, from the catalogue only (§ "never trusted from the browser")
   const catalogueProvider = catalogueProviderForRoute(resolved.route);
-  const voice = body.voiceId ? cr.voices.find((v) => v.id === body.voiceId && v.provider === catalogueProvider) : null;
-  if (body.voiceId && !voice) return refuse("INVALID_INPUT", { error: "Choose one of the voices offered." });
+  const voice = !clone && body.voiceId ? cr.voices.find((v) => v.id === body.voiceId && v.provider === catalogueProvider) : null;
+  if (!clone && body.voiceId && !voice) return refuse("INVALID_INPUT", { error: "Choose one of the voices offered." });
   if (voice && config.voiceIds.length && !config.voiceIds.includes(voice.id)) return refuse("INVALID_INPUT", { error: "Choose one of the voices offered." });
-  if (!voice) {
+  if (!clone && !voice) {
     // the Replicate model needs a voice NAME and the direct API a voice id — neither has a "default" this product sends blind
     const first = cr.voices.find((v) => v.provider === catalogueProvider && (!config.voiceIds.length || config.voiceIds.includes(v.id)));
     if (!first) return refuse("FEATURE_UNAVAILABLE", { error: "No voice is set up for this tool yet." });
     return refuse("INVALID_INPUT", { error: "Choose a voice.", voiceRequired: true, suggestedVoiceId: first.id });
   }
-  const language = (body.languageCode ?? voice.languages[0] ?? "en").toLowerCase();
+  const language = (body.languageCode ?? voice?.languages[0] ?? "en").toLowerCase();
   if (!resolved.provider.supportedLanguages().includes(language)) return refuse("INVALID_INPUT", { error: "That language isn't offered right now." });
-  if (voice.languages.length && !voice.languages.includes(language)) return refuse("INVALID_INPUT", { error: "That voice doesn't speak that language." });
+  // a clone is not limited to one language: the model speaks it in every language it knows
+  if (voice && voice.languages.length && !voice.languages.includes(language)) return refuse("INVALID_INPUT", { error: "That voice doesn't speak that language." });
   if (config.languageCodes.length && !config.languageCodes.includes(language)) return refuse("INVALID_INPUT", { error: "That language isn't offered right now." });
   const name = (body.name ?? defaultAudioName(text)).slice(0, 120);
+  /*
+    2026-09-27: HOW it is spoken. The member names a delivery; the numbers are
+    the operator's, resolved here and written on the row, so the audio and the
+    record agree. With the choice switched off the operator's default applies
+    to everyone — a browser cannot opt into a delivery that is not offered.
+  */
+  const delivery: TtsDelivery = (config.deliveryChoice ? (body.delivery ?? config.defaultDelivery) : config.defaultDelivery) as TtsDelivery;
+  const voiceSettings = voiceSettingsForDelivery(config.voiceSettings, delivery);
 
   /* ── the breaker, before any money moves ──────────────────────────────── */
   if (cr.ops.circuitBreaker.enabled) {
@@ -223,9 +253,12 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
     characters,
     name,
     save: body.save !== false,
-    voiceId: voice.id,
-    providerVoiceId: voice.providerVoiceId || null,
+    voiceId: clone ? body.voiceId! : voice!.id,
+    providerVoiceId: clone ? clone.providerVoiceId : voice!.providerVoiceId || null,
+    clone_id: clone?.id ?? null,
     languageCode: language,
+    delivery,
+    voice_settings: voiceSettings,
     route: resolved.route,
     model: resolved.model,
     quote,
@@ -316,7 +349,9 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
     console.error("[tta/generate] submit failed", { jobId: job.id, route: resolved.route, code: submitted.code, detail: submitted.detail.slice(0, 300) });
     return refuse(submitted.code === "FEATURE_UNAVAILABLE" ? "FEATURE_UNAVAILABLE" : "PROVIDER_UNAVAILABLE", { error: UNAVAILABLE });
   }
-  console.info("[tta/generate] funded and submitted", { jobId: job.id, userId: ownerId, route: resolved.route, model: resolved.model, characters, freeCovered: taken.covered, chargedCents: free || useCredits ? 0 : quote.totalCents, billing, credits: creditDecision?.estimate.creditsRequired ?? null });
+  // "last used" in the Voice Library, and the operator's view of which slots are dead weight. Never able to fail a generation.
+  if (clone) void touchVoiceClone(clone.id).catch(() => null);
+  console.info("[tta/generate] funded and submitted", { jobId: job.id, userId: ownerId, route: resolved.route, model: resolved.model, characters, freeCovered: taken.covered, ownVoice: !!clone, chargedCents: free || useCredits ? 0 : quote.totalCents, billing, credits: creditDecision?.estimate.creditsRequired ?? null });
   const fresh = (await getOwnJob(subject, job.id)) ?? claimed;
   return { ok: true, job: fresh, created: true, billing, balanceCents: balanceAfter, credits: creditDecision ? creditDecisionView(creditDecision) : null, freeCharactersUsed: taken.covered };
 }
@@ -333,13 +368,14 @@ async function submitTextToAudio(job: AiJobRow, resolved: TextToAudioResolvedRou
   const text = typeof meta.text === "string" ? meta.text : "";
   const providerVoiceId = typeof meta.providerVoiceId === "string" ? meta.providerVoiceId : null;
   const languageCode = typeof meta.languageCode === "string" ? meta.languageCode : "en";
+  const voiceSettings = readVoiceSettings(meta.voice_settings);
   const test = (meta.provider_plan as { test?: unknown } | null)?.test === true;
   const startedAt = Date.now();
   if (resolved.route === "replicate") {
     const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? SITE_URL ?? opts.origin).replace(/\/$/, "");
     let sub: Awaited<ReturnType<typeof resolved.provider.createPrediction>>;
     try {
-      sub = await resolved.provider.createPrediction({ jobId: job.id, text, languageCode, providerVoiceId, webhookUrl: `${origin}/api/ai/replicate/webhook` });
+      sub = await resolved.provider.createPrediction({ jobId: job.id, text, languageCode, providerVoiceId, voiceSettings, webhookUrl: `${origin}/api/ai/replicate/webhook` });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       return { ok: false, code: /not configured|no text-to-speech adapter/i.test(detail) ? "FEATURE_UNAVAILABLE" : "PROVIDER_ERROR", detail };
@@ -363,6 +399,18 @@ async function submitTextToAudio(job: AiJobRow, resolved: TextToAudioResolvedRou
     }
   });
   return { ok: true };
+}
+
+/**
+ * The delivery numbers as they were written on the row. A row from before
+ * 2026-09-27 has none, and answers null — the provider's own defaults, which
+ * is exactly what that row was generated with the first time.
+ */
+function readVoiceSettings(raw: unknown): { stability: number; similarityBoost: number; style: number; speakerBoost: boolean; speed: number } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const n = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
+  return { stability: n(r.stability, 0.45), similarityBoost: n(r.similarityBoost, 0.8), style: n(r.style, 0.35), speakerBoost: r.speakerBoost !== false, speed: n(r.speed, 1) };
 }
 
 /** Load what the routes share; the admin flag decides the test mark and the concurrency tier. */

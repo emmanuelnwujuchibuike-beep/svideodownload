@@ -9,7 +9,8 @@ import { publicTextToAudioConfig } from "@/lib/ai/text-to-audio/config";
 import { readFreeCharacters } from "@/lib/ai/text-to-audio/free";
 import { modelCharacterCeiling, textToAudioGate } from "@/lib/ai/text-to-audio/generate";
 import { textToAudioMonthKey } from "@/lib/ai/text-to-audio/pricing";
-import { textToAudioVoices } from "@/lib/ai/text-to-audio/route";
+import { routeAllowsClones, textToAudioVoices } from "@/lib/ai/text-to-audio/route";
+import { usableCloneOptions } from "@/lib/ai/voice-clone/usable";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 
@@ -37,11 +38,17 @@ export async function GET(request: Request) {
     const paused = gate.code === "CR_BUSY" || gate.code === "CR_MAINTENANCE";
     const pub = publicTextToAudioConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, gate.resolved.enabled && gate.resolved.configured && entitlement.allowed);
     const { voices, languages } = textToAudioVoices(config, settings.frenzAiCharacterReplace, gate.resolved);
+    /*
+      2026-09-27: the member's own cloned voices, FIRST in the list — they made
+      them, they are looking for them. Only on the direct route, which is the
+      only one that can speak one (lib/ai/voice-clone/usable.ts).
+    */
+    const own = subject.kind === "user" ? await usableCloneOptions(subjectOwnerId(subject), { allowed: routeAllowsClones(gate.resolved.route) && settings.frenzAiVoiceClone.enabled }) : [];
     const monthKey = textToAudioMonthKey(new Date(), settings.frenzAiPlans.reset.timezone);
     const free = subject.kind === "user" ? await readFreeCharacters(subjectOwnerId(subject), monthKey, config.freeCharactersPerMonth) : { allowance: 0, used: 0, remaining: 0, monthKey };
     const reason = gate.ok ? null : typeof gate.extra?.error === "string" ? gate.extra.error : gate.code === "CR_BUSY" ? "Processing is paused for a moment." : gate.code === "CR_MAINTENANCE" ? "Frenz AI is under maintenance." : !config.enabled ? "Text to Audio is not available right now." : "Text to Audio is temporarily unavailable.";
     return NextResponse.json({
-      config: { ...pub, maximumCharacters: Math.min(pub.maximumCharacters, modelCharacterCeiling(gate.resolved.model)), voices, languages },
+      config: { ...pub, maximumCharacters: Math.min(pub.maximumCharacters, modelCharacterCeiling(gate.resolved.model)), voices: [...own, ...voices], languages },
       free: { allowance: free.allowance, used: free.used, remaining: free.remaining, monthKey: free.monthKey },
       available: gate.ok,
       unavailableReason: reason,

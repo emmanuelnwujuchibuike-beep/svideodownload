@@ -7,6 +7,7 @@ import type { AiProvidersPanelProps } from "@/features/admin/ai-providers-settin
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
+import type { VoiceCloneAdminStats } from "@/lib/ai/voice-clone/admin";
 import type { LandingSettings } from "@/lib/landing/settings";
 
 /*
@@ -105,6 +106,13 @@ const TextToAudioSettings = dynamic(() => import("@/features/admin/text-to-audio
 
 export function TextToAudioSettingsLazy(props: { settings: LandingSettings; stats: TextToAudioAdminStats | null; voices: { id: string; label: string; provider: string }[]; languages: { code: string; label: string }[] }) {
   return <TextToAudioSettings {...props} />;
+}
+
+// Voice Cloning (2026-09-27): AI → Voice Cloning — the slots, the price, the recordings, the consent wording, the live-voice figures.
+const VoiceCloneSettings = dynamic(() => import("@/features/admin/voice-clone-settings").then((m) => m.VoiceCloneSettingsPanel), { loading: skeleton("Loading Voice Cloning") });
+
+export function VoiceCloneSettingsLazy(props: { settings: LandingSettings; stats: VoiceCloneAdminStats | null }) {
+  return <VoiceCloneSettings {...props} />;
 }
 
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {

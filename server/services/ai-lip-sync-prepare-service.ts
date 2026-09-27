@@ -141,7 +141,8 @@ export async function prepareLipSyncJob(jobId: string): Promise<PrepareOutcome> 
         const ttsFile = path.join(dir, "voice-tts.bin");
         let made: { bytes: Buffer; mime: string };
         try {
-          made = await tts.synthesize({ jobId: job.id, text: meta.speech.text, languageCode: meta.speech.languageCode ?? "en", providerVoiceId: meta.speech.providerVoiceId });
+          // 2026-09-27: the same delivery dials as every other spoken line (lib/ai/voice/voice-settings.ts)
+          made = await tts.synthesize({ jobId: job.id, text: meta.speech.text, languageCode: meta.speech.languageCode ?? "en", providerVoiceId: meta.speech.providerVoiceId, voiceSettings: config.tts.voiceSettings });
         } catch (e) {
           await recordJobEvent(job.id, "audio.rejected", { code: "TTS_FAILED", detail: String(e).slice(0, 200), source: "tts", provider: tts.id });
           const userSide = e instanceof ElevenLabsError && e.kind === "input";

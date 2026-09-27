@@ -19,6 +19,8 @@ import type { TextToAudioQuote } from "@/lib/ai/text-to-audio/pricing";
  *   voiceId           catalogue id (null = the provider's default voice)
  *   providerVoiceId   the provider's own id/name for it (server-resolved)
  *   languageCode      BCP-47 primary subtag
+ *   delivery          natural | expressive | calm — the member's choice
+ *   voice_settings    what that resolved to, as the provider was told it
  *   route             replicate | elevenlabs — decided ONCE at Generate
  *   model             the model id under that route
  *   quote             the priced facts (lib/ai/text-to-audio/pricing.ts)
@@ -37,9 +39,14 @@ export const textToAudioMetaSchema = z
     name: z.string().min(1).max(120),
     voiceId: z.string().max(80).nullable(),
     providerVoiceId: z.string().max(200).nullable(),
+    /** 2026-09-27: the member's own voice, when that is what spoke (lib/ai/voice-clone/usable.ts). */
+    clone_id: z.string().uuid().nullable().optional(),
     languageCode: z.string().max(16).nullable(),
     route: z.enum(["replicate", "elevenlabs"]),
     model: z.string().min(1).max(120),
+    /** 2026-09-27: the delivery the member chose, and the numbers it resolved to — what the provider was actually told. */
+    delivery: z.enum(["natural", "expressive", "calm"]).nullable().optional(),
+    voice_settings: z.object({ stability: z.number(), similarityBoost: z.number(), style: z.number(), speakerBoost: z.boolean(), speed: z.number() }).passthrough().nullable().optional(),
     quote: z.custom<TextToAudioQuote>((v) => !!v && typeof v === "object" && typeof (v as { totalCents?: unknown }).totalCents === "number").nullable(),
     billing: z
       .object({

@@ -45,7 +45,7 @@ export interface LipSyncAudio {
 
 export type LaunchPhase = { phase: "idle" } | { phase: "creating" } | { phase: "uploading"; progress: number } | { phase: "starting" } | { phase: "error"; code: string; message: string; extra?: Record<string, unknown> };
 
-export function useLipSyncWorkspace(opts: { initialJobId?: string | null; initialAssetId?: string | null }) {
+export function useLipSyncWorkspace(opts: { initialJobId?: string | null; initialAssetId?: string | null; initialVoiceId?: string | null }) {
   const [config, setConfig] = useState<LipSyncConfigAnswer | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [video, setVideo] = useState<LipSyncVideo | null>(null);
@@ -53,7 +53,8 @@ export function useLipSyncWorkspace(opts: { initialJobId?: string | null; initia
   const [trimStartMs, setTrimStartMs] = useState(0);
   const [source, setSourceState] = useState<SpeechSource>(opts.initialAssetId ? "library" : "text");
   const [text, setText] = useState("");
-  const [voiceId, setVoiceId] = useState<string | null>(null);
+  // 2026-09-27: a cloned voice arrives preselected from the Voice Library; the server resolves it against that member's own rows.
+  const [voiceId, setVoiceId] = useState<string | null>(opts.initialVoiceId ?? null);
   const [languageCode, setLanguageCode] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [audio, setAudio] = useState<LipSyncAudio | null>(null);

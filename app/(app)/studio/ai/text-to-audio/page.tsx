@@ -15,13 +15,26 @@ export const metadata: Metadata = { title: "Text to Audio" };
  *
  * `?job=` opens a past generation (the push and the history tile both use it).
  */
-export default async function StudioTextToAudioPage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
+export default async function StudioTextToAudioPage({ searchParams }: { searchParams: Promise<{ job?: string; voice?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/text-to-audio");
-  const { job } = await searchParams;
+  const { job, voice } = await searchParams;
   const initialJobId = typeof job === "string" && /^[0-9a-fA-F-]{36}$/.test(job) ? job : null;
-  return <TextToAudioWorkspace basePath="/studio/ai/text-to-audio" aiHref="/studio/ai" libraryHref="/studio/ai/audio" lipSyncHref="/studio/ai/lip-sync" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" initialJobId={initialJobId} />;
+  // 2026-09-27: "Make audio with it" from the Voice Library arrives as ?voice=clone:<uuid>
+  const initialVoiceId = typeof voice === "string" && /^clone:[0-9a-fA-F-]{36}$/.test(voice) ? voice : null;
+  return (
+    <TextToAudioWorkspace
+      basePath="/studio/ai/text-to-audio"
+      aiHref="/studio/ai"
+      libraryHref="/studio/ai/audio"
+      lipSyncHref="/studio/ai/lip-sync"
+      historyHref="/studio/ai/history"
+      usageHref="/studio/ai/usage"
+      initialJobId={initialJobId}
+      initialVoiceId={initialVoiceId}
+    />
+  );
 }

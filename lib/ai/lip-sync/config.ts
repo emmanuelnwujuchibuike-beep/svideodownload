@@ -1,3 +1,5 @@
+import { normalizeTtsVoiceSettings, TTS_VOICE_SETTINGS_DEFAULTS, type TtsVoiceSettings } from "@/lib/ai/voice/voice-settings";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  LIP SYNC PRO — the operator's configuration (pure: types, defaults, bounds,
@@ -76,7 +78,7 @@ export interface LipSyncProConfig {
   audioMode: { enabled: boolean; formats: readonly string[]; maximumDurationSeconds: number; maximumUploadBytes: number };
   video: { maximumDurationSeconds: number; minimumDurationSeconds: number; maximumUploadBytes: number; maximumPixels: number };
   /** §5: the voice provider for the text → audio path. LOCKED to ElevenLabs; the model is chosen from the Character Replace TTS catalogue's model list. */
-  tts: { provider: "elevenlabs"; model: string; perRequestCents: number; perCharacterCents: number; providerCostPerCharacterUsdCents: number };
+  tts: { provider: "elevenlabs"; model: string; perRequestCents: number; perCharacterCents: number; providerCostPerCharacterUsdCents: number; voiceSettings: TtsVoiceSettings };
   /** Catalogue ids (Character Replace's voices/languages) offered here; empty = every enabled one. */
   voiceIds: readonly string[];
   languageCodes: readonly string[];
@@ -148,7 +150,8 @@ export const LIP_SYNC_DEFAULTS: LipSyncProConfig = {
   textMode: { enabled: true, minimumCharacters: 1, maximumCharacters: 1_200, speed: { min: 0.8, max: 2.0, default: 1.0 } },
   audioMode: { enabled: true, formats: ["mp3", "wav", "m4a", "aac", "ogg"], maximumDurationSeconds: 120, maximumUploadBytes: 25 * 1024 * 1024 },
   video: { maximumDurationSeconds: 60, minimumDurationSeconds: 1, maximumUploadBytes: 50 * 1024 * 1024, maximumPixels: 1920 * 1080 },
-  tts: { provider: "elevenlabs", model: "elevenlabs/eleven_v3", perRequestCents: 0, perCharacterCents: 0, providerCostPerCharacterUsdCents: 0 },
+  // 2026-09-27: voiceSettings — the delivery dials. Before that date every spoken line ran at the provider defaults with expressiveness at ZERO (lib/ai/voice/voice-settings.ts).
+  tts: { provider: "elevenlabs", model: "elevenlabs/eleven_v3", perRequestCents: 0, perCharacterCents: 0, providerCostPerCharacterUsdCents: 0, voiceSettings: TTS_VOICE_SETTINGS_DEFAULTS },
   voiceIds: [],
   languageCodes: [],
   expression: { enabled: true, default: "balanced", temperature: { natural: 0.3, balanced: 0.5, expressive: 0.8 } },
@@ -237,6 +240,7 @@ export function normalizeLipSyncConfig(raw: unknown): LipSyncProConfig {
       perRequestCents: int(tts.perRequestCents, d.tts.perRequestCents, LIP_SYNC_BOUNDS.cents.min, LIP_SYNC_BOUNDS.cents.max),
       perCharacterCents: num(tts.perCharacterCents, d.tts.perCharacterCents, LIP_SYNC_BOUNDS.cents.min, LIP_SYNC_BOUNDS.cents.max),
       providerCostPerCharacterUsdCents: num(tts.providerCostPerCharacterUsdCents, d.tts.providerCostPerCharacterUsdCents, 0, 1000),
+      voiceSettings: normalizeTtsVoiceSettings(tts.voiceSettings, d.tts.voiceSettings),
     },
     voiceIds: ids(raw.voiceIds, d.voiceIds),
     languageCodes: ids(raw.languageCodes, d.languageCodes),

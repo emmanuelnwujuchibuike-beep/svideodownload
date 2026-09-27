@@ -358,6 +358,9 @@ export function resultSuffixFor(feature: string): string {
       return "cleaned";
     case "ai_text_to_audio":
       return "audio";
+    // a clone produces no file — the name exists only so nothing has to special-case it
+    case "ai_voice_clone":
+      return "voice";
     default:
       return "frenz-ai";
   }

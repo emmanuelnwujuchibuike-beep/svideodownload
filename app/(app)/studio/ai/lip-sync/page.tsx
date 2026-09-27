@@ -13,14 +13,16 @@ export const metadata: Metadata = { title: "Lip Sync Pro" };
  * sign-in and back. Never static under the studio (the cookie-reading layout
  * would prerender the redirect).
  */
-export default async function StudioLipSyncPage({ searchParams }: { searchParams: Promise<{ audio?: string }> }) {
+export default async function StudioLipSyncPage({ searchParams }: { searchParams: Promise<{ audio?: string; voice?: string }> }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/lip-sync");
   // 2026-09-21: "Use in Lip Sync Pro" from the Audio Library arrives as ?audio=<assetId>
-  const { audio } = await searchParams;
+  const { audio, voice } = await searchParams;
   const initialAssetId = typeof audio === "string" && /^[0-9a-fA-F-]{36}$/.test(audio) ? audio : null;
-  return <LipSyncWorkspace basePath="/studio/ai/lip-sync" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" audioHref="/studio/ai/audio" initialAssetId={initialAssetId} />;
+  // 2026-09-27: "Use in Lip Sync Pro" from the Voice Library arrives as ?voice=clone:<uuid>
+  const initialVoiceId = typeof voice === "string" && /^clone:[0-9a-fA-F-]{36}$/.test(voice) ? voice : null;
+  return <LipSyncWorkspace basePath="/studio/ai/lip-sync" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" audioHref="/studio/ai/audio" initialAssetId={initialAssetId} initialVoiceId={initialVoiceId} />;
 }

@@ -32,7 +32,7 @@ const feature = aiFeature("ai_character_replace")!;
 
 describe("the feature registry", () => {
   it("has Character Replace first, then the standalone tools (2026-09-21), and nothing else", () => {
-    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio"]);
+    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone"]);
     expect(primaryAiFeature().id).toBe("ai_character_replace");
   });
 
@@ -64,7 +64,7 @@ describe("the feature registry", () => {
 });
 
 describe("featureAvailability", () => {
-  const ready = { replicate: true, finalizer: true, allowUndispatched: false };
+  const ready = { replicate: true, elevenlabs: true, finalizer: true, allowUndispatched: false };
 
   it("🔴 refuses when no provider is configured", () => {
     const verdict = featureAvailability(feature, { ...ready, replicate: false });
@@ -103,7 +103,7 @@ describe("featureAvailability", () => {
     // A job may be created for testing, and the response still says out loud
     // that nothing will run it.
     expect(
-      featureAvailability(feature, { replicate: false, finalizer: false, allowUndispatched: true }),
+      featureAvailability(feature, { replicate: false, elevenlabs: true, finalizer: false, allowUndispatched: true }),
     ).toEqual({ available: true, dispatchable: false });
   });
 });

@@ -178,6 +178,14 @@ export const OWNER_COLUMN: Record<string, string> = {
   ai_audio_assets: "user_id",
   ai_tta_free_usage: "user_id",
   /*
+    Voice Cloning (0171). An export carries the member's own facts — the names,
+    the dates, the rights record they signed, how much audio each voice was built
+    from. `provider_voice_id` is a vendor handle rather than anything about them,
+    and is filtered out with the other provider columns.
+  */
+  ai_voice_clones: "user_id",
+  ai_vc_free_usage: "user_id",
+  /*
     Every complimentary creation you used (0162): the job, which of your free
     uses it was, the normal price you were NOT charged, and whether it was
     delivered or restored. About you, ours to hand over.

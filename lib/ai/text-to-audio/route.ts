@@ -57,6 +57,17 @@ export interface TextToAudioPublicVoice {
   languages: readonly string[];
   gender: string;
   age?: string;
+  /** 2026-09-27: one of the member's own cloned voices (lib/ai/voice-clone/usable.ts), not a catalogue row. */
+  own?: boolean;
+}
+
+/**
+ * Whether this route can speak a member's CLONED voice. Only the direct API
+ * can: the Replicate wrapper takes one of 26 fixed voice NAMES, and a clone
+ * has none of them. Pure, and the one answer both the offer and the check read.
+ */
+export function routeAllowsClones(route: TextToAudioRoute): boolean {
+  return route === "elevenlabs";
 }
 
 /** The voices and languages the active route can honour, filtered by the operator's allow-lists. Never a provider id. */

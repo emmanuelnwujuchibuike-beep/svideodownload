@@ -221,6 +221,8 @@ export function historyTitleFor(feature: AiFeature): string {
       return "Lip Sync Pro video";
     case "ai_text_to_audio":
       return "Text to Audio";
+    case "ai_voice_clone":
+      return "Voice clone";
     case "ai_clean":
       return "Cleaned video";
     default:
@@ -260,6 +262,11 @@ export function historyResultSentence(job: AiJobView): string {
     const t = job.textToAudio;
     const secs = t?.durationMs ? ` ${(t.durationMs / 1000).toFixed(t.durationMs % 1000 ? 1 : 0)} s of audio.` : "";
     return `${t?.name ? `"${t.name}" — ` : ""}${t?.characters ?? 0} characters spoken.${secs}`;
+  }
+  if (job.feature === "ai_voice_clone") {
+    const v = job.voiceClone;
+    const secs = v?.sampleSeconds ? ` from ${Math.round(v.sampleSeconds)} s of audio.` : ".";
+    return `${v?.name ? `"${v.name}" — ` : ""}a voice you own${secs}`;
   }
   if (job.feature === "ai_clean") {
     return job.result.audioRestored === true

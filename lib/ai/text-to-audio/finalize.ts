@@ -68,7 +68,8 @@ export async function runDirectTextToAudio(jobId: string): Promise<TextToAudioFi
   const startedAt = Date.now();
   let audio: { bytes: Buffer; mime: string };
   try {
-    audio = await provider.synthesize({ jobId: job.id, text: meta.text, languageCode: meta.languageCode ?? "en", providerVoiceId: meta.providerVoiceId });
+    // 2026-09-27: the delivery the row recorded — absent on a row from before that date, which then gets the provider's defaults as it always did
+    audio = await provider.synthesize({ jobId: job.id, text: meta.text, languageCode: meta.languageCode ?? "en", providerVoiceId: meta.providerVoiceId, voiceSettings: meta.voice_settings ?? null });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     await openProviderRun({ jobId: job.id, userId: job.user_id, feature: "ai_text_to_audio", mode: "text_to_audio", stage: "voice", provider: "elevenlabs", model: meta.model, modelVersion: provider.version || null, providerJobId: `tta:${job.id}`, test: (job.metadata?.provider_plan as { test?: unknown } | null)?.test === true, latencyMs: Date.now() - startedAt, status: "failed", errorCode: "VOICE_GENERATION_FAILED", errorDetail: detail.slice(0, 500), costEstimateUsdCents: meta.quote?.providerCostEstimateUsdCents ?? null, metadata: { characters: meta.characters } });

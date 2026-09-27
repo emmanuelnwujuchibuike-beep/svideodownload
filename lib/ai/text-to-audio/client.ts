@@ -39,6 +39,8 @@ export interface TtaVoiceOption {
   languages: readonly string[];
   gender: string;
   age?: string;
+  /** 2026-09-27: one of the member's own cloned voices, so the picker can group them apart from the catalogue. */
+  own?: boolean;
 }
 export interface TtaLanguageOption {
   code: string;
@@ -93,6 +95,8 @@ export function generateTextToAudio(input: {
   name?: string;
   voiceId?: string | null;
   languageCode?: string | null;
+  /** 2026-09-27: Natural / Expressive / Calm — a name, never the numbers. */
+  delivery?: "natural" | "expressive" | "calm" | null;
   quote?: { totalCents: number; pricingConfigVersion: number };
   funding?: "credits" | "wallet";
   save?: boolean;

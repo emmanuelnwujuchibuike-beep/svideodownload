@@ -54,6 +54,9 @@ export type AiJobEventKind =
   | "advance.completed"
   | "advance.failed"
   | "advance.retry_scheduled"
+  /* Voice Cloning, 2026-09-27: the voice was made, refused, or removed again */
+  | "clone.created"
+  | "clone.refused"
   /* Part 7: what the member did with the result */
   | "result.saved"
   | "result.unsaved"

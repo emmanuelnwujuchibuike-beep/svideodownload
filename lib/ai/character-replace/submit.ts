@@ -127,7 +127,8 @@ export async function submitCharacterReplaceJob(
     if (!provider.supportedLanguages().includes(tts.languageCode)) throw new AiJobError("INVALID_INPUT", `language ${tts.languageCode} is not spoken by ${config.tts.model}`);
     // Part 8 §7: under the breaker — refused while the model's circuit is open, scored after.
     const sub = await withCircuit(provider.model, config.ops.circuitBreaker, () =>
-      provider.createPrediction({ jobId: fresh.id, text: tts.text, languageCode: tts.languageCode, providerVoiceId: tts.providerVoiceId, webhookUrl }),
+      // 2026-09-27: the delivery goes with the text — without it the model reads the line out (lib/ai/voice/voice-settings.ts)
+      provider.createPrediction({ jobId: fresh.id, text: tts.text, languageCode: tts.languageCode, providerVoiceId: tts.providerVoiceId, voiceSettings: config.tts.voiceSettings, webhookUrl }),
     );
     created = { reference: sub.reference, model: sub.model, modelVersion: sub.modelVersion, settings: sub.settings, mergeAudio: false };
   } else if (stage === "replace") {

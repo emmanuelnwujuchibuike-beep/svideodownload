@@ -6,11 +6,13 @@ import {
   ChevronRight,
   History,
   Mic,
+  Mic2,
   PersonStanding,
   ScanFace,
   Shirt,
   Type,
   UserRound,
+  UserRoundCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -38,12 +40,18 @@ import { cn } from "@/lib/utils";
  * Transformation tools (the four scopes) — each a first-class door. Text to
  * Audio is not a prerequisite for Lip Sync, and Lip Sync is not a sub-feature
  * of Character Replace: the old "Lip Sync" / "Text to Speech" scroll-to-scope
- * buttons are gone; Voice Replace stays a step of a creation. Voice CLONING is
- * not offered. No provider or model is named. AI Clean is not a card.
+ * buttons are gone; Voice Replace stays a step of a creation. No provider or
+ * model is named. AI Clean is not a card.
+ *
+ * 2026-09-27: VOICE CLONING is an Audio tool with a door of its own, and the
+ * member's Voice Library sits beside it. This note used to say cloning was not
+ * offered; the owner asked for it and it shipped as its own standalone tool.
  */
 export type AiToolId =
   | "text_to_audio"
   | "audio_library"
+  | "voice_clone"
+  | "voice_library"
   | "lip_sync_pro"
   | "face_only"
   | "skin_face"
@@ -87,12 +95,14 @@ export function aiToolCards(
   characterReplaceHref: string,
   historyHref: string,
   /** 2026-09-21: the standalone tools' doors, derived from the Character Replace href's root (`/ai` or `/studio/ai`) when a host does not pass them. */
-  doors: { lipSyncHref?: string; textToAudioHref?: string; audioLibraryHref?: string } = {},
+  doors: { lipSyncHref?: string; textToAudioHref?: string; audioLibraryHref?: string; voiceCloneHref?: string; voiceLibraryHref?: string } = {},
 ): AiToolCard[] {
   const root = characterReplaceHref.replace(/\/character-replace$/, "");
   const lipSyncHref = doors.lipSyncHref ?? `${root}/lip-sync`;
   const textToAudioHref = doors.textToAudioHref ?? `${root}/text-to-audio`;
   const audioLibraryHref = doors.audioLibraryHref ?? `${root}/audio`;
+  const voiceCloneHref = doors.voiceCloneHref ?? `${root}/voice-cloning`;
+  const voiceLibraryHref = doors.voiceLibraryHref ?? `${root}/voices`;
   const create = `${characterReplaceHref}/create`;
   const audio: AiToolCard[] = AUDIO_TOOLS_OPEN
     ? [
@@ -108,6 +118,17 @@ export function aiToolCards(
           group: "audio",
         },
         {
+          id: "voice_clone",
+          icon: Mic2,
+          tint: "bg-rose-500/[0.10] text-rose-600 dark:text-rose-300",
+          name: "Voice Cloning",
+          blurb: "Clone a voice you own and type with it anywhere.",
+          href: voiceCloneHref,
+          scope: false,
+          flow: false,
+          group: "audio",
+        },
+        {
           id: "audio_library",
           icon: AudioLines,
           tint: "bg-teal-500/[0.10] text-teal-600 dark:text-teal-300",
@@ -117,6 +138,17 @@ export function aiToolCards(
           scope: false,
           flow: false,
           group: "audio",
+        },
+        {
+          id: "voice_library",
+          icon: UserRoundCheck,
+          tint: "bg-emerald-500/[0.10] text-emerald-600 dark:text-emerald-300",
+          name: "Your Voices",
+          blurb: "The voices you have cloned, ready to speak.",
+          href: voiceLibraryHref,
+          scope: false,
+          flow: false,
+          group: "library",
         },
       ]
     : [];

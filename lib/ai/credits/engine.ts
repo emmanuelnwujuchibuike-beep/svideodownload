@@ -104,6 +104,10 @@ function labelMode(mode: string | null | undefined): string {
       return "Upper Body";
     case "full_character":
       return "Full Character";
+    case "voice_clone":
+      return "Voice clone";
+    case "text_to_audio":
+      return "Text to Audio";
     default:
       return mode ? mode.replace(/_/g, " ") : "Generation";
   }

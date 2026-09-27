@@ -1,3 +1,5 @@
+import { isTtsDelivery, normalizeTtsVoiceSettings, TTS_VOICE_SETTINGS_DEFAULTS, type TtsDelivery, type TtsVoiceSettings } from "@/lib/ai/voice/voice-settings";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  TEXT TO AUDIO — the operator's configuration (pure)
@@ -59,6 +61,20 @@ export interface TextToAudioConfig {
   languageCodes: readonly string[];
   /** How long a saved audio asset is kept; 0 = for ever. */
   libraryRetentionDays: number;
+  /**
+   * 🔴 2026-09-27 — THE SETTINGS THAT WERE NEVER SENT.
+   *
+   * Owner: "i test the text to speech now and i think is not realistic
+   * enough, sounds like ai." It was v3; what was missing was this. Until this
+   * field existed every generation ran at the provider's own defaults, with
+   * the expressiveness dial at zero. lib/ai/voice/voice-settings.ts explains
+   * which model reads which of these numbers.
+   */
+  voiceSettings: TtsVoiceSettings;
+  /** Whether a member may choose Natural / Expressive / Calm. Off = every generation uses the numbers above. */
+  deliveryChoice: boolean;
+  /** What a member gets when they choose nothing (and what everyone gets when the choice is off). */
+  defaultDelivery: TtsDelivery;
   pricingVersion: number;
   pricingUpdatedAt: string | null;
   version: number;
@@ -97,6 +113,9 @@ export const TEXT_TO_AUDIO_DEFAULTS: TextToAudioConfig = {
   voiceIds: [],
   languageCodes: [],
   libraryRetentionDays: 0,
+  voiceSettings: TTS_VOICE_SETTINGS_DEFAULTS,
+  deliveryChoice: true,
+  defaultDelivery: "natural",
   pricingVersion: 1,
   pricingUpdatedAt: null,
   version: 1,
@@ -145,6 +164,9 @@ export function normalizeTextToAudioConfig(raw: unknown): TextToAudioConfig {
     voiceIds: ids(raw.voiceIds, d.voiceIds),
     languageCodes: ids(raw.languageCodes, d.languageCodes),
     libraryRetentionDays: int(raw.libraryRetentionDays, d.libraryRetentionDays, TEXT_TO_AUDIO_BOUNDS.retentionDays.min, TEXT_TO_AUDIO_BOUNDS.retentionDays.max),
+    voiceSettings: normalizeTtsVoiceSettings(raw.voiceSettings, d.voiceSettings),
+    deliveryChoice: bool(raw.deliveryChoice, d.deliveryChoice),
+    defaultDelivery: isTtsDelivery(raw.defaultDelivery) ? raw.defaultDelivery : d.defaultDelivery,
     pricingVersion: int(raw.pricingVersion, d.pricingVersion, 1, 1_000_000_000),
     pricingUpdatedAt: typeof raw.pricingUpdatedAt === "string" ? raw.pricingUpdatedAt : null,
     version: int(raw.version, d.version, 1, 1_000_000_000),
@@ -158,7 +180,7 @@ export function textToAudioPricingFingerprint(c: TextToAudioConfig): string {
   return stable({ models: TEXT_TO_AUDIO_ROUTES.map((r) => [r, c.models[r].perCharacterCents, c.models[r].perRequestCents, c.models[r].qualityMultiplier, c.models[r].creditMultiplier]), minimum: c.minimumChargeCents, free: c.freeCharactersPerMonth });
 }
 export function textToAudioFingerprint(c: TextToAudioConfig): string {
-  return stable({ enabled: c.enabled, route: c.route, models: TEXT_TO_AUDIO_ROUTES.map((r) => [r, c.models[r].model, c.models[r].enabled]), chars: [c.minimumCharacters, c.maximumCharacters], free: c.freeCharactersPerMonth, voices: c.voiceIds, languages: c.languageCodes, retention: c.libraryRetentionDays });
+  return stable({ enabled: c.enabled, route: c.route, models: TEXT_TO_AUDIO_ROUTES.map((r) => [r, c.models[r].model, c.models[r].enabled]), chars: [c.minimumCharacters, c.maximumCharacters], free: c.freeCharactersPerMonth, voices: c.voiceIds, languages: c.languageCodes, retention: c.libraryRetentionDays, delivery: [c.voiceSettings, c.deliveryChoice, c.defaultDelivery] });
 }
 export function versionTextToAudioConfig(previous: TextToAudioConfig, next: TextToAudioConfig, now: Date = new Date()): TextToAudioConfig {
   const priced = textToAudioPricingFingerprint(previous) !== textToAudioPricingFingerprint(next);
@@ -180,6 +202,9 @@ export interface TextToAudioPublicConfig {
   freeCharactersPerMonth: number;
   /** "from $0.005 per character" — a sentence, server-formatted. */
   priceLine: string | null;
+  /** 2026-09-27: whether the workspace offers Natural / Expressive / Calm, and which one starts selected. */
+  deliveryChoice: boolean;
+  defaultDelivery: TtsDelivery;
   pricingVersion: number;
 }
 
@@ -187,5 +212,5 @@ export function publicTextToAudioConfig(c: TextToAudioConfig, currency: { code: 
   const m = c.models[c.route];
   const perChar = m.perCharacterCents * m.qualityMultiplier;
   const priceLine = perChar > 0 ? `${currency.symbol}${(perChar / 100).toFixed(perChar >= 100 ? 2 : 3).replace(/0+$/, "").replace(/\.$/, "")} per character` : m.perRequestCents > 0 ? `${currency.symbol}${(m.perRequestCents / 100).toFixed(2)} per generation` : null;
-  return { enabled: c.enabled && usable, currency: currency.code, symbol: currency.symbol, minimumCharacters: c.minimumCharacters, maximumCharacters: c.maximumCharacters, freeCharactersPerMonth: c.freeCharactersPerMonth, priceLine, pricingVersion: c.pricingVersion };
+  return { enabled: c.enabled && usable, currency: currency.code, symbol: currency.symbol, minimumCharacters: c.minimumCharacters, maximumCharacters: c.maximumCharacters, freeCharactersPerMonth: c.freeCharactersPerMonth, priceLine, deliveryChoice: c.deliveryChoice, defaultDelivery: c.defaultDelivery, pricingVersion: c.pricingVersion };
 }

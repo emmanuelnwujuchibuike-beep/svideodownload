@@ -40,8 +40,27 @@ import { cn } from "@/lib/utils";
  * (§12): expression only where the model has a temperature, active speaker
  * only where it can detect one, speed only where it means something.
  */
-export function LipSyncWorkspace({ basePath, aiHref, historyHref, usageHref, initialJobId = null, initialAssetId = null, audioHref }: { basePath: string; aiHref: string; historyHref: string; usageHref: string; initialJobId?: string | null; initialAssetId?: string | null; audioHref?: string }) {
-  const ws = useLipSyncWorkspace({ initialJobId, initialAssetId });
+export function LipSyncWorkspace({
+  basePath,
+  aiHref,
+  historyHref,
+  usageHref,
+  initialJobId = null,
+  initialAssetId = null,
+  initialVoiceId = null,
+  audioHref,
+}: {
+  basePath: string;
+  aiHref: string;
+  historyHref: string;
+  usageHref: string;
+  initialJobId?: string | null;
+  initialAssetId?: string | null;
+  /** 2026-09-27: a cloned voice preselected from the Voice Library (the server resolves it against the member's own rows). */
+  initialVoiceId?: string | null;
+  audioHref?: string;
+}) {
+  const ws = useLipSyncWorkspace({ initialJobId, initialAssetId, initialVoiceId });
   const cfg = ws.config?.config ?? null;
   const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);

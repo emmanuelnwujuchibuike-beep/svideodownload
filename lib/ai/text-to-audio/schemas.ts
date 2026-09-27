@@ -25,6 +25,12 @@ export const createTextToAudioJobSchema = z
     name: audioName.optional(),
     voiceId: z.string().max(80).nullable().optional(),
     languageCode: z.string().max(16).nullable().optional(),
+    /**
+     * 2026-09-27: how it should be delivered. A NAME, never the numbers —
+     * stability and style are the operator's, resolved server-side
+     * (lib/ai/voice/voice-settings.ts). An unknown name does not parse.
+     */
+    delivery: z.enum(["natural", "expressive", "calm"]).nullable().optional(),
     /** What the member was shown; Generate recomputes and refuses a difference (PRICE_CHANGED). */
     quote: z.object({ totalCents: z.number().int().nonnegative(), pricingConfigVersion: z.number().int().positive() }).strict().optional(),
     funding: z.enum(["credits", "wallet"]).optional(),

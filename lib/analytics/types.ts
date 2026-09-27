@@ -158,6 +158,15 @@ export type AnalyticsEventType =
   | "text_to_audio_generate_clicked"
   | "text_to_audio_played"
   | "audio_library_reused"
+  /**
+   * Voice Cloning (2026-09-27): a clone pressed, one deleted, one reused in
+   * another tool. COUNTS ONLY — never a name, never a voice id, never a
+   * filename. A cloned voice identifies a person, so nothing about which voice
+   * it was leaves the browser.
+   */
+  | "voice_clone_started"
+  | "voice_clone_deleted"
+  | "voice_clone_reused"
   | "character_replace_video_played"
   | "character_replace_download_clicked"
   | "character_replace_saved"

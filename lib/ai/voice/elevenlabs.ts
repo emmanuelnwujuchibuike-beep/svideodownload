@@ -1,5 +1,7 @@
 import "server-only";
 
+import { clampVoiceSettings, type ClampedVoiceSettings, type TtsVoiceSettings } from "@/lib/ai/voice/voice-settings";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  ELEVENLABS — the HTTP client. Text → speech, speech → speech, the voice list
@@ -139,17 +141,31 @@ export interface ElevenLabsTtsInput {
   text: string;
   model_id: string;
   language_code?: string;
+  /**
+   * 🔴 ADDED 2026-09-27, and the reason the voice sounded like a reading.
+   *
+   * Owner: "i test the text to speech now and i think is not realistic
+   * enough, sounds like ai." The model was v3 all along; THIS FIELD WAS
+   * ABSENT, so every generation ran at the provider's conservative defaults
+   * with the expressiveness dial (`style`) at ZERO — a perfect model reading
+   * a sentence the way a screen reader does. lib/ai/voice/voice-settings.ts
+   * owns the numbers and knows what each model actually reads;
+   * `clampVoiceSettings` DROPS a field the model does not take rather than
+   * sending one it would refuse (v3's stability is a choice of three).
+   */
+  voice_settings?: ClampedVoiceSettings;
 }
 
 /** Pure, exposed for tests: exactly what the API is sent. */
-export function buildElevenLabsTtsBody(req: { text: string; modelId: string; languageCode: string | null; languageCodeParam: boolean }): ElevenLabsTtsInput {
+export function buildElevenLabsTtsBody(req: { text: string; modelId: string; languageCode: string | null; languageCodeParam: boolean; voiceSettings?: TtsVoiceSettings | null }): ElevenLabsTtsInput {
   const body: ElevenLabsTtsInput = { text: req.text, model_id: req.modelId };
   // v3 and Multilingual v2 refuse the parameter; Turbo/Flash v2.5 take it.
   if (req.languageCodeParam && req.languageCode) body.language_code = req.languageCode.toLowerCase();
+  if (req.voiceSettings) body.voice_settings = clampVoiceSettings(req.voiceSettings, req.modelId);
   return body;
 }
 
-export async function elevenLabsTextToSpeech(req: { text: string; modelId: string; providerVoiceId: string; languageCode: string | null; languageCodeParam: boolean }): Promise<{ bytes: Buffer; mime: "audio/mpeg" }> {
+export async function elevenLabsTextToSpeech(req: { text: string; modelId: string; providerVoiceId: string; languageCode: string | null; languageCodeParam: boolean; voiceSettings?: TtsVoiceSettings | null }): Promise<{ bytes: Buffer; mime: "audio/mpeg" }> {
   const voice = encodeURIComponent(req.providerVoiceId);
   const res = await call(
     `/text-to-speech/${voice}?output_format=${OUTPUT_FORMAT}`,
@@ -161,10 +177,12 @@ export async function elevenLabsTextToSpeech(req: { text: string; modelId: strin
 
 /* ───────────────────────────── speech → speech ───────────────────────────── */
 
-export async function elevenLabsSpeechToSpeech(req: { audio: Buffer; filename: string; audioMime: string; modelId: string; providerVoiceId: string }): Promise<{ bytes: Buffer; mime: "audio/mpeg" }> {
+export async function elevenLabsSpeechToSpeech(req: { audio: Buffer; filename: string; audioMime: string; modelId: string; providerVoiceId: string; voiceSettings?: TtsVoiceSettings | null }): Promise<{ bytes: Buffer; mime: "audio/mpeg" }> {
   const voice = encodeURIComponent(req.providerVoiceId);
   const form = new FormData();
   form.set("model_id", req.modelId);
+  // the voice changer reads the same dials (2026-09-27). Multipart, so the object goes as a JSON string.
+  if (req.voiceSettings) form.set("voice_settings", JSON.stringify(clampVoiceSettings(req.voiceSettings, req.modelId)));
   form.set("audio", new Blob([new Uint8Array(req.audio)], { type: req.audioMime }), req.filename);
   const res = await call(`/speech-to-speech/${voice}?output_format=${OUTPUT_FORMAT}`, { method: "POST", headers: { Accept: "audio/mpeg" }, body: form }, "speech-to-speech");
   return { bytes: await readBody(res), mime: "audio/mpeg" };
@@ -195,4 +213,86 @@ export async function elevenLabsListVoices(): Promise<ElevenLabsVoiceRow[]> {
     out.push({ voiceId: r.voice_id, name: r.name, category: typeof r.category === "string" ? r.category : "", description: typeof r.description === "string" ? r.description : "", labels });
   }
   return out;
+}
+
+/* ───────────────────────────── voice cloning (2026-09-27) ────────────────── */
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  ADD, EDIT AND REMOVE A VOICE — instant voice cloning
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-09-27: "next lets build the standalone voice cloning." This
+ * REVERSES a standing rule written in this file's neighbours — voice cloning
+ * used to be "not a workflow this product has" (lib/ai/voice/tts-provider.ts
+ * §6). It is one now, and it is a product of its own with its own consent
+ * record (lib/ai/voice-clone/*).
+ *
+ * `POST /v1/voices/add` is multipart: a name, some labels, and one `files`
+ * part per sample. It answers with a `voice_id` — and that id is the whole
+ * point, because from then on it is just another voice the text-to-speech and
+ * voice-changer calls above can be pointed at.
+ *
+ * ── 🔴 A SLOT IS OCCUPIED UNTIL SOMETHING DELETES IT ────────────────────────
+ * Every clone holds a voice slot on OUR account, shared by every member. That
+ * is why `elevenLabsDeleteVoice` exists and why the delete path calls it before
+ * it touches our own row: a soft-deleted row with a live provider voice behind
+ * it is a slot nobody can ever reclaim, and slots are what run out.
+ */
+export interface ElevenLabsClonedVoice {
+  voiceId: string;
+  name: string;
+  /** The provider's own preview, when it returns one. Not relied upon: the member's first sample is our preview. */
+  previewUrl: string | null;
+}
+
+export interface ElevenLabsVoiceSample {
+  bytes: Buffer;
+  filename: string;
+  mime: string;
+}
+
+export async function elevenLabsAddVoice(req: { name: string; description: string; samples: readonly ElevenLabsVoiceSample[]; labels?: Record<string, string> }): Promise<ElevenLabsClonedVoice> {
+  if (req.samples.length === 0) throw new ElevenLabsError("input", null, "add-voice: no samples");
+  const form = new FormData();
+  form.set("name", req.name.slice(0, 100));
+  if (req.description.trim()) form.set("description", req.description.trim().slice(0, 500));
+  if (req.labels && Object.keys(req.labels).length > 0) form.set("labels", JSON.stringify(req.labels));
+  // one `files` part per sample — the API reads them as one voice, not as several
+  for (const s of req.samples) form.append("files", new Blob([new Uint8Array(s.bytes)], { type: s.mime }), s.filename);
+  const res = await call("/voices/add", { method: "POST", headers: { Accept: "application/json" }, body: form }, "add-voice");
+  const json = (await res.json()) as { voice_id?: unknown; name?: unknown; preview_url?: unknown; requires_verification?: unknown };
+  if (typeof json.voice_id !== "string" || !json.voice_id) throw new ElevenLabsError("provider", res.status, "add-voice: no voice_id in the answer");
+  return {
+    voiceId: json.voice_id,
+    name: typeof json.name === "string" && json.name ? json.name : req.name,
+    previewUrl: typeof json.preview_url === "string" && json.preview_url ? json.preview_url : null,
+  };
+}
+
+/**
+ * Rename a clone at the provider, so the account stays readable to whoever
+ * looks after it. Best-effort by design: our row is the name the member sees,
+ * and a failure here must never make a rename fail for them.
+ */
+export async function elevenLabsEditVoice(req: { voiceId: string; name: string; description: string }): Promise<void> {
+  const form = new FormData();
+  form.set("name", req.name.slice(0, 100));
+  if (req.description.trim()) form.set("description", req.description.trim().slice(0, 500));
+  await call(`/voices/${encodeURIComponent(req.voiceId)}/edit`, { method: "POST", headers: { Accept: "application/json" }, body: form }, "edit-voice");
+}
+
+/**
+ * Remove a clone and free its slot. A 404 is SUCCESS: the voice is already
+ * gone, which is the state the caller wanted, and treating it as a failure
+ * would strand our row for ever behind a provider object that does not exist.
+ */
+export async function elevenLabsDeleteVoice(voiceId: string): Promise<{ deleted: boolean; alreadyGone: boolean }> {
+  try {
+    await call(`/voices/${encodeURIComponent(voiceId)}`, { method: "DELETE", headers: { Accept: "application/json" } }, "delete-voice");
+    return { deleted: true, alreadyGone: false };
+  } catch (e) {
+    if (e instanceof ElevenLabsError && e.status === 404) return { deleted: true, alreadyGone: true };
+    throw e;
+  }
 }

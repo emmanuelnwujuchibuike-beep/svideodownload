@@ -187,6 +187,15 @@ export function collectPhotos(html: string): PhotoCandidate[] {
   for (const raw of html.match(/https:\/\/[a-z0-9.\-]*fbcdn\.net\/v\/[^"'\\ )]{20,600}/gi) ?? []) {
     const url = unescapeJsonUrl(raw.replace(/&amp;/g, "&"));
     if (/\/t39\.30808-1\//.test(url)) continue; // profile picture, not post media
+    /*
+      🔴 t15.5256 IS A VIDEO'S POSTER FRAME (2026-09-27). Owner: "Facebook video
+      post fetch as image". A video share link whose page carries no
+      `playable_url` fell through to the photo path, which happily collected the
+      video's own thumbnail and offered it as "Photo" — so pressing download on a
+      video handed over a JPEG. The cover frame of a video is not a photo post
+      any more than a poster is a film.
+    */
+    if (/\/t15\.5256[-.]/.test(url)) continue;
     const photoId = photoIdOf(url);
     if (!photoId) continue;
     if (seen.has(url)) continue;
@@ -259,6 +268,64 @@ export function mergePhotos(renders: { html: string }[]): MediaFormat[] {
 
   const ordered = [...best.values()].sort((a, b) => a.order - b.order);
   return ordered.map((c, i) => toImageFormat(c, i, ordered.length));
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  A SHARE LINK IS A STUB, AND THE REAL POST IS ONE HOP AWAY (2026-09-27)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner: "Facebook video post fetch as image", with
+ * `facebook.com/share/v/1SAHjVRasA/`.
+ *
+ * Measured on that exact link, from three User-Agents:
+ *
+ *   desktop  400, 1.5 kB      — the WAF, as the header note says
+ *   crawler  200, 459 kB      — no `playable_url` … but
+ *                               `canonical = web.facebook.com/reel/1113603304429770/`
+ *   mobile   200, 3.3 kB      — a stub, canonical `/posts/…/1721540142666158/`
+ *
+ * So the media never was on the share page. The page's own `canonical` names
+ * the real permalink, and asking production for THAT url returns `[video] fb-hd`
+ * — a proper HD video. The share page, meanwhile, carries the video's poster
+ * frame, which the photo fallback then served as the download.
+ *
+ * 🔴 ONLY A VIDEO-SHAPED CANONICAL IS FOLLOWED. A photo post's canonical also
+ * differs from its share link (`/posts/…` above), and the photo path already
+ * works — following every canonical would spend a second round trip on posts
+ * that are already correct, and risk regressing the album merge for no gain.
+ * One hop, video permalinks only, never recursing.
+ */
+const VIDEO_PERMALINK = /\/(?:reel|videos|watch)\b|\/watch\/?\?v=/i;
+
+/** The permalink a render declares for itself, if it is a video one. */
+export function videoCanonicalOf(htmls: string[], current: string): string | null {
+  const here = canonicalKey(current);
+  for (const html of htmls) {
+    const candidates = [
+      html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1],
+      metaContent(html, "og:url"),
+    ];
+    for (const raw of candidates) {
+      if (!raw) continue;
+      const url = unescapeJsonUrl(raw.replace(/&amp;/g, "&"));
+      if (!/^https?:\/\//i.test(url)) continue;
+      if (!VIDEO_PERMALINK.test(url)) continue;
+      if (canonicalKey(url) === here) continue;
+      return url;
+    }
+  }
+  return null;
+}
+
+/** Host and path only, so `web.` vs `www.` and tracking params do not read as a different page. */
+function canonicalKey(url: string): string {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^(?:web|m|www)\./i, "")}${u.pathname.replace(/\/+$/, "")}`.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
 }
 
 /** Fetch one render. Never throws — a dead render must not sink the others. */
@@ -457,6 +524,8 @@ export const facebookExtractor: Extractor = {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let htmls: string[];
+    /* The url the media actually lives at — a share link is replaced by its own canonical below. */
+    let mediaUrl = url;
     try {
       /*
         Desktop FIRST and alone when it succeeds.
@@ -484,6 +553,44 @@ export const facebookExtractor: Extractor = {
 
     if (htmls.length === 0) {
       throw new ExtractionError("Facebook refused every request for this post");
+    }
+
+    /*
+      ── THE CANONICAL HOP (2026-09-27) ────────────────────────────────────
+      A `/share/v/…` page carries no `playable_url` — only the video's poster
+      frame and a `canonical` pointing at the real permalink. Without this,
+      the photo fallback below served that poster frame as "Photo" and the
+      owner pressed download on a video and got a JPEG.
+
+      One hop, only when NO video was found and only to a video permalink
+      (see `videoCanonicalOf`). The renders from the hop REPLACE the stub's,
+      because the stub has nothing worth merging.
+    */
+    if (buildFormats(htmls.find((h) => buildFormats(h).length > 0) ?? "").length === 0) {
+      const canonical = videoCanonicalOf(htmls, url);
+      if (canonical) {
+        const hop = new AbortController();
+        const hopTimer = setTimeout(() => hop.abort(), TIMEOUT_MS);
+        try {
+          const desktop = await render(canonical, DESKTOP_UA, hop.signal);
+          const hopHtmls =
+            desktop && buildFormats(desktop).length > 0
+              ? [desktop]
+              : (
+                  await Promise.all([
+                    Promise.resolve(desktop),
+                    render(canonical, CRAWLER_UA, hop.signal),
+                    render(canonical, MOBILE_UA, hop.signal),
+                  ])
+                ).filter((h): h is string => h !== null);
+          if (hopHtmls.some((h) => buildFormats(h).length > 0)) {
+            htmls = hopHtmls;
+            mediaUrl = canonical;
+          }
+        } finally {
+          clearTimeout(hopTimer);
+        }
+      }
     }
 
     // Story tray FIRST — see the module doc above `tryStorySlides`. Only
@@ -528,13 +635,34 @@ export const facebookExtractor: Extractor = {
       slide `tryStorySlides` worked to recover. A multi-slide result beats a
       higher-bitrate single one here.
     */
-    if (!storySlides && formats[0]?.kind === "video" && !formats.some((f) => f.formatId === "fb-hd")) {
+    /*
+      🔴 THE GUARD USED TO READ `formats[0]?.kind === "video"` (2026-09-27).
+      That is why a video share link never reached yt-dlp: the photo fallback
+      had already produced an IMAGE, so the condition was false and the
+      thumbnail shipped as the answer. A video url that came back with no
+      video is exactly the case that most needs yt-dlp — it is now the first
+      reason to try it, not a reason to skip it.
+    */
+    const looksLikeVideo = VIDEO_PERMALINK.test(url) || /\/share\/(?:v|r)\//i.test(url);
+    const noVideoFound = !formats.some((f) => f.kind === "video");
+    const sdOnly = formats[0]?.kind === "video" && !formats.some((f) => f.formatId === "fb-hd");
+    if (!storySlides && (sdOnly || (looksLikeVideo && noVideoFound))) {
       try {
-        const yt = await ytdlpExtract(url);
+        const yt = await ytdlpExtract(mediaUrl);
         if (yt.formats.length > 0) return yt;
       } catch {
-        /* yt-dlp failed too — the SD direct URL below is still a real download */
+        /* yt-dlp failed too — whatever was found below is still better than nothing */
       }
+    }
+
+    /*
+      🔴 A THUMBNAIL IS NOT THE VIDEO. If the link names a video and all we
+      have is its poster frame, handing that over is worse than failing: the
+      member gets a file, believes it worked, and finds a still image. The
+      caller's chain and the failure copy can say something true instead.
+    */
+    if (looksLikeVideo && noVideoFound) {
+      throw new ExtractionError("Facebook served only this video's cover image — the video itself is login-walled or region-blocked");
     }
 
     // Metadata from the richest render that has each field — the crawler page is
@@ -560,7 +688,8 @@ export const facebookExtractor: Extractor = {
       uploadDate: null,
       viewCount: null,
       likeCount: null,
-      webpageUrl: url,
+      // the canonical hop may have moved us: `sourceUrl` stays what the member pasted, this is where the media actually lives
+      webpageUrl: mediaUrl,
       formats,
       extractor: "facebook",
     };

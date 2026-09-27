@@ -8,6 +8,7 @@ import {
   mergePhotos,
   photoIdOf,
   tryStorySlides,
+  videoCanonicalOf,
 } from "./facebook";
 
 /**
@@ -303,5 +304,67 @@ describe("tryStorySlides", () => {
   it("never throws on a malformed URL", () => {
     expect(() => tryStorySlides("not a url", ["<html></html>"])).not.toThrow();
     expect(tryStorySlides("not a url", ["<html></html>"])).toBeNull();
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  A VIDEO SHARE LINK CAME BACK AS A PHOTO (owner, 2026-09-27)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * "And Facebook video post fetch as image" —
+ * https://www.facebook.com/share/v/1SAHjVRasA/?mibextid=wwXIfr
+ *
+ * Reproduced against production: that link returned exactly ONE format,
+ * `[image] fb-img-0 Photo`. Measured from the three renders of the share page
+ * on 2026-09-27:
+ *
+ *   desktop  400, 1.5 kB   — the WAF
+ *   crawler  200, 459 kB   — no playable_url, but canonical =
+ *                            web.facebook.com/reel/1113603304429770/
+ *   mobile   200, 3.3 kB   — a stub, canonical /posts/…/1721540142666158/
+ *
+ * Asking production for that canonical reel returned `[video] fb-hd HD`. So the
+ * video was always one hop away, and the thing being served instead was the
+ * video's own poster frame, scraped by the photo fallback.
+ */
+describe("a video share link resolves to its real permalink", () => {
+  const CRAWLER = `<link rel="canonical" href="https://web.facebook.com/reel/1113603304429770/" /><meta property="og:url" content="https://web.facebook.com/reel/1113603304429770/" />`;
+  const MOBILE = `<meta property="og:url" content="https://www.facebook.com/sirbaloclinic/posts/truck-of-rice/1721540142666158/" />`;
+  const SHARE = "https://www.facebook.com/share/v/1SAHjVRasA/?mibextid=wwXIfr";
+
+  it("finds the reel permalink the share page declares", () => {
+    expect(videoCanonicalOf([CRAWLER, MOBILE], SHARE)).toBe("https://web.facebook.com/reel/1113603304429770/");
+  });
+
+  /* A photo post's canonical also differs from its share link — following that
+     would spend a round trip on a path that already works. Video permalinks only. */
+  it("ignores a canonical that is not a video permalink", () => {
+    expect(videoCanonicalOf([MOBILE], SHARE)).toBeNull();
+  });
+
+  it("does not hop to the page it is already on, whatever the host prefix says", () => {
+    const here = `<link rel="canonical" href="https://web.facebook.com/reel/1113603304429770/" />`;
+    expect(videoCanonicalOf([here], "https://www.facebook.com/reel/1113603304429770")).toBeNull();
+    expect(videoCanonicalOf([here], "https://m.facebook.com/reel/1113603304429770/?x=1")).toBeNull();
+  });
+
+  it("ignores junk and relative hrefs rather than fetching them", () => {
+    expect(videoCanonicalOf([`<link rel="canonical" href="/reel/123/" />`], SHARE)).toBeNull();
+    expect(videoCanonicalOf([`<link rel="canonical" href="javascript:alert(1)" />`], SHARE)).toBeNull();
+    expect(videoCanonicalOf([""], SHARE)).toBeNull();
+  });
+
+  /* 🔴 The other half of the bug: even with the hop, the photo fallback must
+     not offer a video's cover frame as a downloadable picture. */
+  it("never collects a video's poster frame as a photo", () => {
+    const poster = "https://scontent-iad6-1.xx.fbcdn.net/v/t15.5256-10/803266466_950734544053895_9018415258452378980_n.jpg?_nc_cat=109&stp=dst-jpg_s640x640";
+    expect(photoIdOf(poster)).not.toBeNull(); // it LOOKS like a photo…
+    expect(collectPhotos(`<img src="${poster}">`)).toHaveLength(0); // …but it is a cover frame
+  });
+
+  it("still collects a real post photo from the same CDN", () => {
+    const real = "https://scontent-iad6-1.xx.fbcdn.net/v/t39.35426-6/111111111_222222222_333333333_n.jpg?stp=dst-jpg_s600x600";
+    expect(collectPhotos(`<img src="${real}">`)).toHaveLength(1);
   });
 });

@@ -3,6 +3,7 @@
 import { getClient } from "@/lib/supabase/client-lazy";
 
 import { clearAiBalanceCache } from "@/lib/ai/balance-cache";
+import { clearAiViewCache } from "@/lib/ai/view-cache";
 import { clearCharacterReplaceBalanceCache } from "@/lib/ai/character-replace/client";
 import { clearAiEntitlementCache } from "@/lib/ai/entitlement-cache";
 import { clearAiHistoryCache } from "@/lib/ai/history-cache";
@@ -53,6 +54,7 @@ export async function signOutClient(): Promise<void> {
   */
   clearAiHistoryCache();
   clearAiBalanceCache(); // the same rule, for the balance snapshot (2026-09-13)
+  clearAiViewCache(); // and every AI page's remembered answer (2026-09-27)
   clearAiEntitlementCache(); // and the plan/allowance snapshot (2026-09-13)
   clearCharacterReplaceBalanceCache(); // and the Character Replace wallet snapshot (Part 3)
 

@@ -2,8 +2,9 @@
 
 import { AudioLines, Mic, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useCachedView } from "@/features/ai/core/use-cached-view";
 import { AudioAssetPlayer } from "@/features/ai/text-to-audio/audio-player";
 import { deleteAudioAsset, listAudioLibrary, renameAudioAsset, type AudioAssetItem } from "@/lib/ai/text-to-audio/client";
 import { track } from "@/lib/analytics/client";
@@ -22,16 +23,18 @@ import { cn } from "@/lib/utils";
  * scroll.
  */
 export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string; lipSyncHref: string; aiHref: string }) {
-  const [state, setState] = useState<{ status: "loading" } | { status: "ready"; assets: AudioAssetItem[] } | { status: "error"; message: string }>({ status: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
+  /* Remembered on the device — same reasoning as the Voice Library beside it. */
+  const view = useCachedView<AudioAssetItem[]>("audio-library", async () => {
     const res = await listAudioLibrary(100);
-    setState(res.ok ? { status: "ready", assets: res.assets } : { status: "error", message: res.error });
-  }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+    return res.ok ? { ok: true as const, value: res.assets } : { ok: false as const, error: res.error };
+  });
+  const load = view.refresh;
+  const state: { status: "loading" } | { status: "ready"; assets: AudioAssetItem[] } | { status: "error"; message: string } = view.data
+    ? { status: "ready", assets: view.data }
+    : view.error
+      ? { status: "error", message: view.error }
+      : { status: "loading" };
 
   const rename = useCallback(async (asset: AudioAssetItem) => {
     const next = window.prompt("Name this audio", asset.name);
@@ -41,8 +44,8 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
     setBusy(asset.id);
     const res = await renameAudioAsset(asset.id, name);
     setBusy(null);
-    if (res.ok) setState((s) => (s.status === "ready" ? { status: "ready", assets: s.assets.map((a) => (a.id === asset.id ? res.asset : a)) } : s));
-  }, []);
+    if (res.ok && view.data) view.set(view.data.map((a) => (a.id === asset.id ? res.asset : a)));
+  }, [view]);
 
   const remove = useCallback(async (asset: AudioAssetItem) => {
     if (!window.confirm(`Delete "${asset.name}"? This cannot be undone.`)) return;
@@ -50,8 +53,8 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
     setBusy(asset.id);
     const res = await deleteAudioAsset(asset.id);
     setBusy(null);
-    if (res.ok && res.deleted) setState((s) => (s.status === "ready" ? { status: "ready", assets: s.assets.filter((a) => a.id !== asset.id) } : s));
-  }, []);
+    if (res.ok && res.deleted && view.data) view.set(view.data.filter((a) => a.id !== asset.id));
+  }, [view]);
 
   return (
     <div className="pb-24">

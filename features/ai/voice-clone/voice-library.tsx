@@ -2,8 +2,9 @@
 
 import { AudioLines, Mic, Pencil, Plus, ShieldCheck, Sparkles, Trash2, Type } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
+import { useCachedView } from "@/features/ai/core/use-cached-view";
 import { VoiceSamplePlayer } from "@/features/ai/voice-clone/voice-sample-player";
 import { deleteVoiceCloneItem, listVoiceCloneLibrary, renameVoiceCloneItem, type VoiceCloneItem } from "@/lib/ai/voice-clone/client";
 import { track } from "@/lib/analytics/client";
@@ -26,16 +27,24 @@ import { cn } from "@/lib/utils";
  * the button rather than by their own carelessness.
  */
 export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false }: { cloneHref: string; ttaHref: string; lipSyncHref: string; compact?: boolean }) {
-  const [state, setState] = useState<{ status: "loading" } | { status: "ready"; voices: VoiceCloneItem[]; slots: { used: number; total: number } } | { status: "error"; message: string }>({ status: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
+  /*
+    2026-09-27: remembered on the device, so coming back to the library paints
+    the voices on the first frame instead of two grey skeletons and a round
+    trip. A rename or a delete updates the snapshot in place (`view.set`), so
+    the list is still correct without a refetch; a pull-to-refresh is what goes
+    back to the network (features/ai/core/use-cached-view.ts).
+  */
+  const view = useCachedView<{ voices: VoiceCloneItem[]; slots: { used: number; total: number } }>("voice-library", async () => {
     const res = await listVoiceCloneLibrary();
-    setState(res.ok ? { status: "ready", voices: res.voices, slots: res.slots } : { status: "error", message: res.error });
-  }, []);
-  useEffect(() => {
-    void load();
-  }, [load]);
+    return res.ok ? { ok: true as const, value: { voices: res.voices, slots: res.slots } } : { ok: false as const, error: res.error };
+  });
+  const load = view.refresh;
+  const state: { status: "loading" } | { status: "ready"; voices: VoiceCloneItem[]; slots: { used: number; total: number } } | { status: "error"; message: string } = view.data
+    ? { status: "ready", voices: view.data.voices, slots: view.data.slots }
+    : view.error
+      ? { status: "error", message: view.error }
+      : { status: "loading" };
 
   const rename = useCallback(async (voice: VoiceCloneItem) => {
     const next = window.prompt("Name this voice", voice.name);
@@ -45,8 +54,8 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
     setBusy(voice.id);
     const res = await renameVoiceCloneItem(voice.id, name);
     setBusy(null);
-    if (res.ok) setState((s) => (s.status === "ready" ? { ...s, voices: s.voices.map((v) => (v.id === voice.id ? res.voice : v)) } : s));
-  }, []);
+    if (res.ok && view.data) view.set({ ...view.data, voices: view.data.voices.map((v) => (v.id === voice.id ? res.voice : v)) });
+  }, [view]);
 
   const remove = useCallback(async (voice: VoiceCloneItem) => {
     if (!window.confirm(`Delete "${voice.name}"?\n\nThe voice and the recordings it was built from are removed for good, and anything you make with it from now on will need a new voice. This cannot be undone.`)) return;
@@ -55,12 +64,12 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
     const res = await deleteVoiceCloneItem(voice.id);
     setBusy(null);
     if (res.ok && res.deleted) {
-      setState((s) => (s.status === "ready" ? { ...s, voices: s.voices.filter((v) => v.id !== voice.id), slots: { ...s.slots, used: Math.max(0, s.slots.used - 1) } } : s));
+      if (view.data) view.set({ voices: view.data.voices.filter((v) => v.id !== voice.id), slots: { ...view.data.slots, used: Math.max(0, view.data.slots.used - 1) } });
       track("voice_clone_deleted", {});
     } else if (!res.ok) {
       window.alert(res.error);
     }
-  }, []);
+  }, [view]);
 
   return (
     <div className={compact ? "" : "pb-24"}>

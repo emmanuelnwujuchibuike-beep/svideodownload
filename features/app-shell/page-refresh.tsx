@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, type ReactNode } from "react";
 
 import { PullToRefresh } from "@/features/ui/pull-to-refresh";
+import { requestAiRefresh } from "@/lib/ai/view-cache";
 
 /**
  * App-wide pull-to-refresh (owner, 2026-08-30: "Put a drag down to refresh in
@@ -71,6 +72,14 @@ export function PageRefresh({ children }: { children: ReactNode }) {
 
   const onRefresh = useCallback(async () => {
     router.refresh();
+    /*
+      2026-09-27: the AI pages hold their last answer on the device so going
+      back never reloads them (lib/ai/view-cache.ts). `router.refresh()` only
+      revalidates the SERVER components — it cannot reach a client snapshot —
+      so the pull says so explicitly. Nothing else in the app listens, and a
+      page with no AI read simply has no listener.
+    */
+    requestAiRefresh();
     /*
       `router.refresh()` does not return a promise, and the spinner is only
       honest if it stays up while the work happens. A short floor gives the

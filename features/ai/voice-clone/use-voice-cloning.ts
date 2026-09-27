@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
+import { useCachedView } from "@/features/ai/core/use-cached-view";
 import { useJobWatch } from "@/features/ai/core/use-job-watch";
 import { newClientRequestId } from "@/lib/ai/client";
 import {
@@ -53,8 +54,13 @@ export interface PickedSample {
 }
 
 export function useVoiceCloning(opts: { initialJobId?: string | null }) {
-  const [config, setConfig] = useState<VcConfigAnswer | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
+  /* Remembered on the device — see features/ai/core/use-cached-view.ts. */
+  const configView = useCachedView<VcConfigAnswer>("voice-clone-config", async () => {
+    const res = await getVoiceCloneConfig();
+    return res.ok ? { ok: true as const, value: res } : { ok: false as const, error: res.error };
+  });
+  const config = configView.data;
+  const configError = configView.error;
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   /*
@@ -75,16 +81,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
   const requestId = useRef<string | null>(null);
   const watch = useJobWatch(jobId);
 
-  const loadConfig = useCallback(async () => {
-    const res = await getVoiceCloneConfig();
-    if (res.ok) {
-      setConfig(res);
-      setConfigError(null);
-    } else setConfigError(res.error);
-  }, []);
-  useEffect(() => {
-    void loadConfig();
-  }, [loadConfig]);
+  const loadConfig = configView.refresh;
 
   const limits = config?.config.samples ?? null;
   const totalBytes = samples.reduce((a, s) => a + s.file.size, 0);

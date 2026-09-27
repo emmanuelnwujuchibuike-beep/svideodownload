@@ -64,6 +64,7 @@ import type { CommentNode } from "@/lib/social/engagement";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
+import { useCloseOnNavigate } from "@/features/app-shell/use-close-on-navigate";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -122,6 +123,8 @@ function ImageStage({
   autoOpenComments?: boolean;
   onClose: () => void;
 }) {
+  // the bottom nav navigates; an overlay that is state rather than a route has to be told (features/app-shell/use-close-on-navigate.ts)
+  useCloseOnNavigate(onClose);
   const src = item.mediaUrl || item.thumbnailUrl || "";
   // This viewer mounts ON TOP of the still-mounted feed (which is only
   // covered, never unmounted, behind it) — its own IntersectionObserver still

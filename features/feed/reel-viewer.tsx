@@ -154,6 +154,7 @@ import type { FeedItem } from "@/lib/social/home-feed";
 import type { CommentPreview } from "@/lib/social/reel-extras";
 import { cn, formatCompactNumber, formatPostedOn } from "@/lib/utils";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
+import { useCloseOnNavigate } from "@/features/app-shell/use-close-on-navigate";
 
 interface CommentsData {
   comments: CommentNode[];
@@ -818,6 +819,8 @@ function ReelCard({
   /** A decisive horizontal swipe — switches For You/Following (page variant only). */
   onSwipeTab?: (dir: "left" | "right") => void;
 }) {
+  // the bottom nav navigates; an overlay that is state rather than a route has to be told (features/app-shell/use-close-on-navigate.ts)
+  useCloseOnNavigate(onClose);
   // Anchor the caption + action rail low. On the /reels route (page) they clear
   // the mobile bottom nav AND the scrubber above it — see REEL_CONTENT_BOTTOM for
   // the whole stack — and drop to the very bottom on large screens; in the modal

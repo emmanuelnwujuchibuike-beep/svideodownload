@@ -36,6 +36,7 @@ import type { CommentNode } from "@/lib/social/engagement";
 import { toggleFollow as toggleFollowShared, useFollowState } from "@/lib/social/follow-store";
 import type { FeedItem } from "@/lib/social/home-feed";
 import { cn, formatCompactNumber } from "@/lib/utils";
+import { useCloseOnNavigate } from "@/features/app-shell/use-close-on-navigate";
 
 // Code-split, each gated behind its own "ready" flag (never mounted until
 // the corresponding action is actually tapped) — this viewer is used from
@@ -87,6 +88,8 @@ function ViewerInner({
   startWithComments: boolean;
   onClose: () => void;
 }) {
+  // the bottom nav navigates; an overlay that is state rather than a route has to be told (features/app-shell/use-close-on-navigate.ts)
+  useCloseOnNavigate(onClose);
   // This viewer opens ON TOP of the still-mounted feed (only covered, never
   // unmounted) — suspend it immediately so whatever was playing underneath
   // pauses and can't resume while this is open.

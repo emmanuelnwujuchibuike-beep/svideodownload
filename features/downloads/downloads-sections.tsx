@@ -23,7 +23,6 @@ import { useMemo } from "react";
 
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
-import { QuickActionsButton } from "@/features/downloads/quick-actions-button";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
@@ -117,9 +116,15 @@ export function DownloadsHero() {
             Owner, 2026-09-20: the Quick actions button sits OPPOSITE the
             trust pill on this row — `justify-between`, and the row still
             wraps, so on the narrowest phone the button drops to its own line
-            rather than pressing into the pill (it is also icon-only under
-            400px; see quick-actions-button.tsx). Same row on the landing page
-            and on /downloads, because this hero IS both.
+            rather than pressing into the pill. Same row on the landing page and
+            on /downloads, because this hero IS both.
+
+            2026-09-27 (owner): "Remove the quick action button from the landing
+            page and Download page." The trust pills now sit alone — the quick
+            actions they shared the row with are still on /downloads as the card
+            grid below (DownloadQuickActions), which is a different thing: a
+            visible set of destinations rather than a button that opened a sheet
+            over them.
           */}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
@@ -129,7 +134,6 @@ export function DownloadsHero() {
               <Divider />
               <Pill icon={Shield} label="Private" />
             </span>
-            <QuickActionsButton className="ml-auto" />
           </div>
         </div>
 

@@ -155,7 +155,7 @@ import { PaystackSettings } from "@/features/admin/paystack-settings";
 import { StatAdjuster } from "@/features/admin/stat-adjuster";
 import { PricingEditor } from "@/features/admin/pricing-editor";
 import { ModerationQueue } from "@/features/admin/moderation-queue";
-import { SignedInUsers } from "@/features/admin/signed-in-users";
+import { SignedInUsersLazy } from "@/features/admin/signed-in-users-lazy";
 import { UserModeration } from "@/features/admin/user-moderation";
 import { AppealsQueue } from "@/features/admin/appeals-queue";
 import { MomentumEditor } from "@/features/admin/momentum-editor";
@@ -526,7 +526,7 @@ export default async function AdminPage() {
             `useAdminLive` unsubscribes when its panel is hidden.
           */}
           <AdminPanel id="people">
-            <SignedInUsers />
+            <SignedInUsersLazy />
           </AdminPanel>
 
           <AdminPanel id="subscribers">

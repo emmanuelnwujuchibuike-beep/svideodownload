@@ -13,7 +13,9 @@ const MIGRATION = "supabase/migrations/0172_direct_event_ingest.sql";
 /** 0173 supersedes both of 0172's functions and its read policy. */
 const MIGRATION_173 = "supabase/migrations/0173_ingest_rls_scan_and_diagnostics.sql";
 /** Every migration that defines part of the ingest path, for the ordering guard. */
-const INGEST_MIGRATIONS = [MIGRATION, MIGRATION_173];
+/** 0175 fixes the retry_of type error and drops 0174s diagnostic. */
+const MIGRATION_175 = "supabase/migrations/0175_track_download_state_retry_of.sql";
+const INGEST_MIGRATIONS = [MIGRATION, MIGRATION_173, MIGRATION_175];
 
 /**
  * The migration with its `--` comments removed.
@@ -152,6 +154,10 @@ describe("direct event ingest — the migration's security properties", () => {
     for (const file of INGEST_MIGRATIONS) {
       const body = src(file);
       for (const fn of ["track_events", "track_download_state"]) {
+        // Only the functions this migration actually (re)defines. A migration
+        // that leaves one alone has nothing to re-grant for it, and demanding
+        // otherwise would push noise grants into every future file.
+        if (!body.includes(`create or replace function public.${fn}(`)) continue;
         expect(body, `${file} redefines ${fn} without re-granting`).toContain(
           `grant execute on function public.${fn}(jsonb) to anon, authenticated`,
         );
@@ -239,6 +245,31 @@ describe("direct event ingest — the migration's security properties", () => {
     }
     // A warning, never an exception: re-raising would break the page.
     expect(sql173).not.toMatch(/raise exception/);
+  });
+
+  it("types every uuid column as a uuid, not as text (0175)", () => {
+    /*
+      🔴 THE BUG THAT COST A SESSION. `analytics_downloads.retry_of` is `uuid`
+      (0103) and the function passed `left(r->>'retry_of', 64)`, which is text.
+      Postgres has no assignment cast from text to uuid, so the statement failed
+      while being PLANNED — for every payload, including ones carrying no
+      retry_of at all, on insert and on conflict alike. A null cannot fail a
+      cast; a null never got that far.
+
+      So: a uuid column is written with a uuid-typed expression, guarded by the
+      same regex download_id uses.
+    */
+    const sql175 = sqlCode(src(MIGRATION_175));
+    expect(sql175).toMatch(/case\s+when\s+r->>'retry_of'\s*~/);
+    expect(sql175).toMatch(/\(r->>'retry_of'\)::uuid/);
+    // and never the text form that broke it
+    expect(sql175).not.toMatch(/left\(r->>'retry_of'/);
+  });
+
+  it("drops the temporary diagnostic (0175)", () => {
+    // 0174 returned raw database error text. It must not outlive its
+    // investigation, and it was never reachable by anon or authenticated.
+    expect(sqlCode(src(MIGRATION_175))).toContain("drop function if exists public.track_ingest_diag(jsonb)");
   });
 
   it("does not create a view over an RLS table", () => {

@@ -10,6 +10,10 @@ const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const code = (p: string) => src(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 const MIGRATION = "supabase/migrations/0172_direct_event_ingest.sql";
+/** 0173 supersedes both of 0172's functions and its read policy. */
+const MIGRATION_173 = "supabase/migrations/0173_ingest_rls_scan_and_diagnostics.sql";
+/** Every migration that defines part of the ingest path, for the ordering guard. */
+const INGEST_MIGRATIONS = [MIGRATION, MIGRATION_173];
 
 /**
  * The migration with its `--` comments removed.
@@ -134,12 +138,25 @@ describe("direct event ingest — the migration's security properties", () => {
     }
   });
 
-  it("revokes from PUBLIC before granting, for both functions", () => {
-    // Postgres grants EXECUTE to PUBLIC by default, so a grant alone would leave
-    // a wider grant sitting underneath the intended one.
-    for (const fn of ["track_events", "track_download_state"]) {
-      expect(sql).toContain(`revoke all on function public.${fn}(jsonb) from public`);
-      expect(sql).toContain(`grant execute on function public.${fn}(jsonb) to anon, authenticated`);
+  it("revokes from PUBLIC before granting, for both functions, in every migration that defines them", () => {
+    /*
+      Postgres grants EXECUTE to PUBLIC by default, so a grant alone would leave
+      a wider grant sitting underneath the intended one.
+
+      Checked in EVERY migration that touches these functions, not just the one
+      that created them: `create or replace` preserves privileges, but a future
+      edit that drops and recreates instead would take the browser's ability to
+      record anything with it — silently, because the client swallows analytics
+      failures by design.
+    */
+    for (const file of INGEST_MIGRATIONS) {
+      const body = src(file);
+      for (const fn of ["track_events", "track_download_state"]) {
+        expect(body, `${file} redefines ${fn} without re-granting`).toContain(
+          `grant execute on function public.${fn}(jsonb) to anon, authenticated`,
+        );
+        expect(body).toContain(`revoke all on function public.${fn}(jsonb) from public`);
+      }
     }
   });
 
@@ -154,21 +171,24 @@ describe("direct event ingest — the migration's security properties", () => {
 
       So no bare DDL may appear after the first dollar-quote opens.
     */
-    const firstDollarQuote = sql.search(/\$[a-z_]*\$/);
-    expect(firstDollarQuote).toBeGreaterThan(0);
+    for (const file of INGEST_MIGRATIONS) {
+    const one = src(file);
+    const firstDollarQuote = one.search(/\$[a-z_]*\$/);
+    expect(firstDollarQuote, `${file} has no dollar-quoted block`).toBeGreaterThan(0);
     /*
       Strip the dollar-quoted interiors FIRST. A `create function` body and the
       `alter publication` inside the Realtime `do` block are not top-level
       statements, and flagging them would make this test unpassable rather than
       strict. What is left is what Postgres would run as bare DDL.
     */
-    const topLevel = sqlCode(withoutDollarQuotes(sql));
+    const topLevel = sqlCode(withoutDollarQuotes(one));
     const afterFirst = topLevel.slice(topLevel.search(/create or replace function/));
     const bare = afterFirst
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => /^(alter|drop|revoke|grant)\s/i.test(l));
-    expect(bare, `plain DDL after a dollar-quote in ${MIGRATION}:\n  ${bare.join("\n  ")}`).toEqual([]);
+    expect(bare, `plain DDL after a dollar-quote in ${file}:\n  ${bare.join("\n  ")}`).toEqual([]);
+    }
   });
 
   it("lets only an admin read, and publishes for Realtime", () => {
@@ -177,6 +197,48 @@ describe("direct event ingest — the migration's security properties", () => {
     // There must be no insert/update/delete policy — the functions are the door.
     expect(sql).not.toMatch(/for (insert|update|delete)/i);
     expect(sql).toContain("alter publication supabase_realtime add table public.analytics_events");
+  });
+
+  it("hoists the admin check out of the row filter (0173)", () => {
+    /*
+      🔴 MEASURED, NOT THEORISED. With `using (public.is_admin())` a plain
+      `select event_id ... limit 5` on the ANON key answered
+      `57014 canceling statement due to statement timeout`: the check reads as a
+      per-row filter, so a non-admin scans the whole 145,796-row table looking
+      for five rows that can never match. Nothing leaked — and any anonymous
+      caller could make Postgres do that on demand, for free.
+
+      The scalar subquery makes it an InitPlan, evaluated once, and the scan is
+      never started. The parentheses are the entire fix.
+    */
+    const sql173 = src(MIGRATION_173);
+    expect(sql173).toContain("using ((select public.is_admin()))");
+    // And the un-hoisted form must not come back.
+    expect(sqlCode(sql173)).not.toMatch(/using \(public\.is_admin\(\)\)/);
+  });
+
+  it("never swallows an error without saying so (0173)", () => {
+    /*
+      🔴 THE DEFECT THAT HID THE OTHER DEFECT. `when others then return 0` is
+      right that analytics must not raise into a download, and wrong that it may
+      do so in silence: a raised error and "nothing matched the WHERE" became the
+      same observable answer, so `track_download_state` failed completely while
+      reporting a plausible zero. Same shape as `push_delivery_log`, which wrote
+      nothing for weeks behind a swallowed rejection while pushes kept arriving.
+
+      Every handler must therefore raise a warning — which reaches the Postgres
+      log and never the browser — before returning.
+    */
+    const sql173 = sqlCode(src(MIGRATION_173));
+    const handlers = sql173.split(/when others then/).slice(1);
+    expect(handlers.length, "0173 defines no exception handler").toBeGreaterThan(0);
+    for (const h of handlers) {
+      // the warning must come BEFORE the return in the same handler
+      const upToReturn = h.slice(0, h.search(/return/));
+      expect(upToReturn, `a handler returns without a warning:\n${h.slice(0, 200)}`).toMatch(/raise warning/);
+    }
+    // A warning, never an exception: re-raising would break the page.
+    expect(sql173).not.toMatch(/raise exception/);
   });
 
   it("does not create a view over an RLS table", () => {

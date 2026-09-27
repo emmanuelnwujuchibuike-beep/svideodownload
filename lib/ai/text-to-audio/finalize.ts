@@ -1,7 +1,5 @@
 import "server-only";
 
-import { finalizeBackoffMs, finalizeMaxAttempts } from "@/lib/ai/character-replace/finalize-policy";
-import { settleCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { settleAiCredits } from "@/lib/ai/credits/store";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -16,6 +14,7 @@ import { createAudioAsset } from "@/lib/ai/text-to-audio/assets";
 import { readTextToAudioMeta, type TextToAudioMeta } from "@/lib/ai/text-to-audio/job-meta";
 import { mp3Facts } from "@/lib/ai/text-to-audio/mp3-duration";
 import { textToSpeechProviderFor } from "@/lib/ai/voice/tts-provider";
+import { finalizeBackoffMs, finalizeMaxAttempts, settleAiWalletCharge } from "@/lib/ai/wallet/server";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -162,7 +161,7 @@ export async function finalizeTextToAudioJob(jobId: string, source?: { bytes: Bu
       metadata: { ...(job.metadata ?? {}), output: { durationMs, bytes: bytes.byteLength, mime, bitrateKbps: facts?.bitrateKbps ?? null, sampleRate: facts?.sampleRate ?? null }, asset_id: assetId, provider_output_url: null },
     });
     if (completed) {
-      const settled = job.funding_source === "credits" ? await settleAiCredits(job.id) : job.funding_source === "balance" ? await settleCharacterReplaceCharge(ownerId, job.id) : true;
+      const settled = job.funding_source === "credits" ? await settleAiCredits(job.id) : job.funding_source === "balance" ? await settleAiWalletCharge(ownerId, job.id) : true;
       if (!settled) console.error("[tta/finalize] settle found nothing to settle", { jobId: job.id, userId: ownerId, funding: job.funding_source });
       if (job.replicate_prediction_id) await closeProviderRun("replicate", job.replicate_prediction_id, { status: "succeeded", outputRef: path, metadata: { bytes: bytes.byteLength, durationMs } }).catch(() => null);
       await recordJobEvent(job.id, "finalize.completed", { attempt, bytes: bytes.byteLength, durationMs, route: meta.route, characters: meta.characters, assetId, settled, elapsedMs: Date.now() - startedAt });

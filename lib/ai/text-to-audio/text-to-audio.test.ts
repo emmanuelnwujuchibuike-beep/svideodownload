@@ -1,3 +1,7 @@
+import { CHARACTER_REPLACE_DEFAULTS, CHARACTER_REPLACE_DEFAULT_LANGUAGES } from "@/lib/ai/character-replace/config";
+import { buildElevenLabsTtsBody } from "@/lib/ai/voice/elevenlabs";
+import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
+import { resolveTextToAudioRoute, textToAudioVoices } from "@/lib/ai/text-to-audio/route";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -322,8 +326,8 @@ describe("the money and the free allowance are undone exactly once", () => {
       expect(generate).toContain(`endUnclaimed("${reason}")`);
     }
     // the funding order of every paid AI tool: credits, then the wallet — and the claim before the reservation
-    expect(generate.indexOf("await getAiCreditEntitlement(")).toBeLessThan(generate.indexOf("await getCharacterReplaceBalanceCents("));
-    expect(generate.indexOf("const claim = await claimJobStart(")).toBeLessThan(generate.indexOf("await reserveCharacterReplaceCharge("));
+    expect(generate.indexOf("await getAiCreditEntitlement(")).toBeLessThan(generate.indexOf("await getAiWalletBalanceCents("));
+    expect(generate.indexOf("const claim = await claimJobStart(")).toBeLessThan(generate.indexOf("await reserveAiWalletCharge("));
   });
   it("the finalizer settles once, saves the library row before completing, and refuses a non-audio output", () => {
     const finalize = src("lib/ai/text-to-audio/finalize.ts");
@@ -331,7 +335,7 @@ describe("the money and the free allowance are undone exactly once", () => {
     expect(finalize.indexOf("createAudioAsset")).toBeLessThan(finalize.indexOf('"completed"'));
     expect(finalize).toContain("output is not MPEG audio");
     expect(finalize).toContain("settleAiCredits");
-    expect(finalize).toContain("settleCharacterReplaceCharge");
+    expect(finalize).toContain("settleAiWalletCharge");
     // a Text to Audio job finishes on the frontend — the worker is never asked
     expect(src("lib/ai/finalize-dispatch.ts")).toContain('row?.feature === "ai_text_to_audio"');
   });
@@ -359,5 +363,50 @@ describe("the tool never becomes a video pipeline (the brief's hard rule)", () =
     expect(grid).toContain('audio: { title: "Audio tools"');
     // AI Clean is retired: no card, no id, no href — the only mention allowed is the comment that says so
     expect(codeOf("features/ai/frenz-ai-tools-grid.tsx")).not.toMatch(/ai[_ -]?clean/i);
+  });
+});
+
+/**
+ * ── PIDGIN, AND THE MODELS THAT DETECT THEIR OWN LANGUAGE (2026-09-27) ──────
+ *
+ * Owner: "I want the voice cloning to also have the accent and can speak all
+ * languages including pidgin and all."
+ *
+ * The provider was never the blocker. v3 and Multilingual v2 refuse a
+ * `language_code` parameter and read the language out of the TEXT, so the
+ * picker was our catalogue, not their limit — and Pidgin was missing from it.
+ *
+ * Turbo and Flash v2.5 DO take the parameter, so they deliberately do not get
+ * the extra codes: offering a language whose code the model would reject is how
+ * a member gets a 422 for choosing something we showed them.
+ */
+describe("the languages a member may choose", () => {
+  const catalogue = { ...CHARACTER_REPLACE_DEFAULTS, languages: CHARACTER_REPLACE_DEFAULT_LANGUAGES };
+
+  it("Pidgin is in the catalogue, with a name a Nigerian member would recognise", () => {
+    const row = CHARACTER_REPLACE_DEFAULT_LANGUAGES.find((l) => l.code === "pcm");
+    expect(row).toBeTruthy();
+    expect(row!.label).toBe("Nigerian Pidgin");
+  });
+
+  it("the auto-detecting models speak it; the ones that take a language code do not offer it", () => {
+    expect(elevenLabsTtsModel("elevenlabs/eleven_v3")!.languages).toContain("pcm");
+    // Multilingual v2 documents 29 languages and Pidgin is not among them — we do not claim what the vendor does not
+    expect(elevenLabsTtsModel("elevenlabs/eleven_multilingual_v2")!.languages).not.toContain("pcm");
+    // these two are sent `language_code`, so an unknown code would be a refusal
+    expect(elevenLabsTtsModel("elevenlabs/eleven_turbo_v2_5")!.languages).not.toContain("pcm");
+    expect(elevenLabsTtsModel("elevenlabs/eleven_flash_v2_5")!.languages).not.toContain("pcm");
+  });
+
+  it("and the code never travels to the API for a model that would refuse it", () => {
+    const body = buildElevenLabsTtsBody({ text: "How far, you dey alright?", modelId: "eleven_v3", languageCode: "pcm", languageCodeParam: false });
+    expect(body.language_code).toBeUndefined();
+  });
+
+  it("so Pidgin reaches the picker for the default route", () => {
+    const config = { ...TEXT_TO_AUDIO_DEFAULTS, route: "elevenlabs" as const };
+    const resolved = resolveTextToAudioRoute(config);
+    const { languages } = textToAudioVoices(config, catalogue, resolved);
+    expect(languages.map((l) => l.code)).toContain("pcm");
   });
 });

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
+import { useJobWatch } from "@/features/ai/core/use-job-watch";
 import { newClientRequestId } from "@/lib/ai/client";
 import { generateTextToAudio, getTextToAudioConfig, getTextToAudioQuote, type TtaConfigAnswer, type TtaQuoteAnswer } from "@/lib/ai/text-to-audio/client";
+import { getAiWalletBalance, type AiWalletBalance } from "@/lib/ai/wallet/client";
 import { track } from "@/lib/analytics/client";
 import type { TtsDelivery } from "@/lib/ai/voice/voice-settings";
 
@@ -24,6 +25,12 @@ export type TtaLaunch = { phase: "idle" } | { phase: "generating" } | { phase: "
 
 export function useTextToAudio(opts: { initialJobId?: string | null; initialVoiceId?: string | null }) {
   const [config, setConfig] = useState<TtaConfigAnswer | null>(null);
+  /*
+    2026-09-27: the wallet, so the price can be compared to it BEFORE the button
+    is pressed. One shared Frenz AI balance (0155) — the same wallet Character
+    Replace and Lip Sync spend, read from the same endpoint.
+  */
+  const [balance, setBalance] = useState<AiWalletBalance | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [name, setName] = useState("");
@@ -43,6 +50,14 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
   const requestId = useRef<string | null>(null);
   const quoteAbort = useRef<AbortController | null>(null);
   const watch = useJobWatch(jobId);
+
+  const loadBalance = useCallback(async () => {
+    const res = await getAiWalletBalance({ ledger: 1 });
+    if (res.ok) setBalance(res.balance);
+  }, []);
+  useEffect(() => {
+    void loadBalance();
+  }, [loadBalance]);
 
   const loadConfig = useCallback(async () => {
     const res = await getTextToAudioConfig();
@@ -121,13 +136,16 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
     setQuote({ status: "idle" });
     setFunding(null);
     void loadConfig();
-  }, [loadConfig]);
+    void loadBalance();
+  }, [loadConfig, loadBalance]);
 
   const clearLaunchError = useCallback(() => setLaunch((l) => (l.phase === "error" ? { phase: "idle" } : l)), []);
 
   return {
     config,
     configError,
+    balance,
+    reloadBalance: loadBalance,
     reloadConfig: loadConfig,
     text,
     setText,

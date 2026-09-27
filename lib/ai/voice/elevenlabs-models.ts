@@ -82,6 +82,32 @@ export interface ElevenLabsTtsModel {
 const MULTILINGUAL_V2: readonly string[] = ["en", "ja", "zh", "de", "hi", "fr", "ko", "pt", "it", "es", "id", "nl", "tr", "tl", "pl", "sv", "bg", "ro", "ar", "cs", "el", "fi", "hr", "ms", "sk", "da", "ta", "uk", "ru"];
 /** Turbo/Flash v2.5 add Hungarian, Norwegian and Vietnamese. */
 const V2_5: readonly string[] = [...MULTILINGUAL_V2, "hu", "no", "vi"];
+/*
+  ── 🔴 THE AUTO-DETECTING MODELS TAKE MORE THAN THIS LIST (2026-09-27) ──────
+  v3 and Multilingual v2 refuse a `language_code` parameter — they read the
+  language OUT OF THE TEXT. So for those two this list is not a provider limit
+  at all; it is the menu WE offer, and anything missing from it is a language a
+  member cannot pick even though the model would speak it.
+
+  The owner asked for Pidgin (2026-09-27). It goes on **v3 ONLY**, and the
+  restraint is the point:
+
+    · v3 reads the language out of the text across 70+ languages, and Pidgin is
+      English-based, so it pronounces it. `pcm` never travels to the API —
+      `languageCodeParam: false` drops the code before the request is built
+      (lib/ai/voice/elevenlabs.ts `buildElevenLabsTtsBody`).
+    · Multilingual v2 documents exactly 29 languages and Pidgin is not one of
+      them. Adding it there would be us claiming something the vendor does not,
+      and a test pins that count for exactly this reason.
+    · Turbo and Flash v2.5 ARE sent `language_code`, so an unknown code is a
+      422 for a language we offered. They never get the extras.
+
+  ⚠️ NOT VERIFIED WITH THE VENDOR. v3 handling Pidgin is reasoning from how the
+  model works, not a measurement — the API key is encrypted in Vercel and could
+  not be read to test it. The first real generation settles it.
+*/
+const AUTO_DETECTED_EXTRAS: readonly string[] = ["pcm"];
+
 /** v3: 70+ languages. */
 const V3: readonly string[] = [
   ...V2_5,
@@ -89,7 +115,7 @@ const V3: readonly string[] = [
 ];
 
 export const ELEVENLABS_TTS_MODELS: Readonly<Record<string, ElevenLabsTtsModel>> = {
-  "elevenlabs/eleven_v3": { modelId: "eleven_v3", label: "ElevenLabs v3 — the most expressive, 70+ languages", languageCodeParam: false, maxCharacters: 5_000, languages: V3 },
+  "elevenlabs/eleven_v3": { modelId: "eleven_v3", label: "ElevenLabs v3 — the most expressive, 70+ languages", languageCodeParam: false, maxCharacters: 5_000, languages: [...V3, ...AUTO_DETECTED_EXTRAS] },
   "elevenlabs/eleven_multilingual_v2": { modelId: "eleven_multilingual_v2", label: "ElevenLabs Multilingual v2 — stable, 29 languages", languageCodeParam: false, maxCharacters: 10_000, languages: MULTILINGUAL_V2 },
   "elevenlabs/eleven_turbo_v2_5": { modelId: "eleven_turbo_v2_5", label: "ElevenLabs Turbo v2.5 — fast, 32 languages", languageCodeParam: true, maxCharacters: 40_000, languages: V2_5 },
   "elevenlabs/eleven_flash_v2_5": { modelId: "eleven_flash_v2_5", label: "ElevenLabs Flash v2.5 — fastest, 32 languages", languageCodeParam: true, maxCharacters: 40_000, languages: V2_5 },
@@ -112,7 +138,7 @@ export interface ElevenLabsReplicateModel {
  * prediction: 0.8 s for a sentence).
  */
 export const ELEVENLABS_REPLICATE_TTS_MODELS: Readonly<Record<string, ElevenLabsReplicateModel>> = {
-  "elevenlabs/v3": { version: "7611845fe3de62dc322513b8bdc81b785cb730417a015093f6356f2a89fa3e73", label: "ElevenLabs v3 on Replicate — the most expressive, 70+ languages", languages: V3 },
+  "elevenlabs/v3": { version: "7611845fe3de62dc322513b8bdc81b785cb730417a015093f6356f2a89fa3e73", label: "ElevenLabs v3 on Replicate — the most expressive, 70+ languages", languages: [...V3, ...AUTO_DETECTED_EXTRAS] },
   "elevenlabs/v2-multilingual": { version: "cc1c55e63c927e79a35f5807accbf172051f2b21effe1db532cf8c907cc68d57", label: "ElevenLabs Multilingual v2 on Replicate — stable, 29 languages", languages: MULTILINGUAL_V2 },
   "elevenlabs/turbo-v2.5": { version: "bdab64445fa0fb0ade1c2ae20d00f3024104afe3ff8b4572fc487de30fb24bf0", label: "ElevenLabs Turbo v2.5 on Replicate — fast, 32 languages", languages: V2_5 },
   "elevenlabs/flash-v2.5": { version: "c9f3ebca6f2a684a2a3487271f640c389597d45c6c474db6b03fb9da0a26a47d", label: "ElevenLabs Flash v2.5 on Replicate — fastest, 32 languages", languages: V2_5 },

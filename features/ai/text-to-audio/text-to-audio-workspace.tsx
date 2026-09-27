@@ -1,11 +1,12 @@
 "use client";
 
-import { AudioLines, Check, Gift, Loader2, Mic, RefreshCcw, Sparkles } from "lucide-react";
+import { AudioLines, Check, Gift, Loader2, Mic, Plus, RefreshCcw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AudioAssetPlayer } from "@/features/ai/text-to-audio/audio-player";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
+import { AiWalletRechargeSheet } from "@/features/ai/wallet/recharge-sheet";
 import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
 import { useTextToAudio } from "@/features/ai/text-to-audio/use-text-to-audio";
 import { getAiCredits } from "@/lib/ai/credits/client";
@@ -62,6 +63,7 @@ export function TextToAudioWorkspace({
   const cfg = ws.config?.config ?? null;
   const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);
+  const [rechargeSheet, setRechargeSheet] = useState(false);
   const [plansCatalogue, setPlansCatalogue] = useState<AiPlansPublic | null>(null);
   const openPlans = useCallback(() => {
     haptic("medium");
@@ -77,10 +79,20 @@ export function TextToAudioWorkspace({
   const creditsShort = !!credits?.applicable && !credits.affordable && ws.funding !== "wallet";
   const creditsCover = !!credits?.applicable && credits.affordable && ws.funding !== "wallet";
   const free = quoted ? quoted.quote.totalCents === 0 : false;
+  /*
+    🔴 2026-09-27: the affordability check that was missing. A generation the
+    free characters no longer cover needs money — from plan credits, or from the
+    one Frenz AI wallet. When neither covers it, the button must say so and open
+    the recharge sheet rather than letting the press fail.
+  */
+  const needsMoney = !!quoted && quoted.quote.totalCents > 0 && !creditsCover;
+  const balanceCents = ws.balance?.balanceCents ?? null;
+  const shortOfBalance = needsMoney && balanceCents !== null && balanceCents < quoted.quote.totalCents;
+  const shortfallCents = shortOfBalance && quoted ? quoted.quote.totalCents - (balanceCents ?? 0) : 0;
   const generating = ws.launch.phase === "generating";
   const watching = !!ws.jobId;
   const job = ws.watch.job;
-  const canGenerate = !!quoted && !generating && !creditsShort && ws.ready && (ws.config?.processingAvailable ?? false);
+  const canGenerate = !!quoted && !generating && !creditsShort && !shortOfBalance && ws.ready && (ws.config?.processingAvailable ?? false);
 
   const voices = cfg?.voices ?? [];
   const voice = voices.find((v) => v.id === ws.voiceId) ?? null;
@@ -154,7 +166,13 @@ export function TextToAudioWorkspace({
                 <Notice tone="muted">No voice is set up for this tool yet.</Notice>
               ) : (
                 <>
-                  {voices.some((v) => v.own) ? <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Your voices</p> : null}
+                  {voices.some((v) => v.own) ? (
+                    <>
+                      <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Your voices</p>
+                      {/* The accent is not a setting — a clone learns it from the recordings and keeps it in every language it speaks. Nobody can tell that by looking, so it is said. */}
+                      <p className="mb-2 text-[11px] leading-snug text-muted-foreground">Your cloned voices keep their own accent, in any language you type — Pidgin included.</p>
+                    </>
+                  ) : null}
                   <div className="grid gap-2 sm:grid-cols-2">
                     {voices.map((v) => (
                       <button
@@ -248,6 +266,14 @@ export function TextToAudioWorkspace({
                   <p className="text-[11.5px] text-muted-foreground">
                     {quoted.free.allowance > 0 ? `${quoted.free.afterThis.toLocaleString("en-US")} free characters would be left this month.` : null} {cfg?.priceLine ? `Rate: ${cfg.priceLine}.` : null}
                   </p>
+                  {/* Once the month's free characters are gone this is what pays for it — named before the press, not after a refusal. */}
+                  {needsMoney && ws.balance ? (
+                    <p className={cn("text-[11.5px]", shortOfBalance ? "font-semibold text-amber-600" : "text-muted-foreground")}>
+                      {shortOfBalance
+                        ? `Your balance is ${formatCents(balanceCents ?? 0, symbol)} — ${formatCents(shortfallCents, symbol)} short.`
+                        : `Paid from your balance of ${formatCents(balanceCents ?? 0, symbol)}.`}
+                    </p>
+                  ) : null}
                   {creditsShort ? (
                     <Notice tone="muted">
                       Your plan credits do not cover this one.{" "}
@@ -269,21 +295,54 @@ export function TextToAudioWorkspace({
             {ws.launch.phase === "error" ? (
               <Notice tone="error">
                 {ws.launch.message}{" "}
-                <button type="button" onClick={ws.clearLaunchError} className="font-semibold underline underline-offset-2">
-                  Dismiss
-                </button>
+                {ws.launch.code === "CR_BALANCE_REQUIRED" || ws.launch.code === "AI_BALANCE_REQUIRED" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRechargeSheet(true);
+                      void ws.reloadBalance();
+                    }}
+                    className="font-semibold underline underline-offset-2"
+                  >
+                    Recharge
+                  </button>
+                ) : (
+                  <button type="button" onClick={ws.clearLaunchError} className="font-semibold underline underline-offset-2">
+                    Dismiss
+                  </button>
+                )}
               </Notice>
             ) : null}
 
-            <button
-              type="button"
-              disabled={!canGenerate}
-              onClick={() => void ws.generate()}
-              className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background disabled:opacity-40"
-            >
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <AudioLines className="h-4 w-4" aria-hidden />}
-              {generating ? "Generating…" : free ? "Generate · Free" : quoted ? `Generate · ${creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quoted.quote.totalCents, symbol)}` : "Generate"}
-            </button>
+            {/*
+              🔴 SHORT OF BALANCE, THE BUTTON CHANGES JOB (2026-09-27). It used
+              to stay "Generate", and pressing it answered CR_BALANCE_REQUIRED
+              with no way forward — the owner's "it doesn't show a way to use
+              with balance". Now it names the shortfall and opens the recharge
+              sheet, the same as Character Replace has done since Part 9.
+            */}
+            {shortOfBalance ? (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("medium");
+                  setRechargeSheet(true);
+                }}
+                className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background"
+              >
+                <Plus className="h-4 w-4" aria-hidden /> Recharge to continue · {formatCents(shortfallCents, symbol)} short
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!canGenerate}
+                onClick={() => void ws.generate()}
+                className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background disabled:opacity-40"
+              >
+                {generating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <AudioLines className="h-4 w-4" aria-hidden />}
+                {generating ? "Generating…" : free ? "Generate · Free" : quoted ? `Generate · ${creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quoted.quote.totalCents, symbol)}` : "Generate"}
+              </button>
+            )}
             <p className="text-center text-[11.5px] text-muted-foreground">
               <Link href={libraryHref} className="font-semibold text-primary underline-offset-2 hover:underline">
                 Your Audio Library
@@ -300,6 +359,19 @@ export function TextToAudioWorkspace({
           </div>
         )}
       </div>
+      {rechargeSheet && ws.balance ? (
+        <AiWalletRechargeSheet
+          open={rechargeSheet}
+          onClose={() => {
+            setRechargeSheet(false);
+            ws.clearLaunchError();
+            void ws.reloadBalance();
+          }}
+          balance={ws.balance}
+          returnTo={basePath}
+          suggestedCents={shortfallCents > 0 ? shortfallCents : null}
+        />
+      ) : null}
       {plansSheet ? (
         <AiPlansSheet
           open={plansSheet}

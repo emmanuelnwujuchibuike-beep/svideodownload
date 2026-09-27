@@ -300,7 +300,15 @@ export function publicVoiceCloneConfig(
       minimumSecondsTotal: c.samples.minimumSecondsTotal,
       maximumSecondsEach: c.samples.maximumSecondsEach,
       formatLabels: allowed.map((f) => f.label),
-      acceptMimeTypes: allowed.flatMap((f) => [...f.mimeTypes]),
+      /*
+        🔴 `audio/*` FIRST AND NO CONTAINER TYPES (2026-09-27). The list used to
+        be every MIME type this tool accepts, which includes `audio/mp4` — and
+        an iOS picker asked for an mp4 type opens the PHOTO LIBRARY with every
+        video in it. The owner saw a video option on a tool that refuses video.
+        `audio/*` asks the OS for sound and nothing else; the extensions ride
+        along for desktop browsers that match on those instead.
+      */
+      acceptMimeTypes: ["audio/*"],
       acceptExtensions: allowed.flatMap((f) => f.extensions.map((e) => `.${e}`)),
     },
     consentStatement: c.consentStatement,

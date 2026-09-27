@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
+import { useJobWatch } from "@/features/ai/core/use-job-watch";
 import { newClientRequestId } from "@/lib/ai/client";
 import {
   createVoiceCloneDraft,
@@ -57,6 +57,8 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [samples, setSamples] = useState<PickedSample[]>([]);
+  /** What the picker refused, said where the member is looking rather than after an upload. */
+  const [pickError, setPickError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [consentName, setConsentName] = useState("");
   const [funding, setFunding] = useState<"credits" | "wallet" | null>(null);
@@ -88,7 +90,18 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
       const max = limits?.maximum ?? 5;
-      const incoming = Array.from(files).slice(0, Math.max(0, max - samples.length));
+      const all = Array.from(files);
+      /*
+        🔴 A LAST GUARD IN THE BROWSER (2026-09-27). `accept` is a HINT — every
+        OS picker has a "show all files" escape, and some ignore it outright. A
+        video chosen here would travel all the way to the server to be refused,
+        after the member had already watched it upload. The server refuses it
+        too (`voiceCloneFormatAllowed`); this is the half that is kind about it.
+      */
+      const rejected = all.filter((f) => f.type.startsWith("video/") || f.type.startsWith("image/"));
+      if (rejected.length > 0) setPickError(rejected.length === all.length ? "Those are not audio files. Choose a recording — MP3, WAV, M4A and the rest." : "Some of those were not audio files, so they were left out.");
+      else setPickError(null);
+      const incoming = all.filter((f) => !rejected.includes(f)).slice(0, Math.max(0, max - samples.length));
       const measured = await Promise.all(
         incoming.map(async (file) => ({ file, durationMs: await measureAudioDuration(file), key: `${file.name}:${file.size}:${file.lastModified}` })),
       );
@@ -173,6 +186,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
     samples,
     addFiles,
     removeSample,
+    pickError,
     totalBytes,
     measuredSeconds,
     measurable,

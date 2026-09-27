@@ -1,4 +1,4 @@
-import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
+import type { AiCreditsView } from "@/lib/ai/wallet/client";
 import type { AiJobView } from "@/lib/ai/jobs";
 import type { VoiceClonePublicConfig } from "@/lib/ai/voice-clone/config";
 
@@ -53,7 +53,7 @@ export interface VcConfigAnswer {
   config: VoiceClonePublicConfig;
   free: VcFreeState;
   quote: VcQuoteView;
-  credits: CharacterReplaceCreditsView | null;
+  credits: AiCreditsView | null;
   walletFallback: "allow" | "ask" | "off";
   /** How many voices this member already holds, against their ceiling. */
   slots: { used: number; total: number };
@@ -105,7 +105,7 @@ export async function uploadVoiceSample(ticket: VcUploadTicket, file: File, sign
 export function startVoiceClone(
   jobId: string,
   input: { consent: true; consentName?: string; quote?: { totalCents: number; pricingConfigVersion: number }; funding?: "credits" | "wallet" },
-): Promise<VcResult<{ job: AiJobView; billing: "free" | "credits" | "paid" | null; balanceCents: number | null; credits: CharacterReplaceCreditsView | null }>> {
+): Promise<VcResult<{ job: AiJobView; billing: "free" | "credits" | "paid" | null; balanceCents: number | null; credits: AiCreditsView | null }>> {
   return request(`/api/ai/voice-clones/jobs/${encodeURIComponent(jobId)}/start`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
 }
 

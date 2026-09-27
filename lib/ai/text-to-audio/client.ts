@@ -1,4 +1,4 @@
-import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
+import type { AiCreditsView } from "@/lib/ai/wallet/client";
 import type { AiJobView } from "@/lib/ai/jobs";
 import type { TextToAudioPublicConfig } from "@/lib/ai/text-to-audio/config";
 
@@ -81,7 +81,7 @@ export interface TtaQuoteView {
 export interface TtaQuoteAnswer {
   quote: TtaQuoteView;
   free: TtaFreeState & { afterThis: number };
-  credits: CharacterReplaceCreditsView | null;
+  credits: AiCreditsView | null;
   walletFallback: "allow" | "ask" | "off";
 }
 
@@ -100,7 +100,7 @@ export function generateTextToAudio(input: {
   quote?: { totalCents: number; pricingConfigVersion: number };
   funding?: "credits" | "wallet";
   save?: boolean;
-}): Promise<TtaResult<{ job: AiJobView; created: boolean; billing: "free" | "credits" | "paid" | null; balanceCents: number | null; credits: CharacterReplaceCreditsView | null; freeCharactersUsed: number }>> {
+}): Promise<TtaResult<{ job: AiJobView; created: boolean; billing: "free" | "credits" | "paid" | null; balanceCents: number | null; credits: AiCreditsView | null; freeCharactersUsed: number }>> {
   return request("/api/ai/text-to-audio/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });
 }
 

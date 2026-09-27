@@ -540,6 +540,14 @@ export const CHARACTER_REPLACE_DEFAULT_LANGUAGES: readonly CharacterReplaceLangu
   { code: "yo", label: "Yoruba", native: "Yorùbá" },
   { code: "ig", label: "Igbo", native: "Igbo" },
   { code: "ha", label: "Hausa", native: "Hausa" },
+  /*
+    2026-09-27 (owner: "can speak all languages including pidgin and all").
+    Offered only for the models that DETECT the language from the text — the
+    public config intersects this catalogue with the active model's list, so it
+    simply does not appear for Turbo/Flash v2.5, which would be sent a code they
+    do not know.
+  */
+  { code: "pcm", label: "Nigerian Pidgin", native: "Naijá" },
 ];
 
 /**

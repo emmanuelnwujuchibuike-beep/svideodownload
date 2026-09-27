@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { aiFeature, AI_FEATURES, isWalletFundedFeature, toolIdFor } from "@/lib/ai/jobs";
+import { aiFeature, AI_FEATURES, canTransition, isWalletFundedFeature, toolIdFor } from "@/lib/ai/jobs";
 import { aiVoiceSampleKey, pathBelongsTo, pathBelongsToOwner } from "@/lib/ai/storage";
 import {
   normalizeVoiceCloneConfig,
@@ -336,5 +336,50 @@ describe("ownership of a recording whose job row is gone", () => {
     expect(pathBelongsToOwner("owner-1/ai_voice_clone/../other/sample-1.mp3", "owner-1")).toBe(false);
     expect(pathBelongsToOwner("/owner-1/aivoiceclone/job-1/sample-1.mp3", "owner-1")).toBe(false);
     expect(pathBelongsToOwner("owner-1/aivoiceclone/sample-1.mp3", "owner-1")).toBe(false);
+  });
+});
+
+/**
+ * ── 🔴 THE 2026-09-27 PRODUCTION BUG, AS A TEST ─────────────────────────────
+ *
+ * Owner: "when voice clone a voice it shows couldn't finish but it still shows
+ * in history, it should show success when it is successful."
+ *
+ * Both of their clones WERE made — `ai_voice_clones` held two `ready` rows with
+ * real vendor voice ids — and both jobs said `failed / INTERNAL_ERROR`. The
+ * cause was one line: `run.ts` moved the row `processing → completed`, which
+ * `TRANSITIONS` forbids and `transitionJob` THROWS on, so the throw landed in
+ * the catch that fails and refunds the job — after the voice already existed.
+ *
+ * These tests pin both halves: the rule, and the fact that this file walks it.
+ */
+describe("the status road a finished clone takes", () => {
+  it("processing may NOT reach completed — the short cut that failed two real voices", () => {
+    expect(canTransition("processing", "completed")).toBe(false);
+    expect(canTransition("processing", "finalizing")).toBe(true);
+    expect(canTransition("finalizing", "completed")).toBe(true);
+  });
+
+  it("run.ts claims finalizing before completing, and never completes straight out of processing", () => {
+    const run = readFileSync(path.join(process.cwd(), "lib", "ai", "voice-clone", "run.ts"), "utf8");
+    expect(run).toContain(`"finalizing", {}`);
+    expect(run).toContain(`transitionJob(jobId, ["finalizing"], "completed"`);
+    expect(run.includes(`["processing"], "completed"`)).toBe(false);
+  });
+
+  /*
+    The invariant the bug broke. Everything that can honestly fail happens
+    before the voice is made; after it, a bookkeeping problem is the operator's
+    to read in the log, not the member's to see as a failure.
+  */
+  it("a throw after the voice exists completes the job instead of failing it", () => {
+    const run = readFileSync(path.join(process.cwd(), "lib", "ai", "voice-clone", "run.ts"), "utf8");
+    expect(run).toContain("getVoiceCloneByJob");
+    expect(run).toMatch(/threw AFTER the voice was made/);
+  });
+
+  it("a library row that cannot be written removes the vendor's voice rather than leaking a slot", () => {
+    const run = readFileSync(path.join(process.cwd(), "lib", "ai", "voice-clone", "run.ts"), "utf8");
+    expect(run).toContain("provider.remove(made.providerVoiceId)");
   });
 });

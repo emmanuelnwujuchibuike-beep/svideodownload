@@ -2,8 +2,6 @@ import "server-only";
 
 import { after } from "next/server";
 
-import { concurrencyLimitFor } from "@/lib/ai/character-replace/config";
-import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
 import type { AiErrorCode } from "@/lib/ai/errors";
@@ -19,6 +17,7 @@ import { consumeFreeClone, readFreeClones, releaseFreeClone } from "@/lib/ai/voi
 import { readVoiceCloneDraft } from "@/lib/ai/voice-clone/job-meta";
 import { publicVoiceCloneQuote, quoteVoiceClone, voiceCloneCredits, voiceCloneMonthKey, type VoiceCloneQuote } from "@/lib/ai/voice-clone/pricing";
 import type { StartVoiceCloneJobRequest } from "@/lib/ai/voice-clone/schemas";
+import { concurrencyLimitFor, getAiWalletBalanceCents, reserveAiWalletCharge } from "@/lib/ai/wallet/server";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -137,7 +136,7 @@ export async function startVoiceCloneJob(ctx: VoiceCloneCreateContext, input: { 
       }
     }
   }
-  const balanceBefore = free || useCredits ? null : await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
+  const balanceBefore = free || useCredits ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
   if (!free && !useCredits) {
     if (balanceBefore === null) {
       await giveBack("balance read failed");
@@ -220,7 +219,7 @@ export async function startVoiceCloneJob(ctx: VoiceCloneCreateContext, input: { 
     }
   } else if (!free) {
     try {
-      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof reserveCharacterReplaceCharge>[0]["snapshot"] });
+      balanceAfter = await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof reserveAiWalletCharge>[0]["snapshot"] });
     } catch (e) {
       await revertJobStartClaim(job.id, job.metadata ?? {});
       await endUnclaimed("wallet reservation refused");

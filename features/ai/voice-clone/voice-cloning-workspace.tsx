@@ -132,6 +132,8 @@ export function VoiceCloningWorkspace({
                   <li>· One person speaking, nobody else, no music behind it.</li>
                   <li>· Natural speech — read something aloud rather than listing words.</li>
                   <li>· {cfg ? `At least ${cfg.samples.minimumSecondsTotal} seconds in total; a minute or two is noticeably better.` : "A minute or two of audio is noticeably better than a few seconds."}</li>
+                  {/* Worth saying before they record, not after: the accent comes from the recordings, so record in the voice they want to hear back. */}
+                  <li>· Whatever accent you record in is the accent you get — and it speaks any language you type, Pidgin included.</li>
                 </ul>
               </div>
 
@@ -161,8 +163,9 @@ export function VoiceCloningWorkspace({
                     {ws.samples.length === 0 ? "Choose your recordings" : "Add another"}
                   </button>
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {cfg.samples.formatLabels.join(", ")} · up to {cfg.samples.maximum} files · {Math.round(cfg.samples.maximumBytes / (1024 * 1024))} MB each
+                    {cfg.samples.formatLabels.join(", ")} · up to {cfg.samples.maximum} files · {Math.round(cfg.samples.maximumBytes / (1024 * 1024))} MB each · audio only, never video
                   </p>
+                  {ws.pickError ? <p className="mt-1.5 text-[11.5px] font-semibold text-amber-600">{ws.pickError}</p> : null}
                 </>
               ) : null}
 

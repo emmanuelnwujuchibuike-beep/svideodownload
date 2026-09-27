@@ -3,10 +3,6 @@ import "server-only";
 import { after } from "next/server";
 
 import { policyBlockEvent, screenAiText } from "@/lib/ai/acceptable-use";
-import { providerHealthFor } from "@/lib/ai/character-replace/circuit";
-import { concurrencyLimitFor } from "@/lib/ai/character-replace/config";
-import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
-import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
 import type { AiEntitlement } from "@/lib/ai/entitlement";
@@ -27,6 +23,7 @@ import { countTextToAudioCharacters, publicTextToAudioQuote, quoteTextToAudio, t
 import type { CreateTextToAudioJobRequest } from "@/lib/ai/text-to-audio/schemas";
 import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
 import { voiceSettingsForDelivery, type TtsDelivery } from "@/lib/ai/voice/voice-settings";
+import { LAUNCH_INTERNAL_MESSAGE, concurrencyLimitFor, getAiWalletBalanceCents, launchAllows, providerHealthFor, reserveAiWalletCharge } from "@/lib/ai/wallet/server";
 import { getLandingSettings, type LandingSettings } from "@/lib/landing/settings";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -224,7 +221,7 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
       }
     }
   }
-  const balanceBefore = free || useCredits ? null : await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
+  const balanceBefore = free || useCredits ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
   if (!free && !useCredits) {
     if (balanceBefore === null) {
       await giveBack("balance read failed");
@@ -327,7 +324,7 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
     }
   } else if (!free) {
     try {
-      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof reserveCharacterReplaceCharge>[0]["snapshot"] });
+      balanceAfter = await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof reserveAiWalletCharge>[0]["snapshot"] });
     } catch (e) {
       await revertJobStartClaim(job.id, job.metadata ?? {});
       await endUnclaimed("wallet reservation refused");

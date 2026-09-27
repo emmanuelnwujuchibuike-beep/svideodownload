@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { readAudioDuration, readVideoMetadata } from "@/features/ai/character-replace/read-media";
-import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
+import { useJobWatch } from "@/features/ai/core/use-job-watch";
 import { track } from "@/lib/analytics/client";
 import { newClientRequestId, uploadSource } from "@/lib/ai/client";
 import { createLipSyncJob, getLipSyncConfig, getLipSyncQuote, quoteFieldsForStart, startLipSyncJob, type LipSyncConfigAnswer, type LipSyncQuoteAnswer } from "@/lib/ai/lip-sync/client";

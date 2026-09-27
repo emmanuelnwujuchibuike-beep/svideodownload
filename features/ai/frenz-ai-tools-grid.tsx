@@ -285,8 +285,18 @@ export function FrenzAIToolsGrid({
                 include === "all" ? "md:grid-cols-4" : "sm:grid-cols-4",
               )}
             >
-              {rows.map((tool) => (
-                <li key={tool.id} className="min-w-0">
+              {rows.map((tool, i) => (
+                /*
+                  🔴 NO HOLES (2026-09-27). Owner: "This page is not properly
+                  arranged in grid." A group with an ODD number of cards left a
+                  gap beside its last one — three Audio tools sat 2 + 1, and the
+                  single Video tool sat alone in half a row with nothing next to
+                  it. The last card of an odd group spans both columns instead,
+                  so every group ends on a full edge and a one-card group reads
+                  as a banner rather than as a mistake. Two columns is the phone
+                  layout; at md the grid is four wide and the rule lifts.
+                */
+                <li key={tool.id} className={cn("min-w-0", rows.length % 2 === 1 && i === rows.length - 1 && "col-span-2 md:col-span-1")}>
                   <ToolCardView
                     tool={tool}
                     onFlowTool={onFlowTool}

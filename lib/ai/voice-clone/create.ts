@@ -1,7 +1,6 @@
 import "server-only";
 
 import { policyBlockEvent, screenAiText } from "@/lib/ai/acceptable-use";
-import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/character-replace/launch-server";
 import type { AiEntitlement } from "@/lib/ai/entitlement";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import { aiFeature, type AiFeatureDef, type AiJobRow } from "@/lib/ai/jobs";
@@ -14,6 +13,7 @@ import { countLiveClones, countLiveClonesForAccount } from "@/lib/ai/voice-clone
 import { defaultVoiceName } from "@/lib/ai/voice-clone/job-meta";
 import { resolveVoiceCloneProvider } from "@/lib/ai/voice-clone/provider";
 import type { CreateVoiceCloneJobRequest } from "@/lib/ai/voice-clone/schemas";
+import { LAUNCH_INTERNAL_MESSAGE, launchAllows } from "@/lib/ai/wallet/server";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 

@@ -422,19 +422,26 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, historyHref,
           </div>
           {tta?.assetId ? <AudioAssetPlayer assetId={tta.assetId} durationMs={tta.durationMs} className="mt-4" onPlay={() => track("text_to_audio_played", {})} /> : <p className="mt-3 text-[12.5px] text-muted-foreground">This one was not saved to your library.</p>}
         </div>
+        {/*
+          🔴 THE LIBRARY IS THE PRIMARY ACTION (owner, 2026-09-27: "the review
+          should open the audio library"). The saved audio LIVES there — it is
+          where a member goes to play it again, rename it or download it later.
+          Lip Sync Pro is one thing they might do next; the library is where the
+          thing they just made actually is, so it leads.
+        */}
         <div className="grid gap-2 sm:grid-cols-2">
+          <Link href={libraryHref} className="ai-cta inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
+            <AudioLines className="h-4 w-4" aria-hidden /> Open Audio Library
+          </Link>
           {tta?.assetId ? (
             <Link
               href={`${lipSyncHref}?audio=${encodeURIComponent(tta.assetId)}`}
               onClick={() => track("audio_library_reused", { from: "result" })}
-              className="ai-cta inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background"
+              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-border px-4 text-[13px] font-semibold"
             >
               <Mic className="h-4 w-4" aria-hidden /> Use in Lip Sync Pro
             </Link>
           ) : null}
-          <Link href={libraryHref} className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-border px-4 text-[13px] font-semibold">
-            <Check className="h-4 w-4" aria-hidden /> Your Audio Library
-          </Link>
         </div>
         <div className="flex flex-wrap gap-3 text-sm">
           <Link href={basePath} onClick={onAnother} className="inline-flex items-center gap-1.5 font-semibold text-primary">

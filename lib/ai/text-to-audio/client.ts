@@ -135,7 +135,15 @@ export function deleteAudioAsset(id: string): Promise<TtaResult<{ deleted: boole
   return request(`/api/ai/audio/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-/** The download URL a browser can navigate to (the route redirects to a signed, named file). */
+/**
+ * The download URL a browser can navigate to.
+ *
+ * 🔴 SAME-ORIGIN, and that is the whole point (2026-09-27). It used to carry
+ * `redirect=1`, which bounced to Supabase — and a cross-origin navigation is
+ * opened by the phone rather than saved, which is what the owner saw as
+ * "saving audio opens as web". The route streams the bytes with an
+ * `attachment` disposition instead.
+ */
 export function audioDownloadHref(id: string): string {
-  return `/api/ai/audio/${encodeURIComponent(id)}/file?download=1&redirect=1`;
+  return `/api/ai/audio/${encodeURIComponent(id)}/file?download=1`;
 }

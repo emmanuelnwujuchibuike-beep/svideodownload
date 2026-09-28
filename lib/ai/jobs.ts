@@ -105,9 +105,22 @@ export type AiJobStatus =
    */
   | "deleted";
 
-/** Mirrors `ai_jobs_provider_chk` (0168: 'fal' joined 'replicate'). A job keeps its provider for ever. */
-export type AiProviderId = "replicate" | "fal";
-export const AI_PROVIDER_IDS: readonly AiProviderId[] = ["replicate", "fal"];
+/**
+ * Mirrors `ai_jobs_provider_chk` (0168: 'fal' joined 'replicate'; 0178: 'kling').
+ * A job keeps its provider for ever.
+ *
+ * 🔴 `kling` is a value the DATABASE accepts and an adapter exists for
+ * (lib/ai/kling/provider.ts), but NO feature routes to it — that adapter's
+ * `supports()` answers false for every feature, so `hasProviderFor` can never
+ * report it able to run one and `submitJobToProvider` refuses before any
+ * per-feature branch. Part 2 of the provider migration is the seam only; Part
+ * 3 opens it one feature at a time. The value is in the union first, and the
+ * constraint widened first (0178), because /start reserves the member's money
+ * BEFORE the provider is stamped — a value the database refuses would fail
+ * after the charge.
+ */
+export type AiProviderId = "replicate" | "fal" | "kling";
+export const AI_PROVIDER_IDS: readonly AiProviderId[] = ["replicate", "fal", "kling"];
 
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",

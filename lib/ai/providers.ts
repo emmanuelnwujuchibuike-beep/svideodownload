@@ -1,6 +1,7 @@
 import "server-only";
 
 import { falProvider } from "@/lib/ai/fal/provider";
+import { klingProvider } from "@/lib/ai/kling/provider";
 import { hasProviderFor, providerFor, registerAiProvider } from "@/lib/ai/provider";
 import { replicateProvider } from "@/lib/ai/replicate/provider";
 
@@ -33,5 +34,17 @@ registerAiProvider(replicateProvider);
   never through this registry's feature default.
 */
 registerAiProvider(falProvider);
+/*
+  2026-09-28 (the provider migration, Part 2): the direct Kling adapter, for
+  the same paths as fal's — the reconciler, the stall sweep and the cancel
+  route resolve an adapter from the job ROW's provider, and those must have an
+  answer the day a Kling row first exists rather than one added beside it.
+
+  🔴 Registering is NOT routing. `klingProvider.supports()` answers false for
+  every feature, so `hasProviderFor` reports Kling as able to run nothing and
+  `submitJobToProvider` refuses before any per-feature branch. Part 3 opens it
+  one feature at a time.
+*/
+registerAiProvider(klingProvider);
 
 export { hasProviderFor, providerFor };

@@ -7,6 +7,7 @@ import { KLING_O1_EDIT_LIMITS } from "@/lib/ai/character-replace/providers/kling
 import { replacementProviderFor, replacementRouteOk } from "@/lib/ai/character-replace/providers/router";
 import type { ReplacementProvider } from "@/lib/ai/character-replace/providers/types";
 import { falConfigured } from "@/lib/ai/fal/client";
+import { klingConfigured } from "@/lib/ai/kling/client";
 import { elevenLabsConfigured } from "@/lib/ai/voice/elevenlabs";
 import { falSync3Provider } from "@/lib/ai/voice/fal-sync3";
 import { lipSyncProviderFor, type LipSyncProvider } from "@/lib/ai/voice/lipsync-provider";
@@ -160,6 +161,13 @@ export function resolveLipSyncRoute(tierModel: string, providers: AiProvidersCon
 export function vendorConfigured(vendor: AiVendor): boolean {
   if (vendor === "replicate") return !!process.env.REPLICATE_API_TOKEN?.trim();
   if (vendor === "fal") return falConfigured();
+  /*
+    2026-09-28 (Part 2): Kling can be asked whether it holds a credential, and
+    nothing else. It appears in no feature's routing — `resolveReplacementRoute`
+    and `resolveLipSyncRoute` above still choose between Replicate and fal.ai
+    only, from `SwitchableVendor`, which Kling is not a member of.
+  */
+  if (vendor === "kling") return klingConfigured();
   return elevenLabsConfigured();
 }
 
@@ -194,7 +202,13 @@ export async function resolveProvider(feature: ProviderFeature, settings?: Landi
     locked,
     model,
     configured: vendorConfigured(vendor),
-    paused: vendor === "elevenlabs" ? false : providers.paused[vendor],
+    /*
+      Only the two SWITCHABLE vendors have an emergency pause (§26). ElevenLabs
+      never had one; Kling has none yet either, because Part 2 gives it no admin
+      control — there is nothing to pause while no feature routes to it. Part 3
+      adds the switch with the routing it protects.
+    */
+    paused: vendor === "replicate" || vendor === "fal" ? providers.paused[vendor] : false,
   };
 }
 

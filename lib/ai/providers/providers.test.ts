@@ -82,8 +82,8 @@ describe("the providers configuration (§10, §11, §17)", () => {
     expect(providerRunEstimateUsdCents(m, 5_000)).toBe(55);
     expect(providerRunEstimateUsdCents(modelConfigFor(AI_PROVIDERS_DEFAULTS, "character_replace", "fal"), 5_000)).toBeNull();
   });
-  it("the provider id union mirrors the widened check (0168)", () => {
-    expect(AI_PROVIDER_IDS).toEqual(["replicate", "fal"]);
+  it("the provider id union mirrors the widened check (0168, then 0178)", () => {
+    expect(AI_PROVIDER_IDS).toEqual(["replicate", "fal", "kling"]);
     const sql = src("supabase/migrations/0168_ai_provider_runs.sql");
     expect(sql).toContain("check (provider in ('replicate', 'fal')) not valid");
     expect(sql).toContain("validate constraint ai_jobs_provider_chk");
@@ -376,7 +376,7 @@ describe("the provider ledger arithmetic (§19, §20, §26)", () => {
   });
   it("health: last success / failure per vendor, the recent error, credentials as booleans", () => {
     const rows = [row({ completed_at: "2026-09-21T10:02:30.000Z" }), row({ status: "failed", error_code: "X", error_detail: "boom", completed_at: "2026-09-21T11:00:00.000Z" })];
-    const h = providerHealthFromRuns(rows, { replicate: true, fal: false, elevenlabs: true });
+    const h = providerHealthFromRuns(rows, { replicate: true, fal: false, elevenlabs: true, kling: false });
     const fal = h.find((x) => x.provider === "fal")!;
     expect(fal.credentials).toBe(false);
     expect(fal.lastSuccessAt).toBe("2026-09-21T10:02:30.000Z");

@@ -37,7 +37,16 @@
  * the owner asked for).
  */
 
-export type AiVendor = "replicate" | "fal" | "elevenlabs";
+/**
+ * 🔴 `kling` joined this union on 2026-09-28 (the provider migration, Part 2)
+ * so the run ledger and the credential check can NAME the vendor. It is
+ * deliberately NOT a `SwitchableVendor`, NOT in any feature's `vendors` list
+ * and NOT in `PROVIDER_FEATURE_DEFS` — so no operator setting, and no patch to
+ * the stored settings row, can route a feature to it. The feature table below
+ * is the whole restriction, and it does not mention Kling yet. Part 3 adds it
+ * per feature, deliberately.
+ */
+export type AiVendor = "replicate" | "fal" | "elevenlabs" | "kling";
 export type SwitchableVendor = "replicate" | "fal";
 export const SWITCHABLE_VENDORS: readonly SwitchableVendor[] = ["replicate", "fal"];
 export type ProviderFeature = "character_replace" | "lip_sync" | "text_to_speech" | "voice_change";
@@ -45,7 +54,7 @@ export const PROVIDER_FEATURES: readonly ProviderFeature[] = ["character_replace
 export type SwitchableFeature = "character_replace" | "lip_sync";
 export const SWITCHABLE_FEATURES: readonly SwitchableFeature[] = ["character_replace", "lip_sync"];
 
-export const AI_VENDOR_LABEL: Record<AiVendor, string> = { replicate: "Replicate", fal: "fal.ai", elevenlabs: "ElevenLabs" };
+export const AI_VENDOR_LABEL: Record<AiVendor, string> = { replicate: "Replicate", fal: "fal.ai", elevenlabs: "ElevenLabs", kling: "Kling" };
 
 /** The locked fal.ai endpoints (§3). */
 export const FAL_KLING_O1_EDIT = "fal-ai/kling-video/o1/standard/video-to-video/edit";

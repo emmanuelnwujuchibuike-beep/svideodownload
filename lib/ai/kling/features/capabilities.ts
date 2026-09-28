@@ -1,144 +1,172 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  KLING 3.0 OMNI — what the model actually accepts (PURE, verified 2026-09-28)
+ *  KLING — what the models actually accept (PURE, VERIFIED 2026-09-28)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, Part 3: "Do not infer capability from Replicate Kling models, fal.ai
- * Kling adapters, third-party wrappers, old Kling O1 documentation, unofficial
- * SDKs or previous repository assumptions. The direct API is the source of
- * truth."
+ * Owner, Part 4 §5: "Use the official Kling API documentation and verify the
+ * live API contract before routing production traffic… Do not rely blindly on
+ * mirrors or assumptions from previous code. The actual live Kling API contract
+ * must be treated as authoritative."
  *
- * ── 🔴 THIS FILE IS NOT lib/ai/character-replace/providers/kling-input.ts ───
+ * It was verified with a real key. The evidence — every probe, every vendor
+ * error message quoted verbatim — is in
+ * `docs/AI_PROVIDER_MIGRATION_PART4_KLING_CONTRACT.md`.
  *
- * That file holds `KLING_O1_EDIT_LIMITS`, read from **fal.ai's published
- * schema for Kling O1 Video Edit** on 2026-09-21. It is correct for what it
- * describes and is still live in production behind the fal adapter. It is
- * also, for Omni, WRONG in at least three ways:
+ * ── 🔴 WHAT PART 3 HAD, AND WHY IT COULD NEVER HAVE WORKED ──────────────────
  *
- *      O1 Video Edit (fal)          →   3.0 Omni (direct)
- *      3–10 s                           3–15 s
- *      720–2160 px, min edge 720        720P / 1080P / 4K modes
- *      4 elements+images, always        7 images with NO video;
- *                                       4 elements+images WITH a video
+ * Part 3 built this table from mirrors and marked the request field names ⚠️.
+ * Every one of them was wrong:
  *
- * Copying the O1 numbers into Omni would silently cap every generation at ten
- * seconds and refuse a seventh reference image the model would have accepted.
- * So Omni gets its own table, here, and the two never import each other.
+ *      Part 3 (guessed)            live API (verified)
+ *      image_list[]                contents[] with type "image"/"first_frame"
+ *      element_list[]              contents[] with type "element"
+ *      video_list[] + refer_type   contents[] with type "video"
+ *      multi_prompt[] + shot_type  settings.multi_shot
+ *      mode: std|pro|4k            settings.resolution: 480p|720p|1080p|4k
+ *      sound: on|off               settings.audio: native|off
+ *      end_frame                   last_frame
+ *      model_name in the body      the model is a PATH segment
+ *      callback_url top-level      options.callback_url
  *
- * ── Where these numbers come from ──────────────────────────────────────────
+ * The last one is the dangerous one: unknown top-level fields are IGNORED, not
+ * rejected, so a Part 3 request would have been accepted, generated, BILLED and
+ * never called back.
  *
- * ✅ Kling's own model guide, read 2026-09-28
- *    (kling.ai/quickstart/klingai-video-3-omni-model-user-guide) — this page
- *    is server-rendered and readable, unlike the API reference. It is the
- *    source for: the supported generation modes, "Up to 15s", the 720p/1080p
- *    modes, "up to 7 images (min 300px, max 10MB, .jpg/.jpeg/.png)" without a
- *    video, "up to 4 images/elements total plus one video (3-10s, ≤200MB, ≤2K)"
- *    with one, character elements as up to 4 multi-angle images or a 3–8 s
- *    clip, native audio output, and voice binding at 5–30 s.
+ * ── 🔴 THIS FILE IS NOT character-replace/providers/kling-input.ts ──────────
  *
- * ⚠️ The REQUEST FIELD NAMES below (`image_list`, `element_list`, `video_list`,
- *    `multi_prompt`, `mode`, `sound`, …) could not be read from Kling's own
- *    API reference: kling.ai/document-api is a client-rendered app that
- *    returns a bare title to any non-browser fetch, on every one of its pages
- *    (retried on 2026-09-28 across four URLs). They are corroborated by
- *    several independent mirrors that agree with each other and with the
- *    envelope Part 2 already implements. **Every field here is one a
- *    published source names — nothing is invented — but a live key must
- *    confirm them before a member's money depends on one.** That confirmation
- *    is Part 4's first task, and nothing in Part 3 routes a member to Kling.
+ * That file holds `KLING_O1_EDIT_LIMITS`, read from **fal.ai's** schema for
+ * Kling O1 Video Edit. It is correct for what it describes and is still live
+ * behind the fal adapter. It is also wrong for these models, and the two never
+ * import each other (a test asserts it).
  */
 
-/** The model this file describes. A different model needs a different table. */
+/** The Omni model. ✅ Accepted; `kling-v3-1-omni` answers "model is not supported". */
 export const KLING_OMNI_MODEL_NAME = "kling-v3-omni";
 
-/** `mode` — the vendor's quality tiers, and the resolution each one means. */
-export const KLING_OMNI_MODES = ["std", "pro", "4k"] as const;
-export type KlingOmniMode = (typeof KLING_OMNI_MODES)[number];
-export const KLING_OMNI_MODE_RESOLUTION: Record<KlingOmniMode, string> = { std: "720P", pro: "1080P", "4k": "4K" };
+/* ───────────────────────────── settings{} ────────────────────────────────── */
 
-export const KLING_OMNI_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
-export type KlingOmniAspectRatio = (typeof KLING_OMNI_ASPECT_RATIOS)[number];
+/**
+ * `settings.resolution`. ✅ VERIFIED — the vendor lists these itself:
+ * `"settings.resolution value 'bogus' is invalid, allowed values: 480p, 720p, 1080p, 4k"`
+ *
+ * 🔴 Lower-case. `720P` is NOT accepted, which is exactly the sort of thing a
+ * mirror gets wrong (Pollo publishes `720P`).
+ */
+export const KLING_RESOLUTIONS = ["480p", "720p", "1080p", "4k"] as const;
+export type KlingResolution = (typeof KLING_RESOLUTIONS)[number];
 
-/** `sound` — Omni's native audio. Off is the safe default; see `soundAllowedWithVideo`. */
-export const KLING_OMNI_SOUND = ["on", "off"] as const;
-export type KlingOmniSound = (typeof KLING_OMNI_SOUND)[number];
+/**
+ * `settings.aspect_ratio`. ✅ VERIFIED:
+ * `"aspect_ratio value '99:1' is invalid, supported values: 16:9, 9:16, 1:1"`
+ */
+export const KLING_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
+export type KlingAspectRatio = (typeof KLING_ASPECT_RATIOS)[number];
+
+/**
+ * `settings.audio`. ✅ VERIFIED the vendor accepts three names —
+ * `"allowed values: native, off, original"` — but on `kling-v3-omni`,
+ * `original` answers `"audio mode 'original' is not supported by the current
+ * model"`. So the usable set for this model is two.
+ *
+ * 🔴 Recorded as "the vendor's set minus what this model refuses" rather than
+ * silently shortened, because a later model may accept `original` and the next
+ * reader should know the difference between "never a value" and "not this one".
+ */
+export const KLING_AUDIO_MODES_VENDOR = ["native", "off", "original"] as const;
+export const KLING_AUDIO_MODES = ["native", "off"] as const;
+export type KlingAudioMode = (typeof KLING_AUDIO_MODES)[number];
+
+/**
+ * ✅ VERIFIED: `aspect_ratio` is REQUIRED unless a first frame is supplied —
+ * `"Aspect ratio must be specified unless a first frame is provided or the task
+ * is video editing"`. Named here because two handlers depend on it.
+ */
+export const KLING_ASPECT_RATIO_REQUIRED_WITHOUT_FIRST_FRAME = true;
 
 export const KLING_OMNI = {
-  /** ✅ "Up to 15s" — three times what the O1 adapter allows, and the single most important difference. */
+  /**
+   * ⚠️ 3–15 s is the model guide's window, and the vendor does **NOT** enforce
+   * it: `settings.duration` of `0`, `1` and `20` were all accepted, and only a
+   * non-numeric value is refused.
+   *
+   * 🔴 So this ceiling is OURS to enforce. An unenforced range is a member
+   * charged for a 20-second request the model may silently truncate, or a
+   * 1-second one they did not mean.
+   */
   duration: { minSeconds: 3, maxSeconds: 15, defaultSeconds: 5 },
+  /** ⚠️ 2500 from the model guide; the vendor did not reject a longer prompt in probing. Enforced by us. */
   prompt: { maxChars: 2500 },
-  /** Multi-shot: a list of shots, each with its own prompt and duration. */
-  multiShot: { minShots: 1, maxShots: 6 },
-  modes: KLING_OMNI_MODES,
-  defaultMode: "pro" as KlingOmniMode,
-  aspectRatios: KLING_OMNI_ASPECT_RATIOS,
-  defaultAspectRatio: "16:9" as KlingOmniAspectRatio,
+  resolutions: KLING_RESOLUTIONS,
+  defaultResolution: "720p" as KlingResolution,
+  aspectRatios: KLING_ASPECT_RATIOS,
+  defaultAspectRatio: "16:9" as KlingAspectRatio,
+  audioModes: KLING_AUDIO_MODES,
 
   /**
-   * ✅ Reference images. The ceiling DEPENDS on whether a video is supplied —
-   * the one Omni rule an O1-shaped validator gets wrong in both directions.
+   * ✅ `contents[].type` — the COMPLETE accepted set. Anything else answers
+   * `contents[i].type value '<x>' is invalid`.
    */
+  contentTypes: ["prompt", "image", "video", "element", "first_frame", "last_frame", "voice"] as const,
+
+  /** ⚠️ Image limits from the model guide (min 300 px, 10 MB, jpg/png). Not vendor-verified. */
   images: {
-    withoutVideo: { max: 7 },
-    /** With a video, images AND elements share one budget of four. */
-    withVideo: { maxImagesAndElementsCombined: 4 },
+    max: 7,
     minEdgePx: 300,
     maxBytes: 10 * 1024 * 1024,
-    /** ✅ The guide names these three. Not WebP, not AVIF, whatever our own picker accepts. */
     mimeTypes: ["image/jpeg", "image/png"] as const,
     extensions: [".jpg", ".jpeg", ".png"] as const,
-    /** `image_list[].type` — which end of the clip an image pins. */
-    frameTypes: ["first_frame", "end_frame"] as const,
   },
 
-  /** ✅ A character/subject element: several angles of one person, or a short clip of them. */
-  element: {
-    maxImagesPerElement: 4,
-    clip: { minSeconds: 3, maxSeconds: 8 },
-    /** Voice bound to an element; the guide recommends this window for a multi-image subject. */
-    voice: { minSeconds: 5, maxSeconds: 30 },
-  },
-
-  /** ✅ The reference/base video. Note this is still 3–10 s even though OUTPUT reaches 15 s. */
+  /** ⚠️ The reference/base video's own window, from the model guide. Note it is NOT the output's window. */
   video: {
     minSeconds: 3,
     maxSeconds: 10,
     maxBytes: 200 * 1024 * 1024,
-    /** "≤2K" in the guide. 2560 is the conventional reading of 2K for a long edge. */
     maxEdgePx: 2560,
     maxCount: 1,
-    /** `video_list[].refer_type` — `base` is the clip being rebuilt; `feature` is style/motion guidance. */
-    referTypes: ["base", "feature"] as const,
   },
-
-  /**
-   * ✅ "must be `off` with reference video" — a rule worth naming rather than
-   * leaving as a magic condition inside one handler, because two handlers
-   * accept a video and both must obey it.
-   */
-  soundAllowedWithVideo: false,
 } as const;
 
-export type KlingOmniFrameType = (typeof KLING_OMNI.images.frameTypes)[number];
-export type KlingOmniReferType = (typeof KLING_OMNI.video.referTypes)[number];
+export type KlingContentType = (typeof KLING_OMNI.contentTypes)[number];
+
+/* ───────────────────────────── lip sync ──────────────────────────────────── */
 
 /**
- * How many images a request may carry, given whether it also carries a video
- * and how many elements it uses. The whole point of stating it as a function
- * is that no handler has to remember the interaction.
+ * ✅ VERIFIED: `POST /v1/videos/lip-sync` is a real, separate endpoint with its
+ * own request shape. Part 3 declared Lip Sync unavailable because it is not an
+ * Omni mode — true, and exactly the inference the owner's §6 forbade.
  */
-export function klingOmniImageBudget(opts: { hasVideo: boolean; elementCount: number }): number {
-  if (!opts.hasVideo) return KLING_OMNI.images.withoutVideo.max;
-  return Math.max(0, KLING_OMNI.images.withVideo.maxImagesAndElementsCombined - opts.elementCount);
-}
+export const KLING_LIP_SYNC = {
+  /** ✅ `"input.mode value 'x' is invalid, allowed values: text2video, audio2video"` */
+  modes: ["audio2video", "text2video"] as const,
+  /** ✅ `"input.audio_type value 'bogus' is invalid, allowed values: file, url"` */
+  audioTypes: ["url", "file"] as const,
+  /**
+   * 🔴 ✅ `"input.voice_language value 'bogus' is invalid, allowed values: zh, en"`
+   *
+   * TWO languages. Frenz AI's Text to Audio offers far more through ElevenLabs,
+   * so Kling's NATIVE text-driven lip sync is a two-language feature and the
+   * multilingual path is "ElevenLabs makes the speech, then `audio2video`" — a
+   * separate billed operation, never a hidden chained stage (§3).
+   */
+  voiceLanguages: ["zh", "en"] as const,
+  /** ✅ `"input.voiceSpeed: must be less than or equal to 2.0"` — note the vendor's internal camelCase. */
+  voiceSpeed: { min: 0.8, max: 2.0, default: 1 },
+} as const;
+
+export type KlingLipSyncMode = (typeof KLING_LIP_SYNC.modes)[number];
+export type KlingLipSyncAudioType = (typeof KLING_LIP_SYNC.audioTypes)[number];
+export type KlingLipSyncVoiceLanguage = (typeof KLING_LIP_SYNC.voiceLanguages)[number];
+
+/* ───────────────────────────── helpers ───────────────────────────────────── */
 
 /**
- * Omni's placeholder syntax: a prompt names a reference by position rather
- * than describing it. `<<<element_1>>>` is the first entry of `element_list`,
- * `<<<video_1>>>` the first of `video_list`.
+ * Omni's placeholder syntax: a prompt names a reference by position rather than
+ * describing it. Exposed as functions so the numbering lives in one place — an
+ * off-by-one here points the model at the wrong person.
  *
- * Exposed as functions so the numbering lives in one place — an off-by-one
- * here points the model at the wrong person.
+ * ⚠️ From the model guide, not vendor-verified (it cannot be, without a usable
+ * `element`; see the contract document §2.4).
  */
 export function klingElementRef(oneBasedIndex: number): string {
   return `<<<element_${oneBasedIndex}>>>`;
@@ -147,7 +175,7 @@ export function klingVideoRef(oneBasedIndex: number): string {
   return `<<<video_${oneBasedIndex}>>>`;
 }
 
-/** Seconds as the vendor writes them on the wire: `duration` is a STRING. */
-export function klingDurationValue(seconds: number): string {
-  return String(Math.round(seconds));
+/** Seconds as `settings.duration`. ✅ A number and a numeric string are both accepted; a number is sent. */
+export function klingDurationValue(seconds: number): number {
+  return Math.round(seconds);
 }

@@ -27,6 +27,7 @@ import {
 } from "./signature";
 import {
   extractKlingVideoDurationSeconds,
+  extractKlingBilledUnits,
   extractKlingVideoUrl,
   klingDataFromEnvelope,
   klingExternalTaskId,
@@ -245,12 +246,46 @@ describe("Kling — the status vocabulary, translated once", () => {
     expect(klingExternalTaskId({})).toBeNull();
   });
 
-  it("takes ONE https video URL out of task_result, and refuses a non-https one", () => {
-    expect(extractKlingVideoUrl({ videos: [{ id: "v1", url: "https://cdn.klingai.com/a.mp4", duration: "5.0" }] })).toBe("https://cdn.klingai.com/a.mp4");
-    expect(extractKlingVideoDurationSeconds({ videos: [{ url: "https://cdn.klingai.com/a.mp4", duration: "5.0" }] })).toBe(5);
-    expect(extractKlingVideoUrl({ videos: [{ url: "http://cdn.klingai.com/a.mp4" }] })).toBeNull();
-    expect(extractKlingVideoUrl({ videos: [] })).toBeNull();
+  /*
+    🔴 The REAL success shape, verified against the live API on 2026-09-28:
+
+      "outputs": [ { "type": "video", "id": "…", "url": "https://…", "duration": "5.041" } ]
+
+    Part 2 read `task_result.videos[].url` from a mirror. That field is empty on
+    a genuine Omni success, so a finished, BILLED video came back as "no video"
+    and was refunded. This test is the teeth on that: the first assertion fails
+    against the old reader.
+  */
+  it("🔴 takes the video URL out of outputs[] — the verified Omni success shape", () => {
+    const succeeded = { id: "t1", status: "succeeded", outputs: [{ type: "video", id: "v1", url: "https://cdn.klingai.com/a.mp4", duration: "5.041" }] };
+    expect(extractKlingVideoUrl(succeeded)).toBe("https://cdn.klingai.com/a.mp4");
+    expect(extractKlingVideoDurationSeconds(succeeded)).toBeCloseTo(5.041);
+    expect(extractKlingVideoUrl({ outputs: [{ type: "video", url: "http://cdn.klingai.com/a.mp4" }] })).toBeNull();
+    expect(extractKlingVideoUrl({ outputs: [] })).toBeNull();
     expect(extractKlingVideoUrl(null)).toBeNull();
+  });
+
+  it("still reads the legacy /v1 result envelope, which the Lip Sync endpoint uses", () => {
+    expect(extractKlingVideoUrl({ task_result: { videos: [{ id: "v1", url: "https://cdn.klingai.com/a.mp4", duration: "5.0" }] } })).toBe("https://cdn.klingai.com/a.mp4");
+    expect(extractKlingVideoDurationSeconds({ task_result: { videos: [{ url: "https://cdn.klingai.com/a.mp4", duration: "5.0" }] } })).toBe(5);
+    expect(extractKlingVideoUrl({ task_result: { videos: [{ url: "http://cdn.klingai.com/a.mp4" }] } })).toBeNull();
+  });
+
+  /*
+    The vendor reports what it charged, in UNITS, on the task itself — verified:
+    `[{"charge_type":"unit","amount":"3","package_type":"video"}]`, and
+    `[{"amount":"0"}]` on a task that failed before generating.
+
+    🔴 "no billing line" is NOT zero. A task still running has none at all, and
+    reading that as free would understate real spend in the admin's own figures.
+  */
+  it("🔴 reads the billed UNITS, and tells 'nothing reported' apart from 'zero'", () => {
+    expect(extractKlingBilledUnits({ billing: [{ charge_type: "unit", amount: "3", package_type: "video" }] })).toBe(3);
+    expect(extractKlingBilledUnits({ billing: [{ amount: "0" }] })).toBe(0);
+    expect(extractKlingBilledUnits({ billing: [{ amount: "2" }, { amount: "1.5" }] })).toBe(3.5);
+    expect(extractKlingBilledUnits({ billing: [] })).toBeNull();
+    expect(extractKlingBilledUnits({})).toBeNull();
+    expect(extractKlingBilledUnits({ billing: [{ charge_type: "unit" }] })).toBeNull();
   });
 
   it("a finished task becomes a completed state carrying the output URL", () => {

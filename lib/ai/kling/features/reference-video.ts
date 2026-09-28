@@ -1,61 +1,53 @@
-import { KLING_OMNI_MODEL_NAME, klingVideoRef } from "@/lib/ai/kling/features/capabilities";
-import {
-  commonRequestFields,
-  imageListField,
-  validateCommonOptions,
-  validateImageRefs,
-  validatePrompt,
-  validateSoundWithVideo,
-  validateVideoRef,
-  videoListField,
-  type KlingImageRef,
-  type KlingVideoRefInput,
-} from "@/lib/ai/kling/features/shared";
+import { KLING_OMNI, KLING_OMNI_MODEL_NAME, klingVideoRef } from "@/lib/ai/kling/features/capabilities";
+import { contentItem, promptItem, settingsField, validateCommonOptions, validateMediaUrl, validatePrompt } from "@/lib/ai/kling/features/shared";
 import { invalid, ok, type KlingCommonOptions, type KlingFeatureHandler } from "@/lib/ai/kling/features/types";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  REFERENCE VIDEO on Kling 3.0 Omni — a clip the model TAKES CUES FROM
+ *  REFERENCE VIDEO on Kling 3.0 Omni — a clip the model works from
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * ✅ SUPPORTED. The 3.0 Omni model guide lists "Video Element Reference —
- * Supports uploading/recording video elements", with a clip of 3–10 s,
- * ≤ 200 MB, ≤ 2K, and a combined budget of four references once a video is
- * present.
+ * ✅ **Fields verified, 2026-09-28.** `contents[].type: "video"` is accepted and
+ * its url is genuinely validated:
  *
- * ── 🔴 `refer_type: "feature"`, AND THAT IS THE WHOLE DISTINCTION (§8.8) ───
+ *   {"type":"video","url":"notaurl"} → 400 "Video URL is invalid"
  *
- * The owner's brief: "Do not equate 'video input' with 'reference video'
- * unless the official API does." It does not, and the field says so:
+ * ⚠️ **BEHAVIOUR IS NOT VERIFIED, AND THAT IS WHY THIS IS NOT ROUTABLE YET.**
  *
- *   feature   THIS handler. The clip is guidance — motion, style, energy. The
- *             output is a NEW video that resembles it. The source is not
- *             preserved frame for frame and is not expected to be.
- *   base      full-character.ts. The clip IS the video, rebuilt with a
- *             different character in it. The member expects their own footage
- *             back, edited.
+ * `verification: "fields"`. What a supplied video actually DOES is the open
+ * question, and it is the whole product question:
  *
- * A member who uploads their holiday clip expecting it edited, and receives
- * something merely *inspired* by it, has been given the wrong product and
- * charged for it. One field, two completely different promises — so, two
- * handlers.
+ *   · does the model EDIT the clip (the member's own footage, returned changed)?
+ *   · or does it merely take CUES from it (a new video that resembles it)?
  *
- * ── Sound ──────────────────────────────────────────────────────────────────
- * Omni's native audio may not be requested alongside a reference video. That
- * is the vendor's rule and it is checked by `validateSoundWithVideo`, shared
- * with the other video-accepting handler so neither can forget it.
+ * Part 3 claimed the distinction was expressed by `video_list[].refer_type`
+ * (`"base"` vs `"feature"`). **There is no `refer_type` and no `video_list`** —
+ * the live request has one flat `contents` array and a `video` item carries only
+ * a `url`. So the two products Part 3 split into two handlers are, on the real
+ * API, *the same request*, and which behaviour you get is undocumented.
+ *
+ * 🔴 That matters more than it looks. A member who uploads their footage
+ * expecting it edited, and receives something merely *inspired* by it, has been
+ * given the wrong product and charged for it. So this handler exists, is
+ * complete, and stays **unroutable until one real generation settles which
+ * behaviour the API has** (contract document §7, run #2).
+ *
+ * There is also negative evidence worth recording: supplying a `video` does NOT
+ * satisfy the vendor's "or the task is video editing" exemption from the
+ * aspect-ratio rule — a prompt + video with no `aspect_ratio` is still refused
+ * with "Aspect ratio must be specified…". So on this surface a `video` item is
+ * probably NOT "video editing", which leans towards *cues* rather than *edit*.
+ * Leaning is not knowing, and nothing is declared on a lean.
  */
 
 export interface KlingReferenceVideoInput {
-  /** The clip to take cues from. 3–10 s — the VIDEO's window, not the output's. */
+  /** The clip to work from. 3–10 s — the VIDEO's window, not the output's. */
   videoUrl: string;
   /** Measured by our worker, never claimed by a browser. Omitted = unmeasured, and then unchecked. */
   videoDurationSeconds?: number;
   videoBytes?: number;
   /** What to make from it. Required: without it the model has a mood and no subject. */
   prompt: string;
-  /** Optional stills alongside the clip. They share the four-reference budget with it. */
-  styleImageUrls?: readonly string[];
   options?: KlingCommonOptions;
 }
 
@@ -69,10 +61,14 @@ export const klingReferenceVideo: KlingFeatureHandler<KlingReferenceVideoInput> 
   label: "Reference Video",
   available: true,
   unavailableReason: null,
+  verification: "fields",
   model: KLING_OMNI_MODEL_NAME,
 
   validate(input) {
-    if (!input.videoUrl?.trim()) return invalid("Choose the video to take cues from.");
+    if (!input.videoUrl?.trim()) return invalid("Choose the video to work from.");
+
+    const url = validateMediaUrl(input.videoUrl, "The video");
+    if (!url.ok) return url;
 
     const prompt = validatePrompt(input.prompt, { required: true });
     if (!prompt.ok) return prompt;
@@ -80,29 +76,34 @@ export const klingReferenceVideo: KlingFeatureHandler<KlingReferenceVideoInput> 
     const common = validateCommonOptions(input.options);
     if (!common.ok) return common;
 
-    const sound = validateSoundWithVideo(input.options, true);
-    if (!sound.ok) return sound;
+    /*
+      ⚠️ The VIDEO's window is 3–10 s; the OUTPUT's is 3–15 s. Omni lengthened
+      what it can produce without lengthening what it will read, and conflating
+      the two is the trap this check exists to make impossible.
+    */
+    if (input.videoDurationSeconds !== undefined) {
+      const d = input.videoDurationSeconds;
+      if (!Number.isFinite(d) || d <= 0) return invalid("The video's length could not be measured.");
+      if (d < KLING_OMNI.video.minSeconds) return invalid(`This engine needs at least ${KLING_OMNI.video.minSeconds} seconds of video.`);
+      if (d > KLING_OMNI.video.maxSeconds) return invalid(`This engine reads up to ${KLING_OMNI.video.maxSeconds} seconds of video. Trim your clip and try again.`);
+    }
+    if (input.videoBytes !== undefined && input.videoBytes > KLING_OMNI.video.maxBytes) {
+      return invalid(`This engine takes videos up to ${Math.round(KLING_OMNI.video.maxBytes / (1024 * 1024))} MB.`);
+    }
 
-    const video: KlingVideoRefInput = { url: input.videoUrl, referType: "feature", durationSeconds: input.videoDurationSeconds, bytes: input.videoBytes };
-    const videoVerdict = validateVideoRef(video);
-    if (!videoVerdict.ok) return videoVerdict;
-
-    const images: KlingImageRef[] = (input.styleImageUrls ?? []).map((url) => ({ url }));
-    // With a video present the budget is four in total, and the video itself takes one of them.
-    const imageVerdict = validateImageRefs(images, { hasVideo: true, elementCount: 1, required: false });
-    if (!imageVerdict.ok) return imageVerdict;
+    /*
+      ✅ Verified: a `video` item does NOT exempt the request from the
+      aspect-ratio requirement, so one is required here exactly as for
+      text-to-video.
+    */
+    if (input.options?.aspectRatio === undefined) return invalid("Choose a shape for the video (landscape, portrait or square).");
     return ok;
   },
 
   buildRequest(input) {
-    const images = (input.styleImageUrls ?? []).map((url) => ({ url }));
     return {
-      model_name: KLING_OMNI_MODEL_NAME,
-      multi_shot: false,
-      prompt: input.prompt.trim(),
-      video_list: videoListField([{ url: input.videoUrl, referType: "feature" }]),
-      ...(images.length ? { image_list: imageListField(images) } : {}),
-      ...commonRequestFields(input.options),
+      contents: [promptItem(input.prompt), contentItem("video", { url: input.videoUrl })],
+      settings: settingsField(input.options),
     };
   },
 };

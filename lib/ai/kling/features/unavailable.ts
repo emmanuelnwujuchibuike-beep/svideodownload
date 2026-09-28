@@ -2,70 +2,93 @@ import type { KlingUnavailableFeature } from "@/lib/ai/kling/features/types";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  WHAT KLING 3.0 OMNI DOES NOT DO — declared, not faked
+ *  WHAT THE DIRECT KLING API DOES NOT DO — declared, not faked
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, Part 3: "If Kling 3.0 Omni does NOT directly support one of these
- * features: DO NOT FAKE SUPPORT. Do not silently route it to Replicate, do
- * not silently route it to fal.ai, do not use another AI model, do not chain
- * multiple AI models, do not build a fake compatibility layer, do not claim
- * the feature works when it doesn't. Instead: leave that feature
- * unimplemented, document the exact API limitation, keep the handler
- * capability disabled."
+ * Owner, Part 4 §7: "If a requested feature cannot be performed by direct Kling
+ * using the required quality/behavior: DO NOT use Replicate or fal.ai. Return a
+ * clear unsupported capability state until a proper direct Kling implementation
+ * exists. Do not fake support." §31.24: "Do not declare unsupported features
+ * supported."
  *
- * This is that list. It is a table of REFUSALS rather than four empty modules
- * because a refusal has no input type, no validation and no request to build —
- * a stub handler for each would be four files whose only content is the
- * sentence below, and the sentences are easier to compare side by side.
+ * This is that list. Every reason below is **verified against the live API on
+ * 2026-09-28**, quoting the vendor's own words — not inferred from Omni's model
+ * guide, not inherited from the fal.ai adapter's capability mapping, and not
+ * carried over from Part 3.
  *
- * ── 🔴 THE EVIDENCE, AND ITS LIMITS ────────────────────────────────────────
+ * ── 🔴 THE HEADLINE, AND IT IS A PRODUCT DECISION, NOT AN ENGINEERING ONE ───
  *
- * Kling's 3.0 Omni model guide (kling.ai, read 2026-09-28 — server-rendered,
- * unlike the API reference) lists the model's modes: Text-to-Video,
- * Image-to-Video (start & end frames, multi-image reference, element
- * reference), Video Element Reference, and Element Voice Control. Lip-sync,
- * motion control and video editing are absent from that list, and the guide's
- * FAQ says they "function the same as in O1" — that is, they remain separate
- * endpoints and models, not capabilities of Omni.
+ * **Character Replace has no engine on the direct Kling API.** All four of its
+ * scopes are unavailable, and the reason is not "no region control" (Part 3's
+ * answer) but something more basic that Part 3 could not have known:
  *
- * None of the four below is therefore something Omni refuses at request time;
- * each is something Omni was never documented to do. That distinction matters
- * for Part 4: two of them may be reachable on a DIFFERENT direct Kling model,
- * which is a decision the owner said would be made separately.
+ *   `contents[].type: "element"` requires an `element_id` that refers to an
+ *   element ALREADY EXISTING IN THE KLING ACCOUNT, and there is no endpoint to
+ *   create one.
+ *
+ *       {"type":"element","element_id":"1"}  → 400 "Element id not found: 1"
+ *       {"type":"element"}                   → 400 "Invalid element id: "
+ *
+ *   Supplying the images alongside it in every shape tried — `images[]`,
+ *   `image`, `url`, `urls[]`, a nested `contents[]`, and top-level `elements`,
+ *   `element_list`, `elementList` — changes nothing. And no element-creation
+ *   endpoint exists: `/elements`, `/v1/elements` and `/v1/videos/elements` are
+ *   all 404, `/omni-video/elements` answers "model is not supported".
+ *
+ * So an element is something a human makes in Kling's web application. It cannot
+ * be part of an automated product flow at all, which means character replacement
+ * — the operation every scope is a variant of — is not expressible through this
+ * API. This is not a limitation that "Full Character works and the narrower
+ * scopes don't"; **none of them work.**
+ *
+ * Per §7 that is reported as unsupported and NOT routed to Replicate or fal.ai.
+ * What the product should do about a flagship tool losing its engine is the
+ * owner's call, and it is flagged rather than decided here.
  */
 
+/** The verified element finding, written once and quoted by all four scopes. */
+const ELEMENT_LIMITATION =
+  "The direct Kling API cannot be given a character at all. A character is an `element`, and `contents[].type: \"element\"` only accepts an `element_id` that already exists in the Kling ACCOUNT — it answers \"Element id not found\" for any id, and \"Invalid element id\" for none. Supplying the photos alongside it (as `images`, `image`, `url`, `urls`, a nested `contents`, or a top-level `elements` / `element_list`) changes nothing, and there is no endpoint that creates an element: /elements, /v1/elements and /v1/videos/elements are all 404. Elements are made by a person in Kling's web application, so they cannot be part of an automated flow. Verified against the live API on 2026-09-28.";
+
+const REGION_LIMITATION =
+  "Separately from the element problem, the direct Kling API documents no parameter that scopes a replacement to a region of the body, so there is no way to express \"this part of the person and not the rest\" even once an element exists.";
+
 export const KLING_UNAVAILABLE_FEATURES: readonly KlingUnavailableFeature[] = [
+  {
+    id: "full_character",
+    label: "Full Character",
+    available: false,
+    unavailableReason: `${ELEMENT_LIMITATION} Full Character is exactly this operation — a base clip plus a replacement character — so it is the scope that fails FIRST, not the one that survives. Part 3 declared it available on the strength of Omni's model guide; the live API refuses it.`,
+    revisitWhen: "Kling publishes an element-creation endpoint, or accepts character images inline in the create request.",
+  },
   {
     id: "face_only",
     label: "Face Only",
     available: false,
-    unavailableReason:
-      "Kling 3.0 Omni has no face-swap operation and no parameter that scopes a replacement to a region of the body. Its element reference replaces a SUBJECT as a whole — there is no documented way to ask it to change only the face and leave hair, head shape and body untouched. Building this on Omni would mean sending the identical request Full Character sends and hoping the model restrained itself, which is not a feature.",
-    revisitWhen: "Kling publishes a face-swap endpoint, or an element parameter that scopes the replacement region.",
+    unavailableReason: `${ELEMENT_LIMITATION} ${REGION_LIMITATION}`,
+    revisitWhen: "Kling publishes an element-creation endpoint AND a way to scope the replacement to the face, or a dedicated face-swap endpoint.",
   },
   {
     id: "face_skin",
     label: "Face + Head",
     available: false,
-    unavailableReason:
-      "The same limitation as Face Only. 'Face and head, but not the body' is a region-scoped replacement, and Kling 3.0 Omni's documented element reference offers no region control at all.",
-    revisitWhen: "Kling publishes region-scoped replacement, or a model whose documented behaviour is head-and-face only.",
+    unavailableReason: `${ELEMENT_LIMITATION} ${REGION_LIMITATION} \"Face and head, but not the body\" needs both capabilities and has neither.`,
+    revisitWhen: "Kling publishes element creation and region-scoped replacement, or a model whose documented behaviour is head-and-face only.",
   },
   {
     id: "upper_body",
     label: "Upper Body",
     available: false,
-    unavailableReason:
-      "Again a region-scoped replacement, and again unsupported for the same reason. Note this one is NOT blocked by the old fal.ai capability mapping — that mapping allowed Upper Body on Kling O1 Video Edit. It is blocked because the DIRECT Omni API documents no way to express 'upper body only', and inheriting the fal adapter's answer would be exactly the inference the brief forbids.",
-    revisitWhen: "Kling documents region control on the Omni element reference, or the product accepts that Upper Body and Full Character are the same operation.",
+    unavailableReason: `${ELEMENT_LIMITATION} ${REGION_LIMITATION} Note this is NOT inherited from the old fal.ai capability mapping, which ALLOWED Upper Body on Kling O1 Video Edit — that would be exactly the inference the brief forbids. It is refused because the DIRECT API refuses it.`,
+    revisitWhen: "Kling publishes element creation and region control, or the product accepts that Upper Body and Full Character are one operation.",
   },
   {
-    id: "lip_sync",
-    label: "Lip Sync",
+    id: "reference_image",
+    label: "Reference Image",
     available: false,
     unavailableReason:
-      "Lip sync is not a documented mode of Kling 3.0 Omni. Kling's own 3.0 Omni model guide lists the model's modes and lip-sync is not among them; its FAQ states that lip sync functions as it did in O1 — that is, through a SEPARATE Kling endpoint and model, not through the Omni request this seam builds. Omni's Element Voice Control binds a voice to a character it is generating, which is a different operation from driving the mouth of an existing person in existing footage.",
-    revisitWhen: "A decision is taken to integrate Kling's separate direct lip-sync endpoint, which the owner said would be decided separately. Until then Lip Sync Pro stays on its current providers and is not this seam's business.",
+      "A plain reference image appears to be ignored by the model rather than refused. `contents[].type: \"image\"` is ACCEPTED with any `url` — the url is never validated and, unlike `first_frame`, never fetched: three tasks sent with an unreachable image url all SUCCEEDED, generating from the prompt alone, where an unreachable `first_frame` url makes the task fail with \"Something went wrong when we tried to get the contents of the file.\" A field whose value is never read is a field that does nothing, and a feature built on it would charge a member for a reference the model never saw. The subject-consistency kind of reference is an `element`, which has the problem above. Verified 2026-09-28.",
+    revisitWhen: "A completed generation proves a reachable `image` item actually influences the output (contract document §7, run #3), or Kling documents the field.",
   },
 ];
 

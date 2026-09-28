@@ -1,11 +1,10 @@
 import {
+  KLING_ASPECT_RATIOS,
+  KLING_AUDIO_MODES,
   KLING_OMNI,
-  KLING_OMNI_MODES,
-  KLING_OMNI_ASPECT_RATIOS,
+  KLING_RESOLUTIONS,
   klingDurationValue,
-  klingOmniImageBudget,
-  type KlingOmniFrameType,
-  type KlingOmniReferType,
+  type KlingContentType,
 } from "@/lib/ai/kling/features/capabilities";
 import { invalid, ok, type KlingCommonOptions, type KlingValidation } from "@/lib/ai/kling/features/types";
 
@@ -14,15 +13,21 @@ import { invalid, ok, type KlingCommonOptions, type KlingValidation } from "@/li
  *  WHAT EVERY OMNI HANDLER SHARES — and deliberately nothing more
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * The line this file must not cross: it holds rules that are TRUE OF THE
- * MODEL (a duration window, a URL that must be https, the image budget the
- * vendor sets), never rules that are true of a FEATURE. "Text to Video needs
- * a prompt" lives in text-to-video.ts; "a duration outside 3–15 s is refused"
- * lives here, because every handler would otherwise copy it and one of them
- * would copy it wrong.
+ * Owner, Part 4 §2: "Shared infrastructure must NOT become a hidden shared
+ * video-processing pipeline."
  *
- * Everything is pure. No `server-only`, no imports from the client, no
- * network, no clock — so a handler's validation is testable on its own.
+ * The line this file must not cross: it holds rules that are TRUE OF THE MODEL
+ * (the duration window, a URL that must be https, the allowed setting values),
+ * never rules that are true of a FEATURE. "Text to Video needs a prompt" lives
+ * in text-to-video.ts; "a duration outside 3–15 s is refused" lives here,
+ * because every handler would otherwise copy it and one would copy it wrong.
+ *
+ * There is no request BUILDER for a feature here — only the two fragments every
+ * body has (`settings`, and one `contents` item helper). A handler assembles its
+ * own `contents` array, in its own order, with its own items.
+ *
+ * Everything is pure. No `server-only`, no imports from the client, no network,
+ * no clock — so a handler's validation is testable on its own.
  */
 
 /* ──────────────────────────── small validators ───────────────────────────── */
@@ -34,8 +39,8 @@ import { invalid, ok, type KlingCommonOptions, type KlingValidation } from "@/li
  * handed to a third party that will fetch them; a caller that could pass
  * `http://169.254.169.254/...` would be asking Kling to read our metadata
  * service and hand us the result. The URLs a real caller passes are our own
- * short-lived signed storage links (lib/ai/storage-server.ts), which already
- * satisfy this — the check is here for the day something else calls a handler.
+ * short-lived signed storage links, which already satisfy this — the check is
+ * here for the day something else calls a handler.
  */
 export function validateMediaUrl(value: string, what: string): KlingValidation {
   let url: URL;
@@ -60,7 +65,14 @@ export function validatePrompt(prompt: string | null | undefined, opts: { requir
   return ok;
 }
 
-/** The shared settings, checked once. A handler calls this before its own rules. */
+/**
+ * The shared settings, checked once. A handler calls this before its own rules.
+ *
+ * 🔴 The duration window is enforced HERE because the vendor does not enforce it
+ * at all: `settings.duration` of `0`, `1` and `20` were all accepted live, and
+ * only a non-numeric value is refused. An unenforced range is a member charged
+ * for a length the model may silently truncate.
+ */
 export function validateCommonOptions(options: KlingCommonOptions | undefined): KlingValidation {
   if (!options) return ok;
 
@@ -71,170 +83,67 @@ export function validateCommonOptions(options: KlingCommonOptions | undefined): 
       return invalid(`This engine makes videos between ${KLING_OMNI.duration.minSeconds} and ${KLING_OMNI.duration.maxSeconds} seconds.`);
     }
   }
-  if (options.mode !== undefined && !KLING_OMNI_MODES.includes(options.mode)) return invalid("That quality isn't one this engine offers.");
-  if (options.aspectRatio !== undefined && !KLING_OMNI_ASPECT_RATIOS.includes(options.aspectRatio)) return invalid("That aspect ratio isn't one this engine offers.");
-  if (options.sound !== undefined && options.sound !== "on" && options.sound !== "off") return invalid("The sound setting must be on or off.");
-
-  const negative = validatePrompt(options.negativePrompt, { required: false, what: "The negative prompt" });
-  if (!negative.ok) return negative;
+  if (options.resolution !== undefined && !KLING_RESOLUTIONS.includes(options.resolution)) return invalid("That quality isn't one this engine offers.");
+  if (options.aspectRatio !== undefined && !KLING_ASPECT_RATIOS.includes(options.aspectRatio)) return invalid("That aspect ratio isn't one this engine offers.");
+  if (options.audio !== undefined && !KLING_AUDIO_MODES.includes(options.audio)) {
+    /*
+      🔴 `original` is a value the VENDOR lists but `kling-v3-omni` refuses:
+      "audio mode 'original' is not supported by the current model". Refusing it
+      here means a member sees a sentence instead of a provider rejection after
+      the charge.
+    */
+    return invalid("That sound setting isn't one this engine offers.");
+  }
   return ok;
 }
 
 /**
- * 🔴 The vendor's rule, in one place: native audio may not be requested
- * alongside a reference video. Two handlers accept a video and both must obey
- * it, so neither gets to remember it.
- */
-export function validateSoundWithVideo(options: KlingCommonOptions | undefined, hasVideo: boolean): KlingValidation {
-  if (!hasVideo || options?.sound !== "on") return ok;
-  if (KLING_OMNI.soundAllowedWithVideo) return ok;
-  return invalid("Generated sound isn't available when a reference video is used. Turn sound off, or remove the video.");
-}
-
-export interface KlingImageRef {
-  url: string;
-  /** Which end of the clip this image pins. Omitted = an ordinary reference. */
-  frame?: KlingOmniFrameType;
-}
-
-/** The image list, against the budget the vendor sets — which depends on the video and the elements. */
-export function validateImageRefs(images: readonly KlingImageRef[], opts: { hasVideo: boolean; elementCount: number; required: boolean }): KlingValidation {
-  if (images.length === 0) return opts.required ? invalid("At least one image is required.") : ok;
-
-  const budget = klingOmniImageBudget({ hasVideo: opts.hasVideo, elementCount: opts.elementCount });
-  if (images.length > budget) {
-    return invalid(
-      opts.hasVideo
-        ? `With a video, this engine takes ${KLING_OMNI.images.withVideo.maxImagesAndElementsCombined} references in total (images and characters together).`
-        : `This engine takes up to ${KLING_OMNI.images.withoutVideo.max} reference images.`,
-    );
-  }
-  for (const image of images) {
-    const verdict = validateMediaUrl(image.url, "A reference image");
-    if (!verdict.ok) return verdict;
-    if (image.frame !== undefined && !KLING_OMNI.images.frameTypes.includes(image.frame)) return invalid("That frame position isn't one this engine offers.");
-  }
-  const firsts = images.filter((i) => i.frame === "first_frame").length;
-  const ends = images.filter((i) => i.frame === "end_frame").length;
-  if (firsts > 1) return invalid("Only one image can be the first frame.");
-  if (ends > 1) return invalid("Only one image can be the last frame.");
-  return ok;
-}
-
-export interface KlingVideoRefInput {
-  url: string;
-  referType: KlingOmniReferType;
-  keepOriginalSound?: boolean;
-  /** Measured by our worker, not claimed by a browser. Omitted = unmeasured, and then unchecked. */
-  durationSeconds?: number;
-  bytes?: number;
-}
-
-/**
- * The reference video.
+ * 🔴 The vendor's own rule, verified: `settings.aspect_ratio` is REQUIRED unless
+ * a first frame is supplied — "Aspect ratio must be specified unless a first
+ * frame is provided or the task is video editing".
  *
- * ⚠️ The duration window here is the VIDEO's (3–10 s), which is NOT the
- * output's (3–15 s). Omni lengthened what it can produce without lengthening
- * what it will read. Conflating the two is the mistake this function exists
- * to make impossible.
+ * Checked by us so the refusal is a sentence before the charge, rather than a
+ * 400 from Kling after it.
  */
-export function validateVideoRef(video: KlingVideoRefInput): KlingValidation {
-  const urlVerdict = validateMediaUrl(video.url, "The video");
-  if (!urlVerdict.ok) return urlVerdict;
-  if (!KLING_OMNI.video.referTypes.includes(video.referType)) return invalid("That video reference type isn't one this engine offers.");
-
-  if (video.durationSeconds !== undefined) {
-    if (!Number.isFinite(video.durationSeconds) || video.durationSeconds <= 0) return invalid("The video's length could not be measured.");
-    if (video.durationSeconds < KLING_OMNI.video.minSeconds) return invalid(`This engine needs at least ${KLING_OMNI.video.minSeconds} seconds of video.`);
-    if (video.durationSeconds > KLING_OMNI.video.maxSeconds) return invalid(`This engine reads up to ${KLING_OMNI.video.maxSeconds} seconds of video. Trim your clip and try again.`);
-  }
-  if (video.bytes !== undefined && video.bytes > KLING_OMNI.video.maxBytes) {
-    return invalid(`This engine takes videos up to ${Math.round(KLING_OMNI.video.maxBytes / (1024 * 1024))} MB.`);
-  }
-  return ok;
-}
-
-export interface KlingElementInputRef {
-  /** Several angles of ONE subject. Never two people — that would be two elements. */
-  imageUrls: readonly string[];
-  /** A short clip of the subject instead of stills. */
-  clipUrl?: string;
-  clipDurationSeconds?: number;
-  /** Speech bound to this element. */
-  voiceUrl?: string;
-  voiceDurationSeconds?: number;
-}
-
-export function validateElementRef(element: KlingElementInputRef, index: number): KlingValidation {
-  const label = `Character ${index + 1}`;
-  const hasImages = element.imageUrls.length > 0;
-  const hasClip = !!element.clipUrl;
-  if (!hasImages && !hasClip) return invalid(`${label} needs at least one photo, or a short clip.`);
-  if (element.imageUrls.length > KLING_OMNI.element.maxImagesPerElement) {
-    return invalid(`${label} can have up to ${KLING_OMNI.element.maxImagesPerElement} photos.`);
-  }
-  for (const url of element.imageUrls) {
-    const verdict = validateMediaUrl(url, `${label}'s photo`);
-    if (!verdict.ok) return verdict;
-  }
-  if (element.clipUrl) {
-    const verdict = validateMediaUrl(element.clipUrl, `${label}'s clip`);
-    if (!verdict.ok) return verdict;
-    const d = element.clipDurationSeconds;
-    if (d !== undefined && (d < KLING_OMNI.element.clip.minSeconds || d > KLING_OMNI.element.clip.maxSeconds)) {
-      return invalid(`${label}'s clip should be between ${KLING_OMNI.element.clip.minSeconds} and ${KLING_OMNI.element.clip.maxSeconds} seconds.`);
-    }
-  }
-  if (element.voiceUrl) {
-    const verdict = validateMediaUrl(element.voiceUrl, `${label}'s voice`);
-    if (!verdict.ok) return verdict;
-    const d = element.voiceDurationSeconds;
-    if (d !== undefined && (d < KLING_OMNI.element.voice.minSeconds || d > KLING_OMNI.element.voice.maxSeconds)) {
-      return invalid(`${label}'s voice should be between ${KLING_OMNI.element.voice.minSeconds} and ${KLING_OMNI.element.voice.maxSeconds} seconds.`);
-    }
-  }
-  return ok;
+export function validateAspectRatioPresence(options: KlingCommonOptions | undefined, hasFirstFrame: boolean): KlingValidation {
+  if (hasFirstFrame || options?.aspectRatio !== undefined) return ok;
+  return invalid("Choose a shape for the video (landscape, portrait or square).");
 }
 
 /* ─────────────────────────── request fragments ───────────────────────────── */
 
 /**
- * The settings every Omni body carries.
+ * `settings` — the only object every Omni body carries.
  *
- * 🔴 An omitted option is OMITTED, not defaulted here. Sending `duration: "5"`
- * because nobody chose one silently overrides whatever the vendor's own
- * default becomes, and a future default change would never reach us. The
- * exception is documented per call site.
+ * 🔴 An omitted option is OMITTED, not defaulted here. Sending `duration: 5`
+ * because nobody chose one silently overrides whatever the vendor's own default
+ * becomes, and a future default change would never reach us.
  */
-export function commonRequestFields(options: KlingCommonOptions | undefined): Record<string, unknown> {
-  const body: Record<string, unknown> = {};
-  if (!options) return body;
-  if (options.durationSeconds !== undefined) body.duration = klingDurationValue(options.durationSeconds);
-  if (options.mode !== undefined) body.mode = options.mode;
-  if (options.aspectRatio !== undefined) body.aspect_ratio = options.aspectRatio;
-  if (options.sound !== undefined) body.sound = options.sound;
-  const negative = options.negativePrompt?.trim();
-  if (negative) body.negative_prompt = negative;
-  return body;
+export function settingsField(options: KlingCommonOptions | undefined): Record<string, unknown> {
+  const settings: Record<string, unknown> = {};
+  if (!options) return settings;
+  if (options.durationSeconds !== undefined) settings.duration = klingDurationValue(options.durationSeconds);
+  if (options.resolution !== undefined) settings.resolution = options.resolution;
+  if (options.aspectRatio !== undefined) settings.aspect_ratio = options.aspectRatio;
+  if (options.audio !== undefined) settings.audio = options.audio;
+  return settings;
 }
 
-export function imageListField(images: readonly KlingImageRef[]): Record<string, unknown>[] {
-  return images.map((image) => ({ image: image.url, ...(image.frame ? { type: image.frame } : {}) }));
+/**
+ * One `contents` item.
+ *
+ * ✅ The shape is `{ type, ... }` where `type` is one of the seven verified
+ * values, `prompt` carries `text` and every media item carries `url`. Kept as a
+ * one-item helper rather than a list builder so no handler can be handed
+ * somebody else's `contents` array.
+ */
+export function contentItem(type: KlingContentType, value: { text?: string; url?: string; elementId?: string }): Record<string, unknown> {
+  if (type === "prompt") return { type, text: (value.text ?? "").trim() };
+  if (type === "element") return { type, element_id: value.elementId ?? "" };
+  return { type, url: value.url ?? "" };
 }
 
-export function videoListField(videos: readonly KlingVideoRefInput[]): Record<string, unknown>[] {
-  return videos.map((video) => ({
-    video: video.url,
-    refer_type: video.referType,
-    ...(video.keepOriginalSound === undefined ? {} : { keep_original_sound: video.keepOriginalSound }),
-  }));
-}
-
-export function elementListField(elements: readonly KlingElementInputRef[]): Record<string, unknown>[] {
-  return elements.map((element, i) => ({
-    element_id: i + 1,
-    ...(element.imageUrls.length ? { images: element.imageUrls.slice() } : {}),
-    ...(element.clipUrl ? { video: element.clipUrl } : {}),
-    ...(element.voiceUrl ? { audio: element.voiceUrl } : {}),
-  }));
+/** A prompt item, which every implemented feature sends. */
+export function promptItem(text: string): Record<string, unknown> {
+  return contentItem("prompt", { text });
 }

@@ -7,8 +7,7 @@ import {
   KLING_CALLBACK_TOLERANCE_SECONDS,
   KLING_DEFAULT_BASE_URL,
   KLING_ERROR_CODES,
-  KLING_LEGACY_OMNI_PATH,
-  KLING_LEGACY_TASK_PATH,
+  KLING_LIP_SYNC_PATH,
   KLING_OK_CODE,
   KLING_TASKS_PATH,
   type KlingAuthMode,
@@ -214,6 +213,15 @@ export interface KlingCreateResult {
 export interface KlingCreateTaskOptions {
   /** The model, which is a PATH SEGMENT on the Omni surface — always one of KLING_MODELS, never a request value. */
   model: string;
+  /**
+   * The create path, when it is not the Omni one. Lip Sync is its own endpoint
+   * (`/v1/videos/lip-sync`) with its own request shape, so its handler names the
+   * path rather than having this function guess from the model.
+   *
+   * 🔴 A path is never built from caller input — a handler passes one of the
+   * constants in `config.ts`.
+   */
+  path?: string;
   /** The feature handler's own body. Part 2 ships no handler; Part 3 builds one per feature. */
   input: Record<string, unknown>;
   /** Where Kling should report the outcome. Ours, https, and the same for every feature. */
@@ -249,16 +257,15 @@ export interface KlingCreateTaskOptions {
 export async function klingCreateTask(opts: KlingCreateTaskOptions): Promise<KlingCreateResult> {
   const started = Date.now();
   /*
-    ── The two surfaces express the model in different places (Part 3) ───────
-    New standard  POST /omni-video/<model>   — the model is the PATH segment
-    Legacy        POST /v1/videos/omni       — the model is `model_name`
+    ── 🔴 ONE SURFACE, VERIFIED (Part 4) ─────────────────────────────────────
 
-    A handler always emits `model_name`, because that is what the published
-    request schema names; the surface that carries the model in its path has
-    it removed here rather than in nine feature modules.
+    Part 2 branched the path AND the body on the auth mode, because a mirror
+    described a legacy `POST /v1/videos/omni` where the model travelled in the
+    body as `model_name`. **That endpoint does not exist** — it answers 404 on
+    Kling's own host. There is one Omni create path, the model is a path
+    segment, and there is no `model_name` field anywhere in the request.
   */
-  const legacy = klingAuthMode() === "jwt";
-  const path = legacy ? KLING_LEGACY_OMNI_PATH : klingOmniVideoPath(opts.model);
+  const path = opts.path ?? klingOmniVideoPath(opts.model);
 
   let callback: URL;
   try {
@@ -269,14 +276,22 @@ export async function klingCreateTask(opts: KlingCreateTaskOptions): Promise<Kli
   // The vendor requires https for callbacks, and so do we — a plaintext callback is a forgeable one.
   if (callback.protocol !== "https:") throw new AiJobError("PROVIDER_ERROR", "kling: the callback URL must be https");
 
-  const body: Record<string, unknown> = {
-    ...opts.input,
+  /*
+    ── 🔴 THE CALLBACK GOES IN `options`, AND THAT IS NOT COSMETIC ────────────
+
+    Part 2 put `callback_url` at the TOP LEVEL. The live API ignores unknown
+    top-level fields silently — it does not reject them — so such a request is
+    accepted, generates, BILLS, and never calls back. Every job submitted that
+    way would have hung until the stall sweep failed it, after the member had
+    been charged. Verified against the real API on 2026-09-28.
+  */
+  const options: Record<string, unknown> = {
+    ...(opts.input.options && typeof opts.input.options === "object" ? (opts.input.options as Record<string, unknown>) : {}),
     // 🔴 After the spread, so a feature handler can never take these over.
     callback_url: callback.toString(),
     ...(opts.externalTaskId ? { external_task_id: opts.externalTaskId } : {}),
   };
-  // On the path-per-model surface the body must not also name the model.
-  if (!legacy) delete body.model_name;
+  const body: Record<string, unknown> = { ...opts.input, options };
 
   const res = await withTimeout((signal) => klingCall(path, { method: "POST", body: JSON.stringify(body), signal }), REQUEST_TIMEOUT_MS, "create");
 
@@ -332,15 +347,29 @@ export async function klingGetTask(taskId: string): Promise<KlingTaskData | null
   // Path/query safety: the id goes into a URL, and it arrives from a callback body on one of the two paths.
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new AiJobError("PROVIDER_ERROR", "kling: refusing a task id that is not a plain identifier");
 
-  const path = klingAuthMode() === "jwt" ? `${KLING_LEGACY_TASK_PATH}/${encodeURIComponent(id)}` : `${KLING_TASKS_PATH}?task_ids=${encodeURIComponent(id)}`;
-  const res = await withTimeout((signal) => klingCall(path, { method: "GET", signal }), REQUEST_TIMEOUT_MS, "status");
+  /*
+    ✅ The unified query, verified: `GET /tasks?task_ids=…` answers
+    `{code:0,data:[…]}`, and `data: []` for a task it does not know — which is
+    not an error, so it must not be read as one.
+  */
+  const res = await withTimeout((signal) => klingCall(`${KLING_TASKS_PATH}?task_ids=${encodeURIComponent(id)}`, { method: "GET", signal }), REQUEST_TIMEOUT_MS, "status");
 
   if (res.status === 404) return null;
   if (!res.ok || !klingEnvelopeSucceeded(res.json)) {
     const failure = classifyKlingResponse(res.status, res.json, res.text);
     throw klingErrorToJobError(failure);
   }
-  return klingDataFromEnvelope(res.json);
+  const data = klingDataFromEnvelope(res.json);
+  if (data) return data;
+
+  /*
+    Nothing under `/tasks`. A Lip Sync task was created on the legacy `/v1` tree
+    and may only be queryable there, so that is asked SECOND rather than guessed
+    at first — an unknown id on either surface is still honestly null.
+  */
+  const legacy = await withTimeout((signal) => klingCall(`${KLING_LIP_SYNC_PATH}/${encodeURIComponent(id)}`, { method: "GET", signal }), REQUEST_TIMEOUT_MS, "status (lip sync)").catch(() => null);
+  if (!legacy || legacy.status === 404 || !legacy.ok || !klingEnvelopeSucceeded(legacy.json)) return null;
+  return klingDataFromEnvelope(legacy.json);
 }
 
 /* ───────────────────────── the credential check ──────────────────────────── */
@@ -368,8 +397,14 @@ export async function klingCredentialCheck(): Promise<KlingCredentialCheck> {
   const mode = klingAuthMode();
   if (!mode) return { ok: false, mode: null, status: null, latencyMs: 0, detail: "No Kling credential is set on this deployment (KLING_API_KEY, or KLING_ACCESS_KEY + KLING_SECRET_KEY)." };
 
+  /*
+    ✅ VERIFIED 2026-09-28: with a good credential this exact request answers
+    `200 {"code":0,"message":"SUCCEED","data":[]}` — the task does not exist, and
+    saying so IS the successful answer. A bad credential answers 401/403. One
+    query serves both auth modes, because there is only one task surface.
+  */
   const probe = "0000000000000000";
-  const path = mode === "jwt" ? `${KLING_LEGACY_TASK_PATH}/${probe}` : `${KLING_TASKS_PATH}?task_ids=${probe}`;
+  const path = `${KLING_TASKS_PATH}?task_ids=${probe}`;
   try {
     const res = await withTimeout((signal) => klingCall(path, { method: "GET", signal }), REQUEST_TIMEOUT_MS, "credential check");
     const latencyMs = Date.now() - started;

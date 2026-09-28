@@ -79,6 +79,13 @@ export async function submitKlingFeature<K extends KlingImplementedFeatureId>(op
 
   const result = await klingCreateTask({
     model: handler.model,
+    /*
+      🔴 The handler names its own endpoint. Lip Sync is a DIFFERENT capability on
+      a different path with a different body, and a submit function that chose the
+      path itself would have to know which feature was which — the beginning of
+      the shared pipeline §2 forbids.
+    */
+    ...(handler.path ? { path: handler.path } : {}),
     input: handler.buildRequest(opts.input),
     callbackUrl: opts.callbackUrl,
     externalTaskId: opts.sendExternalTaskId === false ? null : opts.jobId,

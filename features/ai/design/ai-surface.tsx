@@ -125,7 +125,17 @@ export function AiDisplayTitle({
 }) {
   return (
     <>
-      <h1 className={cn("text-[1.95rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.3rem]", className)}>
+      {/*
+        ── THE BRAND FACE ON THE HEADLINE (owner, 2026-09-28) ─────────────────
+        "use a different font for the Ai pages hero H1, use the premium font
+        used for the frenzsave brand font."
+
+        `.font-brand` is Outfit, already loaded by next/font for the FrenzSave
+        wordmark (app/layout.tsx). Reusing it costs NOTHING — no new family, no
+        new weight, no extra request — which is what §20 asks for. It is loaded
+        `preload: false`, so it swaps in rather than blocking paint.
+      */}
+      <h1 className={cn("font-brand text-[1.95rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.3rem]", className)}>
         {title}
         {highlight ? (
           <>
@@ -140,8 +150,14 @@ export function AiDisplayTitle({
           </>
         ) : null}
       </h1>
+      {/*
+        The description is italic (owner, 2026-09-28: "make the AI pages hero
+        description text to use premium italic text font"). Inter's true italic,
+        not a synthesised oblique, and the size is unchanged so it stays as
+        readable as §21 requires.
+      */}
       {subtitle ? (
-        <p className="mt-2.5 max-w-sm text-[14.5px] leading-relaxed text-muted-foreground">{subtitle}</p>
+        <p className="mt-2.5 max-w-sm text-[14.5px] italic leading-relaxed text-muted-foreground">{subtitle}</p>
       ) : null}
     </>
   );

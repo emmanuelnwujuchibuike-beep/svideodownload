@@ -2,9 +2,7 @@
 
 import { Plus, RefreshCw, Trash2, UserRound, X } from "lucide-react";
 
-import { CharacterReplaceInputDirection } from "@/features/ai/character-replace/input-direction";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
-import { CharacterReplaceTutorialButton } from "@/features/ai/character-replace/tutorial-example";
 import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { AssetSlot, CharacterAsset } from "@/lib/ai/character-replace/types";
 import { AI_IMAGE_ACCEPT, AI_IMAGE_FORMAT_LINE, formatResolution, type AiMediaErrorCode } from "@/lib/ai/media";
@@ -53,8 +51,28 @@ export function CharacterReplacePhotoStep({
 
       {/* the owner's red direction (2026-09-14): the exact kind of photo this mode wants, and the drawn example */}
       <div className="space-y-2">
-        <CharacterReplaceInputDirection kind="photo" mode={mode} />
-        <CharacterReplaceTutorialButton kind="photo" mode={mode} />
+        {/*
+          ── 🔴 THE RED PANEL AND THE TUTORIAL LINK ARE GONE (owner, 2026-09-28) ─
+
+          "This section looks like visual noise, this wan 2.2 instructions is
+          different from the Kling Ai instructions that will be integrated next
+          so just remove this red card, and the blue tutorial example."
+
+          Two reasons, and the second is the one that matters:
+
+          1. It was a two-pixel red border round bold red body copy and four
+             red bullets, directly above a dashed blue box. §49 and §24 both
+             rule this out, and it sat between the member and the upload it
+             was describing.
+          2. The guidance is WAN 2.2's. The next session replaces the provider
+             with Kling, whose framing requirements are its own — so this is
+             not advice that is merely loud, it is advice that is about to be
+             wrong. Copy that will mislead is worse than copy that is missing.
+
+          The framing GUARD still runs (`validatePhotoFraming`) — a photo that
+          cannot work is still refused, with a message, at the moment it is
+          chosen. What goes is the pre-emptive lecture, not the check.
+        */}
       </div>
 
       <section>
@@ -73,7 +91,7 @@ export function CharacterReplacePhotoStep({
               busy={busy}
               error={error}
               // 2026-09-20 (brief §3, §14): a refused shape says what this scope needs and opens the drawn example right there
-              guidance={{ best: copy.photo.best, example: <CharacterReplaceTutorialButton kind="photo" mode={mode} className="min-h-0 w-auto border-0 bg-transparent px-0 text-[12.5px] hover:bg-transparent" /> }}
+              guidance={{ best: copy.photo.best }}
               onPick={onPick}
             />
           </div>

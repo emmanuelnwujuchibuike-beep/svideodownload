@@ -42,7 +42,8 @@ export function CharacterReplaceMediaPicker({
   busy?: boolean;
   error: AiMediaErrorCode | null;
   /** 2026-09-20: what the chosen replacement type needs from the photo, shown under a refusal with the drawn example one tap away. */
-  guidance?: { best: string; example: ReactNode } | null;
+  /** `example` is optional since the Wan-era tutorial links were removed (2026-09-28). */
+  guidance?: { best: string; example?: ReactNode } | null;
   onPick: (file: File) => void;
   /** 0166 (multi-video): with `multiple`, every chosen or dropped file at once. Falls back to `onPick` per file when absent. */
   onPickMany?: (files: File[]) => void;

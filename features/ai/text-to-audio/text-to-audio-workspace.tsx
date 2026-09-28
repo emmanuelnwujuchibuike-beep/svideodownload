@@ -1,10 +1,11 @@
 "use client";
 
-import { AudioLines, Check, Gift, Loader2, Mic, Plus, RefreshCcw } from "lucide-react";
+import { AudioLines, Bookmark, Check, Download, Gift, Loader2, Mic, Plus, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AudioAssetPlayer } from "@/features/ai/text-to-audio/audio-player";
+import { audioDownloadHref } from "@/lib/ai/text-to-audio/client";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
@@ -149,7 +150,7 @@ export function TextToAudioWorkspace({
 
         {watching ? (
           <div className="mt-6">
-            <Result job={job} missing={ws.watch.missing} basePath={basePath} libraryHref={libraryHref} lipSyncHref={lipSyncHref} historyHref={historyHref} onAnother={ws.reset} />
+            <Result job={job} missing={ws.watch.missing} basePath={basePath} libraryHref={libraryHref} lipSyncHref={lipSyncHref} voiceLabel={voice?.label ?? null} onAnother={ws.reset} />
           </div>
         ) : (
           <div className="mt-6 space-y-4">
@@ -192,18 +193,27 @@ export function TextToAudioWorkspace({
                     haptic("selection");
                     setVoicePicker(true);
                   }}
-                  className="flex min-h-[60px] w-full items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2 text-left transition hover:bg-secondary/40"
+                  /*
+                    §9: "Use a premium compact voice selector … This should feel
+                    like a media/creative control, not a standard HTML select."
+
+                    It was a bordered row. Now it is the reference's control: a
+                    round avatar-sized disc carrying the voice, the name and its
+                    language/tone beneath, and Change as a real affordance on the
+                    trailing edge. Borderless on a tinted ground, per §25.
+                  */
+                  className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl bg-secondary/50 px-3 py-2.5 text-left transition hover:bg-secondary/80 active:scale-[0.99]"
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Mic className="h-4 w-4" aria-hidden />
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-100 to-sky-100 text-violet-600 ring-1 ring-inset ring-white">
+                    <Mic className="h-[18px] w-[18px]" aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold">{voice?.label ?? "Choose a voice"}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
+                    <span className="block truncate text-[14.5px] font-bold tracking-[-0.01em]">{voice?.label ?? "Choose a voice"}</span>
+                    <span className="block truncate text-[11.5px] font-medium text-foreground/55">
                       {[selectedLanguage?.label, cfg?.deliveryChoice && ws.delivery ? TTS_DELIVERY_LABEL[ws.delivery].label : null].filter(Boolean).join(" · ") || "Tap to choose"}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[12px] font-semibold text-primary">Change</span>
+                  <span className="shrink-0 rounded-full bg-card px-3 py-1.5 text-[12.5px] font-bold text-primary shadow-[0_1px_2px_rgba(15,23,42,0.05)]">Change</span>
                 </button>
               ) : (
                 <>
@@ -482,7 +492,7 @@ export function TextToAudioWorkspace({
 
 const STEPS = [{ label: "Preparing" }, { label: "Generating the voice" }, { label: "Saving your audio" }] as const;
 
-function Result({ job, missing, basePath, libraryHref, lipSyncHref, historyHref, onAnother }: { job: AiJobView | null; missing: boolean; basePath: string; libraryHref: string; lipSyncHref: string; historyHref: string; onAnother: () => void }) {
+function Result({ job, missing, basePath, libraryHref, lipSyncHref, voiceLabel, onAnother }: { job: AiJobView | null; missing: boolean; basePath: string; libraryHref: string; lipSyncHref: string; voiceLabel: string | null; onAnother: () => void }) {
   const tta = job?.textToAudio ?? null;
   if (missing) return <Notice tone="error">That audio is not here any more.</Notice>;
   if (!job) return <div className="h-40 animate-pulse rounded-[1.5rem] bg-secondary/60" aria-busy="true" aria-label="Loading" />;
@@ -490,7 +500,28 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, historyHref,
   if (job.status === "completed") {
     return (
       <div className="space-y-4">
-        <div className="rounded-[1.5rem] border border-border/70 bg-card p-4 sm:p-5">
+        {/*
+          ── THE RESULT, AS THE REFERENCE DRAWS IT ─────────────────────────
+
+          A tick, "Your audio is ready!", then the clip as a real media card,
+          then Download · Save to Library · Share as a row of three.
+
+          What it replaces: a left-aligned info block with a play bar and one
+          Save button, which §10 calls out directly — "The result should feel
+          like a real media player. Do not make the result look like a generic
+          notification."
+        */}
+        <div className="pt-2 text-center">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-sky-50 ring-1 ring-inset ring-sky-100">
+            <Check className="h-7 w-7 text-sky-600" aria-hidden />
+          </span>
+          <h2 className="mt-3 text-[1.35rem] font-bold tracking-[-0.025em]">Your audio is ready!</h2>
+          <p className="mx-auto mt-1 max-w-xs text-[13px] leading-snug text-muted-foreground">
+            Here&apos;s your generated voice. You can listen, download or create a new one.
+          </p>
+        </div>
+
+        <div className="rounded-[1.5rem] bg-secondary/40 p-4 sm:p-5">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
               <AudioLines className="h-5 w-5" aria-hidden />
@@ -498,48 +529,46 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, historyHref,
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-bold tracking-[-0.01em]">{tta?.name ?? "Your audio"}</p>
               <p className="text-[12px] text-muted-foreground">
-                {tta?.characters?.toLocaleString("en-US") ?? 0} characters
-                {tta?.durationMs ? ` · ${Math.round(tta.durationMs / 1000)} s` : ""}
-                {tta?.freeCharactersCovered ? ` · ${tta.freeCharactersCovered} free` : ""}
+                {[
+                  voiceLabel,
+                  tta?.characters ? `${tta.characters.toLocaleString("en-US")} characters` : null,
+                  tta?.durationMs ? `${Math.round(tta.durationMs / 1000)} s` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             </div>
           </div>
-          {tta?.assetId ? <AudioAssetPlayer assetId={tta.assetId} durationMs={tta.durationMs} className="mt-4" onPlay={() => track("text_to_audio_played", {})} /> : <p className="mt-3 text-[12.5px] text-muted-foreground">This one was not saved to your library.</p>}
-        </div>
-        {/*
-          🔴 THE LIBRARY IS THE PRIMARY ACTION (owner, 2026-09-27: "the review
-          should open the audio library"). The saved audio LIVES there — it is
-          where a member goes to play it again, rename it or download it later.
-          Lip Sync Pro is one thing they might do next; the library is where the
-          thing they just made actually is, so it leads.
-        */}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Link href={libraryHref} className="ai-cta inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
-            <AudioLines className="h-4 w-4" aria-hidden /> Open Audio Library
-          </Link>
           {tta?.assetId ? (
-            <Link
-              href={`${lipSyncHref}?audio=${encodeURIComponent(tta.assetId)}`}
-              onClick={() => track("audio_library_reused", { from: "result" })}
-              className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-border px-4 text-[13px] font-semibold"
-            >
-              <Mic className="h-4 w-4" aria-hidden /> Use in Lip Sync Pro
-            </Link>
+            <AudioAssetPlayer assetId={tta.assetId} durationMs={tta.durationMs} className="mt-4" onPlay={() => track("text_to_audio_played", {})} />
+          ) : (
+            <p className="mt-3 text-[12.5px] text-muted-foreground">This one was not saved to your library.</p>
+          )}
+
+          {tta?.assetId ? (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <a
+                href={audioDownloadHref(tta.assetId)}
+                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-card text-[12.5px] font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition active:scale-[0.98]"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden /> Download
+              </a>
+              <Link
+                href={libraryHref}
+                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-card text-[12.5px] font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition active:scale-[0.98]"
+              >
+                <Bookmark className="h-3.5 w-3.5" aria-hidden /> Library
+              </Link>
+              <Link
+                href={`${lipSyncHref}?audio=${encodeURIComponent(tta.assetId)}`}
+                onClick={() => track("audio_library_reused", { from: "result" })}
+                className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-card text-[12.5px] font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition active:scale-[0.98]"
+              >
+                <Mic className="h-3.5 w-3.5" aria-hidden /> Lip Sync
+              </Link>
+            </div>
           ) : null}
         </div>
-        {/*
-          🔴 THIS LINKED TO THE WRONG PLACE (owner, 2026-09-28: "this
-          everything you have saved button lead to character replace history
-          instead of audio library").
-
-          It used `historyHref` — the Character Replace job history — while
-          `libraryHref`, the Audio Library, was already being passed into this
-          component and used elsewhere in the same file. Someone saving a
-          voice track was sent to a list of video jobs.
-
-          Both are real buttons now, not underlined captions: 48px, a surface
-          and an icon each, per §38.
-        */}
         <div className="flex flex-wrap gap-2.5">
           <Link href={basePath} onClick={onAnother} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
             <RefreshCcw className="h-4 w-4" aria-hidden /> Make another

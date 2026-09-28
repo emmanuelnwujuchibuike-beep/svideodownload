@@ -2,9 +2,7 @@
 
 import { Plus, RefreshCw, Trash2, X } from "lucide-react";
 
-import { CharacterReplaceInputDirection } from "@/features/ai/character-replace/input-direction";
 import { CharacterReplaceInputSummary } from "@/features/ai/character-replace/input-summary";
-import { CharacterReplaceTutorialButton } from "@/features/ai/character-replace/tutorial-example";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
 import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/config";
 import type { AssetSlot, CharacterReplaceProject, SourceVideo } from "@/lib/ai/character-replace/types";
@@ -60,8 +58,28 @@ export function CharacterReplaceVideoStep({
       <div>
         {/* the owner's red direction (2026-09-14): the exact kind of video this mode wants */}
         <div className="mb-4 space-y-2">
-          <CharacterReplaceInputDirection kind="video" mode={project.mode} />
-          <CharacterReplaceTutorialButton kind="video" mode={project.mode} />
+        {/*
+          ── 🔴 THE RED PANEL AND THE TUTORIAL LINK ARE GONE (owner, 2026-09-28) ─
+
+          "This section looks like visual noise, this wan 2.2 instructions is
+          different from the Kling Ai instructions that will be integrated next
+          so just remove this red card, and the blue tutorial example."
+
+          Two reasons, and the second is the one that matters:
+
+          1. It was a two-pixel red border round bold red body copy and four
+             red bullets, directly above a dashed blue box. §49 and §24 both
+             rule this out, and it sat between the member and the upload it
+             was describing.
+          2. The guidance is WAN 2.2's. The next session replaces the provider
+             with Kling, whose framing requirements are its own — so this is
+             not advice that is merely loud, it is advice that is about to be
+             wrong. Copy that will mislead is worse than copy that is missing.
+
+          The framing GUARD still runs (`validatePhotoFraming`) — a photo that
+          cannot work is still refused, with a message, at the moment it is
+          chosen. What goes is the pre-emptive lecture, not the check.
+        */}
         </div>
         <CharacterReplaceMediaPicker
           kind="video"
@@ -102,8 +120,6 @@ export function CharacterReplaceVideoStep({
   return (
     <div>
       <div className="mb-4 space-y-2">
-          <CharacterReplaceInputDirection kind="video" mode={project.mode} />
-          <CharacterReplaceTutorialButton kind="video" mode={project.mode} />
         </div>
       <div className="overflow-hidden rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="bg-[#0b0f1a]">

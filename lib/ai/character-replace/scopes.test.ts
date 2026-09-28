@@ -57,7 +57,14 @@ describe("the photo's shape against the scope (brief §3, §14) — deterministi
   it("is applied at the picker (with the example one tap away), at create and on the worker from the decoded file; a mode change drops a photo that no longer fits", () => {
     const hook = code("features/ai/character-replace/use-character-replace-workspace.ts");
     expect(hook).toContain("const framing = validatePhotoFraming(size, state.project.mode);");
-    expect(code("features/ai/character-replace/step-photo.tsx")).toContain("guidance={{ best: copy.photo.best, example:");
+    /*
+      The framing guard still reaches the picker; the TUTORIAL EXAMPLE beside it
+      does not, and that is deliberate (owner, 2026-09-28). It taught Wan 2.2's
+      framing, and the provider is being replaced with Kling next — guidance
+      that is about to be wrong is worse than guidance that is absent. The
+      refusal itself is unchanged.
+    */
+    expect(src("features/ai/character-replace/step-photo.tsx")).toContain("guidance={{ best: copy.photo.best }}");
     expect(code("features/ai/character-replace/media-picker.tsx")).toContain('error === "image-wrong-framing" || error === "image-too-small"');
     expect(code("lib/ai/character-replace/open-job.ts")).toContain("const framingVerdict = validatePhotoFraming({ width: image.width, height: image.height }, mode);");
     const worker = code("server/services/ai-character-replace-prepare-service.ts");

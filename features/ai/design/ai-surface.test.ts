@@ -311,8 +311,12 @@ describe("the desktop shell exists", () => {
       `lg` is not arbitrary: the existing bottom nav is `lg:hidden`, so matching
       it is what guarantees the two can never both show and never both vanish.
     */
+    // The rail moved to its own CLIENT file so the shell could stay a server
+    // component — a client shell that renders {children} puts the whole AI
+    // subtree behind its bundle, which is the white screen the owner reported.
     const shell = code("features/ai/design/ai-studio-shell.tsx");
-    expect(shell).toMatch(/hidden[^"]*lg:flex/);
+    expect(shell, "the shell must not be a client component").not.toMatch(/^"use client"/m);
+    expect(code("features/ai/design/ai-rail.tsx")).toMatch(/hidden[^"]*lg:flex/);
     expect(code("features/app-shell/mobile-nav.tsx")).toMatch(/lg:hidden/);
     // and it is mounted as a layout on BOTH doors, not edited into 22 pages
     for (const f of ["app/(marketing)/ai/layout.tsx", "app/(app)/studio/ai/layout.tsx"]) {

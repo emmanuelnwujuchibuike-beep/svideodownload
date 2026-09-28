@@ -785,13 +785,17 @@ function StepHeader({ title, mode, modeHref }: { title: string; mode: Replacemen
   return (
     <header className="mt-4">
       {/*
-        The crumb, not a pasted eyebrow (owner, 2026-09-28). This step header
-        carried the fourth copy of "Frenz AI · <tool>" in uppercase — §1 of the
-        brief calls that out by name — and its headline had drifted to 1.85rem,
-        a step below every other AI screen.
+        🔴 NO CRUMB HERE (owner, 2026-09-28: "this character replace hero title
+        at the top are duplicates in all character replace pages").
+
+        Replacing this header's uppercase eyebrow with `FrenzAICrumb` put a
+        SECOND crumb on every step, because the workspace already renders one
+        above the step content — so every Character Replace screen showed
+        "Frenz AI / Character Replace" twice, stacked.
+
+        The page owns the crumb; a step owns its title. One of each.
       */}
-      <FrenzAICrumb tool="Character Replace" />
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         {/* the one definition of the display scale — never a private copy */}
         <AiDisplayTitle title={title} />
         <Link

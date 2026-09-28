@@ -70,21 +70,44 @@ export function AudioAssetPlayer({ assetId, durationMs, className, onPlay }: { a
         {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : playing ? <Pause className="h-4 w-4" aria-hidden /> : <Play className="h-4 w-4 translate-x-[1px]" aria-hidden />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary" role="presentation">
-          <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${progress}%` }} />
+        {/*
+          ── A WAVEFORM, NOT A BAR (owner's reference) ────────────────────
+
+          The reference shows a real waveform behind the progress. This is
+          drawn from the ASSET ID, not from decoding the audio: a Web Audio
+          decode of every clip would cost a download and a main-thread pass
+          per result, and §16 is explicit that decoration must not add
+          weight. So the bars are a deterministic hash of the id — the same
+          clip always draws the same shape, different clips look different,
+          and it costs one loop over 40 numbers.
+
+          ⚠️ IT IS NOT A CLAIM ABOUT THE AUDIO. It is a progress readout with
+          texture, marked `role="presentation"`, and the real position is the
+          time under it.
+        */}
+        <div className="flex h-8 items-center gap-[2px]" role="presentation" aria-hidden>
+          {waveform(assetId).map((h, i) => {
+            const pct = ((i + 1) / 40) * 100;
+            return (
+              <span
+                key={i}
+                className={cn("w-full rounded-full transition-colors", pct <= progress ? "bg-primary" : "bg-secondary")}
+                style={{ height: `${h}%` }}
+              />
+            );
+          })}
         </div>
         <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
           {fmtTime(position)} {total > 0 ? `/ ${fmtTime(total)}` : null}
           {error ? <span className="ml-2 font-semibold text-rose-600">{error}</span> : null}
         </p>
       </div>
-      <a
-        href={audioDownloadHref(assetId)}
-        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-border px-3 text-[12px] font-semibold"
-        aria-label="Download this audio"
-      >
-        <Download className="h-3.5 w-3.5" aria-hidden /> Save
-      </a>
+      {/*
+        The inline Save is gone. The result screen below carries Download,
+        Save to Library and Share as a row of three, per the reference — and
+        a fourth affordance inside the player was the same action twice, a
+        pixel apart, which §47 (one clear primary action) rules out.
+      */}
       {url ? (
         <audio
           ref={audio}
@@ -102,6 +125,29 @@ export function AudioAssetPlayer({ assetId, durationMs, className, onPlay }: { a
       ) : null}
     </div>
   );
+}
+
+/**
+ * 40 bar heights for a clip, derived from its id.
+ *
+ * Deterministic so the same audio always draws the same shape — a waveform
+ * that changed on every render would read as the file being different.
+ * Bounded to 22–100% so no bar vanishes and none touches the edge.
+ */
+function waveform(seed: string): number[] {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const out: number[] = [];
+  for (let i = 0; i < 40; i++) {
+    h ^= h << 13;
+    h ^= h >>> 17;
+    h ^= h << 5;
+    out.push(22 + (Math.abs(h) % 79));
+  }
+  return out;
 }
 
 export function fmtTime(seconds: number): string {

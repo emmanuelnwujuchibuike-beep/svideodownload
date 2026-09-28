@@ -654,6 +654,24 @@
     100% { transform: scale(1.6); opacity: 0; }
   }
 
+  /* An INDETERMINATE progress shuttle (Part 6 §22).
+
+     Kling reports submitted / processing / succeeded / failed and nothing in
+     between, so there is no percentage to draw. A bar that creeps to 90% and
+     stops is a fabricated statistic, and this project does not ship those. A
+     shuttle says "working" without claiming to know how far.
+
+     transform only, so it composites on the GPU and costs nothing to run; the
+     reduced-motion rule below stops it dead and leaves a full, static bar. */
+  @keyframes frenz-ai-indeterminate {
+    0%   { transform: translate3d(-110%, 0, 0); }
+    100% { transform: translate3d(320%, 0, 0); }
+  }
+  .ai-indeterminate { animation: frenz-ai-indeterminate 1.35s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    .ai-indeterminate { animation: none; transform: none; }
+  }
+
   /* A result arriving. Blur is the one exception to the transform/opacity rule
      and it is affordable HERE because it runs once, for 600ms, on one element —
      never on an idle loop. It is what makes the result feel created rather than

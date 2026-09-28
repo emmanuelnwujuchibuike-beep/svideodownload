@@ -181,14 +181,28 @@ export function aiToolCards(
       flow: false,
       group: "video",
     },
-    /*
-      ── 🔴 Text to Video and Image to Video land with their PAGES ───────────
-      Both features exist in the backend (verified end to end against the live
-      Kling API, migration 0179) and both have a pipeline. Their cards are held
-      back until `/ai/text-to-video` and `/ai/image-to-video` exist, because a
-      card that leads nowhere is the same lie as a card for a retired tool —
-      which is exactly what this commit is removing.
-    */
+    {
+      id: "text_to_video",
+      icon: Sparkles,
+      tint: "bg-violet-500/[0.10] text-violet-600 dark:text-violet-300",
+      name: "Text to Video",
+      blurb: "Create a video from a written description.",
+      href: textToVideoHref,
+      scope: false,
+      flow: false,
+      group: "create",
+    },
+    {
+      id: "image_to_video",
+      icon: ImageIcon,
+      tint: "bg-indigo-500/[0.10] text-indigo-600 dark:text-indigo-300",
+      name: "Image to Video",
+      blurb: "Animate a photo into a short video.",
+      href: imageToVideoHref,
+      scope: false,
+      flow: false,
+      group: "create",
+    },
     {
       id: "history",
       icon: History,

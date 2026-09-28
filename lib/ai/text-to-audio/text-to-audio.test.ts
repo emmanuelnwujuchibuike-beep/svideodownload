@@ -357,9 +357,16 @@ describe("the tool never becomes a video pipeline (the brief's hard rule)", () =
     const grid = src("features/ai/frenz-ai-tools-grid.tsx");
     expect(grid).toContain("Turn your words into natural AI audio.");
     expect(grid).toContain("Give an existing video natural lip synchronization using any audio.");
-    expect(grid).toContain("Replace a face while preserving the rest of the video.");
-    expect(grid).toContain("Replace the face and skin appearance.");
-    expect(grid).toContain("Transform the complete character in your video.");
+    /*
+      🔴 The four Character Replace scope cards are GONE (Part 5, 2026-09-28).
+      The direct Kling API has no endpoint that accepts a video plus a
+      character, so the tool is retired — and a grid that still advertised
+      "Replace a face…" was sending members to a dead end in production, which
+      is what this assertion now guards against.
+    */
+    for (const retired of ["Replace a face while preserving", "Replace the face and skin appearance", "Transform the complete character", "Replace the face, torso and clothing", "Use your own recording as the voice of a transformation"]) {
+      expect(grid, retired).not.toContain(retired);
+    }
     expect(grid).toContain('audio: { title: "Create Audio"');
     // AI Clean is retired: no card, no id, no href — the only mention allowed is the comment that says so
     expect(codeOf("features/ai/frenz-ai-tools-grid.tsx")).not.toMatch(/ai[_ -]?clean/i);

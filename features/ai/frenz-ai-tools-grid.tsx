@@ -2,16 +2,13 @@
 
 import {
   AudioLines,
-  Captions,
   ChevronRight,
   History,
+  Image as ImageIcon,
   Mic,
   Mic2,
-  PersonStanding,
-  ScanFace,
-  Shirt,
+  Sparkles,
   Type,
-  UserRound,
   UserRoundCheck,
 } from "lucide-react";
 import Link from "next/link";
@@ -53,14 +50,11 @@ export type AiToolId =
   | "voice_clone"
   | "voice_library"
   | "lip_sync_pro"
-  | "face_only"
-  | "skin_face"
-  | "upper_body"
-  | "full_character"
-  | "voice_replace"
+  | "text_to_video"
+  | "image_to_video"
   | "history";
 
-export type AiToolGroup = "audio" | "video" | "transform" | "library";
+export type AiToolGroup = "create" | "audio" | "video" | "library";
 /**
  * The category names from the owner's reference.
  *
@@ -77,15 +71,15 @@ export type AiToolGroup = "audio" | "video" | "transform" | "library";
  * feature that broke.
  */
 export const AI_TOOL_GROUP_LABEL: Record<AiToolGroup, { title: string; hint: string }> = {
+  create: { title: "Create Video", hint: "Make something new from a description or a photo." },
   audio: { title: "Create Audio", hint: "Sound only — no video is touched." },
   video: { title: "Transform Video", hint: "One operation on a video you already have." },
-  transform: { title: "Transform Video", hint: "Change who is in the video, end to end." },
   library: { title: "Yours", hint: "Everything you have made." },
 };
 
 export interface AiToolCard {
   id: AiToolId;
-  icon: typeof ScanFace;
+  icon: typeof Sparkles;
   tint: string;
   name: string;
   blurb: string;
@@ -97,11 +91,17 @@ export interface AiToolCard {
   group: AiToolGroup;
 }
 
-export type FlowToolId = Extract<AiToolId, "voice_replace">;
-export const FLOW_TOOL_HINT: Record<FlowToolId, string> = {
-  voice_replace:
-    "Choose a scope to start. Your own recording is added in the Voice step of your creation.",
-};
+/**
+ * A tool that is a STEP inside another creation rather than a door of its own.
+ *
+ * 🔴 Empty since 2026-09-28 (Part 5). Its only member was Voice Replace, a step
+ * of the Character Replace flow — and that tool is retired, because the direct
+ * Kling API has no endpoint that accepts a video plus a character. The type is
+ * kept so the grid's flow handling stays intact for the next tool that needs
+ * it; `never` means no card can currently claim to be one.
+ */
+export type FlowToolId = never;
+export const FLOW_TOOL_HINT: Record<string, string> = {};
 
 /** The Audio tools' doors open with their pages (the Text to Audio commit); a card never links to a page that does not exist yet. */
 const AUDIO_TOOLS_OPEN = true;
@@ -110,7 +110,7 @@ export function aiToolCards(
   characterReplaceHref: string,
   historyHref: string,
   /** 2026-09-21: the standalone tools' doors, derived from the Character Replace href's root (`/ai` or `/studio/ai`) when a host does not pass them. */
-  doors: { lipSyncHref?: string; textToAudioHref?: string; audioLibraryHref?: string; voiceCloneHref?: string; voiceLibraryHref?: string } = {},
+  doors: { lipSyncHref?: string; textToAudioHref?: string; audioLibraryHref?: string; voiceCloneHref?: string; voiceLibraryHref?: string; textToVideoHref?: string; imageToVideoHref?: string } = {},
 ): AiToolCard[] {
   const root = characterReplaceHref.replace(/\/character-replace$/, "");
   const lipSyncHref = doors.lipSyncHref ?? `${root}/lip-sync`;
@@ -118,7 +118,8 @@ export function aiToolCards(
   const audioLibraryHref = doors.audioLibraryHref ?? `${root}/audio`;
   const voiceCloneHref = doors.voiceCloneHref ?? `${root}/voice-cloning`;
   const voiceLibraryHref = doors.voiceLibraryHref ?? `${root}/voices`;
-  const create = `${characterReplaceHref}/create`;
+  const textToVideoHref = doors.textToVideoHref ?? `${root}/text-to-video`;
+  const imageToVideoHref = doors.imageToVideoHref ?? `${root}/image-to-video`;
   const audio: AiToolCard[] = AUDIO_TOOLS_OPEN
     ? [
         {
@@ -180,61 +181,14 @@ export function aiToolCards(
       flow: false,
       group: "video",
     },
-    {
-      id: "face_only",
-      icon: ScanFace,
-      tint: "bg-violet-500/[0.10] text-violet-600 dark:text-violet-300",
-      name: "Face Only",
-      blurb: "Replace a face while preserving the rest of the video.",
-      href: `${create}?mode=face_only`,
-      scope: true,
-      flow: false,
-      group: "transform",
-    },
-    {
-      id: "skin_face",
-      icon: UserRound,
-      tint: "bg-purple-500/[0.10] text-purple-600 dark:text-purple-300",
-      name: "Face + Head",
-      blurb: "Replace the face and skin appearance.",
-      href: `${create}?mode=skin_face`,
-      scope: true,
-      flow: false,
-      group: "transform",
-    },
-    {
-      id: "upper_body",
-      icon: Shirt,
-      tint: "bg-fuchsia-500/[0.10] text-fuchsia-600 dark:text-fuchsia-300",
-      name: "Upper Body",
-      blurb: "Replace the face, torso and clothing.",
-      href: `${create}?mode=upper_body`,
-      scope: true,
-      flow: false,
-      group: "transform",
-    },
-    {
-      id: "full_character",
-      icon: PersonStanding,
-      tint: "bg-pink-500/[0.10] text-pink-600 dark:text-pink-300",
-      name: "Full Character",
-      blurb: "Transform the complete character in your video.",
-      href: `${create}?mode=full_character`,
-      scope: true,
-      flow: false,
-      group: "transform",
-    },
-    {
-      id: "voice_replace",
-      icon: Captions,
-      tint: "bg-sky-500/[0.10] text-sky-600 dark:text-sky-300",
-      name: "Voice Replace",
-      blurb: "Use your own recording as the voice of a transformation.",
-      href: characterReplaceHref,
-      scope: false,
-      flow: true,
-      group: "transform",
-    },
+    /*
+      ── 🔴 Text to Video and Image to Video land with their PAGES ───────────
+      Both features exist in the backend (verified end to end against the live
+      Kling API, migration 0179) and both have a pipeline. Their cards are held
+      back until `/ai/text-to-video` and `/ai/image-to-video` exist, because a
+      card that leads nowhere is the same lie as a card for a retired tool —
+      which is exactly what this commit is removing.
+    */
     {
       id: "history",
       icon: History,
@@ -270,7 +224,7 @@ export function FrenzAIToolsGrid({
   const cards = aiToolCards(characterReplaceHref, historyHref).filter(
     (c) => include === "all" || !c.scope,
   );
-  const groups: AiToolGroup[] = ["audio", "video", "transform", "library"];
+  const groups: AiToolGroup[] = ["create", "video", "audio", "library"];
   return (
     <section aria-labelledby="ai-tools-title" className={className}>
       {/*
@@ -354,9 +308,9 @@ export function FrenzAIToolsGrid({
  * colour-blocked dashboard.
  */
 const GROUP_GROUND: Record<AiToolGroup, string> = {
+  create: "bg-violet-50/70",
   audio: "bg-sky-50",
-  video: "bg-violet-50",
-  transform: "bg-fuchsia-50/70",
+  video: "bg-indigo-50/70",
   library: "bg-slate-50",
 };
 
@@ -428,14 +382,13 @@ function ToolCardView({
       </span>
     </>
   );
-  if (onFlowTool && tool.flow && tool.id === "voice_replace") {
-    const id = tool.id;
-    return (
-      <button type="button" onClick={() => onFlowTool(id)} className={cn(CARD, GROUP_GROUND[tool.group])}>
-        {body}
-      </button>
-    );
-  }
+  /*
+    🔴 No tool is a flow STEP any more (Part 5). Voice Replace was the only one —
+    a step inside the Character Replace creation — and that tool is retired.
+    `FlowToolId` is `never`, so `tool.flow` can no longer be true for any card
+    and this branch is unreachable; it is removed rather than left as a
+    condition that reads as though some card still behaves this way.
+  */
   return (
     <Link href={href} className={cn(CARD, GROUP_GROUND[tool.group])}>
       {body}

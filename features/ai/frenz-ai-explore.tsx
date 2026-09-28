@@ -197,11 +197,18 @@ export function FrenzAIExplore({
       />
     );
 
-  // a scope the operator switched off is drawn, not offered
+  /*
+    A tool the operator switched off is drawn, not offered.
+
+    🔴 The Character Replace SCOPES no longer appear in this grid (Part 5): the
+    direct Kling API has no endpoint that takes a video plus a character, so
+    Face Only, Face + Head, Upper Body and Full Character are retired rather
+    than disabled. `config.modes` still describes them for the legacy result
+    pages, but none of their ids is an `AiToolId` any more — mapping them in
+    here would be advertising a door that no longer exists, which is exactly
+    what this page was doing in production.
+  */
   const disabled: Partial<Record<AiToolId, string>> = {};
-  if (config)
-    for (const m of config.modes)
-      if (!m.enabled) disabled[m.id] = m.unavailableNote ?? "Not available right now.";
 
   return (
     <div className="pb-24">
@@ -275,7 +282,7 @@ export function FrenzAIExplore({
             historyHref={historyHref}
             disabled={disabled}
             onFlowTool={(id) => {
-              setHint(FLOW_TOOL_HINT[id]);
+              setHint(FLOW_TOOL_HINT[id] ?? null);
               haptic("selection");
               gridRef.current?.scrollIntoView({
                 behavior: window.matchMedia("(prefers-reduced-motion: reduce)")

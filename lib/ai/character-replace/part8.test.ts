@@ -253,9 +253,16 @@ describe("the doors open instantly or say they are opening (owner, 2026-09-14)",
     const grid = src("features/ai/frenz-ai-tools-grid.tsx");
     expect(grid).not.toContain("prefetch={false}");
     expect(grid).toContain("<LinkPendingStripe />");
-    // on the studio page the flow tool (Voice Replace) is a button, never a link to the page it is on (a same-route link is a dead tap);
-    // 2026-09-21: Lip Sync and Text to Speech are no longer scroll buttons — Lip Sync Pro and Text to Audio are their own doors
-    expect(grid).toContain('if (onFlowTool && tool.flow && tool.id === "voice_replace") {');
+    /*
+      🔴 There is no FLOW tool any more (Part 5, 2026-09-28). Voice Replace was
+      the only one — a step inside the Character Replace creation — and that
+      tool is retired because the direct Kling API cannot do character work.
+      `FlowToolId` is `never`, so no card can claim to be a flow step and the
+      button branch is gone. What still matters is the property it protected:
+      every remaining card is a real door with a route of its own.
+    */
+    expect(grid).toContain("export type FlowToolId = never;");
+    expect(grid).not.toContain('id: "voice_replace"');
     expect(grid).not.toContain('id: "lip_sync",');
     expect(grid).not.toContain('id: "tts",');
     /*
@@ -268,8 +275,9 @@ describe("the doors open instantly or say they are opening (owner, 2026-09-14)",
       class attribute. A test that fails on unrelated styling gets deleted by
       whoever is in a hurry.
     */
-    expect(grid).toMatch(/<button type="button" onClick=\{\(\) => onFlowTool\(id\)\}/);
-    expect(grid, "a flow tool must not become a Link").toMatch(/className=\{cn\(CARD/);
+    // …and with no flow tool left, EVERY card is a Link carrying the shared card class.
+    expect(grid).toMatch(/className=\{cn\(CARD/);
+    expect(grid).toContain("<Link href={href}");
     expect(src("features/ai/frenz-ai-explore.tsx")).toContain("<FrenzAIToolsGrid");
     expect(src("features/ai/frenz-ai-chrome.tsx")).not.toContain("prefetch={false}");
     const stripe = src("features/navigation/link-pending-stripe.tsx");

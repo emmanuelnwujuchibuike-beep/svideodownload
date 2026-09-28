@@ -243,8 +243,21 @@ describe("the studio has its own page (owner, 2026-09-20 — Explore AI Studio r
     expect(page).toMatch(/for \(const m of REPLACEMENT_MODES\)\s*router\.prefetch\(`\$\{createPath\}\?mode=\$\{m\}`\);/);
     expect(page).toContain("const cached = readCachedConfig();");
     expect(page).toContain("router.replace(`${createPath}?job=${encodeURIComponent(job)}`);");
+    /*
+      🔴 The scope CARDS are gone from the Explore grid (Part 5, 2026-09-28).
+      The direct Kling API has no endpoint that accepts a video plus a
+      character, so Character Replace is retired — and a grid still offering
+      "Face Only" was walking members into a dead end in production.
+
+      The prefetching above is unchanged and still correct: the create route
+      and its `?mode=` variants remain reachable for anyone holding an old
+      link, and a job already paid for must still open. What must NOT happen is
+      the grid advertising them as things to start.
+    */
     const grid = code("features/ai/frenz-ai-tools-grid.tsx");
-    for (const m of ["face_only", "skin_face", "upper_body", "full_character"]) expect(grid).toContain("href: `${create}?mode=" + m + "`,");
+    for (const m of ["face_only", "skin_face", "upper_body", "full_character"]) {
+      expect(grid, m).not.toContain("href: `${create}?mode=" + m + "`,");
+    }
     // the workspace's step 1 is a navigation to the scope page, and the photo step's back goes there too
     const ws = code("features/ai/character-replace/character-replace-workspace.tsx");
     expect(ws).toContain('if (next === "mode") {');

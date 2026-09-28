@@ -410,6 +410,17 @@ function abs(u: string): string {
  * that produces a directly-streamable H.264 file win whenever it can answer.
  */
 const TIKWM_TIMEOUT_MS = Number(process.env.TIKWM_TIMEOUT_MS || 12000);
+/**
+ * How long to keep waiting for TikWM after the NATIVE route has already
+ * answered (see the race in `extract`).
+ *
+ * Native's formats point at TikTok's own CDN and 403 without the page session
+ * cookie, so a native win is an extraction that cannot be downloaded. This is
+ * the extra latency we are willing to spend to avoid handing a member formats
+ * that will fail — and it is only ever spent when native wins, which is the
+ * case that was already broken.
+ */
+const NATIVE_GRACE_MS = Number(process.env.TIKTOK_NATIVE_GRACE_MS || 3500);
 
 /**
  * TikWM data → our format list. Pure, so the slide mapping is testable.
@@ -573,6 +584,75 @@ export function buildTikWmFormats(d: TikWmData): MediaFormat[] {
   return formats;
 }
 
+/**
+ * TikWM's free tier allows ONE request per second, and says so in words rather
+ * than with a 429: `{"code":-1,"msg":"Free Api Limit: 1 request/second."}` with
+ * HTTP 200. Measured live, 2026-09-28.
+ *
+ * 🔴 This is a rate limit, not a verdict about the video, and treating it as one
+ * was half of an outage: a refused TikWM call answers null, native then wins the
+ * race, and native's formats cannot be downloaded at all (see the race below).
+ * One short retry converts the commonest transient refusal into an answer.
+ */
+const TIKWM_RATE_LIMIT_RE = /free api limit/i;
+/** Just over the vendor's own window, so the retry lands after it has reset. */
+const TIKWM_RATE_LIMIT_RETRY_MS = 1200;
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 TIKWM IS PREFERRED — the race decides LATENCY, never the ROUTE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Both routes run in parallel, so nothing gets slower. But they do not produce
+ * equally usable results, and `Promise.any` treated them as if they did:
+ *
+ *   TikWM   `tt-sd` / `tt-0` pointing at TikWM's OWN re-encode. Downloads.
+ *   native  `tt-0…tt-N` pointing at TikTok's CDN (`v16-webapp-prime…`), which
+ *           answers Akamai **403 Access Denied** without the page's session
+ *           cookie — and `buildFormats` does not carry it.
+ *
+ * So when native won, extraction "succeeded" and every video download then
+ * failed: ffmpeg could not open the URL and `/api/download` answered 502, which
+ * Cloudflare served as its own HTML "502: Bad gateway" page. Measured on
+ * production, 2026-09-28, the same video twice:
+ *
+ *   canonical URL → native (`tt-1,tt-2,tt-0`) → download **502**
+ *   short link    → TikWM  (`tt-sd,tt-0`)     → download **200, 6.8 MB**
+ *
+ * The 2026-09-13 notes predicted exactly this ("so 'let native win' would 403 at
+ * download time today"). It became an outage once TikWM got slow enough — helped
+ * by its one-request-per-second free limit — to start losing the race routinely.
+ *
+ * Native remains a genuine fallback for when TikWM cannot answer at all: its
+ * title, thumbnail and duration are good, and the registry's yt-dlp fallback can
+ * still fetch the media.
+ *
+ * ── Why the ROUTE is tagged rather than sniffed from the result ─────────────
+ * `tt-0` is a format id BOTH routes emit (TikWM when there is no `hdplay`,
+ * native when the first tier is the only one), so inspecting the returned
+ * formats cannot tell them apart. The tag is which promise resolved.
+ *
+ * Exported for the test: the grace window is the whole behaviour, and a rule
+ * that cannot be asserted on is a rule nobody can trust.
+ */
+export async function preferTikWm(
+  viaApi: Promise<VideoMetadata>,
+  viaNative: Promise<VideoMetadata>,
+  graceMs: number,
+  /** For the log line only. */
+  url = "",
+): Promise<VideoMetadata> {
+  const tagged = await Promise.any([viaApi.then((m) => ({ route: "tikwm" as const, m })), viaNative.then((m) => ({ route: "native" as const, m }))]);
+  if (tagged.route === "tikwm") return tagged.m;
+
+  // Native answered first. Spend a little longer on the route whose formats work.
+  const preferred = await Promise.race([viaApi.catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), graceMs))]);
+  if (preferred) return preferred;
+
+  console.warn("[tiktok] native won and TikWM did not answer within the grace window — formats point at TikTok's CDN and may 403 on download", { url: url.slice(0, 120) });
+  return tagged.m;
+}
+
 async function tikwmExtract(
   url: string,
   platform: ReturnType<typeof detectPlatform>,
@@ -580,17 +660,28 @@ async function tikwmExtract(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIKWM_TIMEOUT_MS);
   try {
-    const res = await extractorFetch(
-      `https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(url)}`,
-      {
-        headers: { "User-Agent": DESKTOP_UA, Accept: "application/json" },
-        signal: controller.signal,
-      },
-      "tiktok",
-    );
-    if (!res.ok) return null;
-    const j = (await res.json()) as { code?: number; data?: TikWmData };
-    if (j.code !== 0 || !j.data) return null;
+    const call = async () => {
+      const res = await extractorFetch(
+        `https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(url)}`,
+        {
+          headers: { "User-Agent": DESKTOP_UA, Accept: "application/json" },
+          signal: controller.signal,
+        },
+        "tiktok",
+      );
+      if (!res.ok) return null;
+      return (await res.json()) as { code?: number; msg?: string; data?: TikWmData };
+    };
+
+    let j = await call();
+    if (j && j.code !== 0 && TIKWM_RATE_LIMIT_RE.test(j.msg ?? "")) {
+      // Wait out the vendor's one-per-second window once. The outer abort still
+      // bounds the whole attempt, so this cannot extend past TIKWM_TIMEOUT_MS.
+      await new Promise((r) => setTimeout(r, TIKWM_RATE_LIMIT_RETRY_MS));
+      if (!controller.signal.aborted) j = await call();
+    }
+
+    if (!j || j.code !== 0 || !j.data) return null;
     const d = j.data;
     const formats = buildTikWmFormats(d);
     if (formats.length === 0) return null;
@@ -721,7 +812,34 @@ export const tiktokExtractor: Extractor = {
     const viaNative = nativeExtract(canonical, platform);
 
     try {
-      return await Promise.any([viaApi, viaNative]);
+      /*
+        ── 🔴 TIKWM IS PREFERRED, AND THE RACE NO LONGER DECIDES (2026-09-28) ──
+
+        `Promise.any` handed the member whichever route answered FIRST. That is
+        the right shape for LATENCY and the wrong shape for this pair, because
+        the two routes do not produce equally usable results:
+
+          TikWM   `tt-sd` / `tt-0` pointing at TikWM's own re-encode. Downloads.
+          native  `tt-0…tt-N` pointing at TikTok's CDN (`v16-webapp-prime…`),
+                  which answers Akamai **403 Access Denied** without the page's
+                  session cookie — and `buildFormats` does not carry it.
+
+        So when native won, extraction "succeeded" and every video download then
+        failed: ffmpeg could not open the URL, `/api/download` answered 502, and
+        Cloudflare served its own HTML 502 page over it. Measured on production
+        the same day, on one video, twice:
+
+          canonical URL → native (`tt-1,tt-2,tt-0`) → download **502**
+          short link    → TikWM  (`tt-sd,tt-0`)     → download **200, 6.8 MB**
+
+        This exact outcome was predicted in the 2026-09-13 notes ("so 'let native
+        win' would 403 at download time today"); it became an outage once TikWM
+        got slow enough — helped by its one-request-per-second limit — to start
+        losing the race routinely.
+
+        The rule, and the evidence for it, are in `preferTikWm` above.
+      */
+      return await preferTikWm(viaApi, viaNative, NATIVE_GRACE_MS, canonical);
     } catch (err) {
       /*
         Both routes failed — the registry falls back to yt-dlp from here, same

@@ -83,7 +83,14 @@ async function processDownload(
     try {
       return await proxyToWorker("/api/download", data, clientIp);
     } catch {
-      return fail("Download service is unavailable.", "INTERNAL", 502);
+      /*
+        🔴 503, NOT 502 — Cloudflare REPLACES a 502 from the origin with its own
+        HTML "502: Bad gateway" page, so this JSON never reached the browser and
+        the download card could not show its own failure copy. 503 passes
+        through, which is what makes the sentence above visible at all.
+        (The same rule is why `NOT_INSTALLED` below answers 503.)
+      */
+      return fail("Download service is unavailable.", "INTERNAL", 503);
     }
   }
 
@@ -122,7 +129,8 @@ async function processDownload(
         return fail("The download stalled. Please try again.", "TIMEOUT", 504);
       }
     }
-    return fail("Download failed. Please try again.", "DOWNLOAD_FAILED", 502);
+    // 503 for the same reason as above: a 502 is swallowed by Cloudflare's edge page.
+    return fail("Download failed. Please try again.", "DOWNLOAD_FAILED", 503);
   }
 }
 

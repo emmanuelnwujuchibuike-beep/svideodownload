@@ -56,7 +56,9 @@ export async function POST(request: Request) {
     try {
       return await proxyToWorker("/api/metadata", parsed.data, id);
     } catch {
-      return fail("Extraction service is unavailable.", "INTERNAL", 502);
+      // 503, not 502: Cloudflare replaces an origin 502 with its own HTML page,
+      // which would hide this JSON from the browser entirely.
+      return fail("Extraction service is unavailable.", "INTERNAL", 503);
     }
   }
 

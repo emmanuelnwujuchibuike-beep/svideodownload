@@ -120,7 +120,15 @@ export type AiJobStatus =
  * after the charge.
  */
 export type AiProviderId = "replicate" | "fal" | "kling";
-export const AI_PROVIDER_IDS: readonly AiProviderId[] = ["replicate", "fal", "kling"];
+/**
+ * A TUPLE, not a plain array, so a zod enum can be built straight from it
+ * (`z.enum(AI_PROVIDER_IDS)`) — which is how `lib/ai/character-replace/job-meta.ts`
+ * validates a row's vendor without writing the list a second time.
+ *
+ * `satisfies` keeps the two honest: a value here that is not an `AiProviderId` is
+ * a compile error, and the union is still the source of the type.
+ */
+export const AI_PROVIDER_IDS = ["replicate", "fal", "kling"] as const satisfies readonly AiProviderId[];
 
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",

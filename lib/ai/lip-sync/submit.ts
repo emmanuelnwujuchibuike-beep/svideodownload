@@ -54,6 +54,24 @@ export async function submitLipSyncJob(job: AiJobRow, opts: { from: readonly AiJ
   const config = settings.frenzAiLipSync;
   const plan = readProviderPlan(fresh.metadata);
   const vendor = plan?.id ?? (fresh.provider === "fal" ? "fal" : "replicate");
+  /*
+    🔴 REFUSED, NOT NARROWED (Part 4 §8).
+
+    This function is the Replicate/fal lip-sync path. Kling lip sync is a
+    different endpoint with a different request shape
+    (`lib/ai/kling/features/lip-sync.ts`), so a `kling` row reaching here is a
+    routing mistake — and the interesting question is what the OLD code did with
+    one: `config.models[vendor]` would have been `undefined`, and the next line
+    would have thrown `Cannot read properties of undefined (reading 'model')`. A
+    TypeError, mid-submit, after the charge.
+
+    So it is named explicitly. `FEATURE_UNAVAILABLE` is the code the job system
+    already treats as "refuse and release the funding", which is exactly right
+    for work that must not be submitted here.
+  */
+  if (vendor === "kling") {
+    throw new AiJobError("FEATURE_UNAVAILABLE", "lip-sync: a Kling job cannot be submitted through the Replicate/fal path — it has its own handler");
+  }
   const model = plan?.model || config.models[vendor].model;
   const adapter = lipSyncAdapterFor(vendor, model, settings.frenzAiProviders);
   if (!adapter) throw new AiJobError("FEATURE_UNAVAILABLE", `no lip-sync adapter for ${model} on ${vendor}`);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { PipelineMeta } from "@/lib/ai/character-replace/pipeline";
+import { AI_PROVIDER_IDS, type AiProviderId } from "@/lib/ai/jobs";
 import type { CharacterReplaceQuote } from "@/lib/ai/character-replace/pricing";
 
 /**
@@ -45,7 +46,13 @@ const image = z.object({
 const stageRecord = z
   .object({
     status: z.enum(["pending", "submitted", "processing", "succeeded", "failed"]),
-    provider: z.object({ id: z.enum(["replicate", "fal"]), model: z.string(), version: z.string().nullable() }).nullable().optional(),
+    /*
+      🔴 Widened to accept `kling` (Part 4 §8). This record is what a stage
+      actually ran on, and `jobVendor` reads it FIRST — a zod enum that refused
+      the value would make the parse fail, `readPipeline` answer null, and the
+      whole pipeline become invisible to the reconciler.
+    */
+    provider: z.object({ id: z.enum(["replicate", "fal", "kling"]), model: z.string(), version: z.string().nullable() }).nullable().optional(),
     predictionId: z.string().nullable().optional(),
     submittedAt: z.string().nullable().optional(),
     finishedAt: z.string().nullable().optional(),
@@ -268,22 +275,47 @@ export function providerReferencePaths(meta: Pick<CharacterReplaceJobMeta, "char
 
 /* ───────────────────────── 2026-09-21: the provider plan ─────────────────── */
 
+/**
+ * The vendor a job or a stage RAN on.
+ *
+ * 🔴 WIDENED to include `kling` on 2026-09-28 (Part 4 §8). It used to be
+ * `"replicate" | "fal"`, and the narrowing was not merely cosmetic — see
+ * `jobVendor` below, where every unrecognised value FELL BACK TO REPLICATE. A
+ * Kling row would have been handed to the Replicate adapter for its whole life:
+ * polled at the wrong vendor, cancelled at the wrong vendor, and reconciled into
+ * whatever that vendor said about a task id it had never heard of.
+ *
+ * It is widened here, before anything can create such a row, for the same reason
+ * migration 0178 widened the CHECK constraint before the code could write the
+ * value: the read path has to be right first, or the first Kling job is the one
+ * that discovers it was not.
+ */
+export type JobVendor = AiProviderId;
+
+/**
+ * 🔴 Derived from `AI_PROVIDER_IDS`, never re-listed. That constant already
+ * mirrors the `ai_jobs_provider_chk` CHECK constraint (migration 0178), and a
+ * second hand-written list here is precisely how the two drift — which is the
+ * bug §8 describes.
+ */
+const JOB_VENDORS = AI_PROVIDER_IDS;
+
 /** The router's decision written at Start (start-job.ts `provider_plan`), read by every later step. */
 export interface ProviderPlan {
-  id: "replicate" | "fal";
+  id: JobVendor;
   model: string;
   version: string | null;
-  lipSync: { id: "replicate" | "fal"; model: string; version: string | null } | null;
+  lipSync: { id: JobVendor; model: string; version: string | null } | null;
   providersVersion: number | null;
   test: boolean;
 }
 
 const providerPlanSchema = z
   .object({
-    id: z.enum(["replicate", "fal"]).default("replicate"),
+    id: z.enum(JOB_VENDORS).default("replicate"),
     model: z.string().default(""),
     version: z.string().nullable().optional(),
-    lipSync: z.object({ id: z.enum(["replicate", "fal"]), model: z.string(), version: z.string().nullable().optional() }).nullable().optional(),
+    lipSync: z.object({ id: z.enum(JOB_VENDORS), model: z.string(), version: z.string().nullable().optional() }).nullable().optional(),
     providersVersion: z.number().int().nullable().optional(),
     test: z.boolean().optional(),
   })
@@ -310,28 +342,64 @@ export function readProviderPlan(metadata: unknown): ProviderPlan | null {
   };
 }
 
+/**
+ * 🔴 The row's OWN provider column, believed.
+ *
+ * Part 4 §8: "A Kling job must remain `provider = kling` through its entire
+ * lifecycle. Never allow `kling → replicate` because of a narrow TypeScript
+ * union, default branch, or legacy helper."
+ *
+ * This is that fix. The old code was `row.provider === "fal" ? "fal" :
+ * "replicate"` — a default branch that mapped every value it did not recognise,
+ * including `kling`, onto Replicate. Now an unrecognised value is read as the
+ * value it is when we know it, and only a row with NO provider at all falls back.
+ *
+ * The fallback itself is still correct and still needed: rows written before the
+ * router existed have no `provider_plan` and genuinely ran on Replicate. That is
+ * a historical fact about real rows, not a default for unknown vendors — §27's
+ * "do not rewrite historical rows" cuts both ways.
+ */
+function vendorOfRow(row: { provider?: string | null }): JobVendor {
+  const value = row.provider?.trim();
+  if (value && (JOB_VENDORS as readonly string[]).includes(value)) return value as JobVendor;
+  // No provider on the row at all = a row from before the column was written.
+  return "replicate";
+}
+
 /** The vendor a stage of THIS job runs on — the plan first, the row's column second, Replicate last (a row from before the router). */
-export function stageVendor(row: { provider?: string | null; metadata?: unknown }, stage: "replace" | "lipsync" | "voice"): "replicate" | "fal" {
+export function stageVendor(row: { provider?: string | null; metadata?: unknown }, stage: "replace" | "lipsync" | "voice"): JobVendor {
   const plan = readProviderPlan(row.metadata);
-  if (stage === "lipsync") return plan?.lipSync?.id ?? "replicate";
+  if (stage === "lipsync") return plan?.lipSync?.id ?? vendorOfRow(row);
+  /*
+    🔴 The voice stage is a PREDICTION at the TTS vendor, which is not necessarily
+    the vendor running the replacement. It was hard-coded "replicate" because that
+    was the only vendor that ever ran a voice prediction. Kept as the row's own
+    vendor only when that vendor could actually have run it — otherwise Replicate,
+    because a Kling row's voice stage was still a Replicate prediction.
+  */
   if (stage === "voice") return "replicate";
   if (plan) return plan.id;
-  return row.provider === "fal" ? "fal" : "replicate";
+  return vendorOfRow(row);
 }
 
 /**
- * The vendor holding the request CURRENTLY on the row — for the reconciler,
- * the cancel route and the stall sweep. The pipeline's current stage record
- * (written at submission, the record of what actually ran) first; the plan
- * second; the row's column last. A row from before the router is Replicate.
+ * The vendor holding the request CURRENTLY on the row — for the reconciler, the
+ * cancel route and the stall sweep. The pipeline's current stage record (written
+ * at submission, the record of what actually ran) first; the plan second; the
+ * row's column last.
+ *
+ * 🔴 Getting this wrong is not a display bug: the answer picks the ADAPTER that
+ * polls and cancels the job. A Kling task id handed to the Replicate adapter is
+ * polled at a vendor that has never heard of it, which the reconciler reads as
+ * "gone" — and a job the member paid for is failed while it is still running.
  */
-export function jobVendor(row: { provider?: string | null; metadata?: unknown }): "replicate" | "fal" {
+export function jobVendor(row: { provider?: string | null; metadata?: unknown }): JobVendor {
   const pipeline = readPipeline(row.metadata);
   const stage = pipeline?.current;
   if (pipeline && stage && stage !== "finalize") {
     const recorded = pipeline.records[stage]?.provider?.id;
-    if (recorded === "fal" || recorded === "replicate") return recorded;
+    if (recorded && (JOB_VENDORS as readonly string[]).includes(recorded)) return recorded as JobVendor;
     return stageVendor(row, stage);
   }
-  return row.provider === "fal" ? "fal" : "replicate";
+  return vendorOfRow(row);
 }

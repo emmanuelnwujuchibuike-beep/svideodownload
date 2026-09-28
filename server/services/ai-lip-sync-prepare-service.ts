@@ -88,6 +88,17 @@ export async function prepareLipSyncJob(jobId: string): Promise<PrepareOutcome> 
     const config = settings.frenzAiLipSync;
     const plan = readProviderPlan(job.metadata);
     const vendor = plan?.id ?? "replicate";
+    /*
+      🔴 REFUSED, NOT NARROWED (Part 4 §8) — the same reason as in
+      `lib/ai/lip-sync/submit.ts`. This is the Replicate/fal prepare step; Kling
+      lip sync is a different endpoint with different inputs. Without this the
+      next line reads `.model` off `undefined` and throws a TypeError inside the
+      worker, which surfaces as a generic preparation failure rather than the
+      routing mistake it actually is.
+    */
+    if (vendor === "kling") {
+      throw new PrepareFailure("PREPARATION_FAILED", "a Kling job cannot be prepared through the Replicate/fal lip-sync path", "system");
+    }
     const model = plan?.model || config.models[vendor].model;
     const adapter = lipSyncAdapterFor(vendor, model, settings.frenzAiProviders);
     if (!adapter) throw new PrepareFailure("PREPARATION_FAILED", `no adapter for ${model} on ${vendor}`, "system");

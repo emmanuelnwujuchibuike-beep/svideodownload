@@ -108,6 +108,25 @@ export async function submitCharacterReplaceJob(
   const plan = readProviderPlan(fresh.metadata);
   const providers = settings.frenzAiProviders;
   const vendor = stage === "voice" ? "replicate" : stageVendor(fresh, stage);
+  /*
+    🔴 REFUSED, NOT NARROWED (Part 4 §8).
+
+    This is the Replicate/fal Character Replace path. Direct Kling cannot run
+    character replacement at all — `contents[].type: "element"` needs an element
+    that already exists in the Kling account and there is no API to create one
+    (see lib/ai/kling/features/unavailable.ts) — so a `kling` row here is a
+    routing mistake, and it must say so rather than be handed to a vendor that
+    did not run it.
+
+    Note especially the line below: the webhook URL is chosen by `vendor === "fal"
+    ? fal : replicate`. A Kling row would have been given the REPLICATE callback
+    URL, so the provider's own report would have arrived at a route that verifies
+    Replicate signatures and would have been discarded — the job hanging until
+    the stall sweep failed it, after the charge.
+  */
+  if (vendor === "kling") {
+    throw new AiJobError("FEATURE_UNAVAILABLE", `character-replace: a Kling job cannot be submitted through the Replicate/fal path (stage ${stage})`);
+  }
   const generic = providerFor(vendor);
   if (!generic || !generic.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `the ${vendor} provider is not configured on this deployment`);
   const webhookUrl = vendor === "fal" ? `${origin}/api/webhooks/fal` : `${origin}/api/ai/replicate/webhook`;

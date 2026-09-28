@@ -1,3 +1,4 @@
+import type { JobVendor } from "@/lib/ai/character-replace/job-meta";
 import type { CharacterReplaceLipSyncTier } from "@/lib/ai/character-replace/config";
 import type { ReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceVoiceSource } from "@/lib/ai/character-replace/pricing";
@@ -55,7 +56,7 @@ export type StageStatus = "pending" | "submitted" | "processing" | "succeeded" |
 
 export interface StageRecord {
   status: StageStatus;
-  provider?: { id: "replicate" | "fal"; model: string; version: string | null } | null;
+  provider?: { id: JobVendor; model: string; version: string | null } | null;
   predictionId?: string | null;
   submittedAt?: string | null;
   finishedAt?: string | null;
@@ -151,7 +152,7 @@ export function canAdvance(pipeline: PipelineMeta, from: PipelineStage, to: Pipe
 export function markSubmitted(
   pipeline: PipelineMeta,
   stage: PipelineStage,
-  info: { predictionId: string; provider: { id: "replicate" | "fal"; model: string; version: string | null }; at: string },
+  info: { predictionId: string; provider: { id: JobVendor; model: string; version: string | null }; at: string },
 ): PipelineMeta {
   return {
     ...pipeline,

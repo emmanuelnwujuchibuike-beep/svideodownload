@@ -761,6 +761,30 @@
      centre of the pill never leaves the lavender band at any point of the
      cycle, so the contrast holds without a shadow. Two static layers finish
      it — a top sheen (glass) and a hairline inside the edge. */
+  /* ── THE FRENZ AI GROUND (owner, 2026-09-27) ───────────────────────────────
+     Both references sit on the same thing: a light iridescent wash, lavender
+     into periwinkle with a blush of pink, never flat white and never dark.
+
+     🔴 ONE DEFINITION, because there were already five. The welcome page
+     carried four `radial-gradient` strings inline and every other AI screen
+     invented its own, so two pages a member moves between in one tap were
+     literally different colours. features/ai/design/ai-surface.tsx applies
+     this class; nothing else should hand-roll a background under /ai.
+
+     `background-attachment: fixed` is deliberately NOT used — it forces a
+     repaint of the whole layer on every scroll frame on iOS, and these pages
+     have a 1.6s budget to keep. The gradient is sized to the viewport and
+     simply scrolls with the page. */
+  .ai-wash {
+    background-color: #f7f6fd;
+    background-image:
+      radial-gradient(74% 40% at 10% -4%, rgba(124, 58, 237, 0.13) 0%, transparent 62%),
+      radial-gradient(60% 38% at 98% 16%, rgba(59, 130, 246, 0.12) 0%, transparent 66%),
+      radial-gradient(52% 34% at 88% 96%, rgba(217, 70, 239, 0.09) 0%, transparent 64%),
+      radial-gradient(46% 30% at 4% 92%, rgba(99, 102, 241, 0.08) 0%, transparent 64%);
+    background-repeat: no-repeat;
+  }
+
   .ai-cta {
     position: relative;
     isolation: isolate;

@@ -2,7 +2,7 @@ import {
   KLING_ASPECT_RATIOS,
   KLING_AUDIO_MODES,
   KLING_OMNI,
-  KLING_RESOLUTIONS,
+  KLING_VIDEO_RESOLUTIONS,
   klingDurationValue,
   type KlingContentType,
 } from "@/lib/ai/kling/features/capabilities";
@@ -83,7 +83,14 @@ export function validateCommonOptions(options: KlingCommonOptions | undefined): 
       return invalid(`This engine makes videos between ${KLING_OMNI.duration.minSeconds} and ${KLING_OMNI.duration.maxSeconds} seconds.`);
     }
   }
-  if (options.resolution !== undefined && !KLING_RESOLUTIONS.includes(options.resolution)) return invalid("That quality isn't one this engine offers.");
+  /*
+    🔴 Checked against the VIDEO list, not the field's enum. `480p` passes the
+    enum and is then refused at generation ("video resolution value '480p' is
+    invalid"), so accepting it here would be a refusal after the charge.
+  */
+  if (options.resolution !== undefined && !(KLING_VIDEO_RESOLUTIONS as readonly string[]).includes(options.resolution)) {
+    return invalid("That quality isn't one this engine offers.");
+  }
   if (options.aspectRatio !== undefined && !KLING_ASPECT_RATIOS.includes(options.aspectRatio)) return invalid("That aspect ratio isn't one this engine offers.");
   if (options.audio !== undefined && !KLING_AUDIO_MODES.includes(options.audio)) {
     /*

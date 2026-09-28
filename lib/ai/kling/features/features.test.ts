@@ -3,10 +3,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { KLING_LIP_SYNC, KLING_OMNI, KLING_RESOLUTIONS, klingElementRef, klingVideoRef } from "./capabilities";
+import { KLING_LIP_SYNC, KLING_OMNI, KLING_RESOLUTIONS, KLING_VIDEO_RESOLUTIONS, klingElementRef, klingVideoRef } from "./capabilities";
 import { klingImageToVideo } from "./image-to-video";
 import { klingLipSync } from "./lip-sync";
-import { klingReferenceVideo } from "./reference-video";
 import { klingCapabilityReport, klingFeatureGate, klingFeatureProvenForBilling, KLING_IMPLEMENTED_FEATURE_IDS, KLING_UNAVAILABLE_FEATURES } from "./registry";
 import { klingTextToVideo } from "./text-to-video";
 import { KLING_FEATURE_IDS } from "./types";
@@ -15,8 +14,8 @@ const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const code = (p: string) => src(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
 /** Every pure module under features/ — the list the purity and boundary guards walk. */
-const PURE_FILES = ["registry.ts", "capabilities.ts", "shared.ts", "types.ts", "unavailable.ts", "text-to-video.ts", "image-to-video.ts", "reference-video.ts", "lip-sync.ts"];
-const HANDLER_FILES = ["text-to-video.ts", "image-to-video.ts", "reference-video.ts", "lip-sync.ts"];
+const PURE_FILES = ["registry.ts", "capabilities.ts", "shared.ts", "types.ts", "unavailable.ts", "text-to-video.ts", "image-to-video.ts", "lip-sync.ts"];
+const HANDLER_FILES = ["text-to-video.ts", "image-to-video.ts", "lip-sync.ts"];
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -117,11 +116,24 @@ describe("Text to Video — the one handler verified END TO END", () => {
     expect(body.settings).toEqual({ aspect_ratio: "16:9" });
   });
 
-  it("it is the ONLY handler proven enough for a member's money", () => {
-    expect(klingFeatureProvenForBilling("text_to_video")).toBe(true);
-    for (const id of ["image_to_video", "reference_video", "lip_sync"]) {
+  it("🔴 every SHIPPED feature is proven by a real generation, and nothing else is", () => {
+    // All three were run against the live API on 2026-09-28 and produced correct
+    // output. Nothing reaches a member on the strength of a validation message.
+    for (const id of ["text_to_video", "image_to_video", "lip_sync"]) {
+      expect(klingFeatureProvenForBilling(id), id).toBe(true);
+    }
+    // Refused capabilities are not billable by construction.
+    for (const id of ["reference_video", "reference_image", "full_character", "face_only", "face_skin", "upper_body"]) {
       expect(klingFeatureProvenForBilling(id), id).toBe(false);
     }
+  });
+
+  it("🔴 480p is refused although the settings enum lists it — the model will not render video at it", () => {
+    expect(KLING_RESOLUTIONS as readonly string[]).toContain("480p");
+    expect(KLING_VIDEO_RESOLUTIONS as readonly string[]).not.toContain("480p");
+    // "video resolution value '480p' is invalid" — a refusal AFTER the charge if we allowed it.
+    expect(klingTextToVideo.validate({ prompt: "a cat", options: { aspectRatio: "16:9", resolution: "480p" as never } }).ok).toBe(false);
+    expect(klingTextToVideo.validate({ prompt: "a cat", options: { aspectRatio: "16:9", resolution: "720p" } }).ok).toBe(true);
   });
 });
 
@@ -155,46 +167,6 @@ describe("Image to Video — frames, and the right field names", () => {
     expect(klingImageToVideo.validate({ firstFrameUrl: "https://169.254.169.254/a.jpg" }).ok).toBe(false);
     expect(klingImageToVideo.validate({ firstFrameUrl: "https://localhost/a.jpg" }).ok).toBe(false);
     expect(klingImageToVideo.validate({ firstFrameUrl: "https://x.test/a.jpg", lastFrameUrl: "http://x.test/b.jpg" }).ok).toBe(false);
-  });
-});
-
-describe("Reference Video — one flat `video` item, and an honest unknown", () => {
-  it("🔴 sends a `video` content item with `url` — there is no video_list and no refer_type", () => {
-    const body = klingReferenceVideo.buildRequest({ videoUrl: "https://x.test/a.mp4", prompt: "make it snow", options: { aspectRatio: "16:9" } });
-    expect(body).toEqual({
-      contents: [
-        { type: "prompt", text: "make it snow" },
-        { type: "video", url: "https://x.test/a.mp4" },
-      ],
-      settings: { aspect_ratio: "16:9" },
-    });
-    // 🔴 Part 3 built the whole feature split on `refer_type`, which does not exist.
-    expect(JSON.stringify(body)).not.toContain("refer_type");
-    expect(JSON.stringify(body)).not.toContain("video_list");
-  });
-
-  it("🔴 enforces the VIDEO window, not the output window", () => {
-    const base = { videoUrl: "https://x.test/a.mp4", prompt: "p", options: { aspectRatio: "16:9" as const } };
-    expect(klingReferenceVideo.validate({ ...base, videoDurationSeconds: 2 }).ok).toBe(false);
-    expect(klingReferenceVideo.validate({ ...base, videoDurationSeconds: 11 }).ok).toBe(false);
-    // 12 s is a legal OUTPUT and an illegal INPUT — the assertion that catches a conflation
-    expect(klingReferenceVideo.validate({ ...base, videoDurationSeconds: 12 }).ok).toBe(false);
-    expect(klingReferenceVideo.validate({ ...base, videoDurationSeconds: 10 }).ok).toBe(true);
-  });
-
-  it("🔴 requires an aspect ratio — a `video` item does NOT count as 'video editing' to the vendor", () => {
-    expect(klingReferenceVideo.validate({ videoUrl: "https://x.test/a.mp4", prompt: "p" }).ok).toBe(false);
-  });
-
-  it("refuses an over-size clip and a missing prompt", () => {
-    const base = { videoUrl: "https://x.test/a.mp4", options: { aspectRatio: "16:9" as const } };
-    expect(klingReferenceVideo.validate({ ...base, prompt: "p", videoBytes: KLING_OMNI.video.maxBytes + 1 }).ok).toBe(false);
-    expect(klingReferenceVideo.validate({ ...base, prompt: "  " }).ok).toBe(false);
-  });
-
-  it("🔴 its behaviour is NOT proven, so it is not billable — the distinction Part 3 asserted does not exist on the API", () => {
-    expect(klingReferenceVideo.verification).toBe("fields");
-    expect(klingFeatureProvenForBilling("reference_video")).toBe(false);
   });
 });
 

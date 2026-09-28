@@ -56,6 +56,21 @@ export const KLING_RESOLUTIONS = ["480p", "720p", "1080p", "4k"] as const;
 export type KlingResolution = (typeof KLING_RESOLUTIONS)[number];
 
 /**
+ * 🔴 THE RESOLUTIONS OMNI WILL ACTUALLY RENDER VIDEO AT.
+ *
+ * The vendor's `settings.resolution` validator lists four values, but `480p` is
+ * then refused at generation time with a DIFFERENT error:
+ * `"video resolution value '480p' is invalid"`. Verified 2026-09-28 — the first
+ * attempt at the owner's "cheapest settings" was rejected for exactly this.
+ *
+ * Two lists, because the difference is real and a reader needs both: what the
+ * field accepts, and what the model renders. Offering 480p because the enum
+ * mentions it would be a refusal after the charge.
+ */
+export const KLING_VIDEO_RESOLUTIONS = ["720p", "1080p", "4k"] as const;
+export type KlingVideoResolution = (typeof KLING_VIDEO_RESOLUTIONS)[number];
+
+/**
  * `settings.aspect_ratio`. ✅ VERIFIED:
  * `"aspect_ratio value '99:1' is invalid, supported values: 16:9, 9:16, 1:1"`
  */

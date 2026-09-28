@@ -1,6 +1,5 @@
 import { klingImageToVideo, type KlingImageToVideoInput } from "@/lib/ai/kling/features/image-to-video";
 import { klingLipSync, type KlingLipSyncInput } from "@/lib/ai/kling/features/lip-sync";
-import { klingReferenceVideo, type KlingReferenceVideoInput } from "@/lib/ai/kling/features/reference-video";
 import { klingTextToVideo, type KlingTextToVideoInput } from "@/lib/ai/kling/features/text-to-video";
 import { klingUnavailableFeature, KLING_UNAVAILABLE_FEATURES } from "@/lib/ai/kling/features/unavailable";
 import { KLING_FEATURE_IDS, type KlingFeatureHandler, type KlingFeatureId, type KlingValidation, type KlingVerification } from "@/lib/ai/kling/features/types";
@@ -18,8 +17,8 @@ import { KLING_FEATURE_IDS, type KlingFeatureHandler, type KlingFeatureId, type 
  * that assembles a body, and no common validation path every feature is squeezed
  * through. Each handler is imported, listed, and otherwise left alone.
  *
- *     text-to-video   image-to-video   reference-video   lip-sync
- *            └──────────────┬──────────────┴────────────────┘
+ *        text-to-video      image-to-video      lip-sync
+ *              └─────────────────┬─────────────────┘
  *                    this directory
  *                           │
  *            the shared client (TRANSPORT only)
@@ -33,13 +32,12 @@ import { KLING_FEATURE_IDS, type KlingFeatureHandler, type KlingFeatureId, type 
  */
 
 /** A feature whose handler is built. Whether it may RUN is a separate question — see `klingFeatureGate`. */
-export type KlingImplementedFeatureId = "text_to_video" | "image_to_video" | "reference_video" | "lip_sync";
+export type KlingImplementedFeatureId = "text_to_video" | "image_to_video" | "lip_sync";
 
 /** The input each implemented handler takes — so a caller cannot hand one feature another's input. */
 export interface KlingFeatureInputs {
   text_to_video: KlingTextToVideoInput;
   image_to_video: KlingImageToVideoInput;
-  reference_video: KlingReferenceVideoInput;
   lip_sync: KlingLipSyncInput;
 }
 
@@ -48,11 +46,10 @@ export const KLING_HANDLERS: {
 } = {
   text_to_video: klingTextToVideo,
   image_to_video: klingImageToVideo,
-  reference_video: klingReferenceVideo,
   lip_sync: klingLipSync,
 };
 
-export const KLING_IMPLEMENTED_FEATURE_IDS: readonly KlingImplementedFeatureId[] = ["text_to_video", "image_to_video", "reference_video", "lip_sync"];
+export const KLING_IMPLEMENTED_FEATURE_IDS: readonly KlingImplementedFeatureId[] = ["text_to_video", "image_to_video", "lip_sync"];
 
 export function isKlingImplementedFeature(id: string): id is KlingImplementedFeatureId {
   return (KLING_IMPLEMENTED_FEATURE_IDS as readonly string[]).includes(id);
@@ -99,10 +96,13 @@ export function klingFeatureGate(id: string): KlingCapability {
  * declare unsupported features supported"). A handler can be complete and correct
  * about every field name and still be unproven about what it PRODUCES.
  *
- *   text_to_video    "generation" — a real run completed, output and billing seen
- *   image_to_video   "fields"     — the url is provably fetched, no completed run
- *   reference_video  "fields"     — and its BEHAVIOUR is the open question
- *   lip_sync         "fields"     — a task was accepted, no completed run
+ *   text_to_video    "generation" — a real run completed; output and billing seen
+ *   image_to_video   "generation" — the reference photo came back animated, faithfully
+ *   lip_sync         "generation" — the source video was preserved and the mouth driven
+ *
+ * All three were confirmed on 2026-09-28 at 720p. `reference_video` was removed
+ * entirely rather than left gated: a generation PROVED Omni discards the supplied
+ * video, so there is nothing to un-gate later (unavailable.ts records the runs).
  *
  * Routing consults this, so nothing reaches a paying member on the strength of a
  * validation message alone. It is a one-line change per handler once a run is

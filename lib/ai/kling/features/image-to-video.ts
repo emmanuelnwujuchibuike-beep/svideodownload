@@ -20,9 +20,14 @@ import { invalid, ok, type KlingCommonOptions, type KlingFeatureHandler } from "
  * **a task that fails before generating is not billed**, which the refund path
  * can rely on.
  *
- * ⚠️ `verification: "fields"` rather than `"generation"`: no completed run from a
- * REACHABLE image has been made, because that spends the owner's money and was
- * not authorised. The run is listed in the contract document §7 as #1.
+ * ✅ **AND VERIFIED BY GENERATION, 2026-09-28.** A reachable portrait was sent as
+ * `first_frame` at 720p/3s with the prompt "slow gentle camera push in". The
+ * output was that exact photograph, animated — the same person, clothing,
+ * lighting and background, faithfully preserved. 1.8 units.
+ *
+ * 🔴 It is the ONLY input type Omni genuinely honours. A `video` item is
+ * discarded and a plain `image` item is ignored (see unavailable.ts), so
+ * "the picture becomes the clip" is the real, and the only, image capability.
  *
  * ── 🔴 `last_frame`, NOT `end_frame` ────────────────────────────────────────
  *
@@ -61,7 +66,7 @@ export const klingImageToVideo: KlingFeatureHandler<KlingImageToVideoInput> = {
   label: "Image to Video",
   available: true,
   unavailableReason: null,
-  verification: "fields",
+  verification: "generation",
   model: KLING_OMNI_MODEL_NAME,
 
   validate(input) {

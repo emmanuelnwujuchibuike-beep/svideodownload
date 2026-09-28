@@ -83,6 +83,14 @@ export const KLING_UNAVAILABLE_FEATURES: readonly KlingUnavailableFeature[] = [
     revisitWhen: "Kling publishes element creation and region control, or the product accepts that Upper Body and Full Character are one operation.",
   },
   {
+    id: "reference_video",
+    label: "Reference Video",
+    available: false,
+    unavailableReason:
+      "Kling 3.0 Omni does NOT edit a supplied video — it discards it. Verified by generation, not by inference: a 3 s clip of an animated forest was sent as `contents[].type:\"video\"` with the prompt \"keep this exact scene and motion, change only the sky to deep purple\", and the result was a photoreal empty plain under a purple sky with nothing of the source in it. Repeated using Kling's own placeholder syntax (\"Keep <<<video_1>>> exactly as it is…\") and the result was a photoreal tree in a field — again nothing of the source. A third run added a reference photo and asked for the person to be replaced; the output was a different person in a different place, matching neither input. The supplied video is not preserved, so any product built on this would take a member's footage and hand back something unrelated. Note the contrast that proves this is a real finding rather than a bad prompt: /v1/videos/lip-sync DOES preserve the same source video exactly, changing only the mouth.",
+    revisitWhen: "Kling documents a genuine video-editing task on Omni (no parameter tried — refer_type, role, edit, task_type at item, settings and top level — reaches the 'task is video editing' branch its own aspect-ratio error mentions), or publishes a video-to-video endpoint.",
+  },
+  {
     id: "reference_image",
     label: "Reference Image",
     available: false,

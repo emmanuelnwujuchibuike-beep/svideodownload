@@ -209,28 +209,91 @@ estimated forever.
 
 ---
 
-## 5 · Capability verdicts, and what is still unproven
+## 5 · Capability verdicts — SETTLED BY GENERATION
 
-| Feature | Verdict | Evidence |
+Nine real generations were run on 2026-09-28 with the owner's authorisation, at
+the cheapest settings that work. These are outcomes, not inferences.
+
+| Feature | Verdict | How it was settled |
 |---|---|---|
-| **Text → Video** | ✅ **VERIFIED WORKING** | a real generation succeeded, produced one `outputs[]` video of `duration "5.041"`, billed 3 units |
-| **Image → Video** | ✅ **VERIFIED to the field level** | `first_frame` / `last_frame` require `url`, and the URL is really fetched (an unreachable one fails the task). No completed generation from a reachable image yet |
-| **Lip Sync** | ✅ **VERIFIED to the field level** — and it **exists**, contradicting Part 3 | see §6 |
-| **Reference Video** | ⚠️ **endpoint field verified, behaviour NOT** | `{"type":"video","url"}` is validated (`"Video URL is invalid"`), but whether it *edits* the clip or merely *takes cues* is unconfirmed, and `video` alone does **not** satisfy the "task is video editing" branch of the aspect-ratio rule |
-| **Reference Image** | ⚠️ **probably not supported** | §2.5 — the URL is never fetched |
-| **Full Character** | ❌ **NOT AVAILABLE via the API** | it needs `element`, and §2.4 shows an `element_id` cannot be created through the API |
-| **Face Only / Face + Head / Upper Body** | ❌ **NOT AVAILABLE** | unchanged from Part 3: no region-scoped replacement exists at all, on any surface found |
+| **Text → Video** | ✅ **SHIPS** | a real run succeeded; one `outputs[]` video, `duration "5.041"`, 3 units |
+| **Image → Video** | ✅ **SHIPS** | a reachable portrait sent as `first_frame` came back **animated and faithful** — same person, clothing, lighting, background. 1.8 units at 720p/3s |
+| **Lip Sync** | ✅ **SHIPS** | `audio2video` on a 720p clip of a person: **the source video was preserved exactly** and only the mouth was driven. 0.5 units |
+| **Reference Video** | ❌ **REFUSED** | see §5.1 — Omni **discards** the supplied video |
+| **Reference Image** | ❌ **REFUSED** | a plain `image` item is never fetched; three tasks with an unreachable image url all succeeded, generating from the prompt alone |
+| **Full Character / Face Only / Face + Head / Upper Body** | ❌ **REFUSED** | see §5.2 — there is no way to supply a character, and no endpoint takes video + character |
 
-The three ⚠️/❌ rows in the middle are the ones that decide whether Character
-Replace has an engine at all. **They cannot be settled without a few real
-generations against reachable media**, which bill the owner's account. Those
-runs are listed in §7 and are deliberately left for the owner to authorise.
+### 5.1 🔴 Omni does NOT edit a supplied video — proven three times
 
-Per the brief's §31.24 — *do not declare unsupported features supported* — the
-unproven ones stay unavailable with the concrete limitation recorded, not
-optimistically enabled.
+The question that decides Character Replace, tested directly:
 
----
+| run | request | result |
+|---|---|---|
+| A | prompt "keep this exact scene and motion, change only the sky to deep purple" + `video` | a photoreal **empty plain under a purple sky**. Nothing of the animated-forest source. |
+| D | the same, using Kling's own placeholder syntax — "Keep `<<<video_1>>>` exactly as it is…" | a photoreal **tree in a field**. Again nothing of the source. |
+| B / E | prompt + `video` + a reference photo, asking for the person to be replaced (E with `<<<video_1>>>` and `<<<image_1>>>`) | **a different person in a different place**, matching neither input |
+
+The placeholder tokens were tested specifically because omitting them was the
+obvious flaw in the first attempt. They changed nothing.
+
+**The contrast that proves this is a real finding and not a bad prompt:**
+`/v1/videos/lip-sync` was given the same kind of source and **preserved it
+exactly** — same person, clothing, background and framing, mouth driven. Kling
+*can* edit a supplied video. It simply cannot do it through Omni.
+
+No parameter reaches the "task is video editing" branch that Omni's own
+aspect-ratio error mentions. Tried and rejected, at item, `settings` and top
+level: `refer_type` (`base`/`feature`), `role`, `edit`, `type_`, `mode`, `as`,
+`task_type`, `video_edit`, and a `video_id` instead of a url.
+
+### 5.2 🔴 The complete endpoint map — there is no character endpoint
+
+Every path that exists on the direct API, probed 2026-09-28:
+
+| endpoint | state |
+|---|---|
+| `POST /omni-video/kling-v3-omni` | ✅ live |
+| `POST /v1/videos/text2video` | ✅ live — models `kling-v2-5-turbo`, `kling-v3` |
+| `POST /v1/videos/image2video` | ✅ live — models `kling-v2-5-turbo`, `kling-v3` |
+| `POST /v1/videos/lip-sync` | ✅ live |
+| `POST /v1/videos/video-extend` | exists (needs a Kling `videoId`) |
+| `POST /v1/videos/effects` | exists — template scenes (`hug`, `kiss`, `expansion`, `bloombloom`, `dizzydizzy`) |
+| `POST /v1/images/generations` | exists |
+| `POST /v1/images/kolors-virtual-try-on` | exists (clothing) |
+| `POST /v1/videos/multi-image2video` | 🔴 **RETIRED** — "This API is no longer available", for every model |
+
+404 on every one of: `/v1/videos/{video2video, motion-brush, avatar, character,
+face-swap, swap, omni, generations, edit}`, `/v1/images/{face-swap, image2image,
+edit}`, `/v1/{avatars, characters, elements, assets, uploads, files}`,
+`/omni-image/*`, and the bare `/videos`, `/images`, `/elements`, `/models`.
+
+**There is no face-swap endpoint and no character endpoint.** `multi-image2video`
+was the only one that accepted inline reference images, and it is retired. Older
+models (`kling-v1`, `kling-v1-5`, `kling-v1-6`, `kling-v2-1`, `kling-v2-master`,
+`kling-v2-1-master`) are all discontinued.
+
+So Character Replace needs **video-in + character-in → the same video with the
+person swapped**, and no endpoint on the direct API accepts both. Per §7 it is
+reported unsupported and is **not** routed to Replicate or fal.ai.
+
+> The capability exists in Kling's **web application**, where a person creates an
+> `element` by hand. `element_id` refers to one of those. It is not something an
+> API caller can create, so it cannot be part of an automated product flow.
+
+### 5.3 The unit costs actually observed
+
+| operation | settings | units |
+|---|---|---|
+| Omni video | 720p, 3 s | **1.8** |
+| Omni video | 720p, 5 s | **3** |
+| Lip Sync | ~3 s | **0.5** |
+| any task that failed before generating | — | **0** |
+
+⚠️ `480p` is listed by `settings.resolution` but **refused at generation**
+("video resolution value '480p' is invalid"), so 720p is the real floor for
+video and the cheapest tier there is.
+
+🔴 A failed task costs nothing, which the refund path can rely on.
 
 ## 6 · Kling Lip Sync — a real, separate, direct endpoint
 
@@ -267,7 +330,7 @@ operation**, exactly as the brief's §3 requires, not a hidden chained stage.
 
 ---
 
-## 7 · The generations still owed, and what each one settles
+## 7 · The generations that were run (all authorised by the owner)
 
 Each of these is one real, billable task. They are listed so the owner can
 authorise them as a set, and so nobody later assumes they were run.

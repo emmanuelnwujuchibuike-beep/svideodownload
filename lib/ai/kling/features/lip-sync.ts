@@ -31,9 +31,19 @@ import { invalid, ok, type KlingFeatureHandler, type KlingValidation } from "@/l
  *   {"input":{…,"voice_language":"bogus"}}      → "allowed values: zh, en"
  *   {"input":{…,"voice_speed":99}}              → "input.voiceSpeed: must be less than or equal to 2.0"
  *
- * Verified 2026-09-28 against the live API. `verification: "fields"` — an
- * `audio2video` task was accepted with reachable-looking inputs, but no completed
- * generation from real media has been made (contract document §7, run #4).
+ * ✅ **VERIFIED BY GENERATION, 2026-09-28.** An `audio2video` run against a 720p
+ * clip of a person completed: 0.5 units, and the output PRESERVED THE SOURCE
+ * VIDEO EXACTLY — same person, same clothing, same background, same framing —
+ * with only the mouth driven.
+ *
+ * 🔴 That contrast is the most useful fact in this migration. Kling CAN edit a
+ * supplied video; it just cannot do it through Omni. The same source sent to
+ * Omni as a `video` content item came back as a completely different scene.
+ *
+ * Two validations worth knowing, both failing at ZERO cost: the video must be
+ * 512–2160 px tall ("The video height should not be less than 512px and larger
+ * than 2160px"), and it must contain a person ("The model did not detect a
+ * human").
  *
  * ── 🔴 THIS IS NOT CHAINED TO ANYTHING (§3, §6) ─────────────────────────────
  *
@@ -112,7 +122,7 @@ export const klingLipSync: KlingFeatureHandler<KlingLipSyncInput> = {
   label: "Lip Sync",
   available: true,
   unavailableReason: null,
-  verification: "fields",
+  verification: "generation",
   /*
     🔴 NOT the Omni model, and NOT the Omni path. Lip Sync is a different
     capability on a different endpoint, which is the entire point of §6. The

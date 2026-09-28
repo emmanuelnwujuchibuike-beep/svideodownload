@@ -8,6 +8,7 @@ import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/med
 import { VideoReadyPlayer } from "@/features/ai/character-replace/video-ready-player";
 import { startAiResultDownload } from "@/features/ai/ai-result-download";
 import { AiHero } from "@/features/ai/design/ai-surface";
+import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
 import { useLipSyncWorkspace, type LaunchPhase } from "@/features/ai/lip-sync/use-lip-sync-workspace";
@@ -425,6 +426,14 @@ export function LipSyncWorkspace({
             Credits &amp; balance
           </Link>
         </div>
+
+        {/*
+          The trust row that closes both of the owner's references. It existed
+          in frenz-ai-chrome.tsx and was rendered on NO page at all — a fair
+          measure of how much of the reference had been described rather than
+          built.
+        */}
+        <FrenzAITrustRow className="mt-8 border-t border-border/60 pt-5" />
       </div>
       {plansSheet ? (
         <AiPlansSheet

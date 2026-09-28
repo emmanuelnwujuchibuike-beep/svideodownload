@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -67,7 +67,11 @@ describe("the Frenz AI design surface", () => {
 
   it("keeps exactly one gradient action — the secondary is glass, never a gradient", () => {
     const body = code(SURFACE);
-    const secondary = body.slice(body.indexOf("function AiSecondaryAction"));
+    // Bounded to the function itself. Slicing to end-of-file was always
+    // fragile and broke the moment AiHeroStage was appended below it — a test
+    // that fails on unrelated growth teaches people to delete tests.
+    const from = body.indexOf("function AiSecondaryAction");
+    const secondary = body.slice(from, body.indexOf("\n}", from));
     expect(secondary).not.toMatch(/ai-cta|bg-gradient-to/);
   });
 });
@@ -163,5 +167,86 @@ describe("Character Replace shares the display type", () => {
     // Escaped: unescaped brackets make this a character class, which matches
     // `text-red-500` and every other utility containing one of those letters.
     expect(body).not.toMatch(/text-\[1\.95rem\]/);
+  });
+});
+
+describe("the surface is APPLIED, not merely defined", () => {
+  /*
+    🔴 THE TEST THAT WOULD HAVE CAUGHT THE FIRST PASS (owner, 2026-09-28:
+    "What did you even do? Nothing changed in the Ai upgrade pages").
+
+    The first version of this migration shipped eight primitives and used two of
+    them. `AiPageShell`, `AiGlassCard`, `AiInfoCard`, `AiPrimaryAction`,
+    `AiSecondaryAction` and `AiSectionHeading` were rendered in ZERO files, and
+    the one piece that was applied — `AiHero` — draws the same headline at the
+    same scale with a breadcrumb pill added. Every gate was green and the pages
+    looked identical, because a design system nobody composes is a refactor with
+    a redesign's commit message.
+
+    A component that is exported and never rendered is either unfinished work or
+    dead weight. This test forces the choice.
+  */
+  const RENDERED_SOMEWHERE = [
+    "AiHero",
+    "AiDisplayTitle",
+    "AiHeroStage",
+  ];
+
+  const files = () => {
+    const out: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) walk(full);
+        else if (e.name.endsWith(".tsx") && !e.name.endsWith(".test.tsx")) out.push(full);
+      }
+    };
+    walk(join(process.cwd(), "features/ai"));
+    return out;
+  };
+
+  it("renders every primitive it claims to have finished", () => {
+    const all = files()
+      .filter((f) => !f.includes("ai-surface"))
+      .map((f) => readFileSync(f, "utf8"))
+      .join("\n");
+    for (const name of RENDERED_SOMEWHERE) {
+      expect(all, `<${name}> is exported but rendered nowhere`).toContain(`<${name}`);
+    }
+  });
+
+  it("closes the AI pages the way both references do", () => {
+    /*
+      `FrenzAITrustRow` — Secure · Fast · Natural Results — closes BOTH
+      reference images, and had been sitting in frenz-ai-chrome.tsx rendered on
+      no page at all. The allowance bar was on one page of eight.
+    */
+    const pages = [
+      "features/ai/frenz-ai-welcome.tsx",
+      "features/ai/text-to-audio/text-to-audio-workspace.tsx",
+      "features/ai/voice-clone/voice-cloning-workspace.tsx",
+      "features/ai/lip-sync/lip-sync-workspace.tsx",
+    ];
+    for (const f of pages) {
+      expect(code(f), `${f} does not close with the trust row`).toContain("<FrenzAITrustRow");
+    }
+    expect(code("features/ai/frenz-ai-welcome.tsx")).toContain("<FrenzAIAllowanceBar");
+  });
+
+  it("gives the front door the lit centrepiece both references lead with", () => {
+    expect(code("features/ai/frenz-ai-welcome.tsx")).toContain("<AiHeroStage");
+  });
+
+  it("reuses the environment's motion rather than inventing a second system", () => {
+    /*
+      The stage animates with .frenz-ai-orbit / .frenz-ai-breathe /
+      .frenz-ai-drift, which are already paused on a hidden tab and under
+      prefers-reduced-motion through --ai-play. A private @keyframes here would
+      have been the same mistake in a new file — and would keep running on a
+      backgrounded tab.
+    */
+    const body = code(SURFACE);
+    expect(body).toMatch(/frenz-ai-(orbit|breathe|drift)/);
+    expect(body).not.toMatch(/@keyframes|animation:/);
   });
 });

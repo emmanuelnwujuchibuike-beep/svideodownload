@@ -16,7 +16,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { FrenzAIAllowanceBar, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
+import { AiHeroStage } from "@/features/ai/design/ai-surface";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
@@ -172,6 +174,23 @@ export function FrenzAIWelcome({
           className="px-0"
         />
 
+        {/*
+          ── THE STAGE (owner, 2026-09-28: "Nothing changed in the Ai upgrade
+          pages") ──────────────────────────────────────────────────────────
+
+          Both references LEAD with a lit glass centrepiece and this page had
+          none — which is most of why the first pass at this migration looked
+          identical to what it replaced.
+
+          ⚠️ The owner's 2026-09-20 rule still holds and is not being undone:
+          "no figure — the headline takes the whole width and runs
+          horizontally." The headline still does. The stage sits BELOW it,
+          full width, rather than beside it stealing the line.
+        */}
+        <AiHeroStage className="mt-5">
+          <FrenzLogo size={40} alt="" />
+        </AiHeroStage>
+
         {/* ── THE STUDIO CARD ──────────────────────────────────────────────── */}
         <section
           aria-labelledby="ai-studio-title"
@@ -200,6 +219,15 @@ export function FrenzAIWelcome({
               Video · Voice · Audio
             </span>
           </div>
+
+          {/*
+            The allowance bar, from the reference ("14 of 15 free cleans left
+            today"). It already existed in frenz-ai-chrome.tsx and was rendered
+            on ONE page; the front door — where somebody decides whether to
+            start — did not show it at all. It renders nothing for a paid-only
+            or unlimited plan, so it cannot invent a limit nobody is under.
+          */}
+          <FrenzAIAllowanceBar entitlement={entitlement} className="mt-4" />
 
           {/* the four groups — what the studio does, readable in a few seconds */}
           <ul
@@ -256,6 +284,14 @@ export function FrenzAIWelcome({
             AI. Processing time and credits vary by tool.
           </p>
         </section>
+
+        {/*
+          The trust row that closes BOTH references — Secure · Fast · Natural
+          Results. It has existed in frenz-ai-chrome.tsx since the visual work
+          began and was rendered on ZERO pages, which is a fair summary of how
+          much of the reference had actually been built.
+        */}
+        <FrenzAITrustRow className="mt-7 border-t border-border/60 pt-5" />
       </div>
     </FrenzAIEnvironment>
 

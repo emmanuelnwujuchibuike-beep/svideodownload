@@ -6,6 +6,7 @@ import {
   sinceIso,
   type Range,
 } from "@/lib/analytics/windows";
+import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
 
@@ -417,7 +418,68 @@ function shortMeta(meta: Record<string, unknown> | null): string {
   return parts.join(" · ");
 }
 
+/**
+ * How long a computed summary is reused.
+ *
+ * 🔴 THE NUMBERS BEHIND THIS (owner, 2026-09-27: "all the data in admin
+ * dashboard takes time to load after the admin dashboard opens").
+ *
+ * /admin asks for a NINETY-day summary, and measured against production after
+ * the covering index landed it still costs:
+ *
+ *   analytics_traffic_totals   4,109 ms
+ *   analytics_timeseries       1,996 ms
+ *   analytics_download_totals  1,504 ms
+ *
+ * …every single time the page is opened, and again on every refresh, for a
+ * figure describing the last three months. Nothing in a 90-day aggregate can
+ * meaningfully change between two page loads a minute apart, so recomputing it
+ * per load is pure waiting.
+ *
+ * 120s is chosen against the ONE value in here that is genuinely live —
+ * `liveVisitors`, "active in the last five minutes". Two minutes of staleness
+ * on a five-minute window is visible but not misleading; a ten-minute cache
+ * would let it report people who left. Every other field is an aggregate over
+ * months and could be cached far longer.
+ *
+ * `getCached` single-flights, so two admins opening the dashboard at once run
+ * the query ONCE rather than twice — which is also why this is not simply a
+ * `revalidate` on the page.
+ */
+const SUMMARY_TTL_SECONDS = 120;
+
+/**
+ * The cached door. The uncached computation is `computeAnalyticsSummary`.
+ *
+ * ⚠️ A FAILED READ IS NEVER CACHED. `getCached` only stores what the loader
+ * RESOLVES with — but this loader resolves with a zero-filled summary carrying
+ * `exactAggregates: false` rather than throwing, so that shape would be stored
+ * and every admin would see the banner for two minutes after one unlucky
+ * timeout. So the failure case is re-thrown here, caught, and returned
+ * UNCACHED: a bad read costs the next opener a retry, not two minutes of a
+ * dashboard insisting its figures are unavailable.
+ */
 export async function getAnalyticsSummary(range: Range): Promise<AnalyticsSummary> {
+  try {
+    return await getCached(`admin:analytics-summary:${range}`, SUMMARY_TTL_SECONDS, async () => {
+      const summary = await computeAnalyticsSummary(range);
+      if (!summary.rpcHealth.exactAggregates) throw new UncacheableSummary(summary);
+      return summary;
+    });
+  } catch (err) {
+    if (err instanceof UncacheableSummary) return err.summary;
+    throw err;
+  }
+}
+
+/** Carries a summary that must be returned but not stored. */
+class UncacheableSummary extends Error {
+  constructor(readonly summary: AnalyticsSummary) {
+    super("analytics summary not exact; not cached");
+  }
+}
+
+async function computeAnalyticsSummary(range: Range): Promise<AnalyticsSummary> {
   const { granularity, keys } = buildBuckets(range);
   const emptyBuckets = keys.map((t) => ({ t, visitors: 0, pageViews: 0, downloads: 0 }));
   const empty: AnalyticsSummary = {
@@ -944,7 +1006,19 @@ function isoDayUtc(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Cached for the same reason and on the same clock as the summary above: it is
+ * the OTHER 90-day read the revenue section awaits, it describes months, and it
+ * was being recomputed on every open of /admin.
+ *
+ * No exactness flag on this one, so there is no uncacheable shape to guard —
+ * its own fallback path is documented below.
+ */
 export async function getVisitorSplitSeries(days = 30): Promise<VisitorSplitSeries> {
+  return getCached(`admin:visitor-split:${days}`, SUMMARY_TTL_SECONDS, () => computeVisitorSplitSeries(days));
+}
+
+async function computeVisitorSplitSeries(days = 30): Promise<VisitorSplitSeries> {
   const n = Math.min(VISITOR_SPLIT_MAX_DAYS, Math.max(7, Math.floor(days)));
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

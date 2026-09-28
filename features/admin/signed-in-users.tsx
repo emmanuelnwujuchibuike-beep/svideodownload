@@ -3,6 +3,8 @@
 import { ChevronRight, Loader2, MonitorSmartphone, ShieldAlert, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { Portal } from "@/components/ui/portal";
+
 import type { MemberActivityItem, SignedInRoster, SignedInUser } from "@/lib/admin/people";
 import { adminJson, useAdminLive } from "./live/use-admin-live";
 import { useFeatureStream } from "./live/use-feature-stream";
@@ -263,39 +265,96 @@ function Mini({ label, value }: { label: string; value: string }) {
   );
 }
 
+/* ─────────────────────────── the member detail ──────────────────────────── */
+
 /**
- * One member's timeline.
+ * What one member's events add up to, grouped the ways an operator asks.
  *
- * Fetched ONCE on open, not polled: an operator reading what somebody did an
- * hour ago is not watching it change, and this dashboard has cost the owner
- * real money on exactly that kind of assumption before.
+ * Derived in the browser from the timeline that is already loaded, rather than
+ * asked of the server again: the rows are in hand, the grouping is a few
+ * hundred iterations, and a second round trip to count what we are holding
+ * would be slower AND a second answer to the same question.
  */
+interface Rollup {
+  key: string;
+  count: number;
+}
+
+function rollup(items: MemberActivityItem[], pick: (it: MemberActivityItem) => string | null): Rollup[] {
+  const counts = new Map<string, number>();
+  for (const it of items) {
+    const key = pick(it);
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** A property off an event, as a display string. */
+function prop(it: MemberActivityItem, name: string): string | null {
+  const v = it.properties?.[name];
+  return typeof v === "string" && v ? v : null;
+}
+
+type DetailTab = "overview" | "downloads" | "platforms" | "pages" | "activity";
+
+const TABS: { id: DetailTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "downloads", label: "Downloads" },
+  { id: "platforms", label: "Platforms" },
+  { id: "pages", label: "Pages" },
+  { id: "activity", label: "Activity" },
+];
+
 /**
- * One member, as a near-fullscreen modal.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  ONE MEMBER — A TABBED, PORTALLED, FULL-SCREEN MODAL
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, 2026-09-27: "Clicking on a sign in user profile in admin dashboard
- * should show a clear understandable data that are arranged and it should show
- * as a modal almost full screen not to come at the bottom of the page."
+ * Two owner reports, 2026-09-27, and both were real defects rather than taste.
  *
- * It was an inline block appended under the list, which on a phone meant the
- * answer to "who is this?" appeared below the fold, under everything that had
- * prompted the question — so tapping a row looked like nothing had happened.
+ * ── 🔴 1 · IT WAS NOT ACTUALLY FULL SCREEN ──────────────────────────────────
  *
- * ── What the arrangement is for ─────────────────────────────────────────────
+ * "showing empty white space and the scroll to bottom is infinite."
  *
- * Three bands, in the order the questions get asked: WHO (identity and account
- * state), WHAT IN TOTAL (the counted summary), then WHAT EXACTLY (the
- * timeline). The raw event properties stay, on the same reasoning the live feed
- * was rebuilt for in August: reducing a row to one line throws away the thing
- * an operator opened it to find.
+ * The markup was `fixed inset-0`, which is correct and did not work. `position:
+ * fixed` does NOT resolve against the viewport when an ancestor carries
+ * `transform`, `filter`, `backdrop-filter` or `will-change` — each establishes
+ * a containing block. `AdminPanel` renders its section with
+ * `motion-safe:animate-fade-up`, which animates a transform, so this modal was
+ * pinned to that panel's box: the site header stayed visible above it and the
+ * page kept its own scroll, with the panel's full height showing as blank
+ * space below the card.
  *
- * Fetched once on open and never polled — nobody is watching an hour-old
- * timeline change, and this dashboard has cost real money on that assumption
- * before.
+ * This is a STANDING LAW in this codebase and this is its fourth hit: any
+ * overlay that can render on a page with transformed or blurred chrome must be
+ * portalled to `<body>` with `components/ui/portal.tsx`. Finding and removing
+ * the offending ancestor is not the fix — the next transform anywhere above
+ * re-introduces it silently, on a component nobody touched.
+ *
+ * ── 2 · CLICKING, NOT SCROLLING ─────────────────────────────────────────────
+ *
+ * "make the details not to take much of scrolling, just more of clicking
+ * buttons to review details than scrolling, so when I click on download type,
+ * it shows all, and favour platform it shows it and not show all at once in a
+ * long infinite scroll."
+ *
+ * So the one long column is now five tabs, each answering one question and each
+ * fitting without a long scroll. The raw timeline — which is genuinely long and
+ * genuinely useful — is one of them rather than the price of reading any of the
+ * others, and it scrolls inside its own pane, never the page.
+ *
+ * The rollups (platform, media kind, quality, page) come from the events
+ * already loaded. They are COUNTS OF EVENTS, and every one says so: a member
+ * with four `download_*` events for one file has not made four downloads, and
+ * a label that implied otherwise would be a fabricated stat.
  */
 function MemberDetail({ user, hours, onClose }: { user: SignedInUser; hours: number; onClose: () => void }) {
   const [items, setItems] = useState<MemberActivityItem[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [tab, setTab] = useState<DetailTab>("overview");
 
   useEffect(() => {
     let cancelled = false;
@@ -331,167 +390,237 @@ function MemberDetail({ user, hours, onClose }: { user: SignedInUser; hours: num
     };
   }, [onClose]);
 
+  const list = items ?? [];
+  const downloadEvents = list.filter((it) => it.feature === "downloads");
+  const platforms = rollup(downloadEvents, (it) => prop(it, "platform"));
+  const kinds = rollup(downloadEvents, (it) => prop(it, "mediaKind"));
+  const qualities = rollup(downloadEvents, (it) => prop(it, "quality"));
+  const pages = rollup(list, (it) => it.path);
   const windowLabel = hours >= 24 ? `${Math.round(hours / 24)}d` : `${hours}h`;
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-stretch justify-center bg-black/55 p-2 backdrop-blur-sm sm:p-6"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Activity for ${user.displayName || user.handle || "member"}`}
-      /* A tap on the backdrop closes; a tap inside must not bubble out to it. */
-      onClick={onClose}
-    >
+    <Portal>
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-2xl"
+        className="fixed inset-0 z-[2147483000] flex items-stretch justify-center bg-black/55 p-2 backdrop-blur-sm sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Activity for ${user.displayName || user.handle || "member"}`}
+        /* A tap on the backdrop closes; a tap inside must not bubble out to it. */
+        onClick={onClose}
       >
-        {/* ── WHO ── */}
-        <div className="flex items-start gap-3 border-b border-border/60 px-4 py-4 sm:px-6">
-          <Avatar user={user} />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h3 className="truncate text-[16px] font-semibold">
-                {user.displayName || (user.handle ? `@${user.handle}` : "Member")}
-              </h3>
-              {isLive(user.lastSeen) ? (
-                <span className="flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-300">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
-                </span>
-              ) : null}
-              {user.isAdmin ? <Tag tone="bg-primary/12 text-primary">Admin</Tag> : null}
-              {user.isSuspended ? <Tag tone="bg-red-500/12 text-red-600">Suspended</Tag> : null}
-              {user.isHidden ? <Tag tone="bg-amber-500/12 text-amber-600">Hidden</Tag> : null}
-            </div>
-            <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
-              {user.handle ? `@${user.handle} · ` : ""}
-              {user.userId}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-          {user.isSuspended || user.isHidden ? (
-            <p className="mb-4 flex items-center gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
-              <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-              This account is {user.isSuspended ? "suspended" : "hidden"}. Moderation actions live in the Moderation
-              section — nothing here changes an account.
-            </p>
-          ) : null}
-
-          {/* ── WHAT, IN TOTAL ── */}
-          <h4 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            Last {windowLabel}
-          </h4>
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Fact label="Events" value={formatCompactNumber(user.events)} />
-            <Fact label="Sessions" value={formatCompactNumber(user.sessions)} />
-            <Fact label="Page views" value={formatCompactNumber(user.pageViews)} />
-            <Fact label="Downloads" value={formatCompactNumber(user.downloads)} />
-          </dl>
-
-          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Fact label="Last seen" value={ago(user.lastSeen)} />
-            <Fact label="First seen in window" value={ago(user.firstSeenInWindow)} />
-            <Fact label="Device" value={[user.device, user.os].filter(Boolean).join(" · ") || "—"} />
-            <Fact label="Browser" value={user.browser || "—"} />
-          </dl>
-
-          <dl className="mt-2 grid grid-cols-2 gap-2">
-            <Fact label="Location" value={[user.city, user.country].filter(Boolean).join(", ") || "—"} />
-            <Fact label="Last page" value={user.lastPath || "—"} mono />
-          </dl>
-
-          {user.features.length > 0 ? (
-            <>
-              <h4 className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                Where they spent it
-              </h4>
-              <div className="flex flex-wrap gap-1.5">
-                {user.features.map((f) => (
-                  <span
-                    key={f.feature}
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-[12px] font-semibold",
-                      FEATURE_TONE[f.feature] ?? "bg-secondary text-muted-foreground",
-                    )}
-                  >
-                    {f.feature} · {f.count}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border/70 bg-card shadow-2xl"
+        >
+          {/* ── WHO ── */}
+          <div className="flex items-start gap-3 border-b border-border/60 px-4 py-3.5 sm:px-5">
+            <Avatar user={user} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h3 className="truncate text-[15.5px] font-semibold">
+                  {user.displayName || (user.handle ? `@${user.handle}` : "Member")}
+                </h3>
+                {isLive(user.lastSeen) ? (
+                  <span className="flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Active
                   </span>
-                ))}
+                ) : null}
+                {user.isAdmin ? <Tag tone="bg-primary/12 text-primary">Admin</Tag> : null}
+                {user.isSuspended ? <Tag tone="bg-red-500/12 text-red-600">Suspended</Tag> : null}
+                {user.isHidden ? <Tag tone="bg-amber-500/12 text-amber-600">Hidden</Tag> : null}
               </div>
-            </>
-          ) : null}
+              <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
+                {user.handle ? `@${user.handle} · ` : ""}
+                last {windowLabel} · {ago(user.lastSeen)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
-          {/* ── WHAT, EXACTLY ── */}
-          <h4 className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-            Activity, newest first
-          </h4>
+          {/* ── THE TABS: one question each, so nothing is a scroll ── */}
+          <div
+            role="tablist"
+            aria-label="Member detail"
+            className="flex shrink-0 gap-1 overflow-x-auto border-b border-border/60 px-2 py-2"
+          >
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                role="tab"
+                type="button"
+                aria-selected={tab === t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-colors",
+                  tab === t.id ? "bg-primary text-primary-foreground" : "bg-secondary/60 text-muted-foreground",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-          {failed ? (
-            <p className="rounded-2xl bg-secondary/40 px-4 py-6 text-center text-[13px] text-muted-foreground">
-              Could not read this member&apos;s activity.
-            </p>
-          ) : !items ? (
-            <p className="flex items-center justify-center gap-2 rounded-2xl bg-secondary/40 px-4 py-6 text-[13px] text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading…
-            </p>
-          ) : items.length === 0 ? (
-            <p className="rounded-2xl bg-secondary/40 px-4 py-6 text-center text-[13px] text-muted-foreground">
-              Nothing recorded in this window.
-            </p>
-          ) : (
-            <ol className="space-y-1.5">
-              {items.map((it) => (
-                <li key={it.eventId} className="rounded-xl border border-border/50 bg-secondary/20 px-3 py-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      {it.feature ? (
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold",
-                            FEATURE_TONE[it.feature] ?? "bg-secondary",
-                          )}
-                        >
-                          {it.feature}
-                        </span>
-                      ) : null}
-                      <span className="truncate text-[13px] font-medium">{it.label}</span>
-                    </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{ago(it.at)}</span>
-                  </div>
-                  {it.path ? (
-                    <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{it.path}</p>
-                  ) : null}
-                  {it.properties ? (
-                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-[10.5px] leading-snug text-muted-foreground">
-                      {JSON.stringify(it.properties, null, 1)}
-                    </pre>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            {failed ? (
+              <p className="rounded-2xl bg-secondary/40 px-4 py-6 text-center text-[13px] text-muted-foreground">
+                Could not read this member&apos;s activity.
+              </p>
+            ) : !items ? (
+              <p className="flex items-center justify-center gap-2 rounded-2xl bg-secondary/40 px-4 py-6 text-[13px] text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading…
+              </p>
+            ) : (
+              <>
+                {tab === "overview" ? (
+                  <>
+                    <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <Fact label="Events" value={formatCompactNumber(user.events)} />
+                      <Fact label="Sessions" value={formatCompactNumber(user.sessions)} />
+                      <Fact label="Page views" value={formatCompactNumber(user.pageViews)} />
+                      <Fact label="Downloads" value={formatCompactNumber(user.downloads)} />
+                    </dl>
+                    <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <Fact label="Last seen" value={ago(user.lastSeen)} />
+                      <Fact label="First in window" value={ago(user.firstSeenInWindow)} />
+                      <Fact label="Device" value={[user.device, user.os].filter(Boolean).join(" · ") || "—"} />
+                      <Fact label="Browser" value={user.browser || "—"} />
+                    </dl>
+                    <dl className="mt-2 grid grid-cols-2 gap-2">
+                      <Fact label="Location" value={[user.city, user.country].filter(Boolean).join(", ") || "—"} />
+                      <Fact label="Favourite platform" value={platforms[0]?.key ?? "—"} />
+                    </dl>
+                    {user.features.length > 0 ? (
+                      <>
+                        <SectionLabel>Where they spent it</SectionLabel>
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.features.map((f) => (
+                            <span
+                              key={f.feature}
+                              className={cn(
+                                "rounded-full px-2.5 py-1 text-[12px] font-semibold",
+                                FEATURE_TONE[f.feature] ?? "bg-secondary text-muted-foreground",
+                              )}
+                            >
+                              {f.feature} · {f.count}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {tab === "downloads" ? (
+                  <>
+                    <Bars title="Media type" rows={kinds} empty="No downloads in this window." />
+                    <Bars title="Quality chosen" rows={qualities} empty="No quality recorded." />
+                  </>
+                ) : null}
+
+                {tab === "platforms" ? (
+                  <Bars title="Platforms downloaded from" rows={platforms} empty="No downloads in this window." />
+                ) : null}
+
+                {tab === "pages" ? <Bars title="Pages visited" rows={pages.slice(0, 20)} empty="No pages recorded." mono /> : null}
+
+                {tab === "activity" ? (
+                  list.length === 0 ? (
+                    <p className="rounded-2xl bg-secondary/40 px-4 py-6 text-center text-[13px] text-muted-foreground">
+                      Nothing recorded in this window.
+                    </p>
+                  ) : (
+                    <ol className="space-y-1.5">
+                      {list.map((it) => (
+                        <li key={it.eventId} className="rounded-xl border border-border/50 bg-secondary/20 px-3 py-2">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              {it.feature ? (
+                                <span
+                                  className={cn(
+                                    "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                                    FEATURE_TONE[it.feature] ?? "bg-secondary",
+                                  )}
+                                >
+                                  {it.feature}
+                                </span>
+                              ) : null}
+                              <span className="truncate text-[13px] font-medium">{it.label}</span>
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{ago(it.at)}</span>
+                          </div>
+                          {it.path ? (
+                            <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{it.path}</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  )
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Portal>
   );
 }
 
-/** One labelled figure. `mono` for values that are paths or ids, never for counts. */
-function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <h4 className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{children}</h4>;
+}
+
+/**
+ * A counted breakdown, biggest first, with a bar for proportion.
+ *
+ * 🔴 THE LABEL SAYS "EVENTS", ALWAYS. These are counts of recorded events, not
+ * of downloads: one file emits requested → started → preparing → completed, so
+ * calling four events four downloads would overstate by 4× on a screen an
+ * operator makes decisions from.
+ */
+function Bars({ title, rows, empty, mono }: { title: string; rows: Rollup[]; empty: string; mono?: boolean }) {
+  const top = rows[0]?.count ?? 0;
+  return (
+    <>
+      <SectionLabel>{title}</SectionLabel>
+      {rows.length === 0 ? (
+        <p className="rounded-2xl bg-secondary/40 px-4 py-5 text-center text-[13px] text-muted-foreground">{empty}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map((r) => (
+            <li key={r.key} className="rounded-xl border border-border/50 bg-secondary/20 px-3 py-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className={cn("min-w-0 flex-1 truncate text-[13px] font-medium", mono && "font-mono text-[12px]")}>
+                  {r.key}
+                </span>
+                <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{r.count} events</span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="h-full rounded-full bg-primary/70"
+                  style={{ width: `${top > 0 ? Math.max(4, Math.round((r.count / top) * 100)) : 0}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** One labelled figure. */
+function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-border/50 bg-secondary/25 px-3 py-2">
       <dt className="text-[10.5px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className={cn("truncate text-[13.5px] font-semibold", mono && "font-mono text-[12px]")}>{value}</dd>
+      <dd className="truncate text-[13.5px] font-semibold">{value}</dd>
     </div>
   );
 }

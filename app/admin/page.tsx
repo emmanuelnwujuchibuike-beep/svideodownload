@@ -1057,11 +1057,24 @@ async function RevenueSection({
   );
 }
 
+/*
+  🔴 `bg-secondary`, NOT `bg-card` (owner, 2026-09-27: "Sections in the admin
+  dashboard doesn't load or takes time to load, it shows white").
+
+  `bg-card` IS white on the light theme, so this was a white card pulsing on a
+  white page — an animation with nothing to animate against. For the twelve
+  seconds the 90-day aggregates were taking, the section was indistinguishable
+  from a blank one that had failed.
+
+  `PanelSkeleton` above already uses `bg-secondary`, which is what makes its
+  pulse legible; this now matches. The speed itself is fixed separately, in
+  migration 0177 — but a slow section must still LOOK like it is arriving.
+*/
 function RevenueSectionSkeleton() {
   return (
     <div className="space-y-4" aria-busy="true" aria-label="Loading revenue and engagement">
-      <div className="h-32 animate-pulse rounded-3xl border border-border bg-card" />
-      <div className="h-80 animate-pulse rounded-3xl border border-border bg-card" />
+      <div className="h-32 animate-pulse rounded-2xl bg-secondary/60" />
+      <div className="h-80 animate-pulse rounded-2xl bg-secondary/40" />
     </div>
   );
 }

@@ -30,9 +30,30 @@ import type { LandingSettings } from "@/lib/landing/settings";
   The placeholders keep the section's height steady for the ~100 ms a chunk
   takes on a warm cache, so nothing below them jumps.
 */
+/*
+  🔴 IT HAS TO LOOK LIKE IT IS ARRIVING (owner, 2026-09-27: "Sections in the
+  admin dashboard doesn't load or takes time to load, it shows white").
+
+  This was a single static `bg-card` box, 28rem tall. `bg-card` IS white on the
+  light theme, so every one of the nine lazy tabs below — Frenz AI settings,
+  pricing, balances, processing, plans, providers, Lip Sync, Text to Audio,
+  Voice Cloning — opened as a large blank white rectangle with no motion and no
+  edges to read. That is indistinguishable from a section that failed to load,
+  which is precisely how it was reported.
+
+  Now the same pulsing bars `PanelSkeleton` uses on the page itself
+  (app/admin/page.tsx). The height is preserved so nothing below jumps when the
+  real panel lands; only the emptiness goes.
+*/
 const skeleton = (label: string) =>
   function Skeleton() {
-    return <div aria-busy="true" aria-label={label} className="min-h-[28rem] rounded-3xl border border-border bg-card" />;
+    return (
+      <div className="min-h-[28rem] space-y-4" aria-busy="true" aria-label={label}>
+        <div className="h-28 animate-pulse rounded-2xl bg-secondary/60" />
+        <div className="h-56 animate-pulse rounded-2xl bg-secondary/40" />
+        <div className="h-24 animate-pulse rounded-2xl bg-secondary/30" />
+      </div>
+    );
   };
 
 const FrenzAISettings = dynamic(() => import("@/features/admin/frenz-ai-settings").then((m) => m.FrenzAISettings), {

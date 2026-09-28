@@ -26,13 +26,22 @@ import dynamic from "next/dynamic";
 const SignedInUsersPanel = dynamic(
   () => import("@/features/admin/signed-in-users").then((m) => m.SignedInUsers),
   {
+    /*
+      🔴 A PULSING SKELETON, NOT A BLANK CARD (owner, 2026-09-27: "Sections in
+      the admin dashboard doesn't load or takes time to load, it shows white").
+
+      This was an empty `bg-card` box with a `min-h-[28rem]`, which on a light
+      theme is a large white rectangle and is indistinguishable from a section
+      that has failed. The rest of the page uses `PanelSkeleton`'s pulsing bars
+      (app/admin/page.tsx), so this now matches it: motion is what tells an
+      operator the difference between "arriving" and "broken".
+    */
     loading: function Skeleton() {
       return (
-        <div
-          aria-busy="true"
-          aria-label="Loading signed-in members"
-          className="mt-6 min-h-[28rem] rounded-3xl border border-border bg-card"
-        />
+        <div className="mt-6 space-y-4" aria-busy="true" aria-label="Loading signed-in members">
+          <div className="h-28 animate-pulse rounded-2xl bg-secondary/60" />
+          <div className="h-56 animate-pulse rounded-2xl bg-secondary/40" />
+        </div>
       );
     },
   },

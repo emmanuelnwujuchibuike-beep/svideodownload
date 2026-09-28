@@ -258,15 +258,18 @@ export function FrenzAIToolsGrid({
   const groups: AiToolGroup[] = ["audio", "video", "transform", "library"];
   return (
     <section aria-labelledby="ai-tools-title" className={className}>
-      <div className="flex items-end justify-between gap-3 px-1">
-        <h2
-          id="ai-tools-title"
-          className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground"
-        >
+      {/*
+        §1 of the brief: "avoid excessive uppercase labels". This was an
+        11px all-caps tracked-out label — the SaaS-dashboard tell the brief
+        names — over a one-line hint on the same row. The reference states it
+        plainly instead: a real heading, and the instruction under it.
+      */}
+      <div className="px-1">
+        <h2 id="ai-tools-title" className="text-[1.05rem] font-bold tracking-[-0.02em]">
           AI Tools
         </h2>
-        <p className="text-[11.5px] text-muted-foreground">
-          Choose exactly what you need
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
+          Choose a category and start creating.
         </p>
       </div>
       {groups.map((group) => {
@@ -274,15 +277,16 @@ export function FrenzAIToolsGrid({
         if (!rows.length) return null;
         const label = AI_TOOL_GROUP_LABEL[group];
         return (
-          <div key={group} className="mt-4 first:mt-2.5">
-            <div className="flex items-baseline gap-2 px-1">
-              <h3 className="text-[12.5px] font-bold tracking-[-0.01em]">{label.title}</h3>
-              <p className="text-[11px] text-muted-foreground">{label.hint}</p>
+          <div key={group} className="mt-6 first:mt-5">
+            <div className="px-1">
+              <h3 className="text-[14.5px] font-bold tracking-[-0.015em]">{label.title}</h3>
+              <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">{label.hint}</p>
             </div>
             <ul
               className={cn(
-                "mt-2 grid grid-cols-2 gap-2.5",
-                include === "all" ? "md:grid-cols-4" : "sm:grid-cols-4",
+                "mt-2.5 grid grid-cols-2 gap-2.5 sm:gap-3",
+                // §34: tablets get three, not the phone's two stretched wide
+                include === "all" ? "sm:grid-cols-3 lg:grid-cols-4" : "sm:grid-cols-3 lg:grid-cols-4",
               )}
             >
               {rows.map((tool, i) => (
@@ -312,9 +316,39 @@ export function FrenzAIToolsGrid({
   );
 }
 
+/**
+ * The tool card's ground, tinted by category.
+ *
+ * ── 🔴 WHY THIS CHANGED (owner, 2026-09-28) ─────────────────────────────────
+ *
+ * "the Ai features page, and every page still looks fucking the same."
+ *
+ * Every card was `bg-card/95` with a ring: eleven identical white bordered
+ * rectangles in a grid. The brief says it twice — §8 "Do not make every tool
+ * an identical large white bordered rectangle", and §25 "Reduce visible
+ * borders. Current UI relies too heavily on bordered containers." The
+ * reference carries the category in the CARD'S OWN GROUND: audio reads cool
+ * blue/cyan, transformation purple, voice pink.
+ *
+ * So the border goes and the tint arrives. The icon keeps its stronger tint
+ * on top, which is what still separates one tool from its neighbour inside a
+ * category.
+ *
+ * ⚠️ Kept extremely restrained, per §2 and §49: these are 4–6% washes, not
+ * saturated panels. Side by side they read as a family with a hue, not as a
+ * colour-blocked dashboard.
+ */
+const GROUP_GROUND: Record<AiToolGroup, string> = {
+  audio: "bg-sky-50",
+  video: "bg-violet-50",
+  transform: "bg-fuchsia-50/70",
+  library: "bg-slate-50",
+};
+
 const CARD =
-  "group flex h-full min-h-[6.5rem] w-full flex-col rounded-[1.2rem] bg-card/95 p-3 text-left ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:p-3.5 " +
-  "shadow-[0_10px_28px_-22px_rgba(15,23,42,0.4)] transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.99] " +
+  "group relative flex h-full min-h-[7rem] w-full flex-col rounded-[1.25rem] p-3.5 text-left sm:p-4 " +
+  "shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-200 " +
+  "motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)] active:scale-[0.99] " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 function ToolCardView({
@@ -329,7 +363,7 @@ function ToolCardView({
   const { icon: Icon, href, name, blurb, tint } = tool;
   if (disabledNote) {
     return (
-      <div className={cn(CARD, "opacity-60")} aria-disabled>
+      <div className={cn(CARD, GROUP_GROUND[tool.group], "opacity-60")} aria-disabled>
         <div className="flex items-start justify-between gap-2">
           <span
             className={cn(
@@ -349,39 +383,46 @@ function ToolCardView({
       </div>
     );
   }
+  /*
+    The arrow sits at the FOOT, on the trailing edge, under the description —
+    where the reference puts it. In the corner beside the icon it competed
+    with the icon for the same glance and made every card read top-heavy.
+    `mt-auto` pins it to the bottom so a two-line and a three-line card still
+    line their arrows up across a row.
+  */
   const body = (
     <>
-      <div className="flex items-start justify-between gap-2">
-        <span
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem]",
-            tint,
-          )}
-        >
-          <Icon className="h-[18px] w-[18px]" aria-hidden />
-        </span>
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary/80 text-foreground/60 transition group-hover:text-foreground">
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-        </span>
-      </div>
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem]",
+          tint,
+        )}
+      >
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
       <h3 className="mt-2.5 text-[13.5px] font-bold leading-tight tracking-[-0.01em]">
         {name}
       </h3>
       <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
         {blurb}
       </p>
+      <span className="mt-auto flex justify-end pt-2.5">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-foreground/50 transition group-hover:bg-white group-hover:text-foreground">
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+        </span>
+      </span>
     </>
   );
   if (onFlowTool && tool.flow && tool.id === "voice_replace") {
     const id = tool.id;
     return (
-      <button type="button" onClick={() => onFlowTool(id)} className={CARD}>
+      <button type="button" onClick={() => onFlowTool(id)} className={cn(CARD, GROUP_GROUND[tool.group])}>
         {body}
       </button>
     );
   }
   return (
-    <Link href={href} className={CARD}>
+    <Link href={href} className={cn(CARD, GROUP_GROUND[tool.group])}>
       {body}
       <LinkPendingStripe />
     </Link>

@@ -18,7 +18,6 @@ import { useEffect, useState } from "react";
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIAllowanceBar, FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { AiHeroStage } from "@/features/ai/design/ai-surface";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
@@ -174,22 +173,6 @@ export function FrenzAIWelcome({
           className="px-0"
         />
 
-        {/*
-          ── THE STAGE (owner, 2026-09-28: "Nothing changed in the Ai upgrade
-          pages") ──────────────────────────────────────────────────────────
-
-          Both references LEAD with a lit glass centrepiece and this page had
-          none — which is most of why the first pass at this migration looked
-          identical to what it replaced.
-
-          ⚠️ The owner's 2026-09-20 rule still holds and is not being undone:
-          "no figure — the headline takes the whole width and runs
-          horizontally." The headline still does. The stage sits BELOW it,
-          full width, rather than beside it stealing the line.
-        */}
-        <AiHeroStage className="mt-5">
-          <FrenzLogo size={40} alt="" />
-        </AiHeroStage>
 
         {/* ── THE STUDIO CARD ──────────────────────────────────────────────── */}
         <section

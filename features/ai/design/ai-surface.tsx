@@ -363,99 +363,19 @@ export function AiSectionHeading({
   );
 }
 
-/* ─────────────────────────────── the stage ──────────────────────────────── */
+/*
+  ── 🔴 `AiHeroStage` WAS BUILT HERE AND DELETED THE SAME DAY ────────────────
 
-/**
- * The hero visual: a frosted stage with a lit centre and orbs drifting round it.
- *
- * ── 🔴 WHY THIS EXISTS (owner, 2026-09-28: "Nothing changed in the Ai upgrade
- * pages") ───────────────────────────────────────────────────────────────────
- *
- * The first pass at this migration shipped a design SYSTEM and applied only the
- * one part of it that changes nothing anyone can see: the hero swapped a
- * hand-rolled eyebrow for a breadcrumb pill at the same type scale, and the
- * background moved from four inline gradients to one class that looks much like
- * them. Six of the eight primitives were used zero times. That was a refactor
- * wearing a redesign's commit message.
- *
- * This is the piece both references actually lead with and neither page had:
- * the centrepiece. `frenz ai welcome page.jpg` puts two glass video cards and a
- * lit logo bubble here; `ai input page.jpg` puts one glass frame with a play
- * button. The constant is a FROSTED STAGE WITH DEPTH — a lit centre, a soft rim,
- * and small spheres at different distances.
- *
- * ── Built from CSS, not from an image ───────────────────────────────────────
- *
- * No new dependency and nothing to download: gradients, blur and transforms
- * only. The motion reuses the environment's existing `.frenz-ai-orbit` /
- * `.frenz-ai-breathe` / `.frenz-ai-drift` classes, which are already driven by
- * `--ai-orbit` / `--ai-breath` / `--ai-intensity` and — importantly — already
- * stop dead on a hidden tab and under `prefers-reduced-motion` via `--ai-play`.
- * Inventing a second animation system here would have been the same mistake in
- * a different file.
- */
-export function AiHeroStage({
-  children,
-  className,
-  height = "default",
-}: {
-  /** What sits at the centre — a logo, a preview, a glyph. */
-  children?: ReactNode;
-  className?: string;
-  height?: "default" | "tall";
-}) {
-  return (
-    <div
-      aria-hidden
-      className={cn(
-        "relative isolate w-full overflow-hidden rounded-[1.9rem]",
-        height === "tall" ? "h-64 sm:h-80" : "h-48 sm:h-60",
-        "bg-gradient-to-br from-white/80 via-violet-50/70 to-sky-50/70",
-        "ring-1 ring-inset ring-white/80",
-        "shadow-[0_26px_70px_-40px_rgba(76,58,160,0.55)]",
-        className,
-      )}
-    >
-      {/* the lit centre — the thing that makes it read as depth rather than a box */}
-      <span
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[120%] w-[120%] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-70 blur-2xl"
-        style={{
-          background:
-            "radial-gradient(closest-side, rgba(255,255,255,0.95) 0%, rgba(196,181,253,0.55) 45%, rgba(147,197,253,0.18) 70%, transparent 100%)",
-        }}
-      />
+  It was a large frosted panel with a lit core, orbit rings and floating
+  spheres — added because the welcome page had no "centrepiece". The owner's
+  own brief forbids it in as many words (§49): premium does NOT mean excessive
+  glass, giant empty spaces, animated backgrounds or unnecessary 3D elements;
+  it means precision, hierarchy, restraint and consistency.
 
-      {/* two rings, counter-weighted, on the compositor */}
-      <span className="frenz-ai-orbit pointer-events-none absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/70 sm:h-52 sm:w-52" />
-      <span className="frenz-ai-drift pointer-events-none absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full border border-violet-200/60 sm:h-72 sm:w-72" />
+  It read exactly as the brief predicted — a big empty box with balls in it —
+  and it solved nothing, because the pages' problem was never a missing
+  ornament. It was structure: undifferentiated white bordered cards, no
+  category grouping, and forms where a creative workspace belongs.
 
-      {/* the spheres from the reference, at three distances */}
-      <Orb className="left-[12%] top-[22%] h-6 w-6" />
-      <Orb className="right-[14%] top-[30%] h-4 w-4" />
-      <Orb className="left-[22%] bottom-[18%] h-3.5 w-3.5" />
-      <Orb className="right-[20%] bottom-[22%] h-7 w-7" />
-
-      {children ? (
-        <div className="frenz-ai-breathe absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-white/75 shadow-[0_18px_44px_-20px_rgba(76,58,160,0.6),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-inset ring-white/90 backdrop-blur-xl sm:h-24 sm:w-24">
-            {children}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** One of the reference's little spheres. Decorative; never announced. */
-function Orb({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        "frenz-ai-breathe pointer-events-none absolute rounded-full",
-        "bg-gradient-to-br from-violet-400 to-sky-500",
-        "shadow-[0_6px_16px_-6px_rgba(99,102,241,0.8),inset_0_1px_1px_rgba(255,255,255,0.7)]",
-        className,
-      )}
-    />
-  );
-}
+  Do not re-add a decorative hero panel. Fix the hierarchy instead.
+*/

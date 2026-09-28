@@ -148,7 +148,7 @@ describe("every migrated tool opens with the breadcrumb pill", () => {
       // against almost anything — the same trap that made an earlier assertion
       // in this file meaningless.
       expect(body, "a hand-rolled eyebrow survived").not.toMatch(
-        /uppercase tracking-[0.1[46]em][^]{0,160}Frenz AI ·/,
+        /uppercase tracking-\[0\.1[46]em\][^]{0,160}Frenz AI ·/,
       );
     });
   }
@@ -186,11 +186,7 @@ describe("the surface is APPLIED, not merely defined", () => {
     A component that is exported and never rendered is either unfinished work or
     dead weight. This test forces the choice.
   */
-  const RENDERED_SOMEWHERE = [
-    "AiHero",
-    "AiDisplayTitle",
-    "AiHeroStage",
-  ];
+  const RENDERED_SOMEWHERE = ["AiHero", "AiDisplayTitle"];
 
   const files = () => {
     const out: string[] = [];
@@ -233,20 +229,29 @@ describe("the surface is APPLIED, not merely defined", () => {
     expect(code("features/ai/frenz-ai-welcome.tsx")).toContain("<FrenzAIAllowanceBar");
   });
 
-  it("gives the front door the lit centrepiece both references lead with", () => {
-    expect(code("features/ai/frenz-ai-welcome.tsx")).toContain("<AiHeroStage");
+  it("has no decorative hero panel — the brief forbids one", () => {
+    /*
+      🔴 A LARGE GLASS STAGE WITH FLOATING SPHERES WAS BUILT HERE AND DELETED
+      THE SAME DAY. The brief rules it out in as many words (§49): premium does
+      NOT mean excessive glass, giant empty spaces, animated backgrounds or
+      unnecessary 3D elements — it means precision, hierarchy, restraint and
+      consistency. It read exactly as predicted and fixed nothing, because the
+      problem was never a missing ornament.
+    */
+    for (const f of ["features/ai/frenz-ai-welcome.tsx", "features/ai/design/ai-surface.tsx"]) {
+      expect(code(f), `${f} re-adds a decorative hero panel`).not.toMatch(/AiHeroStage/);
+    }
   });
 
-  it("reuses the environment's motion rather than inventing a second system", () => {
+  it("keeps the surface free of its own animation", () => {
     /*
-      The stage animates with .frenz-ai-orbit / .frenz-ai-breathe /
-      .frenz-ai-drift, which are already paused on a hidden tab and under
-      prefers-reduced-motion through --ai-play. A private @keyframes here would
-      have been the same mistake in a new file — and would keep running on a
-      backgrounded tab.
+      The surface is type, spacing, colour and depth. Motion belongs to the
+      environment (--ai-orbit / --ai-breath / --ai-intensity / --ai-play), which
+      already stops on a hidden tab and under prefers-reduced-motion. A private
+      @keyframes here would run on a backgrounded tab and ignore that setting —
+      and §41 is explicit that every animation must justify itself.
     */
     const body = code(SURFACE);
-    expect(body).toMatch(/frenz-ai-(orbit|breathe|drift)/);
     expect(body).not.toMatch(/@keyframes|animation:/);
   });
 });

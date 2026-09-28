@@ -154,7 +154,7 @@ export function TextToAudioWorkspace({
         ) : (
           <div className="mt-6 space-y-4">
             {/* ── 1 · the text ───────────────────────────────────────────── */}
-            <Section n={1} title="Your text">
+            <Section n={1} title="Your script">
               <label className="block">
                 <span className="sr-only">What should be said</span>
                 <textarea
@@ -286,7 +286,7 @@ export function TextToAudioWorkspace({
             </Section>
 
             {/* ── 3 · the name ───────────────────────────────────────────── */}
-            <Section n={3} title="Name it">
+            <Section n={3} title="Save as">
               <label className="block">
                 <span className="sr-only">A name for your Audio Library</span>
                 <input
@@ -549,13 +549,29 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, historyHref,
 
 /* ───────────────────────────── pieces ────────────────────────────────────── */
 
-function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+/**
+ * One labelled block of the workspace.
+ *
+ * ── 🔴 WHAT WENT, AND WHY (owner, 2026-09-28) ──────────────────────────────
+ *
+ * This drew a numbered black disc and an all-caps tracked-out heading inside a
+ * bordered card: "① YOUR TEXT", "② VOICE & LANGUAGE", "③ NAME IT". Three of
+ * the brief's named anti-patterns in one component — excessive uppercase
+ * labels (§1), form-heavy appearance (§1), and a border round every section
+ * (§25) — and the numbering turned a creative workspace into a wizard for a
+ * task nobody does in order.
+ *
+ * The reference labels the same blocks quietly: "Your script", "Voice", "Save
+ * as", in sentence case, with the editor itself carrying the visual weight.
+ *
+ * `n` is kept in the signature and deliberately unused: every call site passes
+ * it, and removing it there is churn in a file this size for no behaviour. It
+ * is prefixed so lint knows it is intentional.
+ */
+function Section({ n: _n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.5rem] border border-border/70 bg-card/60 p-4 sm:p-5">
-      <h2 className="mb-3 flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-foreground text-[11px] font-bold text-background">{n}</span>
-        {title}
-      </h2>
+    <section className="rounded-[1.5rem] bg-card/70 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
+      <h2 className="mb-2.5 text-[13.5px] font-semibold tracking-[-0.01em] text-foreground/80">{title}</h2>
       {children}
     </section>
   );

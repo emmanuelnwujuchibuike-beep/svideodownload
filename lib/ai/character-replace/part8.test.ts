@@ -258,7 +258,18 @@ describe("the doors open instantly or say they are opening (owner, 2026-09-14)",
     expect(grid).toContain('if (onFlowTool && tool.flow && tool.id === "voice_replace") {');
     expect(grid).not.toContain('id: "lip_sync",');
     expect(grid).not.toContain('id: "tts",');
-    expect(grid).toContain('<button type="button" onClick={() => onFlowTool(id)} className={CARD}>');
+    /*
+      The GUARANTEE, not the exact string: a flow tool is a <button> that calls
+      back rather than a <Link>, because it opens a step inside a creation and
+      has no route of its own — a link there would navigate away from the work.
+
+      It was pinned as one literal line including `className={CARD}`, so adding
+      the per-category ground to the card broke a rule that was never about the
+      class attribute. A test that fails on unrelated styling gets deleted by
+      whoever is in a hurry.
+    */
+    expect(grid).toMatch(/<button type="button" onClick=\{\(\) => onFlowTool\(id\)\}/);
+    expect(grid, "a flow tool must not become a Link").toMatch(/className=\{cn\(CARD/);
     expect(src("features/ai/frenz-ai-explore.tsx")).toContain("<FrenzAIToolsGrid");
     expect(src("features/ai/frenz-ai-chrome.tsx")).not.toContain("prefetch={false}");
     const stripe = src("features/navigation/link-pending-stripe.tsx");

@@ -331,3 +331,34 @@ describe("the desktop shell exists", () => {
     expect(code("features/ai/design/ai-studio-shell.tsx")).toMatch(/min-w-0 flex-1/);
   });
 });
+
+describe("the punctuation guide teaches only what every model honours", () => {
+  const GUIDE = "features/ai/text-to-audio/punctuation-guide.tsx";
+
+  it("documents punctuation, never v3-only audio tags", () => {
+    /*
+      🔴 THE TRAP. ElevenLabs v3 understands inline tags — [laughs], [whispers]
+      — and the model is OPERATOR-CONFIGURABLE (Admin → AI → Text to Audio). On
+      v2 those tags are read aloud as literal words, so a guide teaching someone
+      to type [whispers] would produce a voice saying "open bracket whispers"
+      AND spend their character allowance doing it.
+
+      Worse than no guide. Punctuation works on every model we run.
+    */
+    const body = code(GUIDE);
+    expect(body).not.toMatch(/\[laughs\]|\[whispers\]|\[sighs\]|\[excited\]/i);
+  });
+
+  it("is closed by default and costs no JavaScript to open", () => {
+    // §14 and §48: progressive disclosure, and never make people scroll past an
+    // explanation to reach the action. A native <details> is keyboard-operable
+    // for free and needs no state.
+    const body = code(GUIDE);
+    expect(body).toMatch(/<details/);
+    expect(body).not.toMatch(/useState|onClick/);
+  });
+
+  it("sits under the editor it describes", () => {
+    expect(code("features/ai/text-to-audio/text-to-audio-workspace.tsx")).toMatch(/<PunctuationGuide/);
+  });
+});

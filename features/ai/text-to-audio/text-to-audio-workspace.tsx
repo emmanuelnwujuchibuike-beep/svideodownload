@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AudioAssetPlayer } from "@/features/ai/text-to-audio/audio-player";
+import { PunctuationGuide } from "@/features/ai/text-to-audio/punctuation-guide";
 import { audioDownloadHref } from "@/lib/ai/text-to-audio/client";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
@@ -179,6 +180,14 @@ export function TextToAudioWorkspace({
                 ) : null}
               </div>
               {ws.overLimit ? <p className="mt-1.5 text-[11.5px] font-semibold text-rose-600">That is longer than one generation takes. Shorten it, or split it into two.</p> : null}
+
+              {/*
+                The punctuation dictionary (owner, 2026-09-28). It sits UNDER the
+                editor, closed, because it is reference material for the thing
+                directly above it — and because §48 says nobody should scroll
+                past an explanation to reach the action.
+              */}
+              <PunctuationGuide className="mt-3" />
             </Section>
 
             {/* ── 2 · the voice ──────────────────────────────────────────── */}

@@ -176,7 +176,7 @@ import { CharacterReplaceProvidersPanel } from "@/features/admin/character-repla
 import { listProviderHealth } from "@/lib/ai/character-replace/circuit";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiProvidersPanelLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiProvidersPanelLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
 import { loadAiProvidersPanel } from "@/lib/ai/providers/admin";
 import { getLipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
@@ -956,6 +956,8 @@ async function FrenzAISection() {
           label: "Text to Audio",
           content: <TextToAudioSettingsLazy settings={landing} stats={textToAudioStats} voices={landing.frenzAiCharacterReplace.voices.map((v) => ({ id: v.id, label: v.label, provider: v.provider }))} languages={landing.frenzAiCharacterReplace.languages.map((l) => ({ code: l.code, label: l.label }))} />,
         },
+        /* Kling pricing (2026-09-28, Part 4 §12–§14): the per-tier matrix. Kling charges in UNITS reported on each task; what a member pays is a separate figure. Tiers whose provider cost has not been measured say so instead of showing a margin. */
+        { id: "klingpricing", label: "Kling pricing", content: <KlingPricingSettingsLazy settings={landing} /> },
         /* Voice Cloning (2026-09-27): the voice slots (the thing that actually runs out), the price per voice, the recording limits, the rights confirmation, the live-voice figures. */
         { id: "voiceclone", label: "Voice Cloning", content: <VoiceCloneSettingsLazy settings={landing} stats={voiceCloneStats} /> },
         /* 0167: AI Pro / AI Max, the one-time creations per site plan, the credit rules — and who spent what. */

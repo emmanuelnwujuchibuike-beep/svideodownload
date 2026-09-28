@@ -290,6 +290,41 @@ const schema = z.object({
     })
     .strict()
     .optional(),
+  /**
+   * 2026-09-28 (Part 4 §12–§14): the Kling pricing matrix.
+   *
+   * 🔴 Provider CONSUMPTION and customer PRICE are separate fields on purpose, so
+   * an operator correcting what Kling charges us can never silently re-price a
+   * member. Bounds mirror KLING_PRICING_BOUNDS, and `.strict()` means a tier key
+   * the matrix does not define is refused here rather than quietly dropped by the
+   * normaliser — including `lip_sync:720p`, which is not a tier a member can buy.
+   */
+  frenzAiKlingPricing: z
+    .object({
+      matrix: z
+        .record(
+          z.enum(["text_to_video:720p", "text_to_video:1080p", "text_to_video:4k", "image_to_video:720p", "image_to_video:1080p", "image_to_video:4k", "lip_sync:source"]),
+          z
+            .object({
+              enabled: z.boolean().optional(),
+              providerUnitsPerSecond: z.number().min(0).max(1000).optional(),
+              providerUnitsPerRun: z.number().min(0).max(1000).optional(),
+              unitCostUsdCents: z.number().min(0).max(100000).optional(),
+              priceUsdCentsPerSecond: z.number().min(0).max(100000).optional(),
+              priceUsdCentsPerRun: z.number().min(0).max(100000).optional(),
+              audioSurchargeUsdCentsPerSecond: z.number().min(0).max(100000).optional(),
+              minBillableSeconds: z.number().int().min(1).max(60).optional(),
+              minSeconds: z.number().int().min(1).max(60).optional(),
+              maxSeconds: z.number().int().min(1).max(60).optional(),
+              notes: z.string().max(400).optional(),
+            })
+            .strict(),
+        )
+        .optional(),
+      paused: z.boolean().optional(),
+    })
+    .strict()
+    .optional(),
   /** Lip Sync Pro (2026-09-21): the tool's own configuration — the voice provider takes no field (ElevenLabs by construction). Bounds mirror LIP_SYNC_BOUNDS. */
   frenzAiLipSync: z
     .object({

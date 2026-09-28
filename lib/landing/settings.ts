@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/character-replace/config";
 import { normalizeAiPlansConfig, versionAiPlans, type AiPlansConfig } from "@/lib/ai/credits/config";
 import { normalizeAiProvidersConfig, versionAiProviders, type AiProvidersConfig } from "@/lib/ai/providers/config";
+import { normalizeKlingPricing, versionKlingPricing, type KlingPricingConfig } from "@/lib/ai/kling/pricing";
 import { normalizeLipSyncConfig, versionLipSyncConfig, type LipSyncProConfig } from "@/lib/ai/lip-sync/config";
 import { normalizeTextToAudioConfig, versionTextToAudioConfig, type TextToAudioConfig } from "@/lib/ai/text-to-audio/config";
 import { normalizeVoiceCloneConfig, versionVoiceCloneConfig, type VoiceCloneConfig } from "@/lib/ai/voice-clone/config";
@@ -318,6 +319,13 @@ export interface LandingSettings {
    * read a provider for them. lib/ai/providers/config.ts owns the type.
    */
   frenzAiProviders: AiProvidersConfig;
+  /**
+   * Kling pricing (2026-09-28, Part 4 §12–§14): the per-tier matrix — what Kling
+   * charges US in units, and what the MEMBER pays, kept in separate fields so a
+   * provider price change can never silently re-price a member.
+   * lib/ai/kling/pricing.ts owns the type.
+   */
+  frenzAiKlingPricing: KlingPricingConfig;
   /** Lip Sync Pro (2026-09-21): the tool's own configuration — lib/ai/lip-sync/config.ts owns the type. */
   frenzAiLipSync: LipSyncProConfig;
   /** Text to Audio (2026-09-21): the standalone tool's configuration — lib/ai/text-to-audio/config.ts owns the type. */
@@ -380,6 +388,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiCharacterReplace: normalizeCharacterReplaceConfig(null),
   frenzAiPlans: normalizeAiPlansConfig(null),
   frenzAiProviders: normalizeAiProvidersConfig(null),
+  frenzAiKlingPricing: normalizeKlingPricing(null),
   frenzAiLipSync: normalizeLipSyncConfig(null),
   frenzAiTextToAudio: normalizeTextToAudioConfig(null),
   frenzAiVoiceClone: normalizeVoiceCloneConfig(null),
@@ -530,6 +539,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiCharacterReplace: normalizeCharacterReplaceConfig(raw.frenzAiCharacterReplace),
       frenzAiPlans: normalizeAiPlansConfig(raw.frenzAiPlans),
       frenzAiProviders: normalizeAiProvidersConfig(raw.frenzAiProviders),
+      frenzAiKlingPricing: normalizeKlingPricing(raw.frenzAiKlingPricing),
       frenzAiLipSync: normalizeLipSyncConfig(raw.frenzAiLipSync),
       frenzAiTextToAudio: normalizeTextToAudioConfig(raw.frenzAiTextToAudio),
       frenzAiVoiceClone: normalizeVoiceCloneConfig(raw.frenzAiVoiceClone),
@@ -571,7 +581,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">> & {
   /** Voice Cloning: the same deep merge — the panel posts the slots without erasing the sample limits. */
   frenzAiVoiceClone?: Record<string, unknown>;
   /** Lip Sync Pro: the same deep merge. */
@@ -583,6 +593,8 @@ export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharact
   frenzAiPlans?: Record<string, unknown>;
   /** The providers: the same deep merge — the switch panel posts one feature's vendor without erasing the model configuration. */
   frenzAiProviders?: Record<string, unknown>;
+  /** Kling pricing: the same deep merge, so the panel can post one tier without erasing the rest. */
+  frenzAiKlingPricing?: Record<string, unknown>;
 };
 
 /**
@@ -609,7 +621,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -662,6 +674,15 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
     frenzAiProviders: versionAiProviders(
       current.frenzAiProviders,
       normalizeAiProvidersConfig(mergeCharacterReplacePatch(current.frenzAiProviders as unknown as Record<string, unknown>, (s.frenzAiProviders ?? {}) as Record<string, unknown>)),
+    ),
+    /*
+      Kling pricing: merged the same way. The version bumps when a number that
+      changes what a NEW job COSTS changes — a job records the version it was
+      quoted under, so a later re-price can never be mistaken for the old one.
+    */
+    frenzAiKlingPricing: versionKlingPricing(
+      current.frenzAiKlingPricing,
+      normalizeKlingPricing(mergeCharacterReplacePatch(current.frenzAiKlingPricing as unknown as Record<string, unknown>, (s.frenzAiKlingPricing ?? {}) as Record<string, unknown>)),
     ),
     // Lip Sync Pro: merged the same way; the pricing version bumps on a price-bearing change, the version on any change.
     frenzAiLipSync: versionLipSyncConfig(

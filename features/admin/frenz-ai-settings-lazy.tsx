@@ -129,6 +129,13 @@ export function TextToAudioSettingsLazy(props: { settings: LandingSettings; stat
   return <TextToAudioSettings {...props} />;
 }
 
+// Kling pricing (2026-09-28, Part 4): the unit matrix — what Kling charges us, what the member pays, and the tiers whose cost is not yet measured.
+const KlingPricingSettings = dynamic(() => import("@/features/admin/kling-pricing-settings").then((m) => m.KlingPricingSettingsPanel), { loading: skeleton("Loading Kling pricing") });
+
+export function KlingPricingSettingsLazy(props: { settings: LandingSettings }) {
+  return <KlingPricingSettings {...props} />;
+}
+
 // Voice Cloning (2026-09-27): AI → Voice Cloning — the slots, the price, the recordings, the consent wording, the live-voice figures.
 const VoiceCloneSettings = dynamic(() => import("@/features/admin/voice-clone-settings").then((m) => m.VoiceCloneSettingsPanel), { loading: skeleton("Loading Voice Cloning") });
 

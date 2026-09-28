@@ -362,9 +362,18 @@ describe("Kling — the job integration, and the promise that nothing routes to 
     expect(src("supabase/migrations/0178_ai_kling_provider.sql")).toContain("replicate_prediction_id");
   });
 
-  it("🔴 the Kling adapter supports NO feature — Part 2 routes nothing to it", async () => {
+  it("🔴 the Kling adapter supports EXACTLY the three verified video features (Part 5 §1)", async () => {
     const { klingProvider } = await import("./provider");
-    for (const feature of ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_clean", "ai_generate"] as const) {
+    // The three proven by a completed generation each.
+    for (const feature of ["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"] as const) {
+      expect(klingProvider.supports(feature), feature).toBe(true);
+    }
+    /*
+      🔴 And nothing else. Character Replace especially: the direct API has no
+      endpoint that takes a video plus a character, so §37 says it stays
+      unsupported rather than being approximated here.
+    */
+    for (const feature of ["ai_character_replace", "ai_text_to_audio", "ai_voice_clone", "ai_clean", "ai_generate"] as const) {
       expect(klingProvider.supports(feature), feature).toBe(false);
     }
     expect(klingProvider.id).toBe("kling");

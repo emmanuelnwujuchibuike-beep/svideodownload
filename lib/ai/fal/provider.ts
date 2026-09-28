@@ -29,9 +29,15 @@ export const falProvider: AiProvider = {
     return falConfigured();
   },
 
-  supports(feature) {
-    // Character Replace (the replacement AND its lip-sync stage) is the feature this build routes to fal.ai.
-    return feature === "ai_character_replace";
+  /**
+   * 🔴 NO VIDEO FEATURE. NOT ONE. (Part 5 §1, §40)
+   *
+   * fal.ai never ran a live job on this deployment, and now it cannot: Kling is
+   * the only video provider and §13 forbids any fallback to here. Registered
+   * only so a historical `provider = 'fal'` row remains readable.
+   */
+  supports() {
+    return false;
   },
 
   async submit() {

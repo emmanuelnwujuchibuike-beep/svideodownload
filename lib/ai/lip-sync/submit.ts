@@ -69,8 +69,26 @@ export async function submitLipSyncJob(job: AiJobRow, opts: { from: readonly AiJ
     already treats as "refuse and release the funding", which is exactly right
     for work that must not be submitted here.
   */
-  if (vendor === "kling") {
-    throw new AiJobError("FEATURE_UNAVAILABLE", "lip-sync: a Kling job cannot be submitted through the Replicate/fal path — it has its own handler");
+  /*
+    🔴 WIDENED TO A TOTAL REFUSAL (Part 5 §11).
+
+    Lip Sync now runs on the DIRECT Kling Lip Sync endpoint, which is a different
+    path, a different model and a different request shape
+    (`lib/ai/kling/pipelines/lip-sync.ts`). This function is the legacy
+    Replicate/fal submission and is no longer reachable in production —
+    `replicateProvider.supports()` and `falProvider.supports()` both answer false
+    for every feature, so `submitJobToProvider` refuses before it gets here.
+
+    It refuses ANY vendor rather than naming `kling`, because the set of things
+    that must not be submitted here is now "everything": a legacy vendor cannot
+    run it, and a current one has its own pipeline. Narrowing to two names would
+    leave the `elevenlabs` value — added in Part 5 so the audio tools can name
+    their real vendor — indexing a two-key table and throwing a TypeError
+    mid-submit, after the charge. That is the precise bug the Part 4 note below
+    was written about, one release later.
+  */
+  if (vendor !== "replicate" && vendor !== "fal") {
+    throw new AiJobError("FEATURE_UNAVAILABLE", `lip-sync: ${vendor} jobs are not submitted through the legacy path — Lip Sync runs on the direct Kling endpoint`);
   }
   const model = plan?.model || config.models[vendor].model;
   const adapter = lipSyncAdapterFor(vendor, model, settings.frenzAiProviders);

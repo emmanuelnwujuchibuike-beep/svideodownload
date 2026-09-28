@@ -111,25 +111,25 @@ describe("🔴 the Replicate/fal paths REFUSE a kling row rather than mis-submit
   */
   it("character-replace submit refuses a kling vendor before choosing a webhook URL", () => {
     const source = code("lib/ai/character-replace/submit.ts");
-    const refusal = source.indexOf('if (vendor === "kling")');
+    const refusal = source.indexOf('if (vendor !== "replicate" && vendor !== "fal")');
     const webhook = source.indexOf("const webhookUrl =");
     expect(refusal).toBeGreaterThan(-1);
     expect(webhook).toBeGreaterThan(-1);
     expect(refusal).toBeLessThan(webhook);
   });
 
-  it("lip-sync submit refuses a kling vendor before indexing the two-vendor model table", () => {
+  it("lip-sync submit refuses ANY non-legacy vendor before indexing the two-vendor model table", () => {
     const source = code("lib/ai/lip-sync/submit.ts");
-    const refusal = source.indexOf('if (vendor === "kling")');
+    const refusal = source.indexOf('if (vendor !== "replicate" && vendor !== "fal")');
     const lookup = source.indexOf("config.models[vendor]");
     expect(refusal).toBeGreaterThan(-1);
     expect(lookup).toBeGreaterThan(-1);
     expect(refusal).toBeLessThan(lookup);
   });
 
-  it("the lip-sync PREPARE service refuses it too — the worker path, not just the submit path", () => {
+  it("the lip-sync PREPARE service refuses them too — the worker path, not just the submit path", () => {
     const source = code("server/services/ai-lip-sync-prepare-service.ts");
-    const refusal = source.indexOf('if (vendor === "kling")');
+    const refusal = source.indexOf('if (vendor !== "replicate" && vendor !== "fal")');
     const lookup = source.indexOf("config.models[vendor]");
     expect(refusal).toBeGreaterThan(-1);
     expect(lookup).toBeGreaterThan(-1);
@@ -146,7 +146,9 @@ describe("the vendor list is written once", () => {
   });
 
   it("AI_PROVIDER_IDS is a tuple, so a zod enum can be built from it at all", () => {
-    expect(AI_PROVIDER_IDS).toEqual(["replicate", "fal", "kling"]);
-    expect(AI_PROVIDER_IDS.length).toBe(3);
+    // 2026-09-28 (Part 5): `elevenlabs` joined so the two direct-ElevenLabs tools can
+    // name their real vendor instead of borrowing "replicate".
+    expect(AI_PROVIDER_IDS).toEqual(["replicate", "fal", "kling", "elevenlabs"]);
+    expect(AI_PROVIDER_IDS.length).toBe(4);
   });
 });

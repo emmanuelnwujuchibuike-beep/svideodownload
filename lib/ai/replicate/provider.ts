@@ -202,8 +202,31 @@ export const replicateProvider: AiProvider = {
     or not the submission shape is this file's: `ai_character_replace` and
     `ai_lip_sync` both have their own, and both must pass this gate first.
   */
-  supports(feature) {
-    return feature === "ai_clean" || feature === "ai_character_replace" || feature === "ai_lip_sync";
+  /**
+   * 🔴 NO VIDEO FEATURE. NOT ONE. (Part 5 §1, §40)
+   *
+   * Owner: "There must be zero production execution path where a Kling video
+   * feature is sent to Replicate." This is that path, closed at its narrowest
+   * point — `submitJobToProvider` asks this question BEFORE it reaches any
+   * per-feature branch, so `false` here makes every branch below unreachable
+   * whatever a caller, a setting or a stored row says.
+   *
+   * It answers false for everything it used to run:
+   *
+   *   ai_character_replace  the direct Kling API cannot do character work at all
+   *                         (no endpoint accepts a video PLUS a character), so
+   *                         the product is unsupported — not quietly left here,
+   *                         which §37 forbids.
+   *   ai_lip_sync           moved to the direct Kling Lip Sync endpoint (§11).
+   *   ai_clean              retired long ago.
+   *
+   * The adapter stays REGISTERED so the reconciler, the stall sweep and the
+   * cancel route can still read historical `provider = 'replicate'` rows (§29
+   * allows database compatibility). Reading a finished job is not executing a
+   * new one, and `supports()` is what separates the two.
+   */
+  supports() {
+    return false;
   },
 
   async submit(input: AiProviderSubmission): Promise<AiProviderState> {

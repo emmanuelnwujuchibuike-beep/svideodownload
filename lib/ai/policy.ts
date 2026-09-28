@@ -152,7 +152,7 @@ export interface AiPlanPolicy {
  * 2026-09-09 and `resolveAiSubject` refuses a guest before this row is read,
  * but the row must still be sane on its own.
  */
-const CHARACTER_REPLACE: Record<AiAudience, AiPlanPolicy> = {
+const PAID_VIDEO_TOOL: Record<AiAudience, AiPlanPolicy> = {
   guest: {
     dailyLimit: 0,
     unlimited: false,
@@ -225,7 +225,30 @@ const DEFAULT_BY_AUDIENCE: Record<AiAudience, AiPlanPolicy> = {
  * construction rather than by remembering.
  */
 const FEATURE_POLICY: Partial<Record<AiFeature, Record<AiAudience, AiPlanPolicy>>> = {
-  ai_character_replace: CHARACTER_REPLACE,
+  /*
+    🔴 EVERY PAID VIDEO TOOL SHARES THE PAID-ONLY TABLE (2026-09-28, Part 5).
+
+    This table used to hold one entry, and the comment above it says a feature
+    absent from here "uses DEFAULT_BY_AUDIENCE, which is what makes adding
+    limits for one tool not limit future tools". True, and exactly the trap when
+    the future tool is ALSO paid: the default grants a free daily allowance
+    (2/day guest and free, 5 Pro, 15 Business), so registering Text to Video and
+    Image to Video without a row here would have handed every free member
+    several Kling generations a day at the owner's expense.
+
+    The three video tools are the same economics Character Replace had — show
+    the price, charge the balance, no free run — so they take the same table.
+    Its name changed to say what it means rather than which tool first needed it.
+
+    `ai_character_replace` keeps its entry although the tool is retired: a
+    historical row is still read by the history page and the admin jobs table,
+    and `policyFor` must answer sensibly for it rather than fall through to a
+    free allowance for a tool nobody can create.
+  */
+  ai_character_replace: PAID_VIDEO_TOOL,
+  ai_lip_sync: PAID_VIDEO_TOOL,
+  ai_text_to_video: PAID_VIDEO_TOOL,
+  ai_image_to_video: PAID_VIDEO_TOOL,
 };
 
 /** The policy for one audience and one feature. Never throws. */

@@ -2,6 +2,7 @@ import "server-only";
 
 import { AiJobError } from "@/lib/ai/errors";
 import { klingConfigured, klingGetTask } from "@/lib/ai/kling/client";
+import { isKlingVideoAiFeature } from "@/lib/ai/kling/pipelines/registry";
 import { stateFromKlingTask } from "@/lib/ai/kling/status";
 import type { AiProvider, AiProviderState } from "@/lib/ai/provider";
 
@@ -17,28 +18,24 @@ import type { AiProvider, AiProviderState } from "@/lib/ai/provider";
  * Kling row first exists, and an adapter added at the same time as the row is
  * an adapter nobody tested.
  *
- * ── 🔴 `supports()` ANSWERS false FOR EVERY FEATURE, ON PURPOSE (§19) ───────
+ * ── 🔴 THIS IS NOW THE ONLY ADAPTER THAT RUNS VIDEO (Part 5 §1) ────────────
  *
- * Part 2's promise is "the seam exists and nothing uses it". That promise is
- * worth more as a line of code than as a sentence in a report, so it is one:
+ * Parts 2–3 kept `supports()` at false so nothing could route here. Part 5
+ * opens it for the three features the live API was proven to serve, and closes
+ * Replicate's and fal's to match: `hasProviderFor()` is
+ * `isConfigured() && supports(f)`, and `submitJobToProvider` checks it BEFORE
+ * any per-feature branch, so those two adapters can no longer execute a video
+ * feature whatever a caller or a stored setting says.
  *
- *   · `hasProviderFor()` is `provider.isConfigured() && provider.supports(f)`,
- *     so Kling can never report itself able to run anything;
- *   · `submitJobToProvider` (lib/ai/submit.ts) checks `supports()` BEFORE it
- *     reaches any per-feature branch and refuses with FEATURE_UNAVAILABLE.
+ * ── Why `submit` still throws ──────────────────────────────────────────────
  *
- * Even if a future edit wired a feature's routing to Kling by accident, the
- * submission would be refused here — free, before a charge, before an upload.
- * Part 3 opens this one method, per feature, deliberately.
- *
- * ── Why `submit` throws rather than being written now ──────────────────────
- *
- * There is no such thing as a generic Kling submission. Face Only, Full
- * Character, image-to-video and text-to-video each need their own validation,
- * their own request body and their own prompt handling — the owner's explicit
- * instruction is that there must NOT be one giant shared pipeline. So the
- * generic seam refuses, exactly as the fal adapter refuses, and Part 3 adds
- * one handler per feature over `klingCreateTask`.
+ * There is no such thing as a generic Kling submission, and §2 forbids
+ * inventing one. Text to Video, Image to Video and Lip Sync each have their own
+ * validation, their own request body and — in Lip Sync's case — their own
+ * ENDPOINT and model. They are submitted through `lib/ai/kling/pipelines/`,
+ * which is where the per-feature knowledge lives. This generic seam exists for
+ * the paths that route by a job ROW (poll, cancel, reconcile) and refuses
+ * anything else, exactly as the fal adapter does.
  */
 export const klingProvider: AiProvider = {
   id: "kling",
@@ -47,9 +44,19 @@ export const klingProvider: AiProvider = {
     return klingConfigured();
   },
 
-  /* 🔴 See the note above. Part 2 routes no feature to Kling. */
-  supports() {
-    return false;
+  /**
+   * 🔴 THE ONLY ADAPTER THAT SUPPORTS A VIDEO FEATURE (Part 5 §1).
+   *
+   * The three the live API was PROVEN to serve, each by a completed generation:
+   * Text to Video, Image to Video and Lip Sync. Read from the pipeline registry
+   * rather than written out here, so this list cannot drift from the pipelines
+   * that actually exist and adding a pipeline stays one edit.
+   *
+   * Everything else answers false, including every Character Replace scope —
+   * §37: an unsupported capability stays unsupported rather than approximated.
+   */
+  supports(feature) {
+    return isKlingVideoAiFeature(feature);
   },
 
   async submit() {

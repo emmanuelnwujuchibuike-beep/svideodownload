@@ -83,7 +83,10 @@ describe("the providers configuration (§10, §11, §17)", () => {
     expect(providerRunEstimateUsdCents(modelConfigFor(AI_PROVIDERS_DEFAULTS, "character_replace", "fal"), 5_000)).toBeNull();
   });
   it("the provider id union mirrors the widened check (0168, then 0178)", () => {
-    expect(AI_PROVIDER_IDS).toEqual(["replicate", "fal", "kling"]);
+    // 2026-09-28 (Part 5): `elevenlabs` joined in 0179 so the two direct-ElevenLabs
+    // tools can name their real vendor instead of borrowing "replicate".
+    expect(AI_PROVIDER_IDS).toEqual(["replicate", "fal", "kling", "elevenlabs"]);
+    expect(src("supabase/migrations/0179_ai_kling_video_features.sql")).toContain("'elevenlabs'");
     const sql = src("supabase/migrations/0168_ai_provider_runs.sql");
     expect(sql).toContain("check (provider in ('replicate', 'fal')) not valid");
     expect(sql).toContain("validate constraint ai_jobs_provider_chk");

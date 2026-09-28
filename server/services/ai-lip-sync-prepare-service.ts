@@ -96,8 +96,15 @@ export async function prepareLipSyncJob(jobId: string): Promise<PrepareOutcome> 
       worker, which surfaces as a generic preparation failure rather than the
       routing mistake it actually is.
     */
-    if (vendor === "kling") {
-      throw new PrepareFailure("PREPARATION_FAILED", "a Kling job cannot be prepared through the Replicate/fal lip-sync path", "system");
+    /*
+      🔴 Widened to a TOTAL refusal for the same reason as the submit path
+      (Part 5 §11): Lip Sync runs on the direct Kling endpoint now, so nothing
+      belongs on this legacy Replicate/fal prepare step. Naming only `kling`
+      would let the `elevenlabs` provider value index a two-key table and throw
+      a TypeError inside the worker.
+    */
+    if (vendor !== "replicate" && vendor !== "fal") {
+      throw new PrepareFailure("PREPARATION_FAILED", `a ${vendor} job is not prepared through the legacy Replicate/fal lip-sync path`, "system");
     }
     const model = plan?.model || config.models[vendor].model;
     const adapter = lipSyncAdapterFor(vendor, model, settings.frenzAiProviders);

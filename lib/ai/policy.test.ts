@@ -8,6 +8,7 @@ import {
   policyFor,
   type AiPlanPolicy,
 } from "./policy";
+import { KLING_VIDEO_AI_FEATURES } from "./kling/pipelines/registry";
 import { FRENZ_AI_DAILY_CREDITS } from "./quota";
 
 /**
@@ -175,6 +176,47 @@ describe("🔴 §9 — a future AI tool must NOT inherit another tool's limits",
 
   it("does not make an unlisted tool require an ad it has no flow for", () => {
     expect(policyFor("free", "ai_caption").requiresReward).toBe(false);
+  });
+
+  /*
+    ── 🔴 THE OTHER HALF OF §9, ADDED 2026-09-28 (Part 5) ────────────────────
+
+    "A future tool must not inherit another tool's limits" protects a FREE tool
+    from a paid tool's restrictions. The reverse is the expensive direction and
+    had no guard: a PAID tool absent from FEATURE_POLICY falls through to
+    DEFAULT_BY_AUDIENCE, which grants a free daily allowance.
+
+    That nearly shipped. Registering Text to Video and Image to Video without a
+    policy row would have given every free member several Kling generations a
+    day — real provider spend, per tap, silently. Caught by the entitlement
+    tests; this is the guard so it cannot come back.
+
+    Every registered tool with `freeDailyJobs: 0` is declaring "no free run".
+    The policy must agree, or the registry and the entitlement disagree about
+    the same tool.
+  */
+  it("🔴 every KLING VIDEO tool is paid-only in policy, not just in its registry row", () => {
+    /*
+      Scoped to the video tools on purpose. The two ElevenLabs tools also have
+      `freeDailyJobs: 0`, but they are not paid-only: they have their own
+      MONTHLY free allowances counted in their own tables (500 characters in
+      `ai_tta_free_usage`, one voice in `ai_vc_free_usage`), which the daily job
+      policy knows nothing about. Asserting paidOnly over them would be
+      asserting the wrong economics.
+
+      The video tools are the ones where a daily allowance means real provider
+      spend per tap, and they are exactly the set §1 governs.
+    */
+    expect(KLING_VIDEO_AI_FEATURES.length).toBeGreaterThan(0);
+    for (const id of KLING_VIDEO_AI_FEATURES) {
+      for (const audience of ["free", "pro", "business", "max_ai"] as const) {
+        const policy = policyFor(audience, id);
+        expect(policy.paidOnly, `${id}/${audience} paidOnly`).toBe(true);
+        expect(policy.dailyLimit, `${id}/${audience} dailyLimit`).toBe(0);
+      }
+      // …and a guest is never offered one: the AI surface is signed-in only.
+      expect(featureOfferedTo("guest", id), id).toBe(false);
+    }
   });
 });
 

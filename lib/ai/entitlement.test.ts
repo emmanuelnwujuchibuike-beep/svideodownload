@@ -19,7 +19,14 @@ const { getAiEntitlement, getAiEntitlementSnapshot, usageForClient } = await imp
 const { guestSubject, userSubject } = await import("./subject");
 const { aiFeature } = await import("./jobs");
 
-const feature = aiFeature("ai_character_replace")!;
+/*
+  🔴 Re-anchored (Part 5). Character Replace was RETIRED — the direct Kling API
+  has no endpoint that takes a video plus a character — so it has no registry row
+  and `aiFeature()` answers null for it. These tests are about the contract that
+  applies to a PAID video tool with no free allowance, which Lip Sync Pro still
+  is, so they stand on that.
+*/
+const feature = aiFeature("ai_lip_sync")!;
 /** A feature with no policy table of its own — the default rows carry a free allowance. */
 const freeTool = { ...feature, id: "ai_upscale" as const };
 const member = userSubject("u1");
@@ -35,7 +42,7 @@ describe("getAiEntitlement", () => {
     const e = await getAiEntitlement(member, feature);
     expect(e).toEqual({
       audience: "free",
-      feature: "ai_character_replace",
+      feature: "ai_lip_sync",
       // Allowed although the daily number is zero: the tool is funded at
       // checkout from the balance, and `paidOnly` is what says so.
       allowed: true,

@@ -129,7 +129,7 @@ export type AiJobStatus =
  * BEFORE the provider is stamped — a value the database refuses would fail
  * after the charge.
  */
-export type AiProviderId = "replicate" | "fal" | "kling";
+export type AiProviderId = "replicate" | "fal" | "kling" | "elevenlabs";
 /**
  * A TUPLE, not a plain array, so a zod enum can be built straight from it
  * (`z.enum(AI_PROVIDER_IDS)`) — which is how `lib/ai/character-replace/job-meta.ts`
@@ -138,7 +138,7 @@ export type AiProviderId = "replicate" | "fal" | "kling";
  * `satisfies` keeps the two honest: a value here that is not an `AiProviderId` is
  * a compile error, and the union is still the source of the type.
  */
-export const AI_PROVIDER_IDS = ["replicate", "fal", "kling"] as const satisfies readonly AiProviderId[];
+export const AI_PROVIDER_IDS = ["replicate", "fal", "kling", "elevenlabs"] as const satisfies readonly AiProviderId[];
 
 export const AI_JOB_STATUSES: readonly AiJobStatus[] = [
   "queued",
@@ -287,53 +287,38 @@ export interface AiFeatureDef {
 }
 
 /**
- * ── 🔴 ONE TOOL, AND IT IS CHARACTER REPLACE ────────────────────────────────
+ * ── 🔴 CHARACTER REPLACE IS RETIRED (2026-09-28, the provider migration Part 5) ─
  *
- * Owner, 2026-09-13: Wan 2.2 is the main Frenz AI model, AI Clean is removed,
- * and Character Replace is the first (and only) tool. Part 1 registers the
- * feature so the interface, the price quote and the entitlement all resolve
- * it; the provider submission — the model, its version, the input it takes —
- * is Part 2, and until then `hasProviderFor` answers false for this row and
- * creation is refused with FEATURE_UNAVAILABLE. Nothing expensive can run.
+ * It has no registry row, exactly as `ai_clean` has none, and for exactly the
+ * same reason: the value must stay READABLE (paid rows, ledger entries, refunds,
+ * the history page, the retention sweep) while nothing may CREATE one.
+ * `aiFeature("ai_character_replace")` answers null and the create route refuses.
+ *
+ * Why it was retired, in one line: **the direct Kling API cannot do it.** There
+ * is no endpoint that accepts a base video PLUS a character. `element_id` refers
+ * to an element a person makes by hand in Kling's web app and no API creates
+ * one; `/v1/videos/multi-image2video`, the only endpoint that took inline
+ * reference images, is retired by the vendor; there is no face-swap endpoint;
+ * and Omni discards a supplied video entirely (proven by three generations, one
+ * of them using Kling's own placeholder syntax). All four scopes — Full
+ * Character, Face Only, Face + Head, Upper Body — fail on that, not on region
+ * control.
+ *
+ * Part 5 §1 and §37 decide what follows: Kling is the only video provider, an
+ * unsupported capability stays unsupported, and it must NOT be quietly kept on
+ * Replicate or fal.ai. So the row is gone rather than re-pointed, and
+ * `lib/ai/kling/pipelines/unsupported.ts` carries the member-facing state and
+ * the evidence.
+ *
+ * ── What IS registered ─────────────────────────────────────────────────────
+ *
+ *   ai_lip_sync        → direct Kling Lip Sync (re-pointed, §11)
+ *   ai_text_to_video   → direct Kling Omni     (new, verified)
+ *   ai_image_to_video  → direct Kling Omni     (new, verified)
+ *   ai_text_to_audio   → direct ElevenLabs     (untouched, §12)
+ *   ai_voice_clone     → direct ElevenLabs     (untouched, §12)
  */
 export const AI_FEATURES: readonly AiFeatureDef[] = [
-  {
-    id: "ai_character_replace",
-    label: "Character Replace",
-    provider: "replicate",
-    requires: "replicate",
-    /*
-      The model returns picture only, and the member's settings may ask for
-      the original voice to be kept — either way OUR worker has the last word
-      on the file before it is handed over. Kept true so a deployment without
-      the worker refuses up front rather than after the provider has been
-      paid; Part 2 decides what the finalizer actually does for this tool.
-    */
-    needsFinalizer: true,
-    /*
-      🔴 ZERO. This is a paid tool funded from the member's balance — steps
-      5 and 6 of the owner's flow are "show the exact price" and "confirm
-      payment from balance". There is no free run: a single job is minutes of
-      GPU time, and a free allowance here would be the owner paying the
-      provider for every curious tap. `policyFor` carries the same zero for
-      every audience, and the entitlement reads `paidOnly` to still allow it.
-    */
-    freeDailyJobs: 0,
-    mimeTypes: AI_VIDEO_FORMATS.flatMap((f) => f.mimeTypes),
-    // The same ceiling the picker already enforces (lib/ai/media.ts), so a file
-    // the interface accepted can never be refused by the server for a reason
-    // the interface did not know about.
-    maxBytes: AI_VIDEO_MAX_BYTES,
-    /*
-      Two minutes. The model works frame by frame at a fixed rate, and the
-      price is per second of video — so this is a cost ceiling first and a
-      wait-time ceiling second. The operator can lower it in the admin
-      (Character Replace → longest video); this is the hard upper bound the
-      setting is clamped to.
-    */
-    maxDurationSeconds: 120,
-    retentionHours: 72,
-  },
   {
     /*
       ── LIP SYNC PRO (2026-09-21, the owner's brief) ─────────────────────────
@@ -348,8 +333,9 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     */
     id: "ai_lip_sync",
     label: "Lip Sync Pro",
-    provider: "replicate",
-    requires: "replicate",
+    /* 2026-09-28 (Part 5 §11): re-pointed to the DIRECT Kling Lip Sync endpoint. Same feature value, same history, same wallet — only the provider changed. */
+    provider: "kling",
+    requires: "kling",
     // the output already carries the speech; the worker still validates, stores and announces it
     needsFinalizer: true,
     // paid like Character Replace: complimentary creation → included credits → the wallet
@@ -372,8 +358,14 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     */
     id: "ai_text_to_audio",
     label: "Text to Audio",
-    provider: "replicate",
-    requires: "replicate",
+    /*
+      2026-09-28 (Part 5 §12): this is a DIRECT ElevenLabs tool and now declares
+      it. It used to say "replicate" because of the old route switch; with
+      Replicate supporting nothing, that stale declaration would have reported
+      Text to Audio unavailable on a deployment that can run it perfectly well.
+    */
+    provider: "elevenlabs",
+    requires: "elevenlabs",
     // the Replicate route's MP3 is brought home and stored by the worker; the direct route stores in-request
     needsFinalizer: true,
     freeDailyJobs: 0,
@@ -408,7 +400,8 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     */
     id: "ai_voice_clone",
     label: "Voice Cloning",
-    provider: "replicate",
+    /* 2026-09-28 (Part 5): says ElevenLabs, because it IS ElevenLabs. It read "replicate" only because the union had no better value. */
+    provider: "elevenlabs",
     requires: "elevenlabs",
     needsFinalizer: false,
     freeDailyJobs: 0,
@@ -513,7 +506,17 @@ export function aiFeature(id: string): AiFeatureDef | null {
  * surface, balance and history included. They ask here instead, so the next
  * tool is one edit rather than eleven.
  */
-export const PRIMARY_AI_FEATURE: AiFeature = "ai_character_replace";
+/*
+  🔴 MOVED OFF ai_character_replace (2026-09-28, Part 5). That row is gone, and
+  `primaryAiFeature()` THROWS on an unregistered id — so leaving this pointing at
+  it would have taken down the balance, the entitlement and every job route the
+  moment Character Replace was retired. Exactly the eleven-lookup failure the
+  note above describes, one tool later.
+
+  Text to Video is the new anchor: it is registered, it is verified end to end,
+  and it is the video tool the surface is built around.
+*/
+export const PRIMARY_AI_FEATURE: AiFeature = "ai_text_to_video";
 
 export function primaryAiFeature(): AiFeatureDef {
   const feature = FEATURES_BY_ID.get(PRIMARY_AI_FEATURE);

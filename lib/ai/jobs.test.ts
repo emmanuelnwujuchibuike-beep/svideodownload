@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { AI_VIDEO_MAX_BYTES } from "./media";
@@ -28,12 +31,20 @@ import {
  * feature that reports itself runnable when nothing can run it.
  */
 
-const feature = aiFeature("ai_character_replace")!;
+/*
+  🔴 Re-anchored from ai_character_replace to ai_image_to_video (Part 5).
+  Character Replace was RETIRED — the direct Kling API has no endpoint that takes
+  a video plus a character — so it has no registry row and `aiFeature()` answers
+  null for it, exactly as it does for ai_clean. These tests are about the
+  registry's CONTRACT (limits, availability, input validation), not about that
+  tool, so they now stand on a feature that exists and takes an upload.
+*/
+const feature = aiFeature("ai_image_to_video")!;
 
 describe("the feature registry", () => {
   it("registers exactly the tools that exist — including the two Kling video features (Part 5)", () => {
-    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"]);
-    expect(primaryAiFeature().id).toBe("ai_character_replace");
+    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"]);
+    expect(primaryAiFeature().id).toBe("ai_text_to_video");
   });
 
   /*
@@ -57,21 +68,46 @@ describe("the feature registry", () => {
     expect(aiFeature("ai_clean")).toBeNull();
   });
 
+  /*
+    🔴 The same retirement, one tool later (Part 5). The direct Kling API cannot
+    do character work at all, and §37 says an unsupported capability stays
+    unsupported rather than being kept on Replicate. So the row is GONE while the
+    value stays readable — paid rows, ledger entries and refunds must survive.
+  */
+  it("🔴 Character Replace is retired: no row, so nothing can create one — but the value still parses", () => {
+    expect(aiFeature("ai_character_replace")).toBeNull();
+    expect(AI_FEATURES.map((f) => f.id)).not.toContain("ai_character_replace");
+    /*
+      …and the VALUE must still be usable, so history, refunds and the retention
+      sweep keep working. The type still carries it and migration 0179 still
+      accepts it — asserted on the migration itself rather than on a row fixture,
+      because the database is the authority here.
+    */
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/0179_ai_kling_video_features.sql"), "utf8");
+    expect(sql).toContain("'ai_character_replace'");
+  });
+
   it("🔴 has NO free allowance: every run is paid from the balance", () => {
     expect(feature.freeDailyJobs).toBe(0);
   });
 
-  it("caps a video at two minutes — the price is per second", () => {
-    expect(feature.maxDurationSeconds).toBe(120);
+  it("caps the OUTPUT at the length the vendor will actually make", () => {
+    // Kling Omni generates up to 15s. The vendor does NOT range-check
+    // `settings.duration`, so this ceiling is ours and it is enforced again per
+    // tier in the pricing matrix.
+    expect(feature.maxDurationSeconds).toBe(15);
   });
 
-  it("🔴 accepts exactly what the picker accepts", () => {
+  it("🔴 accepts exactly the image types Kling fetches, and nothing else", () => {
     // A file the interface took must never be refused by the server for a rule
-    // the interface did not know about. Both read the same constant.
-    expect(feature.maxBytes).toBe(AI_VIDEO_MAX_BYTES);
-    for (const mime of ["video/mp4", "video/quicktime", "video/webm", "video/x-msvideo"]) {
+    // the interface did not know about — and the vendor names these three
+    // extensions (.jpg/.jpeg/.png) for a reference image.
+    for (const mime of ["image/jpeg", "image/png"]) {
       expect(feature.mimeTypes, `${mime} missing`).toContain(mime);
     }
+    // not a video tool: it takes a PHOTO and animates it
+    expect(feature.mimeTypes).not.toContain("video/mp4");
+    expect(feature.maxBytes).toBe(10 * 1024 * 1024);
   });
 
   it("returns null for a feature nobody built", () => {
@@ -84,9 +120,13 @@ describe("featureAvailability", () => {
   const ready = { replicate: true, kling: true, elevenlabs: true, finalizer: true, allowUndispatched: false };
 
   it("🔴 refuses when no provider is configured", () => {
-    const verdict = featureAvailability(feature, { ...ready, replicate: false });
+    // 🔴 Gated on KLING (Part 5 §1) — a video tool must never be gated on a
+    // Replicate token it can no longer use.
+    const verdict = featureAvailability(feature, { ...ready, kling: false });
     expect(verdict.available).toBe(false);
     if (!verdict.available) expect(verdict.reason.length).toBeGreaterThan(10);
+    // and a missing Replicate token is now irrelevant to it
+    expect(featureAvailability(feature, { ...ready, replicate: false }).available).toBe(true);
   });
 
   it("🔴 Part 4: refuses when the ffmpeg worker is missing, BEFORE anything is spent", () => {
@@ -103,7 +143,7 @@ describe("featureAvailability", () => {
   it("says the same thing whichever half is missing", () => {
     // Which piece of OUR infrastructure is down is not the member's problem,
     // and naming it publicly buys nothing.
-    const noProvider = featureAvailability(feature, { ...ready, replicate: false });
+    const noProvider = featureAvailability(feature, { ...ready, kling: false });
     const noWorker = featureAvailability(feature, { ...ready, finalizer: false });
     if (!noProvider.available && !noWorker.available) {
       expect(noProvider.reason).toBe(noWorker.reason);
@@ -126,6 +166,13 @@ describe("featureAvailability", () => {
 });
 
 describe("validateJobInput", () => {
+  /*
+    🔴 This block is about VIDEO input rules, so it stands on the registered tool
+    that takes a video upload — Lip Sync Pro. The module-level `feature` is
+    Image to Video, which takes a PHOTO; asserting "accepts video/mp4" against it
+    would be asserting the wrong contract.
+  */
+  const feature = aiFeature("ai_lip_sync")!;
   const ok = { size: 1024, mimeType: "video/mp4" };
 
   it("accepts a plain video", () => {

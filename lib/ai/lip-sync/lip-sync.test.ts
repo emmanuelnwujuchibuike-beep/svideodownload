@@ -286,19 +286,33 @@ describe("the job view", () => {
  * why it was expensive to miss.
  */
 describe("the provider gate every submission passes first", () => {
-  it("supports the three features that actually run on Replicate", () => {
-    expect(replicateProvider.supports("ai_lip_sync")).toBe(true);
-    expect(replicateProvider.supports("ai_character_replace")).toBe(true);
-    expect(replicateProvider.supports("ai_clean")).toBe(true);
+  /*
+    🔴 INVERTED BY PART 5 §1: "There must be zero production execution path where
+    a Kling video feature is sent to Replicate."
+
+    The gate this describe block is about is now the thing that CLOSES Replicate
+    rather than the thing that opened it. `submitJobToProvider` asks
+    `supports()` before it reaches any per-feature branch, so a blanket false
+    makes every Replicate video branch unreachable — which is exactly the
+    property the section demands, enforced at one line instead of by discipline.
+  */
+  it("🔴 Replicate supports NO feature at all — every video path is closed (§1, §40)", () => {
+    for (const feature of ["ai_lip_sync", "ai_character_replace", "ai_clean", "ai_text_to_video", "ai_image_to_video", "ai_upscale", "ai_generate"] as const) {
+      expect(replicateProvider.supports(feature), feature).toBe(false);
+    }
   });
 
-  /* Not a rubber stamp: a feature with no Replicate submission must still be refused. */
-  it("does not claim the ones that never reach a Replicate prediction", () => {
-    expect(replicateProvider.supports("ai_upscale")).toBe(false);
-    expect(replicateProvider.supports("ai_generate")).toBe(false);
+  it("🔴 Lip Sync is Kling's now, and only Kling's (§11)", async () => {
+    const { klingProvider } = await import("../kling/provider");
+    expect(klingProvider.supports("ai_lip_sync")).toBe(true);
+    expect(replicateProvider.supports("ai_lip_sync")).toBe(false);
+    const { falProvider } = await import("../fal/provider");
+    expect(falProvider.supports("ai_lip_sync")).toBe(false);
   });
 
-  it("the registry points Lip Sync at the vendor whose gate now admits it", () => {
-    expect(AI_FEATURES.find((f) => f.id === "ai_lip_sync")?.provider).toBe("replicate");
+  it("🔴 the registry points Lip Sync at KLING — the vendor whose gate now admits it (§11)", () => {
+    const row = AI_FEATURES.find((f) => f.id === "ai_lip_sync")!;
+    expect(row.provider).toBe("kling");
+    expect(row.requires).toBe("kling");
   });
 });

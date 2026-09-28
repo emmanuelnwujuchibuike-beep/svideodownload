@@ -124,8 +124,18 @@ export async function submitCharacterReplaceJob(
     Replicate signatures and would have been discarded — the job hanging until
     the stall sweep failed it, after the charge.
   */
-  if (vendor === "kling") {
-    throw new AiJobError("FEATURE_UNAVAILABLE", `character-replace: a Kling job cannot be submitted through the Replicate/fal path (stage ${stage})`);
+  /*
+    🔴 Widened to a TOTAL refusal (Part 5). Character Replace is retired — the
+    direct Kling API has no endpoint that accepts a video plus a character — so
+    this whole path is dead for new work: the feature has no registry row and
+    `replicateProvider.supports()` answers false for everything.
+
+    It refuses any vendor that is not a legacy one rather than naming `kling`,
+    because `elevenlabs` is now a provider value too and would otherwise reach
+    the webhook-URL line below and be handed Replicate's callback.
+  */
+  if (vendor !== "replicate" && vendor !== "fal") {
+    throw new AiJobError("FEATURE_UNAVAILABLE", `character-replace: ${vendor} jobs are not submitted through this path (stage ${stage}) — the tool is retired`);
   }
   const generic = providerFor(vendor);
   if (!generic || !generic.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `the ${vendor} provider is not configured on this deployment`);

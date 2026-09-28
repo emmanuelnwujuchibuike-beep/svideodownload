@@ -47,6 +47,27 @@
 -- `not valid` (a short lock) and validated in its own statement (a share lock, no
 -- rewrite). Nothing here is pasted by hand — the runner applies it on push.
 
+-- ── 1. `elevenlabs` as an ai_jobs.provider value ────────────────────────────
+--
+-- The two direct-ElevenLabs tools (Text to Audio, Voice Cloning) had to declare
+-- `provider: "replicate"` in the registry because the union offered nothing
+-- truer — a lie that was harmless while Replicate ran things and actively
+-- misleading now that it runs nothing. `ai_provider_runs` has accepted
+-- 'elevenlabs' since 0168; this brings `ai_jobs` into line so those tools can
+-- name their real vendor.
+--
+-- Permissive, like the widening below: no existing row is invalidated.
+alter table public.ai_provider_runs drop constraint if exists ai_provider_runs_provider_chk;
+alter table public.ai_provider_runs
+  add constraint ai_provider_runs_provider_chk check (provider in ('replicate', 'fal', 'elevenlabs', 'kling')) not valid;
+alter table public.ai_provider_runs validate constraint ai_provider_runs_provider_chk;
+
+alter table public.ai_jobs drop constraint if exists ai_jobs_provider_chk;
+alter table public.ai_jobs
+  add constraint ai_jobs_provider_chk check (provider in ('replicate', 'fal', 'kling', 'elevenlabs')) not valid;
+alter table public.ai_jobs validate constraint ai_jobs_provider_chk;
+
+-- ── 2. LAST: the feature check on ai_jobs ───────────────────────────────────
 alter table public.ai_jobs drop constraint if exists ai_jobs_feature_chk;
 alter table public.ai_jobs add constraint ai_jobs_feature_chk check (
   feature in (

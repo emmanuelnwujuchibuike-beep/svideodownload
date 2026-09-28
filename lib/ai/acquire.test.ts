@@ -21,7 +21,14 @@ import { AI_STALL_DEADLINE_MS } from "@/lib/ai/stall";
  * reach `completed` without the provider ever running.
  */
 
-const feature = aiFeature("ai_character_replace")!;
+/*
+  🔴 Re-anchored (Part 5). Character Replace was RETIRED — the direct Kling API
+  has no endpoint that takes a video plus a character — so it has no registry row
+  and `aiFeature()` answers null for it. These tests are about the contract that
+  applies to a PAID video tool with no free allowance, which Lip Sync Pro still
+  is, so they stand on that.
+*/
+const feature = aiFeature("ai_lip_sync")!;
 
 describe("the acquiring status", () => {
   it("is a real status the database can hold", () => {

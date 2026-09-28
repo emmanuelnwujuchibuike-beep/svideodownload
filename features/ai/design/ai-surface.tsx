@@ -99,6 +99,55 @@ export function AiPageShell({
 /* ──────────────────────────────── the hero ──────────────────────────────── */
 
 /**
+ * The display headline, on its own.
+ *
+ * Split out of `AiHero` because Character Replace renders its crumb ONCE at the
+ * top and then swaps the headline per step — seven of them — so it needs the
+ * type without the breadcrumb. It kept a private copy with byte-identical
+ * classes; this is that copy, promoted, so the scale can only be changed in one
+ * place.
+ *
+ * ONE gradient word. The references put exactly one in the headline and the
+ * restraint is the effect; two read as a rainbow rather than as emphasis.
+ */
+export function AiDisplayTitle({
+  title,
+  highlight,
+  tail,
+  subtitle,
+  className,
+}: {
+  title: string;
+  highlight?: string;
+  tail?: string;
+  subtitle?: string | null;
+  className?: string;
+}) {
+  return (
+    <>
+      <h1 className={cn("text-[1.95rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.3rem]", className)}>
+        {title}
+        {highlight ? (
+          <>
+            {" "}
+            <span className="text-gradient">{highlight}</span>
+          </>
+        ) : null}
+        {tail ? (
+          <>
+            <br />
+            {tail}
+          </>
+        ) : null}
+      </h1>
+      {subtitle ? (
+        <p className="mt-2.5 max-w-sm text-[14.5px] leading-relaxed text-muted-foreground">{subtitle}</p>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * The opening of every AI screen: crumb, display headline, subtitle, actions.
  *
  * 🔴 `tool` IS REQUIRED. The component this replaces defaulted its breadcrumb
@@ -141,25 +190,7 @@ export function AiHero({
 
       <div className={cn(aside && "sm:flex sm:items-center sm:gap-6")}>
         <div className="min-w-0 flex-1">
-          <h1 className="mt-3.5 text-[1.95rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.3rem]">
-            {title}
-            {highlight ? (
-              <>
-                {" "}
-                <span className="text-gradient">{highlight}</span>
-              </>
-            ) : null}
-            {tail ? (
-              <>
-                <br />
-                {tail}
-              </>
-            ) : null}
-          </h1>
-
-          {subtitle ? (
-            <p className="mt-2.5 max-w-sm text-[14.5px] leading-relaxed text-muted-foreground">{subtitle}</p>
-          ) : null}
+          <AiDisplayTitle title={title} highlight={highlight} tail={tail} subtitle={subtitle} className="mt-3.5" />
 
           {actions ? <div className="mt-4 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
         </div>

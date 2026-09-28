@@ -401,7 +401,23 @@ function MemberDetail({ user, hours, onClose }: { user: SignedInUser; hours: num
   return (
     <Portal>
       <div
-        className="fixed inset-0 z-[2147483000] flex items-stretch justify-center bg-black/55 p-2 backdrop-blur-sm sm:p-6"
+        /*
+          🔴 THE SAFE AREA IS PART OF THE PADDING (owner: "it going to the safe
+          area on pwa"). A plain `p-2` put the card's header — the name and the
+          close button — underneath the Dynamic Island on an installed iPhone,
+          where it cannot be read or tapped.
+
+          `--frenz-safe-top` is the project's one inset variable, floored at
+          44px for the installed app because iOS reports env() as 0 there. The
+          bottom uses env() directly for the home indicator.
+        */
+        className="fixed inset-0 z-[2147483000] flex items-stretch justify-center bg-black/55 backdrop-blur-sm"
+        style={{
+          paddingTop: "calc(0.5rem + var(--frenz-safe-top))",
+          paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
+          paddingLeft: "0.5rem",
+          paddingRight: "0.5rem",
+        }}
         role="dialog"
         aria-modal="true"
         aria-label={`Activity for ${user.displayName || user.handle || "member"}`}

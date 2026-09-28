@@ -181,7 +181,30 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     claimed ("a single segment for a lone clip") and what it now actually
     does. The seek maths uses the same floor so a drag cannot divide by zero.
   */
-  const segments = Math.max(total, 1);
+  /*
+    🔴 THE ACTUAL BUG, FOUND ON THE FOURTH LOOK (owner, three reports: "this
+    history doesn't have a progress stripe bar like WhatsApp").
+
+    `total` is `queue.items.length`, and `media-gallery.tsx` opens the player
+    with the WHOLE sorted history — every download the member has ever kept.
+    The stripe rendered one `flex-1` segment per item with a 4px gap between
+    them, so on a 406px row a history of sixty clips gave each segment
+    (406 - 59x4) / 60 ≈ 2.8px, separated by gaps wider than themselves.
+
+    It WAS rendering. It was a row of near-invisible dashes, which is why every
+    previous fix — the zero-length guard, the hit area, the contrast — was a
+    real repair that changed nothing anyone could see.
+
+    WhatsApp has the same constraint and solves it by not drawing more segments
+    than can be read. Above the cap this becomes ONE bar for the clip being
+    watched; the header already carries "n/N" for position in the queue, so
+    nothing is lost but the dashes.
+  */
+  const MAX_SEGMENTS = 12;
+  const segmented = total > 1 && total <= MAX_SEGMENTS;
+  const segments = segmented ? total : 1;
+  /* With one bar, it tracks the CURRENT clip, so index no longer offsets it. */
+  const filledBefore = segmented ? index : 0;
   const router = useRouter();
   const [url, setUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,14 +271,14 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       */
       const gap = 4; // the flex gap, in px, matching `gap-1`
       const segment = (rect.width - gap * (segments - 1)) / segments;
-      const left = rect.left + index * (segment + gap);
+      const left = rect.left + filledBefore * (segment + gap);
       const fraction = Math.min(1, Math.max(0, (clientX - left) / segment));
       const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
       if (duration <= 0) return;
       video.currentTime = fraction * duration;
       setProgress(fraction * 100);
     },
-    [index, segments],
+    [filledBefore, segments],
   );
 
   const onScrubDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -801,6 +824,21 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       style={{ zIndex: 2147483646, ...viewerDragStyle }}
       aria-label={rec.title}
     >
+      {/*
+        ── THE TOP CHROME STACK ─────────────────────────────────────────────
+        One positioned container holding the stripe and then the header, both
+        in ordinary flow. It owns the safe-area inset for the pair, so the
+        Dynamic Island is cleared exactly once and neither child computes a
+        `top` of its own.
+
+        `pointer-events-none` on the stack with `pointer-events-auto` on the
+        children: the gap between the two rows must not eat a tap meant for
+        the video underneath.
+      */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-[calc(0.55rem+var(--frenz-safe-top))]"
+      >
+      <div className="pointer-events-auto">
       {/* Status — segmented, like Stories/WhatsApp: one bar per queued item, the
           current one fills with real playback progress (a non-video item reads as
           complete). Always shown — a single segment for a lone clip — so even one
@@ -818,21 +856,31 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         onPointerCancel={endScrub}
         className={cn(
           /*
-            z-40, above the header's z-20 and the caption panel. The bar is the
-            one piece of chrome that must never be coverable — it is both the
-            position readout and the seek control.
-          */
-          "absolute inset-x-3 top-[calc(0.55rem+var(--frenz-safe-top))] z-40 flex gap-1 transition-opacity duration-150",
-          /*
-            🔴 THE HIT AREA MUST NOT REACH THE HEADER (owner, 2026-09-27: "I
-            didnt see the progress bar at the top of the history viewer").
+            🔴 IN NORMAL FLOW, NOT ABSOLUTELY POSITIONED (owner, third report:
+            "this history doesn't have a progress stripe bar like WhatsApp and
+            yet you keep ignoring it").
 
-            It was py-3 — 12px above and below a 4px line — on a z-30 element
-            sitting over a z-20 header whose buttons start ~22px down. So the
-            bar was invisible AND it was swallowing taps meant for Back and the
-            menu. 8px is still a comfortable grab and clears the row below.
+            Three attempts at this failed while it was `absolute` with a `top`
+            of `calc(0.55rem + var(--frenz-safe-top))`, each fixing a real but
+            different defect — a zero-length segment array, a hit area that
+            swallowed the header's taps, too little contrast — and the stripe
+            still did not appear on the device.
+
+            So the positioning goes. The stripe is now the FIRST CHILD of the
+            top chrome stack, in ordinary flow, and the stack carries the safe
+            area. There is no `top` to compute, no containing block to resolve
+            against, no z-order against the header, and no way for the safe
+            inset to be counted twice or not at all. WhatsApp puts it in its
+            own row above the header; so does this now.
           */
-          rec.kind === "video" && url ? "cursor-pointer touch-none py-2 -my-2" : "",
+          "flex gap-1 transition-opacity duration-150",
+          /*
+            A 3px line is not grabbable, so the row is padded to ~19px and the
+            padding is pulled back visually. It can be generous now: the header
+            is a SIBLING BELOW rather than a layer underneath, so this cannot
+            swallow a tap meant for Back or the menu the way it once did.
+          */
+          rec.kind === "video" && url ? "cursor-pointer touch-none py-2" : "",
           holding && "opacity-0",
         )}
       >
@@ -841,12 +889,16 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           <span key={i} className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/45 shadow-[0_0_3px_rgb(0_0_0/0.6)]">
             <span
               className={cn("block h-full rounded-full bg-white", scrubbing ? "" : "transition-[width] duration-150")}
-              style={{ width: `${i < index ? 100 : i === index ? (rec.kind === "video" ? progress : 100) : 0}%` }}
+              style={{
+                width: `${i < filledBefore ? 100 : i === filledBefore ? (rec.kind === "video" ? progress : 100) : 0}%`,
+              }}
             />
           </span>
         ))}
       </div>
+      </div>
 
+      <div className="pointer-events-auto mt-1">
       {/*
         ── THE HEADER (owner, 2026-09-27) ───────────────────────────────────
         "The title should be at the top below the progress bar and the avatar
@@ -860,8 +912,9 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       */}
       <div
         className={cn(
-          // clears the bar (0.55rem) plus its 8px grab padding, so neither steals the other's touches
-          "absolute inset-x-0 top-[calc(1.9rem+var(--frenz-safe-top))] z-20 flex items-center gap-2.5 px-3 transition-opacity duration-150",
+          // A sibling under the stripe, in flow. No `top`, no z-index: the
+          // stack above owns the position and the safe area for both.
+          "flex items-center gap-2.5 transition-opacity duration-150",
           holding && "pointer-events-none opacity-0",
         )}
       >
@@ -888,6 +941,8 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         <button type="button" onClick={() => setMoreOpen(true)} aria-label="More options" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white">
           <MoreVertical className="h-5 w-5" />
         </button>
+      </div>
+      </div>
       </div>
       {/*
         THE FULL CAPTION, WHEN ASKED FOR (2026-09-27).

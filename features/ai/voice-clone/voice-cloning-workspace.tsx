@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Gift, Loader2, Mic, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { Check, Gift, Loader2, Mic, Plus, RefreshCcw, ShieldCheck, Trash2, Type, Upload } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AiHero } from "@/features/ai/design/ai-surface";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
 import { useVoiceCloning } from "@/features/ai/voice-clone/use-voice-cloning";
@@ -92,18 +93,22 @@ export function VoiceCloningWorkspace({
   return (
     <FrenzAIEnvironment stage={envStage} bare>
       <div className="pb-24">
-        <header className="mt-4">
-          <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-            Frenz AI · Audio
-          </p>
-          <h1 className="mt-2 text-[2rem] font-bold leading-[1.06] tracking-[-0.04em] sm:text-[2.4rem]">
-            Voice <span className="text-gradient">Cloning</span>
-          </h1>
-          <p className="mt-2.5 max-w-lg text-[14.5px] leading-relaxed text-muted-foreground">
-            Turn a voice you own into one you can type with. Give us a few clean recordings and it becomes yours to use in Text to Audio and Lip Sync Pro, as often as you like.
-          </p>
-        </header>
+        {/*
+          The shared Frenz AI hero (2026-09-27).
+
+          ⚠️ The eyebrow this replaces read "Frenz AI · Audio" — copied from
+          Text to Audio and never corrected, so Voice Cloning announced
+          itself as a different tool. A breadcrumb whose trailing crumb is a
+          required prop cannot be wrong by omission the way a pasted string
+          can.
+        */}
+        <AiHero
+          tool="Voice Cloning"
+          title="Voice"
+          highlight="Cloning"
+          subtitle="Turn a voice you own into one you can type with. Give us a few clean recordings and it becomes yours to use in Text to Audio and Lip Sync Pro, as often as you like."
+          className="mt-4"
+        />
 
         {ws.configError ? (
           <Notice tone="error" className="mt-5">

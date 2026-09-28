@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
 import { VideoReadyPlayer } from "@/features/ai/character-replace/video-ready-player";
 import { startAiResultDownload } from "@/features/ai/ai-result-download";
+import { AiHero } from "@/features/ai/design/ai-surface";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
 import { useLipSyncWorkspace, type LaunchPhase } from "@/features/ai/lip-sync/use-lip-sync-workspace";
@@ -90,17 +91,24 @@ export function LipSyncWorkspace({
   return (
     <FrenzAIEnvironment stage={envStage as never} armed={!!ws.video} bare>
       <div className="mx-auto w-full max-w-2xl px-4 pb-32 pt-4 sm:px-6">
-        <header className="mb-5">
-          <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-            Frenz AI · Lip Sync Pro
-          </p>
-          <h1 className="mt-2 text-[1.9rem] font-bold leading-[1.06] tracking-[-0.04em] sm:text-[2.3rem]">
-            {watching ? (job?.status === "completed" ? "Your video is " : "Syncing the ") : "Make them say "}
-            <span className="text-gradient">{watching ? (job?.status === "completed" ? "ready." : "lips.") : "anything."}</span>
-          </h1>
-          {!watching ? <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">Type what they should say, or bring your own audio. The mouth follows the speech; the face, the body and the scene stay theirs.</p> : null}
-        </header>
+        {/*
+          The shared Frenz AI hero (2026-09-27). The headline still changes
+          with the job — that is this screen's whole character and it is kept
+          — but the crumb, the type scale and the spacing now come from the
+          one definition instead of from a copy that had already drifted a
+          step smaller than its siblings (1.9rem against 2rem).
+        */}
+        <AiHero
+          tool="Lip Sync Pro"
+          title={watching ? (job?.status === "completed" ? "Your video is" : "Syncing the") : "Make them say"}
+          highlight={watching ? (job?.status === "completed" ? "ready." : "lips.") : "anything."}
+          subtitle={
+            watching
+              ? null
+              : "Type what they should say, or bring your own audio. The mouth follows the speech; the face, the body and the scene stay theirs."
+          }
+          className="mb-5"
+        />
 
         {ws.configError ? (
           <Notice tone="error">

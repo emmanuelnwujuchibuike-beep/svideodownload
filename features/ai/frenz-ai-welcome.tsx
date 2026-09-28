@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
+import { AiHero } from "@/features/ai/design/ai-surface";
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
 import {
@@ -142,33 +143,34 @@ export function FrenzAIWelcome({
     <>
     <FrenzAIEnvironment
       stage="idle"
-      className="relative overflow-hidden rounded-[1.75rem]"
+      /*
+        ── THE SHARED GROUND (owner, 2026-09-27) ─────────────────────────
+        This carried two `radial-gradient` strings inline, and the studio
+        card below carried two more — four definitions of a background that
+        both of the owner's references show as ONE light iridescent wash. A
+        member moving from here into a tool was moving between two colours.
+
+        `.ai-wash` is that wash, once, in globals.css.
+      */
+      className="ai-wash relative overflow-hidden rounded-[1.75rem]"
     >
-      {/* the room's light — static, well under the text */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background:
-            "radial-gradient(70% 38% at 12% 0%, rgba(124,58,237,0.11) 0%, transparent 62%)," +
-            "radial-gradient(56% 36% at 96% 22%, rgba(59,130,246,0.10) 0%, transparent 66%)",
-        }}
-      />
 
       <div className="px-4 pb-6 pt-5 sm:px-6 sm:pt-6">
         {/* ── HERO ─────────────────────────────────────────────────────────── */}
         {/* owner, 2026-09-20: no figure — the headline takes the whole width and runs horizontally */}
-        <header>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-            AI Studio
-          </p>
-          <h1 className="mt-1.5 text-[2.35rem] font-bold leading-[1.02] tracking-[-0.04em] sm:text-[3rem]">
-            Create. Transform. <span className="text-gradient">Perfect.</span>
-          </h1>
-          <p className="mt-2.5 max-w-[30rem] text-[15px] leading-relaxed text-muted-foreground sm:text-[16px]">
-            Professional AI tools for video, voice and audio creation.
-          </p>
-        </header>
+        {/*
+          The shared hero. The owner's 2026-09-20 decision holds — no figure,
+          the headline takes the whole width — and the breadcrumb pill from
+          both references now opens it, so the front door and every tool
+          behind it start the same way.
+        */}
+        <AiHero
+          tool="AI Studio"
+          title="Create. Transform."
+          highlight="Perfect."
+          subtitle="Professional AI tools for video, voice and audio creation."
+          className="px-0"
+        />
 
         {/* ── THE STUDIO CARD ──────────────────────────────────────────────── */}
         <section
@@ -178,15 +180,6 @@ export function FrenzAIWelcome({
             "shadow-[0_20px_48px_-30px_rgba(15,23,42,0.35)]",
           )}
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 -z-10"
-            style={{
-              background:
-                "radial-gradient(55% 45% at 100% 0%, rgba(99,102,241,0.10) 0%, transparent 65%)," +
-                "radial-gradient(45% 40% at 0% 100%, rgba(217,70,239,0.07) 0%, transparent 65%)",
-            }}
-          />
 
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[0.95rem] bg-[#131a4a] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_24px_-14px_rgba(19,26,74,0.7)]">

@@ -89,29 +89,64 @@ describe("the AI ground is defined once", () => {
       page means deleting its gradients rather than leaving both.
     */
     const notYetMigrated = new Set([
-      "features/ai/frenz-ai-welcome.tsx",
       "features/ai/frenz-ai-explore.tsx",
       "features/ai/frenz-ai-dashboard.tsx",
       "features/ai/frenz-ai-tools-grid.tsx",
       "features/ai/frenz-ai-usage-page.tsx",
       "features/ai/frenz-ai-history-page.tsx",
     ]);
-    const adopted = "features/ai/text-to-audio/text-to-audio-workspace.tsx";
-    expect(notYetMigrated.has(adopted), "a migrated page is still on the exemption list").toBe(false);
-    expect(code(adopted)).not.toMatch(/radial-gradient/);
+    const adopted = [
+      "features/ai/text-to-audio/text-to-audio-workspace.tsx",
+      "features/ai/frenz-ai-welcome.tsx",
+    ];
+    for (const f of adopted) {
+      expect(notYetMigrated.has(f), `${f} is migrated but still on the exemption list`).toBe(false);
+      expect(code(f), `${f} still hand-rolls a background`).not.toMatch(/radial-gradient/);
+    }
   });
 });
 
-describe("Text to Audio uses the shared hero", () => {
-  it("opens with the breadcrumb pill, not a hand-rolled eyebrow", () => {
+describe("every migrated tool opens with the breadcrumb pill", () => {
+  /*
+    Each of these opened with a hand-rolled uppercase eyebrow where both
+    references put the pill — so a tool reached from the studio looked like a
+    different product from the one just left.
+
+    ⚠️ Voice Cloning's eyebrow read "Frenz AI · Audio": copied from Text to
+    Audio and never corrected, so it announced itself as the wrong tool
+    entirely. A required `tool` prop cannot be wrong by omission the way a
+    pasted string can.
+  */
+  const tools: [string, string][] = [
+    ["features/ai/text-to-audio/text-to-audio-workspace.tsx", "Text to Audio"],
+    ["features/ai/voice-clone/voice-cloning-workspace.tsx", "Voice Cloning"],
+    ["features/ai/lip-sync/lip-sync-workspace.tsx", "Lip Sync Pro"],
+    ["features/ai/frenz-ai-welcome.tsx", "AI Studio"],
+  ];
+
+  for (const [file, tool] of tools) {
+    it(`${tool} uses the shared hero`, () => {
+      const body = code(file);
+      expect(body).toMatch(/<AiHero/);
+      expect(body).toContain(`tool="${tool}"`);
+      // the eyebrow it replaced, in any of its pasted forms
+      expect(body, "a hand-rolled eyebrow survived").not.toMatch(/uppercase tracking-[0.1[46]em][^]{0,120}Frenz AI ·/);
+    });
+  }
+});
+
+describe("Character Replace shares the display type", () => {
+  it("composes AiDisplayTitle instead of keeping its own copy", () => {
     /*
-      It used to open with an uppercase "Frenz AI · Audio" eyebrow where both of
-      the owner's references put the breadcrumb pill — so a tool reached from
-      the studio looked like a different product from the one just left.
+      🔴 IDENTICAL TODAY IS THE PROBLEM. This screen kept a private `Headline`
+      whose classes were byte-identical to the shared hero's, across seven
+      steps. The next change to the scale would have moved every other AI screen
+      and left this one behind — silently, on the product with the most screens.
     */
-    const body = code("features/ai/text-to-audio/text-to-audio-workspace.tsx");
-    expect(body).toMatch(/<AiHero/);
-    expect(body).toMatch(/tool="Text to Audio"/);
-    expect(body).not.toMatch(/Frenz AI · Audio/);
+    const body = code("features/ai/character-replace/character-replace-workspace.tsx");
+    expect(body).toMatch(/<AiDisplayTitle/);
+    // Escaped: unescaped brackets make this a character class, which matches
+    // `text-red-500` and every other utility containing one of those letters.
+    expect(body).not.toMatch(/text-\[1\.95rem\]/);
   });
 });

@@ -23,6 +23,7 @@ import { useCharacterReplaceBatch } from "@/features/ai/character-replace/use-ch
 import { useCharacterReplaceWorkspace } from "@/features/ai/character-replace/use-character-replace-workspace";
 import { useJobWatch } from "@/features/ai/character-replace/use-job-watch";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
+import { AiDisplayTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { REPLACEMENT_MODE_COPY, type ReplacementMode } from "@/lib/ai/character-replace/modes";
 import { getActiveCharacterReplaceBatch } from "@/lib/ai/character-replace/client";
@@ -805,13 +806,21 @@ function StepHeader({ title, mode, modeHref }: { title: string; mode: Replacemen
   );
 }
 
+/**
+ * This screen swaps its headline per step — seven of them — under ONE crumb
+ * rendered at the top, so it needs the display type without a breadcrumb
+ * attached.
+ *
+ * It used to carry its own copy of that type, with classes byte-identical to
+ * the shared hero's. Identical today is the problem: the next change to the
+ * scale would have moved every other AI screen and left this one behind,
+ * silently, on the product with the most screens. It now composes the one
+ * definition (features/ai/design/ai-surface.tsx).
+ */
 function Headline({ title, highlight, subtitle }: { title: string; highlight: string; subtitle: string | null }) {
   return (
     <header className="mt-4">
-      <h1 className="text-[1.95rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.3rem]">
-        {title} <span className="text-gradient">{highlight}</span>
-      </h1>
-      {subtitle ? <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">{subtitle}</p> : null}
+      <AiDisplayTitle title={title} highlight={highlight} subtitle={subtitle} />
     </header>
   );
 }

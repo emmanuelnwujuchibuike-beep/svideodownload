@@ -10,6 +10,34 @@ import { getCached } from "@/lib/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paginatedSelect } from "@/lib/supabase/paginate";
 
+/**
+ * Run thunks with a ceiling on how many are in flight, preserving order.
+ *
+ * 🔴 WHY THIS EXISTS, MEASURED. `getAnalyticsSummary("90d")` issued twelve
+ * ninety-day aggregates through one `Promise.all`. Against production, alone,
+ * `analytics_traffic_totals` takes ~3s; fired with its eleven siblings it takes
+ * 8.5s, and every sibling inflates from under a second to five or six. They are
+ * not slow — they are starving each other at one database, and the slowest
+ * crosses its statement timeout, which is the "visitor figures could not be
+ * read" banner the owner kept seeing.
+ *
+ * Order is preserved because the caller destructures positionally; a
+ * completion-ordered pool would silently shuffle twelve results into the wrong
+ * variables, which would be far worse than slow.
+ */
+async function inBatches<T extends readonly (() => Promise<unknown>)[]>(
+  limit: number,
+  thunks: T,
+): Promise<{ -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
+  const out: unknown[] = new Array(thunks.length);
+  for (let i = 0; i < thunks.length; i += limit) {
+    const slice = thunks.slice(i, i + limit) as readonly (() => Promise<unknown>)[];
+    const done = await Promise.all(slice.map((fn) => fn()));
+    for (let j = 0; j < done.length; j++) out[i + j] = done[j];
+  }
+  return out as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
+}
+
 /** The bucket for a path no catalogue entry claims. */
 const OTHER_PAGE_ID = "__other";
 
@@ -560,19 +588,46 @@ async function computeAnalyticsSummary(range: Range): Promise<AnalyticsSummary> 
     */
     // An array, not a `let`: TypeScript narrows a nullable `let` that is only
     // ever reassigned inside a callback to `never` at the read site.
-    const rpcErrors: { code: string | null; message: string }[] = [];
+    const rpcErrors: { fn: string; code: string | null; message: string }[] = [];
     const rpc = async <T>(name: string, args: Record<string, unknown>): Promise<T[] | null> => {
       const { data, error } = await db.rpc(name, args);
       if (error) {
-        rpcErrors.push({ code: error.code ?? null, message: error.message ?? String(error) });
+        rpcErrors.push({ fn: name, code: error.code ?? null, message: error.message ?? String(error) });
         return null;
       }
       return (data ?? []) as T[];
     };
 
+    /*
+      ── 🔴 THREE AT A TIME, NOT TWELVE (owner, 2026-09-27) ──────────────────
+
+      "admin revenue section keep showing this" — the timeout banner, still,
+      after an index and a raised limit. Measured against production, the same
+      twelve calls this array issues:
+
+        ALONE          analytics_traffic_totals   ~3,000 ms
+        ALL TWELVE     analytics_traffic_totals    8,495 ms
+                       analytics_visitor_split     6,982 ms
+                       analytics_timeseries        6,514 ms
+                       every analytics_breakdown   5,400–5,900 ms (solo: <1s)
+
+      Nothing here is individually slow any more. `Promise.all` fires twelve
+      ninety-day scans at ONE database at ONE instant, and they fight each
+      other: every query inflates three to tenfold, and the slowest crosses the
+      statement timeout — which is the banner.
+
+      A concurrency limit is the whole fix. Wall clock barely moves, because
+      the work was always serialised by the database; what changes is that no
+      single query is starved past its deadline. And it runs at most once every
+      two minutes now, behind the cache above, so wall clock is the cheap
+      resource here and reliability is the expensive one.
+
+      3, not 1: the connection is remote, so a little overlap hides the round
+      trip without putting the queries back in each other's way.
+    */
     const [totals, split, dlTotals, series, pageRows, devices, browsers, oses, countries, regions, paths, referrers] =
-      await Promise.all([
-        rpc<{
+      await inBatches(3, [
+        () => rpc<{
           total_events: number;
           page_views: number;
           unique_visitors: number;
@@ -583,21 +638,21 @@ async function computeAnalyticsSummary(range: Range): Promise<AnalyticsSummary> 
           dwell_seconds: number;
           rewards_watched: number;
         }>("analytics_traffic_totals", { p_since: since, p_live_since: liveSince }),
-        rpc<{ new_visitors: number; returning_visitors: number }>("analytics_visitor_split", { p_since: since }),
-        rpc<{ status: string; downloads: number; bytes: number }>("analytics_download_totals", { p_since: since }),
-        rpc<{ bucket: string; visitors: number; page_views: number; downloads: number }>("analytics_timeseries", {
+        () => rpc<{ new_visitors: number; returning_visitors: number }>("analytics_visitor_split", { p_since: since }),
+        () => rpc<{ status: string; downloads: number; bytes: number }>("analytics_download_totals", { p_since: since }),
+        () => rpc<{ bucket: string; visitors: number; page_views: number; downloads: number }>("analytics_timeseries", {
           p_since: since,
           p_bucket: granularity,
         }),
-        rpc<{ path: string; views: number; visitors: number }>("analytics_page_traffic", { p_since: since }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "device", p_limit: 8 }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "browser", p_limit: 8 }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "os", p_limit: 8 }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "country", p_limit: 12 }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "region", p_limit: 8 }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "path", p_limit: 8 }),
-        rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "referrer", p_limit: 200 }),
-      ]);
+        () => rpc<{ path: string; views: number; visitors: number }>("analytics_page_traffic", { p_since: since }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "device", p_limit: 8 }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "browser", p_limit: 8 }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "os", p_limit: 8 }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "country", p_limit: 12 }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "region", p_limit: 8 }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "path", p_limit: 8 }),
+        () => rpc<Breakdown>("analytics_breakdown", { p_since: since, p_dimension: "referrer", p_limit: 200 }),
+      ] as const);
 
     /*
       A missing RPC is REPORTED, not zeroed.
@@ -612,7 +667,14 @@ async function computeAnalyticsSummary(range: Range): Promise<AnalyticsSummary> 
         a migration, wait and reload, or go and read the error. A single
         catch-all message was actively misleading — see the helper above.
       */
-      const firstError = rpcErrors[0] ?? null;
+      /*
+        The error from THIS call, not merely the first error of the twelve.
+        The banner explains why `totals` is missing, and attributing a
+        breakdown's failure to it would send the reader after the wrong thing —
+        the same class of mistake as the old catch-all "run migration 0115".
+      */
+      const firstError =
+        rpcErrors.find((e) => e.fn === "analytics_traffic_totals") ?? rpcErrors[0] ?? null;
       const code = firstError?.code ?? null;
       const missing = code === "42883" || code === "PGRST202";
       const timedOut = code === "57014";

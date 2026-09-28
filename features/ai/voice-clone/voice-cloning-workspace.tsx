@@ -64,6 +64,13 @@ export function VoiceCloningWorkspace({
   usageHref: string;
   initialJobId?: string | null;
 }) {
+  /*
+    The member's own voices live beside this tool, not in the Character
+    Replace history. Derived from `basePath` the way the other standalone
+    tools derive their siblings, so it is right on both doors (`/ai/...` and
+    `/studio/ai/...`) without a new prop on two page files.
+  */
+  const voicesHref = `${basePath.replace(/\/voice-cloning$/, "")}/voices`;
   const ws = useVoiceCloning({ initialJobId });
   const cfg = ws.config?.config ?? null;
   const symbol = cfg?.symbol ?? "$";
@@ -127,7 +134,7 @@ export function VoiceCloningWorkspace({
 
         {watching ? (
           <div className="mt-6">
-            <Result job={job} missing={ws.watch.missing} basePath={basePath} ttaHref={ttaHref} lipSyncHref={lipSyncHref} historyHref={historyHref} onAnother={ws.reset} />
+            <Result job={job} missing={ws.watch.missing} basePath={basePath} ttaHref={ttaHref} lipSyncHref={lipSyncHref} voicesHref={voicesHref} onAnother={ws.reset} />
           </div>
         ) : (
           <div className="mt-6 space-y-4">
@@ -408,7 +415,7 @@ export function VoiceCloningWorkspace({
 
 const STEPS = [{ label: "Reading your recordings" }, { label: "Learning the voice" }, { label: "Adding it to your library" }] as const;
 
-function Result({ job, missing, basePath, ttaHref, lipSyncHref, historyHref, onAnother }: { job: AiJobView | null; missing: boolean; basePath: string; ttaHref: string; lipSyncHref: string; historyHref: string; onAnother: () => void }) {
+function Result({ job, missing, basePath, ttaHref, lipSyncHref, voicesHref, onAnother }: { job: AiJobView | null; missing: boolean; basePath: string; ttaHref: string; lipSyncHref: string; voicesHref: string; onAnother: () => void }) {
   const vc = job?.voiceClone ?? null;
   if (missing) return <Notice tone="error">That voice is not here any more.</Notice>;
   if (!job) return <div className="h-40 animate-pulse rounded-[1.5rem] bg-secondary/60" aria-busy="true" aria-label="Loading" />;
@@ -447,12 +454,17 @@ function Result({ job, missing, basePath, ttaHref, lipSyncHref, historyHref, onA
             <Check className="h-4 w-4" aria-hidden /> Use in Lip Sync Pro
           </Link>
         </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link href={basePath} onClick={onAnother} className="inline-flex items-center gap-1.5 font-semibold text-primary">
+        {/*
+          Same defect as Text to Audio: this sent someone who had just cloned
+          a voice to the Character Replace job history. It goes to their
+          voices, and both are real buttons now.
+        */}
+        <div className="flex flex-wrap gap-2.5">
+          <Link href={basePath} onClick={onAnother} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
             <Plus className="h-4 w-4" aria-hidden /> Clone another
           </Link>
-          <Link href={historyHref} className="text-muted-foreground underline-offset-2 hover:underline">
-            Everything you have made
+          <Link href={voicesHref} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
+            <Mic className="h-4 w-4" aria-hidden /> Your Voices
           </Link>
         </div>
       </div>

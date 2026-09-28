@@ -99,7 +99,7 @@ export function CharacterReplaceProcessing({
           ? "Your balance refund is being processed."
           : "Your balance will be refunded.";
     return (
-      <section aria-live="polite" className={cn("rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center", className)}>
+      <section aria-live="polite" className={cn("rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-6 text-center", className)}>
         <span
           className={cn(
             "mx-auto flex h-12 w-12 items-center justify-center rounded-2xl",
@@ -141,7 +141,7 @@ export function CharacterReplaceProcessing({
 
   if (job.status === "complete") {
     return (
-      <section aria-live="polite" className={cn("rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center", className)}>
+      <section aria-live="polite" className={cn("rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-6 text-center", className)}>
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600">
           <Check className="h-6 w-6" strokeWidth={3} aria-hidden />
         </span>
@@ -156,7 +156,7 @@ export function CharacterReplaceProcessing({
   }
 
   return (
-    <section aria-live="polite" aria-busy={active} className={cn("rounded-[1.5rem] border border-border/70 bg-card", className)}>
+    <section aria-live="polite" aria-busy={active} className={cn("rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
       <div className="relative overflow-hidden px-5 pt-5">
         {/* the room's light — one soft gradient, opacity only under reduced motion */}
         <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.18),transparent)] blur-2xl" />
@@ -256,7 +256,7 @@ export function CharacterReplaceProcessing({
           <button
             type="button"
             onClick={onCancel}
-            className="btn-lux mt-3 border border-border/70 bg-card text-foreground hover:border-foreground/25"
+            className="btn-lux mt-3 bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25"
           >
             Cancel
           </button>
@@ -331,7 +331,7 @@ function LeaveCard({ historyHref, exploreHref }: { historyHref: string; exploreH
         You can leave FrenzSave. We&apos;ll notify you when it&apos;s ready.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Link href={historyHref} prefetch={false} className="btn-lux min-h-[42px] border border-border/70 bg-card px-4 text-[13px] text-foreground hover:border-foreground/25">
+        <Link href={historyHref} prefetch={false} className="btn-lux min-h-[42px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-[13px] text-foreground hover:border-foreground/25">
           <History className="h-4 w-4" aria-hidden />
           View My Creations
         </Link>

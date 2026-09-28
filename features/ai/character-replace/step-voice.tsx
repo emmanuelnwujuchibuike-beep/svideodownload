@@ -176,7 +176,7 @@ export function CharacterReplaceVoiceStep({
                   />
                 </label>
               ) : (
-                <div className="mt-3 rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5">
+                <div className="mt-3 rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3.5">
                   <div className="flex items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground/80">
                       <FileAudio className="h-5 w-5" aria-hidden />
@@ -221,7 +221,7 @@ export function CharacterReplaceVoiceStep({
               ) : null}
 
               {/* §6 — the rights confirmation, required for an uploaded voice */}
-              <div className="mt-3 rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5">
+              <div className="mt-3 rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3.5">
                 <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-muted-foreground">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" aria-hidden />
                   Create videos using your own voice or voices you have permission to use.
@@ -287,7 +287,7 @@ export function CharacterReplaceVoiceStep({
                     value={v.languageCode ?? ""}
                     onChange={(e) => onLanguage(e.target.value)}
                     className={cn(
-                      "h-12 w-full appearance-none rounded-2xl border border-border/70 bg-card px-4 pr-10 text-[14px] font-semibold",
+                      "h-12 w-full appearance-none rounded-2xl bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 pr-10 text-[14px] font-semibold",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     )}
                   >
@@ -325,7 +325,7 @@ export function CharacterReplaceVoiceStep({
                   maxLength={Math.min(10_000, config.tts.maximumCharacters + 200)}
                   placeholder="Type or paste your dialogue"
                   className={cn(
-                    "mt-3 w-full resize-y rounded-2xl border border-border/70 bg-card px-4 py-3 text-[14px] leading-relaxed",
+                    "mt-3 w-full resize-y rounded-2xl bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3 text-[14px] leading-relaxed",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   )}
                 />

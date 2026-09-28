@@ -209,12 +209,34 @@ export function TextToAudioWorkspace({
                 <>
                   {voices.some((v) => v.own) ? (
                     <>
-                      <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Your voices</p>
+                      <p className="mb-1 text-[13px] font-semibold text-foreground/80">Your voices</p>
                       {/* The accent is not a setting — a clone learns it from the recordings and keeps it in every language it speaks. Nobody can tell that by looking, so it is said. */}
-                      <p className="mb-2 text-[11px] leading-snug text-muted-foreground">Your cloned voices keep their own accent, in any language you type — Pidgin included.</p>
+                      <p className="mb-2.5 text-[11.5px] leading-snug text-muted-foreground">Your cloned voices keep their own accent, in any language you type — Pidgin included.</p>
                     </>
                   ) : null}
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  {/*
+                    ── TWO ACROSS, AND SHORTER (owner, 2026-09-28) ──────────────
+                    "this voices and languages tile looks too fat and too far to
+                    scroll, it should be grid cols 2 to reduce the scroll, and
+                    reduce the height of each tile and text."
+
+                    It was ONE column on phones (`sm:grid-cols-2` only kicked in
+                    at 640px) with 60px-tall horizontal rows, so twenty voices
+                    were twenty full-width tiles and a very long scroll. §48 of
+                    the brief is exactly this: reduce scroll fatigue.
+
+                    🔴 THE LAYOUT HAD TO CHANGE, NOT JUST THE COLUMN COUNT. Two
+                    columns on a 390px phone leaves ~175px a tile; an icon beside
+                    the text would have left ~130px for names like "Roger -
+                    Laid-Back, Casual, Resonant", i.e. truncation on almost every
+                    one. So the tile is vertical: icon, then name over two lines,
+                    then the descriptor. Same information, half the page.
+
+                    The descriptor also stops being 11px muted grey — the owner
+                    asked for "a more visible font and color", and it is the line
+                    that distinguishes two voices with similar names.
+                  */}
+                  <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
                     {voices.map((v) => (
                       <button
                         key={v.id}
@@ -225,15 +247,18 @@ export function TextToAudioWorkspace({
                           if (v.languages.length && ws.languageCode && !v.languages.includes(ws.languageCode)) ws.setLanguageCode(v.languages[0] ?? null);
                         }}
                         aria-pressed={ws.voiceId === v.id}
-                        className={cn("flex min-h-[60px] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition", ws.voiceId === v.id ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                        className={cn(
+                          "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98]",
+                          ws.voiceId === v.id
+                            ? "bg-foreground text-background"
+                            : "bg-secondary/50 hover:bg-secondary/80",
+                        )}
                       >
-                        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", ws.voiceId === v.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
-                          <Mic className="h-4 w-4" aria-hidden />
+                        <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", ws.voiceId === v.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                          <Mic className="h-3.5 w-3.5" aria-hidden />
                         </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold">{v.label}</span>
-                          <span className={cn("block truncate text-[11px]", ws.voiceId === v.id ? "text-background/75" : "text-muted-foreground")}>{v.blurb}</span>
-                        </span>
+                        <span className="line-clamp-2 text-[12.5px] font-semibold leading-tight">{v.label}</span>
+                        <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", ws.voiceId === v.id ? "text-background/80" : "text-foreground/55")}>{v.blurb}</span>
                       </button>
                     ))}
                   </div>
@@ -502,12 +527,25 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, historyHref,
             </Link>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link href={basePath} onClick={onAnother} className="inline-flex items-center gap-1.5 font-semibold text-primary">
+        {/*
+          🔴 THIS LINKED TO THE WRONG PLACE (owner, 2026-09-28: "this
+          everything you have saved button lead to character replace history
+          instead of audio library").
+
+          It used `historyHref` — the Character Replace job history — while
+          `libraryHref`, the Audio Library, was already being passed into this
+          component and used elsewhere in the same file. Someone saving a
+          voice track was sent to a list of video jobs.
+
+          Both are real buttons now, not underlined captions: 48px, a surface
+          and an icon each, per §38.
+        */}
+        <div className="flex flex-wrap gap-2.5">
+          <Link href={basePath} onClick={onAnother} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
             <RefreshCcw className="h-4 w-4" aria-hidden /> Make another
           </Link>
-          <Link href={historyHref} className="text-muted-foreground underline-offset-2 hover:underline">
-            Everything you have made
+          <Link href={libraryHref} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
+            <AudioLines className="h-4 w-4" aria-hidden /> Audio Library
           </Link>
         </div>
       </div>

@@ -79,7 +79,7 @@ export function CharacterReplacePhotoStep({
           </div>
         ) : (
           <div className="mt-3">
-            <div className="overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
+            <div className="overflow-hidden rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               <div className="relative flex items-center justify-center bg-[#0b0f1a]">
                 {/*
                   A plain <img>, not next/image: this is a blob URL the browser
@@ -96,7 +96,7 @@ export function CharacterReplacePhotoStep({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <label className="btn-lux cursor-pointer border border-border/70 bg-card text-foreground hover:border-foreground/25">
+              <label className="btn-lux cursor-pointer bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
                 <RefreshCw className="h-4 w-4" aria-hidden />
                 Change photo
                 <input
@@ -181,7 +181,7 @@ export function CharacterReplacePhotoStep({
  */
 function Guidance({ lines }: { lines: readonly string[] }) {
   return (
-    <details className="group rounded-2xl border border-border/60 bg-card/60 px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+    <details className="group rounded-2xl bg-card/60 shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
       <summary className="flex cursor-pointer list-none items-center gap-2 font-semibold text-foreground/85 [&::-webkit-details-marker]:hidden">
         <UserRound className="h-3.5 w-3.5 text-primary/70" aria-hidden />
         Tips for the best result

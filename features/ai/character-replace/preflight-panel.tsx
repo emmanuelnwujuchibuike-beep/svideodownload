@@ -47,7 +47,7 @@ export function CharacterReplacePreflightPanel({
   const ticking = state.phase === "checking";
 
   return (
-    <section aria-live="polite" className="relative mt-3 overflow-hidden rounded-[1.6rem] border border-border/70 bg-card p-5 sm:p-6">
+    <section aria-live="polite" className="relative mt-3 overflow-hidden rounded-[1.6rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-5 sm:p-6">
       <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-gradient-to-br from-blue-500/15 via-violet-500/10 to-fuchsia-500/15 blur-3xl" />
 
       {/* ── the headline ─────────────────────────────────────────────────── */}

@@ -115,7 +115,7 @@ export function CharacterReplaceReviewStep({
     <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start lg:gap-6 lg:space-y-0">
       <div className="space-y-4">
       {/* ── what is about to be made ────────────────────────────────────── */}
-      <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3">
+      <div className="rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">Replacement</p>
         <p className="mt-0.5 text-[15px] font-bold tracking-[-0.01em]">{mode.label}</p>
         {/* the tagline, not the paragraph — the picker already explained the mode (Part 9 §2: do not overuse text) */}
@@ -140,7 +140,7 @@ export function CharacterReplaceReviewStep({
 
       {/* 0166: the session — every video with its own price, and the total that "Process N videos" will charge over time */}
       {batchPricing && project.extraVideos.length > 0 ? (
-        <div className="rounded-[1.35rem] border border-border/70 bg-card">
+        <div className="rounded-[1.35rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div className="flex items-baseline justify-between px-4 pt-3.5">
             <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{batchPricing.count} videos in this session</p>
             <p className="text-[15px] font-bold tabular-nums">{batchPricing.complete ? formatCents(batchPricing.totalCents, symbol) : "…"}</p>
@@ -205,7 +205,7 @@ export function CharacterReplaceReviewStep({
       ) : null}
 
       {/* ── consent (§12): professional, unobtrusive, and required ─────────── */}
-      <div className="rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5">
+      <div className="rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3.5">
         <label htmlFor={consentId} className="flex cursor-pointer items-start gap-3">
           <input
             id={consentId}
@@ -267,7 +267,7 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 
 function Thumb({ label, sub, children }: { label: string; sub: string; children: React.ReactNode }) {
   return (
-    <figure className="overflow-hidden rounded-[1.25rem] border border-border/70 bg-card">
+    <figure className="overflow-hidden rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <div className="aspect-[4/3] bg-[#0b0f1a]">{children}</div>
       <figcaption className="px-3 py-2">
         <span className="block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">{label}</span>

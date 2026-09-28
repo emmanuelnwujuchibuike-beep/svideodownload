@@ -105,7 +105,7 @@ export function CharacterReplaceVideoStep({
           <CharacterReplaceInputDirection kind="video" mode={project.mode} />
           <CharacterReplaceTutorialButton kind="video" mode={project.mode} />
         </div>
-      <div className="overflow-hidden rounded-[1.5rem] border border-border/70 bg-card">
+      <div className="overflow-hidden rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="bg-[#0b0f1a]">
           <video
             key={video.objectUrl}
@@ -134,7 +134,7 @@ export function CharacterReplaceVideoStep({
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="btn-lux cursor-pointer border border-border/70 bg-card text-foreground hover:border-foreground/25">
+        <label className="btn-lux cursor-pointer bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
           <RefreshCw className="h-4 w-4" aria-hidden />
           Change video
           <input
@@ -149,7 +149,7 @@ export function CharacterReplaceVideoStep({
           />
         </label>
         {multi && room > 0 ? (
-          <label className="btn-lux cursor-pointer border border-border/70 bg-card text-foreground hover:border-foreground/25">
+          <label className="btn-lux cursor-pointer bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
             <Plus className="h-4 w-4" aria-hidden />
             Add videos
             <input
@@ -180,7 +180,7 @@ export function CharacterReplaceVideoStep({
 
       {/* 0166: the session — every video with its facts; the first is the one previewed above */}
       {multi && (extras.length > 0 || room > 0) ? (
-        <div className="mt-4 rounded-[1.35rem] border border-border/70 bg-card">
+        <div className="mt-4 rounded-[1.35rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
           <div className="flex items-center justify-between px-4 pt-3.5">
             <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {total} of {Math.min(batch!.maxVideos, batch!.canAdd !== null ? batch!.canAdd + total : batch!.maxVideos)} videos

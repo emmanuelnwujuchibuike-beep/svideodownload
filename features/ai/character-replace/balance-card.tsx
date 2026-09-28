@@ -47,7 +47,7 @@ export function CharacterReplaceBalanceCard({
 }) {
   const [hidden, toggleHidden] = useBalanceHidden();
   return (
-    <div className={cn("rounded-[1.25rem] border border-border/70 bg-card px-4 py-3.5", className)}>
+    <div className={cn("rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3.5", className)}>
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow-sm">
           <Wallet className="h-[18px] w-[18px]" aria-hidden />

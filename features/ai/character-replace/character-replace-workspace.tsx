@@ -633,13 +633,13 @@ export function CharacterReplaceWorkspace({
                 <button
                   type="button"
                   onClick={() => goTo(WORKSPACE_STEPS[index - 1]!.id)}
-                  className="btn-lux min-h-[48px] border border-border/70 bg-card text-foreground hover:border-foreground/25"
+                  className="btn-lux min-h-[48px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25"
                 >
                   <ArrowLeft className="h-4 w-4" aria-hidden />
                   Back
                 </button>
               ) : (
-                <Link href={modeHref} className="btn-lux min-h-[48px] border border-border/70 bg-card text-foreground hover:border-foreground/25">
+                <Link href={modeHref} className="btn-lux min-h-[48px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
                   <ArrowLeft className="h-4 w-4" aria-hidden />
                   Replace
                 </Link>
@@ -784,15 +784,19 @@ function StepHeader({ title, mode, modeHref }: { title: string; mode: Replacemen
   const Icon = SCOPE_ICON[mode];
   return (
     <header className="mt-4">
-      <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-        <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-        Frenz AI · Character Replace
-      </p>
-      <div className="mt-2 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <h1 className="text-[1.85rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.2rem]">{title}</h1>
+      {/*
+        The crumb, not a pasted eyebrow (owner, 2026-09-28). This step header
+        carried the fourth copy of "Frenz AI · <tool>" in uppercase — §1 of the
+        brief calls that out by name — and its headline had drifted to 1.85rem,
+        a step below every other AI screen.
+      */}
+      <FrenzAICrumb tool="Character Replace" />
+      <div className="mt-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        {/* the one definition of the display scale — never a private copy */}
+        <AiDisplayTitle title={title} />
         <Link
           href={modeHref}
-          className="inline-flex min-h-[38px] items-center gap-2 rounded-full border border-border/70 bg-card pl-1.5 pr-3 text-[12.5px] font-bold text-foreground transition hover:border-foreground/30 active:scale-[0.98]"
+          className="inline-flex min-h-[38px] items-center gap-2 rounded-full bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] pl-1.5 pr-3 text-[12.5px] font-bold text-foreground transition hover:border-foreground/30 active:scale-[0.98]"
           aria-label={`Replacement type: ${REPLACEMENT_MODE_COPY[mode].label}. Change`}
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white">
@@ -828,14 +832,14 @@ function Headline({ title, highlight, subtitle }: { title: string; highlight: st
 /** §27 — expired, deleted, not found: one calm card, two ways on. Never a stack trace, never someone else's facts. */
 function TerminalNotice({ body, historyHref, onNew }: { body: string; historyHref: string; onNew: () => void }) {
   return (
-    <div className="mt-6 rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center">
+    <div className="mt-6 rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-6 text-center">
       <p className="mx-auto max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         <button type="button" onClick={onNew} className="btn-lux bg-foreground text-background">
           <Sparkles className="h-4 w-4" aria-hidden />
           Start a new video
         </button>
-        <Link href={historyHref} prefetch={false} className="btn-lux border border-border/70 bg-card text-foreground hover:border-foreground/25">
+        <Link href={historyHref} prefetch={false} className="btn-lux bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
           Your AI videos
         </Link>
       </div>
@@ -845,7 +849,7 @@ function TerminalNotice({ body, historyHref, onNew }: { body: string; historyHre
 
 function Unavailable({ reason, aiHref }: { reason: string | null; aiHref: string }) {
   return (
-    <div className="mt-6 rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center">
+    <div className="mt-6 rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-6 text-center">
       <h2 className="text-[17px] font-bold tracking-[-0.01em]">Character Replace isn&apos;t available right now</h2>
       <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">
         {reason ?? "It has been switched off for the moment. Nothing on your account is affected — check back soon."}
@@ -859,7 +863,7 @@ function Unavailable({ reason, aiHref }: { reason: string | null; aiHref: string
 
 function ConfigWait({ error }: { error: string | null }) {
   return (
-    <div role="status" aria-busy={!error} className="relative overflow-hidden rounded-[1.25rem] border border-border/70 bg-card px-4 py-4">
+    <div role="status" aria-busy={!error} className="relative overflow-hidden rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-4">
       <p className="text-[13.5px] font-semibold">{error ? "Couldn't load the options" : "Loading the options…"}</p>
       <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
         {error ?? "Qualities, voices and languages come from Frenz AI so they are always current."}

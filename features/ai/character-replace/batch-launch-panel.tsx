@@ -48,7 +48,7 @@ export function CharacterReplaceBatchLaunchPanel({
           <button type="button" onClick={onRetry} className="btn-lux min-h-[46px] bg-foreground px-5 text-background">
             Try again
           </button>
-          <button type="button" onClick={onBack} className="btn-lux min-h-[46px] border border-border/70 bg-card px-4 text-foreground hover:border-foreground/25">
+          <button type="button" onClick={onBack} className="btn-lux min-h-[46px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-foreground hover:border-foreground/25">
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back
           </button>
@@ -58,7 +58,7 @@ export function CharacterReplaceBatchLaunchPanel({
   }
   if (launch.phase === "creating") {
     return (
-      <section className="mt-5 rounded-[1.5rem] border border-border/70 bg-card px-5 py-6 text-center" aria-busy="true">
+      <section className="mt-5 rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-6 text-center" aria-busy="true">
         <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary motion-reduce:animate-none" aria-hidden />
         <p className="mt-3 text-[15px] font-bold">Preparing {launch.total} videos</p>
         <p className="mt-1 text-[12.5px] text-muted-foreground">Opening a job for each one. Nothing is charged yet.</p>
@@ -74,7 +74,7 @@ export function CharacterReplaceBatchLaunchPanel({
   const short = paidTotal !== null && balanceCents !== null && balanceCents < paidTotal && complimentaryCount < items.length;
 
   return (
-    <section className="mt-5 rounded-[1.5rem] border border-border/70 bg-card" aria-live="polite" aria-busy={busy}>
+    <section className="mt-5 rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]" aria-live="polite" aria-busy={busy}>
       <header className="px-5 pt-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           {launch.phase === "uploading" ? "Uploading" : launch.phase === "checking" ? "Checking your media" : launch.phase === "starting" ? "Starting" : launch.phase === "attention" ? "Needs attention" : "Ready to process"}
@@ -140,7 +140,7 @@ export function CharacterReplaceBatchLaunchPanel({
                 Process the {passing.length} that passed
               </button>
             ) : null}
-            <button type="button" onClick={onBack} className="btn-lux min-h-[46px] border border-border/70 bg-card px-4 text-foreground hover:border-foreground/25">
+            <button type="button" onClick={onBack} className="btn-lux min-h-[46px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-foreground hover:border-foreground/25">
               <ArrowLeft className="h-4 w-4" aria-hidden />
               {launch.phase === "attention" ? "Change files" : "Back"}
             </button>

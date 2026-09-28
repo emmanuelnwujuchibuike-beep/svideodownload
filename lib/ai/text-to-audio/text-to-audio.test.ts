@@ -360,7 +360,7 @@ describe("the tool never becomes a video pipeline (the brief's hard rule)", () =
     expect(grid).toContain("Replace a face while preserving the rest of the video.");
     expect(grid).toContain("Replace the face and skin appearance.");
     expect(grid).toContain("Transform the complete character in your video.");
-    expect(grid).toContain('audio: { title: "Audio tools"');
+    expect(grid).toContain('audio: { title: "Create Audio"');
     // AI Clean is retired: no card, no id, no href — the only mention allowed is the comment that says so
     expect(codeOf("features/ai/frenz-ai-tools-grid.tsx")).not.toMatch(/ai[_ -]?clean/i);
   });

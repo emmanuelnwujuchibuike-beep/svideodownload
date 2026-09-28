@@ -75,7 +75,7 @@ export function CharacterReplacePricingSummary({
   return (
     <section
       aria-labelledby={`${detailsId}-title`}
-      className={cn("rounded-[1.25rem] border border-border/70 bg-card", pricing.status === "idle" && "border-dashed bg-card/60", className)}
+      className={cn("rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]", pricing.status === "idle" && "border-dashed bg-card/60", className)}
     >
       <div className="flex items-baseline justify-between gap-4 px-4 pt-3.5">
         <h3 id={`${detailsId}-title`} className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">

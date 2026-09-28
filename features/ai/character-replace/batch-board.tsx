@@ -155,7 +155,7 @@ export function CharacterReplaceBatchBoard({
 
   if (watch.missing) {
     return (
-      <section className={cn("rounded-[1.5rem] border border-border/70 bg-card px-5 py-6", className)}>
+      <section className={cn("rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-6", className)}>
         <p className="text-[15px] font-bold">We couldn&apos;t find those videos</p>
         <p className="mt-1 text-[12.5px] text-muted-foreground">They may belong to another account, or the session has been cleared.</p>
         <button type="button" onClick={onLeave} className="btn-lux mt-4 bg-foreground text-background">
@@ -170,7 +170,7 @@ export function CharacterReplaceBatchBoard({
   return (
     <section aria-live="polite" aria-busy={summary.active} className={cn("space-y-3", className)}>
       {/* the summary (brief §10) */}
-      <div className="relative overflow-hidden rounded-[1.5rem] border border-border/70 bg-card px-5 py-5">
+      <div className="relative overflow-hidden rounded-[1.5rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-5 py-5">
         <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.16),transparent)] blur-2xl" />
         <div className="relative flex items-center gap-4">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary/70">
@@ -208,7 +208,7 @@ export function CharacterReplaceBatchBoard({
           const state = stateWords(job);
           const b = busy[job.id];
           return (
-            <li key={job.id} className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-card">
+            <li key={job.id} className="overflow-hidden rounded-[1.35rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               <div className="flex items-start gap-3 px-4 pt-4">
                 {/* thumbnail: the real poster once there is one, a plate before that */}
                 <div className="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl bg-[#0b0f1a] ring-1 ring-black/10 dark:ring-white/10">
@@ -251,7 +251,7 @@ export function CharacterReplaceBatchBoard({
                     <Link href={resultHrefFor(job.id)} prefetch={false} className="btn-lux min-h-[42px] bg-foreground px-4 text-[13px] text-background">
                       View
                     </Link>
-                    <button type="button" onClick={() => startAiResultDownload(job)} className="btn-lux min-h-[42px] border border-border/70 bg-card px-4 text-[13px] text-foreground hover:border-foreground/25">
+                    <button type="button" onClick={() => startAiResultDownload(job)} className="btn-lux min-h-[42px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-[13px] text-foreground hover:border-foreground/25">
                       <Download className="h-4 w-4" aria-hidden />
                       Download
                     </button>
@@ -262,7 +262,7 @@ export function CharacterReplaceBatchBoard({
                   </>
                 ) : null}
                 {live && job.status !== "queued" ? (
-                  <button type="button" onClick={() => void cancel(job)} disabled={!!b} className="btn-lux min-h-[42px] border border-border/70 bg-card px-4 text-[13px] text-foreground hover:border-foreground/25">
+                  <button type="button" onClick={() => void cancel(job)} disabled={!!b} className="btn-lux min-h-[42px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-[13px] text-foreground hover:border-foreground/25">
                     {b === "cancel" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <X className="h-4 w-4" aria-hidden />}
                     {job.status === "waiting" ? "Remove from queue" : "Cancel"}
                   </button>
@@ -287,7 +287,7 @@ export function CharacterReplaceBatchBoard({
             Download all ({completed.length})
           </button>
         ) : null}
-        <button type="button" onClick={onLeave} className="btn-lux min-h-[46px] border border-border/70 bg-card px-4 text-[13.5px] text-foreground hover:border-foreground/25">
+        <button type="button" onClick={onLeave} className="btn-lux min-h-[46px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-[13.5px] text-foreground hover:border-foreground/25">
           <ArrowLeft className="h-4 w-4" aria-hidden />
           More videos
         </button>

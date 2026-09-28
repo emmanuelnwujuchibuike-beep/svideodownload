@@ -61,10 +61,25 @@ export type AiToolId =
   | "history";
 
 export type AiToolGroup = "audio" | "video" | "transform" | "library";
+/**
+ * The category names from the owner's reference.
+ *
+ * They were "Audio tools" / "Video tools" / "Transformation tools" — accurate,
+ * and written from the implementation's point of view rather than the member's.
+ * The reference names them by what you DO: Create Audio, Transform Video. §47
+ * asks every page to answer "what can I do?", and a verb answers it faster than
+ * a noun.
+ *
+ * ⚠️ The reference also shows a GENERATE section (Text to Video, Image + Video
+ * References). It is deliberately absent: neither tool exists in this product,
+ * and §7 is explicit — "Do not blindly add tools that do not exist. Only expose
+ * functionality actually implemented." A card leading to a 404 would read as a
+ * feature that broke.
+ */
 export const AI_TOOL_GROUP_LABEL: Record<AiToolGroup, { title: string; hint: string }> = {
-  audio: { title: "Audio tools", hint: "Sound only — no video is touched." },
-  video: { title: "Video tools", hint: "One operation on a video you already have." },
-  transform: { title: "Transformation tools", hint: "Integrated workflows that change who is in the video." },
+  audio: { title: "Create Audio", hint: "Sound only — no video is touched." },
+  video: { title: "Transform Video", hint: "One operation on a video you already have." },
+  transform: { title: "Transform Video", hint: "Change who is in the video, end to end." },
   library: { title: "Yours", hint: "Everything you have made." },
 };
 

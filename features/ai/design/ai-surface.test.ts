@@ -255,3 +255,75 @@ describe("the surface is APPLIED, not merely defined", () => {
     expect(body).not.toMatch(/@keyframes|animation:/);
   });
 });
+
+describe("a tool's own library is where its results live", () => {
+  /*
+    🔴 A REAL ROUTING BUG (owner, 2026-09-28: "this everything you have saved
+    button lead to character replace history instead of audio library").
+
+    Both standalone tools sent someone who had just made something to
+    `historyHref` — the Character Replace JOB history. Text to Audio was already
+    being passed `libraryHref` and used it elsewhere in the same file; the
+    result screen simply reached for the wrong one. Someone who saved a voice
+    track was shown a list of video jobs.
+  */
+  it("Text to Audio points at the Audio Library, never the job history", () => {
+    const result = code("features/ai/text-to-audio/text-to-audio-workspace.tsx");
+    const from = result.indexOf("function Result(");
+    const body = result.slice(from);
+    expect(body).toMatch(/href=\{libraryHref\}/);
+    expect(body, "the result screen still links to the job history").not.toMatch(/href=\{historyHref\}/);
+  });
+
+  it("Voice Cloning points at the member's voices", () => {
+    const body = code("features/ai/voice-clone/voice-cloning-workspace.tsx");
+    expect(body).toMatch(/const voicesHref =/);
+    const from = body.indexOf("function Result(");
+    expect(body.slice(from)).toMatch(/href=\{voicesHref\}/);
+    expect(body.slice(from), "the result screen still links to the job history").not.toMatch(/href=\{historyHref\}/);
+  });
+
+  it("makes both of them look like buttons", () => {
+    /*
+      §38: touch states visible, hit areas not tiny. They were underlined
+      captions in muted grey — a footnote, whose hit area on a phone was the
+      height of the text.
+    */
+    for (const f of [
+      "features/ai/text-to-audio/text-to-audio-workspace.tsx",
+      "features/ai/voice-clone/voice-cloning-workspace.tsx",
+    ]) {
+      const body = code(f);
+      const from = body.indexOf("function Result(");
+      expect(body.slice(from), `${f}: the library link is still a bare caption`).toMatch(
+        /min-h-\[48px\][^]{0,200}rounded-full/,
+      );
+    }
+  });
+});
+
+describe("the desktop shell exists", () => {
+  it("adds a sidebar at exactly the breakpoint the bottom nav leaves", () => {
+    /*
+      §4: "Do NOT simply make the desktop layout shrink down." There was no
+      desktop navigation at all — the phone layout stretched across 1440px.
+
+      `lg` is not arbitrary: the existing bottom nav is `lg:hidden`, so matching
+      it is what guarantees the two can never both show and never both vanish.
+    */
+    const shell = code("features/ai/design/ai-studio-shell.tsx");
+    expect(shell).toMatch(/hidden[^"]*lg:flex/);
+    expect(code("features/app-shell/mobile-nav.tsx")).toMatch(/lg:hidden/);
+    // and it is mounted as a layout on BOTH doors, not edited into 22 pages
+    for (const f of ["app/(marketing)/ai/layout.tsx", "app/(app)/studio/ai/layout.tsx"]) {
+      expect(code(f)).toMatch(/<AiStudioShell>/);
+    }
+  });
+
+  it("keeps the main column able to shrink", () => {
+    // Without min-w-0 a flex child refuses to go below its content's intrinsic
+    // width and one long title puts the whole page into horizontal scroll — which
+    // §5 forbids outright.
+    expect(code("features/ai/design/ai-studio-shell.tsx")).toMatch(/min-w-0 flex-1/);
+  });
+});

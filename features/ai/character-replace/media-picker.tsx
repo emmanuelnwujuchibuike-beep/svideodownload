@@ -108,7 +108,7 @@ export function CharacterReplaceMediaPicker({
         onDrop={onDrop}
         className={cn(
           "group relative flex min-h-[14rem] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[1.75rem] px-6 py-9 text-center sm:min-h-[16rem]",
-          "border border-border/70 bg-card shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-[border-color,box-shadow,transform] duration-200",
+          "bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-[border-color,box-shadow,transform] duration-200",
           "hover:border-foreground/25 hover:shadow-[0_18px_40px_-28px_rgba(15,23,42,0.55)] active:scale-[0.995]",
           "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
           dragging && "border-primary/60 shadow-[0_0_0_4px_rgb(99_102_241/0.15)]",

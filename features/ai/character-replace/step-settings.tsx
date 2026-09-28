@@ -267,12 +267,12 @@ export function CharacterReplaceSettingsStep({
           </div>
 
           {duration === null || !video ? (
-            <p className="mt-3 rounded-2xl border border-border/70 bg-card px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+            <p className="mt-3 rounded-2xl bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
               This video&apos;s length could not be read on your device, so it cannot be trimmed here. It will be
               measured when it is uploaded.
             </p>
           ) : (
-            <div className="mt-3 overflow-hidden rounded-[1.25rem] border border-border/70 bg-card">
+            <div className="mt-3 overflow-hidden rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
               {/* the scrubbing preview: muted, never autoplays, one decoder */}
               <div className="relative bg-[#0b0f1a]">
                 <video

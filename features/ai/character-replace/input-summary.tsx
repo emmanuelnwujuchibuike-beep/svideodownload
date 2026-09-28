@@ -42,7 +42,7 @@ export function CharacterReplaceInputSummary({
   const trimIssue = issues.find((i) => i.startsWith("trim-") || i === "video-unmeasured") ?? null;
 
   return (
-    <section aria-label="Input summary" className={cn("rounded-[1.25rem] border border-border/70 bg-card", className)}>
+    <section aria-label="Input summary" className={cn("rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
       <dl className="divide-y divide-border/60">
         <Row label="Character">
           <Status ok={!!project.character} okText="Ready" notText="Missing" />

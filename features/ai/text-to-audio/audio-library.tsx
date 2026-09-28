@@ -2,6 +2,7 @@
 
 import { AudioLines, Mic, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { AiHero } from "@/features/ai/design/ai-surface";
 import { useCallback, useState } from "react";
 
 import { useCachedView } from "@/features/ai/core/use-cached-view";
@@ -58,16 +59,19 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
 
   return (
     <div className="pb-24">
-      <header className="mt-4">
-        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-          Frenz AI · Audio
-        </p>
-        <h1 className="mt-2 text-[2rem] font-bold leading-[1.06] tracking-[-0.04em] sm:text-[2.4rem]">
-          Your <span className="text-gradient">Audio Library</span>
-        </h1>
-        <p className="mt-2.5 max-w-lg text-[14.5px] leading-relaxed text-muted-foreground">Everything you have made with Text to Audio. Play it, save it to your device, or use it in Lip Sync Pro — reusing it costs nothing.</p>
-      </header>
+        {/*
+          The shared hero (owner, 2026-09-28). This opened with the uppercase
+          "Frenz AI · Audio" eyebrow — the same pasted string Voice Cloning
+          carried, so three different screens announced themselves as one
+          tool. §1 of the brief: avoid excessive uppercase labels.
+        */}
+      <AiHero
+        tool="Audio Library"
+        title="Your"
+        highlight="Audio Library"
+        subtitle="Everything you have made with Text to Audio. Play it, save it to your device, or use it in Lip Sync Pro — reusing it costs nothing."
+        className="mt-4 px-0"
+      />
 
       <Link href={ttaHref} className="ai-cta mt-5 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
         <Plus className="h-4 w-4" aria-hidden /> New audio
@@ -97,7 +101,7 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
           </div>
         ) : (
           state.assets.map((a) => (
-            <article key={a.id} className={cn("rounded-[1.25rem] border border-border/70 bg-card p-4 transition", busy === a.id && "opacity-60")}>
+            <article key={a.id} className={cn("rounded-[1.25rem] bg-sky-50/70 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition", busy === a.id && "opacity-60")}>
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                   <AudioLines className="h-4.5 w-4.5" aria-hidden />

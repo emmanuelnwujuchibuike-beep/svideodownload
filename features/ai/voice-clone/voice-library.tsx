@@ -2,6 +2,7 @@
 
 import { AudioLines, Mic, Pencil, Plus, ShieldCheck, Sparkles, Trash2, Type } from "lucide-react";
 import Link from "next/link";
+import { AiHero } from "@/features/ai/design/ai-surface";
 import { useCallback, useState } from "react";
 
 import { useCachedView } from "@/features/ai/core/use-cached-view";
@@ -75,14 +76,19 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
     <div className={compact ? "" : "pb-24"}>
       {compact ? null : (
         <header className="mt-4">
-          <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-            Frenz AI · Audio
-          </p>
-          <h1 className="mt-2 text-[2rem] font-bold leading-[1.06] tracking-[-0.04em] sm:text-[2.4rem]">
-            Your <span className="text-gradient">Voices</span>
-          </h1>
-          <p className="mt-2.5 max-w-lg text-[14.5px] leading-relaxed text-muted-foreground">The voices you have cloned. Use them anywhere you can type words — Text to Audio, or Lip Sync Pro.</p>
+        {/*
+          The shared hero (owner, 2026-09-28). This opened with the uppercase
+          "Frenz AI · Audio" eyebrow — the same pasted string Voice Cloning
+          carried, so three different screens announced themselves as one
+          tool. §1 of the brief: avoid excessive uppercase labels.
+        */}
+          <AiHero
+            tool="Your Voices"
+            title="Your"
+            highlight="Voices"
+            subtitle="The voices you have cloned. Use them anywhere you can type words — Text to Audio, or Lip Sync Pro."
+            className="px-0"
+          />
         </header>
       )}
 

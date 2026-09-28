@@ -341,7 +341,7 @@ export function CharacterReplaceResultScreen({
             type="button"
             onClick={() => void share()}
             disabled={sharing || !result.previewUrl}
-            className="btn-lux min-h-[46px] border border-border/70 bg-card text-[13.5px] text-foreground hover:border-foreground/25 disabled:opacity-50"
+            className="btn-lux min-h-[46px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-[13.5px] text-foreground hover:border-foreground/25 disabled:opacity-50"
           >
             <Share2 className="h-4 w-4" aria-hidden />
             {sharing ? "Preparing…" : "Share"}
@@ -356,7 +356,7 @@ export function CharacterReplaceResultScreen({
       </div>
 
       {/* ── Video Details (§12), only what was used ─────────────────────── */}
-      <div className="rounded-[1.25rem] border border-border/70 bg-card">
+      <div className="rounded-[1.25rem] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <button
           type="button"
           aria-expanded={detailsOpen}
@@ -397,7 +397,7 @@ export function CharacterReplaceResultScreen({
 
       {/* ── secondary actions (§14–§16) ───────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-center gap-2">
-        <button type="button" onClick={() => onMakeAnother()} className="btn-lux border border-border/70 bg-card text-foreground hover:border-foreground/25">
+        <button type="button" onClick={() => onMakeAnother()} className="btn-lux bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] text-foreground hover:border-foreground/25">
           <Sparkles className="h-4 w-4" aria-hidden />
           Create Another
         </button>
@@ -432,7 +432,7 @@ export function CharacterReplaceResultScreen({
               <button type="button" onClick={() => void remove()} disabled={deleting} className="btn-lux min-h-[42px] bg-rose-600 px-4 text-[13px] text-white hover:bg-rose-700 disabled:opacity-60">
                 {deleting ? "Deleting…" : "Delete"}
               </button>
-              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-lux min-h-[42px] border border-border/70 bg-card px-4 text-[13px] text-foreground">
+              <button type="button" onClick={() => setConfirmDelete(false)} className="btn-lux min-h-[42px] bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04)] px-4 text-[13px] text-foreground">
                 Keep it
               </button>
             </div>

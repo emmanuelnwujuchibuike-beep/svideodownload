@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import type { VideoMetadata } from "@/types";
+
 import { preferTikWm } from "./tiktok";
-import type { VideoMetadata } from "./types";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════

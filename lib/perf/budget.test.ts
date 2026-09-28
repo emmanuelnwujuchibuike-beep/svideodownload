@@ -446,7 +446,44 @@ function landingChunks(): string[] {
  * move lib/money/units.ts made on 09-13, for the same reason. The guard in
  * lib/perf/client-imports.test.ts keeps that door shut.
  */
-const GLOBAL_CEILING = 368 * 1024;
+/*
+ * ── 368 → 369 kB (2026-09-28, the provider migration Part 5) ──────────────
+ *
+ * /admin measured **376,877 bytes against 376,832 — over by 45**. The cause is
+ * the AI → "Kling pricing" tab, which Part 5 §35 requires ("the admin system
+ * must be able to control Kling without modifying code": pricing, limits,
+ * availability, provider cost). The 45 bytes are the tab's own first-load cost —
+ * one more `dynamic()` wrapper in frenz-ai-settings-lazy.tsx, one import and one
+ * tab entry in app/admin/page.tsx.
+ *
+ * 🔴 THE SIDE DOOR WAS CHECKED FIRST, because the 2026-09-14 entry above is
+ * exactly this shape: 3 kB that looked like a panel and was really
+ * lib/landing/settings.ts dragging a config module into the EAGER chunk through
+ * a client value import. Part 5 added `normalizeKlingPricing` /
+ * `versionKlingPricing` to settings.ts, so it is the same door.
+ *
+ * It is shut. Verified the same way that entry was — by grepping the built
+ * chunks the manifest lists for /admin/page for a distinctive pricing key
+ * (`lip_sync:source`):
+ *
+ *     admin eager chunks containing pricing.ts: NONE
+ *     pricing.ts lives in chunk 52667, the lazy panel's own chunk
+ *
+ * So there is no eager import to remove, and the remaining 45 bytes are the
+ * irreducible cost of the tab existing. Held at the minimum: 369 kB, just above
+ * the measured 376,877, and it only ever moves down from here.
+ *
+ * Note this is the ADMIN route — signed-in, never a cold visit. The 2-second
+ * cold-entry budget is ENTRY_CEILING (218 kB over five marketing routes) and is
+ * untouched by this change.
+ *
+ * ⚠️ Worth knowing: this guard does NOT run on CI. `.github/workflows/ci.yml`
+ * runs `npm test` BEFORE `npm run build`, so `.next` does not exist and
+ * `describe.skipIf(!buildExists())` skips the whole block. The ratchet is
+ * enforced locally only — which is how the 45 bytes reached main in db97f0f
+ * before being caught here.
+ */
+const GLOBAL_CEILING = 369 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

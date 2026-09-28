@@ -77,8 +77,21 @@ import { invalid, ok, type KlingFeatureHandler, type KlingValidation } from "@/l
  * `text2video` therefore cannot be offered until the catalogue is known.
  */
 
+/**
+ * Facts every Lip Sync request carries, whichever mode it is in.
+ *
+ * 🔴 `sourceSeconds` is the MEASURED length of the source video and is what the
+ * job is billed on — the output is the source with its mouth changed, so there is
+ * no other length. It is measured by our worker and never claimed by a browser
+ * (§26: the client is never trusted for duration billing). Optional here because
+ * validation does not need it; the QUOTE does, and refuses without it.
+ */
+interface KlingLipSyncCommon {
+  sourceSeconds?: number;
+}
+
 export type KlingLipSyncInput =
-  | {
+  | (KlingLipSyncCommon & {
       mode: "audio2video";
       /** The footage whose mouth is driven. */
       videoUrl?: string;
@@ -86,8 +99,8 @@ export type KlingLipSyncInput =
       videoId?: string;
       /** The speech. Already generated and already billed as its own operation. */
       audioUrl: string;
-    }
-  | {
+    })
+  | (KlingLipSyncCommon & {
       mode: "text2video";
       videoUrl?: string;
       videoId?: string;
@@ -99,7 +112,7 @@ export type KlingLipSyncInput =
       voiceLanguage: KlingLipSyncVoiceLanguage;
       /** 0.8–2.0. */
       voiceSpeed?: number;
-    };
+    });
 
 /** ✅ "video_id or video_url is required" — one of the two, and this is the check. */
 function validateVideoSource(input: { videoUrl?: string; videoId?: string }): KlingValidation {

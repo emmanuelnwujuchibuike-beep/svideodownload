@@ -52,6 +52,16 @@ export type AiFeature =
   | "ai_text_to_audio"
   /** 2026-09-27: Voice Cloning — the member's own audio samples → a voice they own, usable in Text to Audio and Lip Sync Pro; migration 0171. */
   | "ai_voice_clone"
+  /**
+   * 2026-09-28 (Part 5): a prompt → a video, on the direct Kling Omni endpoint.
+   * Verified end to end against the live API; migration 0179.
+   */
+  | "ai_text_to_video"
+  /**
+   * 2026-09-28 (Part 5): a photo, animated, on the direct Kling Omni endpoint
+   * (`first_frame`). Verified end to end against the live API; migration 0179.
+   */
+  | "ai_image_to_video"
   | "ai_image_clean"
   | "ai_upscale"
   | "ai_caption"
@@ -244,7 +254,7 @@ export interface AiFeatureDef {
    * The provider capability this feature needs. A feature whose capability is
    * not configured is refused up front rather than queued into a void.
    */
-  requires: "replicate" | "elevenlabs";
+  requires: "replicate" | "elevenlabs" | "kling";
   /**
    * Whether a finished provider output still needs OUR worker before it is
    * deliverable. True for AI Clean: the model returns video with no audio, so
@@ -408,6 +418,51 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
     // the JOB's retention; the VOICE it made is kept until the member deletes it
     retentionHours: 24 * 365,
   },
+  {
+    /*
+      ── TEXT TO VIDEO (2026-09-28, Part 5) ──────────────────────────────────
+      A prompt, and nothing else, straight to the direct Kling Omni endpoint.
+      ✅ Verified end to end against the live API.
+
+      🔴 It does ONE thing (§3). No voice stage, no lip-sync stage, no character
+      work, no second vendor — the chained pipeline this replaces is the reason
+      the brief forbids chaining at all.
+    */
+    id: "ai_text_to_video",
+    label: "Text to Video",
+    provider: "kling",
+    requires: "kling",
+    // the worker brings the output home, validates it and stores it — as for every video tool
+    needsFinalizer: true,
+    freeDailyJobs: 0,
+    // no upload: the input is a sentence
+    mimeTypes: [],
+    maxBytes: 0,
+    // the OUTPUT ceiling the vendor allows; enforced again per tier in the pricing matrix
+    maxDurationSeconds: 15,
+    retentionHours: 72,
+  },
+  {
+    /*
+      ── IMAGE TO VIDEO (2026-09-28, Part 5) ─────────────────────────────────
+      A photo becomes the first frame of a clip, on the direct Kling Omni
+      endpoint. ✅ Verified end to end: the reference photo came back animated
+      and faithful.
+
+      🔴 The image is handed to Kling as a URL and is never re-encoded, resized
+      or recompressed by us (§19, §32). Kling fetches it itself.
+    */
+    id: "ai_image_to_video",
+    label: "Image to Video",
+    provider: "kling",
+    requires: "kling",
+    needsFinalizer: true,
+    freeDailyJobs: 0,
+    mimeTypes: ["image/jpeg", "image/png"],
+    maxBytes: 10 * 1024 * 1024,
+    maxDurationSeconds: 15,
+    retentionHours: 72,
+  },
 ] as const;
 
 /**
@@ -474,8 +529,14 @@ export function primaryAiFeature(): AiFeatureDef {
  * how `lib/ai/tools.ts` handles the same question.
  */
 export interface AiCapabilities {
-  /** A Replicate token is configured. */
+  /** A Replicate token is configured. Only the retired/legacy tools ask. */
   replicate: boolean;
+  /**
+   * A Kling credential is configured (2026-09-28, Part 5). Every VIDEO feature
+   * needs THIS and nothing else — Kling is the only video provider, so gating a
+   * video tool on a Replicate token would answer wrongly in both directions.
+   */
+  kling: boolean;
   /**
    * An ElevenLabs key is configured (2026-09-27). Voice Cloning needs THIS and
    * not Replicate: it is the first feature here whose provider is a different
@@ -520,6 +581,10 @@ export function featureAvailability(
   caps: AiCapabilities,
 ): AiFeatureAvailability {
   if (feature.requires === "elevenlabs" && !caps.elevenlabs) {
+    if (caps.allowUndispatched) return { available: true, dispatchable: false };
+    return { available: false, reason: "The AI service isn't connected yet." };
+  }
+  if (feature.requires === "kling" && !caps.kling) {
     if (caps.allowUndispatched) return { available: true, dispatchable: false };
     return { available: false, reason: "The AI service isn't connected yet." };
   }

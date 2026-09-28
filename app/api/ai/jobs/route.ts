@@ -32,6 +32,7 @@ import {
   listOwnJobs,
   reserveSourcePath,
 } from "@/lib/ai/job-store";
+import { klingConfigured } from "@/lib/ai/kling/client";
 import { hasProviderFor } from "@/lib/ai/providers";
 import { recoverJob, recoveryDue } from "@/lib/ai/recovery";
 import { hasWorker } from "@/lib/worker";
@@ -86,6 +87,12 @@ const capabilities = (): AiCapabilities => {
     replicate: hasProviderFor(primary),
     // 2026-09-27: Voice Cloning's vendor. Read here for the same reason as the line above — the server is the one thing that knows what is configured.
     elevenlabs: !!process.env.ELEVENLABS_API_KEY?.trim(),
+    /*
+      2026-09-28 (Part 5): the ONLY video vendor. Every video feature declares
+      `requires: "kling"`, so this is what decides whether Text to Video, Image to
+      Video and Lip Sync may accept a job — never a Replicate token.
+    */
+    kling: klingConfigured(),
     // The ffmpeg worker. A job that cannot be finalized must never be started —
     // see the note on AiCapabilities.finalizer.
     finalizer: hasWorker,

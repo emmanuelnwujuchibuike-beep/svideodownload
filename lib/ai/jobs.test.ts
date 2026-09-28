@@ -31,9 +31,26 @@ import {
 const feature = aiFeature("ai_character_replace")!;
 
 describe("the feature registry", () => {
-  it("has Character Replace first, then the standalone tools (2026-09-21), and nothing else", () => {
-    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone"]);
+  it("registers exactly the tools that exist — including the two Kling video features (Part 5)", () => {
+    expect(AI_FEATURES.map((f) => f.id)).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"]);
     expect(primaryAiFeature().id).toBe("ai_character_replace");
+  });
+
+  /*
+    🔴 Part 5 §1: Kling is the ONLY video provider. A video feature that declared
+    `requires: "replicate"` would be gated on a token it must never use, and a
+    deployment with a Kling key but no Replicate token would report it
+    unavailable — the wrong answer in both directions.
+  */
+  it("🔴 every VIDEO feature requires Kling, and none requires Replicate", () => {
+    for (const id of ["ai_text_to_video", "ai_image_to_video"] as const) {
+      const f = aiFeature(id);
+      expect(f, id).not.toBeNull();
+      expect(f!.provider, id).toBe("kling");
+      expect(f!.requires, id).toBe("kling");
+    }
+    // The ElevenLabs tools are untouched by the video migration (§12).
+    expect(aiFeature("ai_voice_clone")!.requires).toBe("elevenlabs");
   });
 
   it("🔴 AI Clean is gone from the registry — nothing can create one (owner, 2026-09-13)", () => {
@@ -64,7 +81,7 @@ describe("the feature registry", () => {
 });
 
 describe("featureAvailability", () => {
-  const ready = { replicate: true, elevenlabs: true, finalizer: true, allowUndispatched: false };
+  const ready = { replicate: true, kling: true, elevenlabs: true, finalizer: true, allowUndispatched: false };
 
   it("🔴 refuses when no provider is configured", () => {
     const verdict = featureAvailability(feature, { ...ready, replicate: false });
@@ -103,7 +120,7 @@ describe("featureAvailability", () => {
     // A job may be created for testing, and the response still says out loud
     // that nothing will run it.
     expect(
-      featureAvailability(feature, { replicate: false, elevenlabs: true, finalizer: false, allowUndispatched: true }),
+      featureAvailability(feature, { replicate: false, kling: false, elevenlabs: true, finalizer: false, allowUndispatched: true }),
     ).toEqual({ available: true, dispatchable: false });
   });
 });

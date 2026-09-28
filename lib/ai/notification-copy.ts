@@ -209,6 +209,13 @@ const MEDIA_NOUN: Record<AiFeature, string> = {
   // a clone produces a VOICE, not a file — "your voice is ready"
   ai_voice_clone: "voice",
   /*
+    2026-09-28 (Part 5): the two direct-Kling video tools. The compiler found
+    these too, exactly as the note below predicted it would — which is the whole
+    reason this Record is total rather than a lookup with a fallback.
+  */
+  ai_text_to_video: "video",
+  ai_image_to_video: "video",
+  /*
     🔴 THE COMPILER FOUND THESE, WHICH IS WHY THE RECORD IS TOTAL. The first
     draft of this file listed `ai_clean` alone and typechecked as an object
     literal; declaring it `Record<AiFeature, string>` failed the build with the

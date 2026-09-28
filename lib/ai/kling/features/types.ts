@@ -1,4 +1,4 @@
-import type { KlingAspectRatio, KlingAudioMode, KlingResolution } from "@/lib/ai/kling/features/capabilities";
+import type { KlingAspectRatio, KlingAudioMode, KlingVideoResolution } from "@/lib/ai/kling/features/capabilities";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -87,8 +87,15 @@ export interface KlingCommonOptions {
    * accepted. The window is ours to enforce, which `validateCommonOptions` does.
    */
   durationSeconds?: number;
-  /** `settings.resolution` — 480p | 720p | 1080p | 4k (lower-case). */
-  resolution?: KlingResolution;
+  /**
+   * `settings.resolution` — 720p | 1080p | 4k (lower-case).
+   *
+   * 🔴 NOT `KlingResolution`. The vendor's settings enum also lists `480p` and
+   * then refuses it at generation ("video resolution value '480p' is invalid"),
+   * so a caller must not even be able to express it. Narrowing the TYPE is what
+   * makes that a compile error rather than a refund.
+   */
+  resolution?: KlingVideoResolution;
   /** `settings.aspect_ratio` — required unless a first frame is supplied. */
   aspectRatio?: KlingAspectRatio;
   /** `settings.audio` — `native` generates sound, `off` does not. */

@@ -153,16 +153,12 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
   const symbol = balance?.symbol ?? "₦";
 
   return (
-    <FrenzAIEnvironment stage="idle" className="relative overflow-hidden rounded-[1.75rem]">
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background:
-            "radial-gradient(70% 40% at 20% 0%, rgba(99,102,241,0.10) 0%, transparent 62%)," +
-            "radial-gradient(60% 40% at 92% 26%, rgba(217,70,239,0.08) 0%, transparent 66%)",
-        }}
-      />
+    <FrenzAIEnvironment stage="idle" className="ai-wash relative overflow-hidden rounded-[1.75rem]">
+      {/*
+        The shared ground. This page carried its own two-gradient wash, another
+        variation on a background both references show as ONE — `.ai-wash` on
+        the wrapper above is that one.
+      */}
 
       <div className="px-4 pb-10 pt-5 sm:px-6">
         <FrenzAICrumb tool="Balance" />

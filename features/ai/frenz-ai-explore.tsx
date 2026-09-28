@@ -34,6 +34,7 @@ import {
   writeAiEntitlementCache,
 } from "@/lib/ai/entitlement-cache";
 import { haptic } from "@/lib/motion/haptics";
+import { AiHero } from "@/features/ai/design/ai-surface";
 import { cn } from "@/lib/utils";
 
 /**
@@ -205,17 +206,20 @@ export function FrenzAIExplore({
   return (
     <div className="pb-24">
       <header className="mt-4">
-        <p className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden />
-          Frenz AI · Studio
-        </p>
-        <h1 className="mt-2 text-[2rem] font-bold leading-[1.06] tracking-[-0.04em] sm:text-[2.5rem]">
-          Explore <span className="text-gradient">AI Studio</span>
-        </h1>
-        <p className="mt-2.5 max-w-lg text-[14.5px] leading-relaxed text-muted-foreground">
-          Every tool in one place. Your photo and video stay on your device
-          until you press Create Video, and nothing is charged before that.
-        </p>
+        {/*
+          The shared Frenz AI hero (2026-09-27). This is the last page-level
+          eyebrow: "Frenz AI · Studio" in uppercase where both references put
+          the breadcrumb pill. The section labels further down this file stay as
+          they are — they label sections, not the page, and the references use a
+          small uppercase style for exactly that.
+        */}
+        <AiHero
+          tool="Explore"
+          title="Explore"
+          highlight="AI Studio"
+          subtitle="Every tool in one place. Your photo and video stay on your device until you press Create Video, and nothing is charged before that."
+          className="px-0"
+        />
         {free?.enabled ? (
           <p
             className={cn(

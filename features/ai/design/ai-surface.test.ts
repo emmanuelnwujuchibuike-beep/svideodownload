@@ -83,25 +83,34 @@ describe("the AI ground is defined once", () => {
       its own background: the welcome page alone carried four `radial-gradient`
       strings inline, so two pages a member moves between in one tap were
       literally different colours.
-
-      Only pages that have NOT yet adopted `AiPageShell` may still carry their
-      own — they are listed here so the list can only shrink, and so adopting a
-      page means deleting its gradients rather than leaving both.
     */
-    const notYetMigrated = new Set([
-      "features/ai/frenz-ai-explore.tsx",
-      "features/ai/frenz-ai-dashboard.tsx",
-      "features/ai/frenz-ai-tools-grid.tsx",
-      "features/ai/frenz-ai-usage-page.tsx",
-      "features/ai/frenz-ai-history-page.tsx",
-    ]);
-    const adopted = [
+    /*
+      Every page-level surface, now that the migration is finished. A page-level
+      wash is a background behind a whole screen; the soft blurred corner glow
+      inside a CARD is not one — the references have those too — so
+      `bg-[radial-gradient(closest-side,...)]` on a card is deliberately allowed.
+
+      `frenz-ai-core` and `frenz-ai-environment` are also exempt by omission:
+      they are the ambient visual system (the orbs and the glow driven by
+      --ai-orbit / --ai-breath / --ai-intensity / --ai-play), not a page
+      background, and rewriting them would gut the thing the wash sits under.
+    */
+    const pages = [
       "features/ai/text-to-audio/text-to-audio-workspace.tsx",
       "features/ai/frenz-ai-welcome.tsx",
+      "features/ai/frenz-ai-explore.tsx",
+      "features/ai/frenz-ai-history-page.tsx",
+      "features/ai/frenz-ai-usage-page.tsx",
+      "features/ai/voice-clone/voice-cloning-workspace.tsx",
+      "features/ai/lip-sync/lip-sync-workspace.tsx",
     ];
-    for (const f of adopted) {
-      expect(notYetMigrated.has(f), `${f} is migrated but still on the exemption list`).toBe(false);
-      expect(code(f), `${f} still hand-rolls a background`).not.toMatch(/radial-gradient/);
+    for (const f of pages) {
+      const body = code(f);
+      // a FULL-BLEED wash of its own — the `inset-0 -z-10` shape every one of
+      // these used to carry
+      expect(body, `${f} still hand-rolls a page wash`).not.toMatch(
+        /absolute inset-0 -z-10[^]{0,200}radial-gradient/,
+      );
     }
   });
 });
@@ -122,6 +131,7 @@ describe("every migrated tool opens with the breadcrumb pill", () => {
     ["features/ai/voice-clone/voice-cloning-workspace.tsx", "Voice Cloning"],
     ["features/ai/lip-sync/lip-sync-workspace.tsx", "Lip Sync Pro"],
     ["features/ai/frenz-ai-welcome.tsx", "AI Studio"],
+    ["features/ai/frenz-ai-explore.tsx", "Explore"],
   ];
 
   for (const [file, tool] of tools) {
@@ -130,7 +140,12 @@ describe("every migrated tool opens with the breadcrumb pill", () => {
       expect(body).toMatch(/<AiHero/);
       expect(body).toContain(`tool="${tool}"`);
       // the eyebrow it replaced, in any of its pasted forms
-      expect(body, "a hand-rolled eyebrow survived").not.toMatch(/uppercase tracking-[0.1[46]em][^]{0,120}Frenz AI ·/);
+      // Escaped. Unescaped, `[0.1[46]em]` is a character class and this passes
+      // against almost anything — the same trap that made an earlier assertion
+      // in this file meaningless.
+      expect(body, "a hand-rolled eyebrow survived").not.toMatch(
+        /uppercase tracking-[0.1[46]em][^]{0,160}Frenz AI ·/,
+      );
     });
   }
 });

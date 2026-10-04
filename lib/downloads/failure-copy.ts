@@ -30,3 +30,37 @@ export const LINK_NOT_SERVABLE_MESSAGE =
 /** The download request itself answered 502, after the automatic retries. */
 export const DOWNLOAD_502_MESSAGE =
   "Error 502: download failed. Upgrade to Pro to download all restricted videos.";
+
+/**
+ * EVERY OTHER download failure (owner, 2026-10-04: "make all download errors
+ * message, says upgrade to pro, pro downloads all restricted videos").
+ *
+ * 502 and the extraction refusal already carried the line; three paths did not,
+ * and they are the ones a member actually hits most:
+ *
+ *   · the retry toast, which said only "Download failed — tap retry"
+ *   · the status fallback, which said "HTTP 403" / "HTTP 500"
+ *   · any response with no readable body
+ *
+ * "HTTP 403" is the worst of them: it reads as the site being broken, when the
+ * usual cause is a platform refusing US — exactly the case the Pro line is about.
+ *
+ * 🔴 NOT used for the daily-limit (429) branch, deliberately. A quota is not a
+ * restriction: that path already names the real reason and offers an upgrade
+ * button, and telling somebody who has hit their cap that Pro "downloads all
+ * restricted videos" answers a question they did not ask while hiding the one
+ * they did.
+ */
+export const DOWNLOAD_FAILED_MESSAGE =
+  "Download failed. Upgrade to Pro to download all restricted videos.";
+
+/**
+ * The sentence for a failed download response, given its status.
+ *
+ * One function so the client cannot grow a fourth phrasing — the drift this
+ * file was created to end.
+ */
+export function downloadFailureMessage(status: number): string {
+  if (status === 502) return DOWNLOAD_502_MESSAGE;
+  return DOWNLOAD_FAILED_MESSAGE;
+}

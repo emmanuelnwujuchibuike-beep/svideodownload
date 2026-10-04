@@ -3,6 +3,7 @@
 import { ChevronDown, HelpCircle, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { ProBadge } from "@/features/monetization/pro-badge";
 import { cn } from "@/lib/utils";
 
 /**
@@ -246,14 +247,19 @@ export function MultiLinkIntro({
         {/* The "Up to N" pill from the reference. Carries the Pro tier when
             that is what the visitor has, so the same element answers "how many
             can I add" for both plans instead of two different affordances. */}
-        <span
-          className={cn(
-            "shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold",
-            onHero ? "bg-white/15 text-white" : "bg-primary/10 text-primary",
-          )}
-        >
-          Up to {sourceLimit}
-          {isPro ? " · PRO" : ""}
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span
+            className={cn(
+              "shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold",
+              onHero ? "bg-white/15 text-white" : "bg-primary/10 text-primary",
+            )}
+          >
+            Up to {sourceLimit}
+          </span>
+          {/* 🔴 Was the string " · PRO" appended inside the pill — a hand-rolled
+              badge, which is the drift `ProBadge` exists to end (2026-10-04).
+              Same condition, same meaning, one shared mark. */}
+          {isPro ? <ProBadge /> : null}
         </span>
 
         {/* Rotates on `transform` only, so it is composited. */}

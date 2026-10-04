@@ -4,6 +4,8 @@ import Link from "next/link";
 
 import { SiteHeader } from "@/components/layout/site-header";
 import { UpgradeButton } from "@/features/monetization/upgrade-button";
+import { ProBadge } from "@/features/monetization/pro-badge";
+import { BUSINESS_FEATURES, FREE_FEATURES, PRO_FEATURES } from "@/lib/monetization/plan-features";
 import { getPricing } from "@/lib/monetization/pricing";
 import { cn } from "@/lib/utils";
 
@@ -80,15 +82,7 @@ function buildTiers(pricing: {
       price: "$0",
       tagline: "Everything you need to get started.",
       icon: Sparkles,
-      features: [
-        "Save from every supported platform",
-        "HD video, MP3 audio & photos — no watermark",
-        "Batch downloads — up to 3 links, 2 a day, with a short ad",
-        "150 downloads/day",
-        "5 GB private cloud storage",
-        "API access — 50 requests a day",
-        "Supported by ads",
-      ],
+      features: [...FREE_FEATURES],
       cta: "Get started free",
       href: "/",
     },
@@ -99,14 +93,7 @@ function buildTiers(pricing: {
       period: pricing.pro.period,
       tagline: "For people who save a lot.",
       icon: Crown,
-      features: [
-        "Everything in Free",
-        "No ads on downloads — skip the ad on large or top-quality files",
-        "Batch downloads — up to 6 links, unlimited per day, no ad",
-        "1,000 downloads/day",
-        "50 GB private cloud storage",
-        "API access — 500 requests a day",
-      ],
+      features: [...PRO_FEATURES],
       cta: `Upgrade to ${pricing.pro.name}`,
       href: "/login?next=/pricing",
       highlight: true,
@@ -118,15 +105,7 @@ function buildTiers(pricing: {
       period: pricing.business.period,
       tagline: "For creators & power users who want everything.",
       icon: Gem,
-      features: [
-        "Everything in Pro",
-        // @sourced download-interstitial.tsx: `watchAllowed = plan !== "business"` — Business is the only plan gated on nothing, so 100% is literal, not rounded.
-        "100% ad-free — every surface, including your download history",
-        "Creator analytics — per-post views, engagement & audience growth",
-        "10,000 downloads/day",
-        "Unlimited private cloud storage",
-        "API access — 50,000 requests a day, the highest limit",
-      ],
+      features: [...BUSINESS_FEATURES],
       cta: `Get ${pricing.business.name}`,
       href: "/login?next=/pricing",
       prestige: true,
@@ -280,6 +259,9 @@ export default async function PricingPage() {
                     <t.icon className="h-5 w-5" />
                   </span>
                   <h2 className="text-lg font-bold">{t.name}</h2>
+                  {/* The one shared PRO / BUSINESS mark, so the badge on a tier card
+                      and the badge beside a gated control are the same object. */}
+                  {t.id === "pro" ? <ProBadge /> : t.id === "business" ? <ProBadge tier="business" /> : null}
                 </div>
 
                 {/* Price */}

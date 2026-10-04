@@ -11,7 +11,7 @@ import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media"
 import { toast } from "@/features/ui/toast";
 import { isIosDevice, saveBlob, saveFilesToDevice, saveToDevice } from "@/lib/client-download";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
-import { DOWNLOAD_502_MESSAGE } from "@/lib/downloads/failure-copy";
+import { DOWNLOAD_502_MESSAGE, DOWNLOAD_FAILED_MESSAGE, downloadFailureMessage } from "@/lib/downloads/failure-copy";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { MediaKind, PlatformId } from "@/types";
 
@@ -474,9 +474,16 @@ async function failureMessage(res: Response): Promise<string> {
     /* not JSON — fall through to the status */
   }
   // 429 is the one status worth naming in plain words even without a body: it
-  // is a limit, not a fault, and "HTTP 429" reads like something broke.
+  // is a limit, not a fault, and "HTTP 429" reads like something broke. It also
+  // deliberately does NOT get the Pro "restricted videos" line — see the note on
+  // DOWNLOAD_FAILED_MESSAGE: a quota is not a restriction.
   if (res.status === 429) return "Daily download limit reached. Try again tomorrow or upgrade.";
-  return `HTTP ${res.status}`;
+  /*
+    Owner, 2026-10-04: "make all download errors message, says upgrade to pro".
+    This was `HTTP ${res.status}` — which reads as the site being broken, when a
+    403 here usually means a platform refused US, the exact case the line is for.
+  */
+  return downloadFailureMessage(res.status);
 }
 
 async function run(id: string) {
@@ -710,7 +717,15 @@ async function run(id: string) {
         action: isFree ? { label: "Go Pro", onClick: () => window.location.assign("/pricing") } : undefined,
       });
     } else {
-      toast("Download failed — tap retry", "error");
+      /*
+        Owner, 2026-10-04. "Download failed — tap retry" named the action and
+        not the reason; this names both, and points at the one thing that
+        actually changes the outcome for a platform-refused link.
+      */
+      toast(DOWNLOAD_FAILED_MESSAGE, "error", {
+        duration: 8000,
+        action: { label: "Go Pro", onClick: () => window.location.assign("/pricing") },
+      });
     }
   } finally {
     clearTimeout(slowTimer);

@@ -46,6 +46,14 @@ var SWX = (self.SWX = self.SWX || {});
 // Behaviour change in an already-installed worker, so it needs a bump to
 // activate at all — the v14 note below is the same situation.
 //
+// v24 (2026-10-04): `/launch.html` replaced the static "Frenz" caption with the
+// animated italic "FrenzSave" brand-gradient wordmark. `/launch.html` is in
+// PRECACHE_DOCUMENTS and served CACHE-FIRST, so an installed PWA keeps serving
+// the copy it already has until this number changes — which is exactly what
+// happened: the owner deployed the new wordmark, confirmed it live on the
+// origin, and still saw the old screen on their phone. Same situation as the
+// v15 and v19 notes below, which were both bumps for this same file.
+//
 // v19 (2026-09-03): `/launch.html` now defers its hand-off past the first paint
 // (owner: "the pwa still shows white for long before showing the F loader"). Its
 // inline script ran in the same task as the parse, so location.replace() fired
@@ -86,7 +94,7 @@ var SWX = (self.SWX = self.SWX || {});
 // navigation's RSC payload the way v21 revalidates a document — the "A new
 // version is ready" screen that stuck for two hours after a deploy. A
 // submodule change; must bump.
-SWX.VERSION = "v23";
+SWX.VERSION = "v24";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

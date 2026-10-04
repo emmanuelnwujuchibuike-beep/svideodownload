@@ -115,7 +115,26 @@ const V3: readonly string[] = [
 ];
 
 export const ELEVENLABS_TTS_MODELS: Readonly<Record<string, ElevenLabsTtsModel>> = {
-  "elevenlabs/eleven_v3": { modelId: "eleven_v3", label: "ElevenLabs v3 — the most expressive, 70+ languages", languageCodeParam: false, maxCharacters: 5_000, languages: [...V3, ...AUTO_DETECTED_EXTRAS] },
+  /*
+    ── v4, the vendor's current flagship (added 2026-10-04) ──────────────────
+
+    ElevenLabs shipped Eleven v4 and v4 Turbo on 2026-09-28 — "our most emotive,
+    high quality speech synthesis model", ranked first by Artificial Analysis.
+    `eleven_v4` is the quality model (content, audiobooks, character voiceover —
+    which is exactly what Text to Audio and a cloned voice are for);
+    `eleven_v4_turbo` is the low-latency variant (~150 ms to first speech) and is
+    offered but not defaulted, because nothing here is a live conversation.
+
+    ⚠️ `maxCharacters` is held at v3's 5,000 and the language list is v3's.
+    Both are floors, not measurements: the vendor documents v4 as having BROADER
+    language coverage than v3, but does not publish a per-model character
+    ceiling this could be read from. Under-promising costs a long passage a
+    split; inventing a higher ceiling would cost a member a rejected request
+    after they wrote it. Raise both once one real generation has measured them.
+  */
+  "elevenlabs/eleven_v4": { modelId: "eleven_v4", label: "ElevenLabs v4 — the newest and most expressive", languageCodeParam: false, maxCharacters: 5_000, languages: [...V3, ...AUTO_DETECTED_EXTRAS] },
+  "elevenlabs/eleven_v4_turbo": { modelId: "eleven_v4_turbo", label: "ElevenLabs v4 Turbo — v4 quality, lowest latency", languageCodeParam: false, maxCharacters: 5_000, languages: [...V3, ...AUTO_DETECTED_EXTRAS] },
+  "elevenlabs/eleven_v3": { modelId: "eleven_v3", label: "ElevenLabs v3 — very expressive, 70+ languages", languageCodeParam: false, maxCharacters: 5_000, languages: [...V3, ...AUTO_DETECTED_EXTRAS] },
   "elevenlabs/eleven_multilingual_v2": { modelId: "eleven_multilingual_v2", label: "ElevenLabs Multilingual v2 — stable, 29 languages", languageCodeParam: false, maxCharacters: 10_000, languages: MULTILINGUAL_V2 },
   "elevenlabs/eleven_turbo_v2_5": { modelId: "eleven_turbo_v2_5", label: "ElevenLabs Turbo v2.5 — fast, 32 languages", languageCodeParam: true, maxCharacters: 40_000, languages: V2_5 },
   "elevenlabs/eleven_flash_v2_5": { modelId: "eleven_flash_v2_5", label: "ElevenLabs Flash v2.5 — fastest, 32 languages", languageCodeParam: true, maxCharacters: 40_000, languages: V2_5 },

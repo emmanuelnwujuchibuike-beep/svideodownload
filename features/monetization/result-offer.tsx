@@ -100,7 +100,16 @@ export function ResultOffer() {
     <UpsellCard
       icon={<Zap className="h-6 w-6" />}
       title={upgradeHeadline("free")}
-      body="Go Pro for an ad-free experience, faster downloads and batch saving."
+      /*
+        🔴 `offer.blurb`, not a string of its own (2026-10-04). The comment two
+        lines up already claimed this was "routed through the shared helper
+        anyway so there is exactly one place this wording lives" — and then the
+        body overrode it with a hardcoded sentence. THIS is the card the owner
+        was looking at when they said the Go Pro buttons never changed: the
+        earlier fix landed on `tired-of-ads.tsx` and on the helper, and this
+        line ignored both.
+      */
+      body={offer.blurb}
       href={offer.href}
       cta={offer.label}
     />

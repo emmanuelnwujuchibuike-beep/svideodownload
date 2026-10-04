@@ -74,7 +74,14 @@ describe("the configuration and the admin switch", () => {
   it("defaults to the DIRECT ElevenLabs API and 500 free characters a month", () => {
     const c = cfg();
     expect(c.route).toBe("elevenlabs");
-    expect(activeTextToAudioModel(c)).toBe("elevenlabs/eleven_v3");
+    /*
+      v3 → v4 (owner, 2026-10-04: "use their most latest and best model
+      suitable"). ElevenLabs shipped v4 on 2026-09-28 as their flagship. Pinned
+      here on purpose: the default model is what every member gets and what the
+      pricing was tuned against, so moving it should be a visible line in a diff
+      rather than something that drifts.
+    */
+    expect(activeTextToAudioModel(c)).toBe("elevenlabs/eleven_v4");
     expect(c.freeCharactersPerMonth).toBe(500);
   });
   it("accepts only the model ids its route offers, and keeps the current one otherwise", () => {

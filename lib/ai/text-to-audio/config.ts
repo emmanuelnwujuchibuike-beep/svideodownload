@@ -27,7 +27,7 @@ export const TEXT_TO_AUDIO_ROUTES: readonly TextToAudioRoute[] = ["replicate", "
 /** The model ids each route accepts — the adapters' own registries (lib/ai/voice/elevenlabs-models.ts). */
 export const TEXT_TO_AUDIO_MODEL_IDS: Record<TextToAudioRoute, readonly string[]> = {
   replicate: ["elevenlabs/v3", "elevenlabs/v2-multilingual", "elevenlabs/turbo-v2.5", "elevenlabs/flash-v2.5"],
-  elevenlabs: ["elevenlabs/eleven_v3", "elevenlabs/eleven_multilingual_v2", "elevenlabs/eleven_turbo_v2_5", "elevenlabs/eleven_flash_v2_5"],
+  elevenlabs: ["elevenlabs/eleven_v4", "elevenlabs/eleven_v4_turbo", "elevenlabs/eleven_v3", "elevenlabs/eleven_multilingual_v2", "elevenlabs/eleven_turbo_v2_5", "elevenlabs/eleven_flash_v2_5"],
 };
 
 export interface TextToAudioModelChoice {
@@ -104,7 +104,14 @@ export const TEXT_TO_AUDIO_DEFAULTS: TextToAudioConfig = {
   route: "elevenlabs",
   models: {
     replicate: model("elevenlabs/v3", "ElevenLabs v3 through Replicate — an async prediction; the 26 named voices."),
-    elevenlabs: model("elevenlabs/eleven_v3", "ElevenLabs v3 through the direct API — synchronous; the account's imported voices."),
+    /*
+      🔴 v4 (owner, 2026-10-04: "use their most latest and best model
+      suitable"). The QUALITY model, not Turbo: nothing in Text to Audio is a
+      live conversation, so v4 Turbo's ~150 ms latency buys nothing here and
+      expressiveness is the whole product. Turbo stays selectable above for an
+      operator who wants it.
+    */
+    elevenlabs: model("elevenlabs/eleven_v4", "ElevenLabs v4 through the direct API — the newest and most expressive; synchronous."),
   },
   minimumChargeCents: 0,
   maximumCharacters: 5_000,

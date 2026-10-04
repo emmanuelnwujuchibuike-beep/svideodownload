@@ -138,6 +138,28 @@ const V2_5_CAPABILITY: VoiceSettingsCapability = { stabilityChoices: [], style: 
  */
 export function voiceSettingsCapability(model: string): VoiceSettingsCapability {
   const m = model.toLowerCase();
+  /*
+    ── 🔴 v4 IS MATCHED FIRST, AND IT HAS TO BE (2026-10-04) ────────────────
+
+    Two traps if it is not. `eleven_v4` does not contain "v3", so it would fall
+    through every branch below to `V2_CAPABILITY` — and `eleven_v4_turbo`
+    contains "turbo", so it would be caught by the turbo branch and treated as
+    Turbo v2.5. Two different wrong answers for one new family, silently.
+
+    ⚠️ The conservative capability is deliberate and is NOT a claim about v4.
+    ElevenLabs does not publish which `voice_settings` v4 reads, and there is no
+    key on this machine to ask the API with. So v4 is given v3's shape — a
+    stability of exactly 0, 0.5 or 1 and no style/boost/speed — because those
+    values are valid under BOTH regimes: if v4 takes the continuous 0–1 range,
+    0.5 is simply a coarser point on it; if v4 restricts stability the way v3
+    does, a continuous 0.45 would be a REJECTED REQUEST and the feature would be
+    dead. One of those failure modes is recoverable and the other is an outage.
+
+    This is also no worse than today: v3 is the current default and already
+    sends neither style nor speaker boost. Widen it once one real generation has
+    confirmed what v4 accepts — that is a two-line change here.
+  */
+  if (m.includes("v4")) return V3_CAPABILITY;
   if (m.includes("v3")) return m.includes("2.5") || m.includes("v2_5") ? V2_5_CAPABILITY : V3_CAPABILITY;
   if (m.includes("turbo") || m.includes("flash")) return V2_5_CAPABILITY;
   return V2_CAPABILITY;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SuggestList } from "@/features/app-shell/suggest-list";
 import type { HomeProfile } from "@/lib/social/home";
 import type { SuggestedCreator } from "@/lib/social/suggest";
+import { upgradeCta } from "@/lib/monetization/upgrade-cta";
 import { formatCompactNumber } from "@/lib/utils";
 
 // Representative trending tags — a hashtag system isn't modelled yet, so these
@@ -100,7 +101,10 @@ export function RightRail({
         <div aria-hidden className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/15 blur-2xl" />
         <Rocket className="h-7 w-7" />
         <p className="mt-3 text-base font-bold">Go Premium</p>
-        <p className="mt-1 text-xs text-white/80">Unlock all features and enjoy an ad-free experience.</p>
+        {/* The shared line (2026-10-04) — "unlock all features" said nothing
+            and led with the ad removal, which is the framing the owner asked to
+            drop. */}
+        <p className="mt-1 text-xs text-white/80">{upgradeCta("free")?.blurb}</p>
         <Link href="/pricing" className="mt-4 inline-block rounded-xl bg-white px-4 py-2 text-xs font-semibold text-slate-900 shadow transition hover:bg-white/90">
           Upgrade Now
         </Link>

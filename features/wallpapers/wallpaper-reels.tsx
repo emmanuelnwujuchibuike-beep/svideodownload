@@ -14,6 +14,7 @@ import { startDownload } from "@/features/downloads/manager";
 import { resolutionBadge, wallpaperCredit, type Wallpaper, type WallpaperComment } from "@/lib/wallpapers";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { upgradeCta } from "@/lib/monetization/upgrade-cta";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -815,9 +816,11 @@ function UpgradeSheet({ onClose }: { onClose: () => void }) {
           </span>
           <div className="min-w-0">
             <p className="font-bold">Upgrade to Pro</p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              An ad-free experience, unlimited downloads and exclusive premium wallpapers.
-            </p>
+            {/* 🔴 Was "unlimited downloads and exclusive premium wallpapers"
+                (2026-10-04). Pro is 1,000 downloads a day, not unlimited, and
+                nothing in the library is gated to Pro — both halves were false.
+                The shared helper is the one place this wording lives. */}
+            <p className="mt-0.5 text-sm text-muted-foreground">{upgradeCta("free")?.blurb}</p>
           </div>
         </div>
         <div className="mt-4 flex gap-2">

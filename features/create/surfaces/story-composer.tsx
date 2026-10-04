@@ -217,20 +217,46 @@ export function StoryComposer({ avatarUrl }: { avatarUrl: string | null }) {
           {err ? <p className="mt-2 text-sm text-rose-400">{err}</p> : null}
 
           <div className="mt-3 flex items-center justify-end">
+            {/*
+              ── 🔴 THE BUTTON WAS RE-MEASURING ON EVERY PERCENT (owner,
+                 2026-10-04: "the post story button is glitching when it's
+                 loading") ────────────────────────────────────────────────────
+
+              Nothing here was animating. The button was simply laid out by its
+              CONTENT, and its content changes constantly while an upload runs:
+              "Your story" → "Uploading 1%" → "Uploading 11%" → "Uploading 100%".
+              Every one of those is a different string width, so the pill
+              resized on each tick, and the trailing icon swapped between a
+              spinner and a send glyph at the same moment. On a phone that reads
+              as the button twitching — which is exactly what the screenshot
+              caught mid-reflow.
+
+              Three changes, each removing one source of movement:
+
+                · `w-full justify-center` with a `sm:w-auto sm:min-w-[11.5rem]`
+                  floor — the pill no longer grows and shrinks with its label;
+                · `tabular-nums` — "11%" and "88%" are the same width, so the
+                  digits stop jittering inside a stable box;
+                · the trailing slot is a FIXED 1rem square that always exists,
+                  so swapping spinner → icon → nothing never changes the
+                  layout.
+            */}
             <button
               type="button"
               onClick={publish}
               disabled={busy || sent}
-              className="inline-flex items-center gap-2 rounded-full bg-white py-2 pl-2 pr-4 text-sm font-bold text-black transition hover:opacity-90 disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white py-2 pl-2 pr-4 text-sm font-bold tabular-nums text-black transition-opacity hover:opacity-90 disabled:opacity-60 sm:w-auto sm:min-w-[11.5rem]"
             >
-              <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-600">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-blue-500 to-violet-600">
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
                 ) : null}
               </span>
-              {sent ? "Shared" : busy ? (busyText ?? "Sharing…") : "Your story"}
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : sent ? null : <Send className="h-4 w-4" />}
+              <span className="min-w-0 truncate">{sent ? "Shared" : busy ? (busyText ?? "Sharing…") : "Your story"}</span>
+              <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center">
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : sent ? null : <Send className="h-4 w-4" />}
+              </span>
             </button>
           </div>
         </div>

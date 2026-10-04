@@ -365,18 +365,42 @@ export function HistoryPanel({
   };
 
   if (!ready) {
-    // The server render and the hydration frame: the store has not read the
-    // device yet, so neither "empty" nor a list is true. A quiet skeleton in
-    // the grid's own shape, gone the moment the first snapshot lands.
+    /*
+      ── 🔴 THE SKELETON WAS INVISIBLE (owner, 2026-10-04) ──────────────────
+
+      "When I enter the history page the first time it shows this white half
+      screen for about a second or 2 before showing the page. It looks very
+      unprofessional and slow."
+
+      The skeleton was never missing — it was unreadable. In light mode
+      `--background` is 98% lightness and `--secondary` is 97%; at `/70` and
+      `/60` alpha these blocks landed around **97.7%**, a 0.3% difference from
+      the page behind them. So a correctly-structured loading state painted as
+      a blank white screen, and `animate-pulse` pulsed something nobody could
+      see.
+
+      `bg-foreground/[0.07]` instead of a `--secondary` tint, because it is the
+      one expression that works in BOTH themes: `--foreground` is near-black on
+      light (→ ~93% lightness, calm but clearly there) and near-white on dark
+      (→ ~11% over a 5% background). A fixed grey would have to be written twice
+      and one of the two would drift.
+
+      ⚠️ The 1–2 seconds themselves are hydration, not a fetch: this page is
+      `force-static` and the store reads `localStorage`, which cannot happen on
+      the server. That wait is real and this does not remove it — it makes the
+      wait look like loading instead of like a broken page, which is what was
+      actually being reported.
+    */
     if (!standalone && !embedded) return null;
+    const block = "animate-pulse bg-foreground/[0.07] motion-reduce:animate-none";
     return (
       <section aria-busy="true" aria-label="Loading your history" className={cn(standalone ? "pb-16 pt-2" : "py-14")}>
         <div className={cn(embedded ? "" : "mx-auto max-w-6xl px-2 sm:px-4")}>
-          <div className="h-24 animate-pulse rounded-3xl bg-secondary/70" />
-          <div className="mt-4 h-11 animate-pulse rounded-2xl bg-secondary/60" />
+          <div className={cn("h-24 rounded-3xl", block)} />
+          <div className={cn("mt-4 h-11 rounded-2xl", block)} />
           <div className="mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
             {Array.from({ length: 12 }, (_, i) => (
-              <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-secondary/60" />
+              <div key={i} className={cn("aspect-[3/4] rounded-xl", block)} />
             ))}
           </div>
         </div>

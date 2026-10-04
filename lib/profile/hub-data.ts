@@ -361,6 +361,50 @@ export async function creatorTotals(profileId: string): Promise<{
         topPost = { id: r.id, title: r.title, thumbnailUrl: r.thumbnail_url ?? r.media_url, views: v, likes: l };
       }
     }
+
+    /*
+      ── Wallpapers count too (owner, 2026-10-04) ──────────────────────────────
+
+      "Let users uploaded Wallpapers likes and views also count on profile
+      engagement."
+
+      A member who shares a wallpaper to the public library is publishing, and
+      the likes, views, saves and comments it collects are theirs — but this
+      function only ever read `posts`, so all of it was invisible on their
+      profile and contributed nothing to reputation or achievements.
+
+      🔴 MEMBER UPLOADS ONLY (`source = 'member'`). A curated admin wallpaper
+      can carry `uploaded_by`, and crediting an operator's catalogue to whoever
+      happened to import it would inflate a profile with work they did not do.
+      The same rule the engagement notifier uses, for the same reason.
+
+      ⚠️ `views_count` and `likes_count` on a wallpaper include the operator's
+      BOOST columns (migration 0108). That is deliberate and consistent: those
+      boosted figures are already what the wallpaper itself displays publicly,
+      so excluding them here would make a profile disagree with the page the
+      visitor just came from. `downloads_count` carries no boost and is not
+      folded in — it is not an engagement signal, it is a delivery count.
+
+      Separately caught: a wallpaper query failing must not zero a member's
+      post totals, which is what a single shared try/catch would do.
+    */
+    try {
+      const { data: walls } = await createAdminClient()
+        .from("wallpapers")
+        .select("likes_count, saves_count, comments_count, views_count, views_boost, likes_boost, saves_boost")
+        .eq("uploaded_by", profileId)
+        .eq("source", "member")
+        .eq("status", "published");
+      for (const w of (walls ?? []) as Record<string, number | null>[]) {
+        likes += Math.max(0, (w.likes_count ?? 0) + (w.likes_boost ?? 0));
+        saves += Math.max(0, (w.saves_count ?? 0) + (w.saves_boost ?? 0));
+        views += Math.max(0, (w.views_count ?? 0) + (w.views_boost ?? 0));
+        comments += w.comments_count ?? 0;
+      }
+    } catch {
+      /* a wallpaper read failing must never cost the member their post totals */
+    }
+
     return { likes, views, comments, shares, saves, topPost };
   } catch {
     return { likes: 0, views: 0, comments: 0, shares: 0, saves: 0, topPost: null };

@@ -302,6 +302,42 @@ export function StoryViewer({
   }, [group, onGroupSeen]);
 
   /*
+    ── 🔴 PRELOAD THE NEXT ONE (owner, 2026-10-04: "stories delays to load
+       when moving to the next story") ──────────────────────────────────────
+
+    There was no preloading of any kind: a story's media began downloading only
+    once it BECAME the current one, so every tap paid a full fetch before
+    anything painted. On a phone that is the pause being described.
+
+    What is preloaded is deliberately narrow — exactly one item ahead, and only
+    while somebody is actively watching:
+
+      · an image story → the image itself, which is the whole payload and the
+        common case;
+      · a video story  → its stored poster (0083), NOT the MP4. The poster is
+        tens of kilobytes and makes the next frame paint instantly while the
+        video buffers behind it; speculatively pulling megabytes of H.264 the
+        member may never reach is the kind of consumption this project has a
+        standing rule against.
+
+    One ahead, not the whole group, for the same reason. This is demand-driven
+    — it only runs because a story is open and being watched — so it costs
+    nothing when nobody is looking, which is the test that rule actually sets.
+  */
+  useEffect(() => {
+    if (!group) return;
+    const next = group.stories[si + 1] ?? groups[gi + 1]?.stories[0];
+    if (!next) return;
+    const href = next.mediaKind === "image" ? next.mediaUrl : next.thumbnailUrl;
+    if (!href) return;
+    // `window.Image`, not `Image` — `next/image` is imported as `Image` in this
+    // file and shadows the DOM constructor.
+    const img = new window.Image();
+    img.decoding = "async";
+    img.src = href;
+  }, [group, groups, gi, si]);
+
+  /*
     ── Record the view, per STORY (2026-10-04, migration 0181) ───────────────
 
     Keyed on the individual story, not the group: the author's question is "who
@@ -677,7 +713,33 @@ export function StoryViewer({
         asking the MEDIA to stop short, which is the one thing an immersive
         full-bleed video viewer specifically should not do.
       */}
-      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
+      {/*
+        ── 🔴 THE MEDIA STOPS AT THE SAFE AREA; THE CHROME FLOATS ON IT ──────
+        (owner, 2026-10-04, with a screenshot of the Dynamic Island)
+
+        "The media is supposed to go under the progress bar, the progress bar
+        should float on top. But the media should not cross the safe area."
+
+        Those are two separate requirements and the old `inset-0` satisfied
+        neither cleanly: the media ran under the notch (crossing the safe area),
+        and because it did, the progress bar ended up reading as part of a black
+        band above the picture rather than as something lying ON it.
+
+        Now: `top` is the safe inset, so the picture begins exactly at the line
+        the status bar ends on and never passes behind it — and the progress bar
+        keeps its own `calc(0.625rem + safe-top)` offset, which now places it
+        just INSIDE the media's top edge. Same two elements, the relationship
+        the owner is asking for.
+
+        The note above is the superseded 2026-08-16 reasoning and is kept
+        deliberately: it argued an immersive viewer should never make the media
+        stop short, which is true of the BOTTOM (still `0`) and is what the new
+        instruction overrides for the top.
+      */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center"
+        style={{ top: "var(--frenz-safe-top, 0px)" }}
+      >
         {story.mediaKind === "video" ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video

@@ -838,6 +838,23 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-[calc(0.55rem+var(--frenz-safe-top))]"
       >
+      {/*
+        🔴 The scrim, added with the full-bleed stage (2026-10-04). The media
+        now runs to the physical top of the screen, so the progress bar, the
+        name and the time are drawn over whatever the first frame happens to be
+        — and a pale frame made all three unreadable.
+
+        A gradient, not a bar: it is strongest at the very top where the status
+        bar and the stripe sit, and gone by the time it reaches the picture, so
+        nothing is permanently covered. `-z-10` within the stack and
+        `pointer-events-none` so it can never eat a tap meant for the video.
+        One painted layer, no blur — this sits over playing video, where a
+        backdrop-filter is the expensive thing.
+      */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[7.5rem] bg-gradient-to-b from-black/55 via-black/25 to-transparent"
+      />
       <div className="pointer-events-auto">
       {/* Status — segmented, like Stories/WhatsApp: one bar per queued item, the
           current one fills with real playback progress (a non-video item reads as
@@ -976,15 +993,31 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           reached the bottom 0"). iOS-gallery tap zones sit over the media, under
           the chrome.
 
-          🔴 Top is padded to `--frenz-safe-top` (owner, 2026-08-18: "the image
-          doesn't reach the safe area boundary, I want it to reach the safe area
-          tip at the top but not cross it... I only see a black top"). Before this,
-          the media extended UNDER the status bar/notch same as the bottom, which
-          on-device read as a dead black strip with the status-bar segments
-          missing from it rather than a clean edge — the status bar's own row
-          (below) already computes its `top` off the same variable, so it now sits
-          flush against the media's new top edge instead of floating in extra
-          space that used to be there for no visible reason. */}
+          ── 🔴 THE RULE, STATED ONCE (owner, 2026-10-04) ────────────────────
+
+          "The media is supposed to go under the progress bar, the progress bar
+          should float on top. But the media should not cross the safe area."
+
+          Two requirements, and they are not in tension once separated:
+
+            · the media's TOP is the safe-area line — it never passes behind
+              the status bar or the notch (this `pt`, kept from 2026-08-18);
+            · the chrome is `absolute`, so the stripe, the avatar and the title
+              lie ON the picture rather than on a black band above it.
+
+          The same rule now governs the story viewer
+          (`features/app-shell/dashboard/stories-row.tsx`), so the two viewers
+          cannot drift into two different answers to the same question.
+
+          🔴 I briefly removed this inset to make the stage full-bleed to the
+          physical top, reading an earlier instruction that way. The clarified
+          one is explicit that the media must NOT cross the safe area, so the
+          inset stays and the floating-chrome half is what does the work. The
+          scrim below is what makes that readable over a pale first frame.
+
+          The original 2026-08-18 note, still the reason this inset exists: "the
+          image doesn't reach the safe area boundary, I want it to reach the
+          safe area tip at the top but not cross it... I only see a black top." */}
       <div className="relative flex min-h-0 flex-1 items-center justify-center pt-[var(--frenz-safe-top)]">
         {error ? (
           <div className="max-w-sm px-6 text-center text-white">

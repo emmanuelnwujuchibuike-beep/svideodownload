@@ -80,10 +80,38 @@ const brandDisplay = Outfit({
   preload: false,
 });
 
-// ISR: static pages (incl. the global footer's admin-managed Recommended Tools)
-// regenerate at most once a minute, so monetization changes go live without a
-// redeploy. Dynamic pages (/admin, /account, /login) set their own config.
-export const revalidate = 60;
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  ISR — 🔴 A CLOCK ON THE ROOT LAYOUT IS A CLOCK ON THE WHOLE SITE
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * This was `60`, to let the global footer's admin-managed Recommended Tools go
+ * live without a redeploy. What it actually bought, found on the bill
+ * 2026-10-04 ($20 of included credit gone with 14 days left in the cycle):
+ *
+ * Next uses the LOWEST `revalidate` in the tree, so this one number governed
+ * EVERY static page under it — the landing, 39 SEO pages, academy, blog, help,
+ * learn, topics, trust. Each of them re-rendered on the server at most a minute
+ * after any request and rewrote its cache entry, which bills four lines at
+ * once: ISR Writes, Fast Origin Transfer (the fresh HTML + RSC payload pushed
+ * origin → edge), Fluid Active CPU (the render) and Observability Events (the
+ * invocation). Crawlers alone kept that spinning around the clock, so the
+ * largest items on the bill were pages nobody had opened. `Function
+ * Invocations` — the line real visitors cause — was $1.13 of $28.54.
+ *
+ * 🔴 Freshness here is an EVENT, not a clock: the only thing that can change
+ * this chrome is an admin pressing Save, and that already calls
+ * `revalidatePath("/", "layout")` (app/api/admin/landing/route.ts,
+ * app/api/admin/platform-status/route.ts) — which drops every page under this
+ * layout in one call. So a save is still live within seconds, and the daily
+ * window below is only the backstop for a cache that was never invalidated.
+ *
+ * A page that genuinely needs to be fresher sets its own smaller value; it then
+ * pays for itself alone instead of billing the whole catalogue.
+ * See the standing rule: never ship an implementation that consumes while
+ * nobody is looking.
+ */
+export const revalidate = 86400;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -708,14 +708,22 @@ export async function POST(request: Request) {
     "shows old, refresh shows current" report, and the more likely trigger the
     fresher this settings panel gets used.
 
-    `revalidatePath("/")` clears the cached HTML the instant a save succeeds,
-    so the very next visitor (including the admin, re-checking their own
-    change) gets the regenerated page on their FIRST request. The 60s
-    time-based revalidate stays as a safety net for any other write path to
-    landing-visible data that doesn't (yet) call this — belt and braces, not
-    a replacement for it.
+    `revalidatePath` clears the cached HTML the instant a save succeeds, so the
+    very next visitor (including the admin, re-checking their own change) gets
+    the regenerated page on their FIRST request.
+
+    🔴 `"layout"`, and `"/"` is not the point of it (2026-10-04). The settings
+    saved here include the GLOBAL FOOTER's Recommended Tools, which render on
+    every static page in the app — the 39 SEO pages, academy, blog, help, learn,
+    topics, trust — not just the landing. Invalidating one path left all of those
+    stale until their own timer turned over, and the timer was the only thing
+    covering them. That timer was a minute, on the root layout, which is to say
+    on the whole catalogue; it has been raised to a day because it was the single
+    largest thing on the Vercel bill and it ran whether or not anyone visited.
+    This call is what replaces it: `revalidatePath("/", "layout")` drops every
+    page under the root layout at once, on the one event that can change them.
   */
-  revalidatePath("/");
+  revalidatePath("/", "layout");
 
   /*
     ── Warm the optimizer BEFORE anyone else hits it (owner, 2026-08-16: "when

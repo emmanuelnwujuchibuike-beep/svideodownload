@@ -90,8 +90,14 @@ export async function POST(request: Request) {
       turns over. The badge is immediate on a fresh browser request and eventual
       in the PWA.
     */
-    revalidatePath("/");
-    revalidatePath("/downloads");
+    /*
+      🔴 `"layout"` (2026-10-04): an outage badge is global chrome, so naming two
+      paths left every other page showing "all systems normal" until its own
+      timer turned over — and that timer is now a day, not a minute, because a
+      one-minute clock on the root layout was regenerating the whole catalogue
+      around the clock for nobody. One call, every page under the root layout.
+    */
+    revalidatePath("/", "layout");
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Couldn't save platform status." }, { status: 500 });

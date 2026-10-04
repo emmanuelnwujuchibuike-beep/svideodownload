@@ -186,7 +186,15 @@ export function aiToolCards(
       icon: Sparkles,
       tint: "bg-violet-500/[0.10] text-violet-600 dark:text-violet-300",
       name: "Text to Video",
-      blurb: "Create a video from a written description.",
+      /*
+        🔴 The style belongs in the blurb (owner, 2026-10-04: "make the text to
+        video and image to video says realistic, cartoon or anyhow described").
+        "Create a video from a written description" is true and says nothing —
+        it reads like a constrained tool. The model takes the style FROM the
+        prompt, so the card has to say that the look is the member's to choose,
+        or nobody discovers it.
+      */
+      blurb: "Describe it and watch it film — realistic, cartoon, anime, any style.",
       href: textToVideoHref,
       scope: false,
       flow: false,
@@ -197,7 +205,8 @@ export function aiToolCards(
       icon: ImageIcon,
       tint: "bg-indigo-500/[0.10] text-indigo-600 dark:text-indigo-300",
       name: "Image to Video",
-      blurb: "Animate a photo into a short video.",
+      /* Same reason as Text to Video above: the style is described, not fixed. */
+      blurb: "Bring a photo to life — realistic, cartoon, anime, however you describe it.",
       href: imageToVideoHref,
       scope: false,
       flow: false,

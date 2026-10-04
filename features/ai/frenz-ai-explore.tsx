@@ -211,7 +211,23 @@ export function FrenzAIExplore({
   const disabled: Partial<Record<AiToolId, string>> = {};
 
   return (
-    <div className="pb-24">
+    /*
+      🔴 `pb-24` → `pb-10` (owner, 2026-10-04: "there is too much gap between
+      the Frenz AI back button and the footer in the AI features page").
+
+      The 6rem was this page reserving clearance for the floating bottom nav by
+      hand. It should not: the nav's box is published once as
+      `--frenz-nav-clearance` (globals.css) and the surfaces that actually sit
+      against it use `.frenz-nav-pad`, which also zeroes itself at `lg` — a
+      hardcoded `pb-24` does neither. And on this page the FOOTER sits between
+      the content and the nav and already clears it, so the reservation was
+      protecting against something that was never there, leaving ~96px of dead
+      white above the footer.
+
+      `pb-10` matches `frenz-ai-usage-page.tsx`, the sibling that renders in both
+      the marketing and the signed-in tree exactly as this one does.
+    */
+    <div className="pb-10">
       <header className="mt-4">
         {/*
           The shared Frenz AI hero (2026-09-27). This is the last page-level

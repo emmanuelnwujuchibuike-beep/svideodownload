@@ -3,14 +3,9 @@
 import {
   ArrowRight,
   AudioLines,
-  ChevronRight,
   Clapperboard,
   ImagePlus,
-  Mic,
-  MousePointerClick,
-  ScanFace,
   Sparkles,
-  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -61,42 +56,62 @@ import { cn } from "@/lib/utils";
  * The one fetch is the entitlement (for `offered` and the plan chip); it paints
  * from its last answer first, so the page never reflows on entry.
  */
+/**
+ * ── 🔴 REWRITTEN 2026-10-04: THIS CARD DESCRIBED A PRODUCT THAT NO LONGER
+ *    EXISTS ──────────────────────────────────────────────────────────────────
+ *
+ * Owner: "this page still describes the old replicate features and design,
+ * update it and make each card less cluster."
+ *
+ * Every one of the four groups was Character Replace's settings panel, written
+ * when that was the only tool: "Face Only / Face + Head / Upper Body / Full
+ * Character" are its four scopes, "Voice Replace", "Trim & Quality", "Original
+ * Audio" and "Your Recording" are its options. Part 5 retired it — the direct
+ * Kling API has no endpoint that takes a base video plus a character — so the
+ * front door of the studio was advertising, in its entirety, the one thing the
+ * studio cannot do. Every name here now resolves to a page that exists and a
+ * feature registered in `AI_FEATURES`.
+ *
+ * ── Why the bullet lists are gone ──────────────────────────────────────────
+ *
+ * That is the "cluster": each card carried a dot-marked list of sub-options AND
+ * a paragraph explaining them, so four cards put twenty-odd pieces of text on a
+ * screen whose entire job is to get somebody to press one button. A tool is a
+ * title and a sentence; the full list is the Explore page's job
+ * (`aiToolCards`), which is one tap away and is the studio's real table of
+ * contents.
+ */
 const CATEGORIES = [
   {
-    id: "character",
-    icon: ScanFace,
+    id: "text_to_video",
+    icon: Sparkles,
     tint: "bg-violet-500/[0.10] text-violet-600 dark:text-violet-300",
-    title: "Character & Face",
+    title: "Text to Video",
     detail:
-      "Replace a face, a head, the upper body or the whole character — the movement, expressions and scene stay.",
-    items: ["Face Only", "Face + Head", "Upper Body", "Full Character"],
+      "Describe a scene and get it filmed — realistic, cartoon, anime, or any style you can put into words.",
   },
   {
-    id: "voice",
-    icon: Mic,
+    id: "image_to_video",
+    icon: ImagePlus,
     tint: "bg-blue-500/[0.10] text-blue-600 dark:text-blue-300",
-    title: "Voice",
+    title: "Image to Video",
     detail:
-      "Keep the original sound, use your own recording, or generate speech from text in a chosen voice.",
-    items: ["Voice Replace", "Text to Speech"],
+      "Give one photo motion. Say how it should move, in any style, and it becomes a clip.",
   },
   {
-    id: "video",
+    id: "lip_sync",
     icon: Clapperboard,
     tint: "bg-fuchsia-500/[0.10] text-fuchsia-600 dark:text-fuchsia-300",
-    title: "Video",
-    detail:
-      "Match the mouth to a new voice; choose the seconds to keep and the output quality.",
-    items: ["Lip Sync", "Trim & Quality"],
+    title: "Lip Sync",
+    detail: "Match any video's mouth to any voice, in any language.",
   },
   {
-    id: "audio",
+    id: "voice_audio",
     icon: AudioLines,
     tint: "bg-indigo-500/[0.10] text-indigo-600 dark:text-indigo-300",
-    title: "Audio",
+    title: "Voice & Audio",
     detail:
-      "The original audio is preserved unless you replace it — with a recording, or the sound of another video.",
-    items: ["Original Audio", "Your Recording"],
+      "Type it and hear it spoken — or clone a voice you own and keep it.",
   },
 ] as const;
 
@@ -231,26 +246,16 @@ export function FrenzAIWelcome({
                   >
                     <c.icon className="h-4 w-4" aria-hidden />
                   </span>
-                  <h3 className="text-[12px] font-bold uppercase tracking-[0.07em]">
+                  <h3 className="text-[12.5px] font-bold leading-tight tracking-[-0.01em]">
                     {c.title}
                   </h3>
                 </div>
-                {/* the capabilities: a dot-marked list that runs inline where there is room and stacks on a phone */}
-                <ul
-                  className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] font-semibold leading-snug"
-                  aria-label={`${c.title} capabilities`}
-                >
-                  {c.items.map((item) => (
-                    <li key={item} className="flex items-center gap-1.5">
-                      <span
-                        aria-hidden
-                        className="h-1 w-1 shrink-0 rounded-full bg-primary/70"
-                      />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">
+                {/*
+                  One sentence, and that is the whole card. The dot-marked list
+                  of sub-options that used to sit here is gone with the tools it
+                  listed — see the note on CATEGORIES.
+                */}
+                <p className="mt-2 text-[11.5px] leading-snug text-muted-foreground">
                   {c.detail}
                 </p>
               </li>

@@ -30,7 +30,8 @@ process.env.AI_QUOTE_SIGNING_SECRET ??= "test-signing-secret";
 describe("the feature and its funding", () => {
   it("ai_lip_sync is registered, wallet-funded like Character Replace, and the migration widens the check LAST", () => {
     expect(AI_FEATURES.find((f) => f.id === "ai_lip_sync")).toMatchObject({ label: "Lip Sync Pro", needsFinalizer: true, freeDailyJobs: 0 });
-    expect(WALLET_FUNDED_FEATURES).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone"]);
+    // 2026-10-04: the two Kling video tools joined — they spend from the same product wallet (see lib/ai/jobs.ts).
+    expect(WALLET_FUNDED_FEATURES).toEqual(["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"]);
     expect(isWalletFundedFeature("ai_lip_sync")).toBe(true);
     expect(isWalletFundedFeature("ai_clean")).toBe(false);
     const sql = src("supabase/migrations/0169_ai_lip_sync_feature.sql");

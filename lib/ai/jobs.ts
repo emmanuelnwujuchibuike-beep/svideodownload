@@ -466,9 +466,35 @@ export const AI_FEATURES: readonly AiFeatureDef[] = [
  * `feature === "ai_character_replace"` asks this instead (2026-09-21), so
  * Lip Sync Pro joined without a second copy of any of it.
  */
-export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone"];
-export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" | "ai_voice_clone" {
-  return feature === "ai_character_replace" || feature === "ai_lip_sync" || feature === "ai_text_to_audio" || feature === "ai_voice_clone";
+/*
+  ── 🔴 THE TWO KLING VIDEO TOOLS BELONG HERE, AND LEAVING THEM OUT COST MONEY ──
+
+  Found on production 2026-10-04, from the first two real Text to Video runs.
+  Both were charged and NEITHER was ever refunded:
+
+      ai_text_to_video  failed  funding=balance  charged=60
+      ai_product_ledger: processing_charge / reserved / -60   ← never released
+      ai_text_to_video  failed  funding=balance  charged=36   ← same, -36
+
+  `lib/ai/video/create.ts` funds a video through `reserveAiWalletCharge`, which
+  IS `reserveCharacterReplaceCharge` — a reservation on `ai_product_ledger`. But
+  with these two ids missing from this list, every undo fell through to the
+  legacy branch below, where `funding_source === "balance"` calls
+  `refundAiCharge` → `refund_ai_charge`: a DIFFERENT ledger, which holds no row
+  for this job. It found nothing, refunded nothing, and said nothing. The
+  reservation stayed `reserved` for ever.
+
+  That made all six undo paths silently useless for video — /start's catch, the
+  webhook, the reconciler, the stall sweep, the finalizer and cancel. The money
+  was taken at reserve time and there was no code path left that could give it
+  back.
+
+  A tool that spends from the product wallet must be named here on the SAME
+  commit that spends from it; `funding.test.ts` now fails if one is not.
+*/
+export const WALLET_FUNDED_FEATURES: readonly AiFeature[] = ["ai_character_replace", "ai_lip_sync", "ai_text_to_audio", "ai_voice_clone", "ai_text_to_video", "ai_image_to_video"];
+export function isWalletFundedFeature(feature: string | null | undefined): feature is "ai_character_replace" | "ai_lip_sync" | "ai_text_to_audio" | "ai_voice_clone" | "ai_text_to_video" | "ai_image_to_video" {
+  return feature === "ai_character_replace" || feature === "ai_lip_sync" || feature === "ai_text_to_audio" || feature === "ai_voice_clone" || feature === "ai_text_to_video" || feature === "ai_image_to_video";
 }
 
 /**

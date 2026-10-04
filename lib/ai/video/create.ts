@@ -219,7 +219,38 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
       const reservation = await reserveAiCredits({ userId: ownerId, jobId: job.id, feature: featureDef.id, plan: creditDecision.plan!, estimate: creditDecision.estimate, dailyLimit: creditDecision.dailyLimit, weeklyLimit: creditDecision.weeklyLimit, periods: currentPeriods(plans), config: plans }).catch(() => null);
       reserved = !!reservation;
     } else {
-      await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, snapshot: { totalCents: quote.totalUsdCents } as unknown as Parameters<typeof reserveAiWalletCharge>[0]["snapshot"] });
+      /*
+        ── 🔴 THE SNAPSHOT MUST CARRY THE WALLET'S CURRENCY ──────────────────
+
+        Production, 2026-10-04. This passed `{ totalCents }` alone behind an
+        `as unknown as` cast, so `snapshot.currency` was `undefined` — and
+        `reserve_product_charge` declares `p_currency text default 'NGN'`.
+        Every Kling video reservation was therefore written in NGN into a USD
+        wallet. The two real Text to Video charges are the ONLY two NGN rows in
+        the entire ledger.
+
+        That is not a cosmetic label. `refund_product_charge` (0160) refuses to
+        credit a refund whose row currency differs from the wallet's —
+        deliberately, because paying NGN minor units back into a USD wallet
+        would return ~1,335× the money. So the mis-currency made these charges
+        PERMANENTLY unrefundable by code: the guard fired, wrote nothing, and
+        returned the balance unchanged, which is why they survived every undo
+        path even after the undo paths themselves were fixed.
+
+        The currency is the operator's one setting — the same `frenzAiCurrency`
+        the two video pages already price in.
+      */
+      const snapshot = {
+        totalCents: quote.totalUsdCents,
+        currency: settings.frenzAiCurrency,
+        feature: featureId,
+        model: pipeline.model,
+        seconds: quote.seconds,
+        billableSeconds: quote.billableSeconds,
+        resolution: quote.resolution,
+        pricingVersion: quote.pricingVersion,
+      };
+      await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, snapshot: snapshot as unknown as Parameters<typeof reserveAiWalletCharge>[0]["snapshot"] });
       reserved = true;
     }
   } catch {

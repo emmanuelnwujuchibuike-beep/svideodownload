@@ -90,8 +90,16 @@ describe("the finalizer — a lease, and nobody is told 'ready' before the file 
 
   it("the refund is the idempotent product-wallet path and is recorded in the audit log", () => {
     const fail = s.slice(s.indexOf("async function failFinalize"));
-    // 2026-09-21: the finalizer serves Lip Sync Pro too — the feature is the row's, one of the two wallet-funded tools
-    expect(fail).toContain('releaseJobFunding({ job: updated, subject, feature: updated.feature === "ai_lip_sync" ? "ai_lip_sync" : "ai_character_replace"');
+    /*
+      The feature is the ROW's. 2026-10-04: this used to read
+      `updated.feature === "ai_lip_sync" ? "ai_lip_sync" : "ai_character_replace"`,
+      which labelled every other tool a Character Replace — and
+      `releaseJobFunding` branches on the feature to pick the undo.
+    */
+    expect(fail).toContain("const refundFeature = isWalletFundedFeature(updated.feature) ? updated.feature : \"ai_character_replace\";");
+    expect(fail).toContain("releaseJobFunding({ job: updated, subject, feature: refundFeature");
+    // teeth: the push must name the same tool the refund did, never a hardcoded one
+    expect(fail).toContain("notifyAiJobFailed({ userId: subject.userId, jobId: job.id, feature: refundFeature");
     expect(fail).toContain('recordJobEvent(job.id, "refund.issued"');
     expect(fail.indexOf('"refund.issued"')).toBeGreaterThan(fail.indexOf("releaseJobFunding("));
   });

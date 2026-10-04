@@ -1,4 +1,5 @@
 import type { CharacterReplaceQualityId } from "@/lib/ai/character-replace/config";
+import { isKlingOutputHost } from "@/lib/ai/kling/config";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -99,7 +100,21 @@ export function isTrustedProviderOutputUrl(url: string): boolean {
     const host = u.hostname.toLowerCase();
     if (host === "replicate.delivery" || host.endsWith(".replicate.delivery") || host === "replicate.com" || host.endsWith(".replicate.com")) return true;
     // 2026-09-21: fal.ai delivers from fal.media (v3.fal.media, v3b.fal.media, …).
-    return host === "fal.media" || host.endsWith(".fal.media");
+    if (host === "fal.media" || host.endsWith(".fal.media")) return true;
+    /*
+      🔴 2026-10-04: Kling was MISSING here, and Kling is now the only video
+      provider. This list is the finalizer's second gate — a Kling output
+      (`v15-kling-fdl.klingai.com`, verified in the Part 4 contract §3) would
+      have been refused as "provider output is not on a trusted host" AFTER the
+      member had been charged and the video generated. No Kling job had reached
+      a finalizer yet, so it had not fired; Text to Video died one check
+      earlier, on the source path.
+
+      `isKlingOutputHost` is the single source of truth for Kling's delivery
+      domains (it already guards the poller). Asking it here rather than
+      re-listing the hosts is what stops the two drifting apart.
+    */
+    return isKlingOutputHost(host);
   } catch {
     return false;
   }

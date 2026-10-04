@@ -128,8 +128,39 @@ export async function POST(request: Request) {
     first check reports "no such job".
   */
   const featureId = (await getJobAsService(jobId).catch(() => null))?.feature ?? null;
-  // Lip Sync Pro (2026-09-21) shares the Character Replace finalizer — the same lease, the same validation, the same settle-once.
-  const finalize = featureId === "ai_character_replace" || featureId === "ai_lip_sync" ? finalizeCharacterReplaceJob : finalizeAICleanJob;
+  /*
+    ── 🔴 A PROMPT-ONLY FEATURE HAS NO SOURCE, AND THIS LINE CHARGED FOR IT ───
+
+    Production, 2026-10-04. Both real Text to Video jobs, after Kling had run
+    for two minutes and the member had been charged:
+
+        FINALIZER_UNAVAILABLE
+        worker declined: AI_FINALIZATION_FAILED — no source path recorded
+
+    The two Kling video tools were not named here, so they fell through to
+    `finalizeAICleanJob` — the AI Clean MUX, whose job is to put the original
+    audio back onto a cleaned copy. Its fourth line demands `job.source_path`.
+    Text to Video's input is a PROMPT (`AI_FEATURES`: `mimeTypes: []`,
+    `maxBytes: 0`); it never has a source and never can. So this was not an
+    intermittent failure — it was every generation, for ever, after the money.
+
+    Image to Video is the same: nothing in `lib/ai/video/**` or
+    `lib/ai/kling/**` writes `source_path` at all (the first frame is handed to
+    Kling as a URL and lives in the request metadata). It had simply never been
+    run on production.
+
+    `finalizeCharacterReplaceJob` is the right finalizer and always was: it
+    VERIFIES AND KEEPS the provider's file — download, probe, upload, settle —
+    which is exactly what a Kling video needs and is the one thing the mux
+    path cannot do without an original to mux against.
+  */
+  const finalize =
+    featureId === "ai_character_replace" ||
+    featureId === "ai_lip_sync" ||
+    featureId === "ai_text_to_video" ||
+    featureId === "ai_image_to_video"
+      ? finalizeCharacterReplaceJob
+      : finalizeAICleanJob;
   const work = finalize(jobId).catch((e) => {
     // Anything reaching here escaped the service's own try/catch, which would
     // be a bug in the service rather than a failed job. Logged loudly.

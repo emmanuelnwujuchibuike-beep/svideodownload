@@ -359,19 +359,47 @@ export async function uploadFinalResult(opts: {
   // be written to a row that later mints signed URLs from it.
   if (!pathBelongsTo(key, opts.ownerId, opts.jobId)) throw new Error("refusing a result path that failed ownership");
 
-  const { readFile } = await import("node:fs/promises");
-  const body = await readFile(opts.filePath);
+  /*
+    ── 🔴 STREAMED OUT, FOR THE SAME REASON IT WAS STREAMED IN ───────────────
+
+    This was `await readFile(opts.filePath)`, which put the ENTIRE finished
+    video in the heap to hand it to the uploader — up to `maxResultSize`
+    (400 MB) resident, per concurrent job, on the last step of the job.
+
+    That is the exact thing `downloadToFile` above goes to such lengths to
+    avoid: the bytes were carefully streamed from the provider's socket to disk
+    and then loaded back into memory wholesale to be sent on. Two jobs
+    finishing at once is how this worker gets OOM-killed, and it is what spiked
+    Railway's memory and made the network graph look like the file moved twice
+    (owner, 2026-10-04).
+
+    `storage-js` supports a Node stream body directly: a value with `.pipe`
+    skips the Blob/FormData wrapping, gets `content-type` from the options and
+    is sent with `duplex: "half"` (verified in the installed client). So the
+    bytes go disk → socket a chunk at a time and are never all in the process.
+
+    `content-length` is sent explicitly rather than letting undici fall back to
+    chunked encoding: the file is one we wrote ourselves a moment ago, so its
+    size is known and stable, and an S3-backed object store is happier with a
+    declared length. It is also the honest value to return as `bytes`, which
+    used to come from the buffer we no longer hold.
+  */
+  const { createReadStream } = await import("node:fs");
+  const { stat } = await import("node:fs/promises");
+  const bytes = (await stat(opts.filePath)).size;
 
   const admin = createAdminClient();
-  const { error } = await admin.storage.from(AI_RESULT_BUCKET).upload(key, body, {
+  const { error } = await admin.storage.from(AI_RESULT_BUCKET).upload(key, createReadStream(opts.filePath), {
     contentType: "video/mp4",
     // A retried finalization overwrites its own object rather than failing on a
     // duplicate key. The whole flow is idempotent; this has to be too.
     upsert: true,
+    duplex: "half",
+    headers: { "content-length": String(bytes) },
   });
   if (error) throw new Error(`upload failed: ${error.message}`);
 
-  return { path: key, bytes: body.byteLength };
+  return { path: key, bytes };
 }
 
 /** Remove everything this job wrote to disk. Never throws. */

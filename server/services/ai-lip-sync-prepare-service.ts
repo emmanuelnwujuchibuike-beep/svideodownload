@@ -1,4 +1,5 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -257,7 +258,27 @@ export async function prepareLipSyncJob(jobId: string): Promise<PrepareOutcome> 
     /* ── 6. store, record, hand to the provider ───────────────────────────── */
     const key = aiPreparedKey(job.user_id, feature.id, job.id);
     if (!pathBelongsTo(key, job.user_id, job.id)) throw new PrepareFailure("PREPARATION_FAILED", "refusing a prepared path that failed ownership", "system");
-    const up = await createAdminClient().storage.from(AI_SOURCE_BUCKET).upload(key, await readFile(preparedFile), { contentType: "video/mp4", upsert: true });
+    /*
+      🔴 STREAMED, never `await readFile(preparedFile)` (2026-10-04). This is a
+      whole prepared video — `preparedStat.size` was just checked against the
+      model's ceiling, up to 400 MB — and buffering it put every byte in the
+      heap at once, per concurrent job, on the worker that also runs ffmpeg.
+
+      Not the Kling spike (the guard above refuses anything that is not
+      replicate/fal, so a Kling job never reaches this line — that one was
+      `uploadFinalResult`). The same defect, found while fixing that one, on the
+      path legacy jobs still take.
+
+      A Node stream body skips storage-js's Blob/FormData wrapping and is sent
+      with `duplex: "half"`; `content-length` is declared from the stat taken
+      above rather than letting it fall back to chunked encoding.
+    */
+    const up = await createAdminClient().storage.from(AI_SOURCE_BUCKET).upload(key, createReadStream(preparedFile), {
+      contentType: "video/mp4",
+      upsert: true,
+      duplex: "half",
+      headers: { "content-length": String(preparedStat.size) },
+    });
     if (up.error) throw new PrepareFailure("PREPARATION_FAILED", `upload failed: ${up.error.message}`, "system");
     const fresh = await getJobAsService(job.id);
     await createAdminClient()

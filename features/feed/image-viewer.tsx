@@ -38,6 +38,7 @@ import { RichText } from "@/components/social/rich-text";
 import { AnimatedCount } from "@/features/ui/animated-count";
 import { floatReaction } from "@/features/ui/reaction-float";
 import { Comments } from "@/features/social/comments";
+import { ViewerCommentBar } from "@/features/feed/viewer-comment-bar";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { toast } from "@/features/ui/toast";
 
@@ -488,7 +489,19 @@ function ImageStage({
           />
         ) : (
           <div
-            className={cn("absolute inset-0", !tall && "flex items-center justify-center")}
+            /*
+              🔴 INSET BY THE SAFE AREA (owner, 2026-10-04: "let image view in
+              feed not cross the safe area on pwa"). This was `absolute inset-0`,
+              so on an installed PWA the picture ran under the notch at the top
+              and under the home indicator and the new comment bar at the bottom
+              — the parts of a photo people frame their subject in.
+
+              The BLURRED FILL behind it deliberately keeps `inset-0` and still
+              bleeds edge to edge: the letterbox should reach the screen's
+              edges, only the real picture must not.
+            */
+            style={{ top: "var(--frenz-safe-top, 0px)", bottom: "calc(env(safe-area-inset-bottom, 0px) + 3.75rem)" }}
+            className={cn("absolute inset-x-0", !tall && "flex items-center justify-center")}
             // Drag-to-dismiss lives on the OUTER wrapper now (see the note
             // there) — this element only ever needs to recognise a tap /
             // double-tap, never its own gesture-vs-scroll disambiguation.
@@ -546,7 +559,7 @@ function ImageStage({
 
         {/* Caption + author (auto-hides) — the sidebar repeats this statically on
             lg, so it's redundant there but harmless (mask lets it fade the same). */}
-        <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-16 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
+        <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-4 pb-[calc(env(safe-area-inset-bottom,0px)+4.25rem)] pt-16 transition-opacity duration-200", ui ? "opacity-100" : "opacity-0")}>
           <Link href={`/u/${item.publisher.handle}`} onClick={onClose} className="pointer-events-auto inline-flex items-center gap-1.5 font-bold text-white">
             @{item.publisher.handle}
           </Link>
@@ -578,7 +591,7 @@ function ImageStage({
             parent already reserves its gutter, so a plain `right-3` (no escape
             offset needed) lands cleanly between the image and the comments
             sidebar instead of overlapping it. */}
-        <div className={cn("absolute bottom-24 right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-8 lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
+        <div className={cn("absolute bottom-[calc(env(safe-area-inset-bottom,0px)+8.5rem)] right-3 z-30 flex flex-col items-center gap-5 transition-opacity duration-200 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] lg:!pointer-events-auto lg:!opacity-100", ui ? "opacity-100" : "pointer-events-none opacity-0")}>
           <RailBtn
             icon={liked ? WowSolid : WowOutline}
             active={liked}
@@ -593,6 +606,23 @@ function ImageStage({
           <RailBtn icon={MessageCircle} count={item.commentsCount} label="Comments" onClick={openComments} />
           <RailBtn icon={Share2} count={item.sharesCount} label="Share" onClick={share} />
           <RailBtn icon={Bookmark} active={saved} fill={saved} activeClass="text-amber-400" label="Save" onClick={() => react("save")} />
+        </div>
+
+        {/*
+          ── THE COMMENT BAR (owner, 2026-10-04) ──────────────────────────────
+          Edge to edge at the bottom, and NOT gated on `ui`: the chrome fades on
+          tap so the photo can be looked at, but the way to say something about
+          it is the one control that must never quietly disappear. Large screens
+          already have the persistent comments sidebar, so it is mobile/tablet
+          only — two composers on one screen would be the duplicate-control
+          mistake this project keeps writing down.
+        */}
+        <div className="lg:hidden">
+          <ViewerCommentBar
+            count={item.commentsCount}
+            canComment={comments ? comments.canComment : true}
+            onOpen={() => void openComments()}
+          />
         </div>
 
         {/* Comments sheet — mobile/tablet only; large screens use the persistent

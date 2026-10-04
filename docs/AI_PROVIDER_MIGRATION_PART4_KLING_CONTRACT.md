@@ -214,13 +214,36 @@ estimated forever.
 Nine real generations were run on 2026-09-28 with the owner's authorisation, at
 the cheapest settings that work. These are outcomes, not inferences.
 
+> ⚠️ **SCOPE: these verdicts are about `kling-v3-omni`, the only Omni model this
+> key can reach.** They are not a statement about Kling as a product, and in
+> particular not about **Kling 4.0**, which the owner reports does reference
+> image and reference video properly.
+>
+> Re-probed 2026-10-04 and 4.0 is **not reachable on this account's API key**:
+> `/omni-video/<model>` accepts `kling-v3-omni` and answers
+> `1201 model is not supported` to every 4.0 spelling, and
+> `/v1/videos/{text2video,image2video}` answer
+> `1203 model_name '<x>' is not supported for this API` to all twelve of
+> `kling-v4`, `-v4-0`, `-v4-flash`, `-v4-0-flash`, `kling-4-0`, `-v4-std`,
+> `-v4-pro`, `-v4-turbo`, `-v4-master`, `-v4-1`, `-v3-5`, `-v3-1`. There is no
+> models-listing endpoint (`/v1/models` 404s) to enumerate the key's grants.
+> Kling's release notes put 4.0 Flash in limited early access from 2026-09-28,
+> with the lineup launching through October — consistent with an account that
+> has not been granted it.
+>
+> 🔴 **When 4.0 reaches this key, re-run §5.1's A/D/B/E runs against it and
+> rewrite the two rows above with the new outcome.** They must not be edited
+> on expectation: the whole value of this section is that every row was settled
+> by a generation, and a row changed on faith would make the other rows
+> unreliable too.
+
 | Feature | Verdict | How it was settled |
 |---|---|---|
 | **Text → Video** | ✅ **SHIPS** | a real run succeeded; one `outputs[]` video, `duration "5.041"`, 3 units |
 | **Image → Video** | ✅ **SHIPS** | a reachable portrait sent as `first_frame` came back **animated and faithful** — same person, clothing, lighting, background. 1.8 units at 720p/3s |
 | **Lip Sync** | ✅ **SHIPS** | `audio2video` on a 720p clip of a person: **the source video was preserved exactly** and only the mouth was driven. 0.5 units |
-| **Reference Video** | ❌ **REFUSED** | see §5.1 — Omni **discards** the supplied video |
-| **Reference Image** | ❌ **REFUSED** | a plain `image` item is never fetched; three tasks with an unreachable image url all succeeded, generating from the prompt alone |
+| **Reference Video** | ❌ **REFUSED on `kling-v3-omni`** | see §5.1 — Omni **discards** the supplied video |
+| **Reference Image** | ❌ **REFUSED on `kling-v3-omni`** | a plain `image` item is never fetched; three tasks with an unreachable image url all succeeded, generating from the prompt alone |
 | **Full Character / Face Only / Face + Head / Upper Body** | ❌ **REFUSED** | see §5.2 — there is no way to supply a character, and no endpoint takes video + character |
 
 ### 5.1 🔴 Omni does NOT edit a supplied video — proven three times

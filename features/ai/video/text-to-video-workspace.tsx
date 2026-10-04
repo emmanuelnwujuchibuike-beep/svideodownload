@@ -7,6 +7,7 @@ import { AiDisplayTitle, AiGlassCard, AiPageShell } from "@/features/ai/design/a
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { AiReferenceRail } from "@/features/ai/video/ai-reference-rail";
 import { AiVideoResult } from "@/features/ai/video/ai-video-result";
+import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
 
@@ -69,9 +70,29 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
     [prompt, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl],
   );
 
-  const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0 });
+  const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0, label: prompt.trim() });
+
+  /*
+    🔴 `--ai-play` HAS TO COME FROM SOMEWHERE (2026-10-04).
+
+    `.ai-cta::before` — the Generate button gradient — animates forever on
+    `animation-play-state: var(--ai-play, running)`. Every other AI workspace
+    (text-to-audio, voice cloning, lip sync) wraps itself in this environment,
+    which is the ONE component that resolves tab visibility and
+    `prefers-reduced-motion` into that variable. These two screens shipped
+    without it, so it was never set, the fallback `running` applied, and the
+    gradient kept animating even while the tab was HIDDEN — a battery cost
+    paid for something nobody can see, which is the exact thing the presence
+    module exists to prevent.
+
+    `bare` because `AiPageShell` already paints `.ai-wash`; this is here for
+    the variables, not for a second background.
+  */
+  const envStage: "idle" | "processing" | "completed" | "failed" =
+    gen.status === "running" || gen.status === "submitting" ? "processing" : gen.status === "done" ? "completed" : gen.status === "error" ? "failed" : "idle";
 
   return (
+    <FrenzAIEnvironment stage={envStage} bare>
     <AiPageShell>
       <FrenzAICrumb tool="Text to Video" />
       <AiDisplayTitle title="Describe it." highlight="We&apos;ll film it." />
@@ -175,5 +196,6 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
         <AiGenerateButton onClick={gen.submit} busy={gen.status === "submitting" || gen.status === "running"} disabled={!prompt.trim() || !!gen.quoteProblem} />
       </AiActionBar>
     </AiPageShell>
+    </FrenzAIEnvironment>
   );
 }

@@ -1,35 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+
+import {
+  clearGeneration,
+  getServerSnapshot,
+  getSnapshot,
+  restoreActiveGeneration,
+  startGeneration,
+  subscribe,
+  type VideoFeature,
+} from "@/features/ai/video/active-generation";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  QUOTE → GENERATE → POLL — the client half of a Kling video generation
+ *  QUOTE → GENERATE → WATCH — the client half of a Kling video generation
  * ═══════════════════════════════════════════════════════════════════════════
  *
  * Part 6 §55: "Do not calculate final prices independently in the UI… The UI
  * must request/recalculate through the authoritative backend quote mechanism."
- * So this hook owns exactly three conversations and no arithmetic:
+ * So this hook owns the quote conversation and no arithmetic:
  *
  *     settings change → POST /api/ai/video/quote   (debounced)
  *     Generate        → POST /api/ai/video/jobs
- *     while running   → GET  /api/ai/jobs/:id      (until terminal)
+ *
+ * ── 🔴 THE RUNNING JOB IS NOT STATE IN THIS COMPONENT ANY MORE ─────────────
+ *
+ * It used to be: a `jobIdRef`, a `status`, and a `setInterval` polling every
+ * 3 seconds. Two consequences, both reported by the owner on 2026-10-04 after
+ * the first real Kling runs:
+ *
+ *   · navigating away LOST the generation — the id lived in a ref that
+ *     unmounted with the page, so the card vanished and nothing was watching;
+ *   · the phone got hot — ~40 requests over a two-minute generation, each a
+ *     radio wake-up and a React render, for a provider that reports no
+ *     progress to learn.
+ *
+ * Both now belong to `features/ai/video/active-generation.ts`: module-level
+ * state, one visibility-gated poll on a schedule paced to the job, and
+ * `sessionStorage` so a reload keeps the card. The reasoning is all in that
+ * file's header. This hook subscribes and renders.
  *
  * ── 🔴 THE BROWSER NEVER WAITS FOR A VIDEO (§33) ──────────────────────────
  *
  * `/jobs` returns as soon as Kling has ACCEPTED the work — seconds, not
- * minutes. The polling below is a courtesy for a member who stays on the page;
- * the job does not depend on it. The callback, the finalizer and the push
- * notification all run server-side, so closing the tab loses nothing. That is
- * why the status copy says so.
- *
- * ── Why polling and not a socket ───────────────────────────────────────────
- *
- * The result route already exists and is cheap, the job is minutes long, and
- * this project has a standing rule against an SSE route billing continuous
- * serverless compute. A 3-second poll that stops the moment the job is
- * terminal — and stops immediately when the tab is hidden — costs less than
- * holding a connection open.
+ * minutes. The watching is a courtesy for a member who stays; the job does not
+ * depend on it. The callback, the finalizer and the push notification all run
+ * server-side, so closing the tab loses nothing.
  */
 
 export type VideoGenStatus = "idle" | "submitting" | "running" | "done" | "error";
@@ -53,16 +70,36 @@ export interface FinishedJob {
 
 /** The debounce on re-quoting: long enough to not fire per keystroke, short enough to feel live. */
 const QUOTE_DEBOUNCE_MS = 400;
-const POLL_MS = 3000;
 
-export function useVideoGeneration({ feature, input, ready }: { feature: "text_to_video" | "image_to_video" | "lip_sync"; input: unknown; ready: boolean }) {
+export function useVideoGeneration({
+  feature,
+  input,
+  ready,
+  /** One line of context for the progress card — the prompt, usually. */
+  label = "",
+}: {
+  feature: VideoFeature;
+  input: unknown;
+  ready: boolean;
+  label?: string;
+}) {
   const [quote, setQuote] = useState<PublicQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [quoteProblem, setQuoteProblem] = useState<string | null>(null);
-  const [status, setStatus] = useState<VideoGenStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<FinishedJob | null>(null);
-  const jobIdRef = useRef<string | null>(null);
+  /** A submit in flight, and a submit that failed before a job ever existed. */
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const active = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  /*
+    Bring back a generation started on another page, once, from an effect —
+    never during render, because `sessionStorage` does not exist on the server
+    and reading it while rendering would mismatch hydration.
+  */
+  useEffect(() => {
+    restoreActiveGeneration();
+  }, []);
 
   /* ── the quote, debounced, and always superseded by the newest ─────────── */
   useEffect(() => {
@@ -110,42 +147,44 @@ export function useVideoGeneration({ feature, input, ready }: { feature: "text_t
     };
   }, [feature, input, ready]);
 
-  /* ── polling, only while a job is actually running ─────────────────────── */
-  useEffect(() => {
-    if (status !== "running" || !jobIdRef.current) return;
-    let stopped = false;
-    const tick = async () => {
-      if (stopped || document.visibilityState === "hidden") return;
-      try {
-        const res = await fetch(`/api/ai/jobs/${jobIdRef.current}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const json = await res.json().catch(() => null);
-        const job = json?.job;
-        if (!job || stopped) return;
-        if (job.status === "completed") {
-          setResult({ id: job.id, status: job.status, resultUrl: job.resultUrl ?? null, posterUrl: job.posterUrl ?? null, createdAt: job.createdAt ?? null });
-          setStatus("done");
-        } else if (["failed", "cancelled", "expired"].includes(job.status)) {
-          setError(job.errorMessage ?? "The generation didn't finish. Nothing has been charged for a failed run.");
-          setStatus("error");
-        }
-      } catch {
-        /* a dropped poll is not a failed job — the next tick asks again */
-      }
+  /*
+    The record is only THIS tool's business when it belongs to this tool. A
+    lip-sync running in another tab's workspace must not light up the Text to
+    Video page as though it were its own.
+  */
+  const mine = active && active.feature === feature ? active : null;
+
+  const status: VideoGenStatus = submitting
+    ? "submitting"
+    : submitError
+      ? "error"
+      : !mine
+        ? "idle"
+        : mine.phase === "running"
+          ? "running"
+          : mine.phase === "completed"
+            ? "done"
+            : "error";
+
+  const result: FinishedJob | null = useMemo(() => {
+    if (!mine || mine.phase !== "completed") return null;
+    return {
+      id: mine.jobId,
+      status: "completed",
+      resultUrl: mine.resultUrl,
+      posterUrl: mine.posterUrl,
+      createdAt: new Date(mine.startedAt).toISOString(),
     };
-    const id = setInterval(tick, POLL_MS);
-    void tick();
-    return () => {
-      stopped = true;
-      clearInterval(id);
-    };
-  }, [status]);
+  }, [mine]);
+
+  const error = submitError ?? (mine && mine.phase === "failed" ? mine.error : null);
 
   const submit = useCallback(async () => {
-    if (!ready || status === "submitting" || status === "running") return;
-    setError(null);
-    setResult(null);
-    setStatus("submitting");
+    if (!ready || submitting || (mine && mine.phase === "running")) return;
+    setSubmitError(null);
+    // A fresh run replaces whatever the card was showing.
+    clearGeneration();
+    setSubmitting(true);
     try {
       const res = await fetch("/api/ai/video/jobs", {
         method: "POST",
@@ -161,23 +200,26 @@ export function useVideoGeneration({ feature, input, ready }: { feature: "text_t
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
-        setError(json?.error ?? "Generation couldn't be started.");
-        setStatus("error");
+        setSubmitError(json?.error ?? "Generation couldn't be started.");
         return;
       }
-      jobIdRef.current = json.jobId as string;
-      setStatus("running");
+      startGeneration({
+        jobId: json.jobId as string,
+        feature,
+        label,
+        // "View" goes back to the workspace that started it.
+        href: typeof window === "undefined" ? "/studio/ai/history" : window.location.pathname,
+      });
     } catch {
-      setError("We couldn't reach the service. Check your connection and try again.");
-      setStatus("error");
+      setSubmitError("We couldn't reach the service. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
     }
-  }, [feature, input, quote, ready, status]);
+  }, [feature, input, label, mine, quote, ready, submitting]);
 
   const reset = useCallback(() => {
-    jobIdRef.current = null;
-    setResult(null);
-    setError(null);
-    setStatus("idle");
+    setSubmitError(null);
+    clearGeneration();
   }, []);
 
   return { quote, quoting, quoteProblem, status, error, result, submit, reset };

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { AiRail } from "@/features/ai/design/ai-rail";
+import { AiGenerationCardMount } from "@/features/ai/video/generation-card-mount";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -51,6 +52,13 @@ export function AiStudioShell({ children }: { children: ReactNode }) {
         page into horizontal scroll — which §5 forbids outright.
       */}
       <div className="min-w-0 flex-1">{children}</div>
+      {/*
+        The running generation, on every AI screen. It is portalled to <body>,
+        so its position in this tree affects nothing but which routes mount it
+        — and mounting it HERE rather than in the root layouts is what keeps it
+        off the landing page's bundle (the rule `AiJobAlertMount` exists for).
+      */}
+      <AiGenerationCardMount />
     </div>
   );
 }

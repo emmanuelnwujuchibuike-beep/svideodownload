@@ -19,8 +19,7 @@ import { onDownloadCompleted, startDownload } from "@/features/downloads/manager
 import { useHistory } from "@/features/history/use-history";
 import { limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { getAutoDownload, getPreferredQuality } from "@/lib/download-hub/auto-download";
-import { buildDownloadContext, pickFormat } from "@/lib/download-hub/context";
-import type { DownloadContext } from "@/lib/download-hub/types";
+import { pickFormat } from "@/lib/download-hub/context";
 /* `BRAND_ICONS`, `FLAGSHIP_IDS` and `PLATFORMS` are gone with the hand-rolled
    strip above — the shared `SupportedPlatforms` owns the marks now. Only
    `detectPlatform` is still needed, for the live "Detected …" line. */
@@ -45,10 +44,9 @@ import type { MediaKind } from "@/types";
   import anyway, so 100% of visitors — landing's overwhelming majority, who
   paste nothing — paid for all six on load. `PreviewCard` in particular
   already had this exact split one call site over: `downloader.tsx` dynamic-
-  imports it, this file didn't. Same fix, same `{ ssr: false }` reasoning as
-  `DiscoveryGateway` below (already split, kept as-is): none of these six
-  need to exist in server-rendered HTML — they render from client state that
-  is null on the server regardless.
+  imports it, this file didn't. None of these six need to exist in
+  server-rendered HTML — they render from client state that is null on the
+  server regardless.
 */
 const PreviewCard = dynamic(() => import("@/features/downloader/preview-card").then((m) => m.PreviewCard), { ssr: false });
 const FloatingDownloadProgress = dynamic(
@@ -91,13 +89,20 @@ const ExoClickSticky = dynamic(
 );
 const ResultOffer = dynamic(() => import("@/features/monetization/result-offer").then((m) => m.ResultOffer), { ssr: false });
 
-// Renders only after a download completes, and pulls in the Learning Academy
-// content it links to — code-split so the Hub's initial bundle does not carry it.
-// Importing it directly cost /downloads 16 kB of lesson prose on first load.
-const DiscoveryGateway = dynamic(
-  () => import("@/features/download-hub/discovery-gateway").then((m) => m.DiscoveryGateway),
-  { ssr: false },
-);
+/*
+  🔴 The "Saved. What next?" panel (DiscoveryGateway) is GONE from here too
+  (owner, 2026-10-04). It had already been taken off the public downloader on
+  2026-09-07 for being a third thing asking for attention after the one job the
+  visitor came for; the same objection applies on /downloads, where it arrived
+  as a card of its own on top of a finished download.
+
+  Removed with it: `features/downloads/hub-warmup.tsx`, which existed only to
+  warm this chunk and `router.prefetch` every route the panel linked to on each
+  visit — speculative RSC payloads for a panel that no longer renders.
+
+  `lib/download-hub/*` stays: the admin page and the impressions/waitlist routes
+  still read it.
+*/
 
 /** Large paste box + preview that enqueues into the in-app download manager
  * (real progress / pause / resume), with supported-platform badges. */
@@ -141,8 +146,7 @@ export function DownloadBox({
   // Discovery Gateway™ context for the most recent save. The Hub is where a
   // signed-in user downloads, so this is the surface where a recommendation is
   // MOST actionable — they already have an account to act with.
-  const [savedContext, setSavedContext] = useState<DownloadContext | null>(null);
-  const { downloadCount, countDownload } = useGatewayMemory();
+  const { countDownload } = useGatewayMemory();
   const { user } = useUser();
   const { plan, ready: planReady } = useEntitlements();
   const { items: historyItems, clearHistory } = useHistory();
@@ -238,15 +242,6 @@ export function DownloadBox({
     setJustQueued(true);
     setTimeout(() => setJustQueued(false), 2400);
     countDownload();
-    setSavedContext(
-      buildDownloadContext({
-        metadata,
-        formatId,
-        kind,
-        signedIn: !!user,
-        downloadCount: downloadCount + 1,
-      }),
-    );
   };
 
   /*
@@ -271,7 +266,6 @@ export function DownloadBox({
   const clear = () => {
     setUrl("");
     setValidationError(null);
-    setSavedContext(null);
     reset();
   };
 
@@ -495,7 +489,6 @@ export function DownloadBox({
           <PreviewCard metadata={metadata} phase="idle" onDownload={onDownload} />
           {/* Decision-engine offer (ad / affiliate / upgrade), keyed per result. */}
           <ResultOffer key={metadata.id} />
-          {savedContext ? <DiscoveryGateway context={savedContext} /> : null}
         </div>
       ) : null}
 

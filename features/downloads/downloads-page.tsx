@@ -10,7 +10,6 @@ import type { PlatformStatusMap } from "@/lib/platform-status";
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
 import type { MultiLinkPublicConfig } from "@/lib/downloads/multi-link-config";
 import { DownloadQuickActions, DownloadTrustStrip } from "@/features/downloads/downloads-sections";
-import { HubWarmup } from "@/features/downloads/hub-warmup";
 import { ReportFailureButton } from "@/features/downloads/report-failure-button";
 import { useDownloadManager } from "@/features/downloads/use-download-manager";
 import { useHistory } from "@/features/history/use-history";
@@ -156,10 +155,6 @@ export function DownloadsPage({
     <div className="space-y-5 pt-1">
       {/* The sticky top banner is mounted in the (app) layout (DownloadTopAd),
           not here — outside the page-transition template so its pin is reliable. */}
-
-      {/* Warms the Gateway chunk and prefetches its destinations on idle, so
-          nothing lags the first time it is needed. Renders nothing. */}
-      <HubWarmup />
 
       {/*
         ── The shared top of the page, now literally shared (owner, 2026-08-16:

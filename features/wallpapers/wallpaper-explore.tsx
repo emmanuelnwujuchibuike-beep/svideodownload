@@ -113,6 +113,19 @@ const POPULAR_PREVIEW = 12;
  * library — with the observer, the page grew as fast as you could scroll it.
  */
 const WALLPAPER_PREVIEW = 30;
+/**
+ * How many each "See more" adds (owner, 2026-10-04).
+ *
+ * 🔴 It used to add ALL of them. `showAll` was a boolean, so one tap on a
+ * 600-wallpaper library mounted 570 more tiles in a single commit — which is
+ * the stall the owner is describing: "see more opening all total causing
+ * lagging when a user scrolls fast."
+ *
+ * A page is ten. That keeps every expansion a small, constant amount of work no
+ * matter how large the library grows, which a single `showAll` can never do:
+ * its cost is the size of the library, so it gets worse with success.
+ */
+const WALLPAPER_PAGE = 10;
 
 export function WallpaperExplore({
   items,
@@ -293,22 +306,24 @@ export function WallpaperExplore({
     grid still grew on its own while a "See more" button sat there claiming to
     be the way to see more.
   */
-  const [showAll, setShowAll] = useState(false);
+  /*
+    How many tiles the grid is currently willing to render. A NUMBER, not a
+    boolean: each "See more" raises it by one page, so the grid grows by a fixed
+    ten whatever the library's size.
+  */
+  const [limit, setLimit] = useState(WALLPAPER_PREVIEW);
   /* Any change to the filters starts a fresh list, so an expansion from the
      previous one must not silently carry over into it. */
   useEffect(() => {
-    setShowAll(false);
+    setLimit(WALLPAPER_PREVIEW);
   }, [category, type, query, sort, expanded]);
 
-  const shown = capped
-    ? filtered.slice(0, POPULAR_PREVIEW)
-    : showAll
-      ? filtered
-      : filtered.slice(0, WALLPAPER_PREVIEW);
-  const hasMore = !capped && !showAll && filtered.length > WALLPAPER_PREVIEW;
+  const shown = capped ? filtered.slice(0, POPULAR_PREVIEW) : filtered.slice(0, limit);
+  const remaining = capped ? 0 : Math.max(0, filtered.length - limit);
+  const hasMore = remaining > 0;
   /* The "See less" pair only makes sense once the grid was actually expanded —
      and only when collapsing would really remove something. */
-  const canCollapse = !capped && showAll && filtered.length > WALLPAPER_PREVIEW;
+  const canCollapse = !capped && limit > WALLPAPER_PREVIEW;
 
   /*
     Collapsing from the BOTTOM button would otherwise leave the viewport
@@ -318,7 +333,7 @@ export function WallpaperExplore({
   */
   const gridTopRef = useRef<HTMLDivElement>(null);
   const collapse = useCallback(() => {
-    setShowAll(false);
+    setLimit(WALLPAPER_PREVIEW);
     gridTopRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, []);
 
@@ -781,10 +796,16 @@ export function WallpaperExplore({
               {hasMore ? (
                 <button
                   type="button"
-                  onClick={() => setShowAll(true)}
+                  onClick={() => setLimit((n) => n + WALLPAPER_PAGE)}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6D5CFF] to-[#8B5CF6] px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition active:scale-[0.99]"
                 >
-                  See more · {(filtered.length - WALLPAPER_PREVIEW).toLocaleString()} more
+                  {/*
+                    It says what the TAP does, then what is left behind it. The
+                    old label promised the whole remainder because that is what
+                    it delivered; promising "570 more" and adding ten would be a
+                    worse lie than the stall it replaces.
+                  */}
+                  See {Math.min(WALLPAPER_PAGE, remaining)} more · {remaining.toLocaleString()} left
                 </button>
               ) : canCollapse ? (
                 <button

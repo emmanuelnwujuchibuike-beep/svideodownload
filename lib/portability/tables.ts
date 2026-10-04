@@ -214,6 +214,14 @@ export const OWNER_COLUMN: Record<string, string> = {
   share_events: "sharer_id",
   sounds: "created_by",
   stories: "user_id",
+  /*
+    Keyed on the VIEWER (migration 0181), the same reasoning as `share_events`
+    above: a member is entitled to a record of the stories THEY watched, not a
+    list of everyone who watched theirs. The author already reads that list live,
+    and it dies with the story — exporting other people's viewing habits under
+    this member's name would be handing them someone else's data.
+  */
+  story_views: "viewer_id",
   // follower_id = accounts you chose to follow. The other side is exported
   // separately as `followers`, see FOLLOW_MIRROR.
   follows: "follower_id",

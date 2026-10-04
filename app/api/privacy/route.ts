@@ -29,6 +29,13 @@ const schema = z.object({
   show_reputation: z.boolean().optional(),
   show_plan_badge: z.boolean().optional(),
   show_views: z.boolean().optional(),
+  /*
+    Migration 0181 — story screenshot alerts. RECIPROCAL: off means the member
+    stops seeing who screenshots their stories AND stops being reported for
+    screenshotting anyone else’s. The rule is enforced where it is written
+    (app/api/stories/[id]/views), not here.
+  */
+  story_screenshot_alerts: z.boolean().optional(),
   // Migration 0112 — relationship privacy (Part 17).
   friends_visibility: z.enum(["public", "friends", "private"]).optional(),
   following_visibility: vis.optional(),
@@ -66,6 +73,7 @@ export async function PATCH(request: Request) {
       show_reputation: _sr,
       show_plan_badge: _spb,
       show_views: _sv,
+      story_screenshot_alerts: _ssa,
       friends_visibility: _fv,
       following_visibility: _flv,
       show_mutual_connections: _smc,
@@ -75,6 +83,7 @@ export async function PATCH(request: Request) {
     void _sr;
     void _spb;
     void _sv;
+    void _ssa;
     void _fv;
     void _flv;
     void _smc;

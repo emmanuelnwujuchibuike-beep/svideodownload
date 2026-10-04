@@ -320,6 +320,12 @@ export interface PrivacySettings {
   show_plan_badge: boolean;
   /** Migration 0106 — the profile's total view count, public by default. */
   show_views: boolean;
+  /**
+   * Migration 0181 — story screenshot alerts. RECIPROCAL: off means this member
+   * neither sees who screenshots their stories nor is reported for screenshotting
+   * anyone else’s. Default true, like every other public-by-default toggle here.
+   */
+  story_screenshot_alerts: boolean;
   /** Migration 0122 (Feature 15 Part 5 tranche 4) — comments containing any
    *  of these words (case-insensitive substring) are rejected at post time. */
   muted_comment_keywords: string[];
@@ -343,6 +349,7 @@ export const DEFAULT_PRIVACY: PrivacySettings = {
   show_reputation: true,
   show_plan_badge: true,
   show_views: true,
+  story_screenshot_alerts: true,
   muted_comment_keywords: [],
 };
 
@@ -531,6 +538,7 @@ const PRIVACY_BASE_COLS =
   "activity_visibility, followers_visibility, reposts_visibility, likes_visibility, saves_visibility, comments_policy, messages_policy, allow_indexing, show_in_recommendations, read_receipts_enabled, typing_indicators_enabled, last_seen_visibility, group_invite_policy";
 const PRIVACY_NEW_COLS = "show_reputation, show_plan_badge, show_views"; // migrations 0102 + 0106
 const PRIVACY_NEWER_COLS = "muted_comment_keywords"; // migration 0122
+const PRIVACY_NEWEST_COLS = "story_screenshot_alerts"; // migration 0181
 
 export async function getPrivacySettings(userId: string): Promise<PrivacySettings> {
   if (!hasSupabase) return DEFAULT_PRIVACY;
@@ -542,7 +550,7 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
   try {
     const { data, error } = await db
       .from("privacy_settings")
-      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}, ${PRIVACY_NEWER_COLS}`)
+      .select(`${PRIVACY_BASE_COLS}, ${PRIVACY_NEW_COLS}, ${PRIVACY_NEWER_COLS}, ${PRIVACY_NEWEST_COLS}`)
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;

@@ -182,6 +182,8 @@ async function notifyAuthorOfReshare(opts: {
   authorId: string;
   viewerId: string;
   destination: ReshareDestination;
+  /** What was reshared, so the sentence can name it. */
+  source?: ReshareInput["source"];
   postId?: string | null;
 }): Promise<void> {
   if (opts.authorId === opts.viewerId) return;
@@ -191,14 +193,30 @@ async function notifyAuthorOfReshare(opts: {
     const name = (actor?.display_name as string) || (actor?.handle ? `@${actor.handle as string}` : "Someone");
     const where =
       opts.destination === "story" ? "their story" : opts.destination === "reel" ? "Reels" : opts.destination === "chat" ? "a chat" : "their feed";
+    /*
+      🔴 The NAME is in the title (owner, 2026-10-04: "users should receive push
+      notification when a user reshared their story and the user name that
+      reshared it").
+
+      It already named them in the body — and a lock-screen notification is very
+      often read as its title alone, with the body truncated or collapsed behind
+      a stack. "Your media was reshared" told the author the one thing they
+      already knew and withheld the one thing they wanted.
+
+      `what` says "story" for a story so the sentence matches what was actually
+      taken, rather than the vaguer "media" that covered both cases badly.
+      `genericBody` is unchanged and still carries no name — that is the
+      hide-push-preview path, and naming somebody there would defeat it.
+    */
+    const what = opts.source === "story" ? "story" : "media";
     await publishNotification({
       userId: opts.authorId,
       type: "reshare",
       actorId: opts.viewerId,
       postId: opts.postId ?? null,
       push: {
-        title: "Your media was reshared",
-        body: `${name} reshared your media to ${where}.`,
+        title: `${name} reshared your ${what}`,
+        body: `Reshared to ${where}.`,
         genericBody: "Someone reshared your media.",
         url: opts.postId ? `/p/${opts.postId}` : "/notifications",
       },
@@ -237,7 +255,7 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
       attachments: [{ mediaKind: resolved.mediaKind, mediaUrl: resolved.mediaUrl, thumbnailUrl: resolved.thumbnailUrl ?? undefined }],
     });
     if (!sent.ok) return { ok: false, reason: "forbidden" };
-    await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination });
+    await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination, source });
     return { ok: true };
   }
 
@@ -270,11 +288,11 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
         .select("id")
         .maybeSingle();
       if (!plain) return { ok: false, reason: "failed" };
-      await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination });
+      await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination, source });
       return { ok: true, storyId: plain.id as string };
     }
     if (error || !created) return { ok: false, reason: "failed" };
-    await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination });
+    await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination, source });
     return { ok: true, storyId: created.id as string };
   }
 
@@ -309,7 +327,7 @@ export async function reshare(input: ReshareInput): Promise<ReshareResult> {
   if (!post) return { ok: false, reason: "failed" };
 
   await bustHomeFeedCache(viewerId);
-  await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination, postId: post.id as string });
+  await notifyAuthorOfReshare({ authorId: resolved.authorId, viewerId, destination, source, postId: post.id as string });
   return { ok: true, postId: post.id as string };
 }
 

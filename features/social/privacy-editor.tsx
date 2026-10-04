@@ -1,6 +1,8 @@
 "use client";
 
-import { Activity, Award, Bookmark, CheckCheck, Clock, Crown, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldOff, Sparkles, UserPlus, Users, X } from "lucide-react";
+import {
+  Activity, Award, Bookmark, Camera, CheckCheck, Clock, Crown, Eye, Loader2, MessageSquare, Repeat2, Search, ShieldOff, Sparkles, UserPlus, Users, X
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -73,6 +75,26 @@ export function PrivacyEditor({ settings }: { settings: PrivacySettings }) {
           <ToggleRow icon={Award} tint="amber" title="Show my reputation" desc="Display your rank on your public profile" on={state.show_reputation} onToggle={() => set("show_reputation", !state.show_reputation)} />
           <ToggleRow icon={Crown} tint="violet" title="Show my Pro / Business badge" desc="Display your plan badge next to your name" on={state.show_plan_badge} onToggle={() => set("show_plan_badge", !state.show_plan_badge)} />
           <ToggleRow icon={Eye} tint="cyan" title="Show my view count" desc="Display total views on your public profile" on={state.show_views} onToggle={() => set("show_views", !state.show_views)} />
+          {/*
+            ── Story screenshots (0181) — RECIPROCAL, and the copy says so ────
+
+            Owner: "they can turn it off in story settings. When they turn it
+            off, them and users who see when they screenshot their post."
+
+            The description is the whole feature in one sentence, and it has to
+            be, because this is not an ordinary privacy toggle: turning it off
+            costs the member something as well as hiding something. A row
+            reading only "Screenshot alerts" would let somebody switch it off to
+            stop being reported and then wonder why their own list went blank.
+          */}
+          <ToggleRow
+            icon={Camera}
+            tint="amber"
+            title="Story screenshot alerts"
+            desc="See who screenshots your stories. Turn this off and others stop seeing when you screenshot theirs — and you stop seeing yours."
+            on={state.story_screenshot_alerts}
+            onToggle={() => set("story_screenshot_alerts", !state.story_screenshot_alerts)}
+          />
         </div>
       </div>
 

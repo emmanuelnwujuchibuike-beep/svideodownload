@@ -1,7 +1,7 @@
 "use client";
 
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
+import { Eye, Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -10,7 +10,9 @@ import { PressIcon } from "@/components/motion/press-icon";
 import { seed, useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
+import { StoryViewersSheet } from "@/features/social/story-viewers-sheet";
 import { toast } from "@/features/ui/toast";
+import { formatRelative } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
 import { fetchStoryGroups, readCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
@@ -227,6 +229,8 @@ export function StoryViewer({
   const [pct, setPct] = useState(0);
   const [replying, setReplying] = useState(false);
   const [resharing, setResharing] = useState(false);
+  /* The author’s own “Seen by” sheet. Lazy: nothing is fetched until it opens. */
+  const [viewersOpen, setViewersOpen] = useState(false);
   /*
     ── Press-and-hold = full clear screen (owner, 2026-08-16: "the story and
     history should show full clear screen on press and hold") ────────────────
@@ -296,6 +300,23 @@ export function StoryViewer({
     markGroupSeen(group);
     onGroupSeen?.();
   }, [group, onGroupSeen]);
+
+  /*
+    ── Record the view, per STORY (2026-10-04, migration 0181) ───────────────
+
+    Keyed on the individual story, not the group: the author's question is "who
+    saw THIS one", and a group-level record would credit a viewer with having
+    seen seven statuses when they swiped away after the first.
+
+    Fire-and-forget, and `keepalive` so a record survives the viewer being
+    closed in the same gesture that triggered it. Your own story is skipped on
+    the server too; skipping it here as well saves a pointless request on the
+    surface people open most.
+  */
+  useEffect(() => {
+    if (!story || isOwn) return;
+    void fetch(`/api/stories/${encodeURIComponent(story.id)}/views`, { method: "POST", keepalive: true }).catch(() => {});
+  }, [story, isOwn]);
 
   const next = useCallback(() => {
     setPct(0);
@@ -486,6 +507,33 @@ export function StoryViewer({
       ) : null}
 
       {/*
+        ── "Seen by" — the author's own story only (2026-10-04) ──────────────
+        Bottom-left, where Instagram and Snapchat both put it, so it is where a
+        thumb already expects it and it does not compete with the reshare and
+        close controls at the top right.
+
+        Rendered only for `isOwn`: the route refuses anyone else and RLS refuses
+        them underneath that, but offering a control that will 403 is worse than
+        not offering it. Lazy — the sheet fetches nothing until it is opened, so
+        an author scrolling their own statuses pays nothing for it.
+      */}
+      {isOwn && story ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setViewersOpen(true)}
+            className={cn(
+              "absolute bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-2 text-[12.5px] font-semibold text-white ring-1 ring-inset ring-white/15 backdrop-blur-md transition hover:bg-white/20 active:scale-95",
+              holding && "pointer-events-none opacity-0",
+            )}
+          >
+            <Eye className="h-4 w-4" aria-hidden /> Seen by
+          </button>
+          <StoryViewersSheet storyId={story.id} open={viewersOpen} onClose={() => setViewersOpen(false)} />
+        </>
+      ) : null}
+
+      {/*
         Progress segments — right on the safe-area line (owner, 2026-08-11:
         "the progress bar should be in the line of the safe area"), a small
         0.625rem breathing gap rather than the 0.75rem it had, which is what
@@ -493,31 +541,88 @@ export function StoryViewer({
       */}
       <div
         className={cn(
-          "absolute inset-x-3 top-[calc(0.625rem+var(--frenz-safe-top))] z-20 flex gap-1 transition-opacity duration-150",
+          "absolute inset-x-3 top-[calc(0.625rem+var(--frenz-safe-top))] z-20 flex gap-[3px] transition-opacity duration-150",
           holding && "opacity-0",
         )}
+        role="group"
+        aria-label={`Story ${si + 1} of ${group.stories.length}`}
       >
+        {/*
+          ── The segmented bar (owner, 2026-10-04, with a reference) ──────────
+          One segment per status, so the COUNT IS THE BAR: "users see their or
+          other story progress and how many status they uploaded" needs no
+          separate "3 / 7" label, and a label would be one more thing covering
+          the picture.
+
+          Premium without weight: 2.5px tall, fully rounded, and a hairline
+          shadow so the unfilled track survives a white photo underneath —
+          `bg-white/30` alone disappears on a bright frame, which is exactly
+          when somebody is trying to read their progress.
+
+          🔴 No backdrop-blur and no gradient here, deliberately. This element
+          sits over every frame of a playing video; a backdrop-filter on it is
+          the one thing on this screen that would genuinely cost frames, and the
+          owner asked for premium "without heavy weight".
+
+          The fill transitions only on segments that are NOT the current one —
+          the active segment is driven by a RAF/timeupdate at ~60fps already, and
+          a CSS transition on top of that makes it lag behind the video.
+        */}
         {group.stories.map((_, idx) => (
-          <span key={idx} className="h-1 flex-1 overflow-hidden rounded-full bg-white/25">
-            <span className="block h-full rounded-full bg-white" style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }} />
+          <span
+            key={idx}
+            className="h-[2.5px] flex-1 overflow-hidden rounded-full bg-white/30 shadow-[0_0_1px_rgba(0,0,0,0.45)]"
+          >
+            <span
+              className={cn("block h-full rounded-full bg-white", idx !== si && "transition-[width] duration-200")}
+              style={{ width: `${idx < si ? 100 : idx === si ? pct : 0}%` }}
+            />
           </span>
         ))}
       </div>
 
-      {/* author */}
+      {/*
+        ── The author row, rebuilt to the owner's reference (2026-10-04) ──────
+
+        Avatar hard left, the name bold on its own line, and the time UNDER it
+        in a lighter weight — the reference's two-line block, not the single
+        inline name this had. The second line is what the row gains: a story is
+        ephemeral, so "when was this posted" is the one fact a viewer actually
+        wants and the old row never answered.
+
+        Sits directly beneath the progress bar (`2.1rem` vs the bar's `0.625rem`)
+        so the two read as one piece of chrome rather than two floating
+        elements, which is what the reference shows.
+
+        Premium and light: NO glass panel behind it. A blurred pane here would
+        be a permanent rectangle over the top of every story, and the text
+        already survives any background on the drop-shadow alone — which costs
+        nothing to composite.
+      */}
       <div
         className={cn(
-          "absolute left-4 top-[calc(1.75rem+var(--frenz-safe-top))] z-20 flex items-center gap-2 text-white transition-opacity duration-150",
+          "absolute left-3 top-[calc(2.1rem+var(--frenz-safe-top))] z-20 flex min-w-0 items-center gap-2.5 pr-28 text-white transition-opacity duration-150",
           holding && "pointer-events-none opacity-0",
         )}
       >
         {group.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={group.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover ring-1 ring-white/30" />
+          <img src={group.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/35" />
         ) : (
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold">{group.displayName.charAt(0)}</span>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-violet-600 text-sm font-bold ring-1 ring-white/25">
+            {group.displayName.charAt(0)}
+          </span>
         )}
-        <span className="text-sm font-semibold">{group.displayName}</span>
+        <span className="min-w-0 leading-tight">
+          <span className="block truncate text-[15px] font-bold tracking-[-0.01em] drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]">
+            {group.displayName}
+          </span>
+          {story ? (
+            <span className="block truncate text-[12.5px] font-medium text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+              {formatRelative(story.createdAt)}
+            </span>
+          ) : null}
+        </span>
       </div>
 
       {/*

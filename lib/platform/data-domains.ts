@@ -92,6 +92,13 @@ export const DATA_DOMAINS: DataDomain[] = [
       "collections",
       "collection_items",
       "stories",
+      /*
+        Who watched a story, and who screenshotted it (migration 0181). Social
+        rather than analytics: it is a named list of PEOPLE the author can read,
+        not an aggregate — and it dies with the story it belongs to
+        (ON DELETE CASCADE), as a 24-hour object's audience must.
+      */
+      "story_views",
       "user_stickers",
       "user_home_preferences",
       // FrenzDNA™ — per-category interest weights, self-owned (Feature 15

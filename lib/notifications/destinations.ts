@@ -65,6 +65,12 @@ const BY_TYPE: Partial<Record<NotificationType, string>> = {
   profile_view: "/account/analytics",
   milestone: "/account/analytics",
   invite: "/friends",
+  /* The uploader's own wallpaper was engaged with — the library is where it is.
+     The sender passes a `url` carrying the specific wallpaper; this is the
+     fallback for a notification that lost it. */
+  wallpaper_like: "/wallpapers",
+  wallpaper_save: "/wallpapers",
+  wallpaper_download: "/wallpapers",
 
   /* security — the specific surface each alert is about, so the member lands on
      the control they would go looking for rather than a security index page. */

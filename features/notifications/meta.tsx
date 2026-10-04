@@ -58,6 +58,11 @@ const ICONS: Partial<Record<NotificationType, LucideIcon>> = {
   comment_reaction: SmilePlus,
   share: Share2,
   save: Bookmark,
+  /* The wallpaper trio (0180). Their own glyphs, because their own types:
+     a heart for a like, a bookmark for a save, an arrow for a download. */
+  wallpaper_like: Heart,
+  wallpaper_save: Bookmark,
+  wallpaper_download: Download,
   profile_view: Eye,
   invite: Users,
   milestone: Trophy,
@@ -163,6 +168,12 @@ export function verbFor(type: NotificationType): string {
       return "shared your post";
     case "save":
       return "saved your post";
+    case "wallpaper_like":
+      return "liked your wallpaper";
+    case "wallpaper_save":
+      return "saved your wallpaper";
+    case "wallpaper_download":
+      return "downloaded your wallpaper";
     case "profile_view":
       return "viewed your profile";
     case "invite":

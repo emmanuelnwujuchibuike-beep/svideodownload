@@ -61,7 +61,16 @@ describe("Notification Registry — behaviour is preserved", () => {
     expect(typesGroupedBy("post").sort()).toEqual(
       ["comment", "comment_reaction", "like", "love", "mention", "quote", "reply", "repost", "repost_engagement", "save", "share"].sort(),
     );
-    expect(typesGroupedBy("together").sort()).toEqual(["follow", "profile_view"].sort());
+    /*
+      The three wallpaper types joined `together` on 2026-10-04 (migration
+      0180). Deliberate: a popular wallpaper can collect a hundred likes in a
+      day, and the Notification Center listing them individually is how somebody
+      turns notifications off. Listed explicitly here so a fourth cannot be
+      added without a diff that says so.
+    */
+    expect(typesGroupedBy("together").sort()).toEqual(
+      ["follow", "profile_view", "wallpaper_like", "wallpaper_save", "wallpaper_download"].sort(),
+    );
     expect(typesGroupedBy("conversation").sort()).toEqual(
       ["message", "message_mention", "message_reaction"].sort(),
     );

@@ -360,6 +360,23 @@ export async function recordWallpaperDownload(
     } catch {
       /* activity logging is never worth failing a download over */
     }
+
+    /*
+      The uploader hears about it (2026-10-04). Separately caught for the same
+      reason the log above is: this is the LAST thing that happens on a path
+      whose actual job — handing over a file — already succeeded.
+
+      `userId` is nullable here and that is not an oversight: a wallpaper can be
+      downloaded by a signed-out visitor, and the notification says "Someone"
+      rather than inventing a name. The sender itself skips curated wallpapers
+      and self-downloads.
+    */
+    try {
+      const { notifyWallpaperEngagement } = await import("@/lib/wallpapers-notify");
+      await notifyWallpaperEngagement({ wallpaperId: id, action: "download", actorId: meta?.userId ?? null });
+    } catch {
+      /* a notification is never worth failing a download over */
+    }
   } catch {
     /* a missed count must never cost someone their download */
   }

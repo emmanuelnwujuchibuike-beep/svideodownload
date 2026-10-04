@@ -25,12 +25,13 @@ import { NOTIFICATIONS } from "@/lib/platform/notifications-registry";
 const MIGRATION = readFileSync("supabase/migrations/0132_streak_notifications.sql", "utf8");
 /*
   🔴 The constraint's CURRENT statement. 0132 introduced the parity check;
-  0152 (2026-09-13) restated the whole list to add the Frenz AI deposit types.
+  0152 (2026-09-13) restated the whole list to add the Frenz AI deposit types;
+  0180 (2026-10-04) restated it again for the three wallpaper engagement types.
   Whichever migration restated it LAST is the one production enforces, so that
   is the one the registry is checked against. Bump this when the next
   migration restates the list.
 */
-const LATEST_TYPE_CHECK = readFileSync("supabase/migrations/0152_ai_deposit_notification_types.sql", "utf8");
+const LATEST_TYPE_CHECK = readFileSync("supabase/migrations/0180_wallpaper_engagement_notifications.sql", "utf8");
 const STREAK_TYPES = ["streak_reminder", "streak_milestone", "streak_lost"] as const;
 const META = readFileSync("features/notifications/meta.tsx", "utf8");
 

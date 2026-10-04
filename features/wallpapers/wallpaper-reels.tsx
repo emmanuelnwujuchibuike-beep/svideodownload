@@ -14,7 +14,7 @@ import { startDownload } from "@/features/downloads/manager";
 import { resolutionBadge, wallpaperCredit, type Wallpaper, type WallpaperComment } from "@/lib/wallpapers";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { cn } from "@/lib/utils";
+import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**
  * An ad after every N wallpapers — the same number the reels deck uses.
@@ -648,6 +648,8 @@ export function WallpaperReels({
         >
           <MessageCircle className="h-5 w-5" />
         </RailButton>
+        {/* No count: the optimistic state tracks `saved` as a boolean only, so a
+            number here would go stale the moment it was toggled. */}
         <RailButton
           active={state[current.id]?.saved}
           onClick={() => void engage(current, state[current.id]?.saved ? "unsave" : "save")}
@@ -655,6 +657,24 @@ export function WallpaperReels({
         >
           <Bookmark className={cn("h-5 w-5", state[current.id]?.saved && "fill-white")} />
         </RailButton>
+        {/*
+          ── Downloads, where everyone can see them (owner, 2026-10-04) ──────
+
+          🔴 A COUNT, NOT A BUTTON. Downloading already has its own primary
+          action below the caption, and this project has a standing rule against
+          two controls for one job — the "Save to device" button was removed
+          from this very rail for exactly that reason. So this is a figure with
+          a glyph, not a fourth tap target: it reports, it does not act.
+
+          It is the one number here that is purely earned — `downloads_count` is
+          real completed downloads and, unlike views, likes and saves, carries
+          no operator boost column. That is why it is worth showing beside the
+          others rather than kept for the ranking it already drives.
+        */}
+        <div className="flex flex-col items-center gap-0.5 pt-0.5 text-white/90" aria-label={`${current.downloads.toLocaleString()} downloads`}>
+          <Download className="h-5 w-5" aria-hidden />
+          <span className="text-[11px] font-bold tabular-nums drop-shadow">{formatCompactNumber(current.downloads)}</span>
+        </div>
       </div>
 
       {/* Caption + the one primary action */}
@@ -763,7 +783,7 @@ function RailButton({
       {children}
       {count !== undefined && count > 0 ? (
         <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/65 px-1.5 text-[10px] font-bold leading-4 tabular-nums backdrop-blur-md">
-          {count > 999 ? `${Math.floor(count / 1000)}k` : count}
+          {formatCompactNumber(count)}
         </span>
       ) : null}
     </button>

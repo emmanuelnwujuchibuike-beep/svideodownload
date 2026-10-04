@@ -1,7 +1,9 @@
+import { after } from "next/server";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { notifyWallpaperEngagement } from "@/lib/wallpapers-notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,12 +41,19 @@ export async function POST(request: Request) {
         // Idempotent: the composite primary key makes a repeat tap a no-op
         // rather than a duplicate row (and therefore not a second count).
         await admin.from("wallpaper_likes").upsert({ wallpaper_id: id, user_id: user.id }, { onConflict: "wallpaper_id,user_id", ignoreDuplicates: true });
+        /*
+          🔴 After the response, not before it. The uploader hearing about this
+          must never be something the liker waits for — and must never be able
+          to fail the like. Only on the way IN: an unlike is not news.
+        */
+        after(() => notifyWallpaperEngagement({ wallpaperId: id, action: "like", actorId: user.id }));
         break;
       case "unlike":
         await admin.from("wallpaper_likes").delete().eq("wallpaper_id", id).eq("user_id", user.id);
         break;
       case "save":
         await admin.from("wallpaper_saves").upsert({ wallpaper_id: id, user_id: user.id }, { onConflict: "wallpaper_id,user_id", ignoreDuplicates: true });
+        after(() => notifyWallpaperEngagement({ wallpaperId: id, action: "save", actorId: user.id }));
         break;
       case "unsave":
         await admin.from("wallpaper_saves").delete().eq("wallpaper_id", id).eq("user_id", user.id);

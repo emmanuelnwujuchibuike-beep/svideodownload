@@ -65,6 +65,23 @@ export const NOTIFICATIONS = [
   { id: "comment_reaction", label: "Reacted to your comment", category: "social", group: "post" },
   { id: "share", label: "Shared your post", category: "social", group: "post" },
   { id: "save", label: "Saved your post", category: "social", group: "post" },
+  /*
+    A member's own WALLPAPER, engaged with (2026-10-04, migration 0180).
+
+    🔴 Their own types rather than `like` / `save` reused, for the reason the AI
+    deposit types above give: a borrowed event type inherits its label AND its
+    destination. `like` reads "Liked your post" and deep-links to a post; a
+    wallpaper is neither. `wallpaper_download` has no post-side equivalent at
+    all — it is the metric an uploader most wants to hear about and the only one
+    carrying no operator boost.
+
+    Grouped `together`: a popular wallpaper can collect a hundred of these in a
+    day, and a Notification Center listing them one by one is a feature that
+    makes people turn notifications off.
+  */
+  { id: "wallpaper_like", label: "Liked your wallpaper", category: "social", group: "together" },
+  { id: "wallpaper_save", label: "Saved your wallpaper", category: "social", group: "together" },
+  { id: "wallpaper_download", label: "Downloaded your wallpaper", category: "social", group: "together" },
   { id: "profile_view", label: "Viewed your profile", category: "social", group: "together" },
   { id: "invite", label: "Invited you", category: "social" },
   { id: "milestone", label: "Milestone reached", category: "social" },

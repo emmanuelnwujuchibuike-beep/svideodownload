@@ -47,8 +47,52 @@ describe("upgradeCta", () => {
 });
 
 describe("upgradeHeadline", () => {
-  it("never mentions ads to a Pro user, who has none", () => {
-    expect(upgradeHeadline("pro").toLowerCase()).not.toContain("ads");
-    expect(upgradeHeadline("free").toLowerCase()).toContain("ads");
+  /*
+    ── 🔴 THIS TEST USED TO REQUIRE THE BUG ──────────────────────────────────
+
+    It asserted `upgradeHeadline("free")` CONTAINS "ads", pinning the old
+    "Tired of ads?" copy in place. That is the exact framing the owner asked to
+    remove on 2026-10-04 — "the go pro buttons still didn't change from earlier
+    fix — to show the AI features and not only remove ads" — because it cast
+    the whole paid product as an ad-blocker in the largest text on the card,
+    where the body copy underneath never got a chance to say otherwise.
+
+    A guard that fails when the bug is FIXED is worse than no guard. The rule
+    it should have been enforcing is the one below: no headline, on any plan,
+    sells the product by what it takes away.
+  */
+  it("never sells either plan as an ad-blocker", () => {
+    for (const plan of ["free", "pro"] as const) {
+      const headline = upgradeHeadline(plan).toLowerCase();
+      expect(headline, plan).not.toContain("ad");
+      expect(headline.length, plan).toBeGreaterThan(5);
+    }
+  });
+
+  it("says something different to a Pro user than to a free one", () => {
+    // teeth: one constant string would satisfy the rule above and tell a
+    // paying member nothing they do not already have.
+    expect(upgradeHeadline("pro")).not.toBe(upgradeHeadline("free"));
+  });
+});
+
+describe("the blurbs claim only things that are really gated", () => {
+  /*
+    Golden rule #2 — never a fabricated claim. Each of these was written on a
+    Go Pro card at some point and each was false: quality and AI access are not
+    plan-gated at all, no speed or queue differentiation exists anywhere, the
+    library is not Pro-only, and Pro's 1,000 downloads a day is not unlimited.
+    `lib/monetization/plan-features.ts` is the one list; these strings are its
+    short form.
+  */
+  const FORBIDDEN = ["faster download", "priority", "unlimited download", "exclusive", "ad-free", "all features"];
+
+  it("no CTA repeats a struck claim", () => {
+    for (const plan of ["free", "pro"] as const) {
+      for (const signedIn of [true, false]) {
+        const blurb = upgradeCta(plan, signedIn)?.blurb.toLowerCase() ?? "";
+        for (const claim of FORBIDDEN) expect(blurb, `${plan}/${signedIn}: "${claim}"`).not.toContain(claim);
+      }
+    }
   });
 });

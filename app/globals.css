@@ -457,11 +457,22 @@
      44px only for an OS that reports 0. No extra gap: /messages already reads
      correct at the raw inset, so matching it everywhere is what the owner wants.
      A browser tab keeps the raw env (0). */
-  html.pwa-standalone {
+  /* 🔴 iOS ONLY, and the Android APK is why (owner, 2026-10-04: "on Android apk
+     pwa it doesn't go to the safe area").
+
+     The 44px floor is a workaround for an iOS BUG: iOS reports
+     env(safe-area-inset-top) as 0 in an installed PWA even when there is a
+     notch, so the real inset has to be guessed. Android has no such bug — its
+     env() is truthful — but an Android TWA DOES match
+     (display-mode: standalone), so it was inheriting the guess and drawing a
+     44px band that belongs to no device. Both rules are gated on the JS-set
+     `.ios` class now (app/layout.tsx), so Android and desktop PWAs keep the raw
+     env() and iOS keeps its floor. */
+  html.pwa-standalone.ios {
     --frenz-safe-top: max(env(safe-area-inset-top), 44px);
   }
   @media (display-mode: standalone) {
-    :root {
+    html.ios {
       --frenz-safe-top: max(env(safe-area-inset-top), 44px);
     }
   }

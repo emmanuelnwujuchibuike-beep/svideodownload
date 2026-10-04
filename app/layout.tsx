@@ -367,9 +367,26 @@ export default function RootLayout({
             buttons kept jamming under the status bar. Deliberately NOT applied to
             the plain iOS browser — env() is already correct (adaptive) there, and
             flooring it fattened the landing header. */}
+        {/*
+          🔴 `.ios` IS SET SEPARATELY, AND THE ANDROID APK IS WHY (owner,
+          2026-10-04: "on Android apk pwa it doesn't go to the safe area").
+
+          The 44px floor below `.pwa-standalone` is an **iOS workaround**: iOS
+          reports `env(safe-area-inset-top)` as 0 in an installed PWA even when
+          there is a notch, so the real inset has to be guessed. Android does
+          not have that bug — but an Android TWA DOES match
+          `(display-mode: standalone)`, so it was picking up `.pwa-standalone`
+          and therefore the 44px guess as well, on a platform whose `env()` is
+          already truthful. That is a phantom band on every Android screen and
+          an inset that disagrees with the device.
+
+          So the floor is scoped to `.pwa-standalone.ios` and Android keeps the
+          raw `env()`. The platform test covers iPadOS 13+, which reports a Mac
+          platform string and is distinguishable only by touch points.
+        */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;if(s||navigator.standalone===true){document.documentElement.classList.add('pwa-standalone')}}catch(e){}})();`,
+            __html: `(function(){try{var d=document.documentElement;var s=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches;if(s||navigator.standalone===true){d.classList.add('pwa-standalone')}var p=navigator.platform||'';if(/iPad|iPhone|iPod/.test(p)||(navigator.maxTouchPoints>1&&/Mac/.test(p))){d.classList.add('ios')}}catch(e){}})();`,
           }}
         />
         {/* Theme class MUST be set from <head>, before any first paint — a

@@ -6,6 +6,7 @@ import { AiActionBar, AiAdvancedSettings, AiCost, AiField, AiGenerateButton, AiG
 import { AiDisplayTitle, AiGlassCard, AiPageShell } from "@/features/ai/design/ai-surface";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { AiImageDrop } from "@/features/ai/video/ai-image-drop";
+import { AiReferenceRail } from "@/features/ai/video/ai-reference-rail";
 import { AiVideoResult } from "@/features/ai/video/ai-video-result";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
@@ -48,6 +49,9 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
   const [durationSeconds, setDuration] = useState<number>(KLING_OMNI.duration.defaultSeconds);
   const [resolution, setResolution] = useState<"720p" | "1080p" | "4k">("720p");
   const [audio, setAudio] = useState<"off" | "native">("off");
+  /* Optional references, on top of the first frame — the model keeps a face, a product or a place consistent. Priced by the server. */
+  const [referenceImageUrls, setReferenceImages] = useState<string[]>([]);
+  const [referenceVideoUrl, setReferenceVideo] = useState<string | null>(null);
 
   const upload = useCallback(async (file: File) => {
     const body = new FormData();
@@ -63,9 +67,13 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
       firstFrameUrl: firstFrameUrl ?? "",
       ...(lastFrameUrl ? { lastFrameUrl } : {}),
       ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+      // Omitted entirely when empty: the wire schema is strict, and an empty
+      // array would re-quote as though something had been attached.
+      ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
+      ...(referenceVideoUrl ? { referenceVideoUrl } : {}),
       options: { durationSeconds, resolution, audio },
     }),
-    [firstFrameUrl, lastFrameUrl, prompt, durationSeconds, resolution, audio],
+    [firstFrameUrl, lastFrameUrl, prompt, durationSeconds, resolution, audio, referenceImageUrls, referenceVideoUrl],
   );
 
   const gen = useVideoGeneration({ feature: "image_to_video", input, ready: !!firstFrameUrl });
@@ -99,6 +107,15 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
             />
           </AiField>
         </div>
+
+        <AiReferenceRail
+          className="mt-3.5"
+          images={referenceImageUrls}
+          onImagesChange={setReferenceImages}
+          videoUrl={referenceVideoUrl}
+          onVideoChange={setReferenceVideo}
+          disabled={gen.status === "submitting" || gen.status === "running"}
+        />
       </AiGlassCard>
 
       {/* ── CORE SETTINGS ─────────────────────────────────────────────────── */}

@@ -4,6 +4,7 @@ import {
   KLING_OMNI,
   KLING_VIDEO_RESOLUTIONS,
   klingDurationValue,
+  klingMaxReferenceImages,
   type KlingContentType,
 } from "@/lib/ai/kling/features/capabilities";
 import { invalid, ok, type KlingCommonOptions, type KlingValidation } from "@/lib/ai/kling/features/types";
@@ -153,4 +154,73 @@ export function contentItem(type: KlingContentType, value: { text?: string; url?
 /** A prompt item, which every implemented feature sends. */
 export function promptItem(text: string): Record<string, unknown> {
   return contentItem("prompt", { text });
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  REFERENCE INPUTS — the rule that depends on TWO fields (2026-10-04)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The vendor, verbatim: "reference_images: Up to 7 reference images (up to 4
+ * when also using a reference video)". And exactly one reference video
+ * (`KLING_OMNI.video.maxCount`).
+ *
+ * 🔴 That conditional is why this is here rather than in the zod schema. The
+ * wire schema can say "not more than seven" because that is true of the field
+ * on its own; it cannot say "not more than four WHEN a video is attached"
+ * without encoding a relationship, and a relationship duplicated in two layers
+ * is two rules that drift. So the schema rejects what is nonsense always, and
+ * this rejects what is nonsense only in combination.
+ *
+ * It belongs in `shared.ts` by the file's own test: this is a rule TRUE OF THE
+ * MODEL, identical for every feature that accepts references, not a step in
+ * anybody's pipeline.
+ */
+export interface KlingReferenceInputs {
+  referenceImageUrls?: string[];
+  referenceVideoUrl?: string;
+}
+
+export function validateReferenceInputs(input: KlingReferenceInputs): KlingValidation {
+  const images = input.referenceImageUrls ?? [];
+  const video = input.referenceVideoUrl?.trim() || null;
+
+  if (video) {
+    const verdict = validateMediaUrl(video, "The reference video");
+    if (!verdict.ok) return verdict;
+  }
+
+  const max = klingMaxReferenceImages(!!video);
+  if (images.length > max) {
+    /*
+      Two different sentences, because they call for two different actions: with
+      a video attached the member can either remove images OR remove the video,
+      and a message that only mentions the image count hides the second option.
+    */
+    return invalid(
+      video
+        ? `With a reference video you can use up to ${max} reference images. Remove ${images.length - max}, or remove the video to use up to ${KLING_OMNI.images.max}.`
+        : `You can use up to ${max} reference images.`,
+    );
+  }
+
+  for (const [i, url] of images.entries()) {
+    const verdict = validateMediaUrl(url, `Reference image ${i + 1}`);
+    if (!verdict.ok) return verdict;
+  }
+
+  // A duplicate reference is a wasted slot and a wasted surcharge, not an error
+  // the vendor would catch — the member is told rather than quietly charged.
+  if (new Set(images).size !== images.length) return invalid("The same reference image is attached more than once.");
+
+  return ok;
+}
+
+/** The `contents` items for the references, in the order the prompt's placeholders count them. */
+export function referenceItems(input: KlingReferenceInputs): Record<string, unknown>[] {
+  const items: Record<string, unknown>[] = [];
+  for (const url of input.referenceImageUrls ?? []) items.push(contentItem("image", { url }));
+  const video = input.referenceVideoUrl?.trim();
+  if (video) items.push(contentItem("video", { url: video }));
+  return items;
 }

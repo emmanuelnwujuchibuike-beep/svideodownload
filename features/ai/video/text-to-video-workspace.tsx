@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { AiActionBar, AiAdvancedSettings, AiCost, AiField, AiGenerateButton, AiGenerationStatus, AiSegmented } from "@/features/ai/design/ai-generate";
 import { AiDisplayTitle, AiGlassCard, AiPageShell } from "@/features/ai/design/ai-surface";
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
+import { AiReferenceRail } from "@/features/ai/video/ai-reference-rail";
 import { AiVideoResult } from "@/features/ai/video/ai-video-result";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
@@ -48,14 +49,24 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
   const [aspectRatio, setAspect] = useState<"16:9" | "9:16" | "1:1">("16:9");
   const [resolution, setResolution] = useState<"720p" | "1080p" | "4k">("720p");
   const [audio, setAudio] = useState<"off" | "native">("off");
+  /* Optional references — the model keeps a face, a product or a place consistent. Priced by the server. */
+  const [referenceImageUrls, setReferenceImages] = useState<string[]>([]);
+  const [referenceVideoUrl, setReferenceVideo] = useState<string | null>(null);
 
   /*
     The request the SERVER will price and run. Memoised on the settings alone so
     an unrelated re-render cannot spam the quote endpoint.
   */
   const input = useMemo(
-    () => ({ prompt: prompt.trim(), options: { durationSeconds, aspectRatio, resolution, audio } }),
-    [prompt, durationSeconds, aspectRatio, resolution, audio],
+    () => ({
+      prompt: prompt.trim(),
+      // Omitted entirely when empty: the wire schema is strict, and an empty
+      // array would re-quote as though something had been attached.
+      ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
+      ...(referenceVideoUrl ? { referenceVideoUrl } : {}),
+      options: { durationSeconds, aspectRatio, resolution, audio },
+    }),
+    [prompt, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl],
   );
 
   const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0 });
@@ -80,6 +91,14 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
         <p className="mt-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
           {prompt.length.toLocaleString("en-US")} / {KLING_OMNI.prompt.maxChars.toLocaleString("en-US")}
         </p>
+        <AiReferenceRail
+          className="mt-3.5"
+          images={referenceImageUrls}
+          onImagesChange={setReferenceImages}
+          videoUrl={referenceVideoUrl}
+          onVideoChange={setReferenceVideo}
+          disabled={gen.status === "submitting" || gen.status === "running"}
+        />
       </AiGlassCard>
 
       {/* ── CORE SETTINGS: the two that change the price most ─────────────── */}

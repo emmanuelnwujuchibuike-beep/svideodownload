@@ -57,6 +57,15 @@ export const klingTextToVideoPipeline: KlingSupportedPipeline<KlingTextToVideoIn
       resolution: input.options?.resolution ?? "720p",
       seconds,
       audio: input.options?.audio === "native",
+      /*
+        🔴 The references are PRICED, at the operator's rate (2026-10-04). They are
+        counted here and nowhere else: the browser sends what it attached, the
+        pipeline already refused a count the vendor would not accept, and
+        `quoteKling` turns the count into money. A surcharge applied in the UI
+        instead would be the frontend deciding the price, which §13 forbids.
+      */
+      referenceImages: input.referenceImageUrls?.length ?? 0,
+      referenceVideo: !!input.referenceVideoUrl,
     });
   },
 };

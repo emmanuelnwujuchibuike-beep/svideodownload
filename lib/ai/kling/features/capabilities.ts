@@ -126,6 +126,22 @@ export const KLING_OMNI = {
   /** ⚠️ Image limits from the model guide (min 300 px, 10 MB, jpg/png). Not vendor-verified. */
   images: {
     max: 7,
+    /**
+     * 🔴 THE CEILING IS CONDITIONAL, AND THIS IS THE HALF THAT WAS MISSING
+     * (2026-10-04).
+     *
+     * The vendor's own wording: "reference_images: Up to 7 reference images
+     * (up to 4 when also using a reference video)". Confirmed against two
+     * independent publications of the model's schema.
+     *
+     * So attaching a reference video does not just add an input — it LOWERS
+     * how many images may travel with it. A UI that offers seven slots and
+     * then lets somebody attach a video has built a request the API refuses,
+     * after they composed it. `klingMaxReferenceImages()` below is the one
+     * place that answers the question, so the picker, the validator and the
+     * quote cannot disagree about it.
+     */
+    maxWithReferenceVideo: 4,
     minEdgePx: 300,
     maxBytes: 10 * 1024 * 1024,
     mimeTypes: ["image/jpeg", "image/png"] as const,
@@ -143,6 +159,18 @@ export const KLING_OMNI = {
 } as const;
 
 export type KlingContentType = (typeof KLING_OMNI.contentTypes)[number];
+
+/**
+ * How many reference images may travel with this request.
+ *
+ * 🔴 ONE function, because the answer depends on something the caller might not
+ * think to ask about: attaching a reference video drops the ceiling from 7 to
+ * 4. The slot picker, the pipeline's validator and the quote all ask here, so
+ * none of them can offer, accept or price a combination the vendor refuses.
+ */
+export function klingMaxReferenceImages(hasReferenceVideo: boolean): number {
+  return hasReferenceVideo ? KLING_OMNI.images.maxWithReferenceVideo : KLING_OMNI.images.max;
+}
 
 /* ───────────────────────────── lip sync ──────────────────────────────────── */
 

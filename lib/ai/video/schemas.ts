@@ -38,10 +38,28 @@ const omniOptions = z
 /** An https URL our own storage minted. The pipeline re-checks it; this stops obvious junk. */
 const mediaUrl = z.string().url().max(2000);
 
+/**
+ * ── REFERENCE INPUTS (2026-10-04) ──────────────────────────────────────────
+ *
+ * The ceiling here is `KLING_OMNI.images.max` — the ABSOLUTE one (7). The
+ * conditional ceiling, 4 when a reference video rides along, is deliberately
+ * NOT enforced at this layer: it is a relationship between two fields, which is
+ * exactly what the header above says belongs in the pipeline's own `validate`.
+ * Putting it in both places would be two rules that can disagree.
+ *
+ * So this rejects "9 images" (nonsense at any time) and the pipeline rejects
+ * "5 images AND a video" (nonsense only together).
+ */
+const referenceInputs = {
+  referenceImageUrls: z.array(mediaUrl).max(KLING_OMNI.images.max).optional(),
+  referenceVideoUrl: mediaUrl.optional(),
+};
+
 export const textToVideoInputSchema = z
   .object({
     prompt: z.string().min(1).max(KLING_OMNI.prompt.maxChars),
     multiShot: z.boolean().optional(),
+    ...referenceInputs,
     options: omniOptions,
   })
   .strict();
@@ -51,6 +69,7 @@ export const imageToVideoInputSchema = z
     firstFrameUrl: mediaUrl,
     lastFrameUrl: mediaUrl.optional(),
     prompt: z.string().max(KLING_OMNI.prompt.maxChars).optional(),
+    ...referenceInputs,
     options: omniOptions,
   })
   .strict();

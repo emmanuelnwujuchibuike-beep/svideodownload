@@ -1,5 +1,5 @@
 import { KLING_OMNI_MODEL_NAME } from "@/lib/ai/kling/features/capabilities";
-import { promptItem, settingsField, validateAspectRatioPresence, validateCommonOptions, validatePrompt } from "@/lib/ai/kling/features/shared";
+import { promptItem, referenceItems, settingsField, validateAspectRatioPresence, validateCommonOptions, validatePrompt, validateReferenceInputs, type KlingReferenceInputs } from "@/lib/ai/kling/features/shared";
 import { invalid, type KlingCommonOptions, type KlingFeatureHandler } from "@/lib/ai/kling/features/types";
 
 /**
@@ -40,7 +40,7 @@ import { invalid, type KlingCommonOptions, type KlingFeatureHandler } from "@/li
  * field name, which no readable source gives.
  */
 
-export interface KlingTextToVideoInput {
+export interface KlingTextToVideoInput extends KlingReferenceInputs {
   /** What to make. The whole instruction — there is nothing else to go on. */
   prompt: string;
   /**
@@ -50,6 +50,7 @@ export interface KlingTextToVideoInput {
   multiShot?: boolean;
   options?: KlingCommonOptions;
 }
+
 
 export const klingTextToVideo: KlingFeatureHandler<KlingTextToVideoInput> = {
   id: "text_to_video",
@@ -68,6 +69,10 @@ export const klingTextToVideo: KlingFeatureHandler<KlingTextToVideoInput> = {
 
     if (input.multiShot !== undefined && typeof input.multiShot !== "boolean") return invalid("The multi-shot setting must be on or off.");
 
+    // 7 images, or 4 alongside a reference video — the vendor rule, in one place.
+    const refs = validateReferenceInputs(input);
+    if (!refs.ok) return refs;
+
     /*
       🔴 There is no first frame here, so the vendor REQUIRES an aspect ratio.
       Refused as a sentence now rather than as a 400 after the charge.
@@ -79,7 +84,7 @@ export const klingTextToVideo: KlingFeatureHandler<KlingTextToVideoInput> = {
     const settings = settingsField(input.options);
     if (input.multiShot !== undefined) settings.multi_shot = input.multiShot;
     return {
-      contents: [promptItem(input.prompt)],
+      contents: [promptItem(input.prompt), ...referenceItems(input)],
       settings,
     };
   },

@@ -1,5 +1,5 @@
 import { KLING_OMNI_MODEL_NAME } from "@/lib/ai/kling/features/capabilities";
-import { contentItem, promptItem, settingsField, validateCommonOptions, validateMediaUrl, validatePrompt } from "@/lib/ai/kling/features/shared";
+import { contentItem, promptItem, referenceItems, settingsField, validateCommonOptions, validateMediaUrl, validatePrompt, validateReferenceInputs, type KlingReferenceInputs } from "@/lib/ai/kling/features/shared";
 import { invalid, ok, type KlingCommonOptions, type KlingFeatureHandler } from "@/lib/ai/kling/features/types";
 
 /**
@@ -51,7 +51,7 @@ import { invalid, ok, type KlingCommonOptions, type KlingFeatureHandler } from "
  * and is left out of the body entirely unless the caller set one.
  */
 
-export interface KlingImageToVideoInput {
+export interface KlingImageToVideoInput extends KlingReferenceInputs {
   /** The picture the clip starts on. */
   firstFrameUrl: string;
   /** Optional: the picture it ends on. The model interpolates between them. */
@@ -86,6 +86,10 @@ export const klingImageToVideo: KlingFeatureHandler<KlingImageToVideoInput> = {
     const prompt = validatePrompt(input.prompt, { required: false });
     if (!prompt.ok) return prompt;
 
+    // 7 images, or 4 alongside a reference video — the vendor rule, in one place.
+    const refs = validateReferenceInputs(input);
+    if (!refs.ok) return refs;
+
     // A first frame is present, so the aspect ratio is genuinely optional here.
     return ok;
   },
@@ -96,6 +100,7 @@ export const klingImageToVideo: KlingFeatureHandler<KlingImageToVideoInput> = {
     if (prompt) contents.push(promptItem(prompt));
     contents.push(contentItem("first_frame", { url: input.firstFrameUrl }));
     if (input.lastFrameUrl?.trim()) contents.push(contentItem("last_frame", { url: input.lastFrameUrl }));
+    contents.push(...referenceItems(input));
 
     return { contents, settings: settingsField(input.options) };
   },

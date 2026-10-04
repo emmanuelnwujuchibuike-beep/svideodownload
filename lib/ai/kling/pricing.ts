@@ -123,6 +123,26 @@ export interface KlingTierPricing {
   priceUsdCentsPerRun: number;
   /** Native audio is a separate generation cost at the vendor; billed per second when on. */
   audioSurchargeUsdCentsPerSecond: number;
+  /**
+   * ── REFERENCE INPUTS, PRICED BY THE OPERATOR (2026-10-04) ────────────────
+   *
+   * Owner: "with reference video cost is different and higher or anyhow set by
+   * the admin. Don't hardcode anything."
+   *
+   * So the surcharge is a FIELD, not a number in a branch somewhere, and both
+   * default to **0** — meaning a deployment that has not set them prices a
+   * referenced generation exactly as it prices a plain one. That is the honest
+   * default: this project may not invent a figure the operator never chose, and
+   * a non-zero default would be exactly that.
+   *
+   * Per RUN, not per second. A reference is an input to the generation, not a
+   * property of its length — the vendor's own unit billing does not scale with
+   * how many references were supplied, so a per-second surcharge would charge
+   * twice for the same decision on a longer clip.
+   */
+  referenceVideoSurchargeUsdCentsPerRun: number;
+  /** Charged once per attached reference image, so 5 images cost 5×. */
+  referenceImageSurchargeUsdCentsPerRun: number;
 
   /* ── the shape of what may be asked for ── */
   /** A floor, so a 3-second job is not priced at almost nothing. */
@@ -146,6 +166,8 @@ const tier = (over: Partial<KlingTierPricing> = {}): KlingTierPricing => ({
   priceUsdCentsPerSecond: 0,
   priceUsdCentsPerRun: 0,
   audioSurchargeUsdCentsPerSecond: 0,
+  referenceVideoSurchargeUsdCentsPerRun: 0,
+  referenceImageSurchargeUsdCentsPerRun: 0,
   minBillableSeconds: 3,
   minSeconds: 3,
   maxSeconds: 15,
@@ -218,6 +240,8 @@ function normalizeTier(raw: unknown, d: KlingTierPricing): KlingTierPricing {
     priceUsdCentsPerSecond: num(r.priceUsdCentsPerSecond, d.priceUsdCentsPerSecond, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
     priceUsdCentsPerRun: num(r.priceUsdCentsPerRun, d.priceUsdCentsPerRun, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
     audioSurchargeUsdCentsPerSecond: num(r.audioSurchargeUsdCentsPerSecond, d.audioSurchargeUsdCentsPerSecond, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
+    referenceVideoSurchargeUsdCentsPerRun: num(r.referenceVideoSurchargeUsdCentsPerRun, d.referenceVideoSurchargeUsdCentsPerRun, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
+    referenceImageSurchargeUsdCentsPerRun: num(r.referenceImageSurchargeUsdCentsPerRun, d.referenceImageSurchargeUsdCentsPerRun, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
     // Clamped INTO the tier's own window, so a floor can never exceed the ceiling.
     minBillableSeconds: int(r.minBillableSeconds, d.minBillableSeconds, minSeconds, maxSeconds),
     minSeconds,
@@ -272,6 +296,12 @@ export interface KlingQuoteRequest {
   seconds: number;
   /** Omni's native audio. Never applies to Lip Sync, which carries its own speech. */
   audio?: boolean;
+  /**
+   * Reference inputs, counted — never the URLs. This function must stay pure
+   * and must not care what was referenced, only how much was.
+   */
+  referenceImages?: number;
+  referenceVideo?: boolean;
 }
 
 export type KlingQuote =
@@ -328,8 +358,28 @@ export function quoteKling(c: KlingPricingConfig, req: KlingQuoteRequest): Kling
   // Native audio is an Omni setting; Lip Sync carries its own speech and never surcharges.
   const audioOn = req.feature !== "lip_sync" && req.audio === true;
   const perSecond = t.priceUsdCentsPerSecond + (audioOn ? t.audioSurchargeUsdCentsPerSecond : 0);
+
+  /*
+    ── The reference surcharges (2026-10-04) ───────────────────────────────────
+
+    Per run, and Lip Sync never pays them: it takes a source video and audio,
+    which are its REQUIRED inputs, not optional references. Charging it a
+    "reference video" surcharge would be charging for the feature itself.
+
+    Counted, then clamped at zero, so a caller that passes a negative or a
+    nonsense count cannot subtract from the price. The COUNT is never trusted to
+    be within the vendor's ceiling here either — that is the pipeline's
+    validation, which runs before this and refuses; this only has to be unable
+    to produce a smaller number than the un-referenced price.
+  */
+  const referenced = req.feature !== "lip_sync";
+  const imageCount = referenced ? Math.max(0, Math.floor(req.referenceImages ?? 0)) : 0;
+  const videoOn = referenced && req.referenceVideo === true;
+  const referenceCents =
+    imageCount * t.referenceImageSurchargeUsdCentsPerRun + (videoOn ? t.referenceVideoSurchargeUsdCentsPerRun : 0);
+
   // Rounded to a whole cent at the END, once — a wallet cannot hold a third of a cent.
-  const totalUsdCents = Math.ceil(billableSeconds * perSecond + t.priceUsdCentsPerRun);
+  const totalUsdCents = Math.ceil(billableSeconds * perSecond + t.priceUsdCentsPerRun + referenceCents);
 
   const units = klingTierCostKnown(t) ? Math.round((billableSeconds * t.providerUnitsPerSecond + t.providerUnitsPerRun) * 1000) / 1000 : null;
   const providerCostUsdCents = units !== null && t.unitCostUsdCents > 0 ? Math.round(units * t.unitCostUsdCents * 100) / 100 : null;

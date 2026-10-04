@@ -67,6 +67,8 @@ type Draft = Record<KlingTierKey, {
   priceUsdCentsPerSecond: string;
   priceUsdCentsPerRun: string;
   audioSurchargeUsdCentsPerSecond: string;
+  referenceVideoSurchargeUsdCentsPerRun: string;
+  referenceImageSurchargeUsdCentsPerRun: string;
   minBillableSeconds: string;
   minSeconds: string;
   maxSeconds: string;
@@ -85,6 +87,8 @@ const toDraft = (m: Record<KlingTierKey, KlingTierPricing>): Draft =>
         priceUsdCentsPerSecond: String(m[k].priceUsdCentsPerSecond),
         priceUsdCentsPerRun: String(m[k].priceUsdCentsPerRun),
         audioSurchargeUsdCentsPerSecond: String(m[k].audioSurchargeUsdCentsPerSecond),
+        referenceVideoSurchargeUsdCentsPerRun: String(m[k].referenceVideoSurchargeUsdCentsPerRun),
+        referenceImageSurchargeUsdCentsPerRun: String(m[k].referenceImageSurchargeUsdCentsPerRun),
         minBillableSeconds: String(m[k].minBillableSeconds),
         minSeconds: String(m[k].minSeconds),
         maxSeconds: String(m[k].maxSeconds),
@@ -121,6 +125,8 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
               priceUsdCentsPerSecond: num(d.priceUsdCentsPerSecond, base.priceUsdCentsPerSecond),
               priceUsdCentsPerRun: num(d.priceUsdCentsPerRun, base.priceUsdCentsPerRun),
               audioSurchargeUsdCentsPerSecond: num(d.audioSurchargeUsdCentsPerSecond, base.audioSurchargeUsdCentsPerSecond),
+              referenceVideoSurchargeUsdCentsPerRun: num(d.referenceVideoSurchargeUsdCentsPerRun, base.referenceVideoSurchargeUsdCentsPerRun),
+              referenceImageSurchargeUsdCentsPerRun: num(d.referenceImageSurchargeUsdCentsPerRun, base.referenceImageSurchargeUsdCentsPerRun),
               minBillableSeconds: int(d.minBillableSeconds, base.minBillableSeconds),
               minSeconds: int(d.minSeconds, base.minSeconds),
               maxSeconds: int(d.maxSeconds, base.maxSeconds),
@@ -259,7 +265,39 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
                           className={cn(input, key.startsWith("lip_sync") && "opacity-50")}
                         />
                       </label>
+                      {/*
+                        The reference surcharges. Disabled on Lip Sync for the
+                        same reason the sound one is: its video and audio are the
+                        feature's REQUIRED inputs, not optional references, so a
+                        surcharge there would charge for the tool itself. The
+                        quote refuses to apply them to Lip Sync regardless — this
+                        only stops an operator typing a number that does nothing.
+                      */}
+                      <label className="block text-[11px] font-semibold text-muted-foreground">
+                        ¢ / reference image
+                        <input
+                          value={d.referenceImageSurchargeUsdCentsPerRun}
+                          onChange={(e) => set(key, { referenceImageSurchargeUsdCentsPerRun: e.target.value })}
+                          inputMode="decimal"
+                          disabled={key.startsWith("lip_sync")}
+                          className={cn(input, key.startsWith("lip_sync") && "opacity-50")}
+                        />
+                      </label>
+                      <label className="block text-[11px] font-semibold text-muted-foreground">
+                        ¢ / reference video
+                        <input
+                          value={d.referenceVideoSurchargeUsdCentsPerRun}
+                          onChange={(e) => set(key, { referenceVideoSurchargeUsdCentsPerRun: e.target.value })}
+                          inputMode="decimal"
+                          disabled={key.startsWith("lip_sync")}
+                          className={cn(input, key.startsWith("lip_sync") && "opacity-50")}
+                        />
+                      </label>
                     </div>
+                    <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+                      Reference surcharges are charged <strong>per run</strong> — once for a reference video, and once for each reference image. Both start at 0, so
+                      until you set them a referenced generation costs the same as a plain one. Kling allows 7 reference images, or 4 alongside a reference video.
+                    </p>
                   </div>
                 </div>
 

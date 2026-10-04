@@ -4,7 +4,7 @@ import { publicAiPlansConfig } from "@/lib/ai/credits/config";
 import { getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 import { listOwnCreditLedger } from "@/lib/ai/credits/store";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
-import { aiFeature } from "@/lib/ai/jobs";
+import { primaryAiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -23,8 +23,14 @@ export const dynamic = "force-dynamic";
  * the same tables at the moment it matters.
  */
 export async function GET(request: Request) {
-  const feature = aiFeature("ai_character_replace");
-  if (!feature) return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), { status: aiErrorStatus("FEATURE_UNAVAILABLE") });
+  /*
+    🔴 2026-10-04: same bug as the wallet route, same day — this named the
+    retired `ai_character_replace` and refused FEATURE_UNAVAILABLE once Part 5
+    removed its registry row, so the allowance card on the balance page died
+    with it. An AI plan's credits are not one tool's; the feature here only
+    resolves the subject, so it asks for the surface's anchor.
+  */
+  const feature = primaryAiFeature();
   const { subject } = await resolveAiSubject(request, feature.id);
   if (!subject || subject.kind !== "user") return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
   const burst = await aiJobReadLimiter.limit(`ai-credits:${subject.key}`);

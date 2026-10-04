@@ -7,7 +7,7 @@ import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { getAdminUser } from "@/lib/admin/require-admin";
 import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
-import { aiFeature } from "@/lib/ai/jobs";
+import { primaryAiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { aiCurrencySymbol, getLandingSettings, isAiCurrency } from "@/lib/landing/settings";
@@ -25,10 +25,19 @@ export const dynamic = "force-dynamic";
  * the sheet needs no second request.
  */
 export async function GET(request: Request) {
-  const feature = aiFeature("ai_character_replace");
-  if (!feature) {
-    return NextResponse.json(aiErrorBody("FEATURE_UNAVAILABLE"), { status: aiErrorStatus("FEATURE_UNAVAILABLE") });
-  }
+  /*
+    🔴 2026-10-04: this asked for `aiFeature("ai_character_replace")` and refused
+    FEATURE_UNAVAILABLE when it answered null. Part 5 retired that registry row —
+    so the moment Character Replace lost its engine, every member's balance page
+    read "Couldn't load your balance right now". The wallet is shared by every
+    paid tool and never belonged to Character Replace; only this gate said so.
+
+    The feature is needed to resolve the subject and the member's own processing
+    figures, nothing more, so it asks for the surface's anchor — exactly what
+    `/api/ai/balance` has always done. A retired tool must never be able to take
+    the wallet down again: `wallet-routes.test.ts` fails if this regresses.
+  */
+  const feature = primaryAiFeature();
   const { subject } = await resolveAiSubject(request, feature.id);
   if (!subject || subject.kind !== "user") {
     return NextResponse.json(aiErrorBody("AUTH_REQUIRED"), { status: aiErrorStatus("AUTH_REQUIRED") });
@@ -65,11 +74,11 @@ export async function GET(request: Request) {
       figure, the operator's caps), how many may be open, how many are open
       now. Display only; the claim and the pump decide with the same function.
     */
-    const [feature, adminUser] = [aiFeature("ai_character_replace"), await getAdminUser().catch(() => null)];
-    const entitlement = feature ? await getAiEntitlement(subject, feature) : null;
+    const adminUser = await getAdminUser().catch(() => null);
+    const entitlement = await getAiEntitlement(subject, feature);
     const processing = settings.frenzAiCharacterReplace.processing;
-    const concurrency = entitlement ? concurrencyLimitFor(settings.frenzAiCharacterReplace, { audience: entitlement.audience, isAdmin: !!adminUser, policyMaxConcurrent: entitlement.maxConcurrent }) : 1;
-    const openJobs = feature ? await countOpenJobs(subject, feature, { includeDrafts: false }).catch(() => 0) : 0;
+    const concurrency = concurrencyLimitFor(settings.frenzAiCharacterReplace, { audience: entitlement.audience, isAdmin: !!adminUser, policyMaxConcurrent: entitlement.maxConcurrent });
+    const openJobs = await countOpenJobs(subject, feature, { includeDrafts: false }).catch(() => 0);
     return NextResponse.json(
       {
         processing: {

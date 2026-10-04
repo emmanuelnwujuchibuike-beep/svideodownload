@@ -55,7 +55,8 @@ export interface NativeVoice {
 }
 
 export interface LipSyncProProvider {
-  readonly id: "replicate" | "fal";
+  /** 🔴 `kling` since Part 5 §11 — the direct endpoint, not a Kling model on Replicate. */
+  readonly id: "replicate" | "fal" | "kling";
   readonly model: string;
   readonly version: string;
   readonly capabilities: LipSyncCapabilities;

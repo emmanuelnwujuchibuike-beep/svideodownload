@@ -37,7 +37,16 @@ import { normalizeTtsVoiceSettings, TTS_VOICE_SETTINGS_DEFAULTS, type TtsVoiceSe
  * voice step uses. The member experiences one generation either way.
  */
 
-export type LipSyncVendor = "replicate" | "fal";
+/**
+ * 🔴 `kling` joined on 2026-09-28 (Part 5 §11): Lip Sync runs on Kling's own
+ * `/v1/videos/lip-sync` endpoint now. It is deliberately NOT a key of
+ * `config.models` — that table holds the legacy vendors' model ids and
+ * version pins, and the direct endpoint names no model in its request. A Kling
+ * job reads its model from the plan the router wrote instead.
+ */
+export type LipSyncVendor = "replicate" | "fal" | "kling";
+/** The two the model table is keyed by. Kling is routed, never configured here. */
+export type LipSyncConfiguredVendor = "replicate" | "fal";
 export type LipSyncExpression = "natural" | "balanced" | "expressive";
 export const LIP_SYNC_EXPRESSIONS: readonly LipSyncExpression[] = ["natural", "balanced", "expressive"];
 /** §7: what to do when the audio and the video differ in length. */
@@ -72,6 +81,7 @@ export interface LipSyncProConfig {
   enabled: boolean;
   /** Which vendor runs NEW jobs (the fal.ai brief's switch, mirrored here for this tool). */
   provider: LipSyncVendor;
+  /** Keyed by the CONFIGURED vendors only: Kling names no model in its request (Part 5 §11). */
   models: Record<LipSyncVendor, LipSyncModelChoice>;
   /** The two speech sources, each switchable. */
   textMode: { enabled: boolean; minimumCharacters: number; maximumCharacters: number; speed: { min: number; max: number; default: number } };
@@ -99,6 +109,13 @@ export interface LipSyncProConfig {
 export const LIP_SYNC_MODEL_IDS: Record<LipSyncVendor, readonly string[]> = {
   replicate: ["sync/lipsync-2-pro", "sync/lipsync-2", "kwaivgi/kling-lip-sync"],
   fal: ["fal-ai/sync-lipsync/v3"],
+  /*
+    🔴 ONE id, and it is not a choice. The direct Kling endpoint names no model
+    in its request — the name exists so the job row, the admin and the provider
+    ledger have something to display. An operator cannot pick a different one,
+    because there is not one.
+  */
+  kling: ["kling-lip-sync"],
 };
 /**
  * Owner, 2026-09-21: "use the fal.ai top lip sync model — Sync-3 or higher".
@@ -146,6 +163,17 @@ export const LIP_SYNC_DEFAULTS: LipSyncProConfig = {
     // Sync Labs' studio model — the tier Character Replace already calls "Studio"; audio-driven, temperature + active speaker
     replicate: modelDefault("sync/lipsync-2-pro", 25, "sync/lipsync-2-pro (audio-driven, expression + active speaker) · sync/lipsync-2 (audio-driven) · kwaivgi/kling-lip-sync (text-native, Kling voices, 2–10 s, 720–1920 px)"),
     fal: { ...modelDefault("fal-ai/sync-lipsync/v3", 25, "Sync-3 on fal.ai ($8/min listed 2026-09-21): audio-driven; text becomes ElevenLabs speech first. A newer fal-ai/sync-lipsync/v… endpoint may be typed here."), providerCostPerSecondUsdCents: 13.33 },
+    /*
+      🔴 THE ONLY ROUTE THAT RUNS (Part 5 §11). Kling's own /v1/videos/lip-sync.
+      The customer price per second is the operator's, as for every other
+      vendor, so the existing quote and its HMAC keep working unchanged.
+
+      `providerCostPerSecondUsdCents` is 0 = NOT MEASURED. A real run cost 0.5
+      units for a ~3 s clip, but one length is a single data point and this
+      project does not ship a rate derived from one. The Kling pricing panel
+      says "not measured" for the same reason.
+    */
+    kling: modelDefault("kling-lip-sync", 25, "Kling's own lip-sync endpoint (direct). Audio-driven: the speech is prepared first, then the mouth is driven. Source must be 512–2160px tall and contain a person — both refusals cost nothing."),
   },
   textMode: { enabled: true, minimumCharacters: 1, maximumCharacters: 1_200, speed: { min: 0.8, max: 2.0, default: 1.0 } },
   audioMode: { enabled: true, formats: ["mp3", "wav", "m4a", "aac", "ogg"], maximumDurationSeconds: 120, maximumUploadBytes: 25 * 1024 * 1024 },
@@ -214,7 +242,17 @@ export function normalizeLipSyncConfig(raw: unknown): LipSyncProConfig {
   return {
     enabled: bool(raw.enabled, d.enabled),
     provider: raw.provider === "fal" ? "fal" : "replicate",
-    models: { replicate: normalizeModel(models.replicate, d.models.replicate, "replicate"), fal: normalizeModel(models.fal, d.models.fal, "fal") },
+    models: {
+      replicate: normalizeModel(models.replicate, d.models.replicate, "replicate"),
+      fal: normalizeModel(models.fal, d.models.fal, "fal"),
+      /*
+        🔴 Kling keeps its MODEL id whatever a patch says — the direct endpoint
+        names no model, so there is nothing for an operator to choose and a
+        stored value could only be wrong. The PRICE is still theirs to set,
+        which is why the row is normalised rather than frozen whole.
+      */
+      kling: { ...normalizeModel(models.kling, d.models.kling, "kling"), model: d.models.kling.model },
+    },
     textMode: {
       enabled: bool(tm.enabled, d.textMode.enabled),
       minimumCharacters: minChars,

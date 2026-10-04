@@ -8,6 +8,7 @@ import { recordJobEvent } from "@/lib/ai/job-events";
 import { getJobAsService, transitionJob } from "@/lib/ai/job-store";
 import type { AiJobRow, AiJobStatus } from "@/lib/ai/jobs";
 import { readLipSyncMeta, readLipSyncPipeline } from "@/lib/ai/lip-sync/job-meta";
+import { KLING_DIRECT_LIP_SYNC_MODEL } from "@/lib/ai/lip-sync/providers/kling-direct";
 import { lipSyncAdapterFor } from "@/lib/ai/lip-sync/providers/router";
 import type { LipSyncSpeech } from "@/lib/ai/lip-sync/providers/types";
 import { providerFor } from "@/lib/ai/providers";
@@ -87,16 +88,29 @@ export async function submitLipSyncJob(job: AiJobRow, opts: { from: readonly AiJ
     mid-submit, after the charge. That is the precise bug the Part 4 note below
     was written about, one release later.
   */
-  if (vendor !== "replicate" && vendor !== "fal") {
-    throw new AiJobError("FEATURE_UNAVAILABLE", `lip-sync: ${vendor} jobs are not submitted through the legacy path — Lip Sync runs on the direct Kling endpoint`);
+  /*
+    🔴 The MODEL table is keyed by the legacy vendors only, so Kling reads its
+    model from the plan the router wrote rather than from `config.models`.
+    Anything that is neither a legacy vendor nor Kling is a routing mistake and
+    is refused rather than indexing a table that does not have it — the
+    `elevenlabs` provider value would otherwise throw a TypeError mid-submit,
+    after the charge.
+  */
+  if (vendor !== "replicate" && vendor !== "fal" && vendor !== "kling") {
+    throw new AiJobError("FEATURE_UNAVAILABLE", `lip-sync: ${vendor} jobs are not submitted through this path`);
   }
-  const model = plan?.model || config.models[vendor].model;
+  const model = plan?.model || (vendor === "kling" ? KLING_DIRECT_LIP_SYNC_MODEL : config.models[vendor].model);
   const adapter = lipSyncAdapterFor(vendor, model, settings.frenzAiProviders);
   if (!adapter) throw new AiJobError("FEATURE_UNAVAILABLE", `no lip-sync adapter for ${model} on ${vendor}`);
   if (!adapter.isConfigured()) throw new AiJobError("FEATURE_UNAVAILABLE", `${model} is not configured on this deployment`);
   const generic = providerFor(vendor);
   const origin = (opts.origin ?? process.env.NEXT_PUBLIC_SITE_URL ?? SITE_URL).replace(/\/$/, "");
-  const webhookUrl = vendor === "fal" ? `${origin}/api/webhooks/fal` : `${origin}/api/ai/replicate/webhook`;
+  /*
+    🔴 The callback follows the VENDOR. A Kling task reporting to Replicate's
+    route would be verified against Replicate's signature scheme and discarded,
+    and the job would hang until the stall sweep failed it — after the charge.
+  */
+  const webhookUrl = vendor === "kling" ? `${origin}/api/webhooks/kling` : vendor === "fal" ? `${origin}/api/webhooks/fal` : `${origin}/api/ai/replicate/webhook`;
 
   // the speech, as the model takes it
   const speechPath = (plan as { speechPath?: unknown } | null)?.speechPath === "native" ? "native" : meta.speech.source === "text" ? (meta.speech.path ?? "tts") : "audio";

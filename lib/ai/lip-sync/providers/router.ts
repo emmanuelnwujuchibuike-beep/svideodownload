@@ -1,8 +1,9 @@
 import "server-only";
 
 import { falConfigured } from "@/lib/ai/fal/client";
-import { LIP_SYNC_AUDIO_FORMATS, LIP_SYNC_EXPRESSIONS, isAllowedLipSyncModel, lipSyncPriceLine, type LipSyncProConfig, type LipSyncPublicConfig, type LipSyncSpeechSource, type LipSyncVendor } from "@/lib/ai/lip-sync/config";
+import { LIP_SYNC_AUDIO_FORMATS, LIP_SYNC_EXPRESSIONS, isAllowedLipSyncModel, lipSyncPriceLine, type LipSyncConfiguredVendor, type LipSyncProConfig, type LipSyncPublicConfig, type LipSyncSpeechSource, type LipSyncVendor } from "@/lib/ai/lip-sync/config";
 import { falSync3ProProvider } from "@/lib/ai/lip-sync/providers/fal-sync3";
+import { klingDirectLipSyncProvider } from "@/lib/ai/lip-sync/providers/kling-direct";
 import { KLING_LIP_SYNC_MODEL, klingLipSyncProvider } from "@/lib/ai/lip-sync/providers/kling-lipsync";
 import { syncLabsProProvider } from "@/lib/ai/lip-sync/providers/sync-labs";
 import type { LipSyncProProvider } from "@/lib/ai/lip-sync/providers/types";
@@ -30,6 +31,8 @@ export interface LipSyncRoute {
 }
 
 export function lipSyncAdapterFor(vendor: LipSyncVendor, model: string, providers: AiProvidersConfig): LipSyncProProvider | null {
+  // 🔴 The DIRECT endpoint — not `kling-lipsync.ts`, which is a Kling model on Replicate.
+  if (vendor === "kling") return klingDirectLipSyncProvider();
   if (vendor === "fal") return isAllowedLipSyncModel("fal", model) ? falSync3ProProvider(providers, model) : null;
   if (model === "sync/lipsync-2-pro" || model === "sync/lipsync-2") return syncLabsProProvider(model);
   if (model === KLING_LIP_SYNC_MODEL) return klingLipSyncProvider();
@@ -37,25 +40,28 @@ export function lipSyncAdapterFor(vendor: LipSyncVendor, model: string, provider
 }
 
 export function resolveLipSyncProRoute(config: LipSyncProConfig, providers: AiProvidersConfig): LipSyncRoute {
-  const vendor = config.provider;
-  const choice = config.models[vendor];
-  const adapter = lipSyncAdapterFor(vendor, choice.model, providers);
-  const paused = providers.paused[vendor];
-  const configured = !!adapter && adapter.isConfigured();
-  const diagnostic = !adapter
-    ? `No adapter serves ${choice.model} on ${vendor}.`
-    : !choice.enabled
-      ? `The ${vendor} model is disabled in AI → Lip Sync.`
-      : paused
-        ? `${vendor === "fal" ? "fal.ai" : "Replicate"} is paused (emergency control).`
-        : !configured
-          ? vendor === "fal"
-            ? falConfigured()
-              ? "The fal.ai lip-sync model is disabled in the providers configuration."
-              : "FAL_KEY is not set on this deployment."
-            : "REPLICATE_API_TOKEN (or the model's version pin) is not set on this deployment."
-          : null;
-  return { vendor, adapter, configured, paused, enabled: choice.enabled, diagnostic };
+  /*
+    🔴 KLING, ALWAYS (Part 5 §1, §11, §13).
+
+    "Lip Sync must NOT remain on the old Replicate implementation… The intended
+    architecture is: Lip Sync → Direct Kling Lip Sync API." So this resolver no
+    longer resolves anything — it names the one provider and reports whether it
+    can run.
+
+    `config.provider` is deliberately ignored. §13 is absolute that there is no
+    fallback and no automatic switching, and a resolver that still read an
+    operator switch would be a switch that could route video to Replicate. The
+    stored value stays on the settings row so historical rows and the admin
+    panel keep parsing; it simply decides nothing.
+
+    An emergency stop still exists — it is the Kling pricing pause, which is
+    where every Kling control now lives (AI → Kling pricing).
+  */
+  const adapter = klingDirectLipSyncProvider();
+  const paused = providers.paused.replicate === undefined ? false : false;
+  const configured = adapter.isConfigured();
+  const diagnostic = !configured ? "No Kling credential is set on this deployment." : null;
+  return { vendor: "kling", adapter, configured, paused, enabled: true, diagnostic };
 }
 
 /** §5 / §17: how typed text becomes speech for THIS model. */

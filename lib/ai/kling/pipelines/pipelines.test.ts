@@ -282,3 +282,68 @@ describe("§27 — each pipeline validates its own inputs", () => {
     expect(klingPipeline("text_to_video").feature).toBe("text_to_video");
   });
 });
+
+describe("🔴 §11 — Lip Sync resolves to the DIRECT Kling endpoint, always", () => {
+  it("the router names kling and ignores the stored operator switch", async () => {
+    const { resolveLipSyncProRoute } = await import("@/lib/ai/lip-sync/providers/router");
+    const { normalizeLipSyncConfig } = await import("@/lib/ai/lip-sync/config");
+    const { normalizeAiProvidersConfig } = await import("@/lib/ai/providers/config");
+    const providers = normalizeAiProvidersConfig(null);
+
+    /*
+      §13 is absolute: no fallback, no automatic switching. A resolver that
+      still read `config.provider` would be a switch that could route video to
+      Replicate — so both stored values must produce the same answer.
+    */
+    for (const stored of ["replicate", "fal"] as const) {
+      const route = resolveLipSyncProRoute(normalizeLipSyncConfig({ provider: stored }), providers);
+      expect(route.vendor, stored).toBe("kling");
+      expect(route.adapter?.id, stored).toBe("kling");
+    }
+  });
+
+  it("🔴 the adapter is the DIRECT endpoint, not a Kling model on Replicate", async () => {
+    const { klingDirectLipSyncProvider } = await import("@/lib/ai/lip-sync/providers/kling-direct");
+    const adapter = klingDirectLipSyncProvider();
+    expect(adapter.id).toBe("kling");
+    // `kwaivgi/kling-lip-sync` is the Replicate-hosted one — the arrangement §11 forbids.
+    expect(adapter.model).not.toContain("kwaivgi");
+    expect(adapter.model).not.toContain("/");
+  });
+
+  it("🔴 it declares NO text support, because the voice catalogue is not discoverable", async () => {
+    const { KLING_DIRECT_LIP_SYNC_CAPABILITIES } = await import("@/lib/ai/lip-sync/providers/kling-direct");
+    // Claiming text without a voice id to name would be faking support (§37) —
+    // and the member would meet the failure after being charged.
+    expect(KLING_DIRECT_LIP_SYNC_CAPABILITIES.supports_text).toBe(false);
+    expect(KLING_DIRECT_LIP_SYNC_CAPABILITIES.supports_audio).toBe(true);
+    // The vendor's own refusals, both of which cost zero units.
+    expect(KLING_DIRECT_LIP_SYNC_CAPABILITIES.video.minEdgePx).toBe(512);
+    expect(KLING_DIRECT_LIP_SYNC_CAPABILITIES.video.maxEdgePx).toBe(2160);
+  });
+
+  it("builds the verified audio2video body through the PIPELINE, never its own", async () => {
+    const { klingDirectLipSyncProvider } = await import("@/lib/ai/lip-sync/providers/kling-direct");
+    const body = klingDirectLipSyncProvider().buildInput({
+      videoUrl: "https://x.test/a.mp4",
+      speech: { kind: "audio", audioUrl: "https://x.test/a.mp3" },
+      syncMode: "silence",
+      temperature: null,
+      activeSpeaker: null,
+    });
+    expect(body).toEqual({ input: { mode: "audio2video", video_url: "https://x.test/a.mp4", audio_type: "url", audio_url: "https://x.test/a.mp3" } });
+  });
+
+  it("🔴 refuses a TEXT request rather than quietly making speech with another vendor (§3, §11)", async () => {
+    const { klingDirectLipSyncProvider } = await import("@/lib/ai/lip-sync/providers/kling-direct");
+    expect(() =>
+      klingDirectLipSyncProvider().buildInput({
+        videoUrl: "https://x.test/a.mp4",
+        speech: { kind: "text", text: "hello", providerVoiceId: null, languageCode: "en", speed: 1 },
+        syncMode: "silence",
+        temperature: null,
+        activeSpeaker: null,
+      }),
+    ).toThrow();
+  });
+});

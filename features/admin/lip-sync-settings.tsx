@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { KLING_VOICES_PUBLIC } from "@/lib/ai/lip-sync/voices-public";
-import { LIP_SYNC_AUDIO_FORMATS, LIP_SYNC_BOUNDS, LIP_SYNC_DURATION_POLICIES, LIP_SYNC_EXPRESSIONS, LIP_SYNC_MODEL_IDS, type LipSyncDurationPolicy, type LipSyncExpression, type LipSyncProConfig, type LipSyncVendor } from "@/lib/ai/lip-sync/config";
+import { LIP_SYNC_AUDIO_FORMATS, LIP_SYNC_BOUNDS, LIP_SYNC_DURATION_POLICIES, LIP_SYNC_EXPRESSIONS, LIP_SYNC_MODEL_IDS, type LipSyncDurationPolicy, type LipSyncExpression, type LipSyncProConfig, type LipSyncConfiguredVendor, type LipSyncVendor } from "@/lib/ai/lip-sync/config";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import { formatCents } from "@/lib/ai/economy";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
@@ -47,7 +47,7 @@ export function LipSyncSettingsPanel({ settings, stats, voices, languages }: { s
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
   const [enabled, setEnabled] = useState(cfg.enabled);
   const [provider, setProvider] = useState<LipSyncVendor>(cfg.provider);
-  const [models, setModels] = useState<Record<LipSyncVendor, { model: string; enabled: boolean; perSecond: string; cost: string; mult: string; conc: string; notes: string }>>({
+  const [models, setModels] = useState<Record<LipSyncConfiguredVendor, { model: string; enabled: boolean; perSecond: string; cost: string; mult: string; conc: string; notes: string }>>({
     replicate: { model: cfg.models.replicate.model, enabled: cfg.models.replicate.enabled, perSecond: minorToMajorInput(cfg.models.replicate.perSecondCents), cost: String(cfg.models.replicate.providerCostPerSecondUsdCents), mult: String(cfg.models.replicate.creditMultiplier), conc: String(cfg.models.replicate.maxConcurrent), notes: cfg.models.replicate.notes },
     fal: { model: cfg.models.fal.model, enabled: cfg.models.fal.enabled, perSecond: minorToMajorInput(cfg.models.fal.perSecondCents), cost: String(cfg.models.fal.providerCostPerSecondUsdCents), mult: String(cfg.models.fal.creditMultiplier), conc: String(cfg.models.fal.maxConcurrent), notes: cfg.models.fal.notes },
   });

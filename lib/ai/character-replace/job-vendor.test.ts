@@ -118,13 +118,28 @@ describe("🔴 the Replicate/fal paths REFUSE a kling row rather than mis-submit
     expect(refusal).toBeLessThan(webhook);
   });
 
-  it("lip-sync submit refuses ANY non-legacy vendor before indexing the two-vendor model table", () => {
+  /*
+    🔴 UPDATED BY PART 5 §11: Lip Sync now RUNS on Kling, so `kling` is no
+    longer a vendor to refuse here — it is the expected one, and it has a real
+    row in the model table. What must still be refused is anything that is
+    neither a legacy vendor nor Kling: `elevenlabs` became a provider value in
+    Part 5 and would otherwise index a table with no row for it and throw a
+    TypeError mid-submit, after the charge.
+  */
+  it("lip-sync submit refuses an unroutable vendor before indexing the model table", () => {
     const source = code("lib/ai/lip-sync/submit.ts");
-    const refusal = source.indexOf('if (vendor !== "replicate" && vendor !== "fal")');
+    const refusal = source.indexOf('vendor !== "replicate" && vendor !== "fal" && vendor !== "kling"');
     const lookup = source.indexOf("config.models[vendor]");
     expect(refusal).toBeGreaterThan(-1);
     expect(lookup).toBeGreaterThan(-1);
     expect(refusal).toBeLessThan(lookup);
+  });
+
+  it("🔴 the lip-sync callback follows the VENDOR — a Kling task never reports to Replicate's route", () => {
+    // A Kling task sent to the Replicate callback would be verified against
+    // Replicate's signature scheme, discarded, and the job would hang until the
+    // stall sweep failed it — after the charge.
+    expect(code("lib/ai/lip-sync/submit.ts")).toContain('vendor === "kling" ? `${origin}/api/webhooks/kling`');
   });
 
   it("the lip-sync PREPARE service refuses them too — the worker path, not just the submit path", () => {

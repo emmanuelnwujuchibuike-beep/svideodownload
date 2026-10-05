@@ -494,6 +494,15 @@ export function LipSyncWorkspace({
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">Nothing is charged until processing starts. A generation that doesn&apos;t finish comes back to you.</p>
             </div>
           </div>
+        ) : !ws.config && !ws.configError ? (
+          /*
+            §43/§60 LOADING, not nothing (2026-10-05). The form waits for the
+            member's config (entitlement, own voices, launch gate), and until
+            it arrived this rendered NOTHING — the page was 792px tall, then
+            ~1,000px of form landed at once: CLS 0.204 on a production build.
+            Four section shells at the form's own size hold the space.
+          */
+          <LipSyncFormLoading />
         ) : null}
 
         <div className="mt-8 flex justify-center gap-4 text-xs text-muted-foreground">
@@ -687,6 +696,19 @@ function JobStage({ job, missing, previewUrl, onCancel, onAnother, historyHref, 
 }
 
 /* ───────────────────────────── pieces ────────────────────────────────────── */
+
+function LipSyncFormLoading() {
+  return (
+    <div className="space-y-5" role="status" aria-live="polite">
+      <span className="sr-only">Loading Lip Sync Pro…</span>
+      {[150, 400, 220, 180].map((h, i) => (
+        <div key={i} aria-hidden className="rounded-[1.5rem] border border-border/70 bg-card/60 p-4 sm:p-5" style={{ height: h }}>
+          <div className="h-3.5 w-32 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (

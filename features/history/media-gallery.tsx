@@ -19,6 +19,7 @@ import {
   Video,
 } from "lucide-react";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { AdSurface } from "@/features/monetization/ad-surface";
 import { ExoClickSticky, type ExoClickInsSlot } from "@/features/monetization/exoclick-sticky";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
@@ -253,8 +254,7 @@ export function MediaGallery({
   const [hilltopConfig, setHilltopConfig] = useState<HilltopConfig | null>(null);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { hilltop?: HilltopConfig }) => {
         if (alive && d.hilltop) setHilltopConfig(d.hilltop);
       })

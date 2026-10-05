@@ -5,6 +5,7 @@ import {
   type ExoClickStickyTag,
 } from "@/lib/monetization/exoclick-sticky";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { loadProvider } from "./exoclick-sticky";
 
 /**
@@ -51,8 +52,7 @@ import { loadProvider } from "./exoclick-sticky";
 let tagPromise: Promise<ExoClickStickyTag | null> | null = null;
 
 function loadTag(): Promise<ExoClickStickyTag | null> {
-  tagPromise ??= fetch("/api/ads/config")
-    .then((r) => (r.ok ? r.json() : {}))
+  tagPromise ??= loadAdsConfig()
     .then((d: { exoclickInterstitial?: ExoClickStickyTag | null }) => d.exoclickInterstitial ?? null)
     .catch(() => null);
   return tagPromise;
@@ -155,8 +155,7 @@ let armedHost: HTMLElement | null = null;
  * here: it decides its own dimensions.
  */
 async function showMultiFormatFallback(): Promise<boolean> {
-  const tag = await fetch("/api/ads/config")
-    .then((r) => (r.ok ? r.json() : {}))
+  const tag = await loadAdsConfig()
     .then(
       (d: { exoclickInterstitialFallback?: ExoClickStickyTag | null; interstitialSkipSeconds?: number }) => d,
     )

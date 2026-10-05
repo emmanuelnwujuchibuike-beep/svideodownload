@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -445,9 +446,11 @@ export function ExoClickSticky({
   const [tag, setTag] = useState<ExoClickStickyTag | null>(null);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((d: Record<string, ExoClickStickyTag | null | undefined>) => {
+    loadAdsConfig()
+      // The shared loader is intentionally open (Record<string, unknown>); this
+      // file reads only ExoClick tag fields, so it narrows at the boundary.
+      .then((raw) => {
+        const d = raw as Record<string, ExoClickStickyTag | null | undefined>;
         if (!alive) return;
         /*
           🔴 ABOVE THE HISTORY GRID, THE SERVER HAS ALREADY CHOSEN.

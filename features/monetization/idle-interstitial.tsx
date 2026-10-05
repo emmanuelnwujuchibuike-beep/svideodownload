@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -226,8 +227,7 @@ export function IdleInterstitial() {
   const [placementOff, setPlacementOff] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { hilltop?: HilltopConfig }) => {
         if (alive && d.hilltop) {
           setVideoOwnsMoment(hilltopZoneSource(d.hilltop, "idle_interstitial") === "vast");

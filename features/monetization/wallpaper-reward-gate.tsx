@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useEffect, useRef, useState } from "react";
 
 import { hilltopZoneSource, type HilltopConfig } from "@/lib/monetization/hilltop-config";
@@ -57,8 +58,7 @@ export function WallpaperRewardGate({
   const [configured, setConfigured] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { wallpaperGateSeconds?: number }) => {
         if (alive && typeof d.wallpaperGateSeconds === "number") setConfigured(d.wallpaperGateSeconds);
       })
@@ -91,8 +91,7 @@ export function WallpaperRewardGate({
   const firedVideo = useRef(false);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { hilltop?: HilltopConfig }) => {
         if (!alive) return;
         setVideoMode(

@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useEffect, useRef, useState } from "react";
 
 import type { HilltopTag } from "@/lib/monetization/hilltop";
@@ -47,8 +48,7 @@ export function HilltopVideoSlider() {
     if (asked.current) return;
     asked.current = true;
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { hilltopVideoSlider?: HilltopTag | null }) => {
         if (alive) setTag(d.hilltopVideoSlider ?? null);
       })

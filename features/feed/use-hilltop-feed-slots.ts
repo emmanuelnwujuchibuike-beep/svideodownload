@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -40,8 +41,7 @@ export function useHilltopFeedSlots(postIds: string[]): Set<string> {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { hilltop?: HilltopConfig }) => {
         if (alive && d.hilltop) setConfig(d.hilltop);
       })

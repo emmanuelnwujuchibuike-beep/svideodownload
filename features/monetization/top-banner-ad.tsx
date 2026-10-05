@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useEffect, useRef, useState } from "react";
 
 import { setBottomAdBarPresent } from "@/lib/dom/bottom-ad-bar";
@@ -61,8 +62,7 @@ export function TopBannerAd() {
   const [exoFilled, setExoFilled] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { exoclickBottomNav?: unknown }) => {
         if (alive) setHasExoBottomNav(Boolean(d.exoclickBottomNav));
       })

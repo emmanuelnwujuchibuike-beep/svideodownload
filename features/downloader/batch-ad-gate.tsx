@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FullscreenInterstitial } from "@/features/monetization/fullscreen-interstitial";
@@ -201,8 +202,7 @@ export function BatchAdGate({
   const [videoMode, setVideoMode] = useState<"unknown" | "vast" | "slot">("unknown");
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { hilltop?: HilltopConfig }) => {
         if (!alive) return;
         setVideoMode(

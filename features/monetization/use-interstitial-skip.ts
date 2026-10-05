@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useEffect, useState } from "react";
 
 import {
@@ -86,9 +87,16 @@ export function useInterstitialConfig(): InterstitialConfig {
       setConfig(cached);
       return;
     }
-    inflight ??= fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
+    /*
+      The FETCH is shared now (2026-10-04); the DERIVED config below stays
+      memoised here, because deriving it is this hook's own work. The shared
+      loader resolves to {} rather than null on failure, which is identical for
+      every `d?.field` read below — both yield undefined and fall back to
+      DEFAULTS. Before this, the page paid a second /api/ads/config request for
+      this hook alone, on top of the one every other ad surface shared.
+    */
+    inflight ??= loadAdsConfig()
+      .then((d: Record<string, unknown> | null) => {
         cached = {
           skipSeconds: typeof d?.interstitialSkipSeconds === "number" ? d.interstitialSkipSeconds : DEFAULTS.skipSeconds,
           wallpaper: d?.interstitialWallpaper === true,

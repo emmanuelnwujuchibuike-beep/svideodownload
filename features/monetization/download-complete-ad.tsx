@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -153,8 +154,7 @@ export function DownloadCompleteAd({
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then(
         (d: {
           vastInterstitial?: { enabled?: boolean; enabledOnDownloadComplete?: boolean };

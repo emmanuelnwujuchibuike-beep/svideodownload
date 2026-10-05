@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { useEffect, useState } from "react";
 
 /**
@@ -58,8 +59,7 @@ export function VastInterstitialTriggers() {
   const [idleMs, setIdleMs] = useState(IDLE_FALLBACK_MS);
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads/config")
-      .then((r) => (r.ok ? r.json() : {}))
+    loadAdsConfig()
       .then((d: { idleInterstitialSeconds?: number }) => {
         if (alive && typeof d.idleInterstitialSeconds === "number") {
           setIdleMs(d.idleInterstitialSeconds * 1000);

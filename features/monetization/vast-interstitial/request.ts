@@ -1,5 +1,6 @@
 "use client";
 
+import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { track } from "@/lib/analytics/client";
 import type { VastCreative } from "@/lib/monetization/vast";
 import {
@@ -103,8 +104,7 @@ function drainPendingCompletion(): void {
 let configPromise: Promise<VastInterstitialConfig> | null = null;
 
 async function loadConfig(): Promise<VastInterstitialConfig> {
-  configPromise ??= fetch("/api/ads/config")
-    .then((r) => (r.ok ? r.json() : {}))
+  configPromise ??= loadAdsConfig()
     .then((d: { vastInterstitial?: unknown }) => normalizeVastInterstitial(d.vastInterstitial))
     /*
       A failed config read must not block a download, and must not silently
@@ -394,7 +394,7 @@ async function loadSkipSeconds(
   field: SkipField | "ambientCooldownSeconds",
 ): Promise<number | null> {
   try {
-    const d = await fetch("/api/ads/config").then((r) => (r.ok ? r.json() : {}));
+    const d = await loadAdsConfig();
     const value = (d as Record<string, unknown>)[field];
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   } catch {

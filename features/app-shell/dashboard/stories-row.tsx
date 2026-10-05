@@ -227,6 +227,27 @@ export function StoryViewer({
   const [gi, setGi] = useState(startGroup);
   const [si, setSi] = useState(0);
   const [pct, setPct] = useState(0);
+  /*
+    ── 🔴 THE SHAPE OF THE SOURCE DECIDES, NOT THE VIEWER (owner, 2026-10-04) ─
+
+    "History and story viewer still show the bottom and top black chrome
+    instead of the media covering all except the safe area."
+
+    `object-contain` letterboxes, so a 9:16 clip on a 9:19.5 phone sat in a
+    black sandwich. `object-cover` everywhere would be worse — a landscape
+    video filling a portrait screen loses most of the frame. So:
+
+      portrait  (h > w)  → cover   (~18% of width cropped on a 9:16 clip,
+                                    which is exactly what every short-form
+                                    app does)
+      square / landscape → contain (cropping these destroys the content)
+
+    Measured from the file on `loadedmetadata` / `load`, never guessed from
+    the platform. 🔴 The SAME rule and the same reading of it govern
+    `features/downloads/download-player.tsx`, which is the point — the two
+    viewers must not drift into two answers to one question.
+  */
+  const [fillFrame, setFillFrame] = useState(false);
   const [replying, setReplying] = useState(false);
   const [resharing, setResharing] = useState(false);
   /* The author’s own “Seen by” sheet. Lazy: nothing is fetched until it opens. */
@@ -261,6 +282,15 @@ export function StoryViewer({
     setHolding(false);
   }, []);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  /*
+    Each slide is a new shape. Without this, the previous story's verdict
+    survives until the next load event, so stepping from a portrait clip to a
+    landscape one crops it for a frame — a flash that reads as a bug.
+  */
+  useEffect(() => {
+    setFillFrame(false);
+  }, [gi, si]);
   const { handle } = useEntitlements();
 
   const group = groups[gi]!;
@@ -757,11 +787,18 @@ export function StoryViewer({
               if (v.duration) setPct((v.currentTime / v.duration) * 100);
             }}
             onEnded={next}
-            className="h-full w-full object-contain"
+            onLoadedMetadata={(e) => setFillFrame(e.currentTarget.videoHeight > e.currentTarget.videoWidth)}
+            className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={`${gi}-${si}`} src={story.mediaUrl} alt="" className="h-full w-full object-contain" />
+          <img
+            key={`${gi}-${si}`}
+            src={story.mediaUrl}
+            alt=""
+            onLoad={(e) => setFillFrame(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth)}
+            className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
+          />
         )}
       </div>
       {story.caption ? (

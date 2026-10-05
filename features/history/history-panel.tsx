@@ -21,6 +21,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { startDownload } from "@/features/downloads/manager";
 import { totalUsedBytes } from "@/features/history/usage";
+import { LoadingStripe } from "@/features/ui/page-loader";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
@@ -365,45 +366,35 @@ export function HistoryPanel({
   };
 
   if (!ready) {
-    /*
-      ── 🔴 THE SKELETON WAS INVISIBLE (owner, 2026-10-04) ──────────────────
-
-      "When I enter the history page the first time it shows this white half
-      screen for about a second or 2 before showing the page. It looks very
-      unprofessional and slow."
-
-      The skeleton was never missing — it was unreadable. In light mode
-      `--background` is 98% lightness and `--secondary` is 97%; at `/70` and
-      `/60` alpha these blocks landed around **97.7%**, a 0.3% difference from
-      the page behind them. So a correctly-structured loading state painted as
-      a blank white screen, and `animate-pulse` pulsed something nobody could
-      see.
-
-      `bg-foreground/[0.07]` instead of a `--secondary` tint, because it is the
-      one expression that works in BOTH themes: `--foreground` is near-black on
-      light (→ ~93% lightness, calm but clearly there) and near-white on dark
-      (→ ~11% over a 5% background). A fixed grey would have to be written twice
-      and one of the two would drift.
-
-      ⚠️ The 1–2 seconds themselves are hydration, not a fetch: this page is
-      `force-static` and the store reads `localStorage`, which cannot happen on
-      the server. That wait is real and this does not remove it — it makes the
-      wait look like loading instead of like a broken page, which is what was
-      actually being reported.
-    */
     if (!standalone && !embedded) return null;
-    const block = "animate-pulse bg-foreground/[0.07] motion-reduce:animate-none";
+    /*
+      ── 🔴 THE BLOCK SKELETON IS GONE — THE STRIPE REPLACES IT (owner, 2026-10-04)
+
+      "The history first screen that shows when I enter the history immediately
+      is still showing. Instead of the white screen, the skeleton stripe loader
+      should show, or nothing should show."
+
+      The previous pass fixed the skeleton's CONTRAST (it was `--secondary` at
+      ~97.7% on a 98% background — a 0.3% difference, which is why a
+      structurally correct loading state painted as a blank page). That was a
+      real bug and the fix was right, but it answered the wrong question: a
+      screenful of grey placeholder blocks is still a screenful of furniture
+      for a wait that is HYDRATION, not a fetch.
+
+      So the whole thing is replaced by the one loader this project already
+      uses everywhere else for exactly this — `LoadingStripe`, two pixels of
+      animated gradient under the header. It says "working" without drawing a
+      fake page, and it is the same thing a cold entry and an in-app navigation
+      already show, so the three cases finally look identical.
+
+      ⚠️ The wait itself is unchanged and cannot be removed here: this page is
+      `force-static` and the store reads `localStorage`, which cannot happen on
+      the server. `loading.tsx` does NOT cover it either — there is no server
+      await to suspend on. Only the component can paint this state.
+    */
     return (
-      <section aria-busy="true" aria-label="Loading your history" className={cn(standalone ? "pb-16 pt-2" : "py-14")}>
-        <div className={cn(embedded ? "" : "mx-auto max-w-6xl px-2 sm:px-4")}>
-          <div className={cn("h-24 rounded-3xl", block)} />
-          <div className={cn("mt-4 h-11 rounded-2xl", block)} />
-          <div className="mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
-            {Array.from({ length: 12 }, (_, i) => (
-              <div key={i} className={cn("aspect-[3/4] rounded-xl", block)} />
-            ))}
-          </div>
-        </div>
+      <section aria-busy="true" aria-label="Loading your history">
+        <LoadingStripe />
       </section>
     );
   }

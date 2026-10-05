@@ -129,21 +129,43 @@ function UpsellCard({
   href: string;
   cta: string;
 }) {
+  /*
+    ── 🔴 IT WAS ONE RIGID ROW, AND A PHONE IS NOT WIDE (owner, 2026-10-04) ──
+
+    "Arrange this pro card properly and make it look professional and
+    prestige."
+
+    `flex items-center` with three children and no wrapping gave the text
+    column whatever was left after a 48px icon, a 16px gap and a button that
+    refused to shrink. On a phone that is ~150px: the title broke after
+    "Unlock everything" and the body ran to six ragged lines beside a button
+    floating in its own vertical centre. Nothing was broken — it was just
+    never given a narrow layout.
+
+    So the row is the DESKTOP case and the stack is the default: full-width
+    text that reads as a paragraph, and the action as a full-width bar under
+    it, which is also the only way it clears the 44px tap target this project
+    requires. `sm:` is where there is genuinely room for three columns.
+  */
   return (
-    <div className="mx-auto mt-6 flex w-full max-w-2xl items-center gap-4 rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/[0.06] to-transparent p-4">
-      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary">
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="text-xs text-muted-foreground">{body}</p>
+    <div className="mx-auto mt-6 w-full max-w-2xl overflow-hidden rounded-[1.25rem] border border-primary/20 bg-gradient-to-br from-primary/[0.08] via-primary/[0.03] to-transparent p-5 shadow-elevated">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary ring-1 ring-inset ring-primary/15">
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          {/* `text-balance` so a two-line title splits evenly instead of
+              leaving one orphaned word on the second line. */}
+          <p className="text-pretty text-[15px] font-bold leading-snug tracking-[-0.01em]">{title}</p>
+          <p className="mt-1 text-pretty text-[13px] leading-relaxed text-muted-foreground">{body}</p>
+        </div>
+        <Link
+          href={href}
+          className="inline-flex min-h-[2.75rem] w-full shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary px-5 text-[13.5px] font-semibold text-primary-foreground transition hover:opacity-90 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 sm:w-auto"
+        >
+          {cta} <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
       </div>
-      <Link
-        href={href}
-        className="inline-flex shrink-0 items-center gap-1 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
-      >
-        {cta} <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
     </div>
   );
 }

@@ -227,6 +227,31 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
   const [favorited, setFavorited] = useState(rec.favorite);
   const [savedToDevice, setSavedToDevice] = useState(false);
   const [paused, setPaused] = useState(false);
+  /*
+    ── 🔴 A PORTRAIT CLIP FILLS THE SCREEN (owner, 2026-10-04) ───────────────
+
+    "History and story viewer still show the bottom and top black chrome
+    instead of the media covering all except the safe area."
+
+    `object-contain` letterboxes, and on a 9:19.5 phone a 9:16 TikTok
+    therefore sat in the middle with a black band above and below — the exact
+    thing being reported. Every short-form app fills instead.
+
+    But `object-cover` everywhere would be worse, not better: on a 16:9
+    landscape video filling a portrait screen crops away most of the frame.
+    So the shape of the SOURCE decides, measured from the file rather than
+    guessed from the platform:
+
+      portrait  (h > w)  → cover. A 9:16 clip loses ~18% of its width on a
+                           tall phone, which is what TikTok itself does.
+      square / landscape → contain. Cropping these destroys the content.
+
+    Images follow the same rule, from `naturalWidth/Height`. A portrait photo
+    on a portrait screen loses very little and gains the whole frame; a
+    landscape one still letterboxes, so nothing a member saved is ever cropped
+    to the point of being unreadable.
+  */
+  const [fillFrame, setFillFrame] = useState(false);
   const [progress, setProgress] = useState(0); // 0-100 within the CURRENT item, for the status bar
   // The center play/pause glyph shows briefly then hides for a "clear full screen"
   // (owner). `dragY` follows a downward swipe so the clip dismisses like a story.
@@ -352,6 +377,13 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     let objectUrl: string | null = null;
     let alive = true;
     const controller = new AbortController();
+    /*
+      A new record is a new shape. Without this reset the previous clip's
+      verdict survives until the next `loadedmetadata`, so stepping from a
+      portrait clip to a landscape one crops the landscape one for a frame —
+      the kind of flash that reads as a rendering bug.
+    */
+    setFillFrame(false);
 
     const play = (blob: Blob) => {
       blobRef.current = blob;
@@ -1045,7 +1077,12 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           </div>
         ) : url && rec.kind === "image" ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={rec.title} className="h-full w-full object-contain" />
+          <img
+            src={url}
+            alt={rec.title}
+            onLoad={(e) => setFillFrame(e.currentTarget.naturalHeight > e.currentTarget.naturalWidth)}
+            className={cn("h-full w-full", fillFrame ? "object-cover" : "object-contain")}
+          />
         ) : url ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
           <video
@@ -1053,7 +1090,11 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
             src={url}
             autoPlay
             playsInline
-            className="h-full w-full bg-black object-contain"
+            className={cn("h-full w-full bg-black", fillFrame ? "object-cover" : "object-contain")}
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              setFillFrame(v.videoHeight > v.videoWidth);
+            }}
             onEnded={() => playerClipEnded()}
             onPlay={() => { setPaused(false); hideControls(); }}
             onPause={() => { setPaused(true); revealControls(); }}

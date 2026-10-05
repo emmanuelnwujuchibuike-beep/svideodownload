@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { FrenzAIExplore } from "@/features/ai/frenz-ai-explore";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 
 /**
  * /studio/ai/character-replace — Explore AI Studio (the Studio-shell door).
@@ -20,6 +21,8 @@ import { FrenzAIExplore } from "@/features/ai/frenz-ai-explore";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Explore AI Studio" };
 
-export default function StudioExploreAIPage() {
-  return <FrenzAIExplore createPath="/studio/ai/character-replace/create" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" />;
+export default async function StudioExploreAIPage() {
+  // The reference opens every AI page with the showcase; cached until an admin saves.
+  const slides = await getShowcaseSlides();
+  return <FrenzAIExplore createPath="/studio/ai/character-replace/create" aiHref="/studio/ai" historyHref="/studio/ai/history" usageHref="/studio/ai/usage" slides={slides} />;
 }

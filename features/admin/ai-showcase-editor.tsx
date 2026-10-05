@@ -163,8 +163,8 @@ export function AiShowcaseEditor({ initial }: { initial: ShowcaseSlide[] | null 
                       ))}
                     </select>
                   </label>
-                  <Field label="Title" value={s.title} max={SHOWCASE_LIMITS.title} onChange={(v) => patch(s.id, { title: v })} hint="e.g. Turn words into" />
-                  <Field label="Highlighted words" value={s.highlight} max={SHOWCASE_LIMITS.highlight} onChange={(v) => patch(s.id, { highlight: v })} hint="In the gradient, after the title" />
+                  <Field label="Title" value={s.title} max={SHOWCASE_LIMITS.title} onChange={(v) => patch(s.id, { title: v })} hint="First line, e.g. Turn Words" />
+                  <Field label="Second line" value={s.highlight} max={SHOWCASE_LIMITS.highlight} onChange={(v) => patch(s.id, { highlight: v })} hint="e.g. Into Motion" />
                   <div className="sm:col-span-2">
                     <Field label="Description" value={s.description} max={SHOWCASE_LIMITS.description} onChange={(v) => patch(s.id, { description: v })} multiline />
                   </div>

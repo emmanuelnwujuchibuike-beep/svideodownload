@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { SHOWCASE_TAG, readStoredShowcase, writeStoredShowcase } from "@/lib/ai/showcase/server";
-import { SHOWCASE_BUCKET, normalizeShowcase } from "@/lib/ai/showcase/slides";
+import { SHOWCASE_BUCKET, SHOWCASE_PAGES, normalizeShowcase } from "@/lib/ai/showcase/slides";
 import { makeSizedWebp } from "@/lib/media/thumbnail";
 import { recordConfigChange } from "@/lib/platform/config-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -144,8 +144,7 @@ export async function PUT(request: Request) {
 
   // The event that replaces a clock: both doors and the cached read, now.
   revalidateTag(SHOWCASE_TAG);
-  revalidatePath("/ai");
-  revalidatePath("/studio/ai");
+  for (const page of SHOWCASE_PAGES) revalidatePath(page);
 
   return NextResponse.json({ ok: true, slides });
 }

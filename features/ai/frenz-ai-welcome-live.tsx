@@ -77,14 +77,19 @@ export function FrenzAIWelcomeLive({
     <>
       <FrenzAIEnvironment
         stage="idle"
+        // bare: the ambient light was the faint grey band behind the showcase (measured 2026-10-05); plain white means none
+        bare
         /*
-          ── THE SHARED GROUND (owner, 2026-09-27) ─────────────────────────
-          `.ai-wash` is the one light iridescent wash every AI page sits on,
-          defined once in globals.css.
+          ── PLAIN WHITE, NO FRAME (owner, 2026-10-05, with the reference) ──
+          This was a rounded, overflow-hidden card painted with the iridescent
+          wash. The reference puts the content straight on the page and the
+          owner asked for plain white, so the frame, its clipping and its inner
+          padding are gone — the showcase now bleeds to the screen edge as in
+          the reference, which a clipping frame would have cut off.
         */
-        className="ai-wash relative overflow-hidden rounded-[1.75rem]"
+        className="ai-wash relative"
       >
-        <div className="px-4 pb-6 pt-5 sm:px-6 sm:pt-6">
+        <div className="pb-6 pt-3 sm:pt-4">
           {children}
 
           {/*
@@ -153,7 +158,7 @@ export function FrenzAIWelcomeLive({
               prefetch={false}
               data-ai-members=""
               aria-label="Your creations"
-              className={aiButtonClass({ variant: "secondary", size: "lg", className: "w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5" })}
+              className={aiButtonClass({ variant: "secondary", size: "lg", className: "ai-btn--round w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5" })}
             >
               <History className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden />
               <span className="hidden sm:inline">Your creations</span>

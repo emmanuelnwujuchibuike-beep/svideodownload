@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SHOWCASE,
   SHOWCASE_LIMITS,
+  SHOWCASE_PAGES,
   SHOWCASE_TARGETS,
   isShowcaseImageUrl,
   normalizeShowcase,
@@ -95,6 +96,19 @@ describe("the showcase slides", () => {
     expect(normalizeShowcase("nope", SUPA)).toEqual([]);
   });
 
+  it("every page that reads the slides is dropped on save, and every listed page reads them", () => {
+    const appDir = join(process.cwd(), "app");
+    const pages = (readdirSync(appDir, { recursive: true }) as string[])
+      .filter((f) => /(^|[\\/])page\.tsx$/.test(f))
+      .map((f) => ({
+        url: "/" + f.replace(/\\/g, "/").replace(/(^|\/)page\.tsx$/, "").split("/").filter((s) => s && !/^\(.*\)$/.test(s)).join("/"),
+        src: readFileSync(join(appDir, f), "utf8"),
+      }));
+    const readers = pages.filter((p) => p.src.includes("getShowcaseSlides()")).map((p) => p.url).sort();
+    expect(readers.length).toBeGreaterThan(0);
+    expect(readers).toEqual([...SHOWCASE_PAGES].sort());
+  });
+
   it("never saved → defaults; saved with every slide off → nothing (the admin hid it)", () => {
     expect(visibleSlides(null)).toBe(DEFAULT_SHOWCASE);
     expect(visibleSlides([{ ...DEFAULT_SHOWCASE[0]!, enabled: false }])).toEqual([]);
@@ -108,8 +122,7 @@ describe("the showcase slides", () => {
     expect(server).toContain('["ai-showcase-slides", JSON.stringify(DEFAULT_SHOWCASE), JSON.stringify(SHOWCASE_LIMITS)]');
     const route = readFileSync(join(process.cwd(), "app/api/admin/ai/showcase/route.ts"), "utf8");
     expect(route).toContain("revalidateTag(SHOWCASE_TAG);");
-    expect(route).toContain('revalidatePath("/ai");');
-    expect(route).toContain('revalidatePath("/studio/ai");');
+    expect(route).toContain("for (const page of SHOWCASE_PAGES) revalidatePath(page);");
     // the carousel itself must not fetch
     const carousel = readFileSync(join(process.cwd(), "features/ai/design/ai-showcase.tsx"), "utf8");
     expect(carousel).not.toContain("fetch(");

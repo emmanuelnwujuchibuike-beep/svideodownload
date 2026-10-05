@@ -29,12 +29,16 @@ import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/co
 import { REPLACEMENT_MODES } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import {
   readAiEntitlementCache,
   writeAiEntitlementCache,
 } from "@/lib/ai/entitlement-cache";
 import { readAiFreeAccessCache, writeAiFreeAccessCache } from "@/lib/ai/free-access-cache";
 import { haptic } from "@/lib/motion/haptics";
+import { AiButtonLink } from "@/features/ai/design/ai-button";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { cn } from "@/lib/utils";
 
@@ -117,12 +121,15 @@ export function FrenzAIExplore({
   aiHref,
   historyHref,
   usageHref,
+  slides,
 }: {
   /** The create page, given the scope in `?mode=`. */
   createPath: string;
   aiHref: string;
   historyHref: string;
   usageHref: string;
+  /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
+  slides: ShowcaseSlide[];
 }) {
   const router = useRouter();
   const characterReplaceHref = createPath.replace(/\/create$/, "");
@@ -241,7 +248,14 @@ export function FrenzAIExplore({
       the marketing and the signed-in tree exactly as this one does.
     */
     <div className="pb-10">
-      <header className="mt-4">
+      {/*
+        Redesign page 2 (owner, 2026-10-05, with the reference image): every AI
+        page opens with the showcase and the credits strip, then its own
+        heading — the same two components as the welcome page, not copies.
+      */}
+      <AiShowcase slides={slides} base={aiHref} className="mt-3" />
+      <AiCreditStrip base={aiHref} className="mt-3" />
+      <header className="mt-6">
         {/*
           The shared Frenz AI hero (2026-09-27). This is the last page-level
           eyebrow: "Frenz AI · Studio" in uppercase where both references put
@@ -298,12 +312,9 @@ export function FrenzAIExplore({
             <p className="mx-auto mt-2 max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">
               {unavailable}
             </p>
-            <Link
-              href={aiHref}
-              className="btn-lux mt-5 bg-foreground text-background"
-            >
+            <AiButtonLink href={aiHref} variant="secondary" className="mt-5">
               Back to Frenz AI
-            </Link>
+            </AiButtonLink>
           </div>
         ) : (
           <FrenzAIToolsGrid
@@ -336,10 +347,13 @@ export function FrenzAIExplore({
         </h2>
         <ol className="mt-2.5 grid grid-cols-3 gap-2 sm:gap-2.5">
           {HOW.map((step, i) => (
-            <li
-              key={step.title}
-              className="rounded-[1.15rem] bg-card/90 px-3 py-3 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:px-4 sm:py-4"
-            >
+            /*
+              Redesign page 2 (2026-10-05): three numbered steps are a LIST,
+              not three cards — Brief A, "if an element does not need a card,
+              do not put it in a card". The box and its ring are gone; the
+              number, icon and two lines carry it.
+            */
+            <li key={step.title} className="px-1 py-1">
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-[11px] font-bold text-background">
                   {i + 1}
@@ -368,8 +382,9 @@ export function FrenzAIExplore({
         <Link
           href={usageHref}
           className={cn(
-            "group mt-2.5 flex items-center gap-3 rounded-[1.25rem] bg-card/95 p-3.5 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10 sm:p-4",
-            "shadow-[0_12px_30px_-22px_rgba(15,23,42,0.35)] transition duration-200 motion-safe:hover:-translate-y-0.5 active:scale-[0.995]",
+            "group mt-2.5 flex items-center gap-3 rounded-[1.25rem] bg-card/95 p-3.5 ring-1 ring-inset ring-black/[0.06] dark:ring-white/10 sm:p-4",
+            // page 2: no resting shadow; hover = the edge strengthens + 1 px (Brief A, Cards)
+            "transition duration-150 [@media(hover:hover)]:hover:ring-primary/25 motion-safe:[@media(hover:hover)]:hover:-translate-y-px active:scale-[0.98]",
           )}
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.8rem] bg-primary/[0.09] text-primary">
@@ -403,13 +418,10 @@ export function FrenzAIExplore({
       </section>
 
       <div className="mt-6">
-        <Link
-          href={aiHref}
-          className="btn-lux min-h-[44px] border border-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden />
+        {/* page 2: Back is a SECONDARY action — the shared quiet button (Brief A, BUTTON SYSTEM). */}
+        <AiButtonLink href={aiHref} variant="secondary" size="sm" icon={<ArrowLeft className="h-4 w-4" />}>
           Frenz AI
-        </Link>
+        </AiButtonLink>
       </div>
     </div>
   );

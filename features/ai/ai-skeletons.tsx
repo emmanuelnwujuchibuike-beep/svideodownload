@@ -18,29 +18,24 @@ import { Skeleton, SkeletonSection } from "@/features/ui/skeleton";
 
 /**
  * The Frenz AI welcome — the shape of features/ai/frenz-ai-welcome.tsx since
- * the 2026-10-05 redesign: the crumb pill, two headline lines, the support
- * line, the 16:10 showcase card (2:1 at sm), its dots, and the docked actions.
+ * the 2026-10-05 redesign (owner's reference): the showcase card, the credits
+ * strip, the crumb pill, two headline lines, the support line, the docked actions.
  * Same paddings as the real page, so nothing moves when it lands.
  */
 export function FrenzAIPageSkeleton() {
   return (
     <SkeletonSection label="Loading Frenz AI">
-      <div className="px-4 pb-6 pt-5 sm:px-6 sm:pt-6" aria-hidden>
-        <Skeleton className="h-10 w-48 rounded-full" />
+      <div className="pb-6 pt-3 sm:pt-4" aria-hidden>
+        <Skeleton className="aspect-[5/4] w-full rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]" />
+        <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+        <Skeleton className="mt-6 h-10 w-48 rounded-full" />
         <Skeleton className="mt-3.5 h-9 w-full max-w-[22rem]" />
         <Skeleton className="mt-2 h-9 w-40 sm:hidden" />
         <Skeleton className="mt-3 h-4 w-80 max-w-full" />
-        <Skeleton className="mt-6 aspect-[16/10] w-full rounded-[1.25rem] sm:aspect-[2/1]" />
-        <div className="mt-3 flex justify-center gap-2">
-          <Skeleton className="h-1.5 w-4 rounded-full" />
-          <Skeleton className="h-1.5 w-1.5 rounded-full" />
-          <Skeleton className="h-1.5 w-1.5 rounded-full" />
-          <Skeleton className="h-1.5 w-1.5 rounded-full" />
-        </div>
       </div>
       <div className="mt-4 flex gap-2" aria-hidden>
-        <Skeleton className="h-[3.375rem] flex-1 rounded-[0.875rem]" />
-        <Skeleton className="h-[3.375rem] w-[3.375rem] shrink-0 rounded-[0.875rem] sm:w-40" />
+        <Skeleton className="h-[3.375rem] flex-1 rounded-full" />
+        <Skeleton className="h-[3.375rem] w-[3.375rem] shrink-0 rounded-full sm:w-40" />
       </div>
     </SkeletonSection>
   );
@@ -54,9 +49,12 @@ export function FrenzAIPageSkeleton() {
 export function FrenzAIExploreSkeleton() {
   return (
     <SkeletonSection label="Opening AI Studio">
-      <div className="mt-4">
-        <Skeleton className="h-3 w-32 rounded-full" />
-        <Skeleton className="mt-3 h-9 w-64 max-w-full" />
+      {/* 2026-10-05: the page opens with the showcase and the credits strip (owner's reference) */}
+      <Skeleton className="mt-3 aspect-[5/4] w-full rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]" />
+      <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+      <div className="mt-6">
+        <Skeleton className="h-10 w-44 rounded-full" />
+        <Skeleton className="mt-3.5 h-9 w-64 max-w-full" />
         <Skeleton className="mt-3 h-4 w-80 max-w-full" />
       </div>
       <Skeleton className="mt-6 h-3 w-16 rounded-full" />

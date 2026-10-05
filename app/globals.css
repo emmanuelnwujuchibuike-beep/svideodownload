@@ -804,14 +804,13 @@
      repaint of the whole layer on every scroll frame on iOS, and these pages
      have a 1.6s budget to keep. The gradient is sized to the viewport and
      simply scrolls with the page. */
+  /* 🔴 PLAIN WHITE (owner, 2026-10-05, with the reference image): "the only
+     exception is the gradient background, don't add it, let it be the plain
+     white". The four radial washes that lived here are gone; every AI page
+     still paints its ground through this ONE class, so the change is here and
+     nowhere else. Follows the theme in dark mode. */
   .ai-wash {
-    background-color: #f7f6fd;
-    background-image:
-      radial-gradient(74% 40% at 10% -4%, rgba(124, 58, 237, 0.13) 0%, transparent 62%),
-      radial-gradient(60% 38% at 98% 16%, rgba(59, 130, 246, 0.12) 0%, transparent 66%),
-      radial-gradient(52% 34% at 88% 96%, rgba(217, 70, 239, 0.09) 0%, transparent 64%),
-      radial-gradient(46% 30% at 4% 92%, rgba(99, 102, 241, 0.08) 0%, transparent 64%);
-    background-repeat: no-repeat;
+    background-color: hsl(var(--background));
   }
 
   /* ── THE AI GLASS, AND ITS FALLBACK HIERARCHY (Part 7 §57, §39) ────────────
@@ -991,10 +990,16 @@
   }
   .ai-btn--lg { min-height: 3.375rem; font-size: 16px; padding: 0 1.5rem; }
   .ai-btn--sm { min-height: 2.5rem; font-size: 14px; padding: 0 0.875rem; border-radius: 0.75rem; }
+  /* A round icon-only companion to the pill primary (the welcome dock). */
+  .ai-btn--round { border-radius: 9999px; }
 
+  /* The reference's Generate: a full pill, soft blue → violet → a touch of
+     pink at the end. Still static — no ambient pass. */
   .ai-btn--primary {
     color: #fff;
-    background-image: linear-gradient(100deg, #3b6cf6 0%, #5b4ff0 52%, #7c3aed 100%);
+    border-radius: 9999px;
+    /* Stops a shade deeper than the reference so white text keeps ~4.5:1 where the label sits. */
+    background-image: linear-gradient(100deg, #4f6cf0 0%, #5f4fee 45%, #8650ea 75%, #d17ad9 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
       0 6px 16px -8px rgba(79, 70, 229, 0.55);
@@ -1022,9 +1027,22 @@
   /* ── THE SHOWCASE CAROUSEL (features/ai/design/ai-showcase.tsx) ────────────
      Native scroll-snap does the swiping, momentum and snapping; the component
      only adds the 3 s advance. The scrollbar is hidden, not the scrolling. */
+  /* Reference (owner, 2026-10-05): the active card centred, neighbours
+     peeking at both edges. `--ai-bleed` pulls the track out to the page edge
+     (the page gutter), `--ai-peek` is how much of each neighbour shows. */
+  .ai-showcase {
+    --ai-bleed: 0.75rem;
+    --ai-peek: 1.125rem;
+  }
+  @media (min-width: 640px) {
+    .ai-showcase { --ai-bleed: 0px; --ai-peek: 0px; }
+  }
   .ai-showcase-track {
+    position: relative;
     display: flex;
-    gap: 0.75rem;
+    gap: 0.5rem;
+    margin-inline: calc(-1 * var(--ai-bleed));
+    padding-inline: var(--ai-peek);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x mandatory;
@@ -1033,9 +1051,63 @@
   }
   .ai-showcase-track::-webkit-scrollbar { display: none; }
   .ai-showcase-track > * {
-    scroll-snap-align: start;
+    scroll-snap-align: center;
     scroll-snap-stop: always;
     flex: 0 0 100%;
+  }
+  /* The controls row sits over the CENTRED card, inside its edges. */
+  .ai-showcase-controls {
+    left: calc(var(--ai-peek) - var(--ai-bleed));
+    right: calc(var(--ai-peek) - var(--ai-bleed));
+  }
+  /* Glass arrows on the photo. No backdrop-filter: on a busy photo a 15%
+     white fill + hairline reads as glass for the cost of a fill. */
+  .ai-showcase-btn {
+    display: flex;
+    height: 2.25rem;
+    width: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+    transition: transform 140ms ease, background-color 140ms ease;
+  }
+  .ai-showcase-btn:active { transform: scale(0.94); }
+  @media (hover: hover) {
+    .ai-showcase-btn:hover { background: rgba(255, 255, 255, 0.26); }
+  }
+  /* The credits strip's action — the reference's soft blue pill, "View credits →". */
+  .ai-strip-cta {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 2rem;
+    padding: 0 0.7rem;
+    border-radius: 9999px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #3b4fd8;
+    background: rgba(79, 108, 240, 0.09);
+    transition: background-color 140ms ease, transform 140ms ease;
+  }
+  .ai-strip-cta:active { transform: scale(0.97); }
+  @media (hover: hover) {
+    .ai-strip-cta:hover { background: rgba(79, 108, 240, 0.15); }
+  }
+  .dark .ai-strip-cta { color: #a5b4fc; background: rgba(129, 140, 248, 0.14); }
+
+  /* The showcase headline's face: the reference is a serif ITALIC. The
+     device's own serif — Iowan/Palatino on Apple, Noto Serif on Android,
+     Georgia elsewhere — so it costs zero bytes and adds no third webfont
+     (Brief A: two families). Used for showcase headlines ONLY. */
+  .font-showcase {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "Noto Serif", Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
   /* The brand art a slide draws when no image has been uploaded: two static
      radial washes over the deep brand indigo. No bytes, no animation. */

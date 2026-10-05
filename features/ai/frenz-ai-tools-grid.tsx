@@ -337,10 +337,19 @@ const GROUP_GROUND: Record<AiToolGroup, string> = {
   library: "bg-slate-50",
 };
 
+/*
+  Redesign page 2 (2026-10-05, Brief A INTERACTION): "Cards: subtle border
+  emphasis, maximum 1–2px visual elevation, no dramatic zoom"; "if an element
+  does not need a shadow, remove the shadow". The tinted ground above stays —
+  it is still the no-border answer to §8/§25 — but the resting drop shadow and
+  the shadow that GREW on hover are gone. Hover is now an edge that appears
+  (ring) and a 1 px lift, on hover-capable pointers only; touch gets the
+  0.98 press. Transform and box-shadow-free.
+*/
 const CARD =
   "group relative flex h-full min-h-[7rem] w-full flex-col rounded-[1.25rem] p-3.5 text-left sm:p-4 " +
-  "shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-200 " +
-  "motion-safe:hover:-translate-y-0.5 motion-safe:hover:shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)] active:scale-[0.99] " +
+  "ring-1 ring-inset ring-transparent transition duration-150 " +
+  "[@media(hover:hover)]:hover:ring-primary/25 motion-safe:[@media(hover:hover)]:hover:-translate-y-px active:scale-[0.98] " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 function ToolCardView({
@@ -400,7 +409,7 @@ function ToolCardView({
       </p>
       <span className="mt-auto flex justify-end pt-2.5">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-foreground/50 transition group-hover:bg-white group-hover:text-foreground">
-          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          <ChevronRight className="h-3.5 w-3.5 transition-transform motion-safe:group-hover:translate-x-px" aria-hidden />
         </span>
       </span>
     </>

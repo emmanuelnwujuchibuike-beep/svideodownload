@@ -129,7 +129,8 @@ export function AiShowcase({
       const el = track?.children[i] as HTMLElement | undefined;
       if (!track || !el) return;
       // `scrollTo` on the TRACK only — `scrollIntoView` would also scroll the page.
-      track.scrollTo({ left: el.offsetLeft, behavior: reduced ? "auto" : "smooth" });
+      // Centre the slide (the track snaps to centre so both neighbours peek).
+      track.scrollTo({ left: el.offsetLeft - (track.clientWidth - el.offsetWidth) / 2, behavior: reduced ? "auto" : "smooth" });
       setActive(i);
     },
     [reduced],
@@ -155,7 +156,7 @@ export function AiShowcase({
       ref={rootRef}
       aria-roledescription="carousel"
       aria-label="What Frenz AI makes"
-      className={cn("relative", className)}
+      className={cn("ai-showcase relative", className)}
       onFocus={() => setFocused(true)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -171,9 +172,16 @@ export function AiShowcase({
         }
       }}
     >
+      {/*
+        Reference (owner, 2026-10-05, "Turn Words Into Motion"): the active card
+        centred, its neighbours peeking at both edges, and the controls INSIDE
+        the card — glass arrows in the bottom corners, bar dots between them.
+        The track bleeds to the page edge (`--ai-bleed`) so the peeks reach the
+        screen edge as in the reference.
+      */}
       <div
         ref={trackRef}
-        className="ai-showcase-track relative rounded-[1.25rem]"
+        className="ai-showcase-track"
         aria-live={autoplay ? "off" : "polite"}
         onPointerDown={hold}
         onWheel={hold}
@@ -186,16 +194,18 @@ export function AiShowcase({
       </div>
 
       {count > 1 ? (
-        <div className="mt-3 flex items-center justify-center gap-1">
+        // Over the active card's foot. `pointer-events-none` on the row so a
+        // swipe that starts between the buttons still reaches the track.
+        <div className="ai-showcase-controls pointer-events-none absolute bottom-0 flex items-center justify-between px-3.5 pb-3.5 sm:px-4 sm:pb-4">
           <button
             type="button"
             onClick={() => step(-1)}
             aria-label="Previous slide"
-            className="hidden h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground sm:flex"
+            className="ai-showcase-btn pointer-events-auto"
           >
-            <ChevronLeft className="h-4 w-4" aria-hidden />
+            <ChevronLeft className="h-[18px] w-[18px]" aria-hidden />
           </button>
-          <div className="flex items-center">
+          <div className="pointer-events-auto flex items-center">
             {slides.map((s, i) => (
               <button
                 key={s.id}
@@ -206,36 +216,36 @@ export function AiShowcase({
                 }}
                 aria-label={`Show slide ${i + 1} of ${count}`}
                 aria-current={i === active ? "true" : undefined}
-                className="flex h-7 w-6 items-center justify-center"
+                className="flex h-8 w-5 items-center justify-center"
               >
                 <span
                   className={cn(
-                    "block h-1.5 rounded-full transition-colors",
-                    i === active ? "w-4 bg-primary" : "w-1.5 bg-foreground/20",
+                    "block h-[3px] rounded-full transition-colors",
+                    i === active ? "w-4 bg-white" : "w-3 bg-white/45",
                   )}
                 />
               </button>
             ))}
+            {!reduced ? (
+              <button
+                type="button"
+                onClick={() => setPaused((p) => !p)}
+                aria-label={paused ? "Play the showcase" : "Pause the showcase"}
+                aria-pressed={paused}
+                className="ml-1 flex h-8 w-6 items-center justify-center text-white/75 hover:text-white"
+              >
+                {paused ? <Play className="h-3 w-3" aria-hidden /> : <Pause className="h-3 w-3" aria-hidden />}
+              </button>
+            ) : null}
           </div>
           <button
             type="button"
             onClick={() => step(1)}
             aria-label="Next slide"
-            className="hidden h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground sm:flex"
+            className="ai-showcase-btn pointer-events-auto"
           >
-            <ChevronRight className="h-4 w-4" aria-hidden />
+            <ChevronRight className="h-[18px] w-[18px]" aria-hidden />
           </button>
-          {!reduced ? (
-            <button
-              type="button"
-              onClick={() => setPaused((p) => !p)}
-              aria-label={paused ? "Play the showcase" : "Pause the showcase"}
-              aria-pressed={paused}
-              className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {paused ? <Play className="h-3.5 w-3.5" aria-hidden /> : <Pause className="h-3.5 w-3.5" aria-hidden />}
-            </button>
-          ) : null}
         </div>
       ) : null}
     </section>
@@ -281,32 +291,38 @@ export function SlideCard({
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
-        <Icon className="absolute -right-3 -top-3 h-32 w-32 text-white/[0.09] sm:h-40 sm:w-40" strokeWidth={1.25} aria-hidden />
+        <Icon className="absolute -right-4 top-1/2 h-40 w-40 -translate-y-1/2 text-white/[0.08] sm:h-52 sm:w-52" strokeWidth={1} aria-hidden />
       )}
-      {/* The scrim: text must stay readable on ANY uploaded image. */}
-      <span className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" aria-hidden />
+      {/*
+        The scrim, as in the reference: deep brand navy from the LEFT, where the
+        words are, clearing to the right so the picture's subject stays bright —
+        plus a short foot for the controls. Text must stay readable on ANY
+        uploaded image.
+      */}
+      <span className="absolute inset-0 bg-gradient-to-r from-[#0b1340]/80 via-[#0b1340]/35 to-transparent" aria-hidden />
+      <span className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#0b1340]/55 to-transparent" aria-hidden />
 
-      {slide.chip ? (
-        <span className="absolute left-3.5 top-3.5 inline-flex items-center gap-1.5 rounded-full bg-black/25 px-2.5 py-1 text-[11.5px] font-semibold text-white ring-1 ring-inset ring-white/25 sm:left-4 sm:top-4">
-          <Icon className="h-3 w-3" aria-hidden />
-          {slide.chip}
-        </span>
-      ) : null}
+      <span className="absolute inset-x-0 top-0 block p-4 sm:p-5">
+        {slide.chip ? (
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.14] py-1 pl-1 pr-3 text-[12px] font-medium text-white ring-1 ring-inset ring-white/30">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-indigo-500">
+              <Icon className="h-3 w-3" aria-hidden />
+            </span>
+            {slide.chip}
+          </span>
+        ) : null}
 
-      <span className="absolute inset-x-0 bottom-0 block p-4 sm:p-5">
-        <span className="font-brand line-clamp-2 text-[1.5rem] font-bold leading-[1.08] text-white sm:text-[1.85rem]">
-          {slide.title}
-          {slide.highlight ? (
-            <>
-              {slide.title ? " " : null}
-              <span className="bg-gradient-to-r from-sky-300 via-indigo-200 to-violet-300 bg-clip-text text-transparent">
-                {slide.highlight}
-              </span>
-            </>
-          ) : null}
+        {/*
+          The reference's headline is a SERIF ITALIC, white, on two lines —
+          title, then the highlighted words. `.font-showcase` is the device's own
+          serif (zero bytes; app/globals.css), used for this headline only.
+        */}
+        <span className="font-showcase mt-3 block text-[1.75rem] leading-[1.05] text-white sm:mt-4 sm:text-[2.35rem]">
+          <span className="line-clamp-1">{slide.title}</span>
+          {slide.highlight ? <span className="line-clamp-1">{slide.highlight}</span> : null}
         </span>
         {slide.description ? (
-          <span className="mt-1.5 line-clamp-2 max-w-[38ch] text-[13px] leading-snug text-white/85 sm:text-[14px]">
+          <span className="mt-2 line-clamp-2 max-w-[34ch] text-[13px] leading-snug text-white/90 sm:max-w-[40ch] sm:text-[14.5px]">
             {slide.description}
           </span>
         ) : null}
@@ -315,8 +331,8 @@ export function SlideCard({
   );
 
   const frame = cn(
-    "ai-showcase-art relative block aspect-[16/10] overflow-hidden rounded-[1.25rem] ring-1 ring-inset ring-black/[0.06] sm:aspect-[2/1]",
-    "outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "ai-showcase-art relative block aspect-[5/4] overflow-hidden rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]",
+    "shadow-[0_12px_32px_-20px_rgba(20,30,90,0.55)] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
   );
 
   return (

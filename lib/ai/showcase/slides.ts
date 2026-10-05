@@ -34,9 +34,9 @@
 export const SHOWCASE_LIMITS = {
   slides: 8,
   chip: 20,
-  title: 22,
-  highlight: 14,
-  description: 72,
+  title: 18,
+  highlight: 18,
+  description: 64,
   alt: 120,
 } as const;
 
@@ -68,7 +68,7 @@ export interface ShowcaseSlide {
   enabled: boolean;
   chip: string;
   title: string;
-  /** Rendered after the title in the brand gradient — "Turn words into" + "motion". */
+  /** The headline's SECOND line (the reference: "Turn Words" / "Into Motion"). */
   highlight: string;
   description: string;
   target: ShowcaseTarget;
@@ -87,9 +87,9 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     id: "default-t2v",
     enabled: true,
     chip: "Text to Video",
-    title: "Turn words into",
-    highlight: "motion.",
-    description: "Describe a scene and watch it filmed — realistic, cartoon or anime.",
+    title: "Turn Words",
+    highlight: "Into Motion",
+    description: "Describe a scene and watch it filmed, in any style you like.",
     target: "text-to-video",
     image: null,
     alt: "",
@@ -98,9 +98,9 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     id: "default-i2v",
     enabled: true,
     chip: "Image to Video",
-    title: "Bring a photo",
-    highlight: "to life.",
-    description: "Give one still photo motion. Say how it moves and it becomes a clip.",
+    title: "Bring Photos",
+    highlight: "To Life",
+    description: "Give a still photo motion. Say how it moves.",
     target: "image-to-video",
     image: null,
     alt: "",
@@ -109,9 +109,9 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     id: "default-lipsync",
     enabled: true,
     chip: "Lip Sync",
-    title: "Any voice, any",
-    highlight: "language.",
-    description: "Match a video's mouth to a new voice so it looks naturally spoken.",
+    title: "Any Voice,",
+    highlight: "Any Language",
+    description: "Match a video's mouth to a new voice, naturally.",
     target: "lip-sync",
     image: null,
     alt: "",
@@ -120,9 +120,9 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     id: "default-audio",
     enabled: true,
     chip: "Voice & Audio",
-    title: "Type it.",
-    highlight: "Hear it.",
-    description: "Turn text into natural speech, or clone a voice you own.",
+    title: "Type It.",
+    highlight: "Hear It.",
+    description: "Turn text into natural speech, or clone your own voice.",
     target: "text-to-audio",
     image: null,
     alt: "",
@@ -210,3 +210,16 @@ export function visibleSlides(stored: ShowcaseSlide[] | null): ShowcaseSlide[] {
 export function slideHref(base: string, target: ShowcaseTarget): string {
   return `${base}${SHOWCASE_TARGETS[target].path}`;
 }
+
+/**
+ * Every page that renders the showcase. The admin save drops each one's cached
+ * HTML (app/api/admin/ai/showcase/route.ts) — a page that shows the slides but
+ * is missing here would keep the old ones until its next build.
+ * `slides.test.ts` checks this list against the pages that call the reader.
+ */
+export const SHOWCASE_PAGES = [
+  "/ai",
+  "/studio/ai",
+  "/ai/character-replace",
+  "/studio/ai/character-replace",
+] as const;

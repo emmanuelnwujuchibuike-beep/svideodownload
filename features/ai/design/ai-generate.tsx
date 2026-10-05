@@ -151,7 +151,7 @@ export function AiActionBar({ children, className }: { children: ReactNode; clas
         className,
       )}
     >
-      <div className="flex items-center gap-3 rounded-[1.5rem] bg-white/80 px-4 py-3 ring-1 ring-inset ring-white/70 backdrop-blur-xl shadow-[0_18px_50px_-28px_rgba(76,58,160,0.5)]">
+      <div className="flex items-center gap-3 rounded-[1.5rem] bg-white/80 px-4 py-3 ring-1 ring-inset ring-white/70 backdrop-blur shadow-[0_18px_50px_-28px_rgba(76,58,160,0.5)]">
         {children}
       </div>
     </div>

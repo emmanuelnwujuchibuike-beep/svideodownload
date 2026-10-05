@@ -225,6 +225,32 @@ export function AiHero({
  * The shadow is COLOURED and wide, not a grey drop shadow — that is most of
  * what reads as "glass" against the wash. `tone="dashed"` is the drop-target
  * variant from `ai input page.jpg`.
+ *
+ * ── 🔴 8px OF BLUR, NOT 24 (Part 7 §11, measured 2026-10-05) ───────────────
+ *
+ * This panel IS the AI screens, so its backdrop-filter is the single largest
+ * compositor cost in AI Studio. Measured on a production build at 390×844:
+ * it covers 68% of the viewport on /ai/text-to-video and 83% on
+ * /ai/image-to-video, and with its siblings the pages carried ~108% of a
+ * viewport — more than one full screen — under a 24px blur.
+ *
+ * `backdrop-blur-xl` was 24px. Diffing real rendered pixels against that
+ * baseline, the share of pixels differing by more than 8/255 was:
+ *
+ *     16px → 0.20%    12px → 0.27%    8px → 0.16%      (noise; identical)
+ *      4px → 1.9%      0px → 2.2%                      (visibly different)
+ *
+ * So the visible contribution SATURATES at 8px and falls off a cliff below it.
+ * 24px was paying three times the kernel for a difference no eye can find —
+ * which is what §11 means by "do NOT remove the premium appearance; optimize
+ * it". The blur stays, the glass still reads as glass, the cost is a third.
+ *
+ * Why it saturates: the fill is `bg-white/70`, so only 30% of the backdrop
+ * shows through, and what shows through is the low-frequency `ai-wash`
+ * gradient — a wider kernel has almost nothing left to smear.
+ *
+ * ⚠️ Do not "restore" this to `-xl` by eye. Re-run the pixel diff; a change
+ * that is invisible in a screenshot is invisible to the member too.
  */
 export function AiGlassCard({
   children,
@@ -240,7 +266,7 @@ export function AiGlassCard({
   return (
     <Tag
       className={cn(
-        "relative overflow-hidden rounded-[1.75rem] bg-white/70 backdrop-blur-xl",
+        "relative overflow-hidden rounded-[1.75rem] bg-white/70 backdrop-blur",
         "shadow-[0_18px_50px_-28px_rgba(76,58,160,0.45)]",
         tone === "solid" && "ring-1 ring-inset ring-white/70",
         tone === "quiet" && "ring-1 ring-inset ring-white/50 bg-white/55",
@@ -347,7 +373,8 @@ export function AiSecondaryAction({
       href={href}
       className={cn(
         "inline-flex h-14 min-h-[3.5rem] items-center justify-center gap-2 rounded-full bg-white/75 px-5 text-[15px] font-semibold",
-        "ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-20px_rgba(76,58,160,0.5)] backdrop-blur-xl",
+        // 8px, not 24 — see the measurement on `AiGlassCard` above.
+        "ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-20px_rgba(76,58,160,0.5)] backdrop-blur",
         "active:scale-[0.985] motion-reduce:active:scale-100",
         className,
       )}

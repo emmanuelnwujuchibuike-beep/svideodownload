@@ -21,6 +21,40 @@ export const STREAK_KEY = "streak";
 /** Display-only cache, so the hero chip can paint before the network answers. */
 const CACHE_KEY = "frenz:streak-display";
 
+/**
+ * The local day on which this device last got a CONFIRMED "activity recorded"
+ * back from the server. See `recordStreakActivity`.
+ */
+const RECORDED_KEY = "frenz:streak-recorded";
+
+/** The local calendar day, in the one format this file already uses. */
+function localDay(): string {
+  return new Date().toLocaleDateString("en-CA");
+}
+
+/**
+ * 🔴 FAILS OPEN, ALWAYS. Every uncertain answer is `false`, which means "send
+ * the POST" — i.e. exactly today's behaviour. Nothing here can lose a streak;
+ * the worst it can do is fail to save a request.
+ */
+function alreadyRecordedToday(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(RECORDED_KEY) === localDay();
+  } catch {
+    return false; // private mode — just send it
+  }
+}
+
+/** Only ever called after the server CONFIRMED the day (a parsed 2xx state). */
+function markRecordedToday(): void {
+  try {
+    window.localStorage.setItem(RECORDED_KEY, localDay());
+  } catch {
+    /* private mode — we simply re-record on the next page open, as before */
+  }
+}
+
 interface DisplayCache {
   current: number;
   /** Local day the cache was written, so a stale overnight value is ignored. */
@@ -93,8 +127,29 @@ export function publishStreak(state: StreakState): void {
 /**
  * Record today's activity. Idempotent server-side, so calling it from more than
  * one place (or more than one tab) is safe by construction.
+ *
+ * ── 🔴 ONCE A DAY PER DEVICE, NOT ONCE PER PAGE OPEN (2026-10-04) ───────────
+ *
+ * `streak-tracker.tsx` mounts on every page, so this fired on EVERY page open
+ * — one Vercel function invocation per pageview, all day, to re-assert a fact
+ * that changes once per day. The file already called the StrictMode duplicate
+ * "a wasted request on every single page open"; the same sentence was true of
+ * the 2nd, 10th and 40th navigation of the day, which nothing was counting.
+ * Measured on a production build 2026-10-04: a POST on every one of 40
+ * authenticated AI Studio page loads.
+ *
+ * The guard is deliberately lopsided. It skips ONLY when this device has a
+ * confirmed, parsed 2xx for today's local date; every other outcome — no
+ * marker, unreadable storage, a changed timezone, a failed or non-ok request —
+ * sends the POST exactly as before. So the worst case is the behaviour we
+ * already had, and a streak cannot be lost by it. The SERVER remains the only
+ * authority on what day it is and what the day is worth (§18, engine.ts); this
+ * only decides whether to bother asking twice.
  */
 export async function recordStreakActivity(): Promise<StreakState | null> {
+  // Not an error and not a failure — today is already on the record, so there
+  // is nothing to celebrate that was not celebrated when it was recorded.
+  if (alreadyRecordedToday()) return null;
   try {
     const res = await fetch("/api/streak", {
       method: "POST",
@@ -108,6 +163,9 @@ export async function recordStreakActivity(): Promise<StreakState | null> {
     });
     if (!res.ok) return null;
     const state = (await res.json()) as StreakState;
+    // Only now — a parsed 2xx. Marking any earlier (on send, or on a non-ok
+    // response) would let a failed record suppress tomorrow's real one.
+    markRecordedToday();
     publishStreak(state);
     return state;
   } catch {

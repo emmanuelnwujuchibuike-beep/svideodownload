@@ -65,3 +65,11 @@ yarn-error.log*
 signing-key-info.txt
 *Google Play package*.zip
 *.aab
+
+# Throwaway investigation probes. Every session writes a few one-off scripts to
+# measure something against a running build (`scripts/_name.tmp.mjs`) plus the
+# odd screenshot. They are evidence for one question, not code anyone reruns,
+# and 133 of them had piled up untracked — enough that "commit everything"
+# stopped being a safe instruction. Ignored so the working tree stays honest.
+scripts/_*.tmp.*
+scripts/_*.png

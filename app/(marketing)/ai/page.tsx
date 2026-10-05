@@ -80,7 +80,25 @@ export const metadata: Metadata = {
   nothing here opts the route out of static rendering — the same discipline
   `getLandingSettings` was built for.
 */
-export const revalidate = 300;
+/*
+  ── 🔴 A CLOCK FOR SOMETHING THAT IS ALREADY AN EVENT (2026-10-05) ───
+
+  This was 300 — a five-minute ISR window on a public marketing page. Under
+  crawler traffic alone that is a regeneration treadmill that never stops:
+  every turn bills ISR Writes AND Fast Origin Transfer AND Fluid Active CPU
+  AND Observability Events, for a page whose content changes when an
+  ADMINISTRATOR saves a switch and at no other moment.
+
+  The only input is `getLandingSettings`, and `app/api/admin/landing/route.ts`
+  already calls `revalidatePath("/", "layout")` the instant that save
+  succeeds — which drops this page with everything else under the root
+  layout. The clock was duplicating a bust that already happens, so it is now
+  the layout's own 86400 and freshness stays exact.
+
+  The standing rule this restores: freshness is an EVENT, not a clock
+  (hard-law-never-ship-idle-consumption-2026-10-04).
+*/
+export const revalidate = 86400;
 
 export default async function PublicFrenzAIPage() {
 

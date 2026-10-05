@@ -417,7 +417,37 @@ const nextConfig: NextConfig = {
           //               "enforcing blindly could break ads" note asked for,
           //               without gambling revenue to get it.
           { key: "Content-Security-Policy", value: buildCsp("enforce") },
-          { key: "Content-Security-Policy-Report-Only", value: buildCsp("report") },
+          /*
+            ── THE REPORT-ONLY TWIN IS OFF BY DEFAULT (2026-10-04) ────────────
+
+            🔴 IT WAS A PER-PAGEVIEW BILLING TAP, and the note above says why
+            without meaning to: its script-src deliberately omits `https:`,
+            while features/monetization/inject.ts executes admin-configured ad
+            markup from origins that are not knowable at build time. So the
+            policy is not occasionally violated — it is violated by DESIGN, by
+            every third-party ad script, on every ad-bearing page load.
+
+            Each violation is a browser POST to /api/csp-report, and each POST
+            is one Vercel function invocation plus a `console.warn`, which is
+            one Observability event. That is a per-request log on the busiest
+            path in the product — the thing the owner has twice asked to stop
+            paying for ("Fast Origin and observability"), and a standing rule.
+
+            The evidence it was gathering is not lost: it is OPT-IN now. Set
+            CSP_REPORT_URI=1 for the run of the nonce + 'strict-dynamic' work
+            the comment above defers, read the origins out of the logs, then
+            unset it. Gathering evidence for a project nobody has started yet
+            is not worth a bill that runs every day.
+
+            The ENFORCING policy is untouched and keeps its report-uri. Its
+            script-src is permissive precisely so ads keep working, so it is
+            violated rarely — and when it IS, something is genuinely blocked
+            and the owner needs to know, because that is how ad revenue breaks
+            silently.
+          */
+          ...(process.env.CSP_REPORT_URI === "1"
+            ? [{ key: "Content-Security-Policy-Report-Only", value: buildCsp("report") }]
+            : []),
         ],
       },
     ];

@@ -120,3 +120,62 @@ describe("report-only CSP — the stricter target we're gathering evidence for",
     expect(buildCsp("report")).not.toBe(buildCsp("enforce"));
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE REPORT-ONLY HEADER IS A COST, NOT JUST A POLICY
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The tests above check what the policies SAY. These check whether the
+ * expensive one is SENT, which is a different question and the one that shows
+ * up on the bill.
+ *
+ * Why it is expensive: the report-only script-src deliberately omits `https:`
+ * (asserted above), while features/monetization/inject.ts runs admin-configured
+ * ad markup from origins unknowable at build time. So it is violated by every
+ * third-party ad script on every ad-bearing page load, and each violation is a
+ * browser POST to /api/csp-report — one Vercel function invocation and one
+ * Observability event apiece.
+ *
+ * These assert on the REAL artifact: the header list `headers()` actually
+ * returns, not a re-description of the intent.
+ */
+describe("report-only CSP — off unless somebody is reading it", () => {
+  async function cspHeaderKeys(): Promise<string[]> {
+    const mod = await import("../../next.config");
+    const rules = await mod.default.headers!();
+    return rules
+      .flatMap((r) => r.headers)
+      .map((h) => h.key)
+      .filter((k) => /^content-security-policy/i.test(k));
+  }
+
+  it("does NOT ship Content-Security-Policy-Report-Only by default", async () => {
+    delete process.env.CSP_REPORT_URI;
+    const keys = await cspHeaderKeys();
+
+    expect(keys).toContain("Content-Security-Policy");
+    expect(keys).not.toContain("Content-Security-Policy-Report-Only");
+  });
+
+  it("TEETH: setting CSP_REPORT_URI=1 brings it back", async () => {
+    // Without this case the test above would also pass if the header had been
+    // deleted outright, or if headers() returned nothing at all.
+    process.env.CSP_REPORT_URI = "1";
+    try {
+      const keys = await cspHeaderKeys();
+      expect(keys).toContain("Content-Security-Policy-Report-Only");
+    } finally {
+      delete process.env.CSP_REPORT_URI;
+    }
+  });
+
+  it("never drops the ENFORCING policy — that one is the actual protection", async () => {
+    for (const flag of [undefined, "1"]) {
+      if (flag) process.env.CSP_REPORT_URI = flag;
+      else delete process.env.CSP_REPORT_URI;
+      expect(await cspHeaderKeys()).toContain("Content-Security-Policy");
+    }
+    delete process.env.CSP_REPORT_URI;
+  });
+});

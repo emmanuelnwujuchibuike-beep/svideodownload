@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
+import { createIdempotencyKeyHolder, type IdempotencyKeyHolder } from "@/features/ai/video/idempotency-key";
 import {
   clearGeneration,
   getServerSnapshot,
@@ -89,6 +90,39 @@ export function useVideoGeneration({
   /** A submit in flight, and a submit that failed before a job ever existed. */
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  /*
+    ── THE IDEMPOTENCY KEY, HELD ACROSS RETRIES ────────────────────────────────
+
+    🔴 This used to be minted inline at the fetch — `crypto.randomUUID()` in the
+    request body — under a comment promising "a double tap or a retry reaches
+    the SAME job rather than paying twice". A fresh uuid per call is the exact
+    opposite: the key was never reused, so the server's idempotency could never
+    fire and a retry bought a SECOND generation.
+
+    The reachable path is not the double tap (the `submitting` flag covers the
+    realistic case) — it is a LOST RESPONSE. If the POST reaches the server,
+    creates the job and takes the money, but the reply dies on the way back,
+    the member sees "We couldn't reach the service" and taps again. On this
+    stack that is not hypothetical: an origin 502 arrives as Cloudflare's own
+    HTML page, so the client cannot even tell a refusal from a lost reply.
+
+    The rule lives in `idempotency-key.ts` rather than here because this repo
+    has no DOM test environment — inside the hook it was untestable, which is
+    how a false promise sat in a money path. See that file for the server half
+    and `idempotency-key.test.ts` for the retry case proved both ways.
+  */
+  const keysRef = useRef<IdempotencyKeyHolder | null>(null);
+  // Lazily, once: `useRef(createIdempotencyKeyHolder())` would build a holder
+  // on every render and throw all but the first away.
+  keysRef.current ??= createIdempotencyKeyHolder();
+  const keys = keysRef.current;
+  /*
+    What makes two submits "the same request". Only the billable facts: the
+    tool and its inputs. `label` is presentational and `quote` is derived, so
+    neither may force a new key.
+  */
+  const requestFingerprint = useMemo(() => JSON.stringify({ feature, input }), [feature, input]);
 
   const active = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
@@ -192,8 +226,10 @@ export function useVideoGeneration({
         body: JSON.stringify({
           feature,
           input,
-          // Idempotency: a double tap or a retry reaches the SAME job rather than paying twice.
-          clientRequestId: crypto.randomUUID().replace(/-/g, "").slice(0, 32),
+          // Idempotency: a double tap or a retry reaches the SAME job rather
+          // than paying twice. Held in a ref so a RETRY sends the same key —
+          // see idempotency-key.ts.
+          clientRequestId: keys.for(requestFingerprint),
           // What the member was shown. The server compares and refuses a difference.
           ...(quote ? { shownTotalCents: quote.totalCents } : {}),
         }),
@@ -203,6 +239,9 @@ export function useVideoGeneration({
         setSubmitError(json?.error ?? "Generation couldn't be started.");
         return;
       }
+      // The job exists and is paid for. The next submit is a NEW request and
+      // must not reuse this key, or the server would hand back this same job.
+      keys.clear();
       startGeneration({
         jobId: json.jobId as string,
         feature,
@@ -215,7 +254,7 @@ export function useVideoGeneration({
     } finally {
       setSubmitting(false);
     }
-  }, [feature, input, label, mine, quote, ready, submitting]);
+  }, [feature, input, keys, label, mine, quote, ready, requestFingerprint, submitting]);
 
   const reset = useCallback(() => {
     setSubmitError(null);

@@ -9,7 +9,21 @@ import { createAdminClient } from "@/lib/supabase/admin";
   regular index instead — see this file's sibling). A short revalidate
   because freshness is the entire point here, unlike the general sitemap.
 */
-export const revalidate = 300;
+/*
+  ── 🔴 300s HERE IS A CRAWLER-DRIVEN TREADMILL (2026-10-05) ─────────
+
+  A news sitemap is fetched by crawlers, not by people — so a five-minute
+  window meant this route regenerated around the clock with nobody on the
+  site, each turn costing a Supabase query, a function invocation, an ISR
+  write and the bytes. That is precisely the "costs money while nobody is
+  looking" line that dominated the bill.
+
+  Freshness is still the point, so it is not simply made long: the window is
+  30 minutes AND `publishPost` now revalidates this path the moment a news
+  post is published. The sitemap is therefore CORRECT sooner than it was
+  before (an event beats a 5-minute clock) while idling at zero.
+*/
+export const revalidate = 1800;
 
 const hasSupabase = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 

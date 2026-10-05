@@ -69,7 +69,15 @@ export function LanguageSelector() {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={toggle}
-        className="inline-flex h-11 items-center justify-center"
+        /*
+          `min-w-[44px]`, not just `h-11`: every sibling header button is
+          `h-11 w-11` (app-topbar, notification-bell, search-trigger) but this
+          one only ever constrained its HEIGHT. Below `sm` the `EN` label is
+          hidden, so the whole target collapsed to the 26px globe — measured
+          26×44 at 320–430px. A MINIMUM rather than a fixed width, because the
+          label reappears at `sm` and must still fit beside the glyph.
+        */
+        className="inline-flex h-11 min-w-[44px] items-center justify-center"
       >
         <IconTile>
           <span className="relative flex items-center">

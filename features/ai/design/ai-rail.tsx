@@ -133,8 +133,23 @@ export function AiRail() {
           <Crown className="h-3.5 w-3.5 text-violet-600" aria-hidden />
           Go Pro
         </p>
+        {/*
+          🔴 "faster processing" REMOVED (2026-10-04) — the fourth surface to
+          carry that claim and the fourth to lose it.
+
+          This one is worse than the others, because the codebase already has
+          the gate it skipped: `aiCleanGpuOffered` in lib/ai/hardware.ts exists
+          precisely so the speed claim "may only appear when there is a GPU
+          model behind it", and its own comment calls it "the one promise a
+          member can check in a minute and find false". This card never asked
+          it. It is also moot for video now: Kling generates on Kling's
+          hardware, so no plan of ours changes how fast a generation runs.
+
+          What replaces it is the concurrency that IS real and checkable —
+          lib/ai/policy.ts: free `maxConcurrent: 1`, pro `2`, business `3`.
+        */}
         <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-          More credits, premium features and faster processing.
+          More credits, higher limits, and two generations running at once.
         </p>
         <Link
           href="/account/plan"

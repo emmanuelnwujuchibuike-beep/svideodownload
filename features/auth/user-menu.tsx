@@ -136,6 +136,20 @@ export function UserMenu() {
       <button
         type="button"
         onClick={toggle}
+        /*
+          🔴 The only control in the header with NO accessible name — measured
+          2026-10-04 on a production build: a screen reader announced it as
+          bare "button". Everything inside it is deliberately nameless, and
+          correctly so: the avatar `<img>` carries `alt=""` because it is
+          decorative, and the fallback is an `aria-hidden` icon. That is right
+          for the contents and leaves the BUTTON with nothing, so the name has
+          to be stated here.
+
+          Phrased as the house does it — `aria-label="Your downloads"` in
+          downloads-entry.tsx — rather than "Account menu", which describes the
+          widget instead of where it goes.
+        */
+        aria-label="Your account"
         aria-haspopup="menu"
         aria-expanded={open}
         className="relative flex h-9 w-9 items-center justify-center overflow-visible rounded-full ring-1 ring-border transition hover:ring-foreground/30"

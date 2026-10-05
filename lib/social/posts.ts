@@ -280,6 +280,33 @@ export async function publishPost(
       .then((m) => m.notifyNewPost(publisherId, id, input.title))
       .catch(() => {});
 
+    /*
+      ── 🔴 FRESHNESS IS AN EVENT, NOT A CLOCK (2026-10-05) ───────────
+
+      The sitemaps used to stay current by regenerating on a timer — the news
+      one every FIVE MINUTES. Crawlers fetch those routes around the clock, so
+      that timer ran with nobody on the site, billing an ISR write, a function
+      invocation, a Supabase query and the bytes on every turn.
+
+      Publishing is the only moment either sitemap can change, so it is the
+      moment that busts them. The windows behind this are now long, and the
+      sitemaps are correct SOONER than the old clock managed.
+
+      ⚠️ Deferred-imported for the same reason the push emit above is: a
+      top-level `next/cache` import pulls server-only code into everything that
+      imports this module, and `home-feed.ts`'s unit tests then fail to load
+      before a single assertion runs. Only an actual publish pays for it.
+
+      Best-effort: a failed revalidate must never fail a post that is already
+      written. The long window is the backstop.
+    */
+    void import("next/cache")
+      .then((m) => {
+        m.revalidatePath("/posts-sitemap.xml");
+        if (input.category === "news") m.revalidatePath("/news-sitemap.xml");
+      })
+      .catch(() => {});
+
     return { ok: true, id };
   } catch {
     return { ok: false, error: "Couldn't publish.", code: "error" };

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { KLING_VOICES_PUBLIC } from "@/lib/ai/lip-sync/voices-public";
-import { LIP_SYNC_AUDIO_FORMATS, LIP_SYNC_BOUNDS, LIP_SYNC_DURATION_POLICIES, LIP_SYNC_EXPRESSIONS, LIP_SYNC_MODEL_IDS, type LipSyncDurationPolicy, type LipSyncExpression, type LipSyncProConfig, type LipSyncConfiguredVendor, type LipSyncVendor } from "@/lib/ai/lip-sync/config";
+import { LIP_SYNC_AUDIO_FORMATS, LIP_SYNC_BOUNDS, LIP_SYNC_DURATION_POLICIES, LIP_SYNC_EXPRESSIONS, type LipSyncDurationPolicy, type LipSyncExpression, type LipSyncProConfig } from "@/lib/ai/lip-sync/config";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import { formatCents } from "@/lib/ai/economy";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
@@ -13,15 +13,15 @@ import { cn } from "@/lib/utils";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  AI → LIP SYNC — the provider switch, the models, the two speech sources,
+ *  AI → LIP SYNC — the Kling price card, the two speech sources,
  *  the limits, the voice, the presets, the mismatch policy, the prices (§13)
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Owner, 2026-09-21: "the lip sync should also have a switch: use the fal.ai
- * top lip sync model — Sync-3 or higher." The switch is the first control:
- * Replicate (Sync Labs lipsync-2-pro / lipsync-2, or Kling Lip Sync — the
- * text-native one) or fal.ai (Sync-3; a newer fal-ai/sync-lipsync/v… endpoint
- * may be typed). Text to Speech is ElevenLabs — shown, not switchable.
+ * 2026-10-05 (Part 8 §3, §4, §71): KLING ONLY. The Replicate / fal.ai switch and
+ * their model cards are gone — every job already ran on the direct Kling
+ * endpoint, while members were priced from the Replicate card. The Kling card
+ * below is now the price the quote reads (owner's decision). Text to Speech is
+ * ElevenLabs — shown, not switchable.
  *
  * Posts ONLY `frenzAiLipSync`. Lazy-loaded (frenz-ai-settings-lazy.tsx).
  */
@@ -34,23 +34,14 @@ const num = (raw: string, fallback: number) => {
   return raw.trim() === "" || !Number.isFinite(n) ? fallback : n;
 };
 
-const MODEL_LABEL: Record<string, string> = {
-  "sync/lipsync-2-pro": "Sync Labs lipsync-2-pro (Studio · audio · expression · active speaker)",
-  "sync/lipsync-2": "Sync Labs lipsync-2 (Standard · audio · expression · active speaker)",
-  "kwaivgi/kling-lip-sync": "Kling Lip Sync (TEXT-NATIVE · Kling voices · speed · 2–10 s · 720–1920 px)",
-  "fal-ai/sync-lipsync/v3": "Sync-3 (audio · sync modes · $8/min listed 09-21)",
-};
-
 export function LipSyncSettingsPanel({ settings, stats, voices, languages }: { settings: LandingSettings; stats: LipSyncAdminStats | null; voices: { id: string; label: string; provider: string }[]; languages: { code: string; label: string }[] }) {
   const router = useRouter();
   const cfg: LipSyncProConfig = settings.frenzAiLipSync;
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
   const [enabled, setEnabled] = useState(cfg.enabled);
-  const [provider, setProvider] = useState<LipSyncVendor>(cfg.provider);
-  const [models, setModels] = useState<Record<LipSyncConfiguredVendor, { model: string; enabled: boolean; perSecond: string; cost: string; mult: string; conc: string; notes: string }>>({
-    replicate: { model: cfg.models.replicate.model, enabled: cfg.models.replicate.enabled, perSecond: minorToMajorInput(cfg.models.replicate.perSecondCents), cost: String(cfg.models.replicate.providerCostPerSecondUsdCents), mult: String(cfg.models.replicate.creditMultiplier), conc: String(cfg.models.replicate.maxConcurrent), notes: cfg.models.replicate.notes },
-    fal: { model: cfg.models.fal.model, enabled: cfg.models.fal.enabled, perSecond: minorToMajorInput(cfg.models.fal.perSecondCents), cost: String(cfg.models.fal.providerCostPerSecondUsdCents), mult: String(cfg.models.fal.creditMultiplier), conc: String(cfg.models.fal.maxConcurrent), notes: cfg.models.fal.notes },
-  });
+  const k = cfg.models.kling;
+  const [kling, setKling] = useState({ enabled: k.enabled, perSecond: minorToMajorInput(k.perSecondCents), cost: String(k.providerCostPerSecondUsdCents), mult: String(k.creditMultiplier), conc: String(k.maxConcurrent), notes: k.notes });
+  const setK = (patch: Partial<typeof kling>) => setKling((cur) => ({ ...cur, ...patch }));
   const [textOn, setTextOn] = useState(cfg.textMode.enabled);
   const [minChars, setMinChars] = useState(String(cfg.textMode.minimumCharacters));
   const [maxChars, setMaxChars] = useState(String(cfg.textMode.maximumCharacters));
@@ -89,10 +80,8 @@ export function LipSyncSettingsPanel({ settings, stats, voices, languages }: { s
     try {
       const payload = {
         enabled,
-        provider,
-        models: Object.fromEntries(
-          (["replicate", "fal"] as const).map((v) => [v, { model: models[v].model.trim(), enabled: models[v].enabled, perSecondCents: (majorInputToMinor(models[v].perSecond) ?? cfg.models[v].perSecondCents), providerCostPerSecondUsdCents: num(models[v].cost, 0), creditMultiplier: num(models[v].mult, 1), maxConcurrent: int(models[v].conc, 0), notes: models[v].notes }]),
-        ),
+        // Kling only — the server refuses a provider or a Replicate / fal card.
+        models: { kling: { enabled: kling.enabled, perSecondCents: (majorInputToMinor(kling.perSecond) ?? k.perSecondCents), providerCostPerSecondUsdCents: num(kling.cost, 0), creditMultiplier: num(kling.mult, 1), maxConcurrent: int(kling.conc, 0), notes: kling.notes } },
         textMode: { enabled: textOn, minimumCharacters: int(minChars, 1), maximumCharacters: int(maxChars, 1200), speed: { min: num(speedMin, 0.8), max: num(speedMax, 2), default: num(speedDefault, 1) } },
         audioMode: { enabled: audioOn, formats, maximumDurationSeconds: int(audioMax, 120), maximumUploadBytes: int(audioBytes, 25) * 1024 * 1024 },
         video: { maximumDurationSeconds: int(videoMax, 60), minimumDurationSeconds: int(videoMin, 1), maximumUploadBytes: int(videoBytes, 50) * 1024 * 1024 },
@@ -107,7 +96,7 @@ export function LipSyncSettingsPanel({ settings, stats, voices, languages }: { s
       };
       const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzAiLipSync: payload }) });
       const json = await res.json().catch(() => ({}));
-      setMsg(res.ok ? { ok: true, text: "Saved. New jobs use this; running jobs keep the provider they started on." } : { ok: false, text: json.error ?? "Failed to save." });
+      setMsg(res.ok ? { ok: true, text: "Saved. New quotes use this; a quote already given keeps its price." } : { ok: false, text: json.error ?? "Failed to save." });
       if (res.ok) router.refresh();
     } catch {
       setMsg({ ok: false, text: "Network error." });
@@ -125,61 +114,25 @@ export function LipSyncSettingsPanel({ settings, stats, voices, languages }: { s
       <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
         <h2 className="mb-1 font-semibold">Lip Sync Pro</h2>
         <p className="mb-5 text-sm text-muted-foreground">
-          A video and ONE speech source — typed text, or the member&apos;s own audio. Text reaches a text-native model itself (Kling Lip Sync) or becomes ElevenLabs speech first; audio goes straight to the audio model. The
-          provider switch below decides NEW jobs; a job keeps the provider it started on.
+          A video and ONE speech source — typed text, or the member&apos;s own audio. Text becomes ElevenLabs speech first; audio goes straight to Kling. Provider: Kling (direct lip-sync endpoint) — fixed, not switchable.
         </p>
         <div className="space-y-5">
           <Toggle label="Offer Lip Sync Pro" hint="Off: the door on the Explore page says so; nothing can be created." checked={enabled} onChange={setEnabled} />
 
-          {/* ── the switch ─────────────────────────────────────────────────── */}
+          {/* ── the price: Kling's card, the one the quote reads ─────────────── */}
           <div className="rounded-2xl border border-border/70 p-4">
-            <p className="text-sm font-semibold">Lip Sync Pro provider</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {(["replicate", "fal"] as const).map((v) => (
-                <button key={v} type="button" onClick={() => setProvider(v)} className={cn("rounded-2xl border px-4 py-3 text-left transition", provider === v ? "border-foreground bg-foreground text-background" : "border-border hover:bg-secondary/40")}>
-                  <span className="block text-sm font-semibold">{v === "fal" ? "fal.ai — Sync-3 (or higher)" : "Replicate"}</span>
-                  <span className={cn("block text-[11px]", provider === v ? "text-background/75" : "text-muted-foreground")}>{v === "fal" ? "Sync Labs' top model on fal.ai; audio-driven, sync modes." : "Sync Labs lipsync-2-pro / lipsync-2, or Kling Lip Sync (text-native)."}</span>
-                </button>
-              ))}
+            <p className="text-sm font-semibold">Kling lip sync — price</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Provider: Kling · Pipeline: direct lip-sync endpoint (kling-lip-sync). Members are quoted this rate × the video&apos;s seconds, plus the per-video price below.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+              <Field label={`Price / second (${symbol})`}><input inputMode="decimal" value={kling.perSecond} onChange={(e) => setK({ perSecond: e.target.value })} className={input} /></Field>
+              <Field label="Kling cost / s (US ¢)" hint="Estimate basis. 0 = unknown."><input inputMode="decimal" value={kling.cost} onChange={(e) => setK({ cost: e.target.value })} className={input} /></Field>
+              <Field label="Credit multiplier" hint={`${LIP_SYNC_BOUNDS.creditMultiplier.min}–${LIP_SYNC_BOUNDS.creditMultiplier.max}; 1 = the same credits as any tool.`}><input inputMode="decimal" value={kling.mult} onChange={(e) => setK({ mult: e.target.value })} className={input} /></Field>
+              <Field label="Max concurrent" hint="0 = the member/global caps only."><input inputMode="numeric" value={kling.conc} onChange={(e) => setK({ conc: e.target.value })} className={input} /></Field>
             </div>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {(["replicate", "fal"] as const).map((v) => {
-                const m = models[v];
-                const set = (patch: Partial<typeof m>) => setModels((all) => ({ ...all, [v]: { ...all[v], ...patch } }));
-                return (
-                  <div key={v} className={cn("rounded-2xl border p-3", provider === v ? "border-foreground/40" : "border-border/60 opacity-90")}>
-                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{v === "fal" ? "fal.ai model" : "Replicate model"}</p>
-                    <label className="mt-2 block text-xs font-semibold text-muted-foreground">
-                      Model
-                      {v === "replicate" ? (
-                        <select value={m.model} onChange={(e) => set({ model: e.target.value })} className={select}>
-                          {LIP_SYNC_MODEL_IDS.replicate.map((id) => (
-                            <option key={id} value={id}>
-                              {MODEL_LABEL[id] ?? id}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <>
-                          <input value={m.model} onChange={(e) => set({ model: e.target.value })} className={input} placeholder="fal-ai/sync-lipsync/v3" />
-                          <span className="mt-1 block font-normal text-[11px] text-muted-foreground/80">Sync-3 today. A newer fal-ai/sync-lipsync/v… endpoint with the same video + audio contract is accepted here.</span>
-                        </>
-                      )}
-                    </label>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <Field label={`Price / second (${symbol})`}><input inputMode="decimal" value={m.perSecond} onChange={(e) => set({ perSecond: e.target.value })} className={input} /></Field>
-                      <Field label="Provider cost / s (US ¢)" hint="Estimate basis. 0 = unknown."><input inputMode="decimal" value={m.cost} onChange={(e) => set({ cost: e.target.value })} className={input} /></Field>
-                      <Field label="Credit multiplier" hint={`${LIP_SYNC_BOUNDS.creditMultiplier.min}–${LIP_SYNC_BOUNDS.creditMultiplier.max}; 1 = the same credits as any tool.`}><input inputMode="decimal" value={m.mult} onChange={(e) => set({ mult: e.target.value })} className={input} /></Field>
-                      <Field label="Max concurrent" hint="0 = the member/global caps only."><input inputMode="numeric" value={m.conc} onChange={(e) => set({ conc: e.target.value })} className={input} /></Field>
-                    </div>
-                    <label className="mt-2 flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={m.enabled} onChange={(e) => set({ enabled: e.target.checked })} className="h-4 w-4 accent-[hsl(var(--primary))]" /> enabled
-                    </label>
-                    <Field label="Notes"><input value={m.notes} onChange={(e) => set({ notes: e.target.value })} className={input} maxLength={400} /></Field>
-                  </div>
-                );
-              })}
-            </div>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={kling.enabled} onChange={(e) => setK({ enabled: e.target.checked })} className="h-4 w-4 accent-[hsl(var(--primary))]" /> enabled
+            </label>
+            <Field label="Notes"><input value={kling.notes} onChange={(e) => setK({ notes: e.target.value })} className={input} maxLength={400} /></Field>
           </div>
 
           {/* ── the two speech sources ─────────────────────────────────────── */}

@@ -94,22 +94,6 @@ const lipSyncModelSchema = z
     notes: z.string().max(400).optional(),
   })
   .strict();
-const providerModelSchema = z
-  .object({
-    model: z.string().max(200).optional(),
-    version: z.string().max(120).optional(),
-    enabled: z.boolean().optional(),
-    maxDurationSeconds: z.number().int().min(1).max(600).nullable().optional(),
-    maxEdgePx: z.number().int().min(256).max(4096).nullable().optional(),
-    creditMultiplier: z.number().min(0.1).max(10).optional(),
-    costUsdCentsPerSecond: z.number().min(0).max(100_000).optional(),
-    costUsdCentsPerRun: z.number().min(0).max(100_000).optional(),
-    maxConcurrent: z.number().int().min(0).max(100).optional(),
-    timeoutMinutes: z.number().int().min(0).max(240).optional(),
-    retryCount: z.number().int().min(0).max(5).optional(),
-    notes: z.string().max(400).optional(),
-  })
-  .strict();
 const aiPlanSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -268,37 +252,20 @@ const schema = z.object({
    * they are ElevenLabs by construction; a patch naming one is refused here
    * (strict) and ignored by the normaliser. Bounds mirror AI_PROVIDERS_BOUNDS.
    */
+  /*
+    ⛔ Part 8 §3/§41/§71 (2026-10-05): every other field this object used to
+    accept — a provider per feature (replicate | fal), fal scopes, per-vendor
+    model configs, the Replicate/fal pause switches — existed only to choose,
+    configure or RE-ACTIVATE a retired provider. `.strict()` now refuses them
+    with a 400. The one live setting left is whether an admin's own jobs are
+    recorded as tests.
+  */
   frenzAiProviders: z
     .object({
-      features: z
-        .object({
-          character_replace: z
-            .object({
-              provider: z.enum(["replicate", "fal"]).optional(),
-              unsupportedScopes: z.enum(["unavailable", "replicate"]).optional(),
-              falScopes: z.object({ upper_body: z.boolean().optional(), full_character: z.boolean().optional() }).strict().optional(),
-            })
-            .strict()
-            .optional(),
-          lip_sync: z.object({ provider: z.enum(["replicate", "fal"]).optional() }).strict().optional(),
-        })
-        .strict()
-        .optional(),
-      models: z.record(z.enum(["character_replace:replicate", "character_replace:fal", "lip_sync:replicate", "lip_sync:fal"]), providerModelSchema).optional(),
-      paused: z.object({ replicate: z.boolean().optional(), fal: z.boolean().optional() }).strict().optional(),
       adminJobsAreTests: z.boolean().optional(),
     })
     .strict()
     .optional(),
-  /**
-   * 2026-09-28 (Part 4 §12–§14): the Kling pricing matrix.
-   *
-   * 🔴 Provider CONSUMPTION and customer PRICE are separate fields on purpose, so
-   * an operator correcting what Kling charges us can never silently re-price a
-   * member. Bounds mirror KLING_PRICING_BOUNDS, and `.strict()` means a tier key
-   * the matrix does not define is refused here rather than quietly dropped by the
-   * normaliser — including `lip_sync:720p`, which is not a tier a member can buy.
-   */
   frenzAiKlingPricing: z
     .object({
       matrix: z
@@ -329,8 +296,9 @@ const schema = z.object({
   frenzAiLipSync: z
     .object({
       enabled: z.boolean().optional(),
-      provider: z.enum(["replicate", "fal"]).optional(),
-      models: z.record(z.enum(["replicate", "fal"]), lipSyncModelSchema).optional(),
+      // Kling only (Part 8 §3/§71, 2026-10-05): no provider switch, and the
+      // Replicate / fal.ai model cards can no longer be written.
+      models: z.record(z.enum(["kling"]), lipSyncModelSchema).optional(),
       textMode: z.object({ enabled: z.boolean().optional(), minimumCharacters: z.number().int().min(1).max(5000).optional(), maximumCharacters: z.number().int().min(1).max(5000).optional(), speed: z.object({ min: z.number().min(0.5).max(3).optional(), max: z.number().min(0.5).max(3).optional(), default: z.number().min(0.5).max(3).optional() }).strict().optional() }).strict().optional(),
       audioMode: z.object({ enabled: z.boolean().optional(), formats: z.array(z.string().max(8)).max(10).optional(), maximumDurationSeconds: z.number().int().min(1).max(600).optional(), maximumUploadBytes: z.number().int().min(1024 * 1024).max(100 * 1024 * 1024).optional() }).strict().optional(),
       video: z.object({ maximumDurationSeconds: z.number().int().min(1).max(120).optional(), minimumDurationSeconds: z.number().int().min(1).max(120).optional(), maximumUploadBytes: z.number().int().min(1024 * 1024).max(100 * 1024 * 1024).optional(), maximumPixels: z.number().int().min(320 * 240).max(3840 * 2160).optional() }).strict().optional(),
@@ -354,10 +322,11 @@ const schema = z.object({
   frenzAiTextToAudio: z
     .object({
       enabled: z.boolean().optional(),
-      route: z.enum(["replicate", "elevenlabs"]).optional(),
+      // ElevenLabs only (Part 8 §42) — "replicate" is refused, not ignored.
+      route: z.literal("elevenlabs").optional(),
       models: z
         .record(
-          z.enum(["replicate", "elevenlabs"]),
+          z.enum(["elevenlabs"]),
           z
             .object({
               model: z.string().max(100).optional(),

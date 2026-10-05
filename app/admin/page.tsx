@@ -172,13 +172,12 @@ import { listAllWallpapers } from "@/lib/wallpapers-server";
 import { fetchPushDeliveryStats } from "@/lib/social/push-delivery-stats";
 import { listAds } from "@/lib/monetization/ads";
 import { CharacterReplaceFreeAccessPanel } from "@/features/admin/character-replace-free-access";
-import { CharacterReplaceProvidersPanel } from "@/features/admin/character-replace-providers";
-import { listProviderHealth } from "@/lib/ai/character-replace/circuit";
+import { AiProvidersOverview } from "@/features/admin/ai-providers-overview";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiProvidersPanelLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
-import { loadAiProvidersPanel } from "@/lib/ai/providers/admin";
+import { loadAiProviderOverview } from "@/lib/ai/providers/overview";
 import { getLipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import { getTextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import { getVoiceCloneAdminStats } from "@/lib/ai/voice-clone/admin";
@@ -906,17 +905,18 @@ async function LandingSection() {
  * each POSTs only the fields it displays, so neither can clobber the other's.
  */
 async function FrenzAISection() {
-  const [landing, aiStats, crJobs, providers, changes] = await Promise.all([
+  const [landing, aiStats, crJobs] = await Promise.all([
     getLandingSettings(),
     getAiAdminStats(),
     listCharacterReplaceAdminJobs(60),
-    listProviderHealth(),
-    listConfigChanges(30, "character_replace"),
   ]);
   // Part 11 §19: the complimentary-creation figures, beside the health panel
   const freeStats = await getCharacterReplaceFreeAccessStats(landing.frenzAiCurrency);
   // 0167: the AI plans' usage and figures (read once, rendered under their own tab)
-  const [creditRows, planStats, providerPanel, lipSyncStats, textToAudioStats, voiceCloneStats] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProvidersPanel(landing), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null)]);
+  // Part 8 (2026-10-05): the Replicate / fal.ai switchboard, its 200-row run
+  // ledger read, the dead circuit-breaker rows and the Character Replace audit
+  // trail (three loaders) are replaced by ONE bounded ai_jobs read.
+  const [creditRows, planStats, providerOverview, lipSyncStats, textToAudioStats, voiceCloneStats] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProviderOverview(landing.frenzAiProviders.adminJobsAreTests), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null)]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -971,16 +971,12 @@ async function FrenzAISection() {
             </div>
           ),
         },
-        /* Part 8 §7, §21, §22: the breaker's state per model and the settings audit trail — server-rendered, one small button. */
-        /* 2026-09-21 (the fal.ai brief): the provider switch per feature, the models, the pauses, health, the comparison, the test buttons — then the breaker's state and the audit trail. */
+        /* Part 8 (2026-10-05): READ-ONLY — Video → Kling, Audio → ElevenLabs, health from real jobs. The Replicate / fal.ai switchboard is gone and the server refuses its settings. */
         {
           id: "providers",
           label: "Providers",
           content: (
-            <div className="space-y-6">
-              <AiProvidersPanelLazy {...providerPanel} />
-              <CharacterReplaceProvidersPanel providers={providers} changes={changes} />
-            </div>
+            <AiProvidersOverview overview={providerOverview} />
           ),
         },
         { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },

@@ -69,8 +69,11 @@ describe("the providers configuration (§10, §11, §17)", () => {
     expect(b.version).toBe(a.version + 1);
     const c = versionAiProviders(b, normalizeAiProvidersConfig({ ...b, models: { ...b.models, "lip_sync:fal": { ...b.models["lip_sync:fal"], notes: "hello" } } }));
     expect(c.version).toBe(b.version);
-    const d = versionAiProviders(c, normalizeAiProvidersConfig({ ...c, paused: { replicate: false, fal: true } }));
-    expect(d.version).toBe(c.version + 1);
+    // Part 8 §71 (2026-10-05): Replicate and fal.ai are retired. An attempt to
+    // un-pause either changes nothing — both stay paused, the version holds.
+    const d = versionAiProviders(c, normalizeAiProvidersConfig({ ...c, paused: { replicate: false, fal: false } }));
+    expect(d.paused).toEqual({ replicate: true, fal: true });
+    expect(d.version).toBe(c.version);
   });
   it("the bounds clamp: a 10 000× credit multiplier becomes 10, a negative cost 0", () => {
     const c = normalizeAiProvidersConfig({ models: { "character_replace:fal": { creditMultiplier: 10_000, costUsdCentsPerSecond: -4 } } });
@@ -320,7 +323,12 @@ describe("the routing stays on the server and on the row (§9, §21, §22)", () 
   it("FAL_KEY is read in one server-only file and nothing under features/ or a public route names it", () => {
     expect(code("lib/ai/fal/client.ts")).toContain("process.env.FAL_KEY");
     expect(src("lib/ai/fal/client.ts").startsWith('import "server-only";')).toBe(true);
-    expect(code("features/admin/ai-providers-settings.tsx")).not.toContain("FAL_KEY");
+    // The switchboard that lived in features/admin/ai-providers-settings.tsx is
+    // gone (Part 8, 2026-10-05); the read-only overview must not name a secret
+    // or read the environment either.
+    for (const f of ["features/admin/ai-providers-overview.tsx", "lib/ai/providers/overview.ts"]) {
+      expect(code(f)).not.toMatch(/FAL_KEY|REPLICATE_API_TOKEN|ELEVENLABS_API_KEY|KLING_[A-Z_]*KEY|process.env/);
+    }
     expect(code("app/api/admin/ai/providers/test/route.ts")).not.toContain("process.env");
   });
   it("the admin patch cannot name a provider for the locked features (strict zod)", () => {
@@ -329,6 +337,20 @@ describe("the routing stays on the server and on the row (§9, §21, §22)", () 
     expect(block).not.toContain("text_to_speech");
     expect(block).not.toContain("voice_change");
     expect(block).toContain(".strict()");
+    // Part 8 §71 (2026-10-05): nothing in the admin patch can choose, configure
+    // or un-pause a retired provider — the only field left is adminJobsAreTests.
+    const providersOnly = s.slice(s.indexOf("frenzAiProviders: z"), s.indexOf("frenzAiKlingPricing: z"));
+    expect(providersOnly.length, "frenzAiProviders schema not found before frenzAiKlingPricing").toBeGreaterThan(20);
+    expect(providersOnly).not.toMatch(/replicate|"fal"|fal:|paused|features:|models:/);
+    expect(providersOnly).toContain("adminJobsAreTests");
+    // …and Text-to-Audio / Lip Sync cannot be routed or priced through them.
+    // Exact substrings — an unescaped regex here matched anything and a
+    // `.not.toMatch` of one could never fail (caught 2026-10-05).
+    expect(s).toContain('route: z.literal("elevenlabs")');
+    expect(s).toContain('models: z.record(z.enum(["kling"]), lipSyncModelSchema)');
+    expect(s).not.toContain('provider: z.enum(["replicate", "fal"])');
+    expect(s).not.toContain('z.enum(["replicate", "elevenlabs"])');
+    expect(code("app/api/admin/ai/providers/test/route.ts")).toContain('vendor: z.literal("elevenlabs")');
   });
 });
 

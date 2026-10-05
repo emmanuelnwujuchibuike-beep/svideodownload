@@ -127,12 +127,18 @@ describe("the price and the credits (§10, §11)", () => {
     expect(native.totalCents).toBe(250);
     expect(native.ttsCents).toBe(0);
   });
-  it("the fal.ai side prices by ITS rate and carries its cost estimate", () => {
-    const fal = normalizeLipSyncConfig({ provider: "fal", models: { fal: { perSecondCents: 40 } } });
-    const q = quoteLipSync({ durationMs: 60_000, speechSource: "audio", speechPath: "audio", textCharacters: 0 }, fal, { currency: "USD" });
-    expect(q.totalCents).toBe(2400);
-    expect(q.vendor).toBe("fal");
-    expect(q.providerCostEstimate.lipSyncUsdCents).toBeCloseTo(799.8, 0);
+  it("ALWAYS prices by the Kling card — the stored provider and the retired cards change nothing (owner, 2026-10-05)", () => {
+    // Every job runs on direct Kling. This used to price by `models[provider]`
+    // with provider "replicate", so members paid the Replicate card's rate.
+    const audio = { durationMs: 60_000, speechSource: "audio" as const, speechPath: "audio" as const, textCharacters: 0 };
+    const kling = normalizeLipSyncConfig({ models: { kling: { perSecondCents: 25 } } });
+    const base = quoteLipSync(audio, kling, { currency: "USD" });
+    expect(base.vendor).toBe("kling");
+    expect(base.lipSyncCents).toBe(60 * 25);
+    const noisy = normalizeLipSyncConfig({ provider: "fal", models: { kling: { perSecondCents: 25 }, fal: { perSecondCents: 40 }, replicate: { perSecondCents: 20 } } });
+    const q = quoteLipSync(audio, noisy, { currency: "USD" });
+    expect(q.vendor).toBe("kling");
+    expect(q.totalCents).toBe(base.totalCents);
   });
   it("the quote is signed over the priced facts and an opaque route key; the public view carries no vendor, model or cost estimate", () => {
     const q = quoteLipSync({ durationMs: 10_000, speechSource: "audio", speechPath: "audio", textCharacters: 0 }, cfg, { currency: "USD" });
@@ -153,7 +159,7 @@ describe("the price and the credits (§10, §11)", () => {
     const credits = lipSyncCredits(q, cfg, AI_PLANS_DEFAULTS);
     expect(credits.feature).toBe("ai_lip_sync");
     expect(credits.creditsRequired).toBe(Math.ceil(250 / AI_PLANS_DEFAULTS.credits.centsPerCredit));
-    const doubled = lipSyncCredits(q, normalizeLipSyncConfig({ ...cfg, models: { ...cfg.models, replicate: { ...cfg.models.replicate, creditMultiplier: 2 } } }), AI_PLANS_DEFAULTS);
+    const doubled = lipSyncCredits(q, normalizeLipSyncConfig({ ...cfg, models: { ...cfg.models, kling: { ...cfg.models.kling, creditMultiplier: 2 } } }), AI_PLANS_DEFAULTS);
     expect(doubled.creditsRequired).toBe(credits.creditsRequired * 2);
   });
   it("the speech estimate is ~15 characters a second, faster at a higher speed", () => {

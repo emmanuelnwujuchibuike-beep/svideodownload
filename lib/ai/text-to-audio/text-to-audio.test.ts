@@ -101,9 +101,11 @@ describe("the configuration and the admin switch", () => {
     const priced = versionTextToAudioConfig(before, cfg({ minimumChargeCents: 500 }));
     expect(priced.pricingVersion).toBe(before.pricingVersion + 1);
     expect(priced.version).toBe(before.version + 1);
-    const routed = versionTextToAudioConfig(before, cfg({ route: "replicate" }));
-    expect(routed.version).toBe(before.version + 1);
-    expect(routed.pricingVersion).toBe(before.pricingVersion);
+    // Part 8 §42 (2026-10-05): the route is always the direct ElevenLabs API.
+    // A stored or submitted "replicate" normalizes away — nothing changes.
+    const routed = versionTextToAudioConfig(before, normalizeTextToAudioConfig({ ...before, route: "replicate" }));
+    expect(routed.route).toBe("elevenlabs");
+    expect(routed.version).toBe(before.version);
   });
   it("the public configuration names no vendor, route or model", () => {
     const pub = publicTextToAudioConfig(cfg(), { code: "NGN", symbol: "₦" }, true);

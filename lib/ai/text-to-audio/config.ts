@@ -162,7 +162,13 @@ export function normalizeTextToAudioConfig(raw: unknown): TextToAudioConfig {
   const minChars = int(raw.minimumCharacters, d.minimumCharacters, TEXT_TO_AUDIO_BOUNDS.characters.min, TEXT_TO_AUDIO_BOUNDS.characters.max);
   return {
     enabled: bool(raw.enabled, d.enabled),
-    route: raw.route === "replicate" ? "replicate" : "elevenlabs",
+    /*
+      ⛔ ALWAYS the direct ElevenLabs API (Part 8 §42, §71 — 2026-10-05). The
+      stored switch could still say "replicate", and `generate.ts` would then
+      have sent real member jobs through Replicate. Whatever is stored, the
+      route is ElevenLabs; the admin save route refuses anything else too.
+    */
+    route: "elevenlabs",
     models: { replicate: normalizeModel(models.replicate, d.models.replicate, "replicate"), elevenlabs: normalizeModel(models.elevenlabs, d.models.elevenlabs, "elevenlabs") },
     minimumChargeCents: int(raw.minimumChargeCents, d.minimumChargeCents, TEXT_TO_AUDIO_BOUNDS.cents.min, TEXT_TO_AUDIO_BOUNDS.cents.max),
     maximumCharacters: Math.max(minChars, int(raw.maximumCharacters, d.maximumCharacters, TEXT_TO_AUDIO_BOUNDS.characters.min, TEXT_TO_AUDIO_BOUNDS.characters.max)),

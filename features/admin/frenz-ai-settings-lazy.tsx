@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
-import type { AiProvidersPanelProps } from "@/features/admin/ai-providers-settings";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
@@ -106,13 +105,6 @@ const AiCreditsMonitor = dynamic(() => import("@/features/admin/ai-credits-monit
 
 export function CharacterReplaceJobsTableLazy({ jobs, symbol }: { jobs: CharacterReplaceAdminJob[]; symbol: string }) {
   return <CharacterReplaceJobsTable jobs={jobs} symbol={symbol} />;
-}
-
-// 2026-09-21 (the fal.ai brief §10, §20, §26, §27): the provider switch, the models, health, the comparison — one chunk, fetched when the tab opens.
-const AiProvidersPanel = dynamic(() => import("@/features/admin/ai-providers-settings").then((m) => m.AiProvidersPanel), { loading: skeleton("Loading providers") });
-
-export function AiProvidersPanelLazy(props: AiProvidersPanelProps) {
-  return <AiProvidersPanel {...props} />;
 }
 
 // Lip Sync Pro (2026-09-21): AI → Lip Sync — the provider switch (Replicate | fal.ai Sync-3), the models, the two speech sources, the prices, the numbers.

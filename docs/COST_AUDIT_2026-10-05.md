@@ -78,7 +78,10 @@ the CDN answers after the first request in each bucket.
    for signed-out visitors on public app pages. Skipped without a session cookie
    (`lib/auth/has-auth-cookie.ts`, one shared test).
 
-## Owner decision — not changed
+## Owner decision — KEEP the background warm-up (answered 2026-10-05)
+
+> Asked with the numbers below; the owner chose **"Keep background warm-up"**.
+> Do not re-propose intent-only warming without a new instruction.
 
 **Idle prefetch of member pages and `<Link prefetch>` (99 uses).** Requested
 for instant navigation (2026-08-18, 08-23, 09-14). Measured after the fixes, a

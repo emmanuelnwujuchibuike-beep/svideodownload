@@ -9,9 +9,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+/*
+  ElevenLabs only (Part 8 §71, 2026-10-05). A test here is a REAL, paid run, and
+  this route accepted Replicate and fal.ai — a button in the admin could spend
+  money on a retired provider. Kling's connection is tested without a paid run.
+*/
 const schema = z.object({
-  feature: z.enum(["character_replace", "lip_sync", "text_to_speech", "voice_change"]),
-  vendor: z.enum(["replicate", "fal", "elevenlabs"]),
+  feature: z.enum(["text_to_speech", "voice_change"]),
+  vendor: z.literal("elevenlabs"),
 });
 
 /**

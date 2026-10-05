@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { formatCents } from "@/lib/ai/economy";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
-import { TEXT_TO_AUDIO_MODEL_IDS, type TextToAudioConfig, type TextToAudioRoute } from "@/lib/ai/text-to-audio/config";
+import { TEXT_TO_AUDIO_MODEL_IDS, type TextToAudioConfig } from "@/lib/ai/text-to-audio/config";
 import { TTS_DELIVERIES, TTS_DELIVERY_LABEL, voiceSettingsCapability } from "@/lib/ai/voice/voice-settings";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
 import type { LandingSettings } from "@/lib/landing/settings";
@@ -38,10 +38,6 @@ const num = (raw: string, fallback: number) => {
 };
 
 const MODEL_LABEL: Record<string, string> = {
-  "elevenlabs/v3": "ElevenLabs v3 through Replicate — most expressive, 70+ languages",
-  "elevenlabs/v2-multilingual": "ElevenLabs Multilingual v2 through Replicate — stable, 29 languages",
-  "elevenlabs/turbo-v2.5": "ElevenLabs Turbo v2.5 through Replicate — fast",
-  "elevenlabs/flash-v2.5": "ElevenLabs Flash v2.5 through Replicate — fastest",
   "elevenlabs/eleven_v3": "ElevenLabs v3 — direct API, most expressive, 70+ languages",
   "elevenlabs/eleven_multilingual_v2": "ElevenLabs Multilingual v2 — direct API, stable",
   "elevenlabs/eleven_turbo_v2_5": "ElevenLabs Turbo v2.5 — direct API, fast (40k characters)",
@@ -53,9 +49,13 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
   const cfg: TextToAudioConfig = settings.frenzAiTextToAudio;
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
   const [enabled, setEnabled] = useState(cfg.enabled);
-  const [route, setRoute] = useState<TextToAudioRoute>(cfg.route);
-  const [models, setModels] = useState<Record<TextToAudioRoute, { model: string; enabled: boolean; perChar: string; perRequest: string; cost: string; quality: string; credit: string; notes: string }>>({
-    replicate: { model: cfg.models.replicate.model, enabled: cfg.models.replicate.enabled, perChar: String(cfg.models.replicate.perCharacterCents), perRequest: minorToMajorInput(cfg.models.replicate.perRequestCents), cost: String(cfg.models.replicate.providerCostPerCharacterUsdCents), quality: String(cfg.models.replicate.qualityMultiplier), credit: String(cfg.models.replicate.creditMultiplier), notes: cfg.models.replicate.notes },
+  /*
+    Part 8 §42 (2026-10-05): the direct ElevenLabs API, always. The route switch
+    and the Replicate card are gone and the server refuses both; the model
+    choice below is still the admin's (the live row stays on whatever it is).
+  */
+  const route = "elevenlabs" as const;
+  const [models, setModels] = useState<Record<"elevenlabs", { model: string; enabled: boolean; perChar: string; perRequest: string; cost: string; quality: string; credit: string; notes: string }>>({
     elevenlabs: { model: cfg.models.elevenlabs.model, enabled: cfg.models.elevenlabs.enabled, perChar: String(cfg.models.elevenlabs.perCharacterCents), perRequest: minorToMajorInput(cfg.models.elevenlabs.perRequestCents), cost: String(cfg.models.elevenlabs.providerCostPerCharacterUsdCents), quality: String(cfg.models.elevenlabs.qualityMultiplier), credit: String(cfg.models.elevenlabs.creditMultiplier), notes: cfg.models.elevenlabs.notes },
   });
   const [minCharge, setMinCharge] = useState(minorToMajorInput(cfg.minimumChargeCents));
@@ -84,7 +84,7 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
         enabled,
         route,
         models: Object.fromEntries(
-          (["replicate", "elevenlabs"] as const).map((r) => [
+          (["elevenlabs"] as const).map((r) => [
             r,
             {
               model: models[r].model.trim(),
@@ -129,7 +129,7 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
   const input = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const select = "mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
   const usd = (c: number | null) => (c === null ? "—" : `$${(c / 100).toFixed(2)}`);
-  const catalogue = voices.filter((v) => v.provider === (route === "replicate" ? "elevenlabs" : "elevenlabs_api"));
+  const catalogue = voices.filter((v) => v.provider === "elevenlabs_api");
   /* Which dials the ACTIVE model reads — the same function the adapters clamp with, so the panel cannot claim otherwise. */
   const capability = voiceSettingsCapability(models[route].model);
   const modelReads = ["stability" + (capability.stabilityChoices.length ? ` (${capability.stabilityChoices.join(" / ")} only)` : ""), "similarity", capability.style ? "expressiveness" : null, capability.speakerBoost ? "speaker boost" : null, capability.speed ? "speed" : null].filter((x): x is string => !!x);
@@ -140,32 +140,22 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
       <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
         <h2 className="mb-1 font-semibold">Text to Audio</h2>
         <p className="mb-5 text-sm text-muted-foreground">
-          A standalone tool: text in, audio out, saved to the member&apos;s Audio Library and reusable in Lip Sync Pro at no second charge. It never touches a video pipeline. The route below decides NEW generations; a running
-          one keeps the route it started on.
+          A standalone tool: text in, audio out, saved to the member&apos;s Audio Library and reusable in Lip Sync Pro at no second charge. It never touches a video pipeline. Provider: ElevenLabs, direct API — fixed, not switchable.
         </p>
         <div className="space-y-5">
           <Toggle label="Offer Text to Audio" hint="Off: the Explore card says so and nothing can be generated." checked={enabled} onChange={setEnabled} />
 
-          {/* ── the route switch ───────────────────────────────────────────── */}
+          {/* ── the model and the price (direct ElevenLabs API) ──────────────── */}
           <div className="rounded-2xl border border-border/70 p-4">
-            <p className="text-sm font-semibold">Text-to-speech route</p>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {(["elevenlabs", "replicate"] as const).map((r) => (
-                <button key={r} type="button" onClick={() => setRoute(r)} className={cn("rounded-2xl border px-4 py-3 text-left transition", route === r ? "border-foreground bg-foreground text-background" : "border-border hover:bg-secondary/40")}>
-                  <span className="block text-sm font-semibold">{r === "elevenlabs" ? "ElevenLabs API — direct (recommended)" : "ElevenLabs through Replicate"}</span>
-                  <span className={cn("block text-[11px]", route === r ? "text-background/75" : "text-muted-foreground")}>
-                    {r === "elevenlabs" ? "Synchronous: the audio comes back in the request. Needs ELEVENLABS_API_KEY and the account's imported voices." : "A prediction and a webhook. Needs REPLICATE_API_TOKEN; uses the model's 26 named voices."}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-semibold">ElevenLabs — direct API</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Synchronous: the audio comes back in the request. Needs ELEVENLABS_API_KEY and the account&apos;s imported voices.</p>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {(["elevenlabs", "replicate"] as const).map((r) => {
+              {(["elevenlabs"] as const).map((r) => {
                 const m = models[r];
                 const set = (patch: Partial<typeof m>) => setModels((all) => ({ ...all, [r]: { ...all[r], ...patch } }));
                 return (
                   <div key={r} className={cn("rounded-2xl border p-3", route === r ? "border-foreground/40" : "border-border/60 opacity-90")}>
-                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{r === "elevenlabs" ? "Direct API model" : "Replicate model"}</p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Direct API model</p>
                     <label className="mt-2 block text-xs font-semibold text-muted-foreground">
                       Model
                       <select value={m.model} onChange={(e) => set({ model: e.target.value })} className={select}>

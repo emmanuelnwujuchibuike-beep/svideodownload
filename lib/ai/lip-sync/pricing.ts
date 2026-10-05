@@ -63,8 +63,15 @@ export interface LipSyncQuote {
 export const LIP_SYNC_QUOTE_TTL_MS = 15 * 60 * 1000;
 
 export function quoteLipSync(input: LipSyncQuoteInput, config: LipSyncProConfig, money: { currency: string }, now: Date = new Date()): LipSyncQuote {
-  const vendor = config.provider;
-  const choice = config.models[vendor];
+  /*
+    🔴 KLING'S CARD, ALWAYS (owner, 2026-10-05). Every lip-sync job runs on the
+    direct Kling endpoint, but this read `config.models[config.provider]` and
+    the stored provider was "replicate" — so members were charged the old
+    Replicate card's 20¢/s while the Kling card's 25¢/s was shown and never
+    used. Asked with the numbers, the owner chose the Kling card's price.
+  */
+  const vendor: LipSyncVendor = "kling";
+  const choice = config.models.kling;
   const seconds = Math.max(0, input.durationMs) / 1000;
   const lipSyncCents = Math.ceil(seconds * choice.perSecondCents);
   const lines: LipSyncQuoteLine[] = [{ key: "lipsync", label: `Lip sync · ${seconds % 1 ? seconds.toFixed(1) : seconds} s`, amountCents: lipSyncCents }];

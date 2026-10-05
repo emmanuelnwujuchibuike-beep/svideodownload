@@ -312,7 +312,12 @@ export function normalizeAiProvidersConfig(raw: unknown): AiProvidersConfig {
       voice_change: { provider: "elevenlabs" },
     },
     models: Object.fromEntries(MODEL_KEYS.map((k) => [k, normalizeModel(models[k], d.models[k], k)])) as Record<ModelKey, ProviderModelConfig>,
-    paused: { replicate: bool(paused.replicate, false), fal: bool(paused.fal, false) },
+    /*
+      ⛔ Replicate and fal.ai are RETIRED (Part 8 §71, 2026-10-05): permanently
+      paused whatever is stored, and the admin save schema can no longer write
+      this field. Kling is the only video provider; nothing can un-pause these.
+    */
+    paused: { replicate: true, fal: true },
     fallback: "off",
     adminJobsAreTests: bool(raw.adminJobsAreTests, d.adminJobsAreTests),
     version: int(raw.version, d.version, 1, 1_000_000_000),

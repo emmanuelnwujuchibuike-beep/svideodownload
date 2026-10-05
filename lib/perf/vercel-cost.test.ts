@@ -103,13 +103,18 @@ describe("freshness is an event, not a clock", () => {
 
 describe("the admin does not read the world on every page view", () => {
   it("the provider panel's query is bounded to a small, recent window", () => {
-    const admin = code("lib/ai/providers/admin.ts");
-    const m = /listProviderRuns\((\d+),\s*\{\s*days:\s*(\d+)/.exec(admin);
-    expect(m, "listProviderRuns call not found").not.toBeNull();
-    const [, limit, days] = m!;
+    // 2026-10-05: the Replicate/fal provider panel (lib/ai/providers/admin.ts,
+    // 1000 → 200 run-ledger rows) is gone; the Providers tab is now ONE ai_jobs
+    // read in lib/ai/providers/overview.ts. Same rule: small and recent.
+    const overview = code("lib/ai/providers/overview.ts");
+    const limit = /\.limit\((\d+)\)/.exec(overview);
+    const days = /const WINDOW_DAYS = (\d+);/.exec(overview);
+    expect(limit, ".limit() not found — the read is unbounded").not.toBeNull();
+    expect(days, "WINDOW_DAYS not found").not.toBeNull();
     // teeth: the exact shape that was costing money — 1000 rows over 30 days
-    expect(Number(limit), "row limit").toBeLessThanOrEqual(250);
-    expect(Number(days), "day window").toBeLessThanOrEqual(7);
+    expect(Number(limit![1]), "row limit").toBeLessThanOrEqual(500);
+    expect(Number(days![1]), "day window").toBeLessThanOrEqual(7);
+    expect(overview).toContain('.gte("created_at", since)');
   });
 
   it("the admin live scheduler still stops dead on a hidden tab", () => {

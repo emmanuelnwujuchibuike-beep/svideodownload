@@ -51,7 +51,7 @@ build** (`next build` + `next start`), 8 AI Studio routes × 6 widths.
 | 35,36,37,38,39 | PWA, mobile Safari, Android Chrome, desktop Safari, fallbacks | `open` | |
 | 41 | Large text 125/150/200% | `open` | |
 | 43,44,45 | Layout shift, skeletons, skeleton cost | `open` | |
-| 46,47,48 | Memory, media cleanup, listener audit | `open` | |
+| 46,47,48 | Memory, media cleanup, listener audit | `partial` | **Audited 2026-10-05: no leaks found in `features/ai/**`.** Object URLs — every file that calls `createObjectURL` also revokes it, revokes >= creates (batch, workspace, lip-sync, ai-image-drop). Listeners — `addEventListener` == `removeEventListener` in all 13 files. Observers/timers — 3 files flagged by a grep for `clearInterval`, all FALSE POSITIVES: the `setInterval` hits are comments describing the OLD code and the files tear down with `clearTimeout`. Still open: §46 large blobs in React state, and runtime heap measurement across navigations |
 | 24 | Quote request debouncing | `done` | **Already existed** — `QUOTE_DEBOUNCE_MS = 400` in `use-video-generation.ts`. Verify only, do not change |
 | 49 | Polling | `done` | **Peer session, do not redo.** `active-generation.ts` (`3cacc99`): the AI video poll was `setInterval` 3s for the whole job and fired while hidden; now 5s→10s→15s with the timer *cancelled* on hide. ~40 → ~14 requests per 2-min generation. `features/admin/live/scheduler.ts` audited and already correct (one shared timer, tiered, backoff, hard stop on hidden, 11 cost-safety tests). `ai-job-alert.tsx` already correct |
 | 50,51,52 | History, result page, download path | `open` | |

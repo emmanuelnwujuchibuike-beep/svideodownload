@@ -146,6 +146,11 @@ export function FrenzAIWelcomeLive({
             */}
             <Link
               href={historyHref}
+              // Not prefetched: this door is new (2026-10-05) and on /studio/ai
+              // its target is a dynamic route — a viewport prefetch would be a
+              // server render on EVERY welcome visit. The primary door above
+              // keeps its prefetch (owner, 2026-09-14: doors open instantly).
+              prefetch={false}
               data-ai-members=""
               aria-label="Your creations"
               className={aiButtonClass({ variant: "secondary", size: "lg", className: "w-[3.375rem] shrink-0 px-0 sm:w-auto sm:px-5" })}

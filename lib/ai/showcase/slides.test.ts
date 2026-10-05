@@ -113,5 +113,8 @@ describe("the showcase slides", () => {
     // the carousel itself must not fetch
     const carousel = readFileSync(join(process.cwd(), "features/ai/design/ai-showcase.tsx"), "utf8");
     expect(carousel).not.toContain("fetch(");
+    // …and must not make the ROUTER fetch either: autoplay scrolls each slide's
+    // link into view, and a viewport prefetch is a server render per slide
+    expect(carousel).toContain('<Link href={href} prefetch={false} className={frame} data-ai-members="">');
   });
 });

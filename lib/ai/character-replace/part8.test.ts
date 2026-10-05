@@ -245,8 +245,13 @@ describe("the doors open instantly or say they are opening (owner, 2026-09-14)",
   it("Explore AI Studio, the tool cards and the crumb prefetch by default and carry the pending stripe", () => {
     // 2026-09-20: the welcome page holds one door (Explore AI Studio); the Explore page holds the grid and the balance door
     // 2026-10-05: the door moved into the welcome page's live island (the dock).
+    // The PRIMARY door (Create with AI → Explore) prefetches. The secondary
+    // "Your creations" door deliberately does not — it is new, and on
+    // /studio/ai a viewport prefetch of it is a server render per visit.
     const welcome = src("features/ai/frenz-ai-welcome-live.tsx");
-    expect(welcome).not.toContain("prefetch={false}");
+    const primary = welcome.slice(welcome.indexOf("href={exploreHref}"), welcome.indexOf("<LinkPendingStripe />"));
+    expect(primary.length).toBeGreaterThan(0);
+    expect(primary).not.toContain("prefetch={false}");
     expect(welcome).toContain("<LinkPendingStripe />");
     expect(src("features/ai/frenz-ai-welcome.tsx")).not.toContain("prefetch={false}");
     const explore = src("features/ai/frenz-ai-explore.tsx");

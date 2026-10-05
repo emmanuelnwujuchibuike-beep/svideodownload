@@ -324,7 +324,17 @@ export function SlideCard({
       {preview ? (
         <div className={frame}>{body}</div>
       ) : (
-        <Link href={href} className={frame} data-ai-members="">
+        /*
+          🔴 prefetch={false} — measured 2026-10-05. With the default, every
+          slide the AUTOPLAY scrolled into view prefetched its tool's RSC
+          payload (`/ai/image-to-video?_rsc=…`, `/ai/lip-sync?_rsc=…`): one to
+          three server renders per idle visit, plus the JS chunks they pull in,
+          that nobody asked for — and for a guest
+          a render of a page that refuses them. Median idle requests (3 runs,
+          member, 8 s window): 0 on the old page, 9 on this one with prefetch on.
+          A tap still navigates normally.
+        */
+        <Link href={href} prefetch={false} className={frame} data-ai-members="">
           {body}
         </Link>
       )}

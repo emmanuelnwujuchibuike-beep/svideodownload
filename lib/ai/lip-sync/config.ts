@@ -179,7 +179,8 @@ export const LIP_SYNC_DEFAULTS: LipSyncProConfig = {
   audioMode: { enabled: true, formats: ["mp3", "wav", "m4a", "aac", "ogg"], maximumDurationSeconds: 120, maximumUploadBytes: 25 * 1024 * 1024 },
   video: { maximumDurationSeconds: 60, minimumDurationSeconds: 1, maximumUploadBytes: 50 * 1024 * 1024, maximumPixels: 1920 * 1080 },
   // 2026-09-27: voiceSettings — the delivery dials. Before that date every spoken line ran at the provider defaults with expressiveness at ZERO (lib/ai/voice/voice-settings.ts).
-  tts: { provider: "elevenlabs", model: "elevenlabs/eleven_v3", perRequestCents: 0, perCharacterCents: 0, providerCostPerCharacterUsdCents: 0, voiceSettings: TTS_VOICE_SETTINGS_DEFAULTS },
+  // 2026-10-05: v4 — Text to Audio moved first; the spoken line in Lip Sync is the same ElevenLabs TTS call and was left on v3.
+  tts: { provider: "elevenlabs", model: "elevenlabs/eleven_v4", perRequestCents: 0, perCharacterCents: 0, providerCostPerCharacterUsdCents: 0, voiceSettings: TTS_VOICE_SETTINGS_DEFAULTS },
   voiceIds: [],
   languageCodes: [],
   expression: { enabled: true, default: "balanced", temperature: { natural: 0.3, balanced: 0.5, expressive: 0.8 } },

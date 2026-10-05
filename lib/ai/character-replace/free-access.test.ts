@@ -133,3 +133,56 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(src("lib/portability/tables.ts")).toContain('ai_free_uses: "user_id"');
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  "NOT AVAILABLE ON THIS ACCOUNT" WAS THE WRONG SENTENCE (owner, 2026-10-04)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A free member whose PLAN grants zero complimentary creations was told
+ * "Complimentary creations aren't available on this account" — which reads as
+ * something wrong with them, and hides that the offer exists one plan up.
+ * Live config when this was written: free 0, pro 3, business 7.
+ *
+ * 🔴 The two causes had to be split before the copy could be fixed, because
+ * only ONE of them is about the plan. `DISABLED_BY_ADMIN` fires when the
+ * operator switches the whole offer off — nobody gets them, on any plan — and
+ * a plan-shaped sentence there would be an upsell for something that does not
+ * exist. This codebase has already shipped upgrade copy implying a gate that
+ * was not real; that is the mistake these assertions exist to prevent.
+ */
+describe("the complimentary-creation refusal says which cause it is", () => {
+  const s = src("lib/ai/character-replace/free-access.ts");
+  const msg = s.slice(s.indexOf("export function freeEligibilityMessage"));
+
+  it("a plan that grants none is its own reason, separate from the offer being off", () => {
+    const logic = code("lib/ai/character-replace/free-access.ts");
+    expect(logic).toContain('if (!config.freeAccess.enabled) return off("DISABLED_BY_ADMIN");');
+    expect(logic).toContain('opts.plans?.freeCreations.enabled ? "NOT_ON_YOUR_PLAN" : "DISABLED_BY_ADMIN"');
+  });
+
+  it("names the plan and says what IS included", () => {
+    const line = msg.slice(msg.indexOf('case "NOT_ON_YOUR_PLAN"'), msg.indexOf('case "DISABLED_BY_ADMIN"'));
+    expect(line).toContain("Free plan");
+    expect(line.toLowerCase()).toContain("text");
+    expect(line.toLowerCase()).toContain("video");
+  });
+
+  it("🔴 quotes no allowance figure", () => {
+    /*
+      The monthly free characters and the per-plan creation counts are both
+      operator-editable. A number written into this sentence goes stale the
+      first time one changes — the standing rule against a stat that is not
+      read from the thing it describes.
+    */
+    const line = msg.slice(msg.indexOf('case "NOT_ON_YOUR_PLAN"'), msg.indexOf('case "DISABLED_BY_ADMIN"'));
+    expect(line.replace(/2026-10-04|frenzAiPlans/g, "")).not.toMatch(/\d{2,}/);
+  });
+
+  it("the offer being switched off still says nothing about a plan", () => {
+    // teeth: the lie this split exists to avoid.
+    const line = msg.slice(msg.indexOf('case "DISABLED_BY_ADMIN"'), msg.indexOf('case "TEMPORARILY_UNAVAILABLE"'));
+    expect(line).not.toContain("Free plan");
+    expect(line).not.toContain("Pro");
+  });
+});

@@ -93,7 +93,7 @@ export function networkHash(request: Request): string | null {
  * member is told nothing — the balance route hides the line rather than
  * announcing "not available on this account" over a fault or a first read.
  */
-export type FreeEligibilityReason = "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "ACCOUNT_NOT_ELIGIBLE" | "TEMPORARILY_UNAVAILABLE";
+export type FreeEligibilityReason = "ELIGIBLE" | "FREE_USES_EXHAUSTED" | "DEVICE_LIMIT_REACHED" | "REQUIRES_VERIFICATION" | "ADMIN_EXEMPT" | "DISABLED_BY_ADMIN" | "NOT_ON_YOUR_PLAN" | "ACCOUNT_NOT_ELIGIBLE" | "TEMPORARILY_UNAVAILABLE";
 
 export interface FreeEligibility {
   eligible: boolean;
@@ -138,7 +138,25 @@ export async function getCharacterReplaceFreeEligibility(opts: {
   */
   const sitePlan = opts.plans ? await getUserPlan(opts.subject.userId).catch(() => "free" as const) : "free";
   const configured = opts.plans ? freeCreationsFor(opts.plans, sitePlan, config.freeAccess.creationsPerAccount) : config.freeAccess.creationsPerAccount;
-  if (!config.freeAccess.enabled || configured <= 0) return off("DISABLED_BY_ADMIN");
+  /*
+    ── 🔴 "OFF" AND "NOT ON YOUR PLAN" ARE DIFFERENT SENTENCES (owner, 2026-10-04)
+
+    Both used to answer `DISABLED_BY_ADMIN`, so a free member whose PLAN grants
+    zero was told "Complimentary creations aren't available on this account" —
+    which reads as something wrong with them, and hides the fact that the
+    offer exists one plan up. Live config: free 0, pro 3, business 7.
+
+    They are now separated, because only one of them is about the plan:
+
+      · the operator switched the whole offer off  → DISABLED_BY_ADMIN
+      · the offer is ON and this plan grants none  → NOT_ON_YOUR_PLAN
+
+    A plan-shaped sentence on the first case would be a lie — nobody would get
+    them, on any plan — and this codebase has already been burned by upgrade
+    copy that implied a gate which did not exist.
+  */
+  if (!config.freeAccess.enabled) return off("DISABLED_BY_ADMIN");
+  if (configured <= 0) return off(opts.plans?.freeCreations.enabled ? "NOT_ON_YOUR_PLAN" : "DISABLED_BY_ADMIN");
 
   const isAdmin = opts.isAdmin ?? (config.antiAbuse.adminExempt ? !!(await getAdminUser().catch(() => null)) : false);
   if (isAdmin && config.antiAbuse.adminExempt) {
@@ -199,6 +217,18 @@ export function freeEligibilityMessage(e: FreeEligibility): string {
       return "This device has reached the complimentary Character Replace limit.";
     case "REQUIRES_VERIFICATION":
       return "This device has reached the complimentary Character Replace limit. Continue with a funded Character Replace balance or complete verification.";
+    case "NOT_ON_YOUR_PLAN":
+      /*
+        Owner, 2026-10-04: say which KIND is missing and which is not.
+        True as written: the free plan grants 0 complimentary VIDEO creations
+        (frenzAiPlans.freeCreations.free), while Text to Audio's monthly free
+        characters apply to everyone.
+
+        🔴 No number. The allowance is operator-editable, and a figure written
+        here would go stale the first time it changes — this project's standing
+        rule against a stat that is not read from the thing it describes.
+      */
+      return "Complimentary video creations aren't included on the Free plan — only text ones are.";
     case "DISABLED_BY_ADMIN":
     case "ACCOUNT_NOT_ELIGIBLE":
       return "Complimentary creations aren't available on this account.";

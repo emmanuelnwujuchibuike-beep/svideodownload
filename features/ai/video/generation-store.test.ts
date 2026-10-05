@@ -133,6 +133,54 @@ describe("every AI workspace sets --ai-play, so its CTA can stop animating", () 
   });
 });
 
+describe("the card can be tucked to the side", () => {
+  const store = src("features/ai/video/active-generation.ts");
+  const card = src("features/ai/video/generation-progress-card.tsx");
+
+  it("the minimised flag lives on the RECORD, so it survives navigation", () => {
+    /*
+      Owner: "make users able to hide this floating progress bar to go beside
+      and they can see the progress without it occupying the screen."
+
+      Local component state would re-expand the card on every route change —
+      this card deliberately outlives its page, so the preference has to
+      outlive it too, or the member re-hides it endlessly.
+    */
+    expect(store).toContain("minimised: boolean");
+    expect(store).toContain("export function setGenerationMinimised");
+    // persisted with the rest of the record
+    expect(store).toContain("minimised: parsed.minimised === true");
+  });
+
+  it("a NEW generation always opens expanded", () => {
+    const start = store.slice(store.indexOf("export function startGeneration"), store.indexOf("export function dismissGeneration"));
+    expect(start).toContain("minimised: false");
+  });
+
+  it("the pill still reports progress rather than hiding it", () => {
+    const pill = card.slice(card.indexOf("if (gen.minimised)"), card.indexOf("return (\n    <Portal>\n      <div"));
+    expect(pill).toContain("Ready");
+    expect(pill).toContain("Making…");
+    expect(pill).toContain("animate-ping");
+  });
+
+  it("minimise is offered while RUNNING, which dismiss deliberately is not", () => {
+    /*
+      Dismissing a running job would read as "stop that" and nothing here can
+      stop it. Minimising is the honest version of the same wish, so it is the
+      one offered in every phase.
+    */
+    expect(card).toContain('aria-label="Minimise"');
+    expect(card).toContain("{!running ? (");
+  });
+
+  it("the pill shares the card's lane, so it cannot land on the downloads pill", () => {
+    // FloatingDownloadProgress owns bottom-right at 4.75rem / lg:1.5rem.
+    expect(card).toContain("bottom-[calc(10.25rem+env(safe-area-inset-bottom))] right-3");
+    expect(card).toContain("lg:bottom-[7.5rem] lg:right-6");
+  });
+});
+
 describe("the progress card outlives the page that started it", () => {
   const store = src("features/ai/video/active-generation.ts");
 

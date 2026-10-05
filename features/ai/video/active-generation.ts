@@ -90,6 +90,18 @@ export interface ActiveGeneration {
   error: string | null;
   /** The member closed a finished card. The record stays; the card does not. */
   dismissed: boolean;
+  /**
+   * Tucked to the side as a pill (owner, 2026-10-04: "make users able to hide
+   * this floating progress bar to go beside and they can see the progress
+   * without it occupying the screen").
+   *
+   * 🔴 On the RECORD rather than in component state, which is where the
+   * downloads card keeps the same flag. That card never outlives its page, so
+   * local state is right for it; this one deliberately survives navigation, so
+   * local state would re-expand the card on every route change — re-imposing
+   * the thing the member just asked to get out of the way.
+   */
+  minimised: boolean;
 }
 
 const STORAGE_KEY = "frenz:ai:active-generation";
@@ -213,6 +225,7 @@ export function restoreActiveGeneration(): void {
       posterUrl: typeof parsed.posterUrl === "string" ? parsed.posterUrl : null,
       error: typeof parsed.error === "string" ? parsed.error : null,
       dismissed: parsed.dismissed === true,
+      minimised: parsed.minimised === true,
     };
     emit(true);
     if (current.phase === "running") armPoll();
@@ -243,6 +256,8 @@ export function startGeneration(opts: { jobId: string; feature: VideoFeature; la
       posterUrl: null,
       error: null,
       dismissed: false,
+      // A new generation always opens expanded — the member asked for this one.
+      minimised: false,
     },
     true,
   );
@@ -264,6 +279,12 @@ export function dismissGeneration(): void {
   if (!current) return;
   if (current.phase === "running") return; // a running job is not dismissible
   patch({ dismissed: true }, true);
+}
+
+/** Tuck the card to the side, or bring it back. Survives navigation. */
+export function setGenerationMinimised(minimised: boolean): void {
+  if (!current) return;
+  patch({ minimised }, true);
 }
 
 /** Start over — "Make another" clears the slate. */

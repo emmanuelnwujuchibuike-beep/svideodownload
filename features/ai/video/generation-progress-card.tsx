@@ -1,17 +1,19 @@
 "use client";
 
-import { Check, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Portal } from "@/components/ui/portal";
 import {
   dismissGeneration,
+  setGenerationMinimised,
   getServerSnapshot,
   getSnapshot,
   restoreActiveGeneration,
   subscribe,
 } from "@/features/ai/video/active-generation";
+import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
 /**
@@ -79,6 +81,55 @@ export function AiGenerationProgressCard() {
   const running = gen.phase === "running";
   const done = gen.phase === "completed";
 
+  /*
+    ── TUCKED TO THE SIDE (owner, 2026-10-04) ────────────────────────────────
+
+    "Make users able to hide this floating progress bar to go beside and they
+    can see the progress without it occupying the screen."
+
+    So the collapsed state is not a hidden card — it is still a live status,
+    just small: the same icon, the same running/ready colour, and a word. It
+    sits in the card's own lane so it can never land on the downloads pill,
+    and one tap brings the full card back.
+
+    🔴 Minimising changes NOTHING about the job. The generation is server-side
+    and already paid for; this card has never been what drives it. That is the
+    promise the control makes and it is why it is safe to offer.
+  */
+  if (gen.minimised) {
+    return (
+      <Portal>
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            setGenerationMinimised(false);
+          }}
+          aria-label={done ? "Your video is ready — tap to open" : "Generation in progress — tap to expand"}
+          className={cn(
+            "fixed bottom-[calc(10.25rem+env(safe-area-inset-bottom))] right-3 z-[86] flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-2 pl-2 pr-3.5 shadow-elevated backdrop-blur-xl transition active:scale-95 motion-reduce:active:scale-100",
+            "lg:bottom-[7.5rem] lg:right-6",
+          )}
+        >
+          <span
+            className={cn(
+              "relative grid h-8 w-8 place-items-center rounded-full",
+              done ? "bg-emerald-500/15 text-emerald-600" : gen.phase === "failed" ? "bg-rose-500/15 text-rose-600" : "bg-violet-500/15 text-violet-600",
+            )}
+          >
+            {done ? <Check className="h-4 w-4" aria-hidden /> : <Sparkles className="h-4 w-4" aria-hidden />}
+            {running ? (
+              // The only motion in the pill, and it is the thing being reported.
+              <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-violet-500/25 motion-reduce:animate-none" />
+            ) : null}
+          </span>
+          <span className="text-xs font-bold">{done ? "Ready" : gen.phase === "failed" ? "Didn't finish" : "Making…"}</span>
+          <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+        </button>
+      </Portal>
+    );
+  }
+
   return (
     <Portal>
       <div
@@ -133,11 +184,29 @@ export function AiGenerationProgressCard() {
           ) : null}
 
           {/*
-            🔴 A RUNNING generation cannot be dismissed, and the reason is the
+            Get it out of the way. Offered in EVERY phase, including while
+            running — that is the phase the member is most likely to want the
+            screen back, and minimising costs them nothing because the pill
+            keeps reporting.
+          */}
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setGenerationMinimised(true);
+            }}
+            aria-label="Minimise"
+            className="shrink-0 rounded-full p-1.5 text-muted-foreground transition hover:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+          >
+            <ChevronDown className="h-4 w-4" aria-hidden />
+          </button>
+
+          {/*
+            🔴 A RUNNING generation cannot be DISMISSED, and the reason is the
             promise the card makes. Closing it would read as "stop that", and
             nothing here can stop it — the job is server-side and already paid
-            for. So the close button appears only once there is nothing left to
-            watch.
+            for. Minimising is the honest version of that wish, which is why it
+            is offered above and this is not.
           */}
           {!running ? (
             <button

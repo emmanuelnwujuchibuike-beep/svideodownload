@@ -52,11 +52,22 @@ const TARGET_ICON: Record<ShowcaseTarget, typeof Sparkles> = {
 export function AiShowcase({
   slides,
   base,
+  desktopOnly,
   className,
 }: {
   slides: ShowcaseSlide[];
   /** The door's base path — "/ai" or "/studio/ai". */
   base: string;
+  /**
+   * Owner, 2026-10-05: "this showcase card section should only be in the
+   * welcome and homepage (explore) … and no other AI page on mobile; the
+   * showcase cards can show on large screen on all AI pages." Tool pages pass
+   * this: hidden below `lg`, and while hidden it costs nothing — the first
+   * image is lazy instead of high-priority (an eager <img> inside
+   * display:none still downloads), and autoplay never starts because the
+   * off-screen observer never reports it visible.
+   */
+  desktopOnly?: boolean;
   className?: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -156,7 +167,7 @@ export function AiShowcase({
       ref={rootRef}
       aria-roledescription="carousel"
       aria-label="What Frenz AI makes"
-      className={cn("ai-showcase relative", className)}
+      className={cn("ai-showcase relative", desktopOnly && "hidden lg:block", className)}
       onFocus={() => setFocused(true)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -189,7 +200,7 @@ export function AiShowcase({
         onKeyDown={hold}
       >
         {slides.map((s, i) => (
-          <SlideCard key={s.id} slide={s} index={i} count={count} href={slideHref(base, s.target)} />
+          <SlideCard key={s.id} slide={s} index={i} count={count} href={slideHref(base, s.target)} eager={!desktopOnly} />
         ))}
       </div>
 
@@ -266,16 +277,19 @@ export function SlideCard({
   count,
   href,
   preview,
+  eager = true,
 }: {
   slide: ShowcaseSlide;
   index: number;
   count: number;
   href: string;
+  /** false when the carousel may be hidden (desktop-only): then no slide image is fetched eagerly. */
+  eager?: boolean;
   /** Admin preview: no navigation, no gating. */
   preview?: boolean;
 }) {
   const Icon = TARGET_ICON[slide.target];
-  const first = index === 0;
+  const first = index === 0 && eager;
   const body = (
     <>
       {slide.image ? (

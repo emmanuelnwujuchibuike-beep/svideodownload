@@ -2548,11 +2548,11 @@ Important: inspect the current implementation and architecture first. Do not rew
 
 | # | Page | State | Commit | Note |
 |---|---|---|---|---|
-| 1 | Welcome / AI Landing | 🔨 in progress | — | anonymous may view (owner 10-05); Explore → sign-in modal |
-| 2 | AI Studio / Home | ⏳ | — | |
-| 3 | Text to Video | ⏳ | — | |
-| 4 | Image to Video | ⏳ | — | Brief B is the spec |
-| 5 | Text to Audio | ⏳ | — | |
+| 1 | Welcome / AI Landing | ✅ | 1bfd104 · d1fd81e · f3b5e04 · 1ed0e0c | guests may view; showcase admin-editable; font-swap CLS 0.097 → 0.0003 |
+| 2 | AI Studio / Home (Explore) | ✅ | f3b5e04 · 1ed0e0c | media tool cards; showcase + credits strip |
+| 3 | Text to Video | ✅ | 1ed0e0c · ab0f8be | owner's style pictures; quote no longer per keystroke; no prompt-enhance API exists (omitted) |
+| 4 | Image to Video | ✅ | ab0f8be | Brief B; upload race fixed; reference-video slot visible on both video tools; no aspect control (photo sets shape) |
+| 5 | Text to Audio | 🔨 | — | |
 | 6 | Voice Cloning | ⏳ | — | |
 | 7 | Lip Sync | ⏳ | — | |
 | 8 | Your Audios | ⏳ | — | |

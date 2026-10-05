@@ -7,7 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AudioAssetPlayer } from "@/features/ai/text-to-audio/audio-player";
 import { PunctuationGuide } from "@/features/ai/text-to-audio/punctuation-guide";
 import { audioDownloadHref } from "@/lib/ai/text-to-audio/client";
-import { AiHero } from "@/features/ai/design/ai-surface";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiWalletRechargeSheet } from "@/features/ai/wallet/recharge-sheet";
@@ -19,6 +22,7 @@ import { formatCents } from "@/lib/ai/economy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { TTS_DELIVERIES, TTS_DELIVERY_LABEL } from "@/lib/ai/voice/voice-settings";
 import { track } from "@/lib/analytics/client";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +56,10 @@ export function TextToAudioWorkspace({
   usageHref,
   initialJobId = null,
   initialVoiceId = null,
+  slides,
 }: {
+  /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
+  slides: ShowcaseSlide[];
   basePath: string;
   aiHref: string;
   libraryHref: string;
@@ -127,12 +134,15 @@ export function TextToAudioWorkspace({
           reached from the studio looked like a different product from the one
           they left. Same headline, same subtitle, one definition.
         */}
-        <AiHero
-          tool="Text to Audio"
-          title="Text to"
-          highlight="Audio"
-          subtitle="Turn your words into natural AI audio. Preview it, save it to your library, and use it in Lip Sync Pro whenever you like."
-          className="mt-4"
+        {/* Redesign page 5 (owner's reference, 2026-10-05): the showcase and the credits strip open every AI page, then the tool's own title. */}
+        <AiShowcase slides={slides} base={aiHref} desktopOnly className="mt-3 mb-3" />
+        <AiCreditStrip base={aiHref} className="mt-3 lg:mt-0" />
+        <AiToolTitle
+          icon={AudioLines}
+          title="Text to Audio"
+          tagline="Type it. Hear it."
+          body="Turn your words into natural AI audio. Preview it, save it to your library, and use it in Lip Sync Pro."
+          className="mt-6"
         />
 
         {ws.configError ? (
@@ -154,7 +164,7 @@ export function TextToAudioWorkspace({
             <Result job={job} missing={ws.watch.missing} basePath={basePath} libraryHref={libraryHref} lipSyncHref={lipSyncHref} voiceLabel={voice?.label ?? null} onAnother={ws.reset} />
           </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <AiPanel className="mt-5 space-y-5">
             {/* ── 1 · the text ───────────────────────────────────────────── */}
             <Section n={1} title="Your script">
               <label className="block">
@@ -165,7 +175,7 @@ export function TextToAudioWorkspace({
                   rows={6}
                   maxLength={Math.max(ws.maximum + 200, 1000)}
                   placeholder="Type or paste what you'd like to hear…"
-                  className="w-full resize-y rounded-2xl border border-border bg-card p-3.5 text-[15px] leading-relaxed outline-none focus:border-foreground"
+                  className="w-full resize-y rounded-2xl border-0 bg-card px-4 py-3.5 text-[15px] leading-relaxed ring-1 ring-inset ring-black/[0.08] placeholder:text-muted-foreground/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 />
               </label>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -211,7 +221,7 @@ export function TextToAudioWorkspace({
                     language/tone beneath, and Change as a real affordance on the
                     trailing edge. Borderless on a tinted ground, per §25.
                   */
-                  className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl bg-secondary/50 px-3 py-2.5 text-left transition hover:bg-secondary/80 active:scale-[0.99]"
+                  className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl bg-card px-3 py-2.5 text-left ring-1 ring-inset ring-black/[0.07] transition active:scale-[0.99] [@media(hover:hover)]:hover:ring-indigo-300/60"
                 >
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-100 to-sky-100 text-violet-600 ring-1 ring-inset ring-white">
                     <Mic className="h-[18px] w-[18px]" aria-hidden />
@@ -338,7 +348,7 @@ export function TextToAudioWorkspace({
                   onChange={(e) => ws.setName(e.target.value)}
                   maxLength={120}
                   placeholder="Intro voiceover"
-                  className="min-h-[48px] w-full rounded-2xl border border-border bg-card px-3.5 text-[15px] outline-none focus:border-foreground"
+                  className="min-h-[48px] w-full rounded-2xl border-0 bg-card px-4 text-[15px] ring-1 ring-inset ring-black/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 />
               </label>
               <p className="mt-1.5 text-[11.5px] text-muted-foreground">Saved to your Audio Library so you can reuse it. Leave it blank and we will name it from your text.</p>
@@ -423,7 +433,7 @@ export function TextToAudioWorkspace({
                   haptic("medium");
                   setRechargeSheet(true);
                 }}
-                className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background"
+                className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
               >
                 <Plus className="h-4 w-4" aria-hidden /> Recharge to continue · {formatCents(shortfallCents, symbol)} short
               </button>
@@ -432,7 +442,7 @@ export function TextToAudioWorkspace({
                 type="button"
                 disabled={!canGenerate}
                 onClick={() => void ws.generate()}
-                className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background disabled:opacity-40"
+                className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
               >
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <AudioLines className="h-4 w-4" aria-hidden />}
                 {generating ? "Generating…" : free ? "Generate · Free" : quoted ? `Generate · ${creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quoted.quote.totalCents, symbol)}` : "Generate"}
@@ -451,7 +461,7 @@ export function TextToAudioWorkspace({
                 Frenz AI
               </Link>
             </p>
-          </div>
+          </AiPanel>
         )}
 
         {/*
@@ -646,8 +656,9 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, voiceLabel, 
  */
 function Section({ n: _n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.5rem] bg-card/70 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
-      <h2 className="mb-2.5 text-[13.5px] font-semibold tracking-[-0.01em] text-foreground/80">{title}</h2>
+    // Redesign page 5: one panel holds every step (the reference's single card), so a step is a titled block, not a box of its own.
+    <section>
+      <h2 className="mb-2.5 text-[15px] font-bold tracking-[-0.015em]">{title}</h2>
       {children}
     </section>
   );

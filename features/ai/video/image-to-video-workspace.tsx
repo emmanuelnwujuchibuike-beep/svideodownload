@@ -135,8 +135,8 @@ export function ImageToVideoWorkspace({
   return (
     <FrenzAIEnvironment stage={envStage} bare>
     <AiPageShell>
-      <AiShowcase slides={slides} base={base} />
-      <AiCreditStrip base={base} className="mt-3" />
+      <AiShowcase slides={slides} base={base} desktopOnly className="mb-3" />
+      <AiCreditStrip base={base} className="mt-1 lg:mt-0" />
 
       <AiToolTitle
         icon={ImagePlay}

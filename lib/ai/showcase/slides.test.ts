@@ -109,6 +109,27 @@ describe("the showcase slides", () => {
     expect(readers).toEqual([...SHOWCASE_PAGES].sort());
   });
 
+  it("on a phone the showcase is ONLY on the welcome and Explore pages (owner, 2026-10-05)", () => {
+    const read = (f: string) => readFileSync(join(process.cwd(), f), "utf8");
+    // the two pages that show it at every width
+    for (const f of ["features/ai/frenz-ai-welcome.tsx", "features/ai/frenz-ai-explore.tsx"]) {
+      expect(read(f), f).toContain("<AiShowcase");
+      expect(read(f), f).not.toContain("desktopOnly");
+    }
+    // every tool page that renders it does so for large screens only
+    for (const f of [
+      "features/ai/video/text-to-video-workspace.tsx",
+      "features/ai/video/image-to-video-workspace.tsx",
+      "features/ai/text-to-audio/text-to-audio-workspace.tsx",
+    ]) {
+      const showcases = read(f).match(/<AiShowcase\b[^>]*>/g) ?? [];
+      expect(showcases.length, f).toBeGreaterThan(0);
+      for (const tag of showcases) expect(tag, f).toContain("desktopOnly");
+    }
+    // and "large screens only" really hides it below lg
+    expect(read("features/ai/design/ai-showcase.tsx")).toContain('desktopOnly && "hidden lg:block"');
+  });
+
   it("never saved → defaults; saved with every slide off → nothing (the admin hid it)", () => {
     expect(visibleSlides(null)).toBe(DEFAULT_SHOWCASE);
     expect(visibleSlides([{ ...DEFAULT_SHOWCASE[0]!, enabled: false }])).toEqual([]);

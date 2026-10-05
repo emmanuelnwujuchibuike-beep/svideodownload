@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { TextToAudioWorkspace } from "@/features/ai/text-to-audio/text-to-audio-workspace";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export default async function StudioTextToAudioPage({ searchParams }: { searchPa
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/text-to-audio");
   const { job, voice } = await searchParams;
+  // The showcase opens every AI page (owner's reference); cached until an admin saves.
+  const slides = await getShowcaseSlides();
   const initialJobId = typeof job === "string" && /^[0-9a-fA-F-]{36}$/.test(job) ? job : null;
   // 2026-09-27: "Make audio with it" from the Voice Library arrives as ?voice=clone:<uuid>
   const initialVoiceId = typeof voice === "string" && /^clone:[0-9a-fA-F-]{36}$/.test(voice) ? voice : null;
@@ -35,6 +38,7 @@ export default async function StudioTextToAudioPage({ searchParams }: { searchPa
       usageHref="/studio/ai/usage"
       initialJobId={initialJobId}
       initialVoiceId={initialVoiceId}
+      slides={slides}
     />
   );
 }

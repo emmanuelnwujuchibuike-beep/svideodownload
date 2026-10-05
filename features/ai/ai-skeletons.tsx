@@ -27,7 +27,7 @@ export function FrenzAIPageSkeleton() {
     <SkeletonSection label="Loading Frenz AI">
       <div className="pb-6 pt-3 sm:pt-4" aria-hidden>
         <Skeleton className="aspect-[5/4] w-full rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]" />
-        <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+        <Skeleton className="mt-3 h-14 w-full rounded-[1.25rem]" />
         <Skeleton className="mt-6 h-10 w-48 rounded-full" />
         <Skeleton className="mt-3.5 h-9 w-full max-w-[22rem]" />
         <Skeleton className="mt-2 h-9 w-40 sm:hidden" />
@@ -51,7 +51,7 @@ export function FrenzAIExploreSkeleton() {
     <SkeletonSection label="Opening AI Studio">
       {/* 2026-10-05: the page opens with the showcase and the credits strip (owner's reference) */}
       <Skeleton className="mt-3 aspect-[5/4] w-full rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]" />
-      <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+      <Skeleton className="mt-3 h-14 w-full rounded-[1.25rem]" />
       <div className="mt-6">
         <Skeleton className="h-10 w-44 rounded-full" />
         <Skeleton className="mt-3.5 h-9 w-64 max-w-full" />
@@ -213,8 +213,9 @@ export function AiToolSkeleton({
     return (
       <SkeletonSection label={label} className="ai-wash relative min-h-full">
         <div className="relative mx-auto w-full max-w-2xl px-4 pb-16 pt-4 sm:px-6" aria-hidden>
-          <Skeleton className="aspect-[5/4] w-full rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]" />
-          <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+          {/* the showcase shows on tool pages on large screens only (owner, 2026-10-05) */}
+          <Skeleton className="mb-3 hidden aspect-[2/1] w-full rounded-[1.375rem] lg:block" />
+          <Skeleton className="mt-1 h-14 w-full rounded-[1.25rem] lg:mt-0" />
           <div className="mt-6 flex items-center gap-3 px-1">
             <Skeleton className="h-[2.85rem] w-[2.85rem] rounded-[0.95rem]" />
             <Skeleton className="h-9 w-52 rounded-lg" />

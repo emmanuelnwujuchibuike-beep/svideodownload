@@ -141,8 +141,16 @@ describe("every migrated tool opens with the breadcrumb pill", () => {
   for (const [file, tool] of tools) {
     it(`${tool} uses the shared hero`, () => {
       const body = code(file);
-      expect(body).toMatch(/<AiHero/);
-      expect(body).toContain(`tool="${tool}"`);
+      /*
+        Redesign 2026-10-05 (owner's reference): a tool page in the new layout
+        opens with the showcase and names itself through `AiToolTitle` instead
+        of the crumb pill. The guarantee is unchanged — the page names its OWN
+        tool through a shared, required prop — so either shared hero satisfies
+        it; a hand-rolled one still does not.
+      */
+      const pill = /<AiHero/.test(body) && body.includes(`tool="${tool}"`);
+      const titled = body.includes("<AiToolTitle") && body.includes(`title="${tool}"`);
+      expect(pill || titled, `${file} does not name ${tool} through a shared hero`).toBe(true);
       // the eyebrow it replaced, in any of its pasted forms
       // Escaped. Unescaped, `[0.1[46]em]` is a character class and this passes
       // against almost anything — the same trap that made an earlier assertion

@@ -12,6 +12,7 @@ import { getJobAsService, noteJobDiagnostic, transitionJob } from "@/lib/ai/job-
 import { aiFeature, type AiJobRow } from "@/lib/ai/jobs";
 import { readLipSyncMeta, type LipSyncJobMeta } from "@/lib/ai/lip-sync/job-meta";
 import { KLING_LIP_SYNC_MODEL } from "@/lib/ai/lip-sync/providers/kling-lipsync";
+import { KLING_DIRECT_LIP_SYNC_MODEL } from "@/lib/ai/lip-sync/providers/kling-direct";
 import { lipSyncAdapterFor } from "@/lib/ai/lip-sync/providers/router";
 import { notifyAiJobFailed } from "@/lib/ai/notify";
 import { AI_SOURCE_BUCKET, aiPreparedKey, pathBelongsTo } from "@/lib/ai/storage";
@@ -104,10 +105,42 @@ export async function prepareLipSyncJob(jobId: string): Promise<PrepareOutcome> 
       would let the `elevenlabs` provider value index a two-key table and throw
       a TypeError inside the worker.
     */
-    if (vendor !== "replicate" && vendor !== "fal") {
-      throw new PrepareFailure("PREPARATION_FAILED", `a ${vendor} job is not prepared through the legacy Replicate/fal lip-sync path`, "system");
+    /*
+      ── 🔴 THIS REFUSAL BROKE LIP SYNC COMPLETELY (owner, 2026-10-05) ────
+
+      Every Kling lip sync died here, before reaching Kling:
+
+          PREPARATION_FAILED — a kling job is not prepared through the
+                               legacy Replicate/fal lip-sync path
+
+      The guard was right about the SYMPTOM it was added for — `config.models`
+      is a two-key table and indexing it with "kling" throws a TypeError inside
+      the worker — but it refused the vendor outright instead of fixing the
+      lookup, and nothing was ever built to replace it. Part 5 routed Lip Sync
+      to Kling at the same time, so the tool has been unusable since.
+
+      Nothing else was missing. `lipSyncAdapterFor("kling", …)` already returns
+      the direct provider, and that provider's own header says it was written
+      to fit "the EXISTING Lip Sync Pro flow — same job rows, SAME PREPARE STEP,
+      same finalizer". It publishes real `capabilities`, which is all this
+      service asks of an adapter.
+
+      🔴 And prepare is NOT skippable for Kling, which is why the fix is to let
+      it run rather than to route around it: `submitLipSyncJob` throws without
+      `meta.prepared`, and the Kling adapter reads the measured duration and
+      dimensions from it — Kling bills on measured length and enforces a
+      512–2160 px height. The measuring, trimming and uploading this step does
+      is exactly what that needs. Only the model LOOKUP was Replicate-shaped.
+    */
+    if (vendor !== "replicate" && vendor !== "fal" && vendor !== "kling") {
+      throw new PrepareFailure("PREPARATION_FAILED", `a ${vendor} job is not prepared through this lip-sync path`, "system");
     }
-    const model = plan?.model || config.models[vendor].model;
+    /*
+      The row's own model first. For Kling there is no `config.models` entry to
+      fall back to — the direct endpoint has one model — so the constant stands
+      in rather than an index that would throw.
+    */
+    const model = plan?.model || (vendor === "kling" ? KLING_DIRECT_LIP_SYNC_MODEL : config.models[vendor].model);
     const adapter = lipSyncAdapterFor(vendor, model, settings.frenzAiProviders);
     if (!adapter) throw new PrepareFailure("PREPARATION_FAILED", `no adapter for ${model} on ${vendor}`, "system");
     const speechPath: "native" | "tts" | "audio" = meta.speech.source === "audio" ? "audio" : (plan as { speechPath?: unknown } | null)?.speechPath === "native" || meta.speech.path === "native" ? "native" : "tts";

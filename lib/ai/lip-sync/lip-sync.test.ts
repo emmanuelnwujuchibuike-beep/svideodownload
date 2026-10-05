@@ -317,3 +317,145 @@ describe("the provider gate every submission passes first", () => {
     expect(row.requires).toBe("kling");
   });
 });
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  PREPARE REFUSED THE ONLY VENDOR LIP SYNC HAS (owner, 2026-10-05)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Every Kling lip sync failed before reaching Kling:
+ *
+ *     PREPARATION_FAILED — a kling job is not prepared through the legacy
+ *                          Replicate/fal lip-sync path
+ *
+ * Two correct changes landed in different files and contradicted each other.
+ * Part 5 routed Lip Sync to Kling and made `resolveLipSyncProRoute` name it as
+ * the ONLY provider; the prepare service, defending against `config.models`
+ * (a two-key table) being indexed with "kling", refused the vendor outright.
+ * Each is defensible alone. Together they are a tool that cannot run.
+ *
+ * 🔴 The guard is therefore a RELATIONSHIP, not a value: whatever the router
+ * can resolve, prepare must accept. A test naming "kling" would have to be
+ * rewritten by the next migration and would not catch the next pair.
+ */
+describe("prepare accepts every vendor the router can actually resolve", () => {
+  const prepare = src("server/services/ai-lip-sync-prepare-service.ts");
+  const router = src("lib/ai/lip-sync/providers/router.ts");
+
+  it("the vendors the router resolves are the vendors prepare lets through", () => {
+    /*
+      The router's own `vendor === "x"` branches are the list of things it can
+      hand back an adapter for. Each one must survive prepare's guard.
+    */
+    const resolvable = [...router.matchAll(/vendor === "(\w+)"/g)].map((m) => m[1]);
+    expect(resolvable).toContain("kling");
+    const guard = prepare.slice(prepare.indexOf("if (vendor !=="), prepare.indexOf("const model = plan?.model"));
+    for (const vendor of resolvable) {
+      expect(guard, `prepare refuses "${vendor}", which the router resolves`).toContain(`vendor !== "${vendor}"`);
+    }
+  });
+
+  it("the model lookup cannot index the two-key table with a vendor that is not in it", () => {
+    /*
+      The TypeError the original guard existed to prevent. It is fixed properly
+      now — a named constant instead of a refusal — so the protection has to be
+      asserted, or removing the ternary silently restores the crash.
+    */
+    expect(prepare).toContain('vendor === "kling" ? KLING_DIRECT_LIP_SYNC_MODEL : config.models[vendor].model');
+    expect(prepare).toContain('from "@/lib/ai/lip-sync/providers/kling-direct"');
+  });
+
+  it("prepare is still required for Kling, not routed around", () => {
+    /*
+      Kling does not re-encode, but submit throws without `meta.prepared` and
+      the adapter reads the measured duration and dimensions off it. Skipping
+      prepare would trade this failure for a different one.
+    */
+    expect(src("lib/ai/lip-sync/submit.ts")).toContain("job has no prepared media");
+    expect(src("lib/ai/lip-sync/start-job.ts")).toContain("dispatchPreparation(job.id)");
+  });
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE COMPLIMENTARY LINE RELOADED ON EVERY ENTRY (owner, 2026-10-05)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * "This complimentary card reloads all the time on back swipe and every page
+ * entry — it should only load once."
+ *
+ * The SAME report was made on 2026-09-13 ("this section reloads every time I
+ * enter the page or backswipe") and answered twice: a snapshot for the balance
+ * card, then one for the allowance bar and plan chip. The complimentary pill
+ * was the one element left reading a live balance with nothing behind it, so
+ * it alone rendered empty and popped in.
+ *
+ * 🔴 Guarded as a SET, not as one element: every first-paint value on that
+ * screen must have a snapshot behind it, or the next one added repeats this
+ * for a fourth time.
+ */
+describe("every first-paint value on the AI front door is seeded", () => {
+  const explore = src("features/ai/frenz-ai-explore.tsx");
+
+  it("the config, the entitlement AND the complimentary line all read a cache first", () => {
+    expect(explore).toContain("readCachedConfig()");
+    expect(explore).toContain("readAiEntitlementCache()");
+    expect(explore).toContain("readAiFreeAccessCache()");
+    // teeth: reading a cache and then not applying it is the same as no cache
+    expect(explore).toContain("setFree((current) => current ?? cachedFree)");
+  });
+
+  it("the fresh answer is written back, so the next entry paints it", () => {
+    // teeth: a read with no write is a cache that is only ever empty
+    expect(explore).toContain("writeAiFreeAccessCache(wallet.balance.freeAccess)");
+  });
+
+  it("🔴 the snapshot is cleared on sign-out, beside the other two", () => {
+    /*
+      A remaining-count is per member. Without this, one person's "6
+      complimentary creations remaining" greets the next person on the device.
+    */
+    const out = src("lib/auth/sign-out.ts");
+    for (const fn of ["clearAiBalanceCache()", "clearAiEntitlementCache()", "clearAiFreeAccessCache()"]) {
+      expect(out, fn).toContain(fn);
+    }
+  });
+});
+
+/**
+ * Owner, 2026-10-05: "the lip sync voice selection is supposed to be like the
+ * text to audio voice and language selection in grid."
+ *
+ * Both tools offer the same voices and the same languages. Lip Sync showed
+ * them in two native <select> dropdowns — one option visible at a time, and no
+ * room for the descriptor that is the only thing separating two similar names.
+ */
+describe("Lip Sync picks a voice the same way Text to Audio does", () => {
+  const lip = src("features/ai/lip-sync/lip-sync-workspace.tsx");
+  const tta = src("features/ai/text-to-audio/text-to-audio-workspace.tsx");
+
+  it("the voice picker is a grid of tiles, not a dropdown", () => {
+    expect(lip).toContain('<p className="mb-1.5 text-[12px] font-semibold">Voice</p>');
+    expect(lip).toContain('<div className="grid grid-cols-2 gap-2 lg:grid-cols-3">');
+    // teeth: the control it replaced must be gone, not merely hidden
+    expect(lip).not.toContain('<select value={ws.voiceId ?? ""}');
+    expect(lip).not.toContain('<select value={ws.languageCode ?? ""}');
+  });
+
+  it("it uses the SAME tile shape Text to Audio settled on, not a second design", () => {
+    /*
+      2026-09-28 settled the geometry there: two columns on a phone, a vertical
+      tile (an icon beside the text leaves ~130px for the name at 390px), and a
+      readable descriptor. Re-deriving it here would drift.
+    */
+    const TILE = "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98]";
+    expect(tta).toContain(TILE);
+    expect(lip).toContain(TILE);
+  });
+
+  it("choosing a voice still corrects a language it cannot speak", () => {
+    const CORRECTION = "if (v.languages.length && ws.languageCode && !v.languages.includes(ws.languageCode)) ws.setLanguageCode(v.languages[0] ?? null);";
+    expect(tta).toContain(CORRECTION);
+    expect(lip).toContain(CORRECTION);
+  });
+});

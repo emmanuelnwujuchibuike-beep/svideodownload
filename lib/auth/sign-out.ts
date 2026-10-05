@@ -6,6 +6,7 @@ import { clearAiBalanceCache } from "@/lib/ai/balance-cache";
 import { clearAiViewCache } from "@/lib/ai/view-cache";
 import { clearCharacterReplaceBalanceCache } from "@/lib/ai/character-replace/client";
 import { clearAiEntitlementCache } from "@/lib/ai/entitlement-cache";
+import { clearAiFreeAccessCache } from "@/lib/ai/free-access-cache";
 import { clearAiHistoryCache } from "@/lib/ai/history-cache";
 
 import { clearIdentity } from "./identity-cache";
@@ -56,6 +57,7 @@ export async function signOutClient(): Promise<void> {
   clearAiBalanceCache(); // the same rule, for the balance snapshot (2026-09-13)
   clearAiViewCache(); // and every AI page's remembered answer (2026-09-27)
   clearAiEntitlementCache(); // and the plan/allowance snapshot (2026-09-13)
+  clearAiFreeAccessCache(); // and the complimentary-creations snapshot (2026-10-05)
   clearCharacterReplaceBalanceCache(); // and the Character Replace wallet snapshot (Part 3)
 
   // Clear the "just signed in" splash cookie so the hard navigation to `/` below

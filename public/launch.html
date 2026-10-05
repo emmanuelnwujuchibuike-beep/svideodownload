@@ -225,6 +225,24 @@ html,body{height:100%;background:#fff;color:#0f172a}
   launch screen is the one place a person cannot opt out of looking at.
 */
 @media (prefers-reduced-motion:reduce){.fx__mark,.fx__shine,.fx__track,.fx__word{animation:none}.fx__word{-webkit-clip-path:none;clip-path:none}.fx__bar{width:100%;opacity:.5;animation:none}}
+/*
+  ── 🔴 THE WORD IS ALREADY ON SCREEN BEFORE THIS DOCUMENT EXISTS ────
+
+  Owner, 2026-10-04, choosing between the two options: the full lockup on
+  the native screen, and NO redraw.
+
+  iOS paints apple-touch-startup-image before any of this file runs, and
+  those images now carry the finished wordmark (scripts/gen-splash.mjs). If
+  the write animation also ran here, the word a person is already looking at
+  would vanish and draw itself in again — a flicker, not an effect.
+
+  So in an installed launch the word is simply THERE, matching the image
+  underneath it. .fx is display:none outside these same display modes, so
+  this covers every case in which this lockup is ever seen; the written
+  reveal lives on #frenz-boot, which is the first brand surface a BROWSER
+  cold entry gets and has no native image in front of it.
+*/
+@media (display-mode:standalone),(display-mode:fullscreen),(display-mode:minimal-ui){.fx__word{animation:none;-webkit-clip-path:none;clip-path:none}}
 </style>
 </head>
 <body>

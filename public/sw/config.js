@@ -46,6 +46,15 @@ var SWX = (self.SWX = self.SWX || {});
 // Behaviour change in an already-installed worker, so it needs a bump to
 // activate at all — the v14 note below is the same situation.
 //
+// v25 (2026-10-04): `/launch.html` again — the written reveal is now SUPPRESSED
+// in installed display modes, because the iOS native launch images it hands over
+// from carry the finished wordmark as of this deploy (scripts/gen-splash.mjs).
+// Without the bump an installed PWA keeps the cache-first v24 copy and the word
+// would vanish and redraw over the native image it is supposed to match — the
+// exact flicker the change exists to remove. The splash PNGs themselves are NOT
+// in PRECACHE_DOCUMENTS (iOS reads them natively, outside the worker), so they
+// need no bump of their own; this one is for the document.
+//
 // v24 (2026-10-04): `/launch.html` replaced the static "Frenz" caption with the
 // animated italic "FrenzSave" brand-gradient wordmark. `/launch.html` is in
 // PRECACHE_DOCUMENTS and served CACHE-FIRST, so an installed PWA keeps serving
@@ -94,7 +103,7 @@ var SWX = (self.SWX = self.SWX || {});
 // navigation's RSC payload the way v21 revalidates a document — the "A new
 // version is ready" screen that stuck for two hours after a deploy. A
 // submodule change; must bump.
-SWX.VERSION = "v24";
+SWX.VERSION = "v25";
 SWX.STATIC_CACHE = `frenz-static-${SWX.VERSION}`;
 SWX.IMAGE_CACHE = `frenz-img-${SWX.VERSION}`;
 SWX.PAGE_CACHE = `frenz-pages-${SWX.VERSION}`;

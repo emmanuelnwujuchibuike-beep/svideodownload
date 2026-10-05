@@ -142,13 +142,34 @@ describe("🔴 the Replicate/fal paths REFUSE a kling row rather than mis-submit
     expect(code("lib/ai/lip-sync/submit.ts")).toContain('vendor === "kling" ? `${origin}/api/webhooks/kling`');
   });
 
-  it("the lip-sync PREPARE service refuses them too — the worker path, not just the submit path", () => {
+  /*
+    🔴 THIS ASSERTION USED TO REQUIRE THE BUG (owner, 2026-10-05).
+
+    It read `if (vendor !== "replicate" && vendor !== "fal")` — pinning a
+    guard that refused KLING, which is the only vendor Lip Sync has had since
+    Part 5. Every lip sync failed with PREPARATION_FAILED before reaching the
+    provider, and this test held that in place.
+
+    The danger it was really written for is one line further down:
+    `config.models` is a two-key table and indexing it with "kling" throws a
+    TypeError inside the worker, after the charge. That danger is real and
+    still guarded — but by a named constant on the kling branch, not by
+    refusing the vendor. So the assertion is now about the LOOKUP being safe,
+    which is what was always meant, rather than about who is turned away.
+  */
+  it("the lip-sync PREPARE service guards the model lookup without refusing Kling", () => {
     const source = code("server/services/ai-lip-sync-prepare-service.ts");
-    const refusal = source.indexOf('if (vendor !== "replicate" && vendor !== "fal")');
+    const refusal = source.indexOf("if (vendor !== ");
     const lookup = source.indexOf("config.models[vendor]");
     expect(refusal).toBeGreaterThan(-1);
     expect(lookup).toBeGreaterThan(-1);
+    // the guard still runs first, so an unknown vendor never reaches the table
     expect(refusal).toBeLessThan(lookup);
+    // …and Kling is NOT what it turns away
+    const guard = source.slice(refusal, lookup);
+    expect(guard).toContain('vendor !== "kling"');
+    // the kling branch answers from a constant instead of indexing the table
+    expect(source).toContain('vendor === "kling" ? KLING_DIRECT_LIP_SYNC_MODEL');
   });
 });
 

@@ -33,6 +33,7 @@ import {
   readAiEntitlementCache,
   writeAiEntitlementCache,
 } from "@/lib/ai/entitlement-cache";
+import { readAiFreeAccessCache, writeAiFreeAccessCache } from "@/lib/ai/free-access-cache";
 import { haptic } from "@/lib/motion/haptics";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { cn } from "@/lib/utils";
@@ -152,6 +153,15 @@ export function FrenzAIExplore({
       router.prefetch(`${createPath}?mode=${m}`);
     const cached = readCachedConfig();
     if (cached) setConfig(cached);
+    /*
+      The complimentary line, from last known (owner, 2026-10-05: "this
+      complimentary card reloads all the time on back swipe and every page
+      entry"). The config and the entitlement above were already seeded this
+      way for the identical report on 2026-09-13; this one element was left
+      reading a live balance with nothing behind it, so it alone popped in.
+    */
+    const cachedFree = readAiFreeAccessCache();
+    if (cachedFree) setFree((current) => current ?? cachedFree);
     const cachedEntitlement = readAiEntitlementCache();
     if (cachedEntitlement)
       setEntitlement((current) => current ?? cachedEntitlement);
@@ -172,8 +182,11 @@ export function FrenzAIExplore({
       // after the config (which plants the device cookie) — the entitlement is decided against that cookie
       const wallet = await getCharacterReplaceBalance();
       if (!alive) return;
-      if (wallet.ok && wallet.balance.freeAccess)
+      if (wallet.ok && wallet.balance.freeAccess) {
         setFree(wallet.balance.freeAccess);
+        // so the NEXT entry paints it immediately, including after a creation is spent
+        writeAiFreeAccessCache(wallet.balance.freeAccess);
+      }
     })();
     void getAiEntitlement().then((res) => {
       if (alive && res.ok) {

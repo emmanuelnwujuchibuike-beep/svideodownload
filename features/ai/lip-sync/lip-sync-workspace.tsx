@@ -184,36 +184,117 @@ export function LipSyncWorkspace({
                       </span>
                     </span>
                   </label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {cfg.capabilities.supports_voice_selection && cfg.voices.length ? (
-                      <label className="block">
-                        <span className="text-xs font-semibold text-muted-foreground">Voice</span>
-                        <select value={ws.voiceId ?? ""} onChange={(e) => ws.setVoiceId(e.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm">
-                          <option value="">Default voice</option>
-                          {cfg.voices.filter((v) => !ws.languageCode || !v.languages.length || v.languages.includes(ws.languageCode)).map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.label}
-                              {v.blurb ? ` — ${v.blurb}` : ""}
-                            </option>
+                  {/*
+                    ── THE SAME PICKER TEXT TO AUDIO USES (owner, 2026-10-05) ───
+
+                    "The lip sync voice selection is supposed to be like the
+                    text to audio voice and language selection in grid."
+
+                    These were two native <select> dropdowns — the same voices,
+                    the same languages, behind a control that shows one option at
+                    a time and cannot show a descriptor at all. Two voices called
+                    "Roger" and "Rachel" were indistinguishable without opening
+                    the menu and reading to the end of a truncated line.
+
+                    The grid is lifted from `text-to-audio-workspace.tsx` rather
+                    than reinvented, including the reasoning already settled
+                    there on 2026-09-28: two columns on a phone (not one), a
+                    VERTICAL tile because an icon beside the text leaves ~130px
+                    for the name on a 390px screen, and a descriptor that is
+                    readable rather than 11px muted grey — it is the line that
+                    separates two similar names.
+
+                    🔴 The filtering is unchanged: a voice that does not speak
+                    the chosen language is still hidden, and choosing a voice
+                    that cannot speak the current language moves the language to
+                    one it can — the same correction Text to Audio makes.
+                  */}
+                  {cfg.capabilities.supports_voice_selection && cfg.voices.length ? (
+                    <div>
+                      <p className="mb-1.5 text-[12px] font-semibold">Voice</p>
+                      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            haptic("selection");
+                            ws.setVoiceId(null);
+                          }}
+                          aria-pressed={!ws.voiceId}
+                          className={cn(
+                            "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98] motion-reduce:active:scale-100",
+                            !ws.voiceId ? "bg-foreground text-background" : "bg-secondary/50 hover:bg-secondary/80",
+                          )}
+                        >
+                          <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", !ws.voiceId ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                            <Mic className="h-3.5 w-3.5" aria-hidden />
+                          </span>
+                          <span className="line-clamp-2 text-[12.5px] font-semibold leading-tight">Default voice</span>
+                          <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", !ws.voiceId ? "text-background/80" : "text-foreground/55")}>Chosen for you</span>
+                        </button>
+                        {cfg.voices
+                          .filter((v) => !ws.languageCode || !v.languages.length || v.languages.includes(ws.languageCode))
+                          .map((v) => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => {
+                                haptic("selection");
+                                ws.setVoiceId(v.id);
+                                if (v.languages.length && ws.languageCode && !v.languages.includes(ws.languageCode)) ws.setLanguageCode(v.languages[0] ?? null);
+                              }}
+                              aria-pressed={ws.voiceId === v.id}
+                              className={cn(
+                                "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98] motion-reduce:active:scale-100",
+                                ws.voiceId === v.id ? "bg-foreground text-background" : "bg-secondary/50 hover:bg-secondary/80",
+                              )}
+                            >
+                              <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", ws.voiceId === v.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                                <Mic className="h-3.5 w-3.5" aria-hidden />
+                              </span>
+                              <span className="line-clamp-2 text-[12.5px] font-semibold leading-tight">{v.label}</span>
+                              {v.blurb ? (
+                                <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", ws.voiceId === v.id ? "text-background/80" : "text-foreground/55")}>{v.blurb}</span>
+                              ) : null}
+                            </button>
                           ))}
-                        </select>
-                      </label>
-                    ) : null}
-                    {cfg.capabilities.supports_language && cfg.languages.length ? (
-                      <label className="block">
-                        <span className="text-xs font-semibold text-muted-foreground">Language</span>
-                        <select value={ws.languageCode ?? ""} onChange={(e) => ws.setLanguageCode(e.target.value || null)} className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm">
-                          <option value="">Auto</option>
-                          {cfg.languages.map((l) => (
-                            <option key={l.code} value={l.code}>
-                              {l.label}
-                              {l.native && l.native !== l.label ? ` · ${l.native}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                  </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {cfg.capabilities.supports_language && cfg.languages.length ? (
+                    <div>
+                      <p className="mb-1.5 text-[12px] font-semibold">Language</p>
+                      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            haptic("selection");
+                            ws.setLanguageCode(null);
+                          }}
+                          aria-pressed={!ws.languageCode}
+                          className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition active:scale-[0.98] motion-reduce:active:scale-100", !ws.languageCode ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                        >
+                          <span className="block text-[12.5px] font-bold">Auto</span>
+                        </button>
+                        {cfg.languages.map((l) => (
+                          <button
+                            key={l.code}
+                            type="button"
+                            onClick={() => {
+                              haptic("selection");
+                              ws.setLanguageCode(l.code);
+                            }}
+                            aria-pressed={ws.languageCode === l.code}
+                            className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition active:scale-[0.98] motion-reduce:active:scale-100", ws.languageCode === l.code ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                          >
+                            <span className="block text-[12.5px] font-bold">{l.label}</span>
+                            {l.native && l.native !== l.label ? (
+                              <span className={cn("block text-[10.5px] font-medium", ws.languageCode === l.code ? "text-background/75" : "text-foreground/55")}>{l.native}</span>
+                            ) : null}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   {cfg.capabilities.supports_speed ? (
                     <label className="block">
                       <span className="flex justify-between text-xs font-semibold text-muted-foreground">

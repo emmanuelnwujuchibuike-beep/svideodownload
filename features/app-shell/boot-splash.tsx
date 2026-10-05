@@ -103,11 +103,32 @@ html.frenz-boot-off #frenz-boot{display:none}
 .frenz-boot__bar{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#8b5cf6,#d946ef);animation:frenz-boot-sweep 1.15s cubic-bezier(.65,0,.35,1) infinite}
 @keyframes frenz-boot-sweep{0%{transform:translateX(-115%)}100%{transform:translateX(255%)}}
 .frenz-boot__word{font:italic 700 30px/1.08 Georgia,"Times New Roman","Hoefler Text",Didot,"Palatino Linotype",serif;letter-spacing:.004em;color:#4338ca}
+/*
+  ── 🔴 THE WRITTEN REVEAL LIVES HERE NOW (owner, 2026-10-04) ─────────
+
+  "The F alone loader should show a writing FrenzSave text."
+
+  It could not: this surface rendered the wordmark STATICALLY and had no
+  write keyframe at all, while launch.html — which only ever renders inside
+  an installed app (its .fx is display:none otherwise) — had the animation.
+  So a browser cold entry, the one case with no native splash in front of
+  it, was the case that never showed the reveal.
+
+  clip-path reveals the glyphs IN PLACE: no layout, no glyph repaint, one
+  element for ~620ms. Not a per-character span loop, which is the "cheap
+  typing demo" the brief rules out.
+
+  🔴 Gated OUT of installed modes. There the native image already showed
+  the finished word, so drawing it again would be a flicker — the same
+  reasoning as the matching rule in launch.html. Keep the two in step.
+*/
+@media not all and (display-mode:standalone){.frenz-boot__word{-webkit-clip-path:inset(0 100% 0 0);clip-path:inset(0 100% 0 0);animation:frenz-boot-write .62s cubic-bezier(.33,.9,.42,1) .06s both}}
+@keyframes frenz-boot-write{from{-webkit-clip-path:inset(0 100% 0 0);clip-path:inset(0 100% 0 0)}to{-webkit-clip-path:inset(0 -6% 0 0);clip-path:inset(0 -6% 0 0)}}
 html.dark .frenz-boot__word{color:#a5b4fc}
 @supports ((-webkit-background-clip:text) or (background-clip:text)){.frenz-boot__word{background:linear-gradient(100deg,#3b82f6 0%,#8b5cf6 38%,#d946ef 74%,#f472b6 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}}
 @keyframes frenz-boot-shimmer{0%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
 @keyframes frenz-boot-selfclear{to{visibility:hidden}}
-@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine,.frenz-boot__bar{animation:none}.frenz-boot__bar{width:100%;opacity:.5}}
+@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine,.frenz-boot__bar,.frenz-boot__word{animation:none}.frenz-boot__word{-webkit-clip-path:none;clip-path:none}.frenz-boot__bar{width:100%;opacity:.5}}
 `;
 
 // WHEN THE F LOADER SHOWS — owner rule, REVISED 2026-07-16:

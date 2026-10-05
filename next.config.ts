@@ -361,7 +361,7 @@ const nextConfig: NextConfig = {
           /api/flagsx is not. Verified against Next's own compiled matcher.
         */
         source:
-          "/api/:path((?!ads(?:/|$)|ai/jobs/[^/]+/poster(?:/|$)|discovery(?:/|$)|feed(?:/|$)|flags(?:/|$)|landing/grid-image(?:/|$)|monetag(?:/|$)|posts/|sounds/discovery(?:/|$)|tools(?:/|$)|wallpaper(?:/|$)|profile/[^/]+/hub/).*)",
+          "/api/:path((?!ads(?:/|$)|announcement(?:/|$)|ai/jobs/[^/]+/poster(?:/|$)|discovery(?:/|$)|feed(?:/|$)|flags(?:/|$)|landing/grid-image(?:/|$)|monetag(?:/|$)|posts/|sounds/discovery(?:/|$)|tools(?:/|$)|wallpaper(?:/|$)|profile/[^/]+/hub/).*)",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },
       {

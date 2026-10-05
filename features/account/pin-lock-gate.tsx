@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 
 /** Paths this quick-lock gate protects. Owner correction (2026-07-13): this
  *  used to include the bare "/messages" prefix, gating the WHOLE inbox and
@@ -83,6 +84,8 @@ export function PinLockGate() {
     // confirmed true, never re-checked again — turning a PIN OFF entirely is
     // rare enough that a hard refresh covering it is an acceptable gap.
     if (hasPin) return;
+    // A guest has no PIN — no status request for them (2026-10-05).
+    if (!hasAuthCookie()) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
     fetch("/api/v1/app/security/pin/status", { signal: controller.signal })

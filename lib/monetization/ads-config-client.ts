@@ -1,3 +1,5 @@
+import { cdnBucket } from "@/lib/net/cdn-bucket";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  /api/ads/config — FETCHED ONCE PER PAGE LOAD, NOT ONCE PER AD COMPONENT
@@ -54,7 +56,8 @@ let adsConfigPromise: Promise<AdsConfig> | null = null;
  * same resolved value, same never-throws contract.
  */
 export function loadAdsConfig(): Promise<AdsConfig> {
-  adsConfigPromise ??= fetch("/api/ads/config")
+  // The 5-minute bucket lets the CDN answer (see lib/net/cdn-bucket.ts).
+  adsConfigPromise ??= fetch(`/api/ads/config?b=${cdnBucket()}`)
     .then((r) => (r.ok ? (r.json() as Promise<AdsConfig>) : ({} as AdsConfig)))
     .catch(() => {
       // Do not let one failed attempt poison the rest of the page.

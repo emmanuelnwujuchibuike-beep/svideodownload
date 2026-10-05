@@ -1,5 +1,7 @@
 "use client";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -192,8 +194,10 @@ export function DownloadCompleteAd({
   useEffect(() => {
     if (!open || config) return;
     let alive = true;
-    fetch("/api/ads?zone=download_complete")
-      .then((r) => (r.ok ? r.json() : { ad: null }))
+    // Zone cannot serve ⇒ no request (ad-inventory-client.ts; unknown ⇒ ask).
+    void loadAdInventory()
+      .then((inv) => (mayServeSlot(inv, "download_complete") ? fetch("/api/ads?zone=download_complete") : null))
+      .then((r) => (r && r.ok ? r.json() : { ad: null }))
       .then((d) => {
         if (!alive) return;
         setConfig({

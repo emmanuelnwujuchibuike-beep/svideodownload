@@ -7,9 +7,17 @@ import { currentPolicySync, droppedFrameRatio, readSignals } from "@/lib/media/e
 import { attachHls, supportsNativeHls, type HlsHandle } from "@/lib/media/hls";
 import { getQualityPreference, getSyncConditions } from "@/lib/media/network-conditions";
 import { type PlaybackMode, reportPlayback } from "@/lib/media/playback-metrics";
+import { parseSampleRate } from "@/lib/perf/sample-rate";
 
 // Sample ~1 in 6 playbacks for metrics — representative signal, low beacon volume.
-const METRICS_SAMPLE = 0.16;
+/*
+  ⛔ OFF BY DEFAULT (2026-10-05). This was 16% of EVERY video mount — on Reels
+  and the feed that is every swipe — and each sample is a /api/metrics/playback
+  invocation plus a console.log there: an Observability event per sixth video,
+  the bill's largest line. Turn it on for a measurement window with
+  NEXT_PUBLIC_PLAYBACK_METRICS_SAMPLE (0–1); see lib/perf/sample-rate.ts.
+*/
+const METRICS_SAMPLE = parseSampleRate(process.env.NEXT_PUBLIC_PLAYBACK_METRICS_SAMPLE);
 
 /**
  * Feed a `<video>` element the best available source and manage its lifecycle:
@@ -47,7 +55,7 @@ export function useAdaptiveSource(
     let hlsHandle: HlsHandle | null = null;
 
     // ── Observability (sampled): TTFF, rebuffers, dropped frames, bitrate, errors ──
-    const sampled = Math.random() < METRICS_SAMPLE;
+    const sampled = METRICS_SAMPLE > 0 && Math.random() < METRICS_SAMPLE;
     const t0 = performance.now();
     let mode: PlaybackMode = "mp4";
     let firstFrame = false;

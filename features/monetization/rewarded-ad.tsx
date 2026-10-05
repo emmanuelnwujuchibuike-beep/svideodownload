@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Download, Lock, Pause, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
 import type { AdSlotData } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
@@ -76,8 +78,10 @@ export function RewardedAdGate({
     lastT.current = 0;
     granted.current = false;
     let alive = true;
-    fetch("/api/ads?zone=reward_video")
-      .then((r) => (r.ok ? r.json() : { ad: null }))
+    // Zone cannot serve ⇒ no request (ad-inventory-client.ts; unknown ⇒ ask).
+    void loadAdInventory()
+      .then((inv) => (mayServeSlot(inv, "reward_video") ? fetch("/api/ads?zone=reward_video") : null))
+      .then((r) => (r && r.ok ? r.json() : { ad: null }))
       .then((d) => alive && setAd(d.ad ?? null))
       .catch(() => alive && setAd(null));
     return () => {

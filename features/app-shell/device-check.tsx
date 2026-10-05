@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 
 const KEY = "frenz:device-checked";
 
@@ -13,6 +14,10 @@ const KEY = "frenz:device-checked";
  */
 export function DeviceCheck() {
   useEffect(() => {
+    // A guest has no device session to check (2026-10-05: this POSTed on every
+    // guest visit to a public app page). Gated BEFORE the session marker, so a
+    // guest who signs in later in this tab is still checked.
+    if (!hasAuthCookie()) return;
     try {
       if (sessionStorage.getItem(KEY)) return;
       sessionStorage.setItem(KEY, "1");

@@ -140,7 +140,12 @@ describe("Ad slots — formats", () => {
     expect((AD_FORMATS as readonly string[]).includes("pop")).toBe(true);
     expect(DEFAULT_MONETIZATION.popunder, "popunder must default to off").toBe(false);
 
-    const route = stripComments(readFileSync(path.join(ROOT, "app/api/ads/route.ts"), "utf8"));
+    // The serving rules moved to lib/monetization/zone-resolution.ts (2026-10-05)
+    // so /api/ads/inventory runs the same code; the route must still USE them.
+    const route = stripComments(readFileSync(path.join(ROOT, "lib/monetization/zone-resolution.ts"), "utf8"));
+    expect(stripComments(readFileSync(path.join(ROOT, "app/api/ads/route.ts"), "utf8"))).toMatch(
+      /const allowed = await allowedFilter\(\);/,
+    );
     expect(route, "the pop format is not gated server-side").toMatch(
       /!settings\.popunder && a\.format === "pop"/,
     );
@@ -156,7 +161,12 @@ describe("Ad slots — formats", () => {
     expect((AD_FORMATS as readonly string[]).includes("exoclick")).toBe(true);
     expect(DEFAULT_MONETIZATION.exoclick, "exoclick must default to off").toBe(false);
 
-    const route = stripComments(readFileSync(path.join(ROOT, "app/api/ads/route.ts"), "utf8"));
+    // The serving rules moved to lib/monetization/zone-resolution.ts (2026-10-05)
+    // so /api/ads/inventory runs the same code; the route must still USE them.
+    const route = stripComments(readFileSync(path.join(ROOT, "lib/monetization/zone-resolution.ts"), "utf8"));
+    expect(stripComments(readFileSync(path.join(ROOT, "app/api/ads/route.ts"), "utf8"))).toMatch(
+      /const allowed = await allowedFilter\(\);/,
+    );
     expect(route, "the exoclick format is not gated server-side").toMatch(
       /a\.format === "exoclick" && !exoClickZoneEnabled\(settings, zone\)/,
     );

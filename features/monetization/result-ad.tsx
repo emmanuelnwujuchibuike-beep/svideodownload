@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 import type { AdSlotData } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
@@ -49,8 +51,10 @@ export function ResultAd({ className }: { className?: string }) {
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/ads?zone=download_result_page")
-      .then((r) => (r.ok ? r.json() : { ad: null }))
+    // Zone cannot serve ⇒ no request (ad-inventory-client.ts; unknown ⇒ ask).
+    void loadAdInventory()
+      .then((inv) => (mayServeSlot(inv, "download_result_page") ? fetch("/api/ads?zone=download_result_page") : null))
+      .then((r) => (r && r.ok ? r.json() : { ad: null }))
       .then((d) => alive && setAd(d.ad ?? null))
       .catch(() => alive && setAd(null));
     return () => {

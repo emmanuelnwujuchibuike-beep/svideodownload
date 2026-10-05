@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { readIdentity, writeIdentity } from "@/lib/auth/identity-cache";
-import { readCookieJar } from "@/lib/dom/cookie";
 import type { BillingPlan } from "@/lib/monetization/types";
 
 /**
@@ -74,13 +74,11 @@ export function readEntitlements(): Omit<Entitlements, "ready"> | null {
  * ever SKIPS the fetch when the cookie is absent; any cookie at all falls
  * through to the authoritative `/api/me`, so a stale or malformed cookie cannot
  * hide a real plan.
+ *
+ * The test itself is `hasAuthCookie` in lib/auth/has-auth-cookie.ts (moved
+ * 2026-10-05), shared with the inbox and the nav warm-up so all three read the
+ * session the same way.
  */
-function hasAuthCookie(): boolean {
-  if (typeof document === "undefined") return true; // assume signed-in on the server; the effect re-checks
-  // Guarded read: a sandboxed embed throws on `document.cookie`, and "no
-  // cookies" must read as signed-out, not as a crash (lib/dom/cookie.ts).
-  return /(^|;\s*)sb-[^=]*-auth-token/.test(readCookieJar());
-}
 
 export function useEntitlements(): Entitlements {
   const [value, setValue] = useState<Omit<Entitlements, "ready">>(cache ?? FREE);

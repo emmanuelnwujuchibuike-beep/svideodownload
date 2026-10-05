@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import type { AdSlotData } from "@/lib/monetization/types";
 
 
+import { loadAdInventory } from "./ad-inventory-client";
 import { injectAdMarkup } from "./inject";
 
 /**
@@ -50,8 +51,11 @@ export function AdScripts() {
       timeout fallback — without it iOS would never load an ad at all.
     */
     const start = () => {
-      fetch("/api/ads?zone=global&all=1")
-        .then((r) => (r.ok ? r.json() : { ads: [] }))
+      // No page-level script configured ⇒ no request (inventory: one shared,
+      // CDN-cached answer per document; unknown ⇒ ask as before).
+      void loadAdInventory()
+        .then((inv) => (inv && !inv.global ? null : fetch("/api/ads?zone=global&all=1")))
+        .then((r) => (r && r.ok ? r.json() : { ads: [] }))
         .then((d) => {
           for (const ad of (d.ads ?? []) as AdSlotData[]) {
             if (ad.scriptCode) injectAdMarkup(document.body, ad.scriptCode);

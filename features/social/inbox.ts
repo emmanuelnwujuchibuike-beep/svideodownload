@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 
 import { revalidate } from "@/features/data";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import type { ConversationSummary } from "@/lib/social/messages";
 import type { BrowserClient } from "@/lib/supabase/client-instance";
 import { getClient } from "@/lib/supabase/client-lazy";
@@ -20,6 +21,14 @@ export interface Inbox {
 }
 
 export async function loadInbox(): Promise<Inbox> {
+  /*
+    No session cookie ⇒ no inbox, and the server would answer a guest with
+    nothing anyway. Measured 2026-10-05: every signed-out page view paid one
+    `/api/messages` invocation through the bottom nav's unread badge. One
+    gate here covers every consumer (nav, bell, floating chat, unread dot).
+    Any cookie at all still asks the server — see lib/auth/has-auth-cookie.ts.
+  */
+  if (!hasAuthCookie()) return { conversations: [], unread: 0 };
   const res = await fetch("/api/messages");
   if (!res.ok) return { conversations: [], unread: 0 };
   const d = (await res.json()) as Inbox;
@@ -37,6 +46,8 @@ export async function loadInbox(): Promise<Inbox> {
  */
 export function useInboxRealtime(): void {
   useEffect(() => {
+    // A guest has no inbox to listen to — no socket, no 60 kB client chunk.
+    if (!hasAuthCookie()) return;
     /*
       Memoized singleton (lib/supabase/client-instance.ts) — safe to request
       again here even though conversation-room.tsx also does; both share one

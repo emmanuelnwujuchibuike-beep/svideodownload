@@ -1,5 +1,7 @@
 "use client";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { anyVast, mayServeVast } from "@/lib/monetization/ad-inventory-shape";
 import { loadAdsConfig } from "@/lib/monetization/ads-config-client";
 import { track } from "@/lib/analytics/client";
 import type { VastCreative } from "@/lib/monetization/vast";
@@ -405,8 +407,9 @@ async function loadSkipSeconds(
 function prefetchCreative(trigger: InterstitialTrigger): void {
   const zone = ZONE_BY_TRIGGER[trigger];
   if (!zone) return;
-  void fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`)
-    .then((r) => (r.ok ? r.json() : null))
+  void loadAdInventory()
+    .then((inv) => (mayServeVast(inv, zone) ? fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`) : null))
+    .then((r) => (r && r.ok ? r.json() : null))
     .then((d) => {
       const creative = d?.ad ?? null;
       if (!creative) return;
@@ -563,6 +566,12 @@ async function resolveCreative(
   budgetMs: number,
 ): Promise<{ creative: VastCreative | null; outcome: ResolveOutcome }> {
   const startedAt = Date.now();
+  /*
+    No VAST source for this zone (inventory: one shared, CDN-cached answer per
+    document) ⇒ the endpoint would answer { ad: null }. Report it as the same
+    "empty" a real no-fill 200 produces, without the request. Unknown ⇒ ask.
+  */
+  if (!mayServeVast(await loadAdInventory(), zone)) return { creative: null, outcome: "empty" };
   vastLog("request started", zone);
 
   const attempt = async (): Promise<{ creative: VastCreative | null; outcome: ResolveOutcome }> => {
@@ -623,6 +632,14 @@ async function resolveCreative(
 }
 
 export function warmVastInterstitial(): void {
+  // Nothing to warm when no zone has a VAST source — the config read, two
+  // module chunks and a creative fetch would all be for an ad that cannot come.
+  void loadAdInventory().then((inv) => {
+    if (anyVast(inv)) warmVastInterstitialNow();
+  });
+}
+
+function warmVastInterstitialNow(): void {
   void loadConfig().catch(() => {
     /* Warming must never surface an error — the real path re-tries. */
   });

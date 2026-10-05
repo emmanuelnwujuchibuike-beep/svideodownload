@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
-import { getAdsForZone } from "@/lib/monetization/ads";
-import { parseHilltopVastUrl } from "@/lib/monetization/hilltop";
-import { hilltopZoneSource } from "@/lib/monetization/hilltop-config";
 import { getUserPlan } from "@/lib/monetization/plan";
-import {
-  exoClickZoneEnabled,
-  getMonetizationSettings,
-  resolveExoClickZoneId,
-} from "@/lib/monetization/settings";
-import { exoClickVastUrl, parseVast, vastWrapperUrl } from "@/lib/monetization/vast";
+import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { parseVast, vastWrapperUrl } from "@/lib/monetization/vast";
+import { resolveVastSource } from "@/lib/monetization/zone-resolution";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -202,30 +196,14 @@ export async function GET(request: Request) {
     switch — which is deliberately NOT consulted for Hilltop, since an operator
     turning ExoClick off on a page must not also silence the network replacing it.
   */
-  const hilltopVast =
-    hilltopZoneSource(settings.hilltop, zone) === "vast"
-      ? parseHilltopVastUrl(settings.hilltopVastUrl)
-      : null;
-
-  let adId: string;
-  let url: string;
-  if (hilltopVast) {
-    adId = `hilltop-vast-${zone}`;
-    url = hilltopVast;
-  } else {
-    if (!exoClickZoneEnabled(settings, zone)) return NextResponse.json({ ad: null });
-
-    /*
-      An explicit row first, then the shared zone id as a fallback — the same
-      precedence `resolveExoClickZoneId` applies everywhere, so a placement cannot
-      resolve to one id here and a different one in /api/ads.
-    */
-    const row = (await getAdsForZone(zone)).find((a) => a.format === "exoclick" && a.adSlotId);
-    const zoneId = resolveExoClickZoneId(settings, zone, row?.adSlotId ?? null);
-    if (!zoneId) return NextResponse.json({ ad: null });
-    adId = row?.id ?? `exoclick-shared-${zone}`;
-    url = exoClickVastUrl(zoneId);
-  }
+  // HillTop VAST when HillTop owns this moment, else ExoClick (row id, then
+  // the shared id) — shared with /api/ads/inventory via lib/monetization/
+  // zone-resolution.ts so the inventory can never promise a zone this route
+  // would refuse, or hide one it would serve.
+  const source = await resolveVastSource(settings, zone);
+  if (!source) return NextResponse.json({ ad: null });
+  const adId = source.adId;
+  let url = source.url;
 
   for (let depth = 0; depth <= MAX_WRAPPER_DEPTH; depth++) {
     const xml = await fetchVast(url, request);

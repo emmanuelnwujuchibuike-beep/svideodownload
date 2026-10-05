@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getPublicAnnouncement } from "@/lib/announcement";
+import { CDN_BUCKET_CACHE_CONTROL } from "@/lib/net/cdn-bucket";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,5 +15,12 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   const announcement = await getPublicAnnouncement();
-  return NextResponse.json({ announcement }, { headers: { "Cache-Control": "no-store" } });
+  /*
+    One global answer for every visitor, so the CDN serves it: the banner asks
+    for `?b=<5-minute bucket>` once per document (it used to ask `no-store` on
+    EVERY client navigation — measured 2026-10-05). An admin change is live
+    within one bucket. See lib/net/cdn-bucket.ts; carved out of the wide
+    no-store rule in next.config.ts.
+  */
+  return NextResponse.json({ announcement }, { headers: { "Cache-Control": CDN_BUCKET_CACHE_CONTROL } });
 }

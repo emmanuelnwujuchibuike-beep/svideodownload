@@ -4,6 +4,8 @@ import { Volume2, VolumeX } from "lucide-react";
 import { allowWindowOpen } from "@/lib/monetization/popunder-guard";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { mayServeVast } from "@/lib/monetization/ad-inventory-shape";
 import { AD_ZONE_META } from "@/lib/monetization/ad-schema";
 import type { AdTiming } from "@/lib/monetization/ad-timing";
 import type { VastCreative } from "@/lib/monetization/vast";
@@ -205,8 +207,11 @@ export function ExoClickUnit({
   useEffect(() => {
     if (!settled) return;
     let alive = true;
-    fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`)
-      .then((r) => (r.ok ? r.json() : { ad: null }))
+    // A zone with no VAST source answers { ad: null } — skip the request
+    // (see ad-inventory-client.ts; unknown ⇒ ask as before).
+    void loadAdInventory()
+      .then((inv) => (mayServeVast(inv, zone) ? fetch(`/api/ads/exoclick?zone=${encodeURIComponent(zone)}`) : null))
+      .then((r) => (r && r.ok ? r.json() : { ad: null }))
       .then((d: { ad: VastCreative | null }) => {
         if (!alive) return;
         if (!d.ad?.mediaUrl) {

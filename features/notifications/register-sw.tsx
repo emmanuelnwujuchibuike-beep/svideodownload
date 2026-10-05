@@ -45,6 +45,9 @@ function reloadRespectingCriticalActivity() {
  */
 const RELOADED_KEY = "frenz-reloaded-for";
 
+/** The visible-tab deploy check period. See the interval below — never hidden. */
+export const APP_VERSION_POLL_MS = 5 * 60 * 1000;
+
 let versionCheckInFlight = false;
 let lastVersionCheck = 0;
 
@@ -220,7 +223,20 @@ export function RegisterServiceWorker() {
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
-    const interval = window.setInterval(check, 60_000);
+    /*
+      ⛔ NEVER WHILE HIDDEN (2026-10-05, measured on a production build).
+      This was an unconditional 60 s poll: every open tab — including one in
+      the background, and an installed app left open overnight — asked
+      /api/app-version (and re-fetched /sw.js) once a minute for as long as it
+      lived. ~60 invocations an hour per forgotten tab, for nobody: the hard
+      rule "nothing may cost money while nobody is looking". A hidden tab is
+      covered anyway — `onVisible` above checks the moment it comes back.
+      Visible-only, and every five minutes: a long-open visible tab still
+      notices a deploy, at a fifth of the cost.
+    */
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") check();
+    }, APP_VERSION_POLL_MS);
     // First check shortly after startup (off the critical path).
     const initial = window.setTimeout(() => void reloadIfNewDeploy(), 4_000);
 

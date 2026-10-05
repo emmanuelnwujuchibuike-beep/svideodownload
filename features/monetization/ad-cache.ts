@@ -1,3 +1,5 @@
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 import type { AdSlotData } from "@/lib/monetization/types";
 
 /**
@@ -59,8 +61,18 @@ function flush() {
     }
   };
 
-  fetch(`/api/ads?zones=${encodeURIComponent(zones.join(","))}`)
-    .then((r) => (r.ok ? r.json() : { ads: {} }))
+  /*
+    Ask the inventory first (one CDN-cached request per document): a zone it
+    rules out resolves to null WITHOUT a request — exactly what /api/ads would
+    have answered. With every network off that is every zone, and the batch
+    request is never made. An unknown inventory asks for every zone, as before.
+  */
+  void loadAdInventory()
+    .then((inv) => {
+      const ask = zones.filter((z) => mayServeSlot(inv, z));
+      if (ask.length === 0) return { ads: {} };
+      return fetch(`/api/ads?zones=${encodeURIComponent(ask.join(","))}`).then((r) => (r.ok ? r.json() : { ads: {} }));
+    })
     .then((d) => settle((d.ads ?? {}) as Record<string, ZoneAnswer>))
     /*
       A failed request resolves every waiter with null rather than rejecting.

@@ -3,6 +3,8 @@
 import { useReportWebVitals } from "next/web-vitals";
 import { useEffect } from "react";
 
+import { parseSampleRate } from "@/lib/perf/sample-rate";
+
 /**
  * Cheap, synchronous device-capability context attached to every vitals
  * beacon — measurement only, changes nothing about how the app behaves.
@@ -33,8 +35,10 @@ function deviceContext(): { cores?: number; memGb?: number; conn?: string } {
  */
 /**
  * The loader's own timing, written by public/launch.html on a cold entry
- * (see the note there) and sent once, un-sampled: a cold start is the rare
- * event the owner is asking about, and one beacon per app open is nothing.
+ * (see the note there) and sent once per sampled document. It was un-sampled
+ * ("one beacon per app open is nothing") until 2026-10-05: one per app open is
+ * one invocation + one log event per app open, so it now rides the same
+ * `NEXT_PUBLIC_VITALS_SAMPLE` switch as everything else here (default off).
  *   `LAUNCH=<responseStart ms> <good|needs-improvement|poor> /launch.html
  *    ws=<workerStart ms|0> ts=<bytes|0 = cache> type=<navigate|reload> age=<ms since>`
  */
@@ -59,9 +63,32 @@ function beaconLaunchTiming() {
   }
 }
 
+/**
+ * ⛔ OFF BY DEFAULT — the beacon is a per-pageview billing tap (owner,
+ * 2026-10-05: "nothing should EVER consume Vercel unless a user has clicked").
+ *
+ * It sampled 15% per METRIC, and a page reports ~5 metrics (LCP, CLS, INP,
+ * FCP, TTFB), so it averaged ~0.75 beacons per page view. Each one is an edge
+ * invocation AND a `console.log` in /api/vitals — one Observability event per
+ * page view, which is the per-request-log rule broken by monitoring itself.
+ * Same fix as the CSP report-only tap (`CSP_REPORT_URI`): measurement is a
+ * switch an operator turns on for a window, not a standing cost.
+ *
+ * `NEXT_PUBLIC_VITALS_SAMPLE` = the share of PAGE VIEWS (0–1) that report.
+ * Unset, empty, malformed or out of range ⇒ 0. Decided ONCE per document, so a
+ * sampled page view reports all its metrics and an unsampled one sends none.
+ */
+export function vitalsSampleRate(raw: string | undefined): number {
+  return parseSampleRate(raw);
+}
+
+const SAMPLE_RATE = vitalsSampleRate(process.env.NEXT_PUBLIC_VITALS_SAMPLE);
+/** Module scope = once per document, never per metric. */
+const SAMPLED = SAMPLE_RATE > 0 && Math.random() < SAMPLE_RATE;
+
 export function WebVitals() {
   useEffect(() => {
-    if (process.env.NODE_ENV === "production") beaconLaunchTiming();
+    if (process.env.NODE_ENV === "production" && SAMPLED) beaconLaunchTiming();
   }, []);
   useReportWebVitals((metric) => {
     if (process.env.NODE_ENV !== "production") {
@@ -69,8 +96,7 @@ export function WebVitals() {
       console.log(`[vitals] ${metric.name}: ${Math.round(metric.value)} (${metric.rating ?? "?"})`);
       return;
     }
-    // Sample ~15% of sessions to keep the signal cheap.
-    if (Math.random() > 0.15) return;
+    if (!SAMPLED) return;
     try {
       const body = JSON.stringify({
         name: metric.name,

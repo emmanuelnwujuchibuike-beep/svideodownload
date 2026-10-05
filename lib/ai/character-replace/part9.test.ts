@@ -55,7 +55,7 @@ describe("a per-member API answer is never cached (found on production, 2026-09-
     for (const file of walk(join(process.cwd(), "app", "api"))) {
       const body = code(file.slice(process.cwd().length + 1));
       // a positive max-age / s-maxage / immutable on a line that is not itself no-store
-      const caches = body.split("\n").some((l) => /cache-control/i.test(l) && !/no-store|no-cache/i.test(l) && /max-age=[1-9]|s-maxage=[1-9]|immutable|IMMUTABLE/.test(l));
+      const caches = body.split("\n").some((l) => /cache-control/i.test(l) && !/no-store|no-cache/i.test(l) && /max-age=[1-9]|s-maxage=[1-9]|immutable|IMMUTABLE|CDN_BUCKET_CACHE_CONTROL/.test(l));
       if (!caches) continue;
       const rel = file.slice(process.cwd().length + 1).replace(/\\/g, "/").replace(/^app/, "").replace(/\/route\.ts$/, "").replace(/\[[^\]]+\]/g, "x");
       deliberate.push(rel);

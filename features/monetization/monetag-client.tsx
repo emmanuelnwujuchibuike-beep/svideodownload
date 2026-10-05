@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
+import { cdnBucket } from "@/lib/net/cdn-bucket";
 import type { MonetagPlacementTag, MonetagTag } from "@/lib/monetization/monetag";
 
 /**
@@ -51,8 +53,10 @@ export function MonetagClient() {
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
-        fetch("/api/monetag")
-          .then((r) => (r.ok ? r.json() : null))
+        // Nothing configured ⇒ no request (see ad-inventory-client.ts).
+        void loadAdInventory()
+          .then((inv) => (inv && !inv.monetag ? null : fetch(`/api/monetag?b=${cdnBucket()}`)))
+          .then((r) => (r && r.ok ? r.json() : null))
           .then((d: MonetagConfig | null) => {
             if (alive && d) setConfig(d);
           })

@@ -11,6 +11,7 @@ import {
   parseHilltopVastUrl,
 } from "@/lib/monetization/hilltop";
 import { getMonetizationSettings, normalizeSkipSeconds } from "@/lib/monetization/settings";
+import { CDN_BUCKET_CACHE_CONTROL } from "@/lib/net/cdn-bucket";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -292,7 +293,16 @@ export async function GET() {
       A permanent fix at the edge exists and is better, but it is not in this
       repo: Cloudflare → Caching → Configuration → Browser Cache TTL → "Respect
       Existing Headers". Do that and this can go back to `public`.
+
+      ── 2026-10-05: BACK ON THE CDN, WITHOUT THE TWO HOURS ─────────────────
+      The private header made EVERY page view an origin invocation for one
+      global answer (owner: "nothing should EVER consume Vercel unless a user
+      has clicked"). The client now asks for `?b=<5-minute bucket>`, so the URL
+      changes every five minutes and Cloudflare's 7200 s browser-TTL rewrite
+      cannot pin an old config past one bucket. Inside a bucket the Vercel CDN
+      answers (s-maxage). An admin switch is live within five minutes, not two
+      hours, and not one invocation per visitor. See lib/net/cdn-bucket.ts.
     */
-    { headers: { "Cache-Control": "private, max-age=60, stale-while-revalidate=300" } },
+    { headers: { "Cache-Control": CDN_BUCKET_CACHE_CONTROL } },
   );
 }

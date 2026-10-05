@@ -33,6 +33,8 @@ import { NavIconBadge } from "@/components/icons/nav-icon-badge";
 import { FrenzFriendsOutline, FrenzFriendsSolid, FrenzHomeOutline, FrenzHomeSolid } from "@/components/icons/frenz-icons";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useShowAds } from "@/features/monetization/use-show-ads";
+import { SIDEBAR_GUEST_WARM_ROUTES } from "@/features/app-shell/warm-routes";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
@@ -96,10 +98,17 @@ export function AppSidebar({ handle: _handle }: { handle: string | null }) {
       // already opened instantly. /sounds added the same way (Feature 15
       // Part 7) — its own page is a static shell (no server data fetch), so
       // prefetching it costs almost nothing and makes the tap feel instant.
-      for (const r of ["/home", "/friends", "/messages", "/reels", "/sounds", profileHref]) router.prefetch(r);
+      //
+      // Guests (no handle, no session cookie) warm the PUBLIC tabs only
+      // (2026-10-05): this sidebar is mounted — CSS-hidden — on phones too,
+      // and a guest's warm-up rendered /home, /friends, /messages and
+      // /account (a /login bounce) on every public app page they opened.
+      const member = !!handle || hasAuthCookie();
+      const routes = member ? ["/home", "/friends", "/messages", "/reels", "/sounds", profileHref] : SIDEBAR_GUEST_WARM_ROUTES;
+      for (const r of routes) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
-  }, [router, profileHref]);
+  }, [router, profileHref, handle]);
 
   return (
     <>

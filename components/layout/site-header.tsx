@@ -8,7 +8,9 @@ import { FrenzLogo, FrenzWordmark } from "@/components/brand/frenz-logo";
 import { IconTile } from "@/components/icons/icon-tile";
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAppMode } from "@/features/app-shell/use-app-mode";
 import { useEntitlements } from "@/features/auth/use-entitlements";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { useUser } from "@/features/auth/use-user";
 import { UserMenu } from "@/features/auth/user-menu";
 import { StreakHeaderChip } from "@/features/streaks/streak-header-chip";
@@ -319,6 +321,19 @@ export function SiteHeader({
 
   const { user, enabled } = useUser();
   const { handle, plan } = useEntitlements();
+  const appMode = useAppMode();
+  /*
+    🔴 A MEMBER'S HOME IS NOT "/" (2026-10-05, measured on a production build).
+    Middleware 307s a signed-in "/" to /downloads (or /home in Full Bleed). The
+    logo pointed at "/", so the router's viewport PREFETCH of it was redirected
+    and the browser followed with a plain GET /downloads — a full HTML server
+    render of the downloads page on 36 of 38 pages, every member page view,
+    for a link nobody tapped. Same rule the bottom nav's Home tab already uses.
+    While a session cookie exists but the handle is not known yet, the logo
+    does not prefetch at all, so the "/" prefetch cannot slip out in between.
+  */
+  const homeHref = handle ? (appMode === "full" ? "/home" : "/downloads") : "/";
+  const homePrefetch = handle || !hasAuthCookie() ? undefined : false;
   const { showAds, ready } = useShowAds();
   const isPremium = ready && !showAds;
 
@@ -356,7 +371,7 @@ export function SiteHeader({
           bar returns at lg+ where the desktop nav actually lives. */}
       <div className={cn("container flex items-center justify-between", social ? "h-0 lg:h-16" : "h-16")}>
         {/* Brand — hidden on mobile social surfaces (plain, full-bleed top bar) */}
-        <Link href="/" className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
+        <Link href={homeHref} prefetch={homePrefetch} className={cn("items-center", social ? "hidden lg:flex" : "flex")} onClick={() => setOpen(false)}>
           {/* The mark sits on a white plate per public/newnativeapplandingpage.jpg —
               a CSS plate, not a third artwork, so the header costs no new bytes.
 
@@ -379,7 +394,9 @@ export function SiteHeader({
           {NAV_LINKS.map((l) => (
             <Link
               key={l.href}
-              href={l.href}
+              // "/" is a member's home only by redirect — see `homeHref` above.
+              href={l.href === "/" ? homeHref : l.href}
+              prefetch={l.href === "/" ? homePrefetch : undefined}
               className="relative transition-colors hover:text-foreground after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-primary after:transition-all hover:after:w-full"
             >
               {t(l.labelKey)}

@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
+import { guestMustLogin } from "@/lib/auth/guest-login-paths";
 import { CORS_HEADERS } from "@/lib/api/cors";
 import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { sessionIsComfortablyFresh } from "@/lib/supabase/session-cookie";
@@ -134,6 +135,14 @@ export async function middleware(request: NextRequest) {
     an alias for /downloads, so the tab still lights up.
   */
   if (downloaderMode && path === "/home") {
+    // A guest would be rewritten to /downloads, rendered, and THEN sent to
+    // /login by the page — send them straight there (the same destination,
+    // minus a thrown-away render). See lib/auth/guest-login-paths.ts.
+    if (!request.cookies.getAll().some((c) => c.name.includes("-auth-token"))) {
+      const redirectUrl = new URL("/login", request.url);
+      redirectUrl.searchParams.set("next", "/downloads");
+      return NextResponse.redirect(redirectUrl);
+    }
     return NextResponse.rewrite(new URL("/downloads", request.url));
   }
   const isLandingRedirect =
@@ -149,7 +158,10 @@ export async function middleware(request: NextRequest) {
   const cookies = request.cookies.getAll();
   const hasAuthCookie = cookies.some((c) => c.name.includes("-auth-token"));
   if (!hasAuthCookie) {
-    if (needsGuard) {
+    // `guestMustLogin`: member pages whose own first line is a /login
+    // redirect — answered here so a guest never pays a server render for it.
+    // See lib/auth/guest-login-paths.ts (and why it is NOT `needsGuard`).
+    if (needsGuard || guestMustLogin(path)) {
       const redirectUrl = new URL("/login", request.url);
       redirectUrl.searchParams.set("next", path);
       return NextResponse.redirect(redirectUrl);

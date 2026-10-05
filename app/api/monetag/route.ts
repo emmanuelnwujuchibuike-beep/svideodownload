@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { resolveMonetagPlacements, resolveMonetagTags } from "@/lib/monetization/monetag";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { CDN_BUCKET_CACHE_CONTROL } from "@/lib/net/cdn-bucket";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,7 @@ export async function GET() {
       to reach a browser that had already loaded the page. Measured: this route
       asked for max-age=15 and was served max-age=7200.
     */
-    { headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=60" } },
+    // 2026-10-05: on the CDN via the 5-minute bucket — see app/api/ads/config.
+    { headers: { "Cache-Control": CDN_BUCKET_CACHE_CONTROL } },
   );
 }

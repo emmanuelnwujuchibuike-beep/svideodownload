@@ -22,11 +22,13 @@ import {
   FrenzReelsSolid,
 } from "@/components/icons/frenz-icons";
 import { useAppMode } from "@/features/app-shell/use-app-mode";
+import { GUEST_WARM_ROUTES } from "@/features/app-shell/warm-routes";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { useQuery } from "@/features/data";
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
+import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { cn } from "@/lib/utils";
 
@@ -258,13 +260,25 @@ export function MobileNav({
   // pages still don't open instantly") — the tab warmed `/history` only on
   // pointer-down, which is too late on a phone that taps; the AI history had
   // no warm at all. Both have a loading.tsx to warm into.
+  //
+  // 🔴 GUESTS GET THE PUBLIC TABS ONLY (2026-10-05, measured on a production
+  // build). The list below is for MEMBERS and is unchanged. A signed-out
+  // visitor was warming all eight too: `/account` and `/studio/ai/history`
+  // bounce straight to /login, and `/home`, `/friends`, `/messages` are
+  // `private, no-store` server renders of member pages a guest never sees a
+  // tab for — five server renders per idle signed-out page view, for nothing.
+  // A guest now warms only the tabs a guest has: Feed, History, Profile.
   useEffect(() => {
     if (isSlowConnection()) return;
+    const member = !!handle || hasAuthCookie();
+    const routes = member
+      ? ["/home", "/friends", "/messages", "/feed", "/account", "/history", "/studio/ai/history", profileHref]
+      : GUEST_WARM_ROUTES;
     const id = setTimeout(() => {
-      for (const r of ["/home", "/friends", "/messages", "/feed", "/account", "/history", "/studio/ai/history", profileHref]) router.prefetch(r);
+      for (const r of routes) router.prefetch(r);
     }, 400);
     return () => clearTimeout(id);
-  }, [router, profileHref]);
+  }, [router, profileHref, handle]);
 
   // Publish the nav's real height (already includes the home-indicator
   // safe-area pad) as `--frenz-bottomnav-h`, so a fixed bar elsewhere (the
@@ -478,6 +492,11 @@ export function MobileNav({
             <NavTab
               label="Home"
               href={handle ? "/downloads" : "/"}
+              /* A member's "/" is a 307 to /downloads, and a followed redirect
+                 is a full HTML render (measured 2026-10-05). Until the handle
+                 is known, a member's Home tab does not prefetch "/" at all —
+                 same guard as the header logo. */
+              prefetch={handle || !hasAuthCookie() ? undefined : false}
               icon={FrenzHomeOutline}
               activeIcon={FrenzHomeSolid}
               active={pathname === "/downloads" || pathname === "/home" || (!handle && pathname === "/")}
@@ -634,6 +653,7 @@ function NavTab({
   onWarm,
   guard,
   attract = false,
+  prefetch,
 }: {
   label: string;
   href: string;
@@ -653,11 +673,14 @@ function NavTab({
   /** When set, intercepts the tap: prevents navigation and runs the guard instead
    *  (used to offer the Full Bleed switch for a gated Downloader-mode tab). */
   guard?: () => void;
+  /** Passed to the Link; `false` suppresses the viewport prefetch. */
+  prefetch?: boolean;
 }) {
   const Glyph = active ? ActiveIcon : Icon;
   return (
     <Link
       href={href}
+      prefetch={prefetch}
       aria-label={label}
       aria-current={active ? "page" : undefined}
       onPointerDown={guard ? undefined : () => onWarm?.(href)}

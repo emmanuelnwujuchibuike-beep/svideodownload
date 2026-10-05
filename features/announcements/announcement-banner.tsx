@@ -6,6 +6,7 @@ import { type ComponentType, useEffect, useRef, useState } from "react";
 
 import type { PublicAnnouncement } from "@/lib/announcement";
 import { haptic } from "@/lib/motion/haptics";
+import { cdnBucket } from "@/lib/net/cdn-bucket";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,25 @@ const VARIANTS: Record<
   },
 };
 
+/*
+  ONE request per document, not one per navigation (2026-10-05). The effect
+  below re-runs on every `pathname` change — it must, to re-apply `showOn` —
+  and it used to re-fetch `no-store` each time, so a member moving through
+  five pages paid five invocations for one unchanged global answer. The
+  promise is memoised for the document and the URL carries the CDN bucket.
+*/
+let announcementPromise: Promise<PublicAnnouncement | null> | null = null;
+function loadAnnouncement(): Promise<PublicAnnouncement | null> {
+  announcementPromise ??= fetch(`/api/announcement?b=${cdnBucket()}`)
+    .then((r) => (r.ok ? r.json() : { announcement: null }))
+    .then((d: { announcement?: PublicAnnouncement | null }) => d.announcement ?? null)
+    .catch(() => {
+      announcementPromise = null; // offline — let a later navigation try again
+      return null;
+    });
+  return announcementPromise;
+}
+
 export function AnnouncementBanner({ showOn }: { showOn?: string[] }) {
   const pathname = usePathname();
   const [ann, setAnn] = useState<PublicAnnouncement | null>(null);
@@ -70,9 +90,7 @@ export function AnnouncementBanner({ showOn }: { showOn?: string[] }) {
     let alive = true;
     (async () => {
       try {
-        const res = await fetch("/api/announcement", { cache: "no-store" });
-        if (!res.ok) return;
-        const { announcement } = (await res.json()) as { announcement: PublicAnnouncement | null };
+        const announcement = await loadAnnouncement();
         if (!alive || !announcement) return;
         let isDismissed = false;
         try {

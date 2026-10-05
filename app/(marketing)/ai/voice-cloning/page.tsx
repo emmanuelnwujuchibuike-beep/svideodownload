@@ -4,6 +4,7 @@ import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AIDownloadOverlay } from "@/features/ai/ai-download-overlay";
 import { VoiceCloningWorkspace } from "@/features/ai/voice-clone/voice-cloning-workspace";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 
 /**
  * /ai/voice-cloning — Voice Cloning on the marketing-group door (2026-09-27),
@@ -19,12 +20,14 @@ export const dynamic = "force-dynamic";
 
 export default async function PublicVoiceCloningPage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
   const { job } = await searchParams;
+  // Large screens show the showcase on every AI page (owner, 2026-10-05); cached until an admin saves.
+  const slides = await getShowcaseSlides();
   const initialJobId = typeof job === "string" && /^[0-9a-fA-F-]{36}$/.test(job) ? job : null;
   return (
     <>
       <SiteHeader landing />
       <main className="container max-w-3xl px-3 pb-10 sm:pb-14" style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}>
-        <VoiceCloningWorkspace basePath="/ai/voice-cloning" aiHref="/ai" ttaHref="/ai/text-to-audio" lipSyncHref="/ai/lip-sync" historyHref="/ai/history" usageHref="/ai/usage" initialJobId={initialJobId} />
+        <VoiceCloningWorkspace slides={slides} basePath="/ai/voice-cloning" aiHref="/ai" ttaHref="/ai/text-to-audio" lipSyncHref="/ai/lip-sync" historyHref="/ai/history" usageHref="/ai/usage" initialJobId={initialJobId} />
       </main>
       <AIDownloadOverlay />
       <SiteFooterMinimal />

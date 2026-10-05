@@ -4,7 +4,10 @@ import { Check, Gift, Loader2, Mic, Plus, RefreshCcw, ShieldCheck, Trash2, Type,
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AiHero } from "@/features/ai/design/ai-surface";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
@@ -16,6 +19,7 @@ import type { AiPlansPublic } from "@/lib/ai/credits/config";
 import { formatCents } from "@/lib/ai/economy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { track } from "@/lib/analytics/client";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +59,10 @@ export function VoiceCloningWorkspace({
   historyHref,
   usageHref,
   initialJobId = null,
+  slides,
 }: {
+  /** The showcase slides, read by the server page — shown on large screens only (owner, 2026-10-05). */
+  slides: ShowcaseSlide[];
   basePath: string;
   aiHref: string;
   ttaHref: string;
@@ -110,12 +117,15 @@ export function VoiceCloningWorkspace({
           required prop cannot be wrong by omission the way a pasted string
           can.
         */}
-        <AiHero
-          tool="Voice Cloning"
-          title="Voice"
-          highlight="Cloning"
-          subtitle="Turn a voice you own into one you can type with. Give us a few clean recordings and it becomes yours to use in Text to Audio and Lip Sync Pro, as often as you like."
-          className="mt-4"
+        {/* Redesign page 6 (owner's reference): showcase on large screens only, the credits strip, then the tool's own title. */}
+        <AiShowcase slides={slides} base={aiHref} desktopOnly className="mt-3 mb-3" />
+        <AiCreditStrip base={aiHref} className="mt-3 lg:mt-0" />
+        <AiToolTitle
+          icon={Mic}
+          title="Voice Cloning"
+          tagline="Your voice, ready to type with."
+          body="Give us a few clean recordings and it becomes yours to use in Text to Audio and Lip Sync Pro, as often as you like."
+          className="mt-6"
         />
 
         {ws.configError ? (
@@ -137,10 +147,10 @@ export function VoiceCloningWorkspace({
             <Result job={job} missing={ws.watch.missing} basePath={basePath} ttaHref={ttaHref} lipSyncHref={lipSyncHref} voicesHref={voicesHref} onAnother={ws.reset} />
           </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <AiPanel className="mt-5 space-y-5">
             {/* ── 1 · the recordings ─────────────────────────────────────── */}
             <Section n={1} title="Your recordings">
-              <div className="rounded-2xl bg-secondary/50 px-3.5 py-3">
+              <div className="rounded-2xl bg-indigo-50/40 px-3.5 py-3 ring-1 ring-inset ring-indigo-100">
                 <p className="text-[12px] font-semibold">What makes a voice sound real</p>
                 <ul className="mt-1.5 space-y-1 text-[11.5px] leading-snug text-muted-foreground">
                   <li>· One person speaking, nobody else, no music behind it.</li>
@@ -171,7 +181,7 @@ export function VoiceCloningWorkspace({
                       haptic("selection");
                       picker.current?.click();
                     }}
-                    className="mt-3 flex min-h-[64px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card/60 px-4 text-[13.5px] font-semibold transition hover:bg-secondary/40"
+                    className="mt-3 flex min-h-[64px] w-full items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-4 text-[13.5px] font-semibold text-indigo-700 transition hover:bg-indigo-50/70 active:scale-[0.99]"
                   >
                     <Upload className="h-4 w-4" aria-hidden />
                     {ws.samples.length === 0 ? "Choose your recordings" : "Add another"}
@@ -186,7 +196,7 @@ export function VoiceCloningWorkspace({
               {ws.samples.length > 0 ? (
                 <ul className="mt-3 space-y-2">
                   {ws.samples.map((s) => (
-                    <li key={s.key} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2">
+                    <li key={s.key} className="flex items-center gap-3 rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] px-3 py-2">
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
                         <Mic className="h-3.5 w-3.5" aria-hidden />
                       </span>
@@ -221,7 +231,7 @@ export function VoiceCloningWorkspace({
                   onChange={(e) => ws.setName(e.target.value)}
                   maxLength={60}
                   placeholder="My voice"
-                  className="min-h-[48px] w-full rounded-2xl border border-border bg-card px-3.5 text-[15px] outline-none focus:border-foreground"
+                  className="min-h-[48px] w-full rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] px-3.5 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 />
               </label>
               <label className="mt-3 block">
@@ -231,7 +241,7 @@ export function VoiceCloningWorkspace({
                   onChange={(e) => ws.setDescription(e.target.value)}
                   maxLength={300}
                   placeholder="Warm, for narration"
-                  className="min-h-[44px] w-full rounded-2xl border border-border bg-card px-3.5 text-[14px] outline-none focus:border-foreground"
+                  className="min-h-[44px] w-full rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] px-3.5 text-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 />
               </label>
 
@@ -263,7 +273,7 @@ export function VoiceCloningWorkspace({
                 server refuses a request without both of these, so this is the
                 interface agreeing with the server rather than the only guard. */}
             <Section n={3} title="The rights to this voice">
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-card p-3.5">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] p-3.5">
                 <input type="checkbox" checked={ws.agreed} onChange={(e) => ws.setAgreed(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[currentColor]" />
                 <span className="text-[12.5px] leading-relaxed">{cfg?.consentStatement ?? "This is my own voice, or I have the speaker's explicit permission to clone it."}</span>
               </label>
@@ -276,7 +286,7 @@ export function VoiceCloningWorkspace({
                     maxLength={120}
                     autoComplete="name"
                     placeholder="Your full name"
-                    className="min-h-[48px] w-full rounded-2xl border border-border bg-card px-3.5 text-[15px] outline-none focus:border-foreground"
+                    className="min-h-[48px] w-full rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] px-3.5 text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   />
                 </label>
               ) : null}
@@ -348,7 +358,7 @@ export function VoiceCloningWorkspace({
               type="button"
               disabled={!ws.ready || working || slotsFull}
               onClick={() => void ws.create()}
-              className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background disabled:opacity-40"
+              className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
             >
               {working ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
               {ws.state.phase === "uploading"
@@ -378,7 +388,7 @@ export function VoiceCloningWorkspace({
             <div className="border-t border-border/60 pt-2">
               <VoiceLibrary cloneHref={basePath} ttaHref={ttaHref} lipSyncHref={lipSyncHref} compact />
             </div>
-          </div>
+          </AiPanel>
         )}
 
         {/*
@@ -443,13 +453,13 @@ function Result({ job, missing, basePath, ttaHref, lipSyncHref, voicesHref, onAn
           <Link
             href={vc?.cloneId ? `${ttaHref}?voice=${encodeURIComponent(`clone:${vc.cloneId}`)}` : ttaHref}
             onClick={() => track("voice_clone_reused", { from: "result", to: "text_to_audio" })}
-            className="ai-cta inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background"
+            className={aiButtonClass({ size: "lg" })}
           >
             <Type className="h-4 w-4" aria-hidden /> Make audio with it
           </Link>
           <Link
             href={vc?.cloneId ? `${lipSyncHref}?voice=${encodeURIComponent(`clone:${vc.cloneId}`)}` : lipSyncHref}
-            className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full border border-border px-4 text-[13px] font-semibold"
+            className={aiButtonClass({ variant: "secondary", size: "lg", className: "ai-btn--round" })}
           >
             <Check className="h-4 w-4" aria-hidden /> Use in Lip Sync Pro
           </Link>
@@ -460,10 +470,10 @@ function Result({ job, missing, basePath, ttaHref, lipSyncHref, voicesHref, onAn
           voices, and both are real buttons now.
         */}
         <div className="flex flex-wrap gap-2.5">
-          <Link href={basePath} onClick={onAnother} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
+          <Link href={basePath} onClick={onAnother} className={aiButtonClass({ variant: "secondary", className: "ai-btn--round flex-1" })}>
             <Plus className="h-4 w-4" aria-hidden /> Clone another
           </Link>
-          <Link href={voicesHref} className={cn("inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-full bg-secondary/70 px-4 text-[13.5px] font-semibold text-foreground shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition active:scale-[0.98]")}>
+          <Link href={voicesHref} className={aiButtonClass({ variant: "secondary", className: "ai-btn--round flex-1" })}>
             <Mic className="h-4 w-4" aria-hidden /> Your Voices
           </Link>
         </div>
@@ -479,7 +489,7 @@ function Result({ job, missing, basePath, ttaHref, lipSyncHref, voicesHref, onAn
         <Notice tone={job.status === "failed" ? "error" : "muted"}>
           {ended} {job.error?.message ?? ""} {refund ?? ""}
         </Notice>
-        <Link href={basePath} onClick={onAnother} className="ai-cta inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
+        <Link href={basePath} onClick={onAnother} className={aiButtonClass({ size: "lg", block: true })}>
           <RefreshCcw className="h-4 w-4" aria-hidden /> Try again
         </Link>
       </div>
@@ -508,9 +518,10 @@ function Result({ job, missing, basePath, ttaHref, lipSyncHref, voicesHref, onAn
 
 function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.5rem] border border-border/70 bg-card/60 p-4 sm:p-5">
-      <h2 className="mb-3 flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-foreground text-[11px] font-bold text-background">{n}</span>
+    // Redesign page 6: every step lives in ONE panel; a step is a titled block with a small number, not a box of its own.
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-[15px] font-bold tracking-[-0.015em]">
+        <span className="grid h-5 w-5 place-items-center rounded-full bg-indigo-50 text-[11px] font-bold text-indigo-600 ring-1 ring-inset ring-indigo-200">{n}</span>
         {title}
       </h2>
       {children}
@@ -535,7 +546,7 @@ function LabelSelect({
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="min-h-[44px] w-full rounded-2xl border border-border bg-card px-3 text-sm outline-none focus:border-foreground"
+        className="min-h-[44px] w-full rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
       >
         {/* Optional on purpose — a member who does not know their own accent's name should not be forced to pick one. */}
         <option value="">Not set</option>

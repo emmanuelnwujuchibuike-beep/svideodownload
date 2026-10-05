@@ -2,6 +2,7 @@
 
 import { AudioLines, Mic, Pencil, Plus, ShieldCheck, Sparkles, Trash2, Type } from "lucide-react";
 import Link from "next/link";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { AiHero } from "@/features/ai/design/ai-surface";
 import { useCallback, useState } from "react";
 
@@ -121,7 +122,7 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
           </span>
           <p className="mt-3 text-[14px] font-semibold">No voices yet</p>
           <p className="mx-auto mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">Clone a voice you own and it will be here, ready to speak anything you type.</p>
-          <Link href={cloneHref} className="ai-cta mt-4 inline-flex min-h-[48px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
+          <Link href={cloneHref} className={aiButtonClass({ className: "mt-4" })}>
             <Plus className="h-4 w-4" aria-hidden /> Clone a voice
           </Link>
         </div>

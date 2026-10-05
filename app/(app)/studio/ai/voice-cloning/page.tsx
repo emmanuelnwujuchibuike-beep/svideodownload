@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { VoiceCloningWorkspace } from "@/features/ai/voice-clone/voice-cloning-workspace";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +23,12 @@ export default async function StudioVoiceCloningPage({ searchParams }: { searchP
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/voice-cloning");
   const { job } = await searchParams;
+  // Large screens show the showcase on every AI page (owner, 2026-10-05); cached until an admin saves.
+  const slides = await getShowcaseSlides();
   const initialJobId = typeof job === "string" && /^[0-9a-fA-F-]{36}$/.test(job) ? job : null;
   return (
     <VoiceCloningWorkspace
+      slides={slides}
       basePath="/studio/ai/voice-cloning"
       aiHref="/studio/ai"
       ttaHref="/studio/ai/text-to-audio"

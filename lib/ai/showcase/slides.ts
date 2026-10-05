@@ -228,4 +228,6 @@ export const SHOWCASE_PAGES = [
   "/studio/ai/image-to-video",
   "/ai/text-to-audio",
   "/studio/ai/text-to-audio",
+  "/ai/voice-cloning",
+  "/studio/ai/voice-cloning",
 ] as const;

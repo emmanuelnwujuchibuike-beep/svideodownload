@@ -306,9 +306,15 @@ describe("a tool's own library is where its results live", () => {
     ]) {
       const body = code(f);
       const from = body.indexOf("function Result(");
-      expect(body.slice(from), `${f}: the library link is still a bare caption`).toMatch(
-        /min-h-\[48px\][^]{0,200}rounded-full/,
-      );
+      const result = body.slice(from);
+      /*
+        Redesign 2026-10-05: a result link may be the shared button —
+        `.ai-btn` is min-height 3rem (48 px) and `ai-btn--round` the pill —
+        which is the same guarantee as the hand-written classes below.
+      */
+      const shared = /aiButtonClass\(\{ variant: "secondary", className: "ai-btn--round/.test(result);
+      const handWritten = /min-h-\[48px\][^]{0,200}rounded-full/.test(result);
+      expect(shared || handWritten, `${f}: the library link is still a bare caption`).toBe(true);
     }
   });
 });

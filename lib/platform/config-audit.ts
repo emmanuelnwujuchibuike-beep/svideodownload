@@ -13,7 +13,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 /** Part 8 §22: Character Replace settings changes ride the same log. */
-export type ConfigSurface = "flag" | "experiment" | "character_replace" | "ai_plans" | "ai_providers" | "lip_sync" | "text_to_audio" | "voice_clone";
+export type ConfigSurface = "flag" | "experiment" | "character_replace" | "ai_plans" | "ai_providers" | "lip_sync" | "text_to_audio" | "voice_clone" | "ai_showcase";
 
 export interface ConfigChange {
   id: string;

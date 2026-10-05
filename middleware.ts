@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { isAdmin } from "@/lib/admin";
+import { isGuardedAiPath } from "@/lib/auth/ai-public-paths";
 import { guestMustLogin } from "@/lib/auth/guest-login-paths";
 import { CORS_HEADERS } from "@/lib/api/cors";
 import { SUPABASE_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
@@ -79,9 +80,14 @@ export async function middleware(request: NextRequest) {
     enforce it independently — middleware protects pages, not endpoints, and a
     direct fetch never passes through a page.
   */
+  /*
+    🟢 2026-10-05: exactly `/ai` (the welcome page) is open to guests — owner
+    replaced the 09-09 rule. Every `/ai/*` tool is still guarded. See
+    lib/auth/ai-public-paths.ts.
+  */
   const needsGuard =
     path.startsWith("/account") ||
-    path.startsWith("/ai") ||
+    isGuardedAiPath(path) ||
     path.startsWith("/studio") ||
     (path.startsWith("/admin") && !isAdminPublic);
 

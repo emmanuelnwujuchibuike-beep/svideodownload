@@ -36,6 +36,35 @@ export interface Thumbnail {
 const THUMB_MAX_EDGE = 640;
 const THUMB_QUALITY = 68;
 
+export interface SizedThumbnail extends Thumbnail {
+  width: number;
+  height: number;
+}
+
+/**
+ * The same resize at a caller's size — the AI showcase makes a ~720 px and a
+ * ~1280 px copy of one upload (app/api/admin/ai/showcase/route.ts). `maxWidth`
+ * bounds the width only: a card is width-constrained, and a tall image must
+ * not be shrunk to fit a square. Same never-fatal contract: `null` on failure.
+ */
+export async function makeSizedWebp(
+  bytes: Uint8Array,
+  { maxWidth, quality }: { maxWidth: number; quality: number },
+): Promise<SizedThumbnail | null> {
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
+    const { data, info } = await sharp(Buffer.from(bytes))
+      .rotate()
+      .resize({ width: maxWidth, withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer({ resolveWithObject: true });
+    return { buffer: data, contentType: "image/webp", ext: "webp", width: info.width, height: info.height };
+  } catch {
+    return null;
+  }
+}
+
 export async function makeThumbnail(bytes: Uint8Array): Promise<Thumbnail | null> {
   try {
     const sharpModule = await import("sharp");

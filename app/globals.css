@@ -947,6 +947,106 @@
     }
   }
 
+  /* ── THE AI BUTTON SYSTEM (redesign 2026-10-05, Brief A "BUTTON SYSTEM") ───
+     One primary and one secondary, shared by every AI page through
+     features/ai/design/ai-button.tsx. Deliberately NOT `.ai-cta`: that one is
+     a pill with an ambient 9 s gradient pass and two glow shadows — the
+     "giant neon button" both briefs retire. This is a STATIC gradient, a
+     moderate radius, a 1 px edge and one small shadow; nothing runs at idle.
+
+     Interaction (both briefs): hover = slight brightness + 1 px lift + icon
+     nudge; press = scale(0.98), fast. Transform/opacity/filter only, and the
+     lift is skipped under reduced motion. */
+  .ai-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    padding: 0 1.25rem;
+    border-radius: 0.875rem;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 140ms ease, filter 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  }
+  .ai-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  .ai-btn:active { transform: scale(0.98); }
+  .ai-btn[aria-disabled="true"], .ai-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+  }
+  .ai-btn > .ai-btn__icon-end { transition: transform 140ms ease; }
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .ai-btn:not(:disabled):not([aria-disabled="true"]):hover { transform: translateY(-1px); }
+    .ai-btn:not(:disabled):not([aria-disabled="true"]):hover > .ai-btn__icon-end { transform: translateX(2px); }
+    .ai-btn:not(:disabled):not([aria-disabled="true"]):active { transform: scale(0.98); }
+  }
+  .ai-btn--lg { min-height: 3.375rem; font-size: 16px; padding: 0 1.5rem; }
+  .ai-btn--sm { min-height: 2.5rem; font-size: 14px; padding: 0 0.875rem; border-radius: 0.75rem; }
+
+  .ai-btn--primary {
+    color: #fff;
+    background-image: linear-gradient(100deg, #3b6cf6 0%, #5b4ff0 52%, #7c3aed 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      0 6px 16px -8px rgba(79, 70, 229, 0.55);
+  }
+  @media (hover: hover) {
+    .ai-btn--primary:not(:disabled):not([aria-disabled="true"]):hover { filter: brightness(1.06); }
+  }
+
+  .ai-btn--secondary {
+    color: hsl(var(--foreground));
+    background-color: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(15, 23, 42, 0.1);
+  }
+  @media (hover: hover) {
+    .ai-btn--secondary:not(:disabled):not([aria-disabled="true"]):hover {
+      border-color: rgba(91, 79, 240, 0.35);
+      background-color: #fff;
+    }
+  }
+  .dark .ai-btn--secondary {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.14);
+  }
+
+  /* ── THE SHOWCASE CAROUSEL (features/ai/design/ai-showcase.tsx) ────────────
+     Native scroll-snap does the swiping, momentum and snapping; the component
+     only adds the 3 s advance. The scrollbar is hidden, not the scrolling. */
+  .ai-showcase-track {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ai-showcase-track::-webkit-scrollbar { display: none; }
+  .ai-showcase-track > * {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    flex: 0 0 100%;
+  }
+  /* The brand art a slide draws when no image has been uploaded: two static
+     radial washes over the deep brand indigo. No bytes, no animation. */
+  .ai-showcase-art {
+    background-color: #131a4a;
+    background-image:
+      radial-gradient(70% 90% at 88% 8%, rgba(124, 58, 237, 0.55) 0%, transparent 60%),
+      radial-gradient(60% 80% at 8% 100%, rgba(59, 130, 246, 0.5) 0%, transparent 62%),
+      radial-gradient(40% 50% at 60% 60%, rgba(34, 211, 238, 0.14) 0%, transparent 70%);
+  }
+
   /* Loading stripe — the indeterminate bar shown inside a route's loading.tsx
      (Next Suspense fallback) by PageLoader. Pure CSS; nothing here or in that
      component touches navigation/prefetch. */

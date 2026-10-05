@@ -175,9 +175,10 @@ import { CharacterReplaceFreeAccessPanel } from "@/features/admin/character-repl
 import { AiProvidersOverview } from "@/features/admin/ai-providers-overview";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiShowcaseEditorLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
 import { loadAiProviderOverview } from "@/lib/ai/providers/overview";
+import { readStoredShowcase } from "@/lib/ai/showcase/server";
 import { getLipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import { getTextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import { getVoiceCloneAdminStats } from "@/lib/ai/voice-clone/admin";
@@ -916,7 +917,7 @@ async function FrenzAISection() {
   // Part 8 (2026-10-05): the Replicate / fal.ai switchboard, its 200-row run
   // ledger read, the dead circuit-breaker rows and the Character Replace audit
   // trail (three loaders) are replaced by ONE bounded ai_jobs read.
-  const [creditRows, planStats, providerOverview, lipSyncStats, textToAudioStats, voiceCloneStats] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProviderOverview(landing.frenzAiProviders.adminJobsAreTests), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null)]);
+  const [creditRows, planStats, providerOverview, lipSyncStats, textToAudioStats, voiceCloneStats, showcase] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProviderOverview(landing.frenzAiProviders.adminJobsAreTests), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null), readStoredShowcase()]);
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -981,6 +982,8 @@ async function FrenzAISection() {
         },
         { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },
         { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },
+        /* Redesign Phase 1 (2026-10-05): the welcome page carousel — image, chip, title, highlight, description, link, order, on/off, with the real card as preview. */
+        { id: "showcase", label: "Welcome showcase", content: <AiShowcaseEditorLazy initial={showcase} /> },
       ]}
     />
   );

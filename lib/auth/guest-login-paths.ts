@@ -13,7 +13,8 @@
  * `needsGuard` instead would force a Supabase `getUser()` on every MEMBER
  * request to them — a new cost for members to save one for guests.
  *
- * `/account`, `/ai`, `/studio`, `/admin` are already guarded by `needsGuard`.
+ * `/account`, `/ai/*` (not `/ai` itself — lib/auth/ai-public-paths.ts), `/studio`,
+ * `/admin` are already guarded by `needsGuard`.
  * `lib/auth/guest-login-paths.test.ts` keeps this list and the pages in step,
  * in both directions.
  */

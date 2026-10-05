@@ -16,46 +16,31 @@ import { Skeleton, SkeletonSection } from "@/features/ui/skeleton";
  * shimmer is a CSS utility from `globals.css`.
  */
 
-/** The Frenz AI welcome: the hero lines, the studio card with its pill, then the tool grid — the shape of features/ai/frenz-ai-welcome.tsx. */
+/**
+ * The Frenz AI welcome — the shape of features/ai/frenz-ai-welcome.tsx since
+ * the 2026-10-05 redesign: the crumb pill, two headline lines, the support
+ * line, the 16:10 showcase card (2:1 at sm), its dots, and the docked actions.
+ * Same paddings as the real page, so nothing moves when it lands.
+ */
 export function FrenzAIPageSkeleton() {
   return (
     <SkeletonSection label="Loading Frenz AI">
-      <div className="mb-6 pt-1">
-        <Skeleton className="h-3 w-16 rounded-full" />
-        <Skeleton className="mt-3 h-10 w-full max-w-[22rem]" />
-        <Skeleton className="mt-2 h-10 w-40 sm:hidden" />
+      <div className="px-4 pb-6 pt-5 sm:px-6 sm:pt-6" aria-hidden>
+        <Skeleton className="h-10 w-48 rounded-full" />
+        <Skeleton className="mt-3.5 h-9 w-full max-w-[22rem]" />
+        <Skeleton className="mt-2 h-9 w-40 sm:hidden" />
         <Skeleton className="mt-3 h-4 w-80 max-w-full" />
-      </div>
-
-      <div className="rounded-[1.75rem] border border-border/70 p-4 sm:p-6" aria-hidden>
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-12 w-12 rounded-[0.95rem]" />
-          <div>
-            <Skeleton className="h-[18px] w-32" />
-            <Skeleton className="mt-2 h-3.5 w-44" />
-          </div>
+        <Skeleton className="mt-6 aspect-[16/10] w-full rounded-[1.25rem] sm:aspect-[2/1]" />
+        <div className="mt-3 flex justify-center gap-2">
+          <Skeleton className="h-1.5 w-4 rounded-full" />
+          <Skeleton className="h-1.5 w-1.5 rounded-full" />
+          <Skeleton className="h-1.5 w-1.5 rounded-full" />
+          <Skeleton className="h-1.5 w-1.5 rounded-full" />
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-[1.15rem] border border-border/60 p-3">
-              <Skeleton className="h-8 w-8 rounded-[0.6rem]" />
-              <Skeleton className="mt-2.5 h-3.5 w-24" />
-              <Skeleton className="mt-2 h-3 w-full" />
-            </div>
-          ))}
-        </div>
-        <Skeleton className="mt-5 h-14 w-full rounded-full" />
       </div>
-
-      <Skeleton className="mt-7 h-3 w-16 rounded-full" />
-      <div className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="rounded-[1.2rem] border border-border/70 p-3" aria-hidden>
-            <Skeleton className="h-9 w-9 rounded-[0.7rem]" />
-            <Skeleton className="mt-3 h-4 w-24" />
-            <Skeleton className="mt-2 h-3 w-full" />
-          </div>
-        ))}
+      <div className="mt-4 flex gap-2" aria-hidden>
+        <Skeleton className="h-[3.375rem] flex-1 rounded-[0.875rem]" />
+        <Skeleton className="h-[3.375rem] w-[3.375rem] shrink-0 rounded-[0.875rem] sm:w-40" />
       </div>
     </SkeletonSection>
   );

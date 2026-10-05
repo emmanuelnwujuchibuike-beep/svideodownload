@@ -244,9 +244,11 @@ describe("the Continue gate reads the mode's own tiers (owner, 2026-09-14)", () 
 describe("the doors open instantly or say they are opening (owner, 2026-09-14)", () => {
   it("Explore AI Studio, the tool cards and the crumb prefetch by default and carry the pending stripe", () => {
     // 2026-09-20: the welcome page holds one door (Explore AI Studio); the Explore page holds the grid and the balance door
-    const welcome = src("features/ai/frenz-ai-welcome.tsx");
+    // 2026-10-05: the door moved into the welcome page's live island (the dock).
+    const welcome = src("features/ai/frenz-ai-welcome-live.tsx");
     expect(welcome).not.toContain("prefetch={false}");
     expect(welcome).toContain("<LinkPendingStripe />");
+    expect(src("features/ai/frenz-ai-welcome.tsx")).not.toContain("prefetch={false}");
     const explore = src("features/ai/frenz-ai-explore.tsx");
     expect(explore).not.toContain("prefetch={false}");
     expect(explore).toContain("<LinkPendingStripe />");

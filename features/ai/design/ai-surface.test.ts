@@ -226,7 +226,10 @@ describe("the surface is APPLIED, not merely defined", () => {
     for (const f of pages) {
       expect(code(f), `${f} does not close with the trust row`).toContain("<FrenzAITrustRow");
     }
-    expect(code("features/ai/frenz-ai-welcome.tsx")).toContain("<FrenzAIAllowanceBar");
+    // 2026-10-05: the welcome page split into a server half and ONE live
+    // island; the allowance needs the entitlement, so it lives in the island.
+    expect(code("features/ai/frenz-ai-welcome-live.tsx")).toContain("<FrenzAIAllowanceBar");
+    expect(code("features/ai/frenz-ai-welcome.tsx")).toContain("<FrenzAIWelcomeLive");
   });
 
   it("has no decorative hero panel — the brief forbids one", () => {

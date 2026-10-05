@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { FrenzAIWelcome } from "@/features/ai/frenz-ai-welcome";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -35,5 +36,8 @@ export default async function FrenzAIPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai");
 
-  return <FrenzAIWelcome />;
+  // Cached until an admin saves (lib/ai/showcase/server.ts) — not a DB read per entry.
+  const slides = await getShowcaseSlides();
+
+  return <FrenzAIWelcome base="/studio/ai" slides={slides} />;
 }

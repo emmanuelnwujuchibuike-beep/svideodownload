@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import type { VoiceCloneAdminStats } from "@/lib/ai/voice-clone/admin";
@@ -133,6 +134,13 @@ const VoiceCloneSettings = dynamic(() => import("@/features/admin/voice-clone-se
 
 export function VoiceCloneSettingsLazy(props: { settings: LandingSettings; stats: VoiceCloneAdminStats | null }) {
   return <VoiceCloneSettings {...props} />;
+}
+
+// Redesign Phase 1 (2026-10-05): AI → Welcome showcase — the carousel's slides, with a live preview using the real card.
+const AiShowcaseEditor = dynamic(() => import("@/features/admin/ai-showcase-editor").then((m) => m.AiShowcaseEditor), { loading: skeleton("Loading the welcome showcase") });
+
+export function AiShowcaseEditorLazy({ initial }: { initial: ShowcaseSlide[] | null }) {
+  return <AiShowcaseEditor initial={initial} />;
 }
 
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {

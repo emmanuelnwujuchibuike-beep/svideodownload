@@ -368,9 +368,9 @@ export const DATA_DOMAINS: DataDomain[] = [
     id: "configuration",
     name: "Configuration",
     owner: "lib/platform",
-    description: "Runtime configuration: feature flags, experiments, global settings and the config change log.",
+    description: "Runtime configuration: feature flags, experiments, global settings and the config change log. `settings` also holds admin-edited content that is read when a page renders — e.g. key `ai_showcase`, the Frenz AI welcome carousel (0182), whose images live in the PUBLIC `ai-showcase` bucket as pre-sized webp copies.",
     tables: ["feature_flags", "experiments", "settings", "config_audit_log"],
-    storage: ["relational", "cache"],
+    storage: ["relational", "cache", "object"],
   },
   {
     id: "audit",

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FrenzAIWelcome } from "@/features/ai/frenz-ai-welcome";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -101,6 +102,23 @@ export const metadata: Metadata = {
 export const revalidate = 86400;
 
 export default async function PublicFrenzAIPage() {
+  /*
+    ── 🟢 THIS ONE PAGE IS OPEN TO GUESTS AGAIN (owner, 2026-10-05) ─────────
+
+    "the promo should replace rule … anonymous users should only see the
+    welcome page and description, when they click the explore it show a pop up
+    modal that says sign in or login to use frenz ai features."
+
+    So middleware.ts exempts exactly `/ai` (lib/auth/ai-public-paths.ts) and
+    every `/ai/*` tool stays guarded. The notes below describe the rule this
+    replaces and why the gate lives in middleware; both still hold for the
+    tools. The metadata stays noindex — the owner opened the page to visitors,
+    not to search engines.
+
+    The slides are read here, at render, from a data cache that only an admin
+    save invalidates — a visitor never asks for them.
+  */
+  const slides = await getShowcaseSlides();
 
   /*
     Off means off. Sending them to the signed-in route is right rather than
@@ -161,7 +179,7 @@ export default async function PublicFrenzAIPage() {
           hard-coding inside the component is what lets a single design serve
           both doors — the Studio page passes nothing and gets the Studio routes.
         */}
-        <FrenzAIWelcome characterReplaceHref="/ai/character-replace" />
+        <FrenzAIWelcome base="/ai" slides={slides} />
       </main>
       {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
       <SiteFooterMinimal />

@@ -70,13 +70,44 @@ html.frenz-boot-on #frenz-boot{position:fixed;inset:0;z-index:2147483000;display
 html.dark.frenz-boot-on #frenz-boot{background:#050816}
 html.frenz-boot-on.frenz-boot-out #frenz-boot{opacity:0;pointer-events:none}
 html.frenz-boot-off #frenz-boot{display:none}
-.frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:104px;height:104px;max-width:26vw;max-height:26vw;animation:frenz-boot-breathe 1.6s ease-in-out infinite}
+/*
+  🔴 EVERY NUMBER BELOW MIRRORS public/launch.html's .fx__* RULES ON PURPOSE.
+  The two surfaces run back to back on a PWA launch; if the mark size, the gap
+  or the wordmark differ by even a few pixels, the handoff reads as a jump
+  between two loaders instead of one continuous screen. Change one, change both.
+*/
+.frenz-boot__stack{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px}
+/*
+  🔴 frenz-boot-breathe REMOVED (2026-10-04). launch.html mark does not
+  pulse, so a pulsing mark here was a visible difference at exactly the moment
+  the two surfaces swap — it announced the handoff. It was also a continuous
+  opacity animation on a full-screen overlay, which the performance brief rules
+  out for its own reasons.
+*/
+.frenz-boot__mark{position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:22%;width:104px;height:104px;max-width:26vw;max-height:26vw}
 .frenz-boot__mark img{display:block;width:100%;height:100%}
 .frenz-boot__shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.65) 50%,transparent 60%);transform:translateX(-130%);animation:frenz-boot-shimmer 1.4s ease-in-out infinite}
-@keyframes frenz-boot-breathe{0%,100%{opacity:.95}50%{opacity:.65}}
+/*
+  The wordmark, ALREADY WRITTEN — no clip-path, no reveal. Same italic serif
+  stack, same gradient and the same @supports guard as launch.html, including
+  the fallback colour: background-clip:text without support renders invisible
+  text, which on a full-screen splash is indistinguishable from the white screen
+  this all exists to prevent.
+*/
+/*
+  The same progress track launch.html carries. Without it this stack had two
+  children where that one has three, so the block was shorter and the mark sat
+  16px LOWER — a visible vertical jump at the handoff. Same size, same colours.
+*/
+.frenz-boot__track{position:relative;width:132px;height:3px;border-radius:999px;overflow:hidden;background:rgba(99,102,241,.16)}
+.frenz-boot__bar{position:absolute;top:0;bottom:0;left:0;width:42%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#8b5cf6,#d946ef);animation:frenz-boot-sweep 1.15s cubic-bezier(.65,0,.35,1) infinite}
+@keyframes frenz-boot-sweep{0%{transform:translateX(-115%)}100%{transform:translateX(255%)}}
+.frenz-boot__word{font:italic 700 30px/1.08 Georgia,"Times New Roman","Hoefler Text",Didot,"Palatino Linotype",serif;letter-spacing:.004em;color:#4338ca}
+html.dark .frenz-boot__word{color:#a5b4fc}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){.frenz-boot__word{background:linear-gradient(100deg,#3b82f6 0%,#8b5cf6 38%,#d946ef 74%,#f472b6 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}}
 @keyframes frenz-boot-shimmer{0%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
 @keyframes frenz-boot-selfclear{to{visibility:hidden}}
-@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine{animation:none}}
+@media (prefers-reduced-motion:reduce){.frenz-boot__mark,.frenz-boot__shine,.frenz-boot__bar{animation:none}.frenz-boot__bar{width:100%;opacity:.5}}
 `;
 
 // WHEN THE F LOADER SHOWS — owner rule, REVISED 2026-07-16:
@@ -359,14 +390,48 @@ export function BootSplash() {
     size the owner asked for — a small elegant mark, roughly TikTok's cold-launch
     logo, not a huge centred one.
   */
+  /*
+    ── 🔴 TWO F LOADERS WERE STACKING (owner, 2026-10-04) ────────────────────
+
+    "It looks like there are two F loaders showing on launch. They are stacking
+    on each other" — and, in the same breath, "I still don't see the loader."
+    Both sentences describe ONE defect.
+
+    There are two installed-PWA-only startup surfaces, and until now neither
+    knew about the other:
+
+      1. `public/launch.html` — the manifest start_url. Shows the 104px F mark
+         AND writes the "FrenzSave" wordmark under it.
+      2. this `#frenz-boot` — rendered into the app's own HTML, covering the gap
+         while the real route boots. Showed the 104px F mark and NOTHING ELSE.
+
+    Same mark, same size, same centre, one after the other. So the launch reads
+    as: wordmark writes itself → document navigates → wordmark DISAPPEARS and a
+    bare F takes its place. The second surface was erasing the first one's
+    brand, which is why the wordmark seemed not to show at all.
+
+    The fix is continuity, not deletion. #frenz-boot still has a job — it covers
+    the window after launch.html hands off, and removing it would put a blank
+    there. It now carries the SAME wordmark, in the same place, at the same
+    size, so the handoff changes nothing visible: the F stays put, the word
+    stays put, only the document underneath swaps.
+
+    🔴 It does NOT replay the writing animation. launch.html already wrote it;
+    re-writing it here is the "replay on every route" the brief forbids, and it
+    would turn one continuous launch back into two events.
+  */
   return (
     <div id="frenz-boot" aria-hidden="true">
-      <span className="frenz-boot__mark">
-        {/* eslint-disable-next-line @next/next/no-img-element -- must render
-            before the JS bundle (next/image) is available */}
-        <img src="/brand/frenz-logo-splash.png" width={104} height={104} alt="" />
-        <span className="frenz-boot__shine" />
-      </span>
+      <div className="frenz-boot__stack">
+        <span className="frenz-boot__mark">
+          {/* eslint-disable-next-line @next/next/no-img-element -- must render
+              before the JS bundle (next/image) is available */}
+          <img src="/brand/frenz-logo-splash.png" width={104} height={104} alt="" />
+          <span className="frenz-boot__shine" />
+        </span>
+        <span className="frenz-boot__word">FrenzSave</span>
+        <span className="frenz-boot__track"><span className="frenz-boot__bar" /></span>
+      </div>
     </div>
   );
 }

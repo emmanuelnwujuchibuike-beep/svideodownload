@@ -62,6 +62,8 @@ build** (`next build` + `next start`), 8 AI Studio routes × 6 widths.
 | 62,63 | Billing UX, authentication regression | `open` | |
 | 64 | Final performance targets (LCP/FCP/CLS/INP) | `open` | |
 | 65 | Real-device testing | `blocked` | Needs the owner's physical iPhone/Android. LAN preview is `http://`, so **no service worker / PWA install** off-localhost |
+| 67 | Browser console clean | `partial` | The audit captured console errors per page. On valid rows the only error was a CORS failure fetching a `media.frenzsave.com` video. No React/hydration errors seen, but not yet checked across all states |
+| 71 | Final user flow test | `blocked` | ⚠️ **COSTS REAL MONEY.** Requires generating actual videos for Text-to-Video, Image-to-Video, Reference Image/Video, Full Character, Lip Sync + Text-to-Audio and Voice Cloning. Each Kling generation is a live charge and Kling has NO cancel endpoint. Needs explicit owner authorisation and a budget before running |
 | 73 | Final report | `open` | Produced once the above close |
 
 ### Landed under Part 7 so far — commit `62a0f61`

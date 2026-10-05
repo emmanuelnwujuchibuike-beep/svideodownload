@@ -60,10 +60,12 @@ export function FrenzAIExploreSkeleton() {
       <Skeleton className="mt-6 h-3 w-16 rounded-full" />
       <div className="mt-2.5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="rounded-[1.2rem] border border-border/70 p-3" aria-hidden>
-            <Skeleton className="h-9 w-9 rounded-[0.7rem]" />
-            <Skeleton className="mt-3 h-4 w-24" />
-            <Skeleton className="mt-2 h-3 w-full" />
+          <div key={i} className="overflow-hidden rounded-[1.375rem] ring-1 ring-inset ring-black/[0.07]" aria-hidden>
+            <Skeleton className="aspect-[16/10] w-full rounded-none" />
+            <div className="p-3.5">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-2 h-3 w-full" />
+            </div>
           </div>
         ))}
       </div>
@@ -195,7 +197,44 @@ export function CharacterReplaceCreateSkeleton() {
  * production build by `scripts/_p7-skeleton.tmp.mjs`. Eleven shimmer blocks,
  * transform-only, off under reduced motion (§45).
  */
-export function AiToolSkeleton({ label = "Loading" }: { label?: string }) {
+export function AiToolSkeleton({
+  label = "Loading",
+  layout = "classic",
+}: {
+  label?: string;
+  /**
+   * `reference` — a page already moved to the owner's 2026-10-05 reference
+   * layout: showcase, credits strip, the icon + gradient title, ONE card, the
+   * action bar. `classic` stays for the tools still waiting for their phase.
+   */
+  layout?: "classic" | "reference";
+}) {
+  if (layout === "reference") {
+    return (
+      <SkeletonSection label={label} className="ai-wash relative min-h-full">
+        <div className="relative mx-auto w-full max-w-2xl px-4 pb-16 pt-4 sm:px-6" aria-hidden>
+          <Skeleton className="aspect-[5/4] w-full rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]" />
+          <Skeleton className="mt-3 h-12 w-full rounded-2xl" />
+          <div className="mt-6 flex items-center gap-3 px-1">
+            <Skeleton className="h-[2.85rem] w-[2.85rem] rounded-[0.95rem]" />
+            <Skeleton className="h-9 w-52 rounded-lg" />
+          </div>
+          <Skeleton className="mx-1 mt-2.5 h-5 w-64 max-w-full" />
+          <Skeleton className="mx-1 mt-2 h-4 w-full max-w-[22rem]" />
+          <div className="mt-5 space-y-3 rounded-[1.75rem] p-4 ring-1 ring-inset ring-black/[0.07] sm:p-5">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-full max-w-[18rem]" />
+            <Skeleton className="h-[9rem] w-full rounded-2xl" />
+            <Skeleton className="h-[6.5rem] w-full rounded-2xl" />
+            <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+              <Skeleton className="h-[3.75rem] rounded-2xl" />
+              <Skeleton className="h-[3.75rem] rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      </SkeletonSection>
+    );
+  }
   return (
     <SkeletonSection label={label} className="ai-wash relative min-h-full">
       <div className="relative mx-auto w-full max-w-2xl px-4 pb-16 pt-4 sm:px-6">

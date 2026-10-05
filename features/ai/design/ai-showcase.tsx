@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, ChevronLeft, ChevronRight, Clapperboard, History, ImagePlus, Mic, Pause, Play, Sparkles, Wand2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, AudioLines, Clapperboard, History, ImagePlus, Mic, Pause, Play, Sparkles, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -196,14 +196,16 @@ export function AiShowcase({
       {count > 1 ? (
         // Over the active card's foot. `pointer-events-none` on the row so a
         // swipe that starts between the buttons still reaches the track.
-        <div className="ai-showcase-controls pointer-events-none absolute bottom-0 flex items-center justify-between px-3.5 pb-3.5 sm:px-4 sm:pb-4">
+        <div className="ai-showcase-controls pointer-events-none absolute bottom-0 flex items-center justify-between px-2 pb-2 sm:px-2.5 sm:pb-2.5">
           <button
             type="button"
             onClick={() => step(-1)}
             aria-label="Previous slide"
-            className="ai-showcase-btn pointer-events-auto"
+            className="ai-showcase-hit pointer-events-auto"
           >
-            <ChevronLeft className="h-[18px] w-[18px]" aria-hidden />
+            <span className="ai-showcase-btn">
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            </span>
           </button>
           <div className="pointer-events-auto flex items-center">
             {slides.map((s, i) => (
@@ -242,9 +244,11 @@ export function AiShowcase({
             type="button"
             onClick={() => step(1)}
             aria-label="Next slide"
-            className="ai-showcase-btn pointer-events-auto"
+            className="ai-showcase-hit pointer-events-auto"
           >
-            <ChevronRight className="h-[18px] w-[18px]" aria-hidden />
+            <span className="ai-showcase-btn">
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+            </span>
           </button>
         </div>
       ) : null}
@@ -331,7 +335,8 @@ export function SlideCard({
   );
 
   const frame = cn(
-    "ai-showcase-art relative block aspect-[5/4] overflow-hidden rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]",
+    // min-h: inside a tool page the card is narrower, and 16:10 alone left the text no room above the controls (measured 2026-10-05)
+    "ai-showcase-art relative block aspect-[5/4] min-h-[13.75rem] overflow-hidden rounded-[1.375rem] min-[380px]:aspect-[16/10] sm:aspect-[2/1]",
     "shadow-[0_12px_32px_-20px_rgba(20,30,90,0.55)] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
   );
 

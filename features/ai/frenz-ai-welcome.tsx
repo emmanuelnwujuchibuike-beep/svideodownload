@@ -69,6 +69,7 @@ export function FrenzAIWelcome({
           tool="AI Studio"
           title="Create. Transform."
           highlight="Perfect."
+          stack
           subtitle="Professional AI tools for video, voice and audio creation."
           className="mt-6 px-0"
         />

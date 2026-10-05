@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,7 @@ export function AiPageShell({
   width?: "default" | "narrow" | "wide";
 }) {
   return (
-    <div className={cn("ai-wash relative min-h-full", className)}>
+    <div className={cn("ai-page-shell ai-wash relative min-h-full", className)}>
       <div
         className={cn(
           "relative mx-auto w-full px-4 pb-16 pt-4 sm:px-6",
@@ -115,12 +115,21 @@ export function AiDisplayTitle({
   highlight,
   tail,
   subtitle,
+  stack,
   className,
 }: {
   title: string;
   highlight?: string;
   tail?: string;
   subtitle?: string | null;
+  /**
+   * Fixed line breaks: the highlight on its own line, and each title word on
+   * its own line under 380 px. 🔴 Measured 2026-10-05 on /ai: the headline
+   * was ONE line in the fallback font and TWO once Outfit swapped in, a
+   * 34 px jump (CLS 0.097). Breaks the font cannot move make both fonts lay
+   * out the same lines.
+   */
+  stack?: boolean;
   className?: string;
 }) {
   return (
@@ -136,10 +145,22 @@ export function AiDisplayTitle({
         `preload: false`, so it swaps in rather than blocking paint.
       */}
       <h1 className={cn("font-brand text-[1.95rem] font-bold leading-[1.08] tracking-[-0.04em] sm:text-[2.3rem]", className)}>
-        {title}
+        {stack
+          ? title.split(" ").map((word, i) => (
+              <Fragment key={i}>
+                {i > 0 ? (
+                  <>
+                    <br className="min-[380px]:hidden" />
+                    <span className="hidden min-[380px]:inline"> </span>
+                  </>
+                ) : null}
+                {word}
+              </Fragment>
+            ))
+          : title}
         {highlight ? (
           <>
-            {" "}
+            {stack ? <br /> : " "}
             <span className="text-gradient">{highlight}</span>
           </>
         ) : null}
@@ -184,10 +205,13 @@ export function AiHero({
   subtitle,
   actions,
   aside,
+  stack,
   className,
 }: {
   /** The breadcrumb's trailing crumb, e.g. "Text to Audio". */
   tool: string;
+  /** Fixed line breaks in the headline — see AiDisplayTitle. */
+  stack?: boolean;
   /** The words before the gradient word. */
   title: string;
   /** The single word rendered in brand gradient. */
@@ -206,7 +230,7 @@ export function AiHero({
 
       <div className={cn(aside && "sm:flex sm:items-center sm:gap-6")}>
         <div className="min-w-0 flex-1">
-          <AiDisplayTitle title={title} highlight={highlight} tail={tail} subtitle={subtitle} className="mt-3.5" />
+          <AiDisplayTitle title={title} highlight={highlight} tail={tail} subtitle={subtitle} stack={stack} className="mt-3.5" />
 
           {actions ? <div className="mt-4 flex flex-wrap items-center gap-2.5">{actions}</div> : null}
         </div>
@@ -214,6 +238,61 @@ export function AiHero({
         {aside ? <div className="mt-5 shrink-0 sm:mt-0">{aside}</div> : null}
       </div>
     </header>
+  );
+}
+
+/**
+ * A TOOL page's title, from the owner's reference (2026-10-05):
+ *
+ *   [▷] Text to Video                  — gradient-stroked icon tile + the
+ *   Describe it. Watch it come to life.   tool's name in the brand gradient
+ *   Turn your ideas into stunning …       (Outfit), then a tagline (Inter
+ *                                          semibold) and one body line.
+ *
+ * Comes after the showcase and the credits strip, which already carry the
+ * brand, so there is no crumb pill here.
+ */
+export function AiToolTitle({
+  icon: Icon,
+  title,
+  tagline,
+  body,
+  className,
+}: {
+  icon: LucideIcon;
+  title: string;
+  tagline?: string | null;
+  body?: string | null;
+  className?: string;
+}) {
+  return (
+    <header className={cn("px-1", className)}>
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 rounded-[0.95rem] bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 p-[1.5px]" aria-hidden>
+          <span className="flex h-10 w-10 items-center justify-center rounded-[0.85rem] bg-card">
+            <Icon className="h-5 w-5 text-indigo-600" />
+          </span>
+        </span>
+        <h1 className="font-brand text-gradient pb-1 text-[2rem] font-bold leading-[1.1] tracking-[-0.035em] sm:text-[2.3rem]">
+          {title}
+        </h1>
+      </div>
+      {tagline ? <p className="mt-2 text-[1.1rem] font-semibold leading-snug tracking-[-0.015em] text-foreground/85">{tagline}</p> : null}
+      {body ? <p className="mt-1.5 text-[14.5px] leading-relaxed text-muted-foreground">{body}</p> : null}
+    </header>
+  );
+}
+
+/**
+ * The reference's one workspace card: plain white, a hairline, a soft short
+ * shadow. No blur — it does not float over anything (Brief A: reduce glass;
+ * reserve backdrop-filter for surfaces that ride over the page).
+ */
+export function AiPanel({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cn("rounded-[1.75rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] shadow-[0_10px_30px_-24px_rgba(30,40,90,0.4)] sm:p-5", className)}>
+      {children}
+    </div>
   );
 }
 

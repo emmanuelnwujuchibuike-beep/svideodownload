@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { TextToVideoWorkspace } from "@/features/ai/video/text-to-video-workspace";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { aiCurrencySymbol } from "@/lib/landing/bounds";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { createClient } from "@/lib/supabase/server";
@@ -21,6 +22,7 @@ export default async function StudioTextToVideoWorkspacePage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/text-to-video");
-  const settings = await getLandingSettings();
-  return <TextToVideoWorkspace historyHref="/studio/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} />;
+  // The showcase opens every AI page (owner's reference); cached until an admin saves.
+  const [settings, slides] = await Promise.all([getLandingSettings(), getShowcaseSlides()]);
+  return <TextToVideoWorkspace historyHref="/studio/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} slides={slides} base="/studio/ai" />;
 }

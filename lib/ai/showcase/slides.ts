@@ -222,4 +222,6 @@ export const SHOWCASE_PAGES = [
   "/studio/ai",
   "/ai/character-replace",
   "/studio/ai/character-replace",
+  "/ai/text-to-video",
+  "/studio/ai/text-to-video",
 ] as const;

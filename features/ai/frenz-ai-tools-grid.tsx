@@ -1,8 +1,8 @@
 "use client";
 
 import {
+  ArrowRight,
   AudioLines,
-  ChevronRight,
   History,
   Image as ImageIcon,
   Mic,
@@ -14,6 +14,7 @@ import {
 import Link from "next/link";
 
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
+import type { ShowcaseImage } from "@/lib/ai/showcase/slides";
 import { cn } from "@/lib/utils";
 
 /**
@@ -232,10 +233,13 @@ export function FrenzAIToolsGrid({
   include = "all",
   onFlowTool,
   disabled,
+  images,
   className,
 }: {
   characterReplaceHref: string;
   historyHref: string;
+  /** A real picture per tool, from the admin's showcase uploads (see ToolCardView). */
+  images?: Partial<Record<AiToolId, ShowcaseImage>>;
   /** "all" — the Explore page; "beyond-scopes" is kept for a host that draws the scopes itself. */
   include?: "all" | "beyond-scopes";
   /** When given, a flow tool (Voice Replace) is a button that hands its id back instead of a link. */
@@ -297,6 +301,8 @@ export function FrenzAIToolsGrid({
                     tool={tool}
                     onFlowTool={onFlowTool}
                     disabledNote={disabled?.[tool.id] ?? null}
+                    image={images?.[tool.id] ?? null}
+                    wide={rows.length % 2 === 1 && i === rows.length - 1}
                   />
                 </li>
               ))}
@@ -309,111 +315,108 @@ export function FrenzAIToolsGrid({
 }
 
 /**
- * The tool card's ground, tinted by category.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  THE TOOL CARD — a media card, like the AI platforms the owner points at
+ * ═══════════════════════════════════════════════════════════════════════════
  *
- * ── 🔴 WHY THIS CHANGED (owner, 2026-09-28) ─────────────────────────────────
+ * Owner, 2026-10-05, on the Explore grid: "these cards … were supposed to be
+ * upgraded and evolved to look more like professional AI platforms with a
+ * clear premium view."
  *
- * "the Ai features page, and every page still looks fucking the same."
+ * The tinted-ground cards (2026-09-28) answered the brief of that day — no
+ * identical white bordered rectangles — but they were still an icon and two
+ * lines of text in a pale box. Every AI product the reference is drawn from
+ * leads with a PICTURE of what the tool makes. So each card now has:
  *
- * Every card was `bg-card/95` with a ring: eleven identical white bordered
- * rectangles in a grid. The brief says it twice — §8 "Do not make every tool
- * an identical large white bordered rectangle", and §25 "Reduce visible
- * borders. Current UI relies too heavily on bordered containers." The
- * reference carries the category in the CARD'S OWN GROUND: audio reads cool
- * blue/cyan, transformation purple, voice pink.
+ *   · a VISUAL HEADER — the tool's own art (the showcase's navy, lit in the
+ *     tool's colour), a glass icon tile, and a scrim;
+ *   · a real IMAGE in that header when the admin has uploaded one for that
+ *     tool in the showcase (Admin → Frenz AI → Welcome showcase). Nothing new
+ *     to manage and nothing fetched: the slides are already in the page, and
+ *     their ~720 px webp copy is ample for a card;
+ *   · a white body — title, one line, and "Open →".
  *
- * So the border goes and the tint arrives. The icon keeps its stronger tint
- * on top, which is what still separates one tool from its neighbour inside a
- * category.
- *
- * ⚠️ Kept extremely restrained, per §2 and §49: these are 4–6% washes, not
- * saturated panels. Side by side they read as a family with a hue, not as a
- * colour-blocked dashboard.
+ * The art is CSS (two radial lights on the brand navy), so a card with no
+ * upload costs zero image bytes. A group with one card gets the wide
+ * banner shape so it never reads as a gap.
  */
-const GROUP_GROUND: Record<AiToolGroup, string> = {
-  create: "bg-violet-50/70",
-  audio: "bg-sky-50",
-  video: "bg-indigo-50/70",
-  library: "bg-slate-50",
+const TOOL_ART: Record<AiToolId, string> = {
+  text_to_video: "radial-gradient(80% 90% at 85% 10%, rgba(139,92,246,.75), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(59,130,246,.6), transparent 62%), #131a4a",
+  image_to_video: "radial-gradient(80% 90% at 85% 10%, rgba(99,102,241,.75), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(14,165,233,.55), transparent 62%), #131a4a",
+  lip_sync_pro: "radial-gradient(80% 90% at 85% 10%, rgba(6,182,212,.6), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(99,102,241,.6), transparent 62%), #131a4a",
+  text_to_audio: "radial-gradient(80% 90% at 85% 10%, rgba(129,140,248,.7), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(56,189,248,.5), transparent 62%), #131a4a",
+  voice_clone: "radial-gradient(80% 90% at 85% 10%, rgba(217,70,239,.55), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(99,102,241,.6), transparent 62%), #131a4a",
+  audio_library: "radial-gradient(80% 90% at 85% 10%, rgba(20,184,166,.55), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(59,130,246,.55), transparent 62%), #131a4a",
+  voice_library: "radial-gradient(80% 90% at 85% 10%, rgba(16,185,129,.5), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(99,102,241,.55), transparent 62%), #131a4a",
+  history: "radial-gradient(80% 90% at 85% 10%, rgba(245,158,11,.5), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(139,92,246,.55), transparent 62%), #131a4a",
 };
 
 /*
-  Redesign page 2 (2026-10-05, Brief A INTERACTION): "Cards: subtle border
-  emphasis, maximum 1–2px visual elevation, no dramatic zoom"; "if an element
-  does not need a shadow, remove the shadow". The tinted ground above stays —
-  it is still the no-border answer to §8/§25 — but the resting drop shadow and
-  the shadow that GREW on hover are gone. Hover is now an edge that appears
-  (ring) and a 1 px lift, on hover-capable pointers only; touch gets the
-  0.98 press. Transform and box-shadow-free.
+  Hover (Brief A, Cards): the edge strengthens and the card lifts 1 px, on
+  hover-capable pointers only; touch gets the 0.98 press. No growing shadow.
 */
 const CARD =
-  "group relative flex h-full min-h-[7rem] w-full flex-col rounded-[1.25rem] p-3.5 text-left sm:p-4 " +
-  "ring-1 ring-inset ring-transparent transition duration-150 " +
-  "[@media(hover:hover)]:hover:ring-primary/25 motion-safe:[@media(hover:hover)]:hover:-translate-y-px active:scale-[0.98] " +
+  "group relative flex h-full w-full flex-col overflow-hidden rounded-[1.375rem] bg-card text-left " +
+  "ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)] transition duration-150 " +
+  "[@media(hover:hover)]:hover:ring-indigo-300/70 motion-safe:[@media(hover:hover)]:hover:-translate-y-px active:scale-[0.98] " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 function ToolCardView({
   tool,
-  onFlowTool,
+  onFlowTool: _onFlowTool,
   disabledNote,
+  image,
+  wide,
 }: {
   tool: AiToolCard;
   onFlowTool?: (id: FlowToolId) => void;
   disabledNote: string | null;
+  image?: ShowcaseImage | null;
+  wide?: boolean;
 }) {
-  const { icon: Icon, href, name, blurb, tint } = tool;
+  const { icon: Icon, href, name, blurb, id } = tool;
+
+  const header = (
+    <span
+      className={cn("relative block overflow-hidden", wide ? "aspect-[2.6/1]" : "aspect-[16/10]")}
+      style={{ background: TOOL_ART[id] }}
+    >
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element -- a pre-sized webp on the storage CDN; the optimizer would bill a second encode
+        <img src={image.sm} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <Icon className="absolute -bottom-3 -right-2 h-20 w-20 text-white/[0.1]" strokeWidth={1.25} aria-hidden />
+      )}
+      <span className="absolute inset-0 bg-gradient-to-t from-[#0b1340]/45 to-transparent" aria-hidden />
+      <span className="absolute left-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.18] text-white ring-1 ring-inset ring-white/35">
+        <Icon className="h-4 w-4" aria-hidden />
+      </span>
+    </span>
+  );
+
+  const body = (
+    <span className="flex flex-1 flex-col px-3.5 pb-3 pt-3">
+      <span className="block text-[14.5px] font-semibold leading-tight tracking-[-0.015em]">{name}</span>
+      <span className="mt-1 line-clamp-3 text-[12.5px] leading-snug text-muted-foreground">{disabledNote ?? blurb}</span>
+      {disabledNote ? null : (
+        <span className="mt-auto inline-flex items-center gap-1 pt-2.5 text-[12.5px] font-semibold text-indigo-600">
+          Open
+          <ArrowRight className="h-3.5 w-3.5 transition-transform motion-safe:group-hover:translate-x-0.5" aria-hidden />
+        </span>
+      )}
+    </span>
+  );
+
   if (disabledNote) {
     return (
-      <div className={cn(CARD, GROUP_GROUND[tool.group], "opacity-60")} aria-disabled>
-        <div className="flex items-start justify-between gap-2">
-          <span
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem]",
-              tint,
-            )}
-          >
-            <Icon className="h-[18px] w-[18px]" aria-hidden />
-          </span>
-        </div>
-        <h3 className="mt-2.5 text-[13.5px] font-bold leading-tight tracking-[-0.01em]">
-          {name}
-        </h3>
-        <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-          {disabledNote}
-        </p>
+      <div className={cn(CARD, "opacity-60")} aria-disabled>
+        {header}
+        <h3 className="sr-only">{name}</h3>
+        {body}
       </div>
     );
   }
-  /*
-    The arrow sits at the FOOT, on the trailing edge, under the description —
-    where the reference puts it. In the corner beside the icon it competed
-    with the icon for the same glance and made every card read top-heavy.
-    `mt-auto` pins it to the bottom so a two-line and a three-line card still
-    line their arrows up across a row.
-  */
-  const body = (
-    <>
-      <span
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem]",
-          tint,
-        )}
-      >
-        <Icon className="h-[18px] w-[18px]" aria-hidden />
-      </span>
-      <h3 className="mt-2.5 text-[13.5px] font-bold leading-tight tracking-[-0.01em]">
-        {name}
-      </h3>
-      <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
-        {blurb}
-      </p>
-      <span className="mt-auto flex justify-end pt-2.5">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-foreground/50 transition group-hover:bg-white group-hover:text-foreground">
-          <ChevronRight className="h-3.5 w-3.5 transition-transform motion-safe:group-hover:translate-x-px" aria-hidden />
-        </span>
-      </span>
-    </>
-  );
+
   /*
     🔴 No tool is a flow STEP any more (Part 5). Voice Replace was the only one —
     a step inside the Character Replace creation — and that tool is retired.
@@ -422,7 +425,8 @@ function ToolCardView({
     condition that reads as though some card still behaves this way.
   */
   return (
-    <Link href={href} className={cn(CARD, GROUP_GROUND[tool.group])}>
+    <Link href={href} className={CARD}>
+      {header}
       {body}
       <LinkPendingStripe />
     </Link>

@@ -135,8 +135,29 @@ export function useVideoGeneration({
     restoreActiveGeneration();
   }, []);
 
+  /*
+    ── 🔴 RE-QUOTE ON A PRICED CHANGE, NOT ON A KEYSTROKE (2026-10-05) ───────
+
+    This effect was keyed on the whole `input`, prompt text included, so every
+    pause while typing a prompt was a POST to /api/ai/video/quote — a Vercel
+    invocation and a rate-limiter read — for an answer that cannot change: the
+    pipelines price duration, resolution, audio and the references
+    (lib/ai/kling/pipelines/{text,image}-to-video.ts `quote`), never the words.
+    Brief B §15: "avoid requesting on every keystroke … only recalculate when a
+    pricing-relevant setting changes".
+
+    So the trigger is the input WITHOUT its prompt; the request still carries
+    the current full input (read through a ref), so the server validates
+    exactly what it did before. `ready` still gates it, so the first character
+    typed asks once.
+  */
+  const inputRef = useRef(input);
+  inputRef.current = input;
+  const pricedKey = useMemo(() => JSON.stringify({ feature, priced: withoutPrompt(input) }), [feature, input]);
+
   /* ── the quote, debounced, and always superseded by the newest ─────────── */
   useEffect(() => {
+    const input = inputRef.current;
     if (!ready) {
       setQuote(null);
       setQuoteProblem(null);
@@ -179,7 +200,9 @@ export function useVideoGeneration({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [feature, input, ready]);
+    // `pricedKey` stands in for `input` on purpose — see the note above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feature, pricedKey, ready]);
 
   /*
     The record is only THIS tool's business when it belongs to this tool. A
@@ -262,4 +285,11 @@ export function useVideoGeneration({
   }, []);
 
   return { quote, quoting, quoteProblem, status, error, result, submit, reset };
+}
+
+/** The input as the PRICE sees it: everything but the prompt text. Exported for the test. */
+export function withoutPrompt(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const { prompt: _prompt, ...rest } = input as Record<string, unknown>;
+  return rest;
 }

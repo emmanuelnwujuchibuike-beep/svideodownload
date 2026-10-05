@@ -1,29 +1,49 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Clock, Palette, Play, RectangleHorizontal } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { AiActionBar, AiAdvancedSettings, AiCost, AiField, AiGenerateButton, AiGenerationStatus, AiSegmented } from "@/features/ai/design/ai-generate";
-import { AiDisplayTitle, AiGlassCard, AiPageShell } from "@/features/ai/design/ai-surface";
-import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
-import { AiReferenceRail } from "@/features/ai/video/ai-reference-rail";
-import { AiVideoResult } from "@/features/ai/video/ai-video-result";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import {
+  AiActionBar,
+  AiAdvancedSettings,
+  AiCost,
+  AiField,
+  AiGenerateButton,
+  AiGenerationStatus,
+  AiPromptBox,
+  AiSegmented,
+  AiSettingRow,
+  AiStylePicker,
+  type AiStyleOption,
+} from "@/features/ai/design/ai-generate";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
+import { AiReferenceSection } from "@/features/ai/video/ai-reference-section";
+import { AiVideoResult } from "@/features/ai/video/ai-video-result";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
+import { withStyle, type VideoStyle } from "@/lib/ai/video/style";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  TEXT TO VIDEO — the workspace
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Part 6 §13 fixes the order and §14 fixes the emphasis:
+ * Redesign page 3 (owner's reference image, 2026-10-05), top to bottom:
  *
- *     Header → INPUT (dominant) → core settings → advanced → cost → Generate
+ *     showcase · credits strip
+ *     [▷] Text to Video — Describe it. Watch it come to life.
+ *     ONE card: prompt (counter inside) · Video Style tiles ·
+ *               Duration ›  Aspect Ratio › · Add Reference · Advanced
+ *     cost + Generate (sticky, the shared pill)
  *
- * So the prompt field is the largest thing on the screen, duration and shape
- * sit under it as two small segmented rows, everything rarely touched is behind
- * a disclosure, and the price and the button share one sticky bar that never
- * scrolls out of reach on a phone.
+ * Part 6 §13/§14 still hold: the prompt is the dominant element, the two
+ * settings that change the price most are one tap away, everything rarely
+ * touched is behind a disclosure, and the price and the button share one
+ * sticky bar that never scrolls out of reach on a phone.
  *
  * ── 🔴 THE SETTINGS SHOWN ARE THE ONES THE PIPELINE ACTUALLY TAKES (§18, §54) ─
  *
@@ -34,18 +54,48 @@ import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
  * `settings.negative_prompt` is not a field the live API validates. Offering a
  * control the backend cannot honour is the confusing UI §18 exists to prevent.
  *
+ * ── 🔴 STYLE IS WORDS IN THE PROMPT, AND SAYS SO ────────────────────────────
+ *
+ * The reference has style tiles; the model has no style field — it takes the
+ * look from the description (owner, 2026-10-04: "realistic, cartoon or anyhow
+ * described"). So a chosen style is appended to the prompt sent, here and
+ * nowhere else (`withStyle`, lib/ai/video/style.ts), and NOTHING is chosen by default: a member who
+ * ignores the tiles sends exactly what they typed, as before. The price does
+ * not depend on the prompt, so a style never changes the quote.
+ *
  * ── 🔴 THE PRICE IS THE SERVER'S (§19, §55) ────────────────────────────────
  *
- * Every settings change re-asks `/api/ai/video/quote`. Nothing here multiplies
- * seconds by a rate. The number the member sees is the number `/jobs`
- * recomputes, and a mismatch refuses rather than silently charging the new one.
+ * A priced settings change re-asks `/api/ai/video/quote` (typing does not —
+ * see use-video-generation.ts). Nothing here multiplies seconds by a rate. The
+ * number the member sees is the number `/jobs` recomputes, and a mismatch
+ * refuses rather than silently charging the new one.
  */
 
 const DURATIONS = [3, 5, 8, 10, 15] as const;
 
-export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyHref: string; currencySymbol: string }) {
-  const promptId = useId();
+/* The owner's own pictures (2026-10-05); the realistic one from the curated wallpaper library. */
+const STYLES: readonly AiStyleOption<VideoStyle>[] = [
+  { value: "realistic", label: "Realistic", image: "/ai/styles/realistic.webp" },
+  { value: "anime", label: "Anime", image: "/ai/styles/anime.webp" },
+  { value: "cartoon", label: "Cartoon", image: "/ai/styles/cartoon.webp" },
+  { value: "3d", label: "3D", image: "/ai/styles/3d.webp" },
+];
+
+export function TextToVideoWorkspace({
+  historyHref,
+  currencySymbol,
+  slides,
+  base,
+}: {
+  historyHref: string;
+  currencySymbol: string;
+  /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
+  slides: ShowcaseSlide[];
+  /** The door: "/ai" or "/studio/ai". */
+  base: string;
+}) {
   const [prompt, setPrompt] = useState("");
+  const [style, setStyle] = useState<VideoStyle | null>(null);
   const [durationSeconds, setDuration] = useState<number>(KLING_OMNI.duration.defaultSeconds);
   const [aspectRatio, setAspect] = useState<"16:9" | "9:16" | "1:1">("16:9");
   const [resolution, setResolution] = useState<"720p" | "1080p" | "4k">("720p");
@@ -60,33 +110,24 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
   */
   const input = useMemo(
     () => ({
-      prompt: prompt.trim(),
+      prompt: withStyle(prompt, style, KLING_OMNI.prompt.maxChars),
       // Omitted entirely when empty: the wire schema is strict, and an empty
       // array would re-quote as though something had been attached.
       ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
       ...(referenceVideoUrl ? { referenceVideoUrl } : {}),
       options: { durationSeconds, aspectRatio, resolution, audio },
     }),
-    [prompt, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl],
+    [prompt, style, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl],
   );
 
   const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0, label: prompt.trim() });
+  const locked = gen.status === "submitting" || gen.status === "running";
 
   /*
-    🔴 `--ai-play` HAS TO COME FROM SOMEWHERE (2026-10-04).
-
-    `.ai-cta::before` — the Generate button gradient — animates forever on
-    `animation-play-state: var(--ai-play, running)`. Every other AI workspace
-    (text-to-audio, voice cloning, lip sync) wraps itself in this environment,
-    which is the ONE component that resolves tab visibility and
-    `prefers-reduced-motion` into that variable. These two screens shipped
-    without it, so it was never set, the fallback `running` applied, and the
-    gradient kept animating even while the tab was HIDDEN — a battery cost
-    paid for something nobody can see, which is the exact thing the presence
-    module exists to prevent.
-
-    `bare` because `AiPageShell` already paints `.ai-wash`; this is here for
-    the variables, not for a second background.
+    `FrenzAIEnvironment` resolves tab visibility and reduced motion into the
+    presence variables every AI workspace reads (2026-10-04). `bare` because
+    `AiPageShell` already paints the ground; this is here for the variables,
+    not for a second background.
   */
   const envStage: "idle" | "processing" | "completed" | "failed" =
     gen.status === "running" || gen.status === "submitting" ? "processing" : gen.status === "done" ? "completed" : gen.status === "error" ? "failed" : "idle";
@@ -94,58 +135,62 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
   return (
     <FrenzAIEnvironment stage={envStage} bare>
     <AiPageShell>
-      <FrenzAICrumb tool="Text to Video" />
-      <AiDisplayTitle title="Describe it." highlight="We&apos;ll film it." />
+      <AiShowcase slides={slides} base={base} />
+      <AiCreditStrip base={base} className="mt-3" />
 
-      {/* ── INPUT: the dominant surface (§14) ─────────────────────────────── */}
-      <AiGlassCard className="mt-5 p-4 sm:p-5">
-        <AiField label="Describe your video" hint={`Up to ${KLING_OMNI.prompt.maxChars.toLocaleString("en-US")} characters. Say what happens, and how it should look.`} htmlFor={promptId}>
-          <textarea
-            id={promptId}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value.slice(0, KLING_OMNI.prompt.maxChars))}
-            rows={5}
-            placeholder="A slow drone shot over a misty pine forest at sunrise, warm light breaking through the trees…"
-            className="w-full resize-y rounded-2xl border-0 bg-white/80 p-3.5 text-[15px] leading-relaxed ring-1 ring-inset ring-black/[0.07] placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+      <AiToolTitle
+        icon={Play}
+        title="Text to Video"
+        tagline="Describe it. Watch it come to life."
+        body="Turn your ideas into videos with Frenz AI — type a prompt and let it film the scene."
+        className="mt-6"
+      />
+
+      {/* ── THE ONE CARD: input first and largest (§14), then the settings ─── */}
+      <AiPanel className="mt-5 space-y-3">
+        <AiPromptBox
+          label="Describe your video"
+          hint={`Up to ${KLING_OMNI.prompt.maxChars.toLocaleString("en-US")} characters. Be as detailed as you want — scene, style, mood, action.`}
+          value={prompt}
+          onChange={setPrompt}
+          max={KLING_OMNI.prompt.maxChars}
+          rows={5}
+          disabled={locked}
+          placeholder="A cinematic shot of a futuristic city at sunset, with flying cars, neon lights and a dramatic sky…"
+        />
+
+        <AiStylePicker icon={Palette} label="Video Style" value={style} options={STYLES} onChange={setStyle} disabled={locked} />
+
+        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+          <AiSettingRow
+            icon={Clock}
+            label="Duration"
+            value={String(durationSeconds)}
+            onChange={(v) => setDuration(Number(v))}
+            options={DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` }))}
+            disabled={locked}
           />
-        </AiField>
-        <p className="mt-1.5 text-right text-[11px] tabular-nums text-muted-foreground">
-          {prompt.length.toLocaleString("en-US")} / {KLING_OMNI.prompt.maxChars.toLocaleString("en-US")}
-        </p>
-        <AiReferenceRail
-          className="mt-3.5"
+          <AiSettingRow
+            icon={RectangleHorizontal}
+            label="Aspect Ratio"
+            value={aspectRatio}
+            onChange={setAspect}
+            options={[
+              { value: "16:9", label: "16:9 (Landscape)" },
+              { value: "9:16", label: "9:16 (Portrait)" },
+              { value: "1:1", label: "1:1 (Square)" },
+            ]}
+            disabled={locked}
+          />
+        </div>
+
+        <AiReferenceSection
           images={referenceImageUrls}
           onImagesChange={setReferenceImages}
           videoUrl={referenceVideoUrl}
           onVideoChange={setReferenceVideo}
-          disabled={gen.status === "submitting" || gen.status === "running"}
+          disabled={locked}
         />
-      </AiGlassCard>
-
-      {/* ── CORE SETTINGS: the two that change the price most ─────────────── */}
-      <AiGlassCard className="mt-4 p-4 sm:p-5" tone="quiet">
-        <div className="space-y-4">
-          <AiField label="Length">
-            <AiSegmented
-              ariaLabel="Video length"
-              value={String(durationSeconds)}
-              onChange={(v) => setDuration(Number(v))}
-              options={DURATIONS.map((d) => ({ value: String(d), label: `${d}s` }))}
-            />
-          </AiField>
-          <AiField label="Shape">
-            <AiSegmented
-              ariaLabel="Aspect ratio"
-              value={aspectRatio}
-              onChange={setAspect}
-              options={[
-                { value: "16:9", label: "Landscape", hint: "16:9" },
-                { value: "9:16", label: "Portrait", hint: "9:16" },
-                { value: "1:1", label: "Square", hint: "1:1" },
-              ]}
-            />
-          </AiField>
-        </div>
 
         <AiAdvancedSettings>
           <AiField label="Quality" hint="Higher quality costs more and takes longer.">
@@ -172,7 +217,7 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
             />
           </AiField>
         </AiAdvancedSettings>
-      </AiGlassCard>
+      </AiPanel>
 
       {/* ── STATUS / RESULT ───────────────────────────────────────────────── */}
       {gen.status === "running" ? <AiGenerationStatus className="mt-4" title="Making your video" /> : null}
@@ -193,7 +238,9 @@ export function TextToVideoWorkspace({ historyHref, currencySymbol }: { historyH
           loading={gen.quoting}
           problem={gen.quoteProblem}
         />
-        <AiGenerateButton onClick={gen.submit} busy={gen.status === "submitting" || gen.status === "running"} disabled={!prompt.trim() || !!gen.quoteProblem} />
+        <AiGenerateButton onClick={gen.submit} busy={locked} disabled={!prompt.trim() || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
+          Generate Video
+        </AiGenerateButton>
       </AiActionBar>
     </AiPageShell>
     </FrenzAIEnvironment>

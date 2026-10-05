@@ -18,6 +18,11 @@ describe("the Video Style tiles only ever ADD words, and only when chosen", () =
     expect(withStyle("   ", "realistic", 2500)).toBe("");
   });
 
+  it("…except where the prompt is optional (Image to Video): the style alone is sent", () => {
+    expect(withStyle("", "anime", 2500, { standalone: true })).toBe("Anime style.");
+    expect(withStyle("", null, 2500, { standalone: true })).toBe("");
+  });
+
   it("never exceeds the model's limit; the style survives, the member's words are trimmed", () => {
     const out = withStyle("x".repeat(2500), "cartoon", 2500);
     expect(out.length).toBeLessThanOrEqual(2500);
@@ -25,7 +30,7 @@ describe("the Video Style tiles only ever ADD words, and only when chosen", () =
   });
 
   it("every style picture the workspace names exists, and is a small file", () => {
-    const ws = readFileSync(join(process.cwd(), "features/ai/video/text-to-video-workspace.tsx"), "utf8");
+    const ws = readFileSync(join(process.cwd(), "features/ai/video/video-styles.ts"), "utf8");
     const images = [...ws.matchAll(/image: "(\/ai\/styles\/[a-z0-9-]+\.webp)"/g)].map((m) => m[1]!);
     expect(images).toHaveLength(4);
     for (const src of images) {

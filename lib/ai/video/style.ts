@@ -17,10 +17,16 @@ export const STYLE_WORDS: Record<VideoStyle, string> = {
   "3d": "3D animated film style",
 };
 
-/** The prompt as sent: the member's words, then the chosen style — never over the model's limit. */
-export function withStyle(prompt: string, style: VideoStyle | null, max: number): string {
+/**
+ * The prompt as sent: the member's words, then the chosen style — never over
+ * the model's limit. `standalone`: a tool whose prompt is OPTIONAL (Image to
+ * Video) sends the style on its own when nothing was typed; Text to Video
+ * needs a description, so a style alone stays empty there.
+ */
+export function withStyle(prompt: string, style: VideoStyle | null, max: number, opts: { standalone?: boolean } = {}): string {
   const text = prompt.trim();
-  if (!style || !text) return text;
+  if (!style) return text;
+  if (!text) return opts.standalone ? `${STYLE_WORDS[style].charAt(0).toUpperCase()}${STYLE_WORDS[style].slice(1)}.` : "";
   const suffix = `. ${STYLE_WORDS[style]}.`;
   return `${text.slice(0, Math.max(0, max - suffix.length))}${suffix}`;
 }

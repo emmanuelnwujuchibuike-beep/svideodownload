@@ -261,7 +261,7 @@ export function AiToolTitle({
 }: {
   icon: LucideIcon;
   title: string;
-  tagline?: string | null;
+  tagline?: ReactNode;
   body?: string | null;
   className?: string;
 }) {

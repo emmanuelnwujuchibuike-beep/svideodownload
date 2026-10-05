@@ -15,13 +15,13 @@ import {
   AiSegmented,
   AiSettingRow,
   AiStylePicker,
-  type AiStyleOption,
 } from "@/features/ai/design/ai-generate";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiReferenceSection } from "@/features/ai/video/ai-reference-section";
 import { AiVideoResult } from "@/features/ai/video/ai-video-result";
+import { VIDEO_STYLES } from "@/features/ai/video/video-styles";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
@@ -73,13 +73,7 @@ import { withStyle, type VideoStyle } from "@/lib/ai/video/style";
 
 const DURATIONS = [3, 5, 8, 10, 15] as const;
 
-/* The owner's own pictures (2026-10-05); the realistic one from the curated wallpaper library. */
-const STYLES: readonly AiStyleOption<VideoStyle>[] = [
-  { value: "realistic", label: "Realistic", image: "/ai/styles/realistic.webp" },
-  { value: "anime", label: "Anime", image: "/ai/styles/anime.webp" },
-  { value: "cartoon", label: "Cartoon", image: "/ai/styles/cartoon.webp" },
-  { value: "3d", label: "3D", image: "/ai/styles/3d.webp" },
-];
+
 
 export function TextToVideoWorkspace({
   historyHref,
@@ -159,7 +153,7 @@ export function TextToVideoWorkspace({
           placeholder="A cinematic shot of a futuristic city at sunset, with flying cars, neon lights and a dramatic sky…"
         />
 
-        <AiStylePicker icon={Palette} label="Video Style" value={style} options={STYLES} onChange={setStyle} disabled={locked} />
+        <AiStylePicker icon={Palette} label="Video Style" value={style} options={VIDEO_STYLES} onChange={setStyle} disabled={locked} />
 
         <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
           <AiSettingRow
@@ -239,7 +233,9 @@ export function TextToVideoWorkspace({
           problem={gen.quoteProblem}
         />
         <AiGenerateButton onClick={gen.submit} busy={locked} disabled={!prompt.trim() || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
-          Generate Video
+          {/* the price takes the bar's left side; under 400 px the full label truncated (page 4 lesson) */}
+          <span className="min-[400px]:hidden">Generate</span>
+          <span className="hidden min-[400px]:inline">Generate Video</span>
         </AiGenerateButton>
       </AiActionBar>
     </AiPageShell>

@@ -162,106 +162,106 @@ export function AiReferenceRail({ images, onImagesChange, videoUrl, onVideoChang
         </span>
       </div>
 
-      {/* ── the grid on the LEFT, the explanation beside it ─────────────────── */}
-      <div className="mt-3 flex flex-wrap items-start gap-3 sm:flex-nowrap">
-        <div className="shrink-0">
-          <div className="grid grid-cols-4 gap-1.5">
-            {slots.map((slot) => {
-              const url = images[slot];
-              return url ? (
-                <div key={slot} className="group relative h-[46px] w-[46px] overflow-hidden rounded-[0.7rem] ring-1 ring-inset ring-black/10 dark:ring-white/15">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage URL; the optimizer cannot cache it and would re-fetch on every mint */}
-                  <img src={url} alt={`Reference ${slot + 1}`} className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(slot)}
-                    disabled={disabled}
-                    aria-label={`Remove reference ${slot + 1}`}
-                    className="absolute right-0.5 top-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm transition hover:bg-black/80"
-                  >
-                    <X className="h-3 w-3" aria-hidden />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  key={slot}
-                  type="button"
-                  onClick={() => imageInput.current?.click()}
-                  disabled={lock}
-                  aria-label="Add a reference image"
-                  className={cn(
-                    "flex h-[46px] w-[46px] items-center justify-center rounded-[0.7rem] border border-dashed border-black/15 bg-card/70 text-muted-foreground transition dark:border-white/15",
-                    !lock && "hover:border-primary/50 hover:text-primary active:scale-[0.96]",
-                    lock && "opacity-50",
-                  )}
-                >
-                  {busyImage ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ImagePlus className="h-4 w-4" aria-hidden />}
-                </button>
-              );
-            })}
-          </div>
-
-          {canReveal ? (
-            <button
-              type="button"
-              onClick={() => setRevealed(maxImages)}
-              disabled={lock}
-              className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold text-foreground ring-1 ring-inset ring-black/[0.06] transition hover:bg-secondary disabled:opacity-50 dark:ring-white/10"
-            >
-              <Plus className="h-3 w-3" aria-hidden /> {maxImages - visible} more
-            </button>
-          ) : null}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <p className="text-[11.5px] leading-snug text-muted-foreground">
-            Add a face, a product or a place and the model will keep it consistent. Up to {KLING_OMNI.images.max} images — or{" "}
-            {KLING_OMNI.images.maxWithReferenceVideo} alongside a reference video.
-          </p>
-
-          {/* ── the one video slot ───────────────────────────────────────────── */}
-          <div className="mt-2.5">
-            {videoUrl ? (
-              <div className="flex items-center gap-2 rounded-[0.8rem] bg-card px-2.5 py-2 ring-1 ring-inset ring-black/[0.06] dark:ring-white/10">
-                <Clapperboard className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold">{videoName ?? "Reference video"}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onVideoChange(null);
-                    setVideoName(null);
-                  }}
-                  disabled={disabled}
-                  aria-label="Remove the reference video"
-                  className="shrink-0 rounded-full p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                >
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              </div>
-            ) : (
+      {/*
+        ── STACKED, FOR A PHONE (redesign 2026-10-05) ──────────────────────
+        This was the grid on the left and the explanation beside it. At
+        390 px that left the text a column four words wide and wrapped the
+        video button into a three-line blob (measured on a screenshot). Now:
+        the image slots across the full width, one line of explanation, then
+        the reference video as its own row — the same row shape as the
+        workspace's settings.
+      */}
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {slots.map((slot) => {
+          const url = images[slot];
+          return url ? (
+            <div key={slot} className="group relative aspect-square overflow-hidden rounded-xl ring-1 ring-inset ring-black/10 dark:ring-white/15">
+              {/* eslint-disable-next-line @next/next/no-img-element -- a signed, short-lived storage URL; the optimizer cannot cache it and would re-fetch on every mint */}
+              <img src={url} alt={`Reference ${slot + 1}`} className="h-full w-full object-cover" />
               <button
                 type="button"
-                onClick={() => videoInput.current?.click()}
-                disabled={disabled || videoBusy}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border border-dashed border-black/15 px-3 py-1.5 text-[11.5px] font-semibold text-muted-foreground transition dark:border-white/15",
-                  !(disabled || videoBusy) && "hover:border-primary/50 hover:text-primary",
-                  (disabled || videoBusy) && "opacity-50",
-                )}
+                onClick={() => removeImage(slot)}
+                disabled={disabled}
+                aria-label={`Remove reference ${slot + 1}`}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white transition hover:bg-black/80"
               >
-                {videoBusy ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Uploading {Math.round(videoProgress * 100)}%
-                  </>
-                ) : (
-                  <>
-                    <Clapperboard className="h-3.5 w-3.5" aria-hidden /> Add a reference video
-                  </>
-                )}
+                <X className="h-3.5 w-3.5" aria-hidden />
               </button>
+            </div>
+          ) : (
+            <button
+              key={slot}
+              type="button"
+              onClick={() => imageInput.current?.click()}
+              disabled={lock}
+              aria-label="Add a reference image"
+              className={cn(
+                "flex aspect-square items-center justify-center rounded-xl border border-dashed border-indigo-300/70 bg-indigo-50/30 text-indigo-500 transition dark:border-white/15",
+                !lock && "hover:border-indigo-400 hover:bg-indigo-50/70 active:scale-[0.96]",
+                lock && "opacity-50",
+              )}
+            >
+              {busyImage ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-5 w-5" aria-hidden />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 flex items-start justify-between gap-3">
+        <p className="text-[12px] leading-snug text-muted-foreground">
+          Keep a face, a product or a place consistent — up to {KLING_OMNI.images.max} images, or {KLING_OMNI.images.maxWithReferenceVideo} with a reference video.
+        </p>
+        {canReveal ? (
+          <button
+            type="button"
+            onClick={() => setRevealed(maxImages)}
+            disabled={lock}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-card px-2.5 py-1 text-[11.5px] font-semibold text-foreground ring-1 ring-inset ring-black/[0.08] transition hover:bg-secondary disabled:opacity-50 dark:ring-white/10"
+          >
+            <Plus className="h-3 w-3" aria-hidden /> {maxImages - visible} more
+          </button>
+        ) : null}
+      </div>
+
+      {/* ── the one video slot, as a row ───────────────────────────────────── */}
+      <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-card px-2.5 py-2 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+          <Clapperboard className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold leading-tight">{videoUrl ? (videoName ?? "Reference video") : "Reference video"}</span>
+          <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">
+            {videoBusy ? `Uploading ${Math.round(videoProgress * 100)}%` : videoUrl ? "Attached — guides the motion" : "MP4 or MOV"}
+          </span>
+        </span>
+        {videoUrl ? (
+          <button
+            type="button"
+            onClick={() => {
+              onVideoChange(null);
+              setVideoName(null);
+            }}
+            disabled={disabled}
+            aria-label="Remove the reference video"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => videoInput.current?.click()}
+            disabled={disabled || videoBusy}
+            className={cn(
+              "inline-flex min-h-[2.25rem] shrink-0 items-center gap-1.5 rounded-xl border border-dashed border-indigo-300/80 px-3 text-[12.5px] font-semibold text-indigo-700 transition dark:text-indigo-200",
+              !(disabled || videoBusy) && "hover:bg-indigo-50/70 active:scale-[0.97]",
+              (disabled || videoBusy) && "opacity-50",
             )}
-          </div>
-        </div>
+          >
+            {videoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />}
+            Add video
+          </button>
+        )}
       </div>
 
       {problem ? (

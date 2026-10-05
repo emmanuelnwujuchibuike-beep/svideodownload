@@ -1,24 +1,46 @@
 "use client";
 
-import { useCallback, useId, useMemo, useState } from "react";
+import { Clock, Gauge, ImagePlay, Palette } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
-import { AiActionBar, AiAdvancedSettings, AiCost, AiField, AiGenerateButton, AiGenerationStatus, AiSegmented } from "@/features/ai/design/ai-generate";
-import { AiDisplayTitle, AiGlassCard, AiPageShell } from "@/features/ai/design/ai-surface";
-import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
-import { AiImageDrop } from "@/features/ai/video/ai-image-drop";
-import { AiReferenceRail } from "@/features/ai/video/ai-reference-rail";
-import { AiVideoResult } from "@/features/ai/video/ai-video-result";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import {
+  AiActionBar,
+  AiAdvancedSettings,
+  AiCost,
+  AiField,
+  AiGenerateButton,
+  AiGenerationStatus,
+  AiPromptBox,
+  AiSegmented,
+  AiSettingRow,
+  AiStylePicker,
+} from "@/features/ai/design/ai-generate";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
+import { AiImageDrop } from "@/features/ai/video/ai-image-drop";
+import { AiReferenceSection } from "@/features/ai/video/ai-reference-section";
+import { AiVideoResult } from "@/features/ai/video/ai-video-result";
 import { useVideoGeneration } from "@/features/ai/video/use-video-generation";
+import { VIDEO_STYLES } from "@/features/ai/video/video-styles";
 import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
+import { withStyle, type VideoStyle } from "@/lib/ai/video/style";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  IMAGE TO VIDEO — the workspace
  * ═══════════════════════════════════════════════════════════════════════════
  *
+ * Redesign page 4 (Brief B in docs/FRENZ_AI_REDESIGN_BRIEFS.md, built on the
+ * system pages 1–3 set): showcase · credits strip · title ("Bring a photo
+ * to life.") · ONE card — Your photo → What should happen? → Video Style →
+ * Duration › Quality › → References → Advanced (ending photo, sound) — then
+ * the sticky cost + Generate.
+ *
  * §14: "make the required input visually dominant". Here that is the photo, so
- * the drop surface is the first and largest thing on the screen and the prompt
+ * the drop surface is the first and largest thing in the card and the prompt
  * is secondary — the frame alone is already an instruction, and the model
  * animates it whether or not anything is typed.
  *
@@ -33,20 +55,40 @@ import { KLING_OMNI } from "@/lib/ai/kling/features/capabilities";
  * run: a pug reference produced a woman), so "guide a video with your photo"
  * would be a promise the engine cannot keep.
  *
- * ── Aspect ratio is deliberately absent from the core row ─────────────────
+ * ── Aspect ratio is deliberately absent ────────────────────────────────────
  *
  * §18: only show settings the pipeline takes. With a first frame present the
  * vendor does NOT require an aspect ratio — the frame defines the shape — so
  * offering the control here would invite a member to fight their own photo.
+ * Brief B's mock shows "Aspect Ratio" in that slot; Quality (real, priced)
+ * takes it instead.
+ *
+ * ── Style ──────────────────────────────────────────────────────────────────
+ *
+ * The same tiles as Text to Video (owner, 2026-10-05). The prompt is optional
+ * here, so a chosen style is sent even with nothing typed ("Anime style.");
+ * nothing is chosen by default.
  */
 
 const DURATIONS = [3, 5, 8, 10, 15] as const;
 
-export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { historyHref: string; currencySymbol: string }) {
-  const promptId = useId();
+export function ImageToVideoWorkspace({
+  historyHref,
+  currencySymbol,
+  slides,
+  base,
+}: {
+  historyHref: string;
+  currencySymbol: string;
+  /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
+  slides: ShowcaseSlide[];
+  /** The door: "/ai" or "/studio/ai". */
+  base: string;
+}) {
   const [firstFrameUrl, setFirst] = useState<string | null>(null);
   const [lastFrameUrl, setLast] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [style, setStyle] = useState<VideoStyle | null>(null);
   const [durationSeconds, setDuration] = useState<number>(KLING_OMNI.duration.defaultSeconds);
   const [resolution, setResolution] = useState<"720p" | "1080p" | "4k">("720p");
   const [audio, setAudio] = useState<"off" | "native">("off");
@@ -63,38 +105,29 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
     return json.url;
   }, []);
 
+  const sentPrompt = withStyle(prompt, style, KLING_OMNI.prompt.maxChars, { standalone: true });
   const input = useMemo(
     () => ({
       firstFrameUrl: firstFrameUrl ?? "",
       ...(lastFrameUrl ? { lastFrameUrl } : {}),
-      ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+      ...(sentPrompt ? { prompt: sentPrompt } : {}),
       // Omitted entirely when empty: the wire schema is strict, and an empty
       // array would re-quote as though something had been attached.
       ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
       ...(referenceVideoUrl ? { referenceVideoUrl } : {}),
       options: { durationSeconds, resolution, audio },
     }),
-    [firstFrameUrl, lastFrameUrl, prompt, durationSeconds, resolution, audio, referenceImageUrls, referenceVideoUrl],
+    [firstFrameUrl, lastFrameUrl, sentPrompt, durationSeconds, resolution, audio, referenceImageUrls, referenceVideoUrl],
   );
 
   // Image to Video's prompt is optional, so the card falls back to the tool's name.
   const gen = useVideoGeneration({ feature: "image_to_video", input, ready: !!firstFrameUrl, label: prompt.trim() || "From your image" });
+  const locked = gen.status === "submitting" || gen.status === "running";
 
   /*
-    🔴 `--ai-play` HAS TO COME FROM SOMEWHERE (2026-10-04).
-
-    `.ai-cta::before` — the Generate button gradient — animates forever on
-    `animation-play-state: var(--ai-play, running)`. Every other AI workspace
-    (text-to-audio, voice cloning, lip sync) wraps itself in this environment,
-    which is the ONE component that resolves tab visibility and
-    `prefers-reduced-motion` into that variable. These two screens shipped
-    without it, so it was never set, the fallback `running` applied, and the
-    gradient kept animating even while the tab was HIDDEN — a battery cost
-    paid for something nobody can see, which is the exact thing the presence
-    module exists to prevent.
-
-    `bare` because `AiPageShell` already paints `.ai-wash`; this is here for
-    the variables, not for a second background.
+    `FrenzAIEnvironment` resolves tab visibility and reduced motion into the
+    presence variables every AI workspace reads (2026-10-04). `bare` because
+    `AiPageShell` already paints the ground.
   */
   const envStage: "idle" | "processing" | "completed" | "failed" =
     gen.status === "running" || gen.status === "submitting" ? "processing" : gen.status === "done" ? "completed" : gen.status === "error" ? "failed" : "idle";
@@ -102,11 +135,23 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
   return (
     <FrenzAIEnvironment stage={envStage} bare>
     <AiPageShell>
-      <FrenzAICrumb tool="Image to Video" />
-      <AiDisplayTitle title="Bring a photo" highlight="to life." />
+      <AiShowcase slides={slides} base={base} />
+      <AiCreditStrip base={base} className="mt-3" />
 
-      {/* ── INPUT: the photo, dominant (§14) ──────────────────────────────── */}
-      <AiGlassCard className="mt-5 p-4 sm:p-5">
+      <AiToolTitle
+        icon={ImagePlay}
+        title="Image to Video"
+        tagline={
+          <>
+            Bring a photo <span className="text-gradient">to life.</span>
+          </>
+        }
+        body="Turn a still image into a cinematic video with Frenz AI."
+        className="mt-6"
+      />
+
+      {/* ── THE ONE CARD: the photo first and largest (§14) ──────────────── */}
+      <AiPanel className="mt-5 space-y-4">
         <AiImageDrop
           label="Your photo"
           hint="The video opens on this image and animates from it."
@@ -117,34 +162,51 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
           maxBytes={KLING_OMNI.images.maxBytes}
         />
 
-        <div className="mt-4">
-          <AiField label="What should happen?" hint="Optional — describe the motion, or leave it and let the model decide." htmlFor={promptId}>
-            <textarea
-              id={promptId}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value.slice(0, KLING_OMNI.prompt.maxChars))}
-              rows={3}
-              placeholder="A slow, gentle push in. The light shifts softly."
-              className="w-full resize-y rounded-2xl border-0 bg-white/80 p-3.5 text-[15px] leading-relaxed ring-1 ring-inset ring-black/[0.07] placeholder:text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
-            />
-          </AiField>
-        </div>
-
-        <AiReferenceRail
-          className="mt-3.5"
-          images={referenceImageUrls}
-          onImagesChange={setReferenceImages}
-          videoUrl={referenceVideoUrl}
-          onVideoChange={setReferenceVideo}
-          disabled={gen.status === "submitting" || gen.status === "running"}
+        <AiPromptBox
+          label="What should happen?"
+          hint="Optional — describe the motion, or leave it and let the model decide."
+          value={prompt}
+          onChange={setPrompt}
+          max={KLING_OMNI.prompt.maxChars}
+          rows={3}
+          disabled={locked}
+          placeholder="A slow, gentle push in. The light shifts softly."
         />
-      </AiGlassCard>
 
-      {/* ── CORE SETTINGS ─────────────────────────────────────────────────── */}
-      <AiGlassCard className="mt-4 p-4 sm:p-5" tone="quiet">
-        <AiField label="Length">
-          <AiSegmented ariaLabel="Video length" value={String(durationSeconds)} onChange={(v) => setDuration(Number(v))} options={DURATIONS.map((d) => ({ value: String(d), label: `${d}s` }))} />
-        </AiField>
+        <div className="space-y-3">
+          <AiStylePicker icon={Palette} label="Video Style" value={style} options={VIDEO_STYLES} onChange={setStyle} disabled={locked} />
+
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+            <AiSettingRow
+              icon={Clock}
+              label="Duration"
+              value={String(durationSeconds)}
+              onChange={(v) => setDuration(Number(v))}
+              options={DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` }))}
+              disabled={locked}
+            />
+            <AiSettingRow
+              icon={Gauge}
+              label="Quality"
+              value={resolution}
+              onChange={setResolution}
+              options={[
+                { value: "720p", label: "720p" },
+                { value: "1080p", label: "1080p" },
+                { value: "4k", label: "4K" },
+              ]}
+              disabled={locked}
+            />
+          </div>
+
+          <AiReferenceSection
+            images={referenceImageUrls}
+            onImagesChange={setReferenceImages}
+            videoUrl={referenceVideoUrl}
+            onVideoChange={setReferenceVideo}
+            disabled={locked}
+          />
+        </div>
 
         <AiAdvancedSettings>
           <AiImageDrop
@@ -157,18 +219,6 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
             accept={KLING_OMNI.images.mimeTypes}
             maxBytes={KLING_OMNI.images.maxBytes}
           />
-          <AiField label="Quality" hint="Higher quality costs more and takes longer.">
-            <AiSegmented
-              ariaLabel="Quality"
-              value={resolution}
-              onChange={setResolution}
-              options={[
-                { value: "720p", label: "720p" },
-                { value: "1080p", label: "1080p" },
-                { value: "4k", label: "4K" },
-              ]}
-            />
-          </AiField>
           <AiField label="Sound" hint="Generated audio to match the scene.">
             <AiSegmented
               ariaLabel="Sound"
@@ -181,13 +231,13 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
             />
           </AiField>
         </AiAdvancedSettings>
-      </AiGlassCard>
+      </AiPanel>
 
-      {gen.status === "running" ? <AiGenerationStatus className="mt-4" title="Animating your photo" /> : null}
+      {gen.status === "running" ? <AiGenerationStatus className="mt-4" title="Creating your video…" /> : null}
       {gen.result ? <AiVideoResult className="mt-4" job={gen.result} historyHref={historyHref} onAgain={gen.reset} /> : null}
       {gen.error ? (
         <div className="mt-4 rounded-[1.5rem] bg-rose-50/80 p-4 ring-1 ring-inset ring-rose-200/70" role="alert">
-          <p className="text-[14px] font-bold text-rose-900">Generation couldn&apos;t be completed</p>
+          <p className="text-[14px] font-bold text-rose-900">Something went wrong.</p>
           <p className="mt-1 text-[13px] leading-snug text-rose-800/85">{gen.error}</p>
         </div>
       ) : null}
@@ -200,7 +250,11 @@ export function ImageToVideoWorkspace({ historyHref, currencySymbol }: { history
           loading={gen.quoting}
           problem={gen.quoteProblem}
         />
-        <AiGenerateButton onClick={gen.submit} busy={gen.status === "submitting" || gen.status === "running"} disabled={!firstFrameUrl || !!gen.quoteProblem} />
+        <AiGenerateButton onClick={gen.submit} busy={locked} disabled={!firstFrameUrl || !!gen.quoteProblem} className="ml-auto min-w-0 flex-1">
+          {/* the price takes the bar's left side; under 400 px the full label truncated (page 4 lesson) */}
+          <span className="min-[400px]:hidden">Generate</span>
+          <span className="hidden min-[400px]:inline">Generate Video</span>
+        </AiGenerateButton>
       </AiActionBar>
     </AiPageShell>
     </FrenzAIEnvironment>

@@ -814,6 +814,80 @@
     background-repeat: no-repeat;
   }
 
+  /* ── THE AI GLASS, AND ITS FALLBACK HIERARCHY (Part 7 §57, §39) ────────────
+     Every frosted AI surface is this ONE class, so the four tiers below are
+     decided once instead of per component:
+
+       1. Full glass         8px blur, the designed fill
+       2. Reduced glass      4px blur, fill raised to 0.82
+       3. Translucent        no blur (browser lacks backdrop-filter), 0.90
+       4. Solid              opaque — the member asked for less transparency
+                             or more contrast; ring + shadow stay
+
+     The ring and coloured shadow are NOT part of this class and survive every
+     tier — §39's "glass → translucent solid → border → shadow" order.
+
+     🔴 Every tier selector has the SAME specificity as `.ai-glass` (the
+     `html` part sits inside `:where()`), so SOURCE ORDER decides and the most
+     conservative tier, declared last, always wins when several apply. Do not
+     add a selector with higher specificity here without re-reading this.
+
+     The fill is a variable, never `calc()`/`min()` arithmetic: a browser old
+     enough to lack backdrop-filter may also reject math in an alpha channel,
+     and an invalid-at-computed-value background is TRANSPARENT — the worst
+     possible fallback for a fallback.
+
+     8px is the measured budget (glass-cost.test.ts). The OLD in-app "reduce
+     transparency" switch only removed the blur and left a 70%-see-through
+     panel — tier 4 is what that switch always promised. */
+  .ai-glass {
+    --ai-glass-fill: 0.7;
+    --ai-glass-blur: 8px;
+    background-color: rgb(255 255 255 / var(--ai-glass-fill));
+    -webkit-backdrop-filter: blur(var(--ai-glass-blur));
+    backdrop-filter: blur(var(--ai-glass-blur));
+  }
+  /* Designed fills, by surface. Declared BEFORE the tiers so a tier overrides
+     them by source order. */
+  .ai-glass--quiet { --ai-glass-fill: 0.55; }
+  .ai-glass--rail { --ai-glass-fill: 0.6; }
+  .ai-glass--pill { --ai-glass-fill: 0.75; }
+  .ai-glass--bar { --ai-glass-fill: 0.8; }
+
+  /* 2 · Reduced glass — reduced motion (OS unless overridden in-app, or
+     in-app), or a low-power device flagged by `data-glass="reduced"`. */
+  @media (prefers-reduced-motion: reduce) {
+    :where(html:not([data-a11y-motion="full"])) .ai-glass {
+      --ai-glass-fill: 0.82;
+      --ai-glass-blur: 4px;
+    }
+  }
+  :where(html[data-a11y-motion="reduce"], html[data-glass="reduced"]) .ai-glass {
+    --ai-glass-fill: 0.82;
+    --ai-glass-blur: 4px;
+  }
+
+  /* 3 · Translucent — no backdrop-filter at all. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .ai-glass {
+      --ai-glass-fill: 0.9;
+    }
+  }
+
+  /* 4 · Solid — less transparency or more contrast, from the OS or in-app. */
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .ai-glass {
+      --ai-glass-fill: 1;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+  :where(html[data-a11y-transparency="reduce"], html[data-a11y-contrast="high"]) .ai-glass {
+    --ai-glass-fill: 1;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .ai-cta {
     position: relative;
     isolation: isolate;

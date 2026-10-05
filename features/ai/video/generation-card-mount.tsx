@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import { useAiGlassTier } from "@/features/ai/design/glass-tier";
+
 /**
  * The card's door.
  *
@@ -24,5 +26,8 @@ const AiGenerationProgressCard = dynamic(
 );
 
 export function AiGenerationCardMount() {
+  // Rides this door because it is already the one client island on every AI
+  // screen — a separate component would be a separate chunk for one effect.
+  useAiGlassTier();
   return <AiGenerationProgressCard />;
 }

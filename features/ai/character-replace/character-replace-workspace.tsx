@@ -614,7 +614,7 @@ export function CharacterReplaceWorkspace({
 
             {/* ── the action bar ─────────────────────────────────────────── */}
             <div
-              className="sticky z-10 -mx-1 mt-6 flex items-center gap-2 border-t border-border/60 bg-background/90 px-1 pt-3 backdrop-blur-md"
+              className="sticky z-10 -mx-1 mt-6 flex items-center gap-2 border-t border-border/60 bg-background/90 px-1 pt-3 backdrop-blur"
               style={{
                 /*
                   Docked above the phone's bottom nav, whose measured height the

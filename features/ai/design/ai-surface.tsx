@@ -266,11 +266,14 @@ export function AiGlassCard({
   return (
     <Tag
       className={cn(
-        "relative overflow-hidden rounded-[1.75rem] bg-white/70 backdrop-blur",
+        // `ai-glass` = an 8px blur over a 0.70 white fill, with the §57
+        // fallback tiers decided once in globals.css. Never hand-write
+        // `bg-white/NN` + a blur utility here: that bypasses every fallback.
+        "ai-glass relative overflow-hidden rounded-[1.75rem]",
         "shadow-[0_18px_50px_-28px_rgba(76,58,160,0.45)]",
         tone === "solid" && "ring-1 ring-inset ring-white/70",
-        tone === "quiet" && "ring-1 ring-inset ring-white/50 bg-white/55",
-        tone === "dashed" && "border-2 border-dashed border-violet-300/60 bg-white/55",
+        tone === "quiet" && "ai-glass--quiet ring-1 ring-inset ring-white/50",
+        tone === "dashed" && "ai-glass--quiet border-2 border-dashed border-violet-300/60",
         className,
       )}
     >
@@ -372,9 +375,9 @@ export function AiSecondaryAction({
     <Link
       href={href}
       className={cn(
-        "inline-flex h-14 min-h-[3.5rem] items-center justify-center gap-2 rounded-full bg-white/75 px-5 text-[15px] font-semibold",
+        "ai-glass ai-glass--pill inline-flex h-14 min-h-[3.5rem] items-center justify-center gap-2 rounded-full px-5 text-[15px] font-semibold",
         // 8px, not 24 — see the measurement on `AiGlassCard` above.
-        "ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-20px_rgba(76,58,160,0.5)] backdrop-blur",
+        "ring-1 ring-inset ring-white/80 shadow-[0_10px_30px_-20px_rgba(76,58,160,0.5)]",
         "active:scale-[0.985] motion-reduce:active:scale-100",
         className,
       )}

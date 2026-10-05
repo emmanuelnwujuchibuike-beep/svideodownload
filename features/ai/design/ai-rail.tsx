@@ -85,7 +85,7 @@ export function AiRail() {
     */
     <aside
       aria-label="Frenz AI"
-      className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border/60 bg-white/60 px-3 py-5 backdrop-blur lg:flex xl:w-64"
+      className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col ai-glass ai-glass--rail border-r border-border/60 px-3 py-5 lg:flex xl:w-64"
     >
       <Link href="/ai" className="mb-4 flex items-center gap-2.5 px-2">
         <FrenzLogo size={26} alt="" />

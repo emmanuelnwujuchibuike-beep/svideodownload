@@ -196,3 +196,49 @@ export function CharacterReplaceCreateSkeleton() {
     </SkeletonSection>
   );
 }
+
+/**
+ * Part 7 §43/§44 — a generation TOOL (Text to Video, Image to Video, Lip Sync,
+ * Text to Audio, Voice Cloning): crumb, display title, the input card, the
+ * settings card, the cost-and-Generate bar.
+ *
+ * 🔴 These routes had NO loading boundary of their own, so a tap on a tool
+ * fell back to `/ai/loading.tsx` — the WELCOME page's skeleton (hero lines, a
+ * four-tile studio card, a tool grid). The member saw the wrong page arrive
+ * and then jump into the right one: a layout shift built into the skeleton.
+ *
+ * The geometry mirrors `AiPageShell` + the workspaces (max-w-2xl, px-4 pt-4,
+ * the 1.75rem cards, the 1.5rem bar) and is checked against the real page on a
+ * production build by `scripts/_p7-skeleton.tmp.mjs`. Eleven shimmer blocks,
+ * transform-only, off under reduced motion (§45).
+ */
+export function AiToolSkeleton({ label = "Loading" }: { label?: string }) {
+  return (
+    <SkeletonSection label={label} className="ai-wash relative min-h-full">
+      <div className="relative mx-auto w-full max-w-2xl px-4 pb-16 pt-4 sm:px-6">
+        <Skeleton className="h-3 w-28 rounded-full" />
+        <Skeleton className="mt-3.5 h-9 w-full max-w-[20rem] rounded-lg" />
+        <Skeleton className="mt-2 h-9 w-48 rounded-lg" />
+
+        <div className="mt-5 rounded-[1.75rem] bg-white/70 p-4 ring-1 ring-inset ring-white/70 sm:p-5" aria-hidden>
+          <Skeleton className="h-3.5 w-36" />
+          <Skeleton className="mt-1.5 h-3 w-full max-w-[18rem]" />
+          <Skeleton className="mt-2 h-[8.5rem] w-full rounded-2xl" />
+          <Skeleton className="mt-5 h-16 w-full rounded-2xl" />
+        </div>
+
+        <div className="mt-4 rounded-[1.75rem] bg-white/55 p-4 ring-1 ring-inset ring-white/50 sm:p-5" aria-hidden>
+          <Skeleton className="h-3.5 w-16" />
+          <Skeleton className="mt-2 h-11 w-full rounded-full" />
+          <Skeleton className="mt-4 h-3.5 w-16" />
+          <Skeleton className="mt-2 h-11 w-full rounded-full" />
+        </div>
+
+        <div className="mt-6 flex h-[4.5rem] items-center rounded-[1.5rem] bg-white/80 px-4 ring-1 ring-inset ring-white/70" aria-hidden>
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="ml-auto h-12 w-36 rounded-full" />
+        </div>
+      </div>
+    </SkeletonSection>
+  );
+}

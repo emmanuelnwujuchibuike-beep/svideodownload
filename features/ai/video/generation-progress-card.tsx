@@ -107,7 +107,7 @@ export function AiGenerationProgressCard() {
           }}
           aria-label={done ? "Your video is ready — tap to open" : "Generation in progress — tap to expand"}
           className={cn(
-            "fixed bottom-[calc(10.25rem+env(safe-area-inset-bottom))] right-3 z-[86] flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-2 pl-2 pr-3.5 shadow-elevated backdrop-blur-xl transition active:scale-95 motion-reduce:active:scale-100",
+            "fixed bottom-[calc(10.25rem+env(safe-area-inset-bottom))] right-3 z-[86] flex items-center gap-2 rounded-full border border-border/60 bg-card/95 py-2 pl-2 pr-3.5 shadow-elevated backdrop-blur transition active:scale-95 motion-reduce:active:scale-100",
             "lg:bottom-[7.5rem] lg:right-6",
           )}
         >
@@ -143,7 +143,7 @@ export function AiGenerationProgressCard() {
         role="status"
         aria-live="polite"
       >
-        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-3 shadow-elevated backdrop-blur-xl">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card/95 p-3 shadow-elevated backdrop-blur">
           <span
             className={cn(
               "grid h-10 w-10 shrink-0 place-items-center rounded-full",

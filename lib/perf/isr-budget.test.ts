@@ -77,10 +77,27 @@ describe("the root ISR clock", () => {
   */
   it("has no page quietly undercutting it", () => {
     const shorter: Record<string, number> = {
-      // the AI front door: 5 minutes, one page
-      "app/(marketing)/ai/page.tsx": 300,
-      // a news sitemap is worthless if it is stale; it is also tiny
-      "app/news-sitemap.xml/route.ts": 300,
+      /*
+        🔴 TWO ENTRIES LEFT THIS LIST ON 2026-10-05, AND THAT IS THE POINT.
+
+        `app/(marketing)/ai/page.tsx` was 300 and `news-sitemap.xml` was 300.
+        Both were crawler-facing, so both regenerated around the clock with
+        nobody on the site — each turn billing an ISR write, a function
+        invocation, a Supabase read and the bytes. Between them they were a
+        standing cost for freshness nobody was waiting on.
+
+        · /ai now inherits the root's 86400. Its only input is
+          `getLandingSettings`, and the admin save already calls
+          revalidatePath("/", "layout") — the clock was duplicating a bust
+          that already happens.
+        · news-sitemap is 1800 AND `publishPost` revalidates it the moment a
+          news post is published, so it is now correct SOONER than a
+          5-minute clock managed, while idling at zero.
+
+        This list is the record of who pays for their own freshness. It
+        should keep getting shorter.
+      */
+      // a full sitemap is large to rebuild and nothing on it is time-critical
       "app/posts-sitemap.xml/route.ts": 3600,
     };
     for (const [path, expected] of Object.entries(shorter)) {

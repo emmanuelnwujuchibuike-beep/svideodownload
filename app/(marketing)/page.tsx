@@ -62,9 +62,15 @@ import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
  *
  * Still not frozen: ISR regenerates this document so Trending stays current
  * without any visitor waiting on a DB read. The cadence comes from
- * `export const revalidate = 60` in app/layout.tsx — Next uses the LOWEST
- * revalidate in the segment tree, so a larger value declared here would be
- * silently ignored. Change it there, not here.
+ * the root layout — Next uses the LOWEST revalidate in the segment tree, so
+ * a larger value declared here would be silently ignored. Change it there,
+ * not here.
+ *
+ * ⚠️ This sentence used to name the number ("= 60"), and the number moved
+ * to 86400 without it. Naming a value that lives in another file is how a
+ * comment becomes a lie — and `lib/perf/vercel-cost.test.ts` read this very
+ * line as a 60-second treadmill on its first run. The layout owns the value;
+ * this file points at it.
  */
 export const dynamic = "force-static";
 

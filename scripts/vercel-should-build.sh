@@ -21,12 +21,29 @@
 # first deploy, a force-push), it builds.
 #
 # ── What counts as "not shippable" ────────────────────────────────────────────
-# Only prose that is never imported, compiled, or served:
+# Only files that are never imported, compiled, or served by the deployment:
 #   docs/**            — internal design notes
 #   *.md at any depth  — READMEs, AGENTS.md, CLAUDE.md
 #   .claude/**         — assistant configuration
-# Everything else — source, config, public/, supabase/, scripts/, tests — builds.
-# Tests are deliberately NOT exempt: they gate the build.
+#   *.test.ts(x)       — see below
+# Everything else — source, config, public/, supabase/, scripts/ — builds.
+#
+# ── 🔴 TESTS WERE EXEMPTED ON 2026-10-05, AND THE OLD REASONING WAS WRONG ─────
+#
+# This file used to say: "Tests are deliberately NOT exempt: they gate the
+# build." They do not. `next build` does not run vitest — CI does, before the
+# push — and Next does not typecheck test files either. A commit touching only
+# `*.test.ts` therefore produces a BYTE-IDENTICAL deployment and was paying for
+# a full build to produce it.
+#
+# That is not theoretical. Build CPU Minutes is the largest line on this
+# project's bill, and a day of test-only commits is a day of builds that ship
+# nothing. The owner's standing rule names this exact case: "A build on a
+# commit that cannot change the deployment."
+#
+# ⚠️ The safety argument still holds in the other direction: skipping a build
+# can never hide a broken test, because the tests do not run here. What catches
+# a broken test is CI and the four local gates — which is where it belongs.
 
 set -uo pipefail
 
@@ -50,7 +67,8 @@ fi
 while IFS= read -r file; do
   [ -z "$file" ] && continue
   case "$file" in
-    docs/*|.claude/*|*.md) ;;      # prose only — keep checking
+    # Not served, not compiled into the deployment, not run by `next build`.
+    docs/*|.claude/*|*.md|*.test.ts|*.test.tsx|*.test.mjs) ;;
     *)
       echo "Shippable change detected ($file) — building."
       exit 1

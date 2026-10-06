@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { cronAuthorized } from "@/lib/cron/auth";
-import { notifyAdminsOfDownloadOutcome, outcomeDedupeKey } from "@/lib/analytics/download-failure-alert";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -93,52 +92,12 @@ async function run(request: Request) {
   if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 });
 
   /*
-    🔴 COLLAPSE TO ONE ROW PER LINK BEFORE ALERTING (owner, 2026-08-26: "should
-    send one per link, not each media in a batch download, causing email and
-    push notification spamming").
-
-    `notifyAdminsOfDownloadOutcome` dedupes on the same key, so the extra rows
-    would be suppressed there anyway — but only after this route had already
-    fanned out a push to every admin and an email attempt PER ROW. A slideshow
-    of forty abandoned photos would open forty of those before the dedupe threw
-    thirty-nine away. Collapsing here means the work is never started.
-
-    Rows with no batch (a plain single download, and every row written before
-    migration 0137) key on their own download id, so they each still alert
-    exactly as before.
+    🔴 NO ADMIN ALERT ANY MORE (owner, 2026-10-06: "abandoned download alert
+    should be turned off too", after the failed / cancelled pushes were
+    removed — f58c0aa). The sweep still marks the rows `timed_out` above, so
+    the dashboard counts abandoned downloads correctly; nobody is pushed.
   */
-  const perLink = new Map<string, StuckRow>();
-  for (const r of rows) {
-    const key = outcomeDedupeKey({
-      status: "timed_out",
-      downloadId: r.download_id,
-      batchId: r.batch_id,
-      linkKey: r.link_key,
-    });
-    // First row of a link wins — they are ordered oldest-first, so the alert
-    // describes the item that actually stalled first.
-    if (!perLink.has(key)) perLink.set(key, r);
-  }
-
-  await Promise.all(
-    [...perLink.values()].map((r) =>
-      notifyAdminsOfDownloadOutcome({
-        downloadId: r.download_id,
-        status: "timed_out",
-        platform: r.platform,
-        mediaKind: r.media_kind,
-        errorReason: null,
-        userId: r.user_id,
-        visitorId: r.visitor_id,
-        device: r.device,
-        country: r.country,
-        batchId: r.batch_id,
-        linkKey: r.link_key,
-      }).catch(() => {}),
-    ),
-  );
-
-  return NextResponse.json({ ok: true, swept: rows.length, alerted: perLink.size });
+  return NextResponse.json({ ok: true, swept: rows.length });
 }
 
 export const GET = run;

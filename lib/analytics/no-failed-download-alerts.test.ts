@@ -21,4 +21,10 @@ describe("failed and cancelled downloads do not alert the admin", () => {
     const route = read("app/api/analytics/collect/route.ts");
     expect(route).not.toContain("notifyAdminsOfDownloadOutcome");
   });
+
+  it("abandoned downloads are still swept, but nobody is pushed (owner, 2026-10-06)", () => {
+    const cron = read("app/api/cron/abandoned-downloads/route.ts");
+    expect(cron).not.toContain("notifyAdminsOfDownloadOutcome");
+    expect(cron).toContain('.update({ status: "timed_out" })');
+  });
 });

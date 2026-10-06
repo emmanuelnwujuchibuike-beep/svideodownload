@@ -4,7 +4,7 @@ import { BusyError } from "@/lib/concurrency";
 import { isTooLarge, maxDownloadBytes, tooLargeMessage } from "@/lib/downloads/size-cap";
 import { slugifyFilename } from "@/lib/utils";
 import type { DownloadRequest } from "@/lib/validation";
-import { resolveDownload } from "@/server/services/download-service";
+import { DownloadTooLargeError, resolveDownload } from "@/server/services/download-service";
 import { YtDlpError } from "@/server/services/ytdlp-service";
 import type { ApiError } from "@/types";
 
@@ -34,7 +34,7 @@ export async function streamResolvedDownload(
       formatId,
       kind,
       providedTitle || "video",
-      { clientPlaysHevc },
+      { clientPlaysHevc, maxBytes },
     );
     /*
       🔴 Refuse BEFORE a byte is sent (lib/downloads/size-cap.ts, 2026-10-06):
@@ -61,6 +61,9 @@ export async function streamResolvedDownload(
 
     return new Response(stream, { headers });
   } catch (err) {
+    if (err instanceof DownloadTooLargeError) {
+      return fail(tooLargeMessage(err.bytes, maxBytes), "FILE_TOO_LARGE", 413);
+    }
     if (err instanceof BusyError) {
       return fail("Server is busy. Please retry in a moment.", "RATE_LIMITED", 503, { "Retry-After": "10" });
     }

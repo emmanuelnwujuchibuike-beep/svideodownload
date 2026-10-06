@@ -46,14 +46,6 @@ function alreadyRecordedToday(): boolean {
   }
 }
 
-function clearRecordedToday(): void {
-  try {
-    window.localStorage.removeItem(RECORDED_KEY);
-  } catch {
-    /* private mode — nothing was stored */
-  }
-}
-
 /** Only ever called after the server CONFIRMED the day (a parsed 2xx state). */
 function markRecordedToday(): void {
   try {
@@ -122,11 +114,10 @@ export async function loadStreak(): Promise<StreakState> {
 
     This GET already runs on every page open, so asking costs nothing: if the
     server says today is not on THIS identity's record while the marker says
-    it is, the marker is wrong. Drop it and record.
+    it is, the marker is wrong. Record anyway; the 2xx re-marks the day.
   */
   if (state.lastActivityDate !== state.today && alreadyRecordedToday()) {
-    clearRecordedToday();
-    void recordStreakActivity();
+    void recordStreakActivity(true);
   }
   return state;
 }
@@ -172,10 +163,13 @@ export function publishStreak(state: StreakState): void {
  * authority on what day it is and what the day is worth (§18, engine.ts); this
  * only decides whether to bother asking twice.
  */
-export async function recordStreakActivity(): Promise<StreakState | null> {
+export async function recordStreakActivity(
+  /** Skip the once-a-day marker: the server just said today is NOT recorded (loadStreak). */
+  force = false,
+): Promise<StreakState | null> {
   // Not an error and not a failure — today is already on the record, so there
   // is nothing to celebrate that was not celebrated when it was recorded.
-  if (alreadyRecordedToday()) return null;
+  if (!force && alreadyRecordedToday()) return null;
   try {
     const res = await fetch("/api/streak", {
       method: "POST",

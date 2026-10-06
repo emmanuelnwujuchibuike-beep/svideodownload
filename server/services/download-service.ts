@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 
+import { isTooLarge } from "@/lib/downloads/size-cap";
 import { getCachedMetadata, getMetadata } from "@/server/extractors";
 import type { MediaFormat, MediaKind, VideoMetadata } from "@/types";
 
@@ -608,6 +609,13 @@ function findFormat(
   );
 }
 
+/** Refused on size before a byte moved — see lib/downloads/size-cap.ts. */
+export class DownloadTooLargeError extends Error {
+  constructor(readonly bytes: number) {
+    super("download too large");
+  }
+}
+
 export interface ResolvedDownload extends DownloadResult {
   title: string;
 }
@@ -621,6 +629,13 @@ export interface ResolvedDownload extends DownloadResult {
 export interface DownloadClientCapabilities {
   /** The browser positively claims HEVC/H.265 playback (lib/media/hevc-support). */
   clientPlaysHevc?: boolean;
+  /**
+   * The caller's size cap (lib/downloads/size-cap.ts). Checked against the
+   * metadata's filesize BEFORE any transfer starts — measured 2026-10-06: a
+   * 750 MB Telegram video otherwise spent 2+ minutes on Telegram I/O (and the
+   * buffered fallback pulls the whole file to disk) before the cap could see it.
+   */
+  maxBytes?: number;
 }
 
 export async function resolveDownload(
@@ -633,6 +648,9 @@ export async function resolveDownload(
   const meta = (await getCachedMetadata(url)) ?? (await getMetadata(url));
   const title = meta.title || fallbackTitle;
   const format = findFormat(meta, formatId, kind);
+  if (caps.maxBytes !== undefined && isTooLarge(format?.filesize, caps.maxBytes)) {
+    throw new DownloadTooLargeError(format!.filesize!);
+  }
 
   // Authenticated Telegram (private / Story) media has no public URL to proxy and
   // yt-dlp can't reach it — download it through the worker's MTProto client.

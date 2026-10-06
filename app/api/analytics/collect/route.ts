@@ -3,7 +3,6 @@ import { z } from "zod";
 
 import type { DownloadStatus } from "@/lib/analytics/types";
 import { geoFromHeaders, parseUA } from "@/lib/analytics/enrich";
-import { notifyAdminsOfDownloadOutcome } from "@/lib/analytics/download-failure-alert";
 import { notifyAdminsOfRetrySuccess } from "@/lib/analytics/retry-success-alert";
 import { checkGrowthMilestones } from "@/server/services/analytics";
 import { createClient } from "@/lib/supabase/server";
@@ -147,29 +146,12 @@ export async function POST(request: Request) {
       continue;
     }
 
-    if (status !== "failed" && status !== "cancelled") continue;
-
     /*
-      `after()`, not awaited inline — this fans out to push and email for every
-      admin. A serverless function CAN freeze the instant its response is sent,
-      so a bare `void` here would sometimes send nothing at all; that exact bug
-      has been hit in this project before.
+      🔴 Failed / cancelled no longer alert the admin (owner, 2026-10-06) — the
+      client stopped sending them (lib/analytics/client.ts reportOutcome), and
+      an older cached client that still sends them is ignored here. The rows
+      are already in Postgres; the dashboard still shows every failure.
     */
-    after(() =>
-      notifyAdminsOfDownloadOutcome({
-        downloadId: e.downloadId,
-        status,
-        platform: str(props.platform),
-        mediaKind: str(props.mediaKind),
-        errorReason: str(props.errorReason),
-        userId,
-        visitorId: e.visitorId,
-        device: ua.device,
-        country: geo.country,
-        batchId: str(props.batchId),
-        linkKey: str(props.linkKey),
-      }),
-    );
   }
 
   /*

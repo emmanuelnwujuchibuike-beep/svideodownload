@@ -337,7 +337,16 @@ function reportOutcome(batch: AnalyticsEventInput[], unloading: boolean): void {
   const notable = batch.filter((e) => {
     if (!e.downloadId) return false;
     const status = STATUS_FROM_TYPE[e.type];
-    if (status === "failed" || status === "cancelled") return true;
+    /*
+      🔴 Failed and cancelled are NOT sent any more (owner, 2026-10-06: "Stop
+      admin from receiving failed and cancelled notification, I think it also
+      take part in the Vercel consumption"). Measured that afternoon: 340
+      "download-outcome" pushes to the admin in 3 hours, each one a Vercel
+      invocation here plus a dedupe row, an admin lookup, a notification row and
+      a push log row. The download rows are already in Postgres (ingest.ts), so
+      the admin dashboard still shows every failure — only the push is gone.
+    */
+    if (status === "failed" || status === "cancelled") return false;
     /*
       A success that needed more than one attempt. `attempts` is sent on
       completion only; anything <= 1 is the normal case and must not alert —

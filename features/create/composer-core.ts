@@ -315,8 +315,10 @@ export async function publishComposition({
     }
 
     // The poster is small; it uploads BESIDE the media, not after it.
+    // One retry: a cover that fails to upload is a post with no cover for good (2026-10-06).
+    const putPoster = (b: Blob) => uploadPostMedia({ data: b, kind: "image", ext: "jpg", contentType: "image/jpeg" });
     const posterUpload: Promise<string | null> = posterBlob
-      ? uploadPostMedia({ data: posterBlob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(() => null)
+      ? putPoster(posterBlob).catch(() => putPoster(posterBlob!).catch(() => null))
       : Promise.resolve(null);
     let mediaUrl: string;
     try {

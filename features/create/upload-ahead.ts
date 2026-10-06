@@ -87,8 +87,10 @@ export function startUploadAhead(id: string, file: File): void {
     ]);
     if (controller.signal.aborted) throw new Error("Upload cancelled.");
     // The poster's upload runs BESIDE the video's, not after it.
+    // One retry: a cover that fails to upload is a post with no cover for good (2026-10-06).
+    const putPoster = (b: Blob) => uploadPostMedia({ data: b, kind: "image", ext: "jpg", contentType: "image/jpeg" });
     const poster: Promise<string | null> = captured.blob
-      ? uploadPostMedia({ data: captured.blob, kind: "image", ext: "jpg", contentType: "image/jpeg" }).catch(() => null)
+      ? putPoster(captured.blob).catch(() => putPoster(captured.blob!).catch(() => null))
       : Promise.resolve(null);
     const url = await uploadWithPlanProgress(plan, file, contentType, {
       signal: controller.signal,

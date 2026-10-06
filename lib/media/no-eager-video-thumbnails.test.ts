@@ -34,3 +34,17 @@ describe("a still is never a video download", () => {
     expect(v).not.toMatch(/setVideoSrc\(src\);\n\s*const \{ saveData, effectiveType \} = getSyncConditions\(\);/);
   });
 });
+
+describe("every new video gets a cover (2026-10-06: 4 posts had none)", () => {
+  it("the capture seeks on metadata — iOS never fires loadeddata for preload=metadata", () => {
+    const p = read("lib/media/video-poster.ts");
+    expect(p).toContain("video.onloadedmetadata = seek;");
+    expect(p).toContain("12_000");
+  });
+
+  it("both publish paths retry the cover upload once", () => {
+    for (const f of ["features/create/upload-ahead.ts", "features/create/composer-core.ts"]) {
+      expect(read(f), f).toContain(".catch(() => putPoster(");
+    }
+  });
+});

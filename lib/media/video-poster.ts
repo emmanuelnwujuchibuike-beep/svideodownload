@@ -61,7 +61,18 @@ export function captureVideoPoster(file: File): Promise<VideoPosterResult> {
       };
 
       video.onerror = () => finish({ blob: null, width: null, height: null }, url);
-      video.onloadeddata = () => {
+      /*
+        🔴 SEEK ON METADATA, NOT ON loadeddata (2026-10-06). Four member videos
+        published with no cover. iOS Safari does not fire `loadeddata` for a
+        `preload="metadata"` element until it plays, so this waited for an
+        event that never came and the safety net returned no poster. A seek
+        is what makes iOS fetch and decode the frame, and seeking needs only
+        the metadata. Whichever of the two events arrives first starts it.
+      */
+      let seeking = false;
+      const seek = () => {
+        if (seeking) return;
+        seeking = true;
         // Seek ~0.5s+ in (never the very first frame) so we don't capture the
         // black leading frame that made covers look corrupted.
         const d = video.duration || 0;
@@ -74,8 +85,10 @@ export function captureVideoPoster(file: File): Promise<VideoPosterResult> {
           grab();
         }
       };
-      // Safety net if events never fire.
-      setTimeout(() => finish({ blob: null, width: null, height: null }, url), 5000);
+      video.onloadedmetadata = seek;
+      video.onloadeddata = seek;
+      // Safety net if events never fire — 12 s, a big file on a slow phone decodes slowly.
+      setTimeout(() => finish({ blob: null, width: null, height: null }, url), 12_000);
     } catch {
       finish({ blob: null, width: null, height: null });
     }

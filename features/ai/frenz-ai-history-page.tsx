@@ -4,8 +4,10 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -40,47 +42,39 @@ import { FrenzAIHistory } from "@/features/ai/frenz-ai-history";
  *
  * What was missing was, again, a door.
  */
-export function FrenzAIHistoryPage() {
+export function FrenzAIHistoryPage({ base = "/ai", slides = [] }: { base?: "/ai" | "/studio/ai"; slides?: ShowcaseSlide[] }) {
+  /*
+    Redesign 2026-10-06 (owner's AI History reference): plain white, no frame;
+    the showcase on large screens only; "AI History" with the gradient word
+    and one line under it; the list (kind pills, day groups, media rows). The
+    list lives ON THE DEVICE (lib/ai/history-store.ts) — entering this page
+    asks the server nothing once this browser has synced.
+  */
   return (
-    <FrenzAIEnvironment stage="idle" className="ai-wash relative overflow-hidden rounded-[1.75rem]">
-      {/*
-        The shared ground. This page carried its own two-gradient wash, a third
-        variation on a background both references show as ONE — `.ai-wash` on
-        the wrapper below is that one.
-      */}
-
-      <div className="px-4 pb-10 pt-5 sm:px-6">
-        <FrenzAICrumb tool="Your videos" />
-
-        <h1 className="mt-4 text-[1.9rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[2.2rem]">
-          Your <span className="text-gradient">videos</span>
-        </h1>
-        <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">
-          Everything you&apos;ve made with Frenz AI. Finished videos stay here for a few days — saved ones for longer —
-          so you can come back for them.
-        </p>
+    <FrenzAIEnvironment stage="idle" bare className="relative">
+      <div className="pb-10 pt-3">
+        <AiShowcase slides={slides} base={base} desktopOnly className="mb-5" />
+        <header className="px-1">
+          <h1 className="font-brand text-[2.1rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[2.4rem]">
+            AI <span className="text-gradient">History</span>
+          </h1>
+          <p className="mt-1.5 text-[15.5px] text-muted-foreground">Your creations, all in one place.</p>
+        </header>
 
         {/*
-          🔴 `showHeading={false}`: this page's own H1 already says "Your
-          videos". The section renders its heading when it is a strip on another
-          page and stays quiet when it IS the page — one component, two
-          contexts, rather than a second copy of the list.
+          🔴 `showHeading={false}`: this page's own H1 already names it. The
+          section renders its heading when it is a strip on another page and
+          stays quiet when it IS the page — one component, two contexts.
         */}
-        <FrenzAIHistory className="mt-6" showHeading={false} groupByDay />
+        <FrenzAIHistory className="mt-4" showHeading={false} groupByDay />
 
         <div className="mt-8">
-          <Link
-            href="/ai"
-            prefetch={false}
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:text-foreground"
-          >
+          <Link href={base} prefetch={false} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to Frenz AI
           </Link>
         </div>
       </div>
-
-
     </FrenzAIEnvironment>
   );
 }

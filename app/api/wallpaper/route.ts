@@ -48,6 +48,8 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 async function enforceWallpaperAllowance(
   request: Request,
   downloadId: string | null,
+  /** The wallpaper id — binds the receipt to THIS wallpaper (2026-10-06). */
+  wallpaperId: string,
 ): Promise<{ denied: Response | null; userId: string | null }> {
   let userId: string | null = null;
   // Skip the Supabase round-trip when there is plainly no session — this
@@ -68,9 +70,12 @@ async function enforceWallpaperAllowance(
   if (limit === 0) return { denied: null, userId }; // Pro / Business — no cap, no ad.
 
   const key = userId ? `wp:u:${userId}` : `wp:ip:${clientId(request.headers)}`;
-  if (downloadId && (await alreadyCounted(`${key}:${downloadId}`))) return { denied: null, userId };
+  // Bound to the wallpaper and limited to a retry's worth of rides — one paid id
+  // cannot be replayed for other wallpapers (see alreadyCounted, 2026-10-06).
+  const receipt = downloadId ? `${key}:${downloadId}:${wallpaperId}` : undefined;
+  if (receipt && (await alreadyCounted(receipt, 3))) return { denied: null, userId };
 
-  const r = await consumeDaily(key, limit, downloadId ? `${key}:${downloadId}` : undefined);
+  const r = await consumeDaily(key, limit, receipt);
   if (r.allowed) return { denied: null, userId };
 
   return {
@@ -101,7 +106,7 @@ export async function GET(request: Request) {
   let viewerId: string | null = null;
   if (isDownload) {
     const downloadId = (params.get("t") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
-    const { denied, userId } = await enforceWallpaperAllowance(request, downloadId);
+    const { denied, userId } = await enforceWallpaperAllowance(request, downloadId, id);
     viewerId = userId;
     if (denied) return denied;
   }

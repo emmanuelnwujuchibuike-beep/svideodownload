@@ -88,6 +88,29 @@ export function readSessionExpiry(cookies: { name: string; value: string }[]): n
  * 60s cushion for clock skew and slow requests: if this says "fresh", the page
  * provably won't refresh.
  */
+/**
+ * The signed-in account's id, read from the session cookie — no request.
+ *
+ * For keying what THIS browser keeps locally per account (the AI history
+ * store, 2026-10-06): a phone shared by two members must never show one the
+ * other's creations. Display only — never an authorisation decision, which
+ * the server makes on every request from the verified token.
+ */
+export function readSessionUserId(cookies: { name: string; value: string }[]): string | null {
+  try {
+    const parts = cookies
+      .filter((c) => SESSION_COOKIE.test(c.name))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    if (parts.length === 0) return null;
+    const raw = parts.map((c) => c.value).join("");
+    const json = raw.startsWith(BASE64_PREFIX) ? decodeBase64Url(raw.slice(BASE64_PREFIX.length)) : raw;
+    const id = (JSON.parse(json) as { user?: { id?: unknown } })?.user?.id;
+    return typeof id === "string" && id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 const REFRESH_SKEW_SECONDS = 150;
 
 export function sessionIsComfortablyFresh(cookies: { name: string; value: string }[]): boolean {

@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 
 import { checkDownloadQuota, isInternalWorkerCall } from "@/lib/api/download-quota";
-import { BusyError } from "@/lib/concurrency";
+import { capFromHeader, capToHeader, MAX_BYTES_HEADER, maxDownloadBytes, maxDownloadBytesFor } from "@/lib/downloads/size-cap";
+import { directDownloadsEnabled, directWorkerBase, mintDirectTicket } from "@/lib/downloads/direct-ticket";
 import { RewardError, redeemRewardItem } from "@/lib/monetization/reward-sessions";
 import { downloadLimiter, clientId } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
-import { slugifyFilename } from "@/lib/utils";
 import { downloadRequestSchema, type DownloadRequest } from "@/lib/validation";
 import {
   hasWorker,
   proxyToWorker,
   rejectIfUnauthorizedWorker,
+  WORKER_SECRET,
 } from "@/lib/worker";
 import { recordDownloadEvent } from "@/server/services/analytics";
-import { resolveDownload } from "@/server/services/download-service";
-import { YtDlpError } from "@/server/services/ytdlp-service";
+import { streamResolvedDownload } from "@/server/services/download-response";
 import type { ApiError } from "@/types";
 
 export const runtime = "nodejs";
@@ -39,11 +39,20 @@ async function enforceDailyCap(
   downloadId?: string | null,
   /** The batch this file belongs to, when it belongs to one. One charge per batch. */
   batchId?: string | null,
-): Promise<Response | null> {
-  if (isInternalWorkerCall(request)) return null;
-  const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId);
-  if (quota.allowed) return null;
-  return NextResponse.json<ApiError>(
+  /** What is being downloaded — binds the retry receipt to it (2026-10-06). */
+  data?: DownloadRequest,
+): Promise<{ denied: Response | null; maxBytes: number }> {
+  /*
+    The worker learns the caller's size cap from the trusted proxy (it carries
+    the worker secret); without the header it applies the free cap.
+  */
+  if (isInternalWorkerCall(request)) return { denied: null, maxBytes: capFromHeader(request.headers.get(MAX_BYTES_HEADER)) };
+  const subject = data ? `${data.url}|${data.formatId}|${data.kind}` : null;
+  const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId, subject);
+  // Owner, 2026-10-06: files of 200 MB and over are for Pro / Business only.
+  const maxBytes = maxDownloadBytesFor(quota.plan);
+  if (quota.allowed) return { denied: null, maxBytes };
+  const denied = NextResponse.json<ApiError>(
     {
       error:
         quota.plan === "free"
@@ -53,6 +62,7 @@ async function enforceDailyCap(
     },
     { status: 429, headers: { "Retry-After": "3600" } },
   );
+  return { denied, maxBytes };
 }
 
 /** Shared core: rate-limit, proxy-or-resolve, stream the file as an attachment. */
@@ -66,6 +76,14 @@ async function processDownload(
     Only ever WIDENS what may be streamed raw, and only for HEVC.
   */
   clientPlaysHevc = false,
+  /*
+    The caller asked for a TICKET instead of the bytes (`direct=1`, sent only
+    by the download manager, which knows how to use one). Honoured only when
+    the switch is on — see lib/downloads/direct-ticket.ts.
+  */
+  wantsDirect = false,
+  /** The caller's size cap (lib/downloads/size-cap.ts) — Infinity for paid plans. */
+  maxBytes: number = maxDownloadBytes(),
 ): Promise<Response> {
   const { success, reset } = await downloadLimiter.limit(clientIp);
   if (!success) {
@@ -80,58 +98,34 @@ async function processDownload(
 
   // Frontend role: forward the heavy work to the worker (which has yt-dlp/ffmpeg).
   if (hasWorker) {
+    /*
+      🔴 FOT brief (owner, 2026-10-06): every check above has run — rate limit,
+      and in the callers the daily quota and reward redemption. What is left is
+      only moving bytes, which Vercel adds nothing to. Hand the browser a signed
+      ticket and let it fetch from the worker itself.
+    */
+    if (wantsDirect && directDownloadsEnabled()) {
+      const { ticket, expiresAt } = mintDirectTicket({ data, hevc: clientPlaysHevc, ip: clientIp, maxBytes: capToHeader(maxBytes) }, WORKER_SECRET);
+      return NextResponse.json(
+        { url: `${directWorkerBase()}/api/download/direct?ticket=${encodeURIComponent(ticket)}`, expiresAt },
+        { headers: { "Cache-Control": "no-store", "x-frenz-direct": "1" } },
+      );
+    }
     try {
-      return await proxyToWorker("/api/download", data, clientIp);
+      return await proxyToWorker("/api/download", data, clientIp, { maxBytes });
     } catch {
       /*
         🔴 503, NOT 502 — Cloudflare REPLACES a 502 from the origin with its own
         HTML "502: Bad gateway" page, so this JSON never reached the browser and
         the download card could not show its own failure copy. 503 passes
         through, which is what makes the sentence above visible at all.
-        (The same rule is why `NOT_INSTALLED` below answers 503.)
+        (The same rule is why `NOT_INSTALLED` answers 503 in download-response.ts.)
       */
       return fail("Download service is unavailable.", "INTERNAL", 503);
     }
   }
 
-  const { url, formatId, kind, title: providedTitle } = data;
-
-  try {
-    const { stream, ext, contentType, filesize, title } = await resolveDownload(
-      url,
-      formatId,
-      kind,
-      providedTitle || "video",
-      { clientPlaysHevc },
-    );
-    const filename = slugifyFilename(title, ext);
-
-    const headers: Record<string, string> = {
-      "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store",
-    };
-    if (filesize > 0) headers["Content-Length"] = String(filesize);
-
-    return new Response(stream, { headers });
-  } catch (err) {
-    if (err instanceof BusyError) {
-      return NextResponse.json<ApiError>(
-        { error: "Server is busy. Please retry in a moment.", code: "RATE_LIMITED" },
-        { status: 503, headers: { "Retry-After": "10" } },
-      );
-    }
-    if (err instanceof YtDlpError) {
-      if (err.code === "NOT_INSTALLED") {
-        return fail("Downloader is temporarily unavailable.", "INTERNAL", 503);
-      }
-      if (err.code === "TIMEOUT") {
-        return fail("The download stalled. Please try again.", "TIMEOUT", 504);
-      }
-    }
-    // 503 for the same reason as above: a 502 is swallowed by Cloudflare's edge page.
-    return fail("Download failed. Please try again.", "DOWNLOAD_FAILED", 503);
-  }
+  return streamResolvedDownload(data, clientPlaysHevc, {}, maxBytes);
 }
 
 /** Programmatic JSON download (used by background fetches). */
@@ -152,10 +146,10 @@ export async function POST(request: Request) {
   }
 
   const clientIp = clientId(request.headers);
-  const capped = await enforceDailyCap(request, clientIp);
-  if (capped) return capped;
+  const { denied, maxBytes } = await enforceDailyCap(request, clientIp);
+  if (denied) return denied;
 
-  return processDownload(parsed.data, clientIp, new URL(request.url).searchParams.get("hevc") === "1");
+  return processDownload(parsed.data, clientIp, new URL(request.url).searchParams.get("hevc") === "1", false, maxBytes);
 }
 
 /**
@@ -240,8 +234,8 @@ export async function GET(request: Request) {
     so a forged value can only ever collide with themselves.
   */
   const batchId = (sp.get("b") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
-  const capped = await enforceDailyCap(request, clientIp, downloadId, batchId);
-  if (capped) return capped;
+  const { denied, maxBytes } = await enforceDailyCap(request, clientIp, downloadId, batchId, data);
+  if (denied) return denied;
 
-  return processDownload(data, clientIp, sp.get("hevc") === "1");
+  return processDownload(data, clientIp, sp.get("hevc") === "1", sp.get("direct") === "1", maxBytes);
 }

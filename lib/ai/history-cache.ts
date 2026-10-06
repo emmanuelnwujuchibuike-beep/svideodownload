@@ -1,5 +1,6 @@
 "use client";
 
+import { AI_HISTORY_KEY } from "@/lib/ai/device-keys";
 import type { AiJobView } from "@/lib/ai/jobs";
 
 /**
@@ -124,7 +125,8 @@ export function writeAiHistoryCache(jobs: AiJobView[]): void {
 export function browserHasUsedFrenzAi(): boolean {
   if (typeof window === "undefined") return false;
   try {
-    return window.localStorage.getItem(KEY) !== null;
+    // the on-device AI history store (2026-10-06, lib/ai/history-store.ts) counts too
+    return window.localStorage.getItem(KEY) !== null || window.localStorage.getItem(AI_HISTORY_KEY) !== null;
   } catch {
     /*
       Blocked storage answers FALSE, and that is the right way round. A private

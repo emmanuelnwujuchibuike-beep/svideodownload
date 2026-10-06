@@ -2,17 +2,27 @@
 
 import {
   AlertTriangle,
+  AudioLines,
   Ban,
+  CheckCircle2,
+  Clapperboard,
+  ImagePlay,
+  LayoutGrid,
   Loader2,
+  Mic,
+  MoreVertical,
   PersonStanding,
   Play,
   RotateCcw,
   Sparkles,
   Trash2,
+  Video,
+  type LucideIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { useAiHistory } from "@/features/ai/use-ai-history";
 import {
   AI_HISTORY_EMPTY_COPY,
@@ -87,6 +97,24 @@ const FrenzAIHistoryPlayer = dynamic(
   { ssr: false },
 );
 
+/* ── kinds, for the reference's filter pills (2026-10-06) ───────────────── */
+type HistoryKind = "video" | "audio";
+const HISTORY_KINDS: readonly HistoryKind[] = ["video", "audio"];
+const HISTORY_KIND_LABEL: Record<HistoryKind, string> = { video: "Videos", audio: "Audio" };
+const HISTORY_KIND_ICON: Record<HistoryKind, LucideIcon> = { video: Video, audio: AudioLines };
+/** Audio is what Text to Audio and Voice Cloning make; everything else here is a video. */
+function historyKind(feature: AiJobView["feature"]): HistoryKind {
+  return feature === "ai_text_to_audio" || feature === "ai_voice_clone" ? "audio" : "video";
+}
+const HISTORY_TOOL_ICON: Partial<Record<AiJobView["feature"], LucideIcon>> = {
+  ai_text_to_video: Sparkles,
+  ai_image_to_video: ImagePlay,
+  ai_lip_sync: Clapperboard,
+  ai_text_to_audio: AudioLines,
+  ai_voice_clone: Mic,
+  ai_character_replace: PersonStanding,
+};
+
 export function FrenzAIHistory({
   className,
   showHeading = true,
@@ -158,8 +186,14 @@ export function FrenzAIHistory({
     row to puzzle over). Client-side over the loaded page — the status tabs
     stay the server's.
   */
-  const features = useMemo(() => Array.from(new Set(history.jobs.map((j) => j.feature))), [history.jobs]);
-  const [featureFilter, setFeatureFilter] = useState<"all" | "ai_clean" | "ai_character_replace">("all");
+  /*
+    Redesign 2026-10-06 (owner's AI History reference): the filter is by KIND
+    — All · Videos · Audio — drawn only for kinds the list holds. There is no
+    image tool, so there is no Images pill (an always-empty tab is a claim).
+    Client-side over the on-device list.
+  */
+  const kinds = useMemo(() => Array.from(new Set(history.jobs.map((j) => historyKind(j.feature)))), [history.jobs]);
+  const [kindFilter, setKindFilter] = useState<"all" | HistoryKind>("all");
   /*
     2026-09-20 (the replacement-scope brief §18): a second chip row, by
     SCOPE — All · Face Only · Face + Head · Upper Body · Full Character —
@@ -169,8 +203,8 @@ export function FrenzAIHistory({
   const modes = useMemo(() => Array.from(new Set(history.jobs.map((j) => j.characterReplace?.mode).filter((m): m is ReplacementMode => !!m))), [history.jobs]);
   const [modeFilter, setModeFilter] = useState<"all" | ReplacementMode>("all");
   const visibleJobs = useMemo(
-    () => history.jobs.filter((j) => (featureFilter === "all" || j.feature === featureFilter) && (modeFilter === "all" || j.characterReplace?.mode === modeFilter)),
-    [featureFilter, modeFilter, history.jobs],
+    () => history.jobs.filter((j) => (kindFilter === "all" || historyKind(j.feature) === kindFilter) && (modeFilter === "all" || j.characterReplace?.mode === modeFilter)),
+    [kindFilter, modeFilter, history.jobs],
   );
 
   const live = openJob ? (history.jobs.find((j) => j.id === openJob.id) ?? openJob) : null;
@@ -290,40 +324,44 @@ export function FrenzAIHistory({
           }}
           className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <RotateCcw className={cn("h-3.5 w-3.5", history.loading && "animate-spin motion-reduce:animate-none")} aria-hidden />
+          <RotateCcw className={cn("h-3.5 w-3.5", history.refreshing && "animate-spin motion-reduce:animate-none")} aria-hidden />
           Refresh
         </button>
       </div>
 
-      {features.length > 1 ? (
-        <div role="tablist" aria-label="Filter by tool" className="mt-3 flex flex-wrap gap-1.5">
-          {(
-            [
-              ["all", "All AI"],
-              ["ai_clean", "Clean"],
-              ["ai_character_replace", "Character Replace"],
-            ] as const
-          )
-            .filter(([id]) => id === "all" || features.includes(id))
-            .map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={featureFilter === id}
-                onClick={() => setFeatureFilter(id)}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-[12px] font-semibold transition",
-                  featureFilter === id ? "bg-foreground text-background" : "bg-secondary text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
+      {kinds.length > 1 ? (
+        <div role="tablist" aria-label="Filter by kind" className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
+          {(["all", ...HISTORY_KINDS] as const)
+            .filter((id) => id === "all" || kinds.includes(id))
+            .map((id) => {
+              const on = kindFilter === id;
+              const Icon = id === "all" ? LayoutGrid : HISTORY_KIND_ICON[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => {
+                    haptic("selection");
+                    setKindFilter(id);
+                  }}
+                  className={cn(
+                    "inline-flex min-h-[2.75rem] shrink-0 items-center gap-2 rounded-full px-4 text-[14px] font-semibold transition active:scale-[0.97]",
+                    on
+                      ? "bg-gradient-to-r from-[#4f6cf0] via-[#5f4fee] to-[#8650ea] text-white shadow-[0_8px_18px_-10px_rgba(79,70,229,0.75)]"
+                      : "bg-card text-foreground/75 ring-1 ring-inset ring-black/[0.08] [@media(hover:hover)]:hover:ring-indigo-300/60",
+                  )}
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {id === "all" ? "All" : HISTORY_KIND_LABEL[id]}
+                </button>
+              );
+            })}
         </div>
       ) : null}
 
-      {modes.length > 1 && featureFilter !== "ai_clean" ? (
+      {modes.length > 1 && kindFilter !== "audio" ? (
         <div role="tablist" aria-label="Filter by replacement type" className="mt-2 flex flex-wrap gap-1.5">
           {(["all", ...REPLACEMENT_MODES] as const)
             .filter((id) => id === "all" || modes.includes(id))
@@ -344,30 +382,6 @@ export function FrenzAIHistory({
             ))}
         </div>
       ) : null}
-
-      {/* ── the tabs ────────────────────────────────────────────────────── */}
-      <div role="tablist" aria-label="Filter videos" className="mt-3 flex gap-1 rounded-full bg-secondary p-1">
-        {AI_HISTORY_FILTERS.map((f) => (
-          <button
-            key={f}
-            type="button"
-            role="tab"
-            aria-selected={history.filter === f}
-            onClick={() => {
-              haptic("selection");
-              history.setFilter(f);
-            }}
-            className={cn(
-              "min-h-[36px] flex-1 rounded-full px-3 text-xs font-semibold transition",
-              history.filter === f
-                ? "bg-card shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {AI_HISTORY_FILTER_LABELS[f]}
-          </button>
-        ))}
-      </div>
 
       <div className="mt-3">
         {history.loading ? (
@@ -401,8 +415,11 @@ export function FrenzAIHistory({
             <div className="flex flex-col gap-5">
               {sections.map((section) => (
                 <section key={section.key} aria-label={section.label}>
-                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+                  <h3 className="mb-2.5 flex items-center gap-2 px-1 text-[17px] font-bold tracking-[-0.015em]">
                     {section.label}
+                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] font-semibold tabular-nums text-indigo-600 ring-1 ring-inset ring-indigo-100">
+                      {section.items.length}
+                    </span>
                   </h3>
                   <div className={HISTORY_GRID}>
                     {section.items.map((job) => (
@@ -427,7 +444,7 @@ export function FrenzAIHistory({
           type="button"
           onClick={history.loadMore}
           disabled={history.loadingMore}
-          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-border/70 bg-card/95 px-6 py-3 text-sm font-semibold transition hover:border-foreground/20 active:scale-[0.99] disabled:opacity-70"
+          className={aiButtonClass({ variant: "secondary", block: true, className: "ai-btn--round mt-3" })}
         >
           {history.loadingMore ? (
             <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
@@ -457,7 +474,8 @@ export function FrenzAIHistory({
  * pixels. Two columns is the width at which the tile shows the thing the
  * feature did.
  */
-const HISTORY_GRID = "grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4";
+/* 2026-10-06: a LIST of media rows (the owner's AI History reference) — thumbnail left, the facts right. */
+const HISTORY_GRID = "flex flex-col gap-2.5";
 
 const TONE_CLASS: Record<AiHistoryTone, string> = {
   active: "bg-primary/12 text-primary ring-primary/25",
@@ -538,136 +556,94 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
   const Tag = opens ? "button" : "div";
   const title = job.source.name ?? historyTitleFor(job.feature);
 
+  const kind = historyKind(job.feature);
+  const ToolIcon = HISTORY_TOOL_ICON[job.feature] ?? Sparkles;
+  const seconds = job.result.durationSeconds ?? (job.textToAudio?.durationMs ? job.textToAudio.durationMs / 1000 : null) ?? job.source.durationSeconds;
+
   return (
     /*
-      🔴 THE SAME OUTER SHELL AS `GalleryTile`, down to the ground colour.
-      `group` is what lets the hover disc find it, `aspect-square` and
-      `rounded-2xl` are the grid's rhythm, and `bg-black/40` is what a poster
-      that has not decoded yet sits on — so a slow connection shows the same
-      dark tile the download page shows, not a flash of page background.
+      ── A MEDIA ROW (owner's AI History reference, 2026-10-06) ──────────────
+      Thumbnail on the left with its play disc and length; on the right the
+      tool chip, the title, when, and the state as a pill; ⋮ opens the same
+      sheet a tap on the picture does. White card, hairline, a soft float.
+
+      `opens` is unchanged: a Character Replace row is a door in every state,
+      every other tool's row only when there is something to play.
     */
     <article
       className={cn(
-        "group relative aspect-square overflow-hidden rounded-2xl bg-black/40",
-        opens && "transition active:scale-[0.98]",
+        "group relative flex gap-3 rounded-[1.375rem] bg-card p-2.5 pr-10 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]",
+        opens && "transition active:scale-[0.99]",
       )}
     >
       <Tag
         {...(opens ? { type: "button" as const, onClick: onOpen } : {})}
         aria-label={opens ? (playable ? `Open ${title}` : active ? `${title} — processing` : `${title} — ${chip.label}`) : undefined}
         className={cn(
-          "absolute inset-0 h-full w-full text-left",
-          opens &&
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/80",
+          "relative block aspect-[16/10] w-[42%] max-w-[13rem] shrink-0 overflow-hidden rounded-[0.95rem] bg-black/40 text-left",
+          opens && "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
         )}
       >
-        <HistoryPoster job={job} playable={playable} active={active} />
-
-        {/*
-          The scrim, and the caption INSIDE it.
-
-          The caption used to sit under the tile, which is the other half of why
-          the two pages read differently: the download gallery puts its title on
-          the picture, so its rows are a wall of images with no text gutter
-          between them. Same treatment here.
-
-          🔴 INDIGO, not neutral black. The gradient is the one differentiator
-          that survives being seen at a glance from across a room, and it is the
-          brand's own colour rather than a decoration — see the note above the
-          component.
-        */}
-        <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-indigo-950/90 via-indigo-950/40 to-transparent px-2 pb-1.5 pt-10">
-          <span className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-white/90">
-            <Sparkles className="h-3.5 w-3.5 drop-shadow" aria-hidden />
-            {job.source.durationSeconds ? formatDuration(job.source.durationSeconds) : null}
-          </span>
-          {/*
-            🔴 The member's own filename, as they typed it. No `uppercase`, no
-            truncation of the extension — a CSS transform is a silent edit of
-            somebody's copy, and this feature has made that mistake once already
-            with "WebM".
-
-            `line-clamp-1` ALONE. Never paired with `block`: the two are
-            single-class selectors setting the same property, Tailwind emits
-            `.block` later, and the clamp silently loses — the exact bug that
-            let a TikTok caption cover a whole download tile in August.
-          */}
-          <span className="line-clamp-1 text-[11.5px] font-semibold text-white/95">{title}</span>
-          <span className="line-clamp-1 text-[10.5px] font-medium text-white/65">
-            <TileCaption job={job} availability={availability} now={now} />
-          </span>
-        </span>
-
-        {/*
-          The play disc, on hover only — and with NO `backdrop-blur`, which is a
-          standing law on anything that repeats per tile. A backdrop filter is a
-          separate GPU pass that promotes its element to a layer even at zero
-          opacity, so on a wall of tiles it is a few hundred passes a frame for
-          chrome a touch device never even shows. The dark fill is what makes
-          the glyph readable; the blur never was.
-        */}
+        <HistoryPoster job={job} playable={playable} active={active} audio={kind === "audio"} />
         {playable ? (
-          <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white">
-              <Play className="ml-0.5 h-5 w-5 fill-white" aria-hidden />
-            </span>
+          <span className="absolute bottom-1.5 left-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white">
+            <Play className="ml-0.5 h-3.5 w-3.5 fill-white" aria-hidden />
+          </span>
+        ) : null}
+        {seconds ? (
+          <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums text-white">
+            {formatDuration(seconds)}
+          </span>
+        ) : null}
+        {/* 0166: the video's place in its multi-video session */}
+        {job.batch ? (
+          <span aria-hidden className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
+            {job.batch.index}
+            {job.batch.size ? `/${job.batch.size}` : ""}
           </span>
         ) : null}
       </Tag>
 
-      {/*
-        Top left: the FRENZ MARK, where a download tile wears its platform
-        badge. Same position, same size, deliberately different meaning — what
-        matters about a saved file is where it came from, and what matters about
-        this one is what was done to it.
-      */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow"
-      >
-        <Sparkles className="h-3.5 w-3.5" />
-      </span>
-
-      {/*
-        Top right: the state, but only when it is not simply "Ready".
-
-        A chip on every tile saying "Ready" is a chip that means nothing — the
-        picture already says the video is there. It earns its place on the rows
-        that are NOT ready, which is the same judgement the download tile makes
-        when it badges only failed and cancelled records.
-      */}
-      {/* 0166: the video's place in its multi-video session */}
-      {job.batch ? (
-        <span aria-hidden className="pointer-events-none absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
-          {job.batch.index}
-          {job.batch.size ? `/${job.batch.size}` : ""}
+      <div className="min-w-0 flex-1 py-0.5">
+        <span className="flex items-center gap-1.5 text-[12px] font-medium text-indigo-600">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-indigo-50 ring-1 ring-inset ring-indigo-100">
+            <ToolIcon className="h-3 w-3" aria-hidden />
+          </span>
+          <span className="truncate">{historyTitleFor(job.feature)}</span>
         </span>
-      ) : null}
-      {chip.tone !== "good" ? (
+        {/*
+          🔴 The member's own filename, as they typed it — no `uppercase`, no
+          truncated extension. `line-clamp-1` ALONE, never with `block`.
+        */}
+        <p className="mt-1 line-clamp-1 text-[14.5px] font-semibold tracking-[-0.01em]">{title}</p>
+        <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">
+          <TileCaption job={job} availability={availability} now={now} />
+        </p>
         <span
           className={cn(
-            "pointer-events-none absolute right-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
-            playable ? "bg-black/60 text-white" : cn("ring-1 ring-inset", TONE_CLASS[chip.tone]),
+            "mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+            chip.tone === "good" ? "bg-indigo-50 text-indigo-700 ring-indigo-200" : TONE_CLASS[chip.tone],
           )}
         >
+          {chip.tone === "good" ? <CheckCircle2 className="h-3 w-3" aria-hidden /> : active ? <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
           {chip.label}
         </span>
-      ) : (
-        /*
-          A ready tile gets the Before / after pill instead. It is the one thing
-          this page can promise that the download page cannot, and putting it on
-          the tile is what tells somebody the tap is worth making.
-        */
-        <span
-          aria-hidden
-          className="pointer-events-none absolute right-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-white"
+      </div>
+
+      {opens ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`More for ${title}`}
+          className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          Before / after
-        </span>
-      )}
+          <MoreVertical className="h-4 w-4" aria-hidden />
+        </button>
+      ) : null}
     </article>
   );
 }
+
 
 /**
  * The picture on the tile — or the plate, when there is no picture.
@@ -688,10 +664,13 @@ function HistoryPoster({
   job,
   playable,
   active,
+  audio = false,
 }: {
   job: AiJobView;
   playable: boolean;
   active: boolean;
+  /** An audio row: the reference's gradient plate with a waveform, never a request. */
+  audio?: boolean;
 }) {
   /*
     Reset synchronously when the id changes rather than in an effect, so a
@@ -703,6 +682,14 @@ function HistoryPoster({
   if (job.id !== lastId) {
     setLastId(job.id);
     setBroken(false);
+  }
+
+  if (audio) {
+    return (
+      <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#4f6cf0] via-[#6d5cf0] to-[#a77bf3] text-white/95">
+        {active ? <Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none" aria-hidden /> : <AudioLines className="h-8 w-8" aria-hidden />}
+      </span>
+    );
   }
 
   if (job.result.hasPoster && !broken) {
@@ -808,7 +795,7 @@ function TileCaption({
 function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) {
   const copy = AI_HISTORY_EMPTY_COPY[filter];
   return (
-    <div className="rounded-2xl border border-dashed border-border/70 px-6 py-10 text-center">
+    <div className="rounded-[1.375rem] border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-6 py-10 text-center">
       <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
         <Sparkles className="h-5 w-5" aria-hidden />
       </span>
@@ -816,7 +803,7 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
       <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">{copy.body}</p>
       {/* Part 9 §35: useful, not decorative — the door to the first video, from the empty list itself */}
       {filter === "all" ? (
-        <Link href="/studio/ai/character-replace" className="btn-lux mt-5 bg-foreground text-background">
+        <Link href="/studio/ai/character-replace" className={aiButtonClass({ className: "mt-5" })}>
           <PersonStanding className="h-4 w-4" aria-hidden />
           Create a video
         </Link>
@@ -840,11 +827,15 @@ function HistorySkeleton() {
         layout the real list no longer has, and the swap from one to the other
         is a visible jump on every load.
       */}
-      {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className="aspect-square w-full animate-pulse rounded-2xl bg-secondary motion-reduce:animate-none"
-        />
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="flex gap-3 rounded-[1.375rem] p-2.5 ring-1 ring-inset ring-black/[0.07]">
+          <div className="aspect-[16/10] w-[42%] max-w-[13rem] shrink-0 animate-pulse rounded-[0.95rem] bg-secondary motion-reduce:animate-none" />
+          <div className="flex-1 space-y-2 py-1">
+            <div className="h-3 w-24 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
+            <div className="h-4 w-36 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
+            <div className="h-3 w-28 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
+          </div>
+        </div>
       ))}
     </div>
   );

@@ -1,6 +1,8 @@
 "use client";
 
 import type { AiErrorCode } from "@/lib/ai/errors";
+import { removeFromAiHistory, upsertAiHistory } from "@/lib/ai/history-store";
+import { cachedMediaUrl, rememberMediaUrl } from "@/lib/ai/media-url-cache";
 import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import type { AiFeature, AiJobSourceInput, AiJobStatus, AiJobView } from "@/lib/ai/jobs";
 
@@ -125,7 +127,10 @@ export async function createAiJob(input: {
 }
 
 export async function getAiJob(id: string): Promise<AiJobResult<{ job: AiJobView }>> {
-  return request(`/api/ai/jobs/${encodeURIComponent(id)}`);
+  const res = await request<{ job: AiJobView }>(`/api/ai/jobs/${encodeURIComponent(id)}`);
+  // every job the app already reads keeps the on-device history current — no request of its own (lib/ai/history-store.ts)
+  if (res.ok) upsertAiHistory([res.job]);
+  return res;
 }
 
 export async function listAiJobs(opts?: {
@@ -147,7 +152,9 @@ export async function listAiJobs(opts?: {
   if (opts?.active) params.set("active", "1");
   if (opts?.statuses?.length) params.set("status", opts.statuses.join(","));
   const query = params.toString();
-  return request(`/api/ai/jobs${query ? `?${query}` : ""}`);
+  const res = await request<{ jobs: AiJobView[]; nextCursor: string | null }>(`/api/ai/jobs${query ? `?${query}` : ""}`);
+  if (res.ok) upsertAiHistory(res.jobs);
+  return res;
 }
 
 export interface AiUploadTicket {
@@ -307,7 +314,18 @@ export async function getAiJobResult(
   forDownload = false,
 ): Promise<AiJobResult<{ url: string; expiresIn: number; size: number | null }>> {
   const suffix = forDownload ? "?download=1" : "";
-  return request(`/api/ai/jobs/${encodeURIComponent(id)}/result${suffix}`);
+  /*
+    Playing the same result again within its link's life asks nothing (owner,
+    2026-10-06) — lib/ai/media-url-cache.ts. Download links are never cached.
+  */
+  const cacheKey = `job:${id}`;
+  if (!forDownload) {
+    const hit = cachedMediaUrl(cacheKey);
+    if (hit) return { ok: true, url: hit, expiresIn: 0, size: null } as AiJobResult<{ url: string; expiresIn: number; size: number | null }>;
+  }
+  const res = await request<{ url: string; expiresIn: number; size: number | null }>(`/api/ai/jobs/${encodeURIComponent(id)}/result${suffix}`);
+  if (res.ok && !forDownload) rememberMediaUrl(cacheKey, res.url, res.expiresIn);
+  return res;
 }
 
 /**
@@ -327,14 +345,18 @@ export async function getAiJobSource(
 
 /** Keep this result beyond the ordinary window (or stop keeping it). Owner only; no charge. */
 export async function saveAiJob(id: string, saved: boolean): Promise<AiJobResult<{ job: AiJobView; saved: boolean; expiresAt: string }>> {
-  return request(`/api/ai/jobs/${encodeURIComponent(id)}/save`, {
+  const res = await request<{ job: AiJobView; saved: boolean; expiresAt: string }>(`/api/ai/jobs/${encodeURIComponent(id)}/save`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ saved }),
   });
+  if (res.ok) upsertAiHistory([res.job]);
+  return res;
 }
 
 /** Remove a finished result: its files go, the row leaves history, the ledger stays. */
 export async function deleteAiJob(id: string): Promise<AiJobResult<{ job: AiJobView; deleted: boolean }>> {
-  return request(`/api/ai/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const res = await request<{ job: AiJobView; deleted: boolean }>(`/api/ai/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (res.ok && res.deleted) removeFromAiHistory(id);
+  return res;
 }

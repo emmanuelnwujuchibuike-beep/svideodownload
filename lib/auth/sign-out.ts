@@ -8,6 +8,7 @@ import { clearCharacterReplaceBalanceCache } from "@/lib/ai/character-replace/cl
 import { clearAiEntitlementCache } from "@/lib/ai/entitlement-cache";
 import { clearAiFreeAccessCache } from "@/lib/ai/free-access-cache";
 import { clearAiHistoryCache } from "@/lib/ai/history-cache";
+import { forgetAiDeviceData } from "@/lib/ai/device-keys";
 
 import { clearIdentity } from "./identity-cache";
 
@@ -54,6 +55,7 @@ export async function signOutClient(): Promise<void> {
     put it there.
   */
   clearAiHistoryCache();
+  forgetAiDeviceData(); // the on-device AI history + kept playback links (2026-10-06) — keys only, see lib/ai/device-keys.ts
   clearAiBalanceCache(); // the same rule, for the balance snapshot (2026-09-13)
   clearAiViewCache(); // and every AI page's remembered answer (2026-09-27)
   clearAiEntitlementCache(); // and the plan/allowance snapshot (2026-09-13)

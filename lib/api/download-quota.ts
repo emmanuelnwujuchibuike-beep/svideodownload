@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { getPlanLimits, getUserPlan } from "@/lib/monetization/plan";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { alreadyCounted, consumeDaily } from "@/lib/rate-limit";
@@ -17,6 +19,11 @@ import { WORKER_SECRET } from "@/lib/worker";
 export function isInternalWorkerCall(request: Request): boolean {
   return !!WORKER_SECRET && request.headers.get("x-worker-secret") === WORKER_SECRET;
 }
+
+/** The download manager makes at most 3 attempts (retry-policy MAX_ATTEMPTS); one ride of slack. */
+export const MAX_RETRY_RIDES = 3;
+/** A batch is at most 50 files (reward-sessions MAX_ITEMS.batch), each with retries. */
+export const MAX_BATCH_RIDES = 100;
 
 export interface DownloadQuota {
   allowed: boolean;
@@ -70,6 +77,11 @@ export async function checkDownloadQuota(
    * through on an id that never paid.
    */
   batchId?: string | null,
+  /**
+   * WHAT is being downloaded (source URL + format + kind). Binds a per-download
+   * receipt to it, so one paid id cannot be reused for a different file.
+   */
+  subject?: string | null,
 ): Promise<DownloadQuota> {
   // Resolve the caller's identity from the session cookie (null = anonymous).
   // Skip the Supabase round-trip entirely when there's no auth cookie — the
@@ -99,10 +111,16 @@ export async function checkDownloadQuota(
     for all its retries. Preferring the batch id is what makes a 12-photo
     slideshow cost one instead of twelve.
   */
-  const receipt = batchId ? `${key}:b:${batchId}` : downloadId ? `${key}:${downloadId}` : undefined;
+  const bound = subject ? `:${createHash("sha256").update(subject).digest("base64url").slice(0, 16)}` : "";
+  const receipt = batchId ? `${key}:b:${batchId}` : downloadId ? `${key}:${downloadId}${bound}` : undefined;
 
   // A retry — or a sibling of an already-paid batch — passes straight through.
-  if (receipt && (await alreadyCounted(receipt))) {
+  /*
+    🔴 2026-10-06 (Railway egress spike): a receipt now allows a bounded number
+    of rides — the retries one download really makes, or the files one batch
+    really has. Past that the request is charged like any new download.
+  */
+  if (receipt && (await alreadyCounted(receipt, batchId ? MAX_BATCH_RIDES : MAX_RETRY_RIDES))) {
     return { allowed: true, used: 0, limit, plan };
   }
 

@@ -46,6 +46,14 @@ function alreadyRecordedToday(): boolean {
   }
 }
 
+function clearRecordedToday(): void {
+  try {
+    window.localStorage.removeItem(RECORDED_KEY);
+  } catch {
+    /* private mode — nothing was stored */
+  }
+}
+
 /** Only ever called after the server CONFIRMED the day (a parsed 2xx state). */
 function markRecordedToday(): void {
   try {
@@ -97,11 +105,29 @@ function writeDisplayCache(state: StreakState): void {
   }
 }
 
-async function loadStreak(): Promise<StreakState> {
+export async function loadStreak(): Promise<StreakState> {
   const res = await fetch("/api/streak", { credentials: "same-origin" });
   if (!res.ok) throw new Error(`streak ${res.status}`);
   const state = (await res.json()) as StreakState;
   writeDisplayCache(state);
+  /*
+    🔴 THE ONCE-A-DAY MARKER IS PER BROWSER; THE STREAK IS PER IDENTITY
+    (owner, 2026-10-06: "streak icon is not showing in the browser landing
+    page" — and it showed in a different browser).
+
+    The marker said "recorded today" for whoever recorded first on this
+    browser. After a sign-in, a sign-out, or cleared cookies, the identity is a
+    different one that has NOT been recorded — but the marker still skipped the
+    POST, so the server honestly answered 0 and the chip hid all day.
+
+    This GET already runs on every page open, so asking costs nothing: if the
+    server says today is not on THIS identity's record while the marker says
+    it is, the marker is wrong. Drop it and record.
+  */
+  if (state.lastActivityDate !== state.today && alreadyRecordedToday()) {
+    clearRecordedToday();
+    void recordStreakActivity();
+  }
   return state;
 }
 

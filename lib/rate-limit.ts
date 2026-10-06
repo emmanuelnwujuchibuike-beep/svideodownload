@@ -261,10 +261,22 @@ export async function peekDaily(key: string): Promise<number> {
  * "no receipt", the caller falls through to `consumeDaily`, and that fails open
  * too — a broken counter must never be what stops a download.
  */
-export async function alreadyCounted(receiptKey: string): Promise<boolean> {
+export async function alreadyCounted(receiptKey: string, maxRides = Number.POSITIVE_INFINITY): Promise<boolean> {
   if (!dailyRedis) return false;
   try {
-    return (await dailyRedis.exists(`svd:receipt:${receiptKey}`)) === 1;
+    if ((await dailyRedis.exists(`svd:receipt:${receiptKey}`)) !== 1) return false;
+    if (!Number.isFinite(maxRides)) return true;
+    /*
+      🔴 A RECEIPT IS A FEW FREE RIDES, NOT A SEASON TICKET (2026-10-06).
+      Production, 3 hours: 1,049 anonymous Telegram downloads, single posts
+      fetched up to 76 times, Railway egress $7 in 2 hours. A receipt used to
+      let EVERY later request with the same id through uncharged for six hours,
+      so one paid unit could be replayed without end. Each ride is now counted;
+      past `maxRides` the request is charged like a new download.
+    */
+    const rides = await dailyRedis.incr(`svd:rides:${receiptKey}`);
+    if (rides === 1) await dailyRedis.expire(`svd:rides:${receiptKey}`, 60 * 60 * 6);
+    return rides <= maxRides;
   } catch {
     return false;
   }

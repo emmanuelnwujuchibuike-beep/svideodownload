@@ -4,6 +4,7 @@ import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AIDownloadOverlay } from "@/features/ai/ai-download-overlay";
 import { FrenzAIHistoryPage } from "@/features/ai/frenz-ai-history-page";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { SITE_URL } from "@/lib/site";
 
 /**
@@ -128,7 +129,7 @@ export default async function PublicFrenzAIHistoryPage() {
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
         style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
-        <FrenzAIHistoryPage />
+        <FrenzAIHistoryPage base="/ai" slides={await getShowcaseSlides()} />
       </main>
       {/*
         The download card, sound and haptic. The MARKETING group has no

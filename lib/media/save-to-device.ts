@@ -29,6 +29,29 @@
  */
 export type SaveResult = "saved" | "shared" | "cancelled" | "failed";
 
+/** The origins storage CORS was measured to answer (see the note in saveMediaToDevice). */
+const DIRECT_ORIGINS = new Set(["https://frenzsave.com", "https://www.frenzsave.com"]);
+
+export function proxiedUrl(url: string, name: string): string {
+  return `/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
+}
+
+/**
+ * The object straight from storage, or null to use the proxy — off the
+ * production origins (where it would throw), for a non-https URL, or when the
+ * direct attempt failed in any way.
+ */
+async function fetchDirect(url: string): Promise<Response | null> {
+  if (typeof location === "undefined" || !DIRECT_ORIGINS.has(location.origin)) return null;
+  if (!/^https:\/\//i.test(url)) return null;
+  try {
+    const res = await fetch(url, { mode: "cors", cache: "no-store", credentials: "omit" });
+    return res.ok ? res : null;
+  } catch {
+    return null;
+  }
+}
+
 function extensionFor(url: string, mime: string | null, kind: "image" | "video"): string {
   const fromUrl = url.split("?")[0]?.split(".").pop()?.toLowerCase();
   if (fromUrl && /^[a-z0-9]{2,4}$/.test(fromUrl)) return fromUrl;
@@ -60,8 +83,14 @@ export async function saveMediaToDevice({
     // gets no `access-control-allow-origin` at all, so a direct fetch THROWS
     // and every save fails there. Same-origin has no preflight and no
     // per-domain allowlist to keep in sync. See /api/media/download.
-    const proxied = `/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
-    const res = await fetch(proxied, { cache: "no-store" });
+    //
+    // 🔴 FOT brief (owner, 2026-10-06): the proxy streams every saved byte
+    // through Vercel. On the two production origins that measurement says the
+    // direct fetch WORKS, so it is tried first there and the proxy is only
+    // the fallback. Nothing is loosened: the URL is one the page already
+    // shows (a public object), and the bytes still become a same-origin blob
+    // below, so `Content-Disposition` was never what saved it.
+    const res = (await fetchDirect(url)) ?? (await fetch(proxiedUrl(url, name), { cache: "no-store" }));
     if (!res.ok) return "failed";
     const blob = await res.blob();
     const file = new File([blob], name, { type: blob.type || (kind === "video" ? "video/mp4" : "image/jpeg") });

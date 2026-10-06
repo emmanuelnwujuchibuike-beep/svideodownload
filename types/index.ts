@@ -250,6 +250,7 @@ export interface ApiError {
     | "RATE_LIMITED"
     | "EXTRACTION_FAILED"
     | "DOWNLOAD_FAILED"
+    | "FILE_TOO_LARGE"
     | "TIMEOUT"
     | "INTERNAL"
     // Reward-session / download-authorization errors — see

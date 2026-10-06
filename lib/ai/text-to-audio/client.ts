@@ -1,6 +1,7 @@
 import type { AiCreditsView } from "@/lib/ai/wallet/client";
 import type { AiJobView } from "@/lib/ai/jobs";
 import type { TextToAudioPublicConfig } from "@/lib/ai/text-to-audio/config";
+import { cachedMediaUrl, rememberMediaUrl } from "@/lib/ai/media-url-cache";
 
 /**
  * The browser's view of Text to Audio and the Audio Library. Same shape as
@@ -123,8 +124,18 @@ export function listAudioLibrary(limit = 100): Promise<TtaResult<{ assets: Audio
   return request(`/api/ai/audio?limit=${encodeURIComponent(String(limit))}`);
 }
 
-export function getAudioAssetUrl(id: string): Promise<TtaResult<{ url: string; expiresIn: number; mime: string; bytes: number; durationMs: number | null }>> {
-  return request(`/api/ai/audio/${encodeURIComponent(id)}/file`);
+export async function getAudioAssetUrl(id: string): Promise<TtaResult<{ url: string; expiresIn: number; mime: string; bytes: number; durationMs: number | null }>> {
+  /*
+    Playing the same audio again within its link's life asks nothing (owner,
+    2026-10-06) — lib/ai/media-url-cache.ts. mime/bytes/duration are what the
+    player already showed; the cached hit only needs the URL.
+  */
+  const key = `audio:${id}`;
+  const hit = cachedMediaUrl(key);
+  if (hit) return { ok: true, url: hit, expiresIn: 0, mime: "", bytes: 0, durationMs: null } as TtaResult<{ url: string; expiresIn: number; mime: string; bytes: number; durationMs: number | null }>;
+  const res = await request<{ url: string; expiresIn: number; mime: string; bytes: number; durationMs: number | null }>(`/api/ai/audio/${encodeURIComponent(id)}/file`);
+  if (res.ok) rememberMediaUrl(key, res.url, res.expiresIn);
+  return res;
 }
 
 export function renameAudioAsset(id: string, name: string): Promise<TtaResult<{ asset: AudioAssetItem }>> {

@@ -119,7 +119,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           poster is cut once from a file that never changes, and the row's own
           retention deletes it rather than replacing it.
         */
-        "Cache-Control": "private, max-age=86400, immutable",
+        // 30 days (2026-10-06): a job's poster never changes, and the AI history must not ask again on every visit
+        "Cache-Control": "private, max-age=2592000, immutable",
         // The bytes are already unguessable and access-checked; this is here so
         // a poster can never be interpreted as anything but an image.
         "X-Content-Type-Options": "nosniff",

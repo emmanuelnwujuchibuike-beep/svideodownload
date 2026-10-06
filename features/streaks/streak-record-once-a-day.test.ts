@@ -158,3 +158,39 @@ describe("recordStreakActivity — once a day per device", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+/*
+  Owner, 2026-10-06: the chip vanished on one browser and showed on another.
+  The marker is per BROWSER, the streak per IDENTITY — after a sign-in/out or a
+  cookie reset the marker skipped the new identity's record all day. The GET
+  that already runs on every page now repairs it.
+*/
+describe("the marker heals when the server disagrees", () => {
+  it("a 'recorded' marker the server does not agree with is dropped and today is recorded", async () => {
+    const storage = fakeStorage({ "frenz:streak-recorded": TODAY });
+    install(storage);
+    const spy = vi.fn(async (_u: string, init?: { method?: string }) => ({
+      ok: true,
+      json: async () =>
+        init?.method === "POST"
+          ? { ...OK_STATE, currentStreak: 1, lastActivityDate: TODAY }
+          : { ...OK_STATE, currentStreak: 0, lastActivityDate: null },
+    }));
+    vi.stubGlobal("fetch", spy);
+    const { loadStreak } = await loadModule();
+
+    await loadStreak();
+    await vi.waitFor(() => expect(spy.mock.calls.some(([, i]) => i?.method === "POST")).toBe(true));
+    await vi.waitFor(() => expect(storage.map.get("frenz:streak-recorded")).toBe(TODAY));
+  });
+
+  it("costs nothing when the server agrees today is recorded — no POST", async () => {
+    install(fakeStorage({ "frenz:streak-recorded": TODAY }));
+    const spy = mockFetch({ ok: true, body: { ...OK_STATE, lastActivityDate: TODAY } });
+    const { loadStreak } = await loadModule();
+
+    await loadStreak();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+});

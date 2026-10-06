@@ -1,3 +1,5 @@
+import { capToHeader, isTooLarge, MAX_BYTES_HEADER, maxDownloadBytes, tooLargeMessage } from "@/lib/downloads/size-cap";
+
 /**
  * Frontend/worker split.
  *
@@ -36,7 +38,10 @@ export async function proxyToWorker(
   path: "/api/metadata" | "/api/download",
   body: unknown,
   clientIp: string,
+  /** The caller's size cap (lib/downloads/size-cap.ts); Infinity = none. */
+  opts: { maxBytes?: number } = {},
 ): Promise<Response> {
+  const maxBytes = opts.maxBytes ?? maxDownloadBytes();
   const upstream = await fetch(`${WORKER_URL}${path}`, {
     method: "POST",
     headers: {
@@ -44,9 +49,30 @@ export async function proxyToWorker(
       "x-worker-secret": WORKER_SECRET,
       // Preserve the real client IP so the worker's rate limiter is accurate.
       "x-forwarded-for": clientIp,
+      [MAX_BYTES_HEADER]: capToHeader(maxBytes),
     },
     body: JSON.stringify(body),
   });
+
+  /*
+    🔴 2026-10-06 — the size cap, enforced HERE as well as on the worker. The
+    worker's headers arrive before its body; when they show a file over the
+    cap, cancel the body so the worker stops sending (Railway egress) and say so.
+  */
+  if (path === "/api/download" && upstream.ok) {
+    const length = Number(upstream.headers.get("content-length"));
+    if (isTooLarge(length, maxBytes)) {
+      try {
+        await upstream.body?.cancel();
+      } catch {
+        /* already closed */
+      }
+      return new Response(JSON.stringify({ error: tooLargeMessage(length, maxBytes), code: "FILE_TOO_LARGE" }), {
+        status: 413,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
+  }
 
   // Stream the worker's response straight back, copying the headers that matter.
   const headers = new Headers();

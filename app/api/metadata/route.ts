@@ -83,6 +83,17 @@ export async function POST(request: Request) {
           422,
         );
       }
+      /*
+        A PUBLIC post that is only text (owner report 2026-10-06, measured on
+        production: t.me/durov/397, /402, /403 — text posts — answered
+        500 "Something went wrong." while photo and video posts downloaded).
+        That is a fact about the post, not a fault in the service.
+      */
+      return fail(
+        "This Telegram post has no photo or video to download — it may be text only, or the media was removed.",
+        "EXTRACTION_FAILED",
+        422,
+      );
     }
     /*
       The platform itself said the content is gone (a Snapchat 404 with its own

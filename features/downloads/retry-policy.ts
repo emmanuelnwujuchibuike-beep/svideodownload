@@ -40,6 +40,9 @@ export function isRetryable(reason: string): boolean {
   // A definitive "not there" or "not allowed" says the same thing every time.
   if (/\b(?:404|403|401|410)\b/.test(reason)) return false;
   if (/private|removed|expired|not found|unavailable in your/i.test(reason)) return false;
+  // Too large is a fact about the file (lib/downloads/size-cap.ts). Retrying it
+  // re-sent hundreds of MB out of Railway per attempt (2026-10-06).
+  if (/too large|\b413\b/i.test(reason)) return false;
   // Everything else — 502s above all, which is most of the real error log — is
   // a transient upstream hiccup that usually succeeds on the next attempt.
   return true;

@@ -2,6 +2,7 @@
 
 import { trackDownload } from "@/lib/analytics/client";
 import { canPlayHevc } from "@/lib/media/hevc-support";
+import { fetchDownload } from "@/features/downloads/fetch-download";
 import { isRetryable, MAX_ATTEMPTS, RETRY_DELAY_MS } from "@/features/downloads/retry-policy";
 import { readEntitlements } from "@/features/auth/use-entitlements";
 import { addDownload, getSnapshot as getHistorySnapshot } from "@/features/history/store";
@@ -528,7 +529,7 @@ async function run(id: string) {
   const endCriticalActivity = beginCriticalActivity();
 
   try {
-    const res = await fetch(fetchTarget(task), { signal: controller.signal });
+    const res = await fetchDownload(fetchTarget(task), controller.signal);
     if (!res.ok || !res.body) throw new Error(await failureMessage(res));
 
     const total = Number(res.headers.get("content-length")) || 0;

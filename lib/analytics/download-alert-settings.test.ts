@@ -68,7 +68,7 @@ describe("download retry keeps its direct target", () => {
     expect(manager).toContain("function fetchTarget");
     // The relative-path guard, and the fetch going through it.
     expect(manager).toContain("test(t.url)) return t.url");
-    expect(manager).toContain("fetch(fetchTarget(task)");
+    expect(manager).toContain("fetchDownload(fetchTarget(task)");
   });
 
   it("persists directUrl on every history write", () => {

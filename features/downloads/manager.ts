@@ -2,7 +2,6 @@
 
 import { trackDownload } from "@/lib/analytics/client";
 import { canPlayHevc } from "@/lib/media/hevc-support";
-import { fetchDownload } from "@/features/downloads/fetch-download";
 import { isRetryable, MAX_ATTEMPTS, RETRY_DELAY_MS } from "@/features/downloads/retry-policy";
 import { readEntitlements } from "@/features/auth/use-entitlements";
 import { addDownload, getSnapshot as getHistorySnapshot } from "@/features/history/store";
@@ -529,6 +528,9 @@ async function run(id: string) {
   const endCriticalActivity = beginCriticalActivity();
 
   try {
+    // Loaded on the first download, not with every page that mounts the manager
+    // (lib/perf/budget.test.ts held /admin at its ceiling, 2026-10-06).
+    const { fetchDownload } = await import("@/features/downloads/fetch-download");
     const res = await fetchDownload(fetchTarget(task), controller.signal);
     if (!res.ok || !res.body) throw new Error(await failureMessage(res));
 

@@ -396,47 +396,6 @@ export function AiInfoCard({
 
 /* ─────────────────────────────── the actions ────────────────────────────── */
 
-/**
- * The one gradient pill on the screen.
- *
- * ⚠️ 56px TALL, AND THAT IS LOAD-BEARING. A global
- * `a[href] { min-height: var(--tap) }` rule once clamped every link's utility
- * `min-h-*` because (0,1,1) beats (0,1,0), and a CTA that measured 56px in the
- * markup rendered at 26px on the device. The height is set on BOTH `h-14` and
- * `min-h-[3.5rem]` so a specificity accident cannot silently shrink it again.
- *
- * `.ai-cta` carries the animated gradient, the sheen and the inner hairline —
- * see globals.css, where it is already paused on a hidden tab and under
- * reduced motion.
- */
-export function AiPrimaryAction({
-  href,
-  children,
-  icon: Icon = ArrowRight,
-  className,
-  ...rest
-}: {
-  href: string;
-  children: ReactNode;
-  icon?: LucideIcon | null;
-  className?: string;
-} & Omit<React.ComponentProps<typeof Link>, "href" | "className" | "children">) {
-  return (
-    <Link
-      href={href}
-      className={cn(
-        "ai-cta inline-flex h-14 min-h-[3.5rem] items-center justify-center gap-2 px-6 text-[15px] font-bold",
-        "active:scale-[0.985] motion-reduce:active:scale-100",
-        className,
-      )}
-      {...rest}
-    >
-      {children}
-      {Icon ? <Icon className="h-[18px] w-[18px]" aria-hidden /> : null}
-    </Link>
-  );
-}
-
 /** The bordered glass pill that sits beside the primary one. Never a gradient. */
 export function AiSecondaryAction({
   href,

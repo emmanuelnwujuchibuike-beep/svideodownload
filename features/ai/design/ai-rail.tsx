@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { FrenzLogo } from "@/components/brand/frenz-logo";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -153,7 +154,9 @@ export function AiRail() {
         </p>
         <Link
           href="/account/plan"
-          className="ai-cta mt-2.5 flex h-9 items-center justify-center rounded-full text-[13px] font-bold"
+          prefetch={false}
+          // the shared pill (consistency audit 2026-10-06) — .ai-cta looped a 9 s gradient pass
+          className={aiButtonClass({ size: "sm", block: true, className: "mt-2.5" })}
         >
           Upgrade
         </Link>

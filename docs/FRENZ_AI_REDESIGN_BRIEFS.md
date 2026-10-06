@@ -2555,11 +2555,11 @@ Important: inspect the current implementation and architecture first. Do not rew
 | 5 | Text to Audio | ✅ | 395e6dd · 0f69b5c | showcase lg+ only on tool pages (owner); floating glass credits strip |
 | 6 | Voice Cloning | ✅ | b4c0609 | one panel, numbered blocks, shared buttons |
 | 7 | Lip Sync | ✅ | 0f69b5c | 0 layout shifts (4 runs); indigo selected states |
-| 8 | Your Audios | ⏳ NEXT | — | audio-library.tsx still on .ai-cta; voice-library.tsx standalone page |
-| 9 | Your Videos | ⏳ | — | |
-| 10 | Credit Balance | ⏳ | — | |
-| 11 | Plans / Pricing | ⏳ | — | |
-| — | Consistency audit | ⏳ | — | |
+| 8 | Your Audios + Your Voices | ✅ | c40f367 | libraries get their own loading shape |
+| 9 | Your Videos → AI History | ✅ | ca26f7d | list lives on the device (history-store.ts); no request per visit; the app-wide job banner asks only when a job is running |
+| 10 | Credit Balance | ✅ | 2cb36cc | AI balance; showcase lg+; no strip |
+| 11 | Plans / Pricing | ✅ | 2cb36cc | copy names the tools that spend credits; indigo pills |
+| — | Consistency audit | ⏳ NEXT | — | remaining .ai-cta in ai-rail.tsx / ai-surface.tsx |
 | — | Performance audit | ⏳ | — | vs d08cf56 built in C:\tmp\svd-base |
 | C | Landing promo | ⏸ queued | — | not one of the 11; owner decisions recorded above |
 

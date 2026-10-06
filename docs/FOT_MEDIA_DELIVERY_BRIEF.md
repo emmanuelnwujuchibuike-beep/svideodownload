@@ -563,6 +563,10 @@ Implement this carefully without breaking Frenzsave.
 
 | Step | State | Note |
 |---|---|---|
-| Audit (every media path) | ⏳ | after the AI History page commit |
-| Fixes | ⏳ | |
-| Validation | ⏳ | |
+| Audit (every media path) | ✅ | production probe 10-06: post/reel/feed media come from R2/Supabase directly; idle + hidden ≈ 0 Vercel requests; downloads were the big FOT source |
+| Downloads off Vercel | ✅ | 935aa45 · 8abcb8d — signed worker tickets, DOWNLOAD_DIRECT=1 on production; measured 2.8 s direct vs 9.7 s proxied, identical bytes; fallback to proxy on any worker failure |
+| Size caps (Railway egress spike) | ✅ | 935aa45 · fd2674c · 66d4395 — free < 200 MB, Pro/Business uncapped; Telegram ≤ 60 MB on every path; bounded quota receipts |
+| Admin download-outcome pushes | ✅ | f58c0aa — failed/cancelled no longer call Vercel |
+| Save to device | ✅ | 935aa45 — direct storage fetch on the production origins, proxy fallback |
+| Profile media on open | ✅ | 7ac594a — 67.8 MB → 2.4 MB |
+| Open | ⏳ | /_next/image thumbnails (~50 per profile view, first-time ones transform on Vercel); 4 video posts need real thumbnails (production write — owner) ; AI audio save still proxies (owner rule: iOS must save, not open) |

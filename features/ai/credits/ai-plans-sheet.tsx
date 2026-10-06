@@ -4,6 +4,7 @@ import { Check, Crown, Sparkles, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
+import { aiButtonClass } from "@/features/ai/design/ai-button";
 import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
 import { beginAiPlanCheckout } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
@@ -96,7 +97,7 @@ export function AiPlansSheet({
                   haptic("selection");
                   onPayFromWallet();
                 }}
-                className="btn-lux mt-3 min-h-[46px] w-full border border-border/70 bg-card text-foreground hover:border-foreground/25"
+                className={aiButtonClass({ variant: "secondary", block: true, className: "mt-3" })}
               >
                 <Wallet className="h-4 w-4" aria-hidden />
                 {walletLabel ?? (shortfall.priceLabel ? `Pay ${shortfall.priceLabel} from my balance instead` : "Pay from my balance instead")}
@@ -104,7 +105,7 @@ export function AiPlansSheet({
             ) : null}
           </div>
         ) : (
-          <p className="text-[13px] leading-relaxed text-muted-foreground">An AI plan includes a daily and a weekly allowance of credits for Character Replace and every Pro and Business AI feature. Both allowances reset on their own — no top-ups to remember.</p>
+          <p className="text-[13px] leading-relaxed text-muted-foreground">An AI plan includes a daily and a weekly allowance of credits for every Frenz AI tool — video, audio, voice cloning and lip sync. Both allowances reset on their own — no top-ups to remember.</p>
         )}
 
         {!plans || !plans.enabled || offered.length === 0 ? (
@@ -119,8 +120,8 @@ export function AiPlansSheet({
                 <article
                   key={p.id}
                   className={cn(
-                    "relative overflow-hidden rounded-[1.5rem] border bg-card p-4",
-                    top ? "border-transparent bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow-[0_18px_40px_-20px_rgba(79,70,229,0.6)]" : "border-border/70",
+                    "relative overflow-hidden rounded-[1.5rem] bg-card p-4",
+                    top ? "border-transparent bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white shadow-[0_18px_40px_-20px_rgba(79,70,229,0.6)]" : "ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -143,7 +144,7 @@ export function AiPlansSheet({
                   <ul className={cn("mt-4 space-y-1.5 text-[12.5px] leading-snug", top ? "text-white/90" : "text-foreground")}>
                     {(p.id === "ai_max"
                       ? ["Everything in AI Pro", "Higher daily and weekly allowance", "Maximum AI usage tier"]
-                      : ["Character Replace — every scope", "Pro and Business AI features", "Future eligible AI features"]
+                      : ["Text to Video and Image to Video", "Text to Audio, Voice Cloning and Lip Sync", "Future eligible AI features"]
                     ).map((line) => (
                       <li key={line} className="flex items-start gap-2">
                         <Check className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", top ? "text-white" : "text-primary")} aria-hidden />
@@ -155,10 +156,11 @@ export function AiPlansSheet({
                     type="button"
                     disabled={isCurrent || lower || !p.purchasable || busy !== null}
                     onClick={() => void subscribe(p.id)}
-                    className={cn(
-                      "mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full text-[14px] font-bold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60",
-                      top ? "bg-white text-indigo-700" : "bg-foreground text-background",
-                    )}
+                    className={
+                      top
+                        ? "mt-4 flex min-h-[48px] w-full items-center justify-center rounded-full bg-white text-[14px] font-bold text-indigo-700 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                        : aiButtonClass({ block: true, className: "mt-4 disabled:cursor-not-allowed disabled:opacity-60" })
+                    }
                   >
                     {busy === p.id ? "Opening checkout…" : isCurrent ? "Current plan" : lower ? "Included in your plan" : !p.purchasable ? "Coming soon" : currentPlan ? `Upgrade to ${p.label}` : `Get ${p.label}`}
                   </button>
@@ -172,7 +174,7 @@ export function AiPlansSheet({
             {error}
           </p>
         ) : null}
-        <p className="mt-3 text-center text-[11.5px] leading-relaxed text-muted-foreground">You pay on a secure Paystack page and come straight back. Credits don&apos;t carry over between days or weeks. Cancel any time from your usage page.</p>
+        <p className="mt-3 text-center text-[11.5px] leading-relaxed text-muted-foreground">You pay on a secure Paystack page and come straight back. Credits don&apos;t carry over between days or weeks. Cancel any time from Credit Balance.</p>
       </div>
     </GlassSheetShell>
   );

@@ -126,6 +126,7 @@ describe("the showcase slides", () => {
       "features/ai/text-to-audio/audio-library.tsx",
       "features/ai/voice-clone/voice-library.tsx",
       "features/ai/frenz-ai-history-page.tsx",
+      "features/ai/frenz-ai-usage-page.tsx",
     ]) {
       const showcases = read(f).match(/<AiShowcase\b[^>]*>/g) ?? [];
       expect(showcases.length, f).toBeGreaterThan(0);

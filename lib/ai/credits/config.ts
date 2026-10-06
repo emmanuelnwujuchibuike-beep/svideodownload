@@ -106,7 +106,7 @@ export const AI_PLANS_BOUNDS = {
 export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   enabled: true,
   plans: {
-    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", blurb: "Character Replace and every Pro and Business AI feature, with a daily allowance of credits." },
+    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
     ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
   },
   // null = the count on the Character Replace tab (`freeAccess.creationsPerAccount`) — one control until the operator sets a plan apart

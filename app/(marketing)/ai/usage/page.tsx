@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FrenzAIUsagePage } from "@/features/ai/frenz-ai-usage-page";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 
 /**
  * /ai/usage — balance, free counters and the full statement.
@@ -27,7 +28,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-static";
 
-export default function PublicFrenzAIUsagePage() {
+export default async function PublicFrenzAIUsagePage() {
+  const slides = await getShowcaseSlides();
   return (
     <>
       <SiteHeader landing />
@@ -35,7 +37,7 @@ export default function PublicFrenzAIUsagePage() {
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
         style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
-        <FrenzAIUsagePage aiHref="/ai" />
+        <FrenzAIUsagePage aiHref="/ai" slides={slides} />
       </main>
       {/* The closing line only (owner, 2026-09-13) — see SiteFooterMinimal. */}
       <SiteFooterMinimal />

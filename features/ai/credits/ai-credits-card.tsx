@@ -4,6 +4,7 @@ import { Crown, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { AiPlansSheet, relative } from "@/features/ai/credits/ai-plans-sheet";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { getAiCredits, openAiPlanManage, type AiCreditsAnswer } from "@/lib/ai/credits/client";
 import { formatCents } from "@/lib/ai/economy";
 import { haptic } from "@/lib/motion/haptics";
@@ -71,8 +72,7 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
     const cheapest = [...data.plans.plans].sort((a, b) => a.priceCents - b.priceCents)[0];
     return (
       <>
-        <section className={cn("relative overflow-hidden rounded-[1.5rem] border border-border/70 bg-card px-4 py-4", className)}>
-          <span aria-hidden className="pointer-events-none absolute -right-14 -top-14 h-40 w-40 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.16),transparent)] blur-2xl" />
+        <section className={cn("relative overflow-hidden rounded-[1.5rem] bg-card px-4 py-4 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]", className)}>
           <div className="relative flex items-center gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-fuchsia-500 text-white">
               <Sparkles className="h-5 w-5" aria-hidden />
@@ -89,7 +89,7 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
                 haptic("selection");
                 setSheet(true);
               }}
-              className="btn-lux min-h-[42px] shrink-0 bg-foreground px-4 text-[13px] text-background"
+              className={aiButtonClass({ size: "sm", className: "shrink-0" })}
             >
               See plans
             </button>
@@ -105,9 +105,8 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
     <>
       <section
         aria-label={`${e.planLabel}: ${e.usedToday} of ${e.dailyLimit} credits used today, ${e.usedThisWeek} of ${e.weeklyLimit} this week`}
-        className={cn("relative overflow-hidden rounded-[1.5rem] border border-border/70 bg-card px-4 py-4", className)}
+        className={cn("relative overflow-hidden rounded-[1.5rem] bg-card px-4 py-4 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]", className)}
       >
-        <span aria-hidden className="pointer-events-none absolute -right-14 -top-14 h-44 w-44 rounded-full bg-[radial-gradient(closest-side,rgba(99,102,241,0.18),transparent)] blur-2xl" />
         <div className="relative flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
@@ -142,13 +141,13 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
                   haptic("selection");
                   setSheet(true);
                 }}
-                className="btn-lux min-h-[38px] bg-foreground px-3.5 text-[12.5px] text-background"
+                className={aiButtonClass({ size: "sm" })}
               >
                 Upgrade to {data.plans.plans.find((p) => p.id === "ai_max")?.label ?? "AI Max"}
               </button>
             ) : null}
             {e.subscription?.manageable ? (
-              <button type="button" onClick={() => void manage()} disabled={managing} className="btn-lux min-h-[38px] border border-border/70 bg-card px-3.5 text-[12.5px] text-foreground hover:border-foreground/25">
+              <button type="button" onClick={() => void manage()} disabled={managing} className={aiButtonClass({ variant: "secondary", size: "sm" })}>
                 {managing ? "Opening…" : "Manage"}
               </button>
             ) : null}

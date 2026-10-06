@@ -272,4 +272,6 @@ export const SHOWCASE_PAGES = [
   "/studio/ai/voices",
   "/ai/history",
   "/studio/ai/history",
+  "/ai/usage",
+  "/studio/ai/usage",
 ] as const;

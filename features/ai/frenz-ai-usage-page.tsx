@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowLeft, ChevronRight, Eye, EyeOff, PersonStanding, Plus, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -10,7 +10,10 @@ import { takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
 import { StatementDetailSheet, symbolFor } from "@/features/ai/statement-detail-sheet";
 import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
-import { FrenzAICrumb } from "@/features/ai/frenz-ai-chrome";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiToolTitle } from "@/features/ai/design/ai-surface";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { getCharacterReplaceBalance, takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
 import { formatCents } from "@/lib/ai/economy";
@@ -49,13 +52,22 @@ type LedgerRow = CharacterReplaceTransaction;
 
 const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; tone: "in" | "out" | "neutral" }> = {
   recharge: { label: "Balance added", Icon: ArrowDownLeft, tone: "in" },
-  processing_charge: { label: "Character Replace video", Icon: PersonStanding, tone: "out" },
+  // 2026-10-06: the one AI wallet pays for every tool now — Character Replace is retired
+  processing_charge: { label: "Frenz AI creation", Icon: Sparkles, tone: "out" },
   refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },
   adjustment: { label: "Adjustment by Frenz", Icon: ShieldCheck, tone: "neutral" },
   reversal: { label: "Reversed", Icon: RotateCcw, tone: "neutral" },
 };
 
-export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/character-replace" }: { aiHref?: string; createHref?: string }) {
+export function FrenzAIUsagePage({
+  aiHref = "/ai",
+  createHref = "/studio/ai/character-replace",
+  slides = [],
+}: {
+  aiHref?: string;
+  createHref?: string;
+  slides?: ShowcaseSlide[];
+}) {
   const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
   /* 2026-09-20: a tap on the figure hides it (kept per browser); a tap on a line opens it in full */
   const [hidden, toggleHidden] = useBalanceHidden();
@@ -153,22 +165,21 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
   const symbol = balance?.symbol ?? "₦";
 
   return (
-    <FrenzAIEnvironment stage="idle" className="ai-wash relative overflow-hidden rounded-[1.75rem]">
-      {/*
-        The shared ground. This page carried its own two-gradient wash, another
-        variation on a background both references show as ONE — `.ai-wash` on
-        the wrapper above is that one.
-      */}
-
-      <div className="px-4 pb-10 pt-5 sm:px-6">
-        <FrenzAICrumb tool="Balance" />
-
-        <h1 className="mt-4 text-[1.9rem] font-bold leading-[1.08] tracking-[-0.035em] sm:text-[2.2rem]">
-          Your <span className="text-gradient">balance</span>
-        </h1>
-        <p className="mt-2.5 max-w-md text-[14.5px] leading-relaxed text-muted-foreground">
-          What you have, what a video costs, and every line of your Frenz AI account.
-        </p>
+    /*
+      Redesign 2026-10-06 (page 10, Credit Balance): plain white like every
+      redesigned AI page — no wash, no frame, no double gutter; the showcase on
+      large screens only; the shared tool title. No credits strip: this page IS
+      the balance.
+    */
+    <FrenzAIEnvironment stage="idle" bare className="relative">
+      <div className="pb-10 pt-3">
+        <AiShowcase slides={slides} base={aiHref} desktopOnly className="mb-5" />
+        <AiToolTitle
+          icon={Wallet}
+          title="Credit Balance"
+          tagline="What you have, and every line of it."
+          body="Your AI balance, your plan's allowance, and each recharge, creation and refund."
+        />
 
         {failed ? (
           <div className="mt-6 rounded-2xl bg-card/95 p-4 ring-1 ring-inset ring-black/[0.05] dark:ring-white/10">
@@ -179,7 +190,7 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                 haptic("selection");
                 void load();
               }}
-              className="mt-3 rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground"
+              className={aiButtonClass({ size: "sm", className: "mt-3" })}
             >
               Try again
             </button>
@@ -198,11 +209,9 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                 "bg-[linear-gradient(135deg,#1d4ed8_0%,#4f46e5_55%,#a21caf_100%)] shadow-[0_24px_48px_-28px_rgba(79,70,229,0.75)]",
               )}
             >
-              <span aria-hidden className="pointer-events-none absolute -right-10 -top-16 h-52 w-52 rounded-full bg-white/10 blur-2xl" />
-              <span aria-hidden className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-fuchsia-300/20 blur-3xl" />
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Character Replace balance</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">AI balance</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -247,8 +256,8 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
                   href={createHref}
                   className="inline-flex min-h-[46px] items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-white/90 ring-1 ring-inset ring-white/30 transition hover:bg-white/10"
                 >
-                  <PersonStanding className="h-4 w-4" aria-hidden />
-                  Create a video
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  Explore AI tools
                 </Link>
               </div>
               {balance.topupOptionsCents.length > 0 ? (
@@ -273,7 +282,7 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (
               <section aria-label="Your account at a glance" className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-                <Figure label="Videos made" value={String(figures.videos)} />
+                <Figure label="Creations" value={String(figures.videos)} />
                 <Figure label="Spent" value={hidden ? HIDDEN_AMOUNT : formatCents(figures.spent, symbol)} />
                 <Figure label="Refunded" value={hidden ? HIDDEN_AMOUNT : formatCents(figures.refunded, symbol)} tone={figures.refunded > 0 ? "in" : undefined} />
               </section>
@@ -350,7 +359,7 @@ export function FrenzAIUsagePage({ aiHref = "/ai", createHref = "/studio/ai/char
         ) : null}
 
         <div className="mt-8">
-          <Link href={aiHref} className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-muted-foreground transition hover:text-foreground">
+          <Link href={aiHref} prefetch={false} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to Frenz AI
           </Link>

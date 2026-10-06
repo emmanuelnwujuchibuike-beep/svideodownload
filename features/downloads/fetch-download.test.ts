@@ -80,3 +80,32 @@ describe("fetchDownload", () => {
     expect(calls).toEqual(["/api/wallpaper?id=a&dl=1"]);
   });
 });
+
+describe("a broken direct door never fails a download", () => {
+  it("a 404 / gateway page from the worker falls back to the proxied path", async () => {
+    for (const bad of [
+      new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } }),
+      new Response("<html>502</html>", { status: 502, headers: { "content-type": "text/html" } }),
+    ]) {
+      const calls: string[] = [];
+      vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+        calls.push(u);
+        if (u === TICKET) return bad;
+        return u.endsWith("&direct=1") ? ticketResponse() : new Response("proxied");
+      }));
+      const res = await fetchDownload("/api/download?url=x", new AbortController().signal);
+      expect(await res.text()).toBe("proxied");
+      expect(calls).toHaveLength(3);
+    }
+  });
+
+  it("our own JSON refusal from the worker is shown, not retried through Vercel", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (u: string) =>
+      u === TICKET
+        ? new Response(JSON.stringify({ error: "too large", code: "FILE_TOO_LARGE" }), { status: 413, headers: { "content-type": "application/json" } })
+        : ticketResponse(),
+    ));
+    const res = await fetchDownload("/api/download?url=x", new AbortController().signal);
+    expect(res.status).toBe(413);
+  });
+});

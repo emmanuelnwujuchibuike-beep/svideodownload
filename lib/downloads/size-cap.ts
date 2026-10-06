@@ -63,8 +63,12 @@ export function tooLargeMessage(bytes: number, limit: number = maxDownloadBytes(
  * nobody receives. The files being retried were 99–283 MB.
  *
  * This applies to every plan — a Pro attempt at 109 MB fails exactly the same
- * way. It goes away when the bytes stop passing through Vercel (the direct
- * worker ticket, DOWNLOAD_DIRECT=1). `TELEGRAM_MAX_BYTES` overrides.
+ * way. `TELEGRAM_MAX_BYTES` overrides.
+ *
+ * 🔴 It is KEPT on the direct worker path too (owner, 2026-10-06: taking Vercel
+ * off the path "should also not consume railway usage"). Direct removes the
+ * 300 s limit, so big Telegram files would start COMPLETING — every one of
+ * them new Railway egress. The ceiling is now a Railway-cost rule as well.
  */
 export const DEFAULT_TELEGRAM_MAX_BYTES = 60 * 1024 * 1024;
 
@@ -82,10 +86,10 @@ export function isTelegramUrl(url: string): boolean {
   }
 }
 
-/** The cap for THIS download: the plan's, narrowed for a Telegram source that streams through Vercel. */
-export function capForDownload(plan: string | null | undefined, url: string, viaVercel: boolean): number {
+/** The cap for THIS download: the plan's, narrowed for a Telegram source on every path. */
+export function capForDownload(plan: string | null | undefined, url: string): number {
   const planCap = maxDownloadBytesFor(plan);
-  return viaVercel && isTelegramUrl(url) ? Math.min(planCap, telegramMaxBytes()) : planCap;
+  return isTelegramUrl(url) ? Math.min(planCap, telegramMaxBytes()) : planCap;
 }
 
 /** Header the trusted Vercel proxy uses to tell the worker the caller's cap. */

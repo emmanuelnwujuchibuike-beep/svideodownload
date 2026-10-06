@@ -50,9 +50,9 @@ async function enforceDailyCap(
   const subject = data ? `${data.url}|${data.formatId}|${data.kind}` : null;
   const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId, subject);
   // Owner, 2026-10-06: files of 200 MB and over are for Pro / Business only.
-  // …and a Telegram source streamed through Vercel has a ceiling set by what can finish in 300 s.
+  // …and a Telegram source has its own ceiling on every path (lib/downloads/size-cap.ts).
   const maxBytes = data
-    ? capForDownload(quota.plan, data.url, hasWorker && !directDownloadsEnabled())
+    ? capForDownload(quota.plan, data.url)
     : maxDownloadBytesFor(quota.plan);
   if (quota.allowed) return { denied: null, maxBytes };
   const denied = NextResponse.json<ApiError>(
@@ -237,8 +237,9 @@ export async function GET(request: Request) {
     so a forged value can only ever collide with themselves.
   */
   const batchId = (sp.get("b") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null;
+  const wantsDirect = sp.get("direct") === "1";
   const { denied, maxBytes } = await enforceDailyCap(request, clientIp, downloadId, batchId, data);
   if (denied) return denied;
 
-  return processDownload(data, clientIp, sp.get("hevc") === "1", sp.get("direct") === "1", maxBytes);
+  return processDownload(data, clientIp, sp.get("hevc") === "1", wantsDirect, maxBytes);
 }

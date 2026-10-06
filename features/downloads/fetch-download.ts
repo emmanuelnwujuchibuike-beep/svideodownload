@@ -26,7 +26,14 @@ export async function fetchDownload(target: string, signal: AbortSignal): Promis
   }
   if (ticketUrl) {
     try {
-      return await fetch(ticketUrl, { signal, mode: "cors", credentials: "omit" });
+      const direct = await fetch(ticketUrl, { signal, mode: "cors", credentials: "omit" });
+      /*
+        Use the worker's answer when it is the file, or one of OUR refusals (JSON:
+        too large, rate limited, expired). Anything else — a 404 from a worker
+        without the route, a gateway's HTML error page — says the direct door is
+        not working, and must never be the reason a download fails.
+      */
+      if (direct.ok || (direct.headers.get("content-type") ?? "").includes("application/json")) return direct;
     } catch (e) {
       if (signal.aborted) throw e;
       /* the worker is not reachable from here — the proxied path below */

@@ -102,16 +102,17 @@ describe("Telegram's ceiling is what can finish through Vercel (2026-10-06)", ()
   it("the 99–283 MB files being retried are refused for every plan; a short clip is not", async () => {
     const { capForDownload } = await import("@/lib/downloads/size-cap");
     for (const plan of ["free", "pro", "business", null]) {
-      const cap = capForDownload(plan, "https://t.me/todofamosas/80419", true);
+      const cap = capForDownload(plan, "https://t.me/todofamosas/80419");
       expect(isTooLarge(99 * 1048576, cap)).toBe(true);
       expect(isTooLarge(3_775_770, cap)).toBe(false);
     }
   });
 
-  it("other platforms keep the plan cap; Telegram without Vercel in the path keeps it too", async () => {
-    const { capForDownload, maxDownloadBytesFor } = await import("@/lib/downloads/size-cap");
-    expect(capForDownload("free", "https://www.tiktok.com/@a/video/1", true)).toBe(maxDownloadBytesFor("free"));
-    expect(capForDownload("pro", "https://t.me/x/1", false)).toBe(Number.POSITIVE_INFINITY);
+  it("other platforms keep the plan cap; Telegram keeps its ceiling on the direct path too (Railway cost)", async () => {
+    const { capForDownload, maxDownloadBytesFor, telegramMaxBytes } = await import("@/lib/downloads/size-cap");
+    expect(capForDownload("free", "https://www.tiktok.com/@a/video/1")).toBe(maxDownloadBytesFor("free"));
+    expect(capForDownload("pro", "https://www.tiktok.com/@a/video/1")).toBe(Number.POSITIVE_INFINITY);
+    expect(capForDownload("pro", "https://t.me/x/1")).toBe(telegramMaxBytes());
   });
 
   it("the Telegram refusal does not sell Pro, and is never retried", async () => {

@@ -482,8 +482,22 @@ function landingChunks(): string[] {
  * `describe.skipIf(!buildExists())` skips the whole block. The ratchet is
  * enforced locally only — which is how the 45 bytes reached main in db97f0f
  * before being caught here.
+ *
+ * ── 2026-10-06: +68 bytes → 370 kB (measured 377,924) ──────────────────────
+ *
+ * Two FIXES, both on every page through shared chunks, found by grepping the
+ * /admin/page manifest chunks for their distinctive strings:
+ *   · chunk 6323 `frenz:streak-recorded` + `lastActivityDate` — the streak
+ *     chip vanished on one browser (owner report): the once-a-day marker was
+ *     per browser, the streak per identity; loadStreak now repairs it.
+ *   · chunk 81672 `frenzsave_ai_history_v2` — sign-out forgets the on-device
+ *     AI history (lib/ai/device-keys.ts; the store itself was kept OUT of
+ *     sign-out, which is what put /admin 1 kB over the first time).
+ * The download-delivery code that also grew is lazy (fetch-download loads on
+ * the first download) and is not in these chunks. Admin route, never a cold
+ * visit; ENTRY_CEILING untouched.
  */
-const GLOBAL_CEILING = 369 * 1024;
+const GLOBAL_CEILING = 370 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

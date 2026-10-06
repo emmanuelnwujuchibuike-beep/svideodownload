@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, AudioLines, Clapperboard, History, ImagePlus, Mi
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { slideHref, type ShowcaseSlide, type ShowcaseTarget } from "@/lib/ai/showcase/slides";
+import { SHOWCASE_VIDEO, slideHref, type ShowcaseSlide, type ShowcaseTarget } from "@/lib/ai/showcase/slides";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,6 +81,20 @@ export function AiShowcase({
   const [onScreen, setOnScreen] = useState(false);
   const [tabVisible, setTabVisible] = useState(true);
   const [reduced, setReduced] = useState(false);
+  /*
+    A slide with a clip stays up for the clip (3–8 s), not a flat 3 s, and the
+    clip plays ONLY while it is the active slide, on screen, in a visible tab,
+    not paused by the member, without reduced motion and without Data Saver —
+    so nobody downloads a video they cannot see (owner, 2026-10-06).
+  */
+  const [dwell, setDwell] = useState(ADVANCE_MS);
+  const [saveData, setSaveData] = useState(false);
+  useEffect(() => {
+    const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    setSaveData(!!c?.saveData);
+  }, []);
+  useEffect(() => setDwell(ADVANCE_MS), [active]);
+  const motionOk = onScreen && tabVisible && !paused && !reduced && !saveData;
   const count = slides.length;
 
   /* Interaction holds autoplay, and every new interaction restarts the 6 s. */
@@ -151,9 +165,9 @@ export function AiShowcase({
 
   useEffect(() => {
     if (!autoplay) return;
-    const t = window.setTimeout(() => go((active + 1) % count), ADVANCE_MS);
+    const t = window.setTimeout(() => go((active + 1) % count), dwell);
     return () => window.clearTimeout(t);
-  }, [autoplay, active, count, go]);
+  }, [autoplay, active, count, go, dwell]);
 
   if (count === 0) return null;
 
@@ -200,7 +214,16 @@ export function AiShowcase({
         onKeyDown={hold}
       >
         {slides.map((s, i) => (
-          <SlideCard key={s.id} slide={s} index={i} count={count} href={slideHref(base, s.target)} eager={!desktopOnly} />
+          <SlideCard
+            key={s.id}
+            slide={s}
+            index={i}
+            count={count}
+            href={slideHref(base, s.target)}
+            eager={!desktopOnly}
+            playing={motionOk && i === active}
+            onDuration={i === active ? (sec) => setDwell(Math.min(SHOWCASE_VIDEO.maxDwellMs, Math.max(ADVANCE_MS, Math.round(sec * 1000)))) : undefined}
+          />
         ))}
       </div>
 
@@ -278,6 +301,8 @@ export function SlideCard({
   href,
   preview,
   eager = true,
+  playing = false,
+  onDuration,
 }: {
   slide: ShowcaseSlide;
   index: number;
@@ -285,6 +310,10 @@ export function SlideCard({
   href: string;
   /** false when the carousel may be hidden (desktop-only): then no slide image is fetched eagerly. */
   eager?: boolean;
+  /** Play the slide's clip now — the carousel decides (active, visible, allowed). */
+  playing?: boolean;
+  /** The clip's length in seconds, once known — the carousel's dwell. */
+  onDuration?: (seconds: number) => void;
   /** Admin preview: no navigation, no gating. */
   preview?: boolean;
 }) {
@@ -311,6 +340,25 @@ export function SlideCard({
       ) : (
         <Icon className="absolute -right-4 top-1/2 h-40 w-40 -translate-y-1/2 text-white/[0.08] sm:h-52 sm:w-52" strokeWidth={1} aria-hidden />
       )}
+      {/*
+        The clip exists in the DOM only while it plays: no <video> element, no
+        preload, no bytes for a slide nobody is looking at. The image (its
+        poster) stays underneath, so the swap never flashes empty.
+      */}
+      {slide.video && playing ? (
+        <video
+          src={slide.video.url}
+          poster={slide.image?.sm}
+          muted
+          playsInline
+          autoPlay
+          loop
+          preload="auto"
+          aria-hidden
+          onLoadedMetadata={(e) => onDuration?.(e.currentTarget.duration)}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
       {/*
         The scrim, as in the reference: deep brand navy from the LEFT, where the
         words are, clearing to the right so the picture's subject stays bright —

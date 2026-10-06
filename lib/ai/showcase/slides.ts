@@ -73,9 +73,30 @@ export interface ShowcaseSlide {
   description: string;
   target: ShowcaseTarget;
   image: ShowcaseImage | null;
+  /**
+   * An optional short clip (owner, 2026-10-06: "backend to upload images and
+   * video where required in the showcase cards"). Plays muted and looped ONLY
+   * while its slide is the active one and on screen; the image is its poster
+   * and what everyone else sees. See ai-showcase.tsx.
+   */
+  video: ShowcaseVideo | null;
   /** Describes the IMAGE for a screen reader; empty when it is decorative. */
   alt: string;
 }
+
+/** An uploaded clip: MP4 or WebM in the showcase bucket, stored as uploaded. */
+export interface ShowcaseVideo {
+  url: string;
+  bytes: number;
+}
+
+/** The video limits the admin route enforces. 12 MB keeps a phone's first play fast. */
+export const SHOWCASE_VIDEO = {
+  maxBytes: 12 * 1024 * 1024,
+  mimeTypes: ["video/mp4", "video/webm"] as const,
+  /** How long a slide with a clip stays up, at most (its own length, 3–8 s). */
+  maxDwellMs: 8000,
+} as const;
 
 /*
   The four live tools, so the carousel is real before an admin has uploaded
@@ -92,6 +113,7 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     description: "Describe a scene and watch it filmed, in any style you like.",
     target: "text-to-video",
     image: null,
+    video: null,
     alt: "",
   },
   {
@@ -103,6 +125,7 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     description: "Give a still photo motion. Say how it moves.",
     target: "image-to-video",
     image: null,
+    video: null,
     alt: "",
   },
   {
@@ -114,6 +137,7 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     description: "Match a video's mouth to a new voice, naturally.",
     target: "lip-sync",
     image: null,
+    video: null,
     alt: "",
   },
   {
@@ -125,6 +149,7 @@ export const DEFAULT_SHOWCASE: ShowcaseSlide[] = [
     description: "Turn text into natural speech, or clone your own voice.",
     target: "text-to-audio",
     image: null,
+    video: null,
     alt: "",
   },
 ];
@@ -155,6 +180,14 @@ export function isShowcaseImageUrl(value: unknown, supabaseUrl: string | undefin
 }
 
 export const SHOWCASE_BUCKET = "ai-showcase";
+
+function normalizeVideo(value: unknown, supabaseUrl: string | undefined): ShowcaseVideo | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (!isShowcaseImageUrl(v.url, supabaseUrl) || !/.(mp4|webm)$/i.test(v.url)) return null;
+  const bytes = typeof v.bytes === "number" && v.bytes > 0 ? Math.round(v.bytes) : 0;
+  return { url: v.url, bytes };
+}
 
 function normalizeImage(value: unknown, supabaseUrl: string | undefined): ShowcaseImage | null {
   if (!value || typeof value !== "object") return null;
@@ -192,6 +225,7 @@ export function normalizeShowcase(value: unknown, supabaseUrl: string | undefine
       description: cleanText(r.description, SHOWCASE_LIMITS.description),
       target: isShowcaseTarget(r.target) ? r.target : "explore",
       image: normalizeImage(r.image, supabaseUrl),
+      video: normalizeVideo(r.video, supabaseUrl),
       alt: cleanText(r.alt, SHOWCASE_LIMITS.alt),
     });
     if (out.length >= SHOWCASE_LIMITS.slides) break;

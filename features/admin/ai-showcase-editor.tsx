@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Film, ImagePlus, Plus, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { SlideCard } from "@/features/ai/design/ai-showcase";
@@ -8,6 +8,7 @@ import {
   DEFAULT_SHOWCASE,
   SHOWCASE_LIMITS,
   SHOWCASE_TARGETS,
+  SHOWCASE_VIDEO,
   isShowcaseTarget,
   type ShowcaseSlide,
 } from "@/lib/ai/showcase/slides";
@@ -68,15 +69,21 @@ export function AiShowcaseEditor({ initial }: { initial: ShowcaseSlide[] | null 
     setSlides((all) =>
       all.length >= SHOWCASE_LIMITS.slides
         ? all
-        : [...all, { id: newId(), enabled: true, chip: "", title: "New slide", highlight: "", description: "", target: "explore", image: null, alt: "" }],
+        : [...all, { id: newId(), enabled: true, chip: "", title: "New slide", highlight: "", description: "", target: "explore", image: null, video: null, alt: "" }],
     );
     setDirty(true);
   };
 
-  const upload = async (id: string, file: File) => {
+  const upload = async (id: string, picked: File) => {
     setUploading(id);
     setMsg(null);
     try {
+      /*
+        A Vercel function refuses a body over 4.5 MB, and a phone photo is often
+        larger — shrink it here first (the server still makes the two final
+        sizes). Smaller files go up untouched.
+      */
+      const file = picked.size > 4 * 1024 * 1024 ? await shrinkForUpload(picked) : picked;
       const form = new FormData();
       form.append("file", file);
       const res = await fetch("/api/admin/ai/showcase", { method: "POST", body: form });
@@ -91,6 +98,54 @@ export function AiShowcaseEditor({ initial }: { initial: ShowcaseSlide[] | null 
       }
     } finally {
       setUploading(null);
+    }
+  };
+
+  /*
+    A clip goes STRAIGHT to storage (owner, 2026-10-06): the route signs a
+    ticket for an admin, then the browser PUTs the file to the bucket — the
+    bytes never pass through a Vercel function (4.5 MB body limit, and paid
+    bandwidth). XHR rather than fetch for the progress figure.
+  */
+  const [videoProgress, setVideoProgress] = useState<{ id: string; pct: number } | null>(null);
+  const uploadVideo = async (id: string, file: File) => {
+    setMsg(null);
+    if (!(SHOWCASE_VIDEO.mimeTypes as readonly string[]).includes(file.type)) {
+      setMsg({ ok: false, text: "Use an MP4 or WebM video." });
+      return;
+    }
+    if (file.size > SHOWCASE_VIDEO.maxBytes) {
+      setMsg({ ok: false, text: `That video is over ${Math.round(SHOWCASE_VIDEO.maxBytes / (1024 * 1024))} MB — trim it to a few seconds.` });
+      return;
+    }
+    setVideoProgress({ id, pct: 0 });
+    try {
+      const res = await fetch("/api/admin/ai/showcase", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ kind: "video", contentType: file.type, size: file.size }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; uploadUrl?: string; video?: ShowcaseSlide["video"] };
+      if (!res.ok || !json.ok || !json.uploadUrl || !json.video) {
+        setMsg({ ok: false, text: json.error ?? "Could not start the upload." });
+        return;
+      }
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", json.uploadUrl!, true);
+        xhr.setRequestHeader("content-type", file.type);
+        xhr.setRequestHeader("cache-control", "max-age=31536000");
+        xhr.upload.onprogress = (e) => e.lengthComputable && setVideoProgress({ id, pct: Math.round((e.loaded / e.total) * 100) });
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Storage answered ${xhr.status}`)));
+        xhr.onerror = () => reject(new Error("The upload was interrupted."));
+        xhr.send(file);
+      });
+      patch(id, { video: json.video });
+      setMsg({ ok: true, text: `Video ready — ${(file.size / (1024 * 1024)).toFixed(1)} MB. It plays muted while its slide is showing. Press Save to publish.` });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Upload failed." });
+    } finally {
+      setVideoProgress(null);
     }
   };
 
@@ -146,7 +201,7 @@ export function AiShowcaseEditor({ initial }: { initial: ShowcaseSlide[] | null 
               <div className="mt-3 grid gap-5 lg:grid-cols-[264px_1fr]">
                 {/* the live preview — the shipped component, at the card width of the narrowest phone (320 px screen); if it fits here it fits everywhere */}
                 <div className="w-full max-w-[264px]">
-                  <SlideCard slide={s} index={i} count={slides.length} href="#" preview />
+                  <SlideCard slide={s} index={i} count={slides.length} href="#" preview playing={!!s.video} />
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -180,6 +235,26 @@ export function AiShowcaseEditor({ initial }: { initial: ShowcaseSlide[] | null 
                       ) : (
                         <span className="text-xs text-muted-foreground">No image — the card draws the brand art. Landscape, 1600 px wide or more, looks best.</span>
                       )}
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-xs font-medium text-muted-foreground">Video (optional)</span>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <VideoUploadButton
+                        busy={videoProgress?.id === s.id}
+                        label={videoProgress?.id === s.id ? `Uploading ${videoProgress.pct}%` : s.video ? "Replace video" : "Upload video"}
+                        onFile={(f) => void uploadVideo(s.id, f)}
+                      />
+                      {s.video ? (
+                        <button type="button" onClick={() => patch(s.id, { video: null })} className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-border px-3 text-xs font-medium">
+                          <X className="h-3.5 w-3.5" aria-hidden /> Remove video
+                        </button>
+                      ) : null}
+                      <span className="text-xs text-muted-foreground">
+                        {s.video
+                          ? `${(s.video.bytes / (1024 * 1024)).toFixed(1)} MB · plays muted while this slide is showing`
+                          : `MP4 or WebM, a few seconds, up to ${Math.round(SHOWCASE_VIDEO.maxBytes / (1024 * 1024))} MB. Add an image too — it is the poster everyone sees first.`}
+                      </span>
                     </div>
                   </div>
                   {s.image ? (
@@ -298,4 +373,49 @@ function ImageUploadButton({ busy, hasImage, onFile }: { busy: boolean; hasImage
       </button>
     </>
   );
+}
+
+function VideoUploadButton({ busy, label, onFile }: { busy: boolean; label: string; onFile: (f: File) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input
+        ref={ref}
+        type="file"
+        accept={SHOWCASE_VIDEO.mimeTypes.join(",")}
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) onFile(f);
+        }}
+      />
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => ref.current?.click()}
+        className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold disabled:opacity-50"
+      >
+        <Film className="h-3.5 w-3.5" aria-hidden />
+        {label}
+      </button>
+    </>
+  );
+}
+
+/** Downscale a large photo in the browser so it fits under the 4.5 MB function body limit. */
+async function shrinkForUpload(file: File): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.9));
+    return blob ? new File([blob], file.name.replace(/.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  } catch {
+    return file; // the server will say if it is still too large
+  }
 }

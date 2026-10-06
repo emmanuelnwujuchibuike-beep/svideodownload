@@ -132,6 +132,32 @@ describe("the showcase slides", () => {
     expect(read("features/ai/design/ai-showcase.tsx")).toContain('desktopOnly && "hidden lg:block"');
   });
 
+  it("a slide's video is accepted only from our bucket, and only MP4/WebM", () => {
+    const ok = `${SUPA}/storage/v1/object/public/ai-showcase/slides/1.mp4`;
+    const [a] = normalizeShowcase([{ id: "a", title: "Hi", video: { url: ok, bytes: 900_000 } }], SUPA);
+    expect(a?.video).toEqual({ url: ok, bytes: 900_000 });
+    for (const bad of [
+      "https://evil.example/x.mp4",
+      `${SUPA}/storage/v1/object/public/ai-showcase/slides/1.mov`,
+      `${SUPA}/storage/v1/object/public/ai-showcase/slides/1.webp`,
+      `${SUPA}/storage/v1/object/public/wallpapers/x.mp4`,
+    ]) {
+      const [b] = normalizeShowcase([{ id: "a", title: "Hi", video: { url: bad, bytes: 1 } }], SUPA);
+      expect(b?.video, bad).toBeNull();
+    }
+  });
+
+  it("a visitor downloads a clip only while its slide plays, and the route never carries video bytes", () => {
+    const card = readFileSync(join(process.cwd(), "features/ai/design/ai-showcase.tsx"), "utf8");
+    // the <video> element exists only when the carousel says this slide plays
+    expect(card).toContain("{slide.video && playing ? (");
+    expect(card).toContain("playing={motionOk && i === active}");
+    expect(card).toContain("const motionOk = onScreen && tabVisible && !paused && !reduced && !saveData;");
+    const route = readFileSync(join(process.cwd(), "app/api/admin/ai/showcase/route.ts"), "utf8");
+    expect(route).toContain(".createSignedUploadUrl(key)");
+    expect(route).toContain('if (body.kind !== "video") return bad("Unknown upload.");');
+  });
+
   it("never saved → defaults; saved with every slide off → nothing (the admin hid it)", () => {
     expect(visibleSlides(null)).toBe(DEFAULT_SHOWCASE);
     expect(visibleSlides([{ ...DEFAULT_SHOWCASE[0]!, enabled: false }])).toEqual([]);

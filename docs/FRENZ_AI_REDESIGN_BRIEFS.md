@@ -2552,13 +2552,15 @@ Important: inspect the current implementation and architecture first. Do not rew
 | 2 | AI Studio / Home (Explore) | ✅ | f3b5e04 · 1ed0e0c | media tool cards; showcase + credits strip |
 | 3 | Text to Video | ✅ | 1ed0e0c · ab0f8be | owner's style pictures; quote no longer per keystroke; no prompt-enhance API exists (omitted) |
 | 4 | Image to Video | ✅ | ab0f8be | Brief B; upload race fixed; reference-video slot visible on both video tools; no aspect control (photo sets shape) |
-| 5 | Text to Audio | 🔨 | — | |
-| 6 | Voice Cloning | ⏳ | — | |
-| 7 | Lip Sync | ⏳ | — | |
-| 8 | Your Audios | ⏳ | — | |
+| 5 | Text to Audio | ✅ | 395e6dd · 0f69b5c | showcase lg+ only on tool pages (owner); floating glass credits strip |
+| 6 | Voice Cloning | ✅ | b4c0609 | one panel, numbered blocks, shared buttons |
+| 7 | Lip Sync | ✅ | 0f69b5c | 0 layout shifts (4 runs); indigo selected states |
+| 8 | Your Audios | ⏳ NEXT | — | audio-library.tsx still on .ai-cta; voice-library.tsx standalone page |
 | 9 | Your Videos | ⏳ | — | |
 | 10 | Credit Balance | ⏳ | — | |
 | 11 | Plans / Pricing | ⏳ | — | |
 | — | Consistency audit | ⏳ | — | |
 | — | Performance audit | ⏳ | — | vs d08cf56 built in C:\tmp\svd-base |
 | C | Landing promo | ⏸ queued | — | not one of the 11; owner decisions recorded above |
+
+**Hand-off 2026-10-06:** pages 1–7 pushed on the owner instruction. Resume from page 8; read `docs/agent-memory/handoff-2026-10-06-ai-redesign-pages-1-7.md` and `docs/agent-memory/ai-redesign-lessons-pages-1-3.md` first.

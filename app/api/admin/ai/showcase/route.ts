@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { SHOWCASE_TAG, readStoredShowcase, writeStoredShowcase } from "@/lib/ai/showcase/server";
-import { SHOWCASE_BUCKET, SHOWCASE_PAGES, normalizeShowcase } from "@/lib/ai/showcase/slides";
+import { SHOWCASE_BUCKET, SHOWCASE_PAGES, SHOWCASE_VIDEO, normalizeShowcase } from "@/lib/ai/showcase/slides";
 import { makeSizedWebp } from "@/lib/media/thumbnail";
 import { recordConfigChange } from "@/lib/platform/config-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -40,6 +40,46 @@ function bad(error: string, status = 400) {
 export async function POST(request: Request) {
   const admin = await getAdminUser();
   if (!admin) return bad("Not authorised.", 403);
+
+  /*
+    ── A VIDEO: a signed ticket, never the bytes (owner, 2026-10-06) ─────────
+    A Vercel function refuses a request body over 4.5 MB, so a clip cannot
+    pass through here — and it should not: the browser PUTs it straight to
+    the bucket with the ticket below (the reference-upload pattern,
+    lib/ai/video/reference-upload.ts). This route only decides WHO may upload
+    WHAT: an admin, MP4/WebM, ≤ 12 MB. The bucket enforces the same type and
+    size limits again at storage (0183), so a lying client is refused there
+    too. Stored as uploaded — there is no video encoder on a serverless box.
+  */
+  if ((request.headers.get("content-type") ?? "").includes("application/json")) {
+    let body: { kind?: unknown; contentType?: unknown; size?: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return bad("Malformed request.");
+    }
+    if (body.kind !== "video") return bad("Unknown upload.");
+    const type = typeof body.contentType === "string" ? body.contentType.split(";")[0]!.trim().toLowerCase() : "";
+    if (!(SHOWCASE_VIDEO.mimeTypes as readonly string[]).includes(type)) return bad("Use an MP4 or WebM video.");
+    const size = Number(body.size);
+    if (!Number.isFinite(size) || size <= 0) return bad("Malformed request.");
+    if (size > SHOWCASE_VIDEO.maxBytes) return bad(`That video is over ${Math.round(SHOWCASE_VIDEO.maxBytes / (1024 * 1024))} MB — trim it to a few seconds.`);
+
+    const key = `slides/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${type === "video/webm" ? "webm" : "mp4"}`;
+    const db = createAdminClient();
+    const { data, error } = await db.storage.from(SHOWCASE_BUCKET).createSignedUploadUrl(key);
+    if (error || !data?.signedUrl) {
+      if (/bucket/i.test(error?.message ?? "") && /not found/i.test(error?.message ?? "")) {
+        return bad("The showcase storage bucket is missing — migration 0182 has not been applied.", 503);
+      }
+      return bad(error?.message ?? "Could not start the upload.", 500);
+    }
+    return NextResponse.json({
+      ok: true,
+      uploadUrl: data.signedUrl.startsWith("http") ? data.signedUrl : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1${data.signedUrl}`,
+      video: { url: db.storage.from(SHOWCASE_BUCKET).getPublicUrl(key).data.publicUrl, bytes: size },
+    });
+  }
 
   let form: FormData;
   try {
@@ -132,9 +172,10 @@ export async function PUT(request: Request) {
     const at = url.lastIndexOf(marker);
     return at === -1 ? null : decodeURIComponent(url.slice(at + marker.length));
   };
-  const kept = new Set(slides.flatMap((s) => (s.image ? [s.image.sm, s.image.lg] : [])));
+  const files = (s: (typeof slides)[number]) => [...(s.image ? [s.image.sm, s.image.lg] : []), ...(s.video ? [s.video.url] : [])];
+  const kept = new Set(slides.flatMap(files));
   const gone = (before ?? [])
-    .flatMap((s) => (s.image ? [s.image.sm, s.image.lg] : []))
+    .flatMap(files)
     .filter((u) => !kept.has(u))
     .map(keyOf)
     .filter((k): k is string => !!k);

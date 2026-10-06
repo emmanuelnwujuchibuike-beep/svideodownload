@@ -83,5 +83,11 @@ describe.skipIf(trackedSourceFiles().length === 0)("source integrity", () => {
         `correct and behave differently. Rewrite the line with an editor or a script FILE, ` +
         `never through a heredoc or \`node -e "…"\`.`,
     ).toEqual([]);
-  });
+    /*
+      30 s, not the default 5 s (2026-10-06): this reads EVERY tracked file,
+      so it is disk-bound — it timed out at 6–7 s twice in a full run while
+      OneDrive was syncing a fresh build, and passed alone in 3 s with no
+      offender. The check is unchanged; only the clock allows slow disks.
+    */
+  }, 30_000);
 });

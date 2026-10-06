@@ -151,7 +151,8 @@ function RailVideo({ src, poster }: { src: string; poster?: string | null }) {
       muted
       loop
       playsInline
-      preload="metadata"
+      // nothing loads until the card is on screen and plays (2026-10-06) — the poster covers it
+      preload="none"
       className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105"
     />
   );

@@ -137,9 +137,14 @@ export function FriendsStories({
                     {cover?.mediaKind === "image" ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={cover.mediaUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
-                    ) : cover?.mediaKind === "video" ? (
-                      // eslint-disable-next-line jsx-a11y/media-has-caption
-                      <video src={`${cover.mediaUrl}#t=0.3`} muted playsInline preload="metadata" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
+                    ) : cover?.mediaKind === "video" && cover.thumbnailUrl ? (
+                      /*
+                        🔴 Never a <video> for a 54 px circle (2026-10-06): `#t=0.3` with
+                        preload="metadata" pulls most of an MP4 whose index sits at the
+                        end. The story's own thumbnail, else the avatar below.
+                      */
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={cover.thumbnailUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />
                     ) : g.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={g.avatarUrl} alt="" className="h-[3.4rem] w-[3.4rem] rounded-full object-cover" />

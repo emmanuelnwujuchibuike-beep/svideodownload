@@ -58,17 +58,22 @@ export function PostCover({
   if (post.thumbnailUrl) {
     return <Image src={post.thumbnailUrl} alt="" fill sizes={sizes} loading="lazy" className={cn("object-cover", className)} />;
   }
-  if (post.mediaKind === "video" && post.mediaUrl) {
+  /*
+    🔴 A GRID TILE NEVER LOADS A VIDEO (2026-10-06, measured on production).
+
+    A video post with no thumbnail used to render a metadata-preloaded video
+    element seeked half a second in, to show a frame. "metadata" is a few KB only when the MP4
+    keeps its index at the front; these keep it at the END, so seeking to 0.5 s
+    pulled most of each file — /u/chris downloaded 68 MB of MP4 on open, three
+    files twice, nobody pressing play. Only 4 of 117 video posts lack a
+    thumbnail, but each one cost the visitor megabytes. The tile is a still
+    placeholder; the video loads when somebody opens the post.
+  */
+  if (post.mediaKind === "video") {
     return (
-      // eslint-disable-next-line jsx-a11y/media-has-caption
-      <video
-        src={`${post.mediaUrl}#t=0.5`}
-        muted
-        playsInline
-        preload="metadata"
-        tabIndex={-1}
-        className={className}
-      />
+      <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-800 via-zinc-900 to-black text-white/70", className)}>
+        <Play className="h-8 w-8 fill-white/70" aria-hidden />
+      </div>
     );
   }
   return (

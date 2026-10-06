@@ -44,18 +44,31 @@ export function IdentityVideo({ src, poster, className }: { src: string; poster:
         return;
       }
 
-      // 2) First visit — play progressively from the network now (poster covers the
-      //    buffer), and cache in the background so every later visit is instant.
-      setVideoSrc(src);
+      /*
+        2) First visit — ONE download (2026-10-06, measured on production).
+
+        This used to start the <video> streaming the file AND fetch the same
+        file again in the background to cache it: every first view downloaded
+        the clip twice (a 2.3 MB intro: one 200 + one 206). Now the file is
+        fetched once, cached, and played from that copy; the poster covers the
+        wait, as it already did for the buffer. A slow or data-saving
+        connection streams without caching, as before.
+      */
       const { saveData, effectiveType } = getSyncConditions();
-      if (saveData || effectiveType === "slow-2g" || effectiveType === "2g") return;
+      if (saveData || effectiveType === "slow-2g" || effectiveType === "2g") {
+        setVideoSrc(src);
+        return;
+      }
       try {
         const res = await fetch(src);
-        if (!res.ok) return;
+        if (!res.ok) throw new Error(String(res.status));
         const blob = await res.blob();
-        if (!cancelled) await saveMedia(keyFor(src), blob);
+        if (cancelled) return;
+        applyBlob(blob);
+        void saveMedia(keyFor(src), blob).catch(() => {});
       } catch {
-        /* CORS/offline — the direct <video src> is already playing; just no cache */
+        /* CORS/offline — stream it directly; no cache this time */
+        if (!cancelled) setVideoSrc(src);
       }
     })();
 

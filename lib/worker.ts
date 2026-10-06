@@ -12,7 +12,8 @@ import { capToHeader, isTooLarge, MAX_BYTES_HEADER, maxDownloadBytes, tooLargeMe
  *    matching `x-worker-secret` header so only the trusted frontend can use it.
  */
 
-export const WORKER_URL = (process.env.DOWNLOAD_WORKER_URL || "").replace(/\/$/, "");
+// trimmed: the production value ends in a newline (measured 2026-10-06)
+export const WORKER_URL = (process.env.DOWNLOAD_WORKER_URL || "").trim().replace(/\/$/, "");
 export const WORKER_SECRET = process.env.WORKER_SECRET || "";
 
 /** True on the FRONTEND role: requests should be proxied to the worker. */

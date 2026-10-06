@@ -616,7 +616,7 @@ function HistoryTile({ job, now, onOpen }: { job: AiJobView; now: number; onOpen
           truncated extension. `line-clamp-1` ALONE, never with `block`.
         */}
         <p className="mt-1 line-clamp-1 text-[14.5px] font-semibold tracking-[-0.01em]">{title}</p>
-        <p className="mt-0.5 line-clamp-1 text-[12px] text-muted-foreground">
+        <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
           <TileCaption job={job} availability={availability} now={now} />
         </p>
         <span
@@ -804,8 +804,8 @@ function EmptyState({ filter }: { filter: keyof typeof AI_HISTORY_EMPTY_COPY }) 
       {/* Part 9 §35: useful, not decorative — the door to the first video, from the empty list itself */}
       {filter === "all" ? (
         <Link href="/studio/ai/character-replace" className={aiButtonClass({ className: "mt-5" })}>
-          <PersonStanding className="h-4 w-4" aria-hidden />
-          Create a video
+          <Sparkles className="h-4 w-4" aria-hidden />
+          Explore AI tools
         </Link>
       ) : null}
     </div>

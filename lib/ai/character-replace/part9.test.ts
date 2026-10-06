@@ -139,12 +139,14 @@ describe("price, trim and progress are the server's facts (§6, §12, §15)", ()
 });
 
 describe("the empty history is a door, and a tile says what it holds (§24, §35)", () => {
-  it("empty → Create a video; a ready tile → length · quality · when", () => {
+  it("empty → Explore AI tools; a ready tile → length · quality · when", () => {
     const h = src("features/ai/frenz-ai-history.tsx");
     // 2026-10-06: the door is the shared primary button now; still a door from the empty list
     expect(h).toContain('<Link href="/studio/ai/character-replace" className={aiButtonClass({ className: "mt-5" })}>');
     expect(h).toContain("qualityWord(cr.quality)");
-    expect(src("lib/ai/history.ts")).toContain('title: "Your transformations will appear here",');
+    expect(src("lib/ai/history.ts")).toContain('title: "Your creations will appear here",');
+    // Character Replace is retired: the empty list must not send people to it by name
+    expect(src("lib/ai/history.ts")).not.toContain("first Character Replace video");
   });
 });
 

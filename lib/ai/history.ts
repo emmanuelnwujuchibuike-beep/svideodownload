@@ -73,8 +73,9 @@ export const AI_HISTORY_FILTER_LABELS: Record<AiHistoryFilter, string> = {
 /** What the empty list should say, per tab. Never a bare "Nothing here". */
 export const AI_HISTORY_EMPTY_COPY: Record<AiHistoryFilter, { title: string; body: string }> = {
   all: {
-    title: "Your transformations will appear here",
-    body: "Create your first Character Replace video to see it here — it stays for a few days, longer when you save it.",
+    // 2026-10-06: Character Replace is retired — the history holds every tool now
+    title: "Your creations will appear here",
+    body: "Make your first video or audio and it shows up here — it stays for a few days, longer when you save it.",
   },
   completed: {
     title: "No finished videos yet",

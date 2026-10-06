@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { listAiJobs } from "@/lib/ai/client";
 import { AI_JOB_STARTED_EVENT, browserHasUsedFrenzAi } from "@/lib/ai/history-cache";
+import { getAiHistorySnapshot } from "@/lib/ai/history-store";
 import { aiNotificationCopy, outcomeForErrorCode } from "@/lib/ai/notification-copy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { haptic } from "@/lib/motion/haptics";
@@ -81,6 +82,26 @@ const POLL_MS = 12_000;
 const VISIBLE_MS = 9_000;
 
 type Alert = { job: AiJobView; kind: "ready" | "failed" };
+
+/**
+ * ── 🔴 ASK ONLY WHEN SOMETHING CAN HAVE FINISHED (owner, 2026-10-06) ──────────
+ *
+ * "never call server each time a user enters the page." This banner mounts on
+ * every page, and it used to ask `/api/ai/jobs` on EVERY page load for anyone
+ * who had ever used Frenz AI — found by the AI History screenshot run, where a
+ * fully synced on-device history still produced one request per visit.
+ *
+ * The on-device history (lib/ai/history-store.ts) already knows: every job this
+ * device starts or reads passes through it. So the banner asks only when that
+ * store holds a job still running, or when the store has never been filled on
+ * this browser (the first visit after this change) and the browser has used
+ * Frenz AI before. A job started here also fires AI_JOB_STARTED_EVENT, as before.
+ */
+function worthAsking(): boolean {
+  const snap = getAiHistorySnapshot();
+  if (snap.jobs.some((j) => isActiveStatus(j.status))) return true;
+  return snap.syncedAt === null && snap.jobs.length === 0 && browserHasUsedFrenzAi();
+}
 
 export function AiJobAlert() {
   const router = useRouter();
@@ -243,7 +264,7 @@ export function AiJobAlert() {
       network. A browser that has never touched Frenz AI does nothing at all
       here — not one request, not one timer.
     */
-    if (browserHasUsedFrenzAi()) void tick();
+    if (worthAsking()) void tick();
 
     /*
       And the first-timer, who by definition has no cache. The workspace hook
@@ -260,7 +281,7 @@ export function AiJobAlert() {
       and came back would sit on a stale page until they navigated.
     */
     const onVisible = () => {
-      if (document.visibilityState === "visible") void tick();
+      if (document.visibilityState === "visible" && worthAsking()) void tick();
     };
     document.addEventListener("visibilitychange", onVisible);
 

@@ -93,7 +93,8 @@ export function directDownloadsEnabled(env: Record<string, string | undefined> =
 
 /** The worker's address as a BROWSER reaches it (may differ from the server-to-server one). */
 export function directWorkerBase(env: Record<string, string | undefined> = process.env): string {
-  return (env.DOWNLOAD_WORKER_PUBLIC_URL || env.DOWNLOAD_WORKER_URL || "").replace(/\/$/, "");
+  // trimmed: the production DOWNLOAD_WORKER_URL value ends in a newline (measured 2026-10-06)
+  return (env.DOWNLOAD_WORKER_PUBLIC_URL || env.DOWNLOAD_WORKER_URL || "").trim().replace(/\/$/, "");
 }
 
 /** Origins the worker answers CORS for: the site, plus any listed in DOWNLOAD_DIRECT_ORIGINS. */

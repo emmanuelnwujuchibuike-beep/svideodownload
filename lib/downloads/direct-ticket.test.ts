@@ -62,3 +62,11 @@ describe("direct download tickets (FOT brief 2026-10-06)", () => {
     expect(directAllowedOrigin("http://localhost:3124", { DOWNLOAD_DIRECT_ORIGINS: "http://localhost:3124" })).toBe("http://localhost:3124");
   });
 });
+
+describe("the worker address", () => {
+  it("is trimmed — the production value ends in a newline (2026-10-06)", async () => {
+    const { directWorkerBase } = await import("@/lib/downloads/direct-ticket");
+    expect(directWorkerBase({ DOWNLOAD_WORKER_URL: "https://w.up.railway.app\n" })).toBe("https://w.up.railway.app");
+    expect(directWorkerBase({ DOWNLOAD_WORKER_URL: " https://w.up.railway.app/ " })).toBe("https://w.up.railway.app");
+  });
+});

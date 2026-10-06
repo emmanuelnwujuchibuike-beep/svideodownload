@@ -86,4 +86,11 @@ describe("the on-device AI history", () => {
     // keys only: the store itself must never ride into every page via the header
     expect(readFileSync(join(process.cwd(), "lib/auth/sign-out.ts"), "utf8")).not.toMatch(/history-store|media-url-cache/);
   });
+
+  it("the app-wide job banner asks only when the device holds a running job (no request per page view)", () => {
+    const alert = readFileSync(join(process.cwd(), "features/ai/ai-job-alert.tsx"), "utf8");
+    expect(alert).toContain("if (worthAsking()) void tick();");
+    expect(alert).toContain("if (snap.jobs.some((j) => isActiveStatus(j.status))) return true;");
+    expect(alert).not.toContain("if (browserHasUsedFrenzAi()) void tick();");
+  });
 });

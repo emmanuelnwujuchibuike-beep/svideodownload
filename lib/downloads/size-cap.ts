@@ -45,7 +45,47 @@ const mb = (b: number) => `${Math.round(b / (1024 * 1024))} MB`;
 
 /** The sentence the download card shows. Contains "too large" — retry-policy will not retry it. */
 export function tooLargeMessage(bytes: number, limit: number = maxDownloadBytes()): string {
+  // Below the free cap only the Telegram ceiling can be in force — Pro would not help, so don't sell it.
+  if (limit < maxDownloadBytes()) {
+    return `This video is too large to download from Telegram here (${mb(bytes)}). Telegram videos up to ${mb(limit)} work — try a shorter one.`;
+  }
   return `This file is too large for the free plan (${mb(bytes)}). Files of ${mb(limit)} and over download with Pro — upgrade to save it.`;
+}
+
+/**
+ * ── TELEGRAM: A CEILING SET BY WHAT CAN FINISH (2026-10-06, measured) ───────
+ *
+ * Through worker → Vercel, Telegram moves at ~260 KB/s (t.me/durov/396:
+ * 3.7 MB in 14.6 s on production). Vercel ends the function at 300 s, so a
+ * file much over ~70 MB can NEVER complete: it streams until cut ("Failed to
+ * fetch" — 13 of the last 30 minutes' failures), the client retries, and every
+ * attempt bills Fast Origin Transfer, Fluid CPU and Railway egress for a file
+ * nobody receives. The files being retried were 99–283 MB.
+ *
+ * This applies to every plan — a Pro attempt at 109 MB fails exactly the same
+ * way. It goes away when the bytes stop passing through Vercel (the direct
+ * worker ticket, DOWNLOAD_DIRECT=1). `TELEGRAM_MAX_BYTES` overrides.
+ */
+export const DEFAULT_TELEGRAM_MAX_BYTES = 60 * 1024 * 1024;
+
+export function telegramMaxBytes(env: Record<string, string | undefined> = process.env): number {
+  const n = Number(env.TELEGRAM_MAX_BYTES);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TELEGRAM_MAX_BYTES;
+}
+
+export function isTelegramUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h === "t.me" || h === "telegram.me" || h.endsWith(".t.me");
+  } catch {
+    return false;
+  }
+}
+
+/** The cap for THIS download: the plan's, narrowed for a Telegram source that streams through Vercel. */
+export function capForDownload(plan: string | null | undefined, url: string, viaVercel: boolean): number {
+  const planCap = maxDownloadBytesFor(plan);
+  return viaVercel && isTelegramUrl(url) ? Math.min(planCap, telegramMaxBytes()) : planCap;
 }
 
 /** Header the trusted Vercel proxy uses to tell the worker the caller's cap. */

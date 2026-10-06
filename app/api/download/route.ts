@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { checkDownloadQuota, isInternalWorkerCall } from "@/lib/api/download-quota";
-import { capFromHeader, capToHeader, MAX_BYTES_HEADER, maxDownloadBytes, maxDownloadBytesFor } from "@/lib/downloads/size-cap";
+import { capForDownload, capFromHeader, capToHeader, MAX_BYTES_HEADER, maxDownloadBytes, maxDownloadBytesFor } from "@/lib/downloads/size-cap";
 import { directDownloadsEnabled, directWorkerBase, mintDirectTicket } from "@/lib/downloads/direct-ticket";
 import { RewardError, redeemRewardItem } from "@/lib/monetization/reward-sessions";
 import { downloadLimiter, clientId } from "@/lib/rate-limit";
@@ -50,7 +50,10 @@ async function enforceDailyCap(
   const subject = data ? `${data.url}|${data.formatId}|${data.kind}` : null;
   const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId, subject);
   // Owner, 2026-10-06: files of 200 MB and over are for Pro / Business only.
-  const maxBytes = maxDownloadBytesFor(quota.plan);
+  // …and a Telegram source streamed through Vercel has a ceiling set by what can finish in 300 s.
+  const maxBytes = data
+    ? capForDownload(quota.plan, data.url, hasWorker && !directDownloadsEnabled())
+    : maxDownloadBytesFor(quota.plan);
   if (quota.allowed) return { denied: null, maxBytes };
   const denied = NextResponse.json<ApiError>(
     {
@@ -146,7 +149,7 @@ export async function POST(request: Request) {
   }
 
   const clientIp = clientId(request.headers);
-  const { denied, maxBytes } = await enforceDailyCap(request, clientIp);
+  const { denied, maxBytes } = await enforceDailyCap(request, clientIp, null, null, parsed.data);
   if (denied) return denied;
 
   return processDownload(parsed.data, clientIp, new URL(request.url).searchParams.get("hevc") === "1", false, maxBytes);

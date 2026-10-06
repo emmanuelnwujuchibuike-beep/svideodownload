@@ -122,6 +122,7 @@ describe("the showcase slides", () => {
       "features/ai/video/image-to-video-workspace.tsx",
       "features/ai/text-to-audio/text-to-audio-workspace.tsx",
       "features/ai/voice-clone/voice-cloning-workspace.tsx",
+      "features/ai/lip-sync/lip-sync-workspace.tsx",
     ]) {
       const showcases = read(f).match(/<AiShowcase\b[^>]*>/g) ?? [];
       expect(showcases.length, f).toBeGreaterThan(0);

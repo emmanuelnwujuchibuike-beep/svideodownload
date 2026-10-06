@@ -279,15 +279,15 @@ export function TextToAudioWorkspace({
                         className={cn(
                           "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98]",
                           ws.voiceId === v.id
-                            ? "bg-foreground text-background"
-                            : "bg-secondary/50 hover:bg-secondary/80",
+                            ? "bg-indigo-50/80 text-indigo-950 ring-2 ring-inset ring-indigo-400/80"
+                            : "bg-card ring-1 ring-inset ring-black/[0.08] hover:ring-indigo-300/60",
                         )}
                       >
-                        <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", ws.voiceId === v.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                        <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", ws.voiceId === v.id ? "bg-white text-indigo-600" : "bg-primary/10 text-primary")}>
                           <Mic className="h-3.5 w-3.5" aria-hidden />
                         </span>
                         <span className="line-clamp-2 text-[12.5px] font-semibold leading-tight">{v.label}</span>
-                        <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", ws.voiceId === v.id ? "text-background/80" : "text-foreground/55")}>{v.blurb}</span>
+                        <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", ws.voiceId === v.id ? "text-indigo-900/70" : "text-foreground/55")}>{v.blurb}</span>
                       </button>
                     ))}
                   </div>
@@ -304,7 +304,7 @@ export function TextToAudioWorkspace({
                               ws.setDelivery(d);
                             }}
                             aria-pressed={ws.delivery === d}
-                            className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition", ws.delivery === d ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                            className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition", ws.delivery === d ? "border-indigo-400 bg-indigo-50/80 text-indigo-950" : "border-border bg-card hover:bg-secondary/40")}
                           >
                             <span className="block text-[12.5px] font-bold">{TTS_DELIVERY_LABEL[d].label}</span>
                           </button>
@@ -608,7 +608,7 @@ function Result({ job, missing, basePath, libraryHref, lipSyncHref, voiceLabel, 
         <Notice tone={job.status === "failed" ? "error" : "muted"}>
           {ended} {job.error?.message ?? ""} {refund ?? ""}
         </Notice>
-        <Link href={basePath} onClick={onAnother} className="ai-cta inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
+        <Link href={basePath} onClick={onAnother} className={aiButtonClass({ size: "lg", block: true })}>
           <RefreshCcw className="h-4 w-4" aria-hidden /> Try again
         </Link>
       </div>

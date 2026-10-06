@@ -7,7 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CharacterReplaceMediaPicker } from "@/features/ai/character-replace/media-picker";
 import { VideoReadyPlayer } from "@/features/ai/character-replace/video-ready-player";
 import { startAiResultDownload } from "@/features/ai/ai-result-download";
-import { AiHero } from "@/features/ai/design/ai-surface";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAITrustRow } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
@@ -19,6 +22,7 @@ import type { AiPlansPublic } from "@/lib/ai/credits/config";
 import { formatCents } from "@/lib/ai/economy";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { LIP_SYNC_EXPRESSIONS } from "@/lib/ai/lip-sync/config";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +55,10 @@ export function LipSyncWorkspace({
   initialAssetId = null,
   initialVoiceId = null,
   audioHref,
+  slides = [],
 }: {
+  /** The showcase slides, read by the server page — shown on large screens only (owner, 2026-10-05). The result pages pass none. */
+  slides?: ShowcaseSlide[];
   basePath: string;
   aiHref: string;
   historyHref: string;
@@ -99,16 +106,15 @@ export function LipSyncWorkspace({
           one definition instead of from a copy that had already drifted a
           step smaller than its siblings (1.9rem against 2rem).
         */}
-        <AiHero
-          tool="Lip Sync Pro"
-          title={watching ? (job?.status === "completed" ? "Your video is" : "Syncing the") : "Make them say"}
-          highlight={watching ? (job?.status === "completed" ? "ready." : "lips.") : "anything."}
-          subtitle={
-            watching
-              ? null
-              : "Type what they should say, or bring your own audio. The mouth follows the speech; the face, the body and the scene stay theirs."
-          }
-          className="mb-5"
+        {/* Redesign page 7 (owner's reference): showcase on large screens only, the credits strip, then the tool's own title. */}
+        <AiShowcase slides={slides} base={aiHref} desktopOnly className="mt-3 mb-3" />
+        <AiCreditStrip base={aiHref} className="mt-3 lg:mt-0" />
+        <AiToolTitle
+          icon={Mic}
+          title="Lip Sync Pro"
+          tagline={watching ? (job?.status === "completed" ? "Your video is ready." : "Syncing the lips.") : "Make them say anything."}
+          body={watching ? null : "Type what they should say, or bring your own audio. The mouth follows the speech; the face, the body and the scene stay theirs."}
+          className="mb-5 mt-6"
         />
 
         {ws.configError ? (
@@ -124,11 +130,11 @@ export function LipSyncWorkspace({
         {watching ? (
           <JobStage job={job} missing={ws.watch.missing} previewUrl={ws.watch.previewUrl} onCancel={() => void ws.watch.cancel()} onAnother={ws.reset} historyHref={historyHref} basePath={basePath} />
         ) : ws.config?.available ? (
-          <div className="space-y-5">
+          <AiPanel className="space-y-6">
             {/* ── Step 1 · the video ─────────────────────────────────────── */}
             <Section n={1} title="Upload video">
               {ws.video ? (
-                <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-3">
+                <div className="flex items-center gap-3 rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] p-3">
                   <video src={ws.video.objectUrl} muted playsInline preload="metadata" className="h-16 w-12 shrink-0 rounded-lg bg-black object-cover" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{ws.video.file.name}</p>
@@ -222,14 +228,14 @@ export function LipSyncWorkspace({
                           aria-pressed={!ws.voiceId}
                           className={cn(
                             "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98] motion-reduce:active:scale-100",
-                            !ws.voiceId ? "bg-foreground text-background" : "bg-secondary/50 hover:bg-secondary/80",
+                            !ws.voiceId ? "bg-indigo-50/80 text-indigo-950 ring-2 ring-inset ring-indigo-400/80" : "bg-card ring-1 ring-inset ring-black/[0.08] hover:ring-indigo-300/60",
                           )}
                         >
-                          <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", !ws.voiceId ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                          <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", !ws.voiceId ? "bg-white text-indigo-600" : "bg-primary/10 text-primary")}>
                             <Mic className="h-3.5 w-3.5" aria-hidden />
                           </span>
                           <span className="line-clamp-2 text-[12.5px] font-semibold leading-tight">Default voice</span>
-                          <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", !ws.voiceId ? "text-background/80" : "text-foreground/55")}>Chosen for you</span>
+                          <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", !ws.voiceId ? "text-indigo-900/70" : "text-foreground/55")}>Chosen for you</span>
                         </button>
                         {cfg.voices
                           .filter((v) => !ws.languageCode || !v.languages.length || v.languages.includes(ws.languageCode))
@@ -245,15 +251,15 @@ export function LipSyncWorkspace({
                               aria-pressed={ws.voiceId === v.id}
                               className={cn(
                                 "flex min-h-[86px] flex-col rounded-2xl px-2.5 py-2.5 text-left transition active:scale-[0.98] motion-reduce:active:scale-100",
-                                ws.voiceId === v.id ? "bg-foreground text-background" : "bg-secondary/50 hover:bg-secondary/80",
+                                ws.voiceId === v.id ? "bg-indigo-50/80 text-indigo-950 ring-2 ring-inset ring-indigo-400/80" : "bg-card ring-1 ring-inset ring-black/[0.08] hover:ring-indigo-300/60",
                               )}
                             >
-                              <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", ws.voiceId === v.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                              <span className={cn("mb-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg", ws.voiceId === v.id ? "bg-white text-indigo-600" : "bg-primary/10 text-primary")}>
                                 <Mic className="h-3.5 w-3.5" aria-hidden />
                               </span>
                               <span className="line-clamp-2 text-[12.5px] font-semibold leading-tight">{v.label}</span>
                               {v.blurb ? (
-                                <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", ws.voiceId === v.id ? "text-background/80" : "text-foreground/55")}>{v.blurb}</span>
+                                <span className={cn("mt-0.5 line-clamp-1 text-[11px] font-medium", ws.voiceId === v.id ? "text-indigo-900/70" : "text-foreground/55")}>{v.blurb}</span>
                               ) : null}
                             </button>
                           ))}
@@ -271,7 +277,7 @@ export function LipSyncWorkspace({
                             ws.setLanguageCode(null);
                           }}
                           aria-pressed={!ws.languageCode}
-                          className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition active:scale-[0.98] motion-reduce:active:scale-100", !ws.languageCode ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                          className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition active:scale-[0.98] motion-reduce:active:scale-100", !ws.languageCode ? "border-indigo-400 bg-indigo-50/80 text-indigo-950" : "border-border bg-card hover:bg-secondary/40")}
                         >
                           <span className="block text-[12.5px] font-bold">Auto</span>
                         </button>
@@ -284,7 +290,7 @@ export function LipSyncWorkspace({
                               ws.setLanguageCode(l.code);
                             }}
                             aria-pressed={ws.languageCode === l.code}
-                            className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition active:scale-[0.98] motion-reduce:active:scale-100", ws.languageCode === l.code ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                            className={cn("min-h-[44px] rounded-2xl border px-2 py-1.5 text-center transition active:scale-[0.98] motion-reduce:active:scale-100", ws.languageCode === l.code ? "border-indigo-400 bg-indigo-50/80 text-indigo-950" : "border-border bg-card hover:bg-secondary/40")}
                           >
                             <span className="block text-[12.5px] font-bold">{l.label}</span>
                             {l.native && l.native !== l.label ? (
@@ -314,7 +320,7 @@ export function LipSyncWorkspace({
               {ws.source === "audio" && cfg?.audioMode.enabled ? (
                 <div className="mt-4">
                   {ws.audio ? (
-                    <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card p-3">
+                    <div className="flex items-center gap-3 rounded-2xl bg-card ring-1 ring-inset ring-black/[0.08] p-3">
                       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                         <AudioLines className="h-5 w-5" aria-hidden />
                       </span>
@@ -378,9 +384,9 @@ export function LipSyncWorkspace({
                             type="button"
                             onClick={() => ws.setAssetId(a.id)}
                             aria-pressed={ws.assetId === a.id}
-                            className={cn("flex w-full min-h-[60px] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition", ws.assetId === a.id ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}
+                            className={cn("flex w-full min-h-[60px] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition", ws.assetId === a.id ? "border-indigo-400 bg-indigo-50/80 text-indigo-950" : "border-border bg-card hover:bg-secondary/40")}
                           >
-                            <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", ws.assetId === a.id ? "bg-background/15" : "bg-primary/10 text-primary")}>
+                            <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", ws.assetId === a.id ? "bg-white text-indigo-600" : "bg-primary/10 text-primary")}>
                               <AudioLines className="h-4 w-4" aria-hidden />
                             </span>
                             <span className="min-w-0 flex-1">
@@ -477,23 +483,23 @@ export function LipSyncWorkspace({
               {ws.launch.phase === "error" && ws.launch.code !== "CR_CREDITS_REQUIRED" ? <Notice tone="error">{ws.launch.message}</Notice> : null}
               {ws.config && !ws.config.processingAvailable ? <Notice tone="muted">{ws.config.processingUnavailableReason ?? "Processing isn't available right now."}</Notice> : null}
               {creditsShort && quoted ? (
-                <button type="button" onClick={openPlans} className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background">
+                <button type="button" onClick={openPlans} className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}>
                   <Sparkles className="h-4 w-4" aria-hidden />
                   Get more AI credits
                 </button>
               ) : shortOfBalance && quoted ? (
-                <Link href={`${usageHref}?recharge=${quoted.shortfallCents}`} className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background">
+                <Link href={`${usageHref}?recharge=${quoted.shortfallCents}`} className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}>
                   Add {formatCents(quoted.shortfallCents, symbol)} to continue
                 </Link>
               ) : (
-                <button type="button" onClick={() => void ws.generate()} disabled={!canGenerate} className="ai-cta inline-flex min-h-[56px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-6 text-[15px] font-bold text-background transition disabled:cursor-not-allowed disabled:opacity-45">
+                <button type="button" onClick={() => void ws.generate()} disabled={!canGenerate} className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}>
                   {launching ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
                   {launchLabel(ws.launch, quoted, credits, complimentary, symbol, creditsCover)}
                 </button>
               )}
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">Nothing is charged until processing starts. A generation that doesn&apos;t finish comes back to you.</p>
             </div>
-          </div>
+          </AiPanel>
         ) : !ws.config && !ws.configError ? (
           /*
             §43/§60 LOADING, not nothing (2026-10-05). The form waits for the
@@ -602,7 +608,7 @@ function JobStage({ job, missing, previewUrl, onCancel, onAnother, historyHref, 
           <Notice tone="muted">Deleted. It will not be in your AI videos.</Notice>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <button type="button" onClick={() => startAiResultDownload(job)} className="ai-cta col-span-2 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background sm:col-span-2">
+            <button type="button" onClick={() => startAiResultDownload(job)} className={aiButtonClass({ size: "lg", className: "col-span-2" })}>
               <Download className="h-4 w-4" aria-hidden /> Download
             </button>
             <button
@@ -661,7 +667,7 @@ function JobStage({ job, missing, previewUrl, onCancel, onAnother, historyHref, 
         <Notice tone={job.status === "failed" ? "error" : "muted"}>
           {[ended, detail, refundLine ?? ""].filter(Boolean).join(" ")}
         </Notice>
-        <Link href={basePath} onClick={onAnother} className="ai-cta inline-flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
+        <Link href={basePath} onClick={onAnother} className={aiButtonClass({ size: "lg", block: true })}>
           <RefreshCcw className="h-4 w-4" aria-hidden /> Try again
         </Link>
       </div>
@@ -699,22 +705,26 @@ function JobStage({ job, missing, previewUrl, onCancel, onAnother, historyHref, 
 
 function LipSyncFormLoading() {
   return (
-    <div className="space-y-5" role="status" aria-live="polite">
-      <span className="sr-only">Loading Lip Sync Pro…</span>
-      {[150, 400, 220, 180].map((h, i) => (
-        <div key={i} aria-hidden className="rounded-[1.5rem] border border-border/70 bg-card/60 p-4 sm:p-5" style={{ height: h }}>
-          <div className="h-3.5 w-32 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
-        </div>
-      ))}
-    </div>
+    // Redesign page 7: the same ONE panel as the form, its blocks at the form's block heights (measured on the build).
+    <AiPanel className="space-y-6">
+      <div role="status" aria-live="polite" className="space-y-6">
+        <span className="sr-only">Loading Lip Sync Pro…</span>
+        {[118, 368, 188, 148].map((h, i) => (
+          <div key={i} aria-hidden style={{ height: h }}>
+            <div className="h-3.5 w-32 animate-pulse rounded-full bg-secondary motion-reduce:animate-none" />
+          </div>
+        ))}
+      </div>
+    </AiPanel>
   );
 }
 
 function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[1.5rem] border border-border/70 bg-card/60 p-4 sm:p-5">
-      <h2 className="mb-3 flex items-center gap-2 text-[13px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-foreground text-[11px] font-bold text-background">{n}</span>
+    // Redesign page 7: every step lives in ONE panel; a step is a titled block with a small number, not a box of its own.
+    <section>
+      <h2 className="mb-3 flex items-center gap-2 text-[15px] font-bold tracking-[-0.015em]">
+        <span className="grid h-5 w-5 place-items-center rounded-full bg-indigo-50 text-[11px] font-bold text-indigo-600 ring-1 ring-inset ring-indigo-200">{n}</span>
         {title}
       </h2>
       {children}
@@ -724,11 +734,22 @@ function Section({ n, title, children }: { n: number; title: string; children: R
 
 function SourceTab({ active, onClick, icon, label, hint }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; hint: string }) {
   return (
-    <button type="button" role="tab" aria-selected={active} onClick={onClick} className={cn("flex min-h-[64px] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition", active ? "border-foreground bg-foreground text-background" : "border-border bg-card hover:bg-secondary/40")}>
-      <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", active ? "bg-background/15" : "bg-primary/10 text-primary")}>{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold">{label}</span>
-        <span className={cn("block text-[11px]", active ? "text-background/75" : "text-muted-foreground")}>{hint}</span>
+    // Redesign page 7 (Brief A, selected controls): a clear border and a subtle tint — not an inverted black block; one line each so nothing wraps at 390 px.
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        // stacked: the icon above the words, so the label gets the tile's full width (side by side it truncated at 390 px)
+        "flex min-h-[86px] flex-col items-start gap-1.5 rounded-2xl px-3 py-2.5 text-left ring-inset transition active:scale-[0.98]",
+        active ? "bg-indigo-50/80 ring-2 ring-indigo-400/80" : "bg-card ring-1 ring-black/[0.08] [@media(hover:hover)]:hover:ring-indigo-300/60",
+      )}
+    >
+      <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-xl", active ? "bg-white text-indigo-600 shadow-[0_2px_6px_-2px_rgba(99,102,241,0.5)]" : "bg-indigo-50 text-indigo-600")}>{icon}</span>
+      <span className="w-full min-w-0">
+        <span className={cn("block truncate text-[13.5px] font-semibold", active && "text-indigo-900")}>{label}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{hint}</span>
       </span>
     </button>
   );

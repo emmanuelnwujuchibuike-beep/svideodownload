@@ -230,4 +230,6 @@ export const SHOWCASE_PAGES = [
   "/studio/ai/text-to-audio",
   "/ai/voice-cloning",
   "/studio/ai/voice-cloning",
+  "/ai/lip-sync",
+  "/studio/ai/lip-sync",
 ] as const;

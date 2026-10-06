@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { VoiceLibrary } from "@/features/ai/voice-clone/voice-library";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +15,7 @@ export default async function StudioVoicesPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/voices");
-  return <VoiceLibrary cloneHref="/studio/ai/voice-cloning" ttaHref="/studio/ai/text-to-audio" lipSyncHref="/studio/ai/lip-sync" />;
+  // large screens show the showcase on every AI page (owner, 2026-10-05); cached until an admin saves
+  const slides = await getShowcaseSlides();
+  return <VoiceLibrary slides={slides} cloneHref="/studio/ai/voice-cloning" ttaHref="/studio/ai/text-to-audio" lipSyncHref="/studio/ai/lip-sync" />;
 }

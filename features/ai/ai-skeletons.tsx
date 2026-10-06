@@ -265,3 +265,31 @@ export function AiToolSkeleton({
     </SkeletonSection>
   );
 }
+
+/**
+ * A library page (Your Audios, Your Voices — redesign page 8): the credits
+ * strip, the tool title, the primary action, then two item cards. These
+ * routes had no fallback of their own and inherited the WELCOME page's
+ * (showcase card, hero), so they jumped when the list arrived.
+ */
+export function AiLibrarySkeleton({ label = "Loading" }: { label?: string }) {
+  return (
+    <SkeletonSection label={label}>
+      <div className="pb-24" aria-hidden>
+        <Skeleton className="mb-3 hidden aspect-[2/1] w-full rounded-[1.375rem] lg:block" />
+        <Skeleton className="mt-3 h-14 w-full rounded-[1.25rem] lg:mt-0" />
+        <div className="mt-6 flex items-center gap-3 px-1">
+          <Skeleton className="h-[2.85rem] w-[2.85rem] rounded-[0.95rem]" />
+          <Skeleton className="h-9 w-48 rounded-lg" />
+        </div>
+        <Skeleton className="mx-1 mt-2.5 h-5 w-64 max-w-full" />
+        <Skeleton className="mx-1 mt-2 h-4 w-full max-w-[22rem]" />
+        <Skeleton className="mt-5 h-12 w-36 rounded-full" />
+        <div className="mt-6 space-y-3">
+          <Skeleton className="h-[9.5rem] w-full rounded-[1.375rem]" />
+          <Skeleton className="h-[9.5rem] w-full rounded-[1.375rem]" />
+        </div>
+      </div>
+    </SkeletonSection>
+  );
+}

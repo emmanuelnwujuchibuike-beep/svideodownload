@@ -2,12 +2,16 @@
 
 import { AudioLines, Mic, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { AiHero } from "@/features/ai/design/ai-surface";
+import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiToolTitle } from "@/features/ai/design/ai-surface";
 import { useCallback, useState } from "react";
 
 import { useCachedView } from "@/features/ai/core/use-cached-view";
 import { AudioAssetPlayer } from "@/features/ai/text-to-audio/audio-player";
 import { deleteAudioAsset, listAudioLibrary, renameAudioAsset, type AudioAssetItem } from "@/lib/ai/text-to-audio/client";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { track } from "@/lib/analytics/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -23,7 +27,18 @@ import { cn } from "@/lib/utils";
  * pressed — so a long library costs one request to open and nothing to
  * scroll.
  */
-export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string; lipSyncHref: string; aiHref: string }) {
+export function AudioLibrary({
+  ttaHref,
+  lipSyncHref,
+  aiHref,
+  slides = [],
+}: {
+  ttaHref: string;
+  lipSyncHref: string;
+  aiHref: string;
+  /** The showcase — large screens only on every AI page that is not the welcome or Explore (owner, 2026-10-05). */
+  slides?: ShowcaseSlide[];
+}) {
   const [busy, setBusy] = useState<string | null>(null);
   /* Remembered on the device — same reasoning as the Voice Library beside it. */
   const view = useCachedView<AudioAssetItem[]>("audio-library", async () => {
@@ -65,23 +80,26 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
           carried, so three different screens announced themselves as one
           tool. §1 of the brief: avoid excessive uppercase labels.
         */}
-      <AiHero
-        tool="Audio Library"
-        title="Your"
-        highlight="Audio Library"
-        subtitle="Everything you have made with Text to Audio. Play it, save it to your device, or use it in Lip Sync Pro — reusing it costs nothing."
-        className="mt-4 px-0"
+      {/* Redesign page 8 (owner's reference): showcase on large screens, the credits strip, the page's own title, one primary action. */}
+      <AiShowcase slides={slides} base={aiHref} desktopOnly className="mt-3 mb-3" />
+      <AiCreditStrip base={aiHref} className="mt-3 lg:mt-0" />
+      <AiToolTitle
+        icon={AudioLines}
+        title="Your Audios"
+        tagline="Everything you made with Text to Audio."
+        body="Play it, save it to your device, or use it in Lip Sync Pro — reusing it costs nothing."
+        className="mt-6"
       />
 
-      <Link href={ttaHref} className="ai-cta mt-5 inline-flex min-h-[52px] items-center justify-center gap-2 rounded-full bg-foreground px-5 text-[14px] font-bold text-background">
+      <Link href={ttaHref} className={aiButtonClass({ className: "mt-5" })}>
         <Plus className="h-4 w-4" aria-hidden /> New audio
       </Link>
 
       <div className="mt-6 space-y-3">
         {state.status === "loading" ? (
           <>
-            <div className="h-24 animate-pulse rounded-[1.25rem] bg-secondary/60" aria-busy="true" aria-label="Loading your audio" />
-            <div className="h-24 animate-pulse rounded-[1.25rem] bg-secondary/40" />
+            <div className="h-[9.5rem] animate-pulse rounded-[1.375rem] bg-secondary/60" aria-busy="true" aria-label="Loading your audio" />
+            <div className="h-[9.5rem] animate-pulse rounded-[1.375rem] bg-secondary/40" />
           </>
         ) : state.status === "error" ? (
           <p className="rounded-2xl bg-rose-500/10 px-3.5 py-2.5 text-[12.5px] text-rose-700 dark:text-rose-300">
@@ -91,20 +109,20 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
             </button>
           </p>
         ) : state.assets.length === 0 ? (
-          <div className="rounded-[1.5rem] border border-dashed border-border bg-card/60 px-5 py-10 text-center">
+          <div className="rounded-[1.375rem] border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-5 py-10 text-center">
             <AudioLines className="mx-auto h-7 w-7 text-primary" aria-hidden />
             <p className="mt-3 text-[15px] font-bold tracking-[-0.01em]">Nothing here yet</p>
             <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-muted-foreground">Make your first audio and it will be saved here with the name you give it.</p>
-            <Link href={ttaHref} className="mt-4 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border border-border px-4 text-[13px] font-semibold">
+            <Link href={ttaHref} className={aiButtonClass({ variant: "secondary", className: "ai-btn--round mt-4" })}>
               Turn text into audio
             </Link>
           </div>
         ) : (
           state.assets.map((a) => (
-            <article key={a.id} className={cn("rounded-[1.25rem] bg-sky-50/70 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition", busy === a.id && "opacity-60")}>
+            <article key={a.id} className={cn("rounded-[1.375rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)] transition", busy === a.id && "opacity-60")}>
               <div className="flex items-start gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                  <AudioLines className="h-4.5 w-4.5" aria-hidden />
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 text-white shadow-[0_6px_12px_-6px_rgba(99,102,241,0.7)]">
+                  <AudioLines className="h-[18px] w-[18px]" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14.5px] font-bold tracking-[-0.01em]">{a.name}</p>
@@ -115,10 +133,10 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
                   </p>
                 </div>
                 <div className="flex shrink-0 gap-1">
-                  <button type="button" onClick={() => void rename(a)} disabled={busy !== null} aria-label={`Rename ${a.name}`} className="grid h-9 w-9 place-items-center rounded-full border border-border disabled:opacity-50">
+                  <button type="button" onClick={() => void rename(a)} disabled={busy !== null} aria-label={`Rename ${a.name}`} className="grid h-9 w-9 place-items-center rounded-full ring-1 ring-inset ring-black/[0.08] transition hover:bg-secondary disabled:opacity-50">
                     <Pencil className="h-3.5 w-3.5" aria-hidden />
                   </button>
-                  <button type="button" onClick={() => void remove(a)} disabled={busy !== null} aria-label={`Delete ${a.name}`} className="grid h-9 w-9 place-items-center rounded-full border border-border text-rose-600 disabled:opacity-50">
+                  <button type="button" onClick={() => void remove(a)} disabled={busy !== null} aria-label={`Delete ${a.name}`} className="grid h-9 w-9 place-items-center rounded-full text-rose-600 ring-1 ring-inset ring-black/[0.08] transition hover:bg-rose-50 disabled:opacity-50">
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 </div>
@@ -127,7 +145,7 @@ export function AudioLibrary({ ttaHref, lipSyncHref, aiHref }: { ttaHref: string
               <Link
                 href={`${lipSyncHref}?audio=${encodeURIComponent(a.id)}`}
                 onClick={() => track("audio_library_reused", { from: "library" })}
-                className="mt-3 inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-secondary px-3.5 text-[12.5px] font-semibold"
+                className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round mt-3" })}
               >
                 <Mic className="h-3.5 w-3.5 text-primary" aria-hidden /> Use in Lip Sync Pro
               </Link>

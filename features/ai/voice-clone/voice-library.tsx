@@ -3,12 +3,15 @@
 import { AudioLines, Mic, Pencil, Plus, ShieldCheck, Sparkles, Trash2, Type } from "lucide-react";
 import Link from "next/link";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { AiHero } from "@/features/ai/design/ai-surface";
+import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
+import { AiShowcase } from "@/features/ai/design/ai-showcase";
+import { AiToolTitle } from "@/features/ai/design/ai-surface";
 import { useCallback, useState } from "react";
 
 import { useCachedView } from "@/features/ai/core/use-cached-view";
 import { VoiceSamplePlayer } from "@/features/ai/voice-clone/voice-sample-player";
 import { deleteVoiceCloneItem, listVoiceCloneLibrary, renameVoiceCloneItem, type VoiceCloneItem } from "@/lib/ai/voice-clone/client";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { track } from "@/lib/analytics/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -28,7 +31,22 @@ import { cn } from "@/lib/utils";
  * member who reads "delete" and means "hide from this list" has been misled by
  * the button rather than by their own carelessness.
  */
-export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false }: { cloneHref: string; ttaHref: string; lipSyncHref: string; compact?: boolean }) {
+export function VoiceLibrary({
+  cloneHref,
+  ttaHref,
+  lipSyncHref,
+  compact = false,
+  slides = [],
+}: {
+  cloneHref: string;
+  ttaHref: string;
+  lipSyncHref: string;
+  compact?: boolean;
+  /** The showcase — large screens only on the standalone page (owner, 2026-10-05). */
+  slides?: ShowcaseSlide[];
+}) {
+  // the door's base ("/ai" or "/studio/ai"), from the clone link that already carries it
+  const aiHref = cloneHref.replace(/\/voice-cloning$/, "");
   const [busy, setBusy] = useState<string | null>(null);
   /*
     2026-09-27: remembered on the device, so coming back to the library paints
@@ -76,21 +94,18 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
   return (
     <div className={compact ? "" : "pb-24"}>
       {compact ? null : (
-        <header className="mt-4">
-        {/*
-          The shared hero (owner, 2026-09-28). This opened with the uppercase
-          "Frenz AI · Audio" eyebrow — the same pasted string Voice Cloning
-          carried, so three different screens announced themselves as one
-          tool. §1 of the brief: avoid excessive uppercase labels.
-        */}
-          <AiHero
-            tool="Your Voices"
-            title="Your"
-            highlight="Voices"
-            subtitle="The voices you have cloned. Use them anywhere you can type words — Text to Audio, or Lip Sync Pro."
-            className="px-0"
+        <>
+          {/* Redesign page 8 (owner's reference): showcase on large screens, the credits strip, the page's own title. */}
+          <AiShowcase slides={slides} base={aiHref} desktopOnly className="mt-3 mb-3" />
+          <AiCreditStrip base={aiHref} className="mt-3 lg:mt-0" />
+          <AiToolTitle
+            icon={Mic}
+            title="Your Voices"
+            tagline="The voices you have cloned."
+            body="Use them anywhere you can type words — Text to Audio, or Lip Sync Pro."
+            className="mt-6"
           />
-        </header>
+        </>
       )}
 
       <div className="mt-5 flex items-center justify-between gap-3">
@@ -105,7 +120,7 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
       {state.status === "loading" ? (
         <div className="mt-3 space-y-2" aria-busy="true" aria-label="Loading your voices">
           {[0, 1].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-[1.25rem] bg-secondary/60" />
+            <div key={i} className="h-[8.5rem] animate-pulse rounded-[1.375rem] bg-secondary/60" />
           ))}
         </div>
       ) : state.status === "error" ? (
@@ -116,7 +131,7 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
           </button>
         </p>
       ) : state.voices.length === 0 ? (
-        <div className="mt-3 rounded-[1.25rem] border border-dashed border-border px-4 py-8 text-center">
+        <div className="mt-3 rounded-[1.375rem] border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-4 py-8 text-center">
           <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-primary/10 text-primary">
             <Mic className="h-5 w-5" aria-hidden />
           </span>
@@ -129,9 +144,9 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
       ) : (
         <ul className="mt-3 space-y-2">
           {state.voices.map((voice) => (
-            <li key={voice.id} className={cn("rounded-[1.25rem] border border-border/70 bg-card p-3.5", busy === voice.id && "opacity-60")}>
+            <li key={voice.id} className={cn("rounded-[1.375rem] bg-card p-3.5 ring-1 ring-inset ring-black/[0.07] shadow-[0_8px_24px_-20px_rgba(30,40,90,0.45)]", busy === voice.id && "opacity-60")}>
               <div className="flex items-start gap-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 text-white shadow-[0_6px_12px_-6px_rgba(99,102,241,0.7)]">
                   <Mic className="h-4 w-4" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -145,10 +160,10 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
                   {voice.description ? <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{voice.description}</p> : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <button type="button" onClick={() => void rename(voice)} aria-label={`Rename ${voice.name}`} className="grid h-9 w-9 place-items-center rounded-full border border-border text-muted-foreground">
+                  <button type="button" onClick={() => void rename(voice)} aria-label={`Rename ${voice.name}`} className="grid h-9 w-9 place-items-center rounded-full ring-1 ring-inset ring-black/[0.08] text-muted-foreground">
                     <Pencil className="h-3.5 w-3.5" aria-hidden />
                   </button>
-                  <button type="button" onClick={() => void remove(voice)} aria-label={`Delete ${voice.name}`} className="grid h-9 w-9 place-items-center rounded-full border border-border text-rose-600">
+                  <button type="button" onClick={() => void remove(voice)} aria-label={`Delete ${voice.name}`} className="grid h-9 w-9 place-items-center rounded-full ring-1 ring-inset ring-black/[0.08] text-rose-600">
                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 </div>
@@ -158,14 +173,14 @@ export function VoiceLibrary({ cloneHref, ttaHref, lipSyncHref, compact = false 
                 <Link
                   href={`${ttaHref}?voice=${encodeURIComponent(`clone:${voice.id}`)}`}
                   onClick={() => track("voice_clone_reused", { to: "text_to_audio" })}
-                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[12px] font-bold text-background"
+                  className={aiButtonClass({ size: "sm" })}
                 >
                   <Type className="h-3.5 w-3.5" aria-hidden /> Make audio
                 </Link>
                 <Link
                   href={`${lipSyncHref}?voice=${encodeURIComponent(`clone:${voice.id}`)}`}
                   onClick={() => track("voice_clone_reused", { to: "lip_sync" })}
-                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-border px-3.5 text-[12px] font-semibold"
+                  className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}
                 >
                   <AudioLines className="h-3.5 w-3.5" aria-hidden /> Lip Sync Pro
                 </Link>

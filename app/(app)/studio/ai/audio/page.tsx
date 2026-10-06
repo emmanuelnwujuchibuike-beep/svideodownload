@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { AudioLibrary } from "@/features/ai/text-to-audio/audio-library";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +15,7 @@ export default async function StudioAudioLibraryPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/studio/ai/audio");
-  return <AudioLibrary ttaHref="/studio/ai/text-to-audio" lipSyncHref="/studio/ai/lip-sync" aiHref="/studio/ai" />;
+  // large screens show the showcase on every AI page (owner, 2026-10-05); cached until an admin saves
+  const slides = await getShowcaseSlides();
+  return <AudioLibrary slides={slides} ttaHref="/studio/ai/text-to-audio" lipSyncHref="/studio/ai/lip-sync" aiHref="/studio/ai" />;
 }

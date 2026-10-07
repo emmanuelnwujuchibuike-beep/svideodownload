@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Skeleton } from "@/features/ui/skeleton";
-import { SOUND_GENRES, SOUND_MOODS, type Sound, type SoundGenre, type SoundMood } from "@/lib/social/sounds";
+import type { Sound } from "@/lib/social/sounds";
+import { SOUND_GENRES, SOUND_MOODS, type SoundGenre, type SoundMood } from "@/lib/social/sounds-shared";
 import { cn, formatCompactNumber } from "@/lib/utils";
 
 /**

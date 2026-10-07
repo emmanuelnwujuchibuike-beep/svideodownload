@@ -10,7 +10,7 @@ import {
   HOME_MODULE_LABELS,
   type HomeModuleKey,
   type HomePreferences,
-} from "@/lib/social/home-preferences";
+} from "@/lib/social/home-preferences-shared";
 import { cn } from "@/lib/utils";
 
 const MODULE_ICON: Record<HomeModuleKey, typeof Clock> = {

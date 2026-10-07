@@ -55,8 +55,10 @@ build** (`next build` + `next start`), 8 AI Studio routes × 6 widths.
 | 24 | Quote request debouncing | `done` | **Already existed** — `QUOTE_DEBOUNCE_MS = 400` in `use-video-generation.ts`. Verify only, do not change |
 | 49 | Polling | `done` | **Peer session, do not redo.** `active-generation.ts` (`3cacc99`): the AI video poll was `setInterval` 3s for the whole job and fired while hidden; now 5s→10s→15s with the timer *cancelled* on hide. ~40 → ~14 requests per 2-min generation. `features/admin/live/scheduler.ts` audited and already correct (one shared timer, tiered, backoff, hard stop on hidden, 11 cost-safety tests). `ai-job-alert.tsx` already correct |
 | 50,51,52 | History, result page, download path | `open` | |
-| 53,54,68 | Network observability, credential exposure, provider isolation | `open` | |
-| 55,56 | SEO safety, PWA cache safety | `open` | |
+| 53,68 | Network observability, provider isolation | `open` | |
+| 54 | Credential exposure | `done` 2026-10-07 | Built client output scanned for the VALUES of all 10 server secrets in .env.local: 0 found. Found instead: `createAdminClient` (service-role helper; key never present, it can only throw) in 15 browser chunks incl. the `(app)` layout — client components imported a constant from 8 modules that also ran service-role queries. Pure parts split to `*-shared.ts`; `lib/supabase/admin.ts` is `server-only` (build fails on a client path); `lib/supabase/admin-never-in-browser.test.ts` walks the import graph. After: 0 chunks. |
+| 55 | SEO safety | `done` 2026-10-07 | All 13 `/ai` pages already noindex,nofollow; robots disallows `/ai`; sitemap has none. Guarded by `lib/ai/ai-pages-not-indexed.test.ts` (walks the directory). |
+| 56 | PWA cache safety | `done` 2026-10-07 | SW reviewed: API cache allowlist empty, page cache public-only, downloads/media bypass. Gap fixed: the image cache (signed AI/DM image URLs) outlived sign-out — `signOutClient` now drops `frenz-img-*` locally, unawaited. Test pins the prefix to the worker's cache name. |
 | 58,59 | Responsive grid, long text | `open` | |
 | 60,61 | State matrix, feature-unavailable state | `open` | |
 | 62,63 | Billing UX, authentication regression | `open` | |

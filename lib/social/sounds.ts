@@ -1,5 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/* Browser-safe constants, types and pure helpers live in ./sounds-shared.ts — a client
+   component imports them from there, so this module (and its service-role
+   queries) never reaches a browser bundle. Re-exported for server callers. */
+import { type SoundSourceType, type SoundMood, type SoundGenre } from "./sounds-shared";
+export * from "./sounds-shared";
+
 /**
  * Sounds data layer (Feature 15 Part 7) — see docs/FEATURE_15_PART_7_MUSIC.md.
  *
@@ -11,42 +17,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-export type SoundSourceType = "original" | "downloaded";
-
-/**
- * Creator-set mood/genre vocabulary — a small fixed list the publisher picks
- * from, not an AI inference. Keeping this list here (not free text) is what
- * makes "browse by mood" possible without pretending the app understands the
- * audio; it's a tag, not a signal.
- */
-export const SOUND_MOODS = [
-  "happy",
-  "relaxing",
-  "energetic",
-  "romantic",
-  "motivational",
-  "gaming",
-  "workout",
-  "travel",
-  "night",
-  "focus",
-] as const;
-export type SoundMood = (typeof SOUND_MOODS)[number];
-
-export const SOUND_GENRES = [
-  "pop",
-  "hip-hop",
-  "electronic",
-  "lofi",
-  "acoustic",
-  "afrobeats",
-  "rock",
-  "ambient",
-  "spoken-word",
-  "comedy",
-] as const;
-export type SoundGenre = (typeof SOUND_GENRES)[number];
 
 export interface Sound {
   id: string;

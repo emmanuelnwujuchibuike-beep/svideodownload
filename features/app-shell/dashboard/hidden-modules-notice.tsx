@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { EyeOff, Loader2, Plus } from "lucide-react";
 
 import { useHomeModules } from "@/features/app-shell/dashboard/home-modules-store";
-import { HOME_MODULE_LABELS } from "@/lib/social/home-preferences";
+import { HOME_MODULE_LABELS } from "@/lib/social/home-preferences-shared";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { playSound } from "@/lib/notifications/sound-fx";

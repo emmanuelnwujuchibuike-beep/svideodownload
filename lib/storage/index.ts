@@ -2,6 +2,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { hasR2, presignR2Put, putR2 } from "./r2";
 
+/* Browser-safe constants, types and pure helpers live in ./buckets.ts — a client
+   component imports them from there, so this module (and its service-role
+   queries) never reaches a browser bundle. Re-exported for server callers. */
+import { POST_BUCKET, type StorageBackend } from "./buckets";
+export * from "./buckets";
+
 /**
  * Media storage router for Frenz.
  *
@@ -11,9 +17,6 @@ import { hasR2, presignR2Put, putR2 } from "./r2";
  * falls back to the existing Supabase `post-media` bucket, so uploads keep
  * working unchanged. See docs/INFRASTRUCTURE.md.
  */
-
-export const POST_BUCKET = "post-media";
-export type StorageBackend = "r2" | "supabase";
 
 export { hasR2 };
 

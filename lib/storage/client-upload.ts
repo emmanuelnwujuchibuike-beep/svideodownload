@@ -4,7 +4,7 @@ import { beginCriticalActivity } from "@/lib/pwa/activity-lock";
 import { createClient } from "@/lib/supabase/client";
 
 import { MEDIA_CACHE_CONTROL, MEDIA_MAX_AGE_SECONDS } from "./cache-control";
-import { POST_BUCKET } from "./index";
+import { POST_BUCKET } from "./buckets";
 
 export type UploadPlan =
   | { backend: "r2"; key: string; uploadUrl: string; publicUrl: string }

@@ -13,7 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { PLACEMENTS, type AffiliateRecord, type Placement } from "@/lib/monetization/tools";
+import { PLACEMENTS, type AffiliateRecord, type Placement } from "@/lib/monetization/tools-shared";
 import { cn } from "@/lib/utils";
 
 interface FormState {

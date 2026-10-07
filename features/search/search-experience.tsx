@@ -14,7 +14,8 @@ import {
   removeRecentSearch,
   setRecentSearchEnabled,
 } from "@/features/search/recent-searches";
-import { emptySearchResult, type SearchResult, type SearchType } from "@/lib/social/search";
+import type { SearchResult, SearchType } from "@/lib/social/search";
+import { emptySearchResult } from "@/lib/social/search-shared";
 import { cn } from "@/lib/utils";
 
 /**

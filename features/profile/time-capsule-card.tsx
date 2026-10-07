@@ -4,7 +4,7 @@ import { Clock, Lock, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { MESSAGE_MAX, TITLE_MAX, type TimeCapsule } from "@/lib/social/time-capsules";
+import { MESSAGE_MAX, TITLE_MAX, type TimeCapsule } from "@/lib/social/time-capsules-shared";
 import { cn } from "@/lib/utils";
 
 /** Tomorrow's date as a YYYY-MM-DD string — the min for the date input. The

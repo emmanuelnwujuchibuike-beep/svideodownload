@@ -15,7 +15,7 @@ import { hrefFor, iconFor, tintFor, timeAgo, verbFor } from "@/features/notifica
 import { INBOX_KEY, loadInbox, type Inbox } from "@/features/social/inbox";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
-import { categoryForType } from "@/lib/social/notifications";
+import { categoryForType } from "@/lib/platform/notifications-registry";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 

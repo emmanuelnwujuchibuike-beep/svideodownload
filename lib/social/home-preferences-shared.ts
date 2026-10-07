@@ -1,0 +1,122 @@
+import { isCategory, type Category } from "./categories";
+
+/** The optional Home sections a viewer can hide/reorder. The main feed is
+ *  deliberately never a member — it's infinite, always renders last, and
+ *  isn't something a "move it up/down" editor can meaningfully apply to.
+ *  Owner decision (2026-07-11): Friend Activity removed from this list
+ *  entirely — it now lives only on /friends (see FriendActivityFeed there),
+ *  never as a Home module. `isHomeModuleKey` naturally filters out any
+ *  already-stored `"friend_activity"` value from an existing viewer's saved
+ *  `hidden_modules`/`module_order` row, so no data migration is needed. */
+export const HOME_MODULE_KEYS = ["stories", "trending_reels", "continue_watching"] as const;
+export type HomeModuleKey = (typeof HOME_MODULE_KEYS)[number];
+
+export function isHomeModuleKey(v: unknown): v is HomeModuleKey {
+  return typeof v === "string" && (HOME_MODULE_KEYS as readonly string[]).includes(v);
+}
+
+export const HOME_MODULE_LABELS: Record<HomeModuleKey, string> = {
+  stories: "Stories",
+  trending_reels: "Trending Reels",
+  continue_watching: "Continue Watching",
+};
+
+export interface HomePreferences {
+  hiddenModules: HomeModuleKey[];
+  /** Visible-or-not, ALL module keys in the viewer's chosen order — always a
+   *  permutation of the full `HOME_MODULE_KEYS` set (see `normalizeOrder`). */
+  moduleOrder: HomeModuleKey[];
+  mutedCategories: Category[];
+  boostedCategories: Category[];
+  preferFriends: boolean;
+  fewerReposts: boolean;
+  quietMode: boolean;
+  /**
+   * Discovery Controls (Feature 15 Part 8) — "Pause personalization". When
+   * true, "for_you" skips `rankForYou` and the muted-category filter entirely
+   * and falls back to the same plain reverse-chronological order "recent"
+   * uses — a real, literal pause, not a softened version of ranking.
+   */
+  personalizationPaused: boolean;
+  /** Opt-in: include `is_nsfw` posts in ranked/discovery surfaces. Off by
+   *  default — the safe default, not a personalization preference to earn. */
+  sensitiveContent: boolean;
+  /**
+   * Content-language preference. Stored and surfaced in Discovery Controls;
+   * NOT yet enforced as a feed filter — posts carry no language tag today
+   * (see docs/FEATURE_15_PART_8_DISCOVERY.md), so this is honest groundwork
+   * for that filter rather than a working one.
+   */
+  preferredLanguages: string[];
+}
+
+export const DEFAULT_HOME_PREFERENCES: HomePreferences = {
+  hiddenModules: [],
+  moduleOrder: [...HOME_MODULE_KEYS],
+  mutedCategories: [],
+  boostedCategories: [],
+  preferFriends: false,
+  fewerReposts: false,
+  quietMode: false,
+  personalizationPaused: false,
+  sensitiveContent: false,
+  preferredLanguages: [],
+};
+
+/** A saved order might predate a newly-added module key, have been
+ *  corrupted client-side, or (a malformed direct API call — the Reorder UI
+ *  itself can't produce this) contain a duplicate — always resolve to a
+ *  full, duplicate-free permutation so callers never have to think about a
+ *  module key going missing OR appearing twice (a duplicate would otherwise
+ *  render the same Home section twice with the same React key). */
+export function normalizeOrder(saved: unknown): HomeModuleKey[] {
+  const known: HomeModuleKey[] = [];
+  const seen = new Set<HomeModuleKey>();
+  if (Array.isArray(saved)) {
+    for (const v of saved) {
+      if (isHomeModuleKey(v) && !seen.has(v)) {
+        known.push(v);
+        seen.add(v);
+      }
+    }
+  }
+  for (const k of HOME_MODULE_KEYS) {
+    if (!seen.has(k)) {
+      known.push(k);
+      seen.add(k);
+    }
+  }
+  return known;
+}
+
+export interface HomePreferencesRow {
+  hidden_modules: string[] | null;
+  module_order: string[] | null;
+  muted_categories: string[] | null;
+  boosted_categories: string[] | null;
+  prefer_friends: boolean | null;
+  fewer_reposts: boolean | null;
+  quiet_mode: boolean | null;
+  personalization_paused?: boolean | null;
+  sensitive_content?: boolean | null;
+  preferred_languages?: string[] | null;
+}
+
+/** Pure row→camelCase mapper — shared by the server-side reader below and
+ *  the `/api/home-preferences` route (which uses the session-scoped client,
+ *  not the admin one, so it can't call `getHomePreferences` directly). */
+export function fromHomePreferencesRow(row: HomePreferencesRow | null): HomePreferences {
+  if (!row) return DEFAULT_HOME_PREFERENCES;
+  return {
+    hiddenModules: (row.hidden_modules ?? []).filter(isHomeModuleKey),
+    moduleOrder: normalizeOrder(row.module_order),
+    mutedCategories: (row.muted_categories ?? []).filter(isCategory),
+    boostedCategories: (row.boosted_categories ?? []).filter(isCategory),
+    preferFriends: !!row.prefer_friends,
+    fewerReposts: !!row.fewer_reposts,
+    quietMode: !!row.quiet_mode,
+    personalizationPaused: !!row.personalization_paused,
+    sensitiveContent: !!row.sensitive_content,
+    preferredLanguages: row.preferred_languages ?? [],
+  };
+}

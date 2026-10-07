@@ -24,7 +24,7 @@ import {
   type Offering,
   type OpeningHours,
   type ProfileDetails,
-} from "@/lib/social/profile-platform";
+} from "@/lib/social/profile-platform-shared";
 
 /**
  * Module panels — what each Smart Profile Module™ actually renders

@@ -38,6 +38,26 @@ import { clearIdentity } from "./identity-cache";
  *      (useUser's `cachedUser`, useEntitlements' `cache`) so nothing signed-in
  *      survives into the next render.
  */
+/*
+  🔴 PART 7 §56 (2026-10-07). The service worker keeps up to 80 images by URL
+  (public/sw/config.js IMAGE_CACHE) — and an AI result, a DM photo or a private
+  post is an image too, under a signed URL. That copy outlived sign-out on a
+  shared phone. Dropped here: local only, NOT awaited, no request — a sign-out
+  never waits on it (AGENTS.md rule 4). Pages and API answers need nothing:
+  only public pages are ever cached, and the API allowlist is empty.
+*/
+function forgetCachedImages(): void {
+  try {
+    if (typeof caches === "undefined") return;
+    void caches
+      .keys()
+      .then((names) => Promise.all(names.filter((n) => n.startsWith("frenz-img-")).map((n) => caches.delete(n))))
+      .catch(() => undefined);
+  } catch {
+    /* Cache Storage blocked — nothing stored */
+  }
+}
+
 export async function signOutClient(): Promise<void> {
   clearIdentity();
 
@@ -61,6 +81,7 @@ export async function signOutClient(): Promise<void> {
   clearAiEntitlementCache(); // and the plan/allowance snapshot (2026-09-13)
   clearAiFreeAccessCache(); // and the complimentary-creations snapshot (2026-10-05)
   clearCharacterReplaceBalanceCache(); // and the Character Replace wallet snapshot (Part 3)
+  forgetCachedImages(); // and the service worker's image copies (Part 7 §56, 2026-10-07)
 
   // Clear the "just signed in" splash cookie so the hard navigation to `/` below
   // can never make BootSplash force its F loader on sign-out (owner, 2026-08-02:

@@ -5,6 +5,7 @@ import { friendIdSet } from "./friend-ids";
 import { searchTags, type TrendingTag } from "./hashtags";
 import { searchPlaces, type PlaceResult } from "./places";
 import type { MediaKind, PostCard } from "./posts";
+import { emptySearchResult } from "./search-shared";
 import { searchSounds, type Sound } from "./sounds";
 
 /**
@@ -130,10 +131,7 @@ export interface SearchResult {
   places: PlaceResult[];
 }
 
-/** The "nothing matched" shape, so no call site has to spell out five keys. */
-export function emptySearchResult(): SearchResult {
-  return { people: [], posts: [], sounds: [], tags: [], places: [] };
-}
+export { emptySearchResult };
 
 export async function searchAll(q: string, type: SearchType, viewerId: string | null = null): Promise<SearchResult> {
   const term = clean(q);

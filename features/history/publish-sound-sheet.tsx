@@ -13,7 +13,7 @@ import { computeAudioPeaks } from "@/lib/media/comment-recording";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { presignUpload, uploadWithPlan } from "@/lib/storage/client-upload";
-import { SOUND_GENRES, SOUND_MOODS, type SoundGenre, type SoundMood } from "@/lib/social/sounds";
+import { SOUND_GENRES, SOUND_MOODS, type SoundGenre, type SoundMood } from "@/lib/social/sounds-shared";
 import { cn } from "@/lib/utils";
 import type { DownloadRecord } from "@/types";
 

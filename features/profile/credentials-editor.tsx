@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Field, INPUT, SaveMessage, TEXTAREA } from "@/features/profile/platform-fields";
-import { CREDENTIAL_KINDS, type Credential, type CredentialKind } from "@/lib/social/profile-platform";
+import { CREDENTIAL_KINDS, type Credential, type CredentialKind } from "@/lib/social/profile-platform-shared";
 import { cn } from "@/lib/utils";
 
 type Draft = {

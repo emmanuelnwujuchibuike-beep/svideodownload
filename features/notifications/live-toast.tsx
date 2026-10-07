@@ -8,7 +8,8 @@ import { useEffect, useRef, useState } from "react";
 import { loadFlatNotifications } from "@/features/notifications/data";
 import { hrefFor, iconFor, timeAgo, tintFor, verbFor } from "@/features/notifications/meta";
 import { loadInbox } from "@/features/social/inbox";
-import { categoryForType, type NotificationItem } from "@/lib/social/notifications";
+import { categoryForType } from "@/lib/platform/notifications-registry";
+import type { NotificationItem } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 

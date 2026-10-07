@@ -1,50 +1,17 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/* Browser-safe constants, types and pure helpers live in ./tools-shared.ts — a client
+   component imports them from there, so this module (and its service-role
+   queries) never reaches a browser bundle. Re-exported for server callers. */
+import { type Placement, type RecommendedTool, type AffiliateRecord } from "./tools-shared";
+export * from "./tools-shared";
+
 /**
  * Curated "Recommended Tools" + affiliate records, all backed by the
  * `affiliate_offers` table. Public reads (`getRecommendedTools`) only ever
  * return active, in-schedule rows for the requested placement; admin reads
  * (`listAffiliates`) return everything for the management table.
  */
-
-export const PLACEMENTS = [
-  "homepage",
-  "download_result",
-  "blog",
-  "footer",
-  "sidebar",
-] as const;
-export type Placement = (typeof PLACEMENTS)[number];
-
-/** Public, render-ready tool card. `url` is the TRACKED redirect. */
-export interface RecommendedTool {
-  id: string;
-  name: string;
-  description: string | null;
-  url: string; // /api/go/<id>
-  imageUrl: string | null;
-  cta: string;
-  category: string | null;
-}
-
-/** Full admin record (all fields, incl. disabled/scheduled). */
-export interface AffiliateRecord {
-  id: string;
-  name: string;
-  description: string | null;
-  url: string;
-  image_url: string | null;
-  cta: string;
-  category: string | null;
-  placements: string[];
-  priority: number;
-  sort_order: number;
-  weight: number;
-  active: boolean;
-  starts_at: string | null;
-  ends_at: string | null;
-  created_at: string;
-}
 
 const hasSupabase =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { toast } from "@/features/ui/toast";
 import { categoryLabel, type Category } from "@/lib/social/categories";
 import type { HomePreferences } from "@/lib/social/home-preferences";
-import { DEFAULT_HOME_PREFERENCES } from "@/lib/social/home-preferences";
+import { DEFAULT_HOME_PREFERENCES } from "@/lib/social/home-preferences-shared";
 import { springs } from "@/lib/motion/springs";
 import type { SmartReason } from "@/lib/social/smart-feed";
 import { cn } from "@/lib/utils";

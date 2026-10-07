@@ -43,6 +43,8 @@ export interface AiMoneySummary {
   consumption: { settledCredits: number; reservedCredits: number; jobs: number };
   refunds: { count: number; credits: number };
   adjustments: { count: number; netCredits: number };
+  /** 0193: member-to-member transfers — how many, credits moved, fees taken. */
+  transfers: { count: number; credits: number; fees: number };
   /** Settled credits by tool, largest first. */
   byFeature: { tool: string; credits: number; jobs: number }[];
   /** The five members who spent the most credits (ids only — the panel links them). */
@@ -69,6 +71,7 @@ export function summarizeAiMoney(ledger: readonly MoneyLedgerRow[], costs: reado
     consumption: { settledCredits: 0, reservedCredits: 0, jobs: 0 },
     refunds: { count: 0, credits: 0 },
     adjustments: { count: 0, netCredits: 0 },
+    transfers: { count: 0, credits: 0, fees: 0 },
     byFeature: [],
     topUsers: [],
     providerCost: { usdCents: 0, jobs: 0, withEstimate: 0 },
@@ -120,6 +123,13 @@ export function summarizeAiMoney(ledger: readonly MoneyLedgerRow[], costs: reado
       case "reversal":
         s.adjustments.count += 1;
         s.adjustments.netCredits += delta;
+        break;
+      case "transfer_out":
+        s.transfers.count += 1;
+        s.transfers.credits += -delta;
+        break;
+      case "transfer_fee":
+        s.transfers.fees += -delta;
         break;
     }
   }

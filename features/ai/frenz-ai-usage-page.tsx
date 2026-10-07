@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownLeft, ArrowLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -8,6 +8,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
 import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
 import type { PlanCelebrationProps } from "@/features/ai/credits/plan-celebration";
+import { TransferPanel } from "@/features/ai/wallet/transfer-panel";
+import { createClient } from "@/lib/supabase/client";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 import { getAiCredits, takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
 import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS } from "@/lib/ai/credits/features";
 import { StatementDetailSheet } from "@/features/ai/statement-detail-sheet";
@@ -49,7 +52,7 @@ import { cn } from "@/lib/utils";
  * and the sheet's chunk is fetched only when Recharge is pressed (next/dynamic
  * inside the sheet module).
  */
-type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal";
+type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal" | "transfer_out" | "transfer_in" | "transfer_fee";
 
 type LedgerRow = CharacterReplaceTransaction;
 
@@ -61,6 +64,10 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
   // 0187: cashing out withdrawable reward credits, and a withdrawal that was returned
   withdrawal: { label: "Withdrawal", Icon: ArrowDownLeft, tone: "out" },
   withdrawal_reversal: { label: "Withdrawal returned", Icon: RotateCcw, tone: "in" },
+  // 0193: credits sent to / received from another member's wallet, and the 5% fee
+  transfer_out: { label: "Credits sent", Icon: ArrowUpRight, tone: "out" },
+  transfer_in: { label: "Credits received", Icon: ArrowDownLeft, tone: "in" },
+  transfer_fee: { label: "Transfer fee", Icon: ArrowUpRight, tone: "out" },
   // 2026-10-06: the one AI wallet pays for every tool now — Character Replace is retired
   processing_charge: { label: "Frenz AI creation", Icon: Sparkles, tone: "out" },
   refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },
@@ -152,6 +159,32 @@ export function FrenzAIUsagePage({
       }
       await load();
     })();
+  }, [load]);
+
+  /*
+    0193 (owner 2026-10-07: "when the account gets funded the credit balance
+    updates instantly"): while this page is open it listens to the member's OWN
+    wallet row (RLS: own row only). A received transfer, a top-up the webhook
+    credited, a reward — the balance and statement re-read the moment the row
+    changes. One channel, only on this page, removed when it closes; the topic
+    is unique per mount (a realtime topic is a global key — reusing one throws).
+  */
+  useEffect(() => {
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    void getClientAuthUser(supabase).then(({ data }) => {
+      const uid = data.user?.id;
+      if (!uid || cancelled) return;
+      channel = supabase
+        .channel(`wallet-balance:${uid}:${Math.random().toString(36).slice(2, 10)}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "ai_product_balances", filter: `user_id=eq.${uid}` }, () => void load())
+        .subscribe();
+    });
+    return () => {
+      cancelled = true;
+      if (channel) void supabase.removeChannel(channel);
+    };
   }, [load]);
 
   const openSheet = useCallback((amount: number | null = null) => {
@@ -334,6 +367,9 @@ export function FrenzAIUsagePage({
               </span>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             </Link>
+
+            {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
+            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} onChanged={() => void load()} />
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (

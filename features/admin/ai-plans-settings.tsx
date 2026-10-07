@@ -74,6 +74,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   // 2026-10-07: which rail takes a payment, per market and purpose (lib/payments/router.ts)
   const [routing, setRouting] = useState<PaymentRouting>(cfg.wallet.routing);
   const [memberChoice, setMemberChoice] = useState<boolean>(cfg.wallet.memberChoice);
+  // 0193: member-to-member credit transfers
+  const [xfer, setXfer] = useState({ enabled: cfg.wallet.transfers.enabled, fee: String(cfg.wallet.transfers.feePercent), min: String(cfg.wallet.transfers.minCredits), max: String(cfg.wallet.transfers.maxCredits), daily: String(cfg.wallet.transfers.dailyMaxCredits) });
   // 0185: one row of rules per paid tool (lib/ai/credits/features.ts); the credit multiplier is credits.featureMultiplier
   const [features, setFeatures] = useState<Record<AiCreditFeatureId, FeatureRow>>(
     Object.fromEntries(
@@ -161,6 +163,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         provider,
         routing,
         memberChoice,
+        transfers: { enabled: xfer.enabled, feePercent: Math.min(50, Math.max(0, Number(xfer.fee) || 0)), minCredits: int(xfer.min, cfg.wallet.transfers.minCredits), maxCredits: int(xfer.max, cfg.wallet.transfers.maxCredits), dailyMaxCredits: int(xfer.daily, cfg.wallet.transfers.dailyMaxCredits) },
       },
       features: Object.fromEntries(
         AI_CREDIT_FEATURES.map((id) => {
@@ -169,7 +172,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         }),
       ) as AiFeaturePolicies,
     }),
-    [centsPerCredit, cfg, customEnabled, features, routing, memberChoice, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
+    [centsPerCredit, cfg, customEnabled, features, routing, memberChoice, xfer, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
   );
 
   /* the same bounds the server enforces, refused before the request leaves */
@@ -480,6 +483,20 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                 checked={memberChoice}
                 onChange={setMemberChoice}
               />
+            </div>
+            <div className="mb-4 rounded-xl border border-border/60 px-3 py-3">
+              <Toggle
+                label="Members can send credits to each other"
+                hint="By 10-digit wallet number, instantly. The sender pays the fee on top; the recipient gets the full amount as AI credits (never withdrawable). Off: nobody can send, history stays visible."
+                checked={xfer.enabled}
+                onChange={(v) => setXfer({ ...xfer, enabled: v })}
+              />
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Field id="xfer-fee" label="Fee (%)"><input id="xfer-fee" inputMode="decimal" value={xfer.fee} onChange={(e) => setXfer({ ...xfer, fee: e.target.value })} className={small} /></Field>
+                <Field id="xfer-min" label="Minimum per transfer"><input id="xfer-min" inputMode="numeric" value={xfer.min} onChange={(e) => setXfer({ ...xfer, min: e.target.value })} className={small} /></Field>
+                <Field id="xfer-max" label="Maximum per transfer"><input id="xfer-max" inputMode="numeric" value={xfer.max} onChange={(e) => setXfer({ ...xfer, max: e.target.value })} className={small} /></Field>
+                <Field id="xfer-daily" label="Most per 24 hours"><input id="xfer-daily" inputMode="numeric" value={xfer.daily} onChange={(e) => setXfer({ ...xfer, daily: e.target.value })} className={small} /></Field>
+              </div>
             </div>
             <p className="text-xs font-semibold text-muted-foreground">Payment routing — which provider takes a payment</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">

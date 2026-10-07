@@ -254,6 +254,7 @@ const schema = z.object({
           custom: z.object({ enabled: z.boolean().optional(), minCredits: z.number().int().min(1).max(1_000_000).optional(), maxCredits: z.number().int().min(1).max(1_000_000).optional() }).strict().optional(),
           provider: z.enum(["paystack", "bachs"]).optional(),
           memberChoice: z.boolean().optional(),
+          transfers: z.object({ enabled: z.boolean().optional(), feePercent: z.number().min(0).max(50).optional(), minCredits: z.number().int().min(1).max(1_000_000).optional(), maxCredits: z.number().int().min(1).max(10_000_000).optional(), dailyMaxCredits: z.number().int().min(1).max(100_000_000).optional() }).strict().optional(),
           routing: z
             .record(
               z.enum(["NG", "other"]),

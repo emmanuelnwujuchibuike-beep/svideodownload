@@ -34,14 +34,24 @@ interface RewardStatus {
   shareOffer: { credits: number; minSeconds: number } | null;
 }
 
+/** Kept per video for the session — a re-opened result paints its line at once; it changes only when the member publishes (written below). */
+const statusCache = new Map<string, RewardStatus>();
+
 export function AiResultShare({ jobId, reelsHref = "/reels" }: { jobId: string; reelsHref?: string }) {
-  const [status, setStatus] = useState<RewardStatus | null>(null);
+  const [status, setStatusState] = useState<RewardStatus | null>(() => statusCache.get(jobId) ?? null);
+  const setStatus = (next: RewardStatus | null | ((s: RewardStatus | null) => RewardStatus | null)) =>
+    setStatusState((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      if (value) statusCache.set(jobId, value);
+      return value;
+    });
   const [composing, setComposing] = useState(false);
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (statusCache.has(jobId)) return;
     let live = true;
     fetch(`/api/ai/jobs/${jobId}/rewards`, { cache: "no-store" })
       .then((r) => (r.ok ? (r.json() as Promise<RewardStatus>) : null))

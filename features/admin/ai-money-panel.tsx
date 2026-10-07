@@ -27,6 +27,7 @@ export function AiMoneyPanel({ money, labels, survey = null }: { money: AiMoneyS
     },
     { label: "Estimated margin", value: money.estimatedMarginUsdCents === null ? "—" : usd(money.estimatedMarginUsdCents), hint: "credits spent at the credit rate − provider estimate" },
     { label: "Adjustments", value: formatCredits(money.adjustments.netCredits, { short: true }), hint: `${money.adjustments.count} by an operator or a grant` },
+    { label: "Member transfers", value: formatCredits(money.transfers?.credits ?? 0, { short: true }), hint: `${money.transfers?.count ?? 0} transfer${money.transfers?.count === 1 ? "" : "s"} · ${formatCredits(money.transfers?.fees ?? 0)} in fees` },
   ];
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6" aria-label="Frenz AI money">

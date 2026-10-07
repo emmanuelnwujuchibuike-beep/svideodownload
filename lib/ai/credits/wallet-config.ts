@@ -64,6 +64,12 @@ export interface AiWalletConfig {
    * decides silently. Either way the server offers only what the route allows.
    */
   memberChoice: boolean;
+  /**
+   * 0193 (owner 2026-10-07): member-to-member credit transfers by wallet number.
+   * The SENDER pays `feePercent` on top (rounded up); the recipient receives the
+   * amount, as usable credits. Bounds per transfer and per rolling 24 hours.
+   */
+  transfers: CreditTransferConfig;
   /** @deprecated 0184's single switch — read only when a saved config predates `routing`. */
   provider: TopupProviderId;
 }
@@ -83,8 +89,39 @@ export const AI_WALLET_DEFAULTS: AiWalletConfig = {
     other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null } },
   },
   memberChoice: true,
+  transfers: { enabled: true, feePercent: 5, minCredits: 10, maxCredits: 5000, dailyMaxCredits: 20000 },
   provider: "paystack",
 };
+
+export interface CreditTransferConfig {
+  enabled: boolean;
+  /** 5 = 5 %, charged to the sender on top of the amount, rounded up to a whole credit. */
+  feePercent: number;
+  minCredits: number;
+  maxCredits: number;
+  /** Most a member can send in a rolling 24 hours (amounts, not counting fees). */
+  dailyMaxCredits: number;
+}
+
+/** The fee on a transfer: `feePercent` of the amount, rounded UP — never a fraction of a credit, never less than the rate. */
+export function transferFee(amount: number, feePercent: number): number {
+  if (!Number.isFinite(amount) || amount <= 0 || feePercent <= 0) return 0;
+  return Math.ceil((Math.floor(amount) * feePercent) / 100);
+}
+
+function normalizeTransfers(raw: unknown): CreditTransferConfig {
+  const d = AI_WALLET_DEFAULTS.transfers;
+  const r = isRecord(raw) ? raw : {};
+  const minCredits = int(r.minCredits, d.minCredits, 1, 1_000_000);
+  const maxCredits = Math.max(minCredits, int(r.maxCredits, d.maxCredits, 1, 10_000_000));
+  return {
+    enabled: typeof r.enabled === "boolean" ? r.enabled : d.enabled,
+    feePercent: Math.min(50, Math.max(0, typeof r.feePercent === "number" && Number.isFinite(r.feePercent) ? Math.round(r.feePercent * 100) / 100 : d.feePercent)),
+    minCredits,
+    maxCredits,
+    dailyMaxCredits: Math.max(maxCredits, int(r.dailyMaxCredits, d.dailyMaxCredits, 1, 100_000_000)),
+  };
+}
 
 function normalizeRoute(raw: unknown, d: PaymentRoute): PaymentRoute {
   const r = isRecord(raw) ? raw : {};
@@ -114,7 +151,7 @@ function int(v: unknown, fallback: number, min: number, max: number): number {
 
 export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
   const d = AI_WALLET_DEFAULTS;
-  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom }, routing: normalizePaymentRouting(null) };
+  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom }, routing: normalizePaymentRouting(null), transfers: { ...d.transfers } };
   const seen = new Set<string>();
   const packs: CreditPack[] = [];
   if (Array.isArray(raw.packs)) {
@@ -137,6 +174,7 @@ export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
     custom: { enabled: typeof c.enabled === "boolean" ? c.enabled : d.custom.enabled, minCredits, maxCredits: Math.max(minCredits, int(c.maxCredits, d.custom.maxCredits, WALLET_BOUNDS.credits.min, WALLET_BOUNDS.credits.max)) },
     routing: normalizePaymentRouting(raw.routing),
     memberChoice: typeof raw.memberChoice === "boolean" ? raw.memberChoice : d.memberChoice,
+    transfers: normalizeTransfers(raw.transfers),
     provider: raw.provider === "bachs" ? "bachs" : "paystack",
   };
 }
@@ -194,6 +232,8 @@ export function publicWalletOffer(cfg: AiWalletConfig, centsPerCredit: number) {
     packs: cfg.packs.filter((p) => p.enabled).map((p) => ({ id: p.id, credits: p.credits, bonusCredits: p.bonusCredits, priceUsdCents: p.credits * cpc, highlight: p.highlight })),
     custom: cfg.custom.enabled ? { minCredits: cfg.custom.minCredits, maxCredits: cfg.custom.maxCredits } : null,
     centsPerCredit: cpc,
+    // 0193: what the send sheet shows before the server re-decides
+    transfers: cfg.transfers.enabled ? { feePercent: cfg.transfers.feePercent, minCredits: cfg.transfers.minCredits, maxCredits: cfg.transfers.maxCredits, dailyMaxCredits: cfg.transfers.dailyMaxCredits } : null,
   };
 }
 export type PublicWalletOffer = ReturnType<typeof publicWalletOffer>;

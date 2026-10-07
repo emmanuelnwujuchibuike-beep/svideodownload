@@ -43,6 +43,10 @@ const TYPE: Record<string, string> = {
   processing_charge: "credit_usage",
   adjustment: "credit_adjustment",
   reversal: "credit_adjustment",
+  // 0193
+  transfer_out: "credit_transfer_out",
+  transfer_in: "credit_transfer_in",
+  transfer_fee: "credit_transfer_fee",
 };
 
 /** A tool's cheapest common job, priced by the tool's own engine and the one credit engine — the "from" on a feature card. */

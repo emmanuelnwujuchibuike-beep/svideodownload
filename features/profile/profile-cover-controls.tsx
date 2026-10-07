@@ -35,6 +35,14 @@ const ProfileMenuBottomSheet = dynamic(() => import("./profile-menu-bottom-sheet
  * `lg:hidden`: on a laptop the app shell's own sidebar and top bar provide all
  * of this, and the profile page docks its rail there instead.
  */
+/**
+ * The floating glass the three cover controls share (owner, 2026-10-07: "more
+ * premium and glassy like iOS Instagram"). Dark frosted glass — legible on a
+ * bright cover AND on page content once the profile scrolls under them — with
+ * a hairline light edge, a soft drop, and a spring press so a tap is felt.
+ */
+const GLASS = "bg-black/30 text-white ring-1 ring-inset ring-white/25 backdrop-blur-lg backdrop-saturate-150 shadow-[0_10px_28px_-12px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.28)] transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:bg-black/40 active:scale-90 active:duration-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 motion-reduce:active:scale-100";
+
 export function ProfileCoverControls({ user }: { user: MenuUser }) {
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
@@ -98,17 +106,17 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
         <Link
           href="/search"
           aria-label="Search"
-          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55 active:scale-95"
+          className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full ${GLASS}`}
         >
-          <Search className="h-5 w-5" />
+          <Search className="h-[19px] w-[19px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} />
         </Link>
 
         <div className="pointer-events-auto flex items-center gap-2">
           <Link
             href="/account/identity"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-black/55 active:scale-95"
+            className={`inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] font-semibold tracking-[-0.01em] ${GLASS}`}
           >
-            <Camera className="h-4 w-4" /> Edit Cover
+            <Camera className="h-4 w-4 drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} /> Edit Cover
           </Link>
           <button
             type="button"
@@ -118,9 +126,9 @@ export function ProfileCoverControls({ user }: { user: MenuUser }) {
             }}
             aria-label="Menu"
             aria-expanded={open}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-black/40 text-white backdrop-blur-md transition hover:bg-black/55 active:scale-95"
+            className={`flex h-10 w-10 items-center justify-center rounded-full ${GLASS}`}
           >
-            <LayoutGrid className="h-5 w-5" />
+            <LayoutGrid className="h-[19px] w-[19px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" strokeWidth={2.2} />
           </button>
         </div>
       </div>

@@ -68,7 +68,19 @@ const config: Config = {
           "0 0 28px hsl(43 96% 56% / 0.32), 0 0 64px hsl(43 96% 56% / 0.12)",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        /*
+          🔴 THE FALLBACK INSIDE var() IS THE FIX (owner, 2026-10-07, screenshots:
+          the installed app rendering every page in a SERIF — Times).
+          `--font-sans` is defined by next/font on a class whose name is hashed
+          PER BUILD. When the installed app shows a document from one build
+          with a stylesheet from another (a cached page across a deploy), that
+          class defines nothing, `var(--font-sans)` is undefined, and a var()
+          with no fallback makes the WHOLE font-family declaration invalid at
+          computed-value time — the browser's initial font, Times, wins over
+          every name after the comma. A fallback INSIDE var() keeps the
+          declaration valid: the phone's own sans instead of a serif.
+        */
+        sans: ["var(--font-sans, -apple-system)", "-apple-system", "BlinkMacSystemFont", "system-ui", "Segoe UI", "Roboto", "sans-serif"],
       },
       backgroundImage: {
         "grid-pattern":

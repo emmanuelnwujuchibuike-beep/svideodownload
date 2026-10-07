@@ -191,6 +191,9 @@ export const OWNER_COLUMN: Record<string, string> = {
   // 0192: your quest progress and the activities that counted toward it
   quest_progress: "user_id",
   quest_event_log: "user_id",
+  // 0193: your wallet number, and the transfers you sent (received ones are on your statement)
+  wallet_accounts: "user_id",
+  credit_transfers: "sender_id",
   /*
     Voice Cloning (0171). An export carries the member's own facts — the names,
     the dates, the rights record they signed, how much audio each voice was built

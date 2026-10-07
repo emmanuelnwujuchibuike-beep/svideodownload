@@ -31,7 +31,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const PRODUCT = CHARACTER_REPLACE_PRODUCT;
 
-export type CharacterReplaceLedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal";
+export type CharacterReplaceLedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal" | "transfer_out" | "transfer_in" | "transfer_fee";
 export type CharacterReplaceLedgerStatus = "settled" | "reserved" | "refunded" | "reversed";
 
 export interface CharacterReplaceLedgerEntry {

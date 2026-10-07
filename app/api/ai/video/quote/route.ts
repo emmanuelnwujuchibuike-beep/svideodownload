@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { deviceCookieHeader, getCharacterReplaceFreeEligibility, newDeviceId, readDeviceId } from "@/lib/ai/character-replace/free-access";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -7,7 +8,9 @@ import { klingConfigured } from "@/lib/ai/kling/client";
 import { klingCapability, klingPipeline } from "@/lib/ai/kling/pipelines/registry";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { publicKlingQuote } from "@/lib/ai/video/create";
+import { FREE_VIDEO_SUMMARY, freeVideoQualifies, type FreeVideoRequest } from "@/lib/ai/video/free-video";
 import { videoQuoteRequestSchema } from "@/lib/ai/video/schemas";
+import { getAdminUser } from "@/lib/admin/guard";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 
@@ -51,7 +54,31 @@ export async function POST(request: Request) {
   }
 
   // The pipeline decides which dimensions of ITS request are billable.
+  /*
+    🔴 The device marker the complimentary video's once-per-device rule counts
+    (owner, 2026-10-07). Planted here because every creation is quoted first;
+    the create route refuses a complimentary video without it.
+  */
+  const headers = new Headers();
+  const deviceId = readDeviceId(request);
+  if (!deviceId) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
+
   const quote = pipeline.quote(parsed.data.input as never, settings.frenzAiKlingPricing);
-  if (!quote.ok) return NextResponse.json({ ok: false, reason: quote.reason }, { status: 200 });
-  return NextResponse.json({ ok: true, quote: publicKlingQuote(quote), currency: settings.frenzAiCurrency }, { status: 200 });
+  if (!quote.ok) return NextResponse.json({ ok: false, reason: quote.reason }, { status: 200, headers });
+
+  /*
+    Would THIS request be the complimentary video? Asked only when it fits the
+    rules (3 s · 720p · no reference video), so changing other options never
+    touches the allowance read. Display only — /jobs decides again.
+  */
+  let complimentary: { eligible: boolean; rules: string } = { eligible: false, rules: FREE_VIDEO_SUMMARY };
+  if (freeVideoQualifies(parsed.data.input as unknown as FreeVideoRequest).ok) {
+    const cr = settings.frenzAiCharacterReplace;
+    const isAdmin = !!(await getAdminUser().catch(() => null));
+    if (deviceId || isAdmin || !cr.antiAbuse.deviceDetection) {
+      const e = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, isAdmin, plans: settings.frenzAiPlans }).catch(() => null);
+      complimentary = { eligible: !!e?.eligible && (e.remainingFreeUses === null || e.remainingFreeUses > 0), rules: FREE_VIDEO_SUMMARY };
+    }
+  }
+  return NextResponse.json({ ok: true, quote: publicKlingQuote(quote), currency: settings.frenzAiCurrency, complimentary }, { status: 200, headers });
 }

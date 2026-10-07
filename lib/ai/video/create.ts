@@ -1,6 +1,7 @@
 import { ONE_MINUTE_SECONDS, ONE_MINUTE_SEGMENT_SECONDS, ONE_MINUTE_SEGMENTS } from "@/lib/ai/kling/pricing";
 import "server-only";
 
+import { consumeFreeUse, getCharacterReplaceFreeEligibility, readDeviceId } from "@/lib/ai/character-replace/free-access";
 import { calculateCredits } from "@/lib/ai/credits/engine";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
@@ -16,6 +17,7 @@ import { quoteKling, type KlingQuote } from "@/lib/ai/kling/pricing";
 import type { AiSubject } from "@/lib/ai/subject";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { concurrencyLimitFor, getAiWalletBalanceCents, reserveAiWalletCharge } from "@/lib/ai/wallet/server";
+import { freeVideoQualifies, type FreeVideoRequest } from "@/lib/ai/video/free-video";
 import type { LandingSettings } from "@/lib/landing/settings";
 
 /**
@@ -68,7 +70,7 @@ export interface CreateKlingVideoResult {
   ok: true;
   jobId: string;
   quote: KlingQuote & { ok: true };
-  funding: "credits" | "balance";
+  funding: "credits" | "balance" | "free";
   balanceCents: number | null;
   credits: ReturnType<typeof creditDecisionView> | null;
 }
@@ -89,6 +91,8 @@ export interface CreateKlingVideoOptions<K extends KlingRunnableFeature> {
   callbackUrl: string;
   /** Facts the worker measured, recorded on the row for the operator. Never billing input on their own. */
   sourceFacts?: Record<string, unknown>;
+  /** The member's request — its device cookie and network decide the complimentary video's device rule. */
+  request?: Request;
 }
 
 type Refusal = { ok: false; code: string; extra?: Record<string, unknown> };
@@ -150,10 +154,34 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     return refuse("PRICE_CHANGED", { quote: publicKlingQuote(quote) });
   }
 
-  /* ── 4 · fund: credits first, then the wallet ──────────────────────────── */
+  /* ── 4 · fund: the complimentary video, then credits, then the wallet ──── */
+  /*
+    🔴 THE COMPLIMENTARY VIDEO (owner, 2026-10-07): 3 s, 720p, no reference
+    video — and once per DEVICE, not per account. Only a request that fits
+    lib/ai/video/free-video.ts asks; anything else is priced as usual and never
+    touches the allowance. The pool and the device rule are the AI studio's one
+    pool (`grant_free_entitlement`: max free accounts per device / network).
+
+    A request with NO device marker is never complimentary: the marker is what
+    the device rule counts, so a browser without one (cookies cleared, a fresh
+    private window) would otherwise be a new device every time. The video
+    quote route plants it, so an ordinary visit always has one by now.
+  */
+  const cr = settings.frenzAiCharacterReplace;
+  let complimentary = false;
+  let freeGranted: number | null = null;
+  if (opts.request && subject.kind === "user" && !isOneMinute(opts.input) && freeVideoQualifies(opts.input as unknown as FreeVideoRequest).ok) {
+    const deviceKnown = !cr.antiAbuse.deviceDetection || !!readDeviceId(opts.request);
+    if (deviceKnown || opts.isAdmin) {
+      const eligibility = await getCharacterReplaceFreeEligibility({ subject, config: cr, request: opts.request, isAdmin: opts.isAdmin, plans }).catch(() => null);
+      complimentary = !!eligibility?.eligible && (eligibility.remainingFreeUses === null || eligibility.remainingFreeUses > 0);
+      freeGranted = eligibility && eligibility.remainingFreeUses !== null ? eligibility.granted : null;
+    }
+  }
+
   let creditDecision: ReturnType<typeof decideCredits> | null = null;
   let useCredits = false;
-  if (plans.enabled) {
+  if (!complimentary && plans.enabled) {
     const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
     if (creditEntitlement.plan) {
       const estimate = calculateCredits({ feature: featureDef.id, priceCents: quote.totalUsdCents, mode: "video", durationMs: Math.round(quote.billableSeconds * 1000), lines: [{ label: pipeline.label, cents: quote.totalUsdCents }] }, plans);
@@ -167,8 +195,9 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     }
   }
 
-  const balanceBefore = useCredits ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
-  if (!useCredits) {
+  const fundingKind: "free" | "credits" | "balance" = complimentary ? "free" : useCredits ? "credits" : "balance";
+  const balanceBefore = useCredits || complimentary ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
+  if (!useCredits && !complimentary) {
     if (balanceBefore === null) return refuse("INTERNAL_ERROR");
     if (balanceBefore < quote.totalUsdCents) {
       return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: quote.totalUsdCents, shortfallCents: quote.totalUsdCents - balanceBefore, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
@@ -186,7 +215,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   });
   if (!created.created) {
     // Idempotent: the same client request id gets the same job, unfunded twice.
-    return { ok: true, jobId: created.row.id, quote, funding: useCredits ? "credits" : "balance", balanceCents: balanceBefore, credits: creditDecision ? creditDecisionView(creditDecision) : null };
+    return { ok: true, jobId: created.row.id, quote, funding: fundingKind, balanceCents: balanceBefore, credits: creditDecision ? creditDecisionView(creditDecision) : null };
   }
   const job = created.row;
   const now = new Date().toISOString();
@@ -198,7 +227,9 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     request: opts.input,
     source_facts: opts.sourceFacts ?? null,
     quote,
-    billing: useCredits && creditDecision
+    billing: complimentary
+      ? { type: "FREE_TRIAL", normalPriceCents: quote.totalUsdCents, chargedCents: 0, freeEntitlementUsed: 1 }
+      : useCredits && creditDecision
       ? { type: "CREDITS", normalPriceCents: quote.totalUsdCents, chargedCents: 0, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan }
       : { type: "PAID", normalPriceCents: quote.totalUsdCents, chargedCents: quote.totalUsdCents },
     /*
@@ -228,9 +259,9 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     maxActivePerUser: maxActive,
     maxActiveGlobal: settings.frenzAiCharacterReplace.limits.maxActiveJobsGlobal,
     maxPerDay: settings.frenzAiCharacterReplace.limits.maxJobsPerUserPerDay,
-    chargedCents: useCredits ? 0 : quote.totalUsdCents,
+    chargedCents: useCredits || complimentary ? 0 : quote.totalUsdCents,
     metadata,
-    funding: useCredits ? "credits" : "balance",
+    funding: fundingKind,
     queue: false,
   });
   if (claim === "user_limit" || claim === "waiting") {
@@ -245,7 +276,16 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   /* ── 6 · reserve, now that the row exists to attach it to ──────────────── */
   let reserved = false;
   try {
-    if (useCredits && creditDecision) {
+    if (complimentary) {
+      // atomic in the database, one per job; refused when the allowance is gone (a race with another tab)
+      const use = await consumeFreeUse({
+        userId: ownerId,
+        jobId: job.id,
+        snapshot: { mode: featureId, quality: quote.resolution, durationMs: quote.seconds * 1000, totalCents: quote.totalUsdCents, currency: settings.frenzAiCurrency, feature: featureId, model: pipeline.model } as unknown as Parameters<typeof consumeFreeUse>[0]["snapshot"],
+        granted: freeGranted,
+      });
+      reserved = use.ok;
+    } else if (useCredits && creditDecision) {
       const reservation = await reserveAiCredits({ userId: ownerId, jobId: job.id, feature: featureDef.id, plan: creditDecision.plan!, estimate: creditDecision.estimate, dailyLimit: creditDecision.dailyLimit, weeklyLimit: creditDecision.weeklyLimit, periods: currentPeriods(plans), config: plans }).catch(() => null);
       reserved = !!reservation;
     } else {
@@ -287,8 +327,9 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     reserved = false;
   }
   if (!reserved) {
-    await transitionJob(job.id, ["acquiring", "processing", "queued"], "failed", { error_code: "CR_BALANCE_REQUIRED", completed_at: new Date().toISOString() });
-    return refuse("CR_BALANCE_REQUIRED");
+    const code = complimentary ? "CR_FREE_UNAVAILABLE" : "CR_BALANCE_REQUIRED";
+    await transitionJob(job.id, ["acquiring", "processing", "queued"], "failed", { error_code: code, completed_at: new Date().toISOString() });
+    return refuse(code);
   }
 
   /* ── 7 · the pipeline submits its OWN request ──────────────────────────── */
@@ -299,7 +340,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
       was taken — and the recorded failure mode is releasing a daily allowance
       on a PAID job, which hands back a free run the member never spent.
     */
-    const fresh = { ...job, funding_source: useCredits ? "credits" : "balance" } as typeof job;
+    const fresh = { ...job, funding_source: fundingKind } as typeof job;
     await releaseJobFunding({ job: fresh, subject, feature: featureDef.id, dailyLimit: 0, cause: "undo" }).catch(() => {});
     await transitionJob(job.id, ["queued", "acquiring", "processing"], "failed", { error_code: code, error_message: detail.slice(0, 2000), completed_at: new Date().toISOString() });
   };
@@ -340,7 +381,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     return refuse(err?.code ?? "PROVIDER_ERROR", { error: capability.reason ?? undefined });
   }
 
-  return { ok: true, jobId: job.id, quote, funding: useCredits ? "credits" : "balance", balanceCents: balanceBefore, credits: creditDecision ? creditDecisionView(creditDecision) : null };
+  return { ok: true, jobId: job.id, quote, funding: fundingKind, balanceCents: balanceBefore, credits: creditDecision ? creditDecisionView(creditDecision) : null };
 }
 
 /** The quote as a browser may see it — no provider cost, no units, no margin. */

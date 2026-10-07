@@ -279,9 +279,10 @@ export function TextToVideoWorkspace({
       {/* ── COST + GENERATE, always reachable (§19, §21) ──────────────────── */}
       <AiActionBar>
         <AiCost
-          totalCents={gen.quote?.totalCents ?? null}
+          totalCents={gen.complimentary ? 0 : (gen.quote?.totalCents ?? null)}
           currencySymbol={currencySymbol}
           detail={gen.quote ? `${gen.quote.billableSeconds}s · ${resolution}` : null}
+          funding={gen.complimentary ? { label: "Your complimentary video", hint: "free" } : undefined}
           loading={gen.quoting}
           problem={gen.quoteProblem}
         />

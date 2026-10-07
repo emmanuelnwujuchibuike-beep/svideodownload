@@ -67,6 +67,8 @@ export async function POST(request: Request) {
       entitlement,
       isAdmin: !!adminUser,
       callbackUrl: `${origin}/api/webhooks/kling`,
+      // the complimentary video's device rule reads the device cookie + network from here
+      request,
     });
     if (!outcome.ok) return fail(outcome.code as Parameters<typeof aiErrorBody>[0], outcome.extra);
     return NextResponse.json({ jobId: outcome.jobId, quote: publicKlingQuote(outcome.quote), funding: outcome.funding, balanceCents: outcome.balanceCents, credits: outcome.credits }, { status: 201 });

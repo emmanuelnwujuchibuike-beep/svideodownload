@@ -87,6 +87,8 @@ export function useVideoGeneration({
   const [quote, setQuote] = useState<PublicQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [quoteProblem, setQuoteProblem] = useState<string | null>(null);
+  /** These settings would be the member's complimentary video (3 s · 720p · no reference video) — the server's answer, display only. */
+  const [complimentary, setComplimentary] = useState(false);
   /** A submit in flight, and a submit that failed before a job ever existed. */
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -160,6 +162,7 @@ export function useVideoGeneration({
     const input = inputRef.current;
     if (!ready) {
       setQuote(null);
+      setComplimentary(false);
       setQuoteProblem(null);
       return;
     }
@@ -184,10 +187,12 @@ export function useVideoGeneration({
           // A capability refusal or a validation refusal: the server's sentence, verbatim.
           setQuoteProblem(json.capability?.reason ?? json.reason ?? "This can't be priced right now.");
           setQuote(null);
+          setComplimentary(false);
           return;
         }
         setQuoteProblem(null);
         setQuote(json.quote as PublicQuote);
+        setComplimentary(json.complimentary?.eligible === true);
       } catch {
         // An aborted request is the NEXT keystroke's job, not an error to show.
         if (!cancelled && !controller.signal.aborted) setQuoteProblem("This can't be priced right now.");
@@ -284,7 +289,7 @@ export function useVideoGeneration({
     clearGeneration();
   }, []);
 
-  return { quote, quoting, quoteProblem, status, error, result, submit, reset };
+  return { quote, quoting, quoteProblem, complimentary, status, error, result, submit, reset };
 }
 
 /** The input as the PRICE sees it: everything but the prompt text. Exported for the test. */

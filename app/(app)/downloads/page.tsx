@@ -6,6 +6,7 @@ import { AppContent } from "@/features/app-shell/app-content";
 import { DownloadsPage } from "@/features/downloads/downloads-page";
 import { DownloadsSkeleton } from "@/features/downloads/downloads-skeleton";
 import { getHomeProfile } from "@/lib/social/home";
+import { getAiPromo } from "@/lib/ai/promo/server";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
@@ -121,7 +122,7 @@ async function DownloadsData() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/downloads");
 
-  const [profile, wallpapers, landing, platformStatus, multiLink] = await Promise.all([
+  const [profile, wallpapers, landing, platformStatus, multiLink, aiPromo] = await Promise.all([
     getHomeProfile(user.id),
     listWallpapers(user.id),
     // The admin-uploaded tile background (admin → Landing page). Resolved HERE
@@ -132,6 +133,10 @@ async function DownloadsData() {
     getPlatformStatus(),
     // Same reason again: the batch downloader's admin visibility switch.
     getMultiLinkSettings(),
+    // The Frenz AI promotion (owner, 2026-10-06: "the pwa frenz ai button doesnt
+    // show the promotion medias") — the same tile as the landing, the same media.
+    // Cached until an admin saves (lib/ai/promo/server.ts), so no read per visit.
+    getAiPromo(),
   ]);
   if (!profile?.handle) redirect("/welcome");
 
@@ -151,6 +156,7 @@ async function DownloadsData() {
       frenzAiTileImageUrl={landing.frenzAiTileImageUrl || null}
       platformStatus={platformStatus}
       multiLink={publicMultiLinkConfig(multiLink)}
+      aiPromo={aiPromo}
     />
   );
 }

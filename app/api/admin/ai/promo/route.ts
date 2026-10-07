@@ -121,5 +121,6 @@ export async function PUT(request: Request) {
   // The event that replaces a clock: the cached read and the static landing, now.
   revalidateTag(PROMO_TAG);
   revalidatePath("/");
+  revalidatePath("/downloads");
   return NextResponse.json({ ok: true, promo });
 }

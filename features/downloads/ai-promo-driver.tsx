@@ -35,6 +35,18 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
   const [stage, setStage] = useState<PromoStage>("intro");
   const [reduced, setReduced] = useState(false);
   const [lite, setLite] = useState(false);
+  /*
+    🔴 iOS (owner, 2026-10-06: "The landing video is not showing"). iOS Safari
+    IGNORES preload="auto" — it downloads nothing until play() — so a clip
+    judged by readyState was never "ready" and its stage was skipped every
+    time on an iPhone. Now: the clip is warmed with a muted play-then-pause
+    during the opening delay (iOS allows that, and it makes it buffer); on its
+    turn it is always asked to play; its layer shows only once it IS playing,
+    so the intro stays up meanwhile (never a black box); and it is skipped only
+    when it cannot play at all (Low Power Mode blocks autoplay).
+  */
+  const [clipPlaying, setClipPlaying] = useState(false);
+  const [clipBlocked, setClipBlocked] = useState(false);
 
   useEffect(() => {
     setReduced(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
@@ -56,7 +68,24 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     };
   }, [promo.timing.delay]);
 
-  const useClip = !!promo.video?.enabled && !lite;
+  const useClip = !!promo.video?.enabled && !lite && !clipBlocked;
+
+  useEffect(() => {
+    const v = video.current;
+    if (!v || !useClip || reduced) return;
+    let warmed = false;
+    const onPlaying = () => {
+      if (warmed) return;
+      warmed = true;
+      v.pause();
+      v.currentTime = 0;
+    };
+    v.addEventListener("playing", onPlaying, { once: true });
+    v.play().catch(() => setClipBlocked(true));
+    return () => v.removeEventListener("playing", onPlaying);
+    // once, at mount — the warm-up is the whole point of the opening delay
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const stages = promoStages(promo).filter((s) => s !== "video" || useClip || !!promo.video?.poster);
   const running = started && onScreen && tabVisible && stages.length > 1;
 
@@ -67,7 +96,7 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     const t = setTimeout(() => {
       const next = stages[(stages.indexOf(stage) + 1) % stages.length] ?? "intro";
       // a clip that is not ready on its turn is skipped, never shown as a black box
-      if (next === "video" && useClip && !promo.video?.poster && (video.current?.readyState ?? 0) < 2) {
+      if (next === "video" && !useClip && !promo.video?.poster) {
         setStage(stages[(stages.indexOf(next) + 1) % stages.length] ?? "intro");
         return;
       }
@@ -83,9 +112,10 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     const v = video.current;
     if (!v) return;
     if (running && stage === "video" && !reduced) {
-      v.play().catch(() => undefined);
+      v.play().catch(() => setClipBlocked(true));
     } else {
       v.pause();
+      setClipPlaying(false);
     }
   }, [running, stage, reduced]);
 
@@ -93,7 +123,7 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
   return (
     <div ref={root} aria-hidden className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-[inherit]">
       {promo.video && stages.includes("video") ? (
-        <div className={cn("absolute inset-0 bg-black", fade, stage === "video" ? "opacity-100" : "opacity-0")}>
+        <div className={cn("absolute inset-0 bg-black", fade, stage === "video" && (clipPlaying || !!promo.video.poster) ? "opacity-100" : "opacity-0")}>
           {promo.video.poster ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={promo.video.poster} alt="" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
@@ -109,6 +139,7 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
               loop
               // loaded once, during the opening delay, then only played and paused
               preload="auto"
+              onPlaying={() => stage === "video" && setClipPlaying(true)}
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : null}

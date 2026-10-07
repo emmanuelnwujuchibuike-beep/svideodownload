@@ -1,5 +1,6 @@
 "use client";
 
+import type { AiPromo } from "@/lib/ai/promo/config";
 import { Pause, Play, RotateCw, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
@@ -105,6 +106,7 @@ export function DownloadsPage({
   /** Admin visibility switch for the Multi-Link batch downloader — same
    *  server-resolved-prop reason as the two above. */
   multiLink,
+  aiPromo = null,
 }: {
   wallpapers: Wallpaper[];
   ctaWallpaperUrl?: string | null;
@@ -112,6 +114,8 @@ export function DownloadsPage({
   frenzAiTileImageUrl?: string | null;
   platformStatus?: PlatformStatusMap;
   multiLink?: MultiLinkPublicConfig;
+  /** The Frenz AI promotion played over the Frenz AI tile — the landing's own. */
+  aiPromo?: AiPromo | null;
 }) {
   const { items, toggleFavorite, removeDownload } = useHistory();
   const { tasks, pauseDownload, resumeDownload, retryDownload, cancelDownload, pauseAll } = useDownloadManager();
@@ -192,6 +196,7 @@ export function DownloadsPage({
         rotateUrls={rotateUrls}
         multiLink={multiLink}
         showFrenzAi
+        aiPromo={aiPromo}
         installBanner={false}
       />
 

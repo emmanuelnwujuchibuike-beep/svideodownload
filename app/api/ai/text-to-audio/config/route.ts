@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { getAiEntitlement } from "@/lib/ai/entitlement";
+import { featureContext } from "@/lib/ai/credits/feature-gate";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
 import { subjectOwnerId } from "@/lib/ai/subject";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
-import { publicTextToAudioConfig } from "@/lib/ai/text-to-audio/config";
+import { publicTextToAudioConfig, textToAudioAllowance } from "@/lib/ai/text-to-audio/config";
 import { readFreeCharacters } from "@/lib/ai/text-to-audio/free";
 import { modelCharacterCeiling, textToAudioGate } from "@/lib/ai/text-to-audio/generate";
 import { textToAudioMonthKey } from "@/lib/ai/text-to-audio/pricing";
@@ -45,11 +46,13 @@ export async function GET(request: Request) {
     */
     const own = subject.kind === "user" ? await usableCloneOptions(subjectOwnerId(subject), { allowed: routeAllowsClones(gate.resolved.route) && settings.frenzAiVoiceClone.enabled }) : [];
     const monthKey = textToAudioMonthKey(new Date(), settings.frenzAiPlans.reset.timezone);
-    const free = subject.kind === "user" ? await readFreeCharacters(subjectOwnerId(subject), monthKey, config.freeCharactersPerMonth) : { allowance: 0, used: 0, remaining: 0, monthKey };
+    // 0185: the month's characters for THIS member's tier (Free / AI Pro / AI Max), and the rule for a text longer than what is left
+    const tier = subject.kind === "user" ? (await featureContext(subjectOwnerId(subject), "ai_text_to_audio", settings.frenzAiPlans)).tier : "free";
+    const free = subject.kind === "user" ? await readFreeCharacters(subjectOwnerId(subject), monthKey, textToAudioAllowance(config, tier)) : { allowance: 0, used: 0, remaining: 0, monthKey };
     const reason = gate.ok ? null : typeof gate.extra?.error === "string" ? gate.extra.error : gate.code === "CR_BUSY" ? "Processing is paused for a moment." : gate.code === "CR_MAINTENANCE" ? "Frenz AI is under maintenance." : !config.enabled ? "Text to Audio is not available right now." : "Text to Audio is temporarily unavailable.";
     return NextResponse.json({
       config: { ...pub, maximumCharacters: Math.min(pub.maximumCharacters, modelCharacterCeiling(gate.resolved.model)), voices: [...own, ...voices], languages },
-      free: { allowance: free.allowance, used: free.used, remaining: free.remaining, monthKey: free.monthKey },
+      free: { allowance: free.allowance, used: free.used, remaining: free.remaining, monthKey: free.monthKey, tier, partialAllowance: config.partialAllowance },
       available: gate.ok,
       unavailableReason: reason,
       processingAvailable: (gate.ok || paused) && gate.resolved.enabled && gate.resolved.configured && !paused,

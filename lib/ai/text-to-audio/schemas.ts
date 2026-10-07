@@ -13,6 +13,8 @@ export const textToAudioQuoteRequestSchema = z
     /** The text itself, or just its length — the estimate needs the count only. */
     text: z.string().max(40_000).optional(),
     characters: z.number().int().nonnegative().max(40_000).optional(),
+    /** 0185: the member's choice for a text longer than what is left of the month (re-priced with it). */
+    partial: z.enum(["split", "all_credits"]).optional(),
   })
   .strict()
   .refine((v) => v.text !== undefined || v.characters !== undefined, { message: "text or characters" });
@@ -34,6 +36,8 @@ export const createTextToAudioJobSchema = z
     /** What the member was shown; Generate recomputes and refuses a difference (PRICE_CHANGED). */
     quote: z.object({ totalCents: z.number().int().nonnegative(), pricingConfigVersion: z.number().int().positive() }).strict().optional(),
     funding: z.enum(["credits", "wallet"]).optional(),
+    /** 0185: when the text is longer than what is left of the month's characters and the rule is "ask" — the member's choice. */
+    partial: z.enum(["split", "all_credits"]).optional(),
     /** Whether to keep the result in the Audio Library (default true — "save to library with a name"). */
     save: z.boolean().optional(),
   })

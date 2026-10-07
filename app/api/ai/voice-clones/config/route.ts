@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
+import { featureContext } from "@/lib/ai/credits/feature-gate";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
         free: { allowance: free.allowance, used: free.used, remaining: free.remaining, monthKey: free.monthKey },
         quote: { ...publicVoiceCloneQuote(quote), credits: quote.totalCents > 0 ? voiceCloneCredits(quote, config, plans).creditsRequired : 0 },
         unit: "CREDIT",
+        access: (await featureContext(ownerId, feature.id, plans)).view,
         credits,
         walletFallback: plans.enabled ? plans.walletFallback : "allow",
         slots: { used, total: voiceCloneSlotsFor(config, { audience: entitlement.audience, isAdmin }) },

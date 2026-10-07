@@ -243,6 +243,34 @@ const schema = z.object({
         .optional(),
       reset: z.object({ timezone: z.string().max(80).optional(), weekStartsOn: z.number().int().min(0).max(6).optional() }).optional(),
       walletFallback: z.enum(["allow", "ask", "off"]).optional(),
+      /** 0184: credit packs and the top-up provider (lib/ai/credits/wallet-config.ts — the normaliser clamps again). */
+      wallet: z
+        .object({
+          packs: z
+            .array(z.object({ credits: z.number().int().min(1).max(1_000_000), bonusCredits: z.number().int().min(0).max(1_000_000).optional(), enabled: z.boolean().optional(), highlight: z.boolean().optional() }).strict())
+            .max(8)
+            .optional(),
+          custom: z.object({ enabled: z.boolean().optional(), minCredits: z.number().int().min(1).max(1_000_000).optional(), maxCredits: z.number().int().min(1).max(1_000_000).optional() }).strict().optional(),
+          provider: z.enum(["paystack", "bachs"]).optional(),
+        })
+        .strict()
+        .optional(),
+      /** 0185: the per-tool rules table (lib/ai/credits/features.ts — the normaliser clamps again). */
+      features: z
+        .record(
+          z.enum(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync", "ai_voice_clone", "ai_text_to_audio"]),
+          z
+            .object({
+              enabled: z.boolean().optional(),
+              payAsYouGo: z.boolean().optional(),
+              tiers: z.object({ free: z.boolean().optional(), ai_pro: z.boolean().optional(), ai_max: z.boolean().optional() }).strict().optional(),
+              minimumCredits: z.number().int().min(0).max(100_000).optional(),
+              maxInputSeconds: z.number().int().min(1).max(3600).nullable().optional(),
+              monthlyIncluded: z.object({ free: z.number().int().min(0).max(10_000).optional(), ai_pro: z.number().int().min(0).max(10_000).optional(), ai_max: z.number().int().min(0).max(10_000).optional() }).strict().optional(),
+            })
+            .strict(),
+        )
+        .optional(),
     })
     .strict()
     .optional(),
@@ -361,6 +389,9 @@ const schema = z.object({
       maximumCharacters: z.number().int().min(1).max(40_000).optional(),
       minimumCharacters: z.number().int().min(1).max(40_000).optional(),
       freeCharactersPerMonth: z.number().int().min(0).max(1_000_000).optional(),
+      /** 0185: the month's characters for an AI plan (null = Free's) and the partial-allowance rule. */
+      tierCharacters: z.object({ ai_pro: z.number().int().min(0).max(1_000_000).nullable().optional(), ai_max: z.number().int().min(0).max(1_000_000).nullable().optional() }).strict().optional(),
+      partialAllowance: z.enum(["ask", "split", "all_credits"]).optional(),
       voiceIds: z.array(z.string().max(80)).max(200).optional(),
       languageCodes: z.array(z.string().max(16)).max(200).optional(),
       libraryRetentionDays: z.number().int().min(0).max(3650).optional(),

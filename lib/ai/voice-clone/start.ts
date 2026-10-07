@@ -4,6 +4,7 @@ import { after } from "next/server";
 
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { featureContext, featureRefusal, payAsYouGoRefusal } from "@/lib/ai/credits/feature-gate";
 import { walletShortfall } from "@/lib/ai/credits/units";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -77,6 +78,10 @@ export async function startVoiceCloneJob(ctx: VoiceCloneCreateContext, input: { 
   /* ── A · gate ──────────────────────────────────────────────────────────── */
   const gate = await voiceCloneGate(ctx, subject);
   if (!gate.ok) return gate;
+  // 0185: the admin feature table — may this tier use it at all? (its allowance is free voices a month, below)
+  const fctx = await featureContext(ownerId, feature.id, plans);
+  const barred = featureRefusal(fctx);
+  if (barred) return refuse(barred.code, barred.extra);
 
   /* ── C · consent ───────────────────────────────────────────────────────── */
   const consentName = (body.consentName ?? "").trim().slice(0, 120);
@@ -141,6 +146,12 @@ export async function startVoiceCloneJob(ctx: VoiceCloneCreateContext, input: { 
   const walletCharge = voiceCloneCredits(quote, config, plans);
   const balanceBefore = free || useCredits ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
   if (!free && !useCredits) {
+    // 0185: the wallet may be closed for this feature — a plan's allowance only
+    const closed = payAsYouGoRefusal(fctx);
+    if (closed) {
+      await giveBack("pay-as-you-go off");
+      return refuse(closed.code, { ...closed.extra, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
+    }
     if (balanceBefore === null) {
       await giveBack("balance read failed");
       return refuse("INTERNAL_ERROR");

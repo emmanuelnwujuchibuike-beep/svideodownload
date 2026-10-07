@@ -16,6 +16,7 @@ import {
   AiSettingRow,
   AiStylePicker,
 } from "@/features/ai/design/ai-generate";
+import { FreeVideoNotice } from "@/features/ai/video/free-video-notice";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
 import { AiPageShell, AiPanel, AiToolTitle } from "@/features/ai/design/ai-surface";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
@@ -294,6 +295,7 @@ export function TextToVideoWorkspace({
       ) : null}
 
       {/* ── COST + GENERATE, always reachable (§19, §21) ──────────────────── */}
+      <FreeVideoNotice offer={gen.freeOffer} className="mt-4" />
       <AiActionBar>
         <AiCost
           credits={gen.complimentary ? 0 : (gen.quote?.credits ?? null)}

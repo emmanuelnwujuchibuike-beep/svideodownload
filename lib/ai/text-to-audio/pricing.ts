@@ -109,6 +109,19 @@ export function textToAudioCredits(quote: TextToAudioQuote, config: TextToAudioC
   );
 }
 
+/**
+ * 0185 (brief §11): the two ways to pay for a text longer than what is left of
+ * the month's characters, priced by the same engine — the member chooses.
+ * ("Shorten the text" is the third, and needs no price.)
+ */
+export function textToAudioPartialOptions(characters: number, remaining: number, config: TextToAudioConfig, plans: AiPlansConfig, currency: string) {
+  const option = (covered: number) => {
+    const q = quoteTextToAudio({ characters, freeCharactersAvailable: covered }, config, { currency });
+    return { freeCharacters: q.freeCharactersCovered, billableCharacters: q.billableCharacters, credits: q.totalCents > 0 ? textToAudioCredits(q, config, plans).creditsRequired : 0 };
+  };
+  return { split: option(remaining), all_credits: option(0) };
+}
+
 /** What leaves the server: the route's vendor and model and the operator's cost stay behind. */
 export function publicTextToAudioQuote(q: TextToAudioQuote) {
   const { route: _r, model: _m, providerCostEstimateUsdCents: _c, ...shown } = q;

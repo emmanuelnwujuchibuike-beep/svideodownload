@@ -10,7 +10,7 @@ const ok = { options: { durationSeconds: 3, resolution: "720p" } };
 
 describe("the complimentary video (owner 2026-10-07: 3 s, 720p, no reference video, once per device)", () => {
   it("the rules are the owner's", () => {
-    expect(FREE_VIDEO).toEqual({ seconds: 3, resolution: "720p", allowReferenceVideo: false });
+    expect(FREE_VIDEO).toEqual({ seconds: 3, resolution: "720p", allowReferenceVideo: false, allowNativeAudio: false });
   });
 
   it("3 s at 720p qualifies, with or without a reference IMAGE", () => {
@@ -24,6 +24,9 @@ describe("the complimentary video (owner 2026-10-07: 3 s, 720p, no reference vid
     expect(freeVideoQualifies({ options: { durationSeconds: 3, resolution: "1080p" } })).toMatchObject({ ok: false, reason: "resolution" });
     expect(freeVideoQualifies({ options: { durationSeconds: 3 } })).toMatchObject({ ok: false, reason: "resolution" });
     expect(freeVideoQualifies({ ...ok, referenceVideoUrl: "https://x/v.mp4" })).toMatchObject({ ok: false, reason: "reference_video" });
+    // owner, 2026-10-07: "no reference video or native audio on free"
+    expect(freeVideoQualifies({ options: { ...ok.options, audio: "native" } })).toMatchObject({ ok: false, reason: "native_audio" });
+    expect(freeVideoQualifies({ options: { ...ok.options, audio: "off" } }).ok).toBe(true);
   });
 
   it("create asks the shared pool ONLY for a qualifying request, and never without a device marker", () => {
@@ -35,7 +38,7 @@ describe("the complimentary video (owner 2026-10-07: 3 s, 720p, no reference vid
     expect(create).toContain("consumeFreeUse(");
     expect(create).toContain('funding_source: fundingKind');
     // a complimentary job charges nothing and never reads the wallet
-    expect(create).toContain("chargedCents: useCredits || complimentary ? 0 : quote.totalUsdCents");
+    expect(create).toContain("chargedCents: useCredits || complimentary || included ? 0 : quote.totalUsdCents");
   });
 
   it("the jobs route hands the request over (device cookie + network), and the quote route plants the marker", () => {
@@ -43,5 +46,7 @@ describe("the complimentary video (owner 2026-10-07: 3 s, 720p, no reference vid
     const quote = read("app/api/ai/video/quote/route.ts");
     expect(quote).toContain("deviceCookieHeader(newDeviceId())");
     expect(quote).toContain("freeVideoQualifies(");
+    // the page is told whether a free video is left and what stops these settings from using it
+    expect(quote).toContain("available && !fits");
   });
 });

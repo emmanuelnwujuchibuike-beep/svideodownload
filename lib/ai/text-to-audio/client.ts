@@ -53,6 +53,18 @@ export interface TtaFreeState {
   used: number;
   remaining: number;
   monthKey: string;
+  /** 0185: the member's tier — whose allowance this is. */
+  tier?: "free" | "ai_pro" | "ai_max";
+  /** 0185: the operator's rule for a text longer than what is left. */
+  partialAllowance?: "ask" | "split" | "all_credits";
+}
+/** 0185: a text longer than what is left of the month — the two ways to pay for the rest, priced by the server. */
+export interface TtaPartialChoice {
+  policy: "ask" | "split" | "all_credits";
+  choiceRequired: boolean;
+  remaining: number;
+  characters: number;
+  options: { split: { freeCharacters: number; billableCharacters: number; credits: number }; all_credits: { freeCharacters: number; billableCharacters: number; credits: number } };
 }
 export interface TtaConfigAnswer {
   config: TextToAudioPublicConfig & { voices: TtaVoiceOption[]; languages: TtaLanguageOption[] };
@@ -84,11 +96,12 @@ export interface TtaQuoteView {
 export interface TtaQuoteAnswer {
   quote: TtaQuoteView;
   free: TtaFreeState & { afterThis: number };
+  partial: TtaPartialChoice | null;
   credits: AiCreditsView | null;
   walletFallback: "allow" | "ask" | "off";
 }
 
-export function getTextToAudioQuote(input: { text?: string; characters?: number }, signal?: AbortSignal): Promise<TtaResult<TtaQuoteAnswer>> {
+export function getTextToAudioQuote(input: { text?: string; characters?: number; partial?: "split" | "all_credits" }, signal?: AbortSignal): Promise<TtaResult<TtaQuoteAnswer>> {
   return request("/api/ai/text-to-audio/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input), signal });
 }
 
@@ -102,6 +115,7 @@ export function generateTextToAudio(input: {
   delivery?: "natural" | "expressive" | "calm" | null;
   quote?: { totalCents: number; pricingConfigVersion: number };
   funding?: "credits" | "wallet";
+  partial?: "split" | "all_credits";
   save?: boolean;
 }): Promise<TtaResult<{ job: AiJobView; created: boolean; billing: "free" | "credits" | "paid" | null; balanceCents: number | null; credits: AiCreditsView | null; freeCharactersUsed: number }>> {
   return request("/api/ai/text-to-audio/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });

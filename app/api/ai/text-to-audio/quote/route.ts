@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
+import { featureContext } from "@/lib/ai/credits/feature-gate";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -8,7 +9,8 @@ import { subjectOwnerId } from "@/lib/ai/subject";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { readFreeCharacters } from "@/lib/ai/text-to-audio/free";
 import { modelCharacterCeiling, textToAudioGate } from "@/lib/ai/text-to-audio/generate";
-import { countTextToAudioCharacters, publicTextToAudioQuote, quoteTextToAudio, textToAudioCredits, textToAudioMonthKey } from "@/lib/ai/text-to-audio/pricing";
+import { textToAudioAllowance, textToAudioCoverage } from "@/lib/ai/text-to-audio/config";
+import { countTextToAudioCharacters, publicTextToAudioQuote, quoteTextToAudio, textToAudioCredits, textToAudioMonthKey, textToAudioPartialOptions } from "@/lib/ai/text-to-audio/pricing";
 import { textToAudioQuoteRequestSchema } from "@/lib/ai/text-to-audio/schemas";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -49,8 +51,13 @@ export async function POST(request: Request) {
     const ownerId = subjectOwnerId(subject);
     const plans = settings.frenzAiPlans;
     const monthKey = textToAudioMonthKey(new Date(), plans.reset.timezone);
-    const free = await readFreeCharacters(ownerId, monthKey, config.freeCharactersPerMonth);
-    const quote = quoteTextToAudio({ characters, freeCharactersAvailable: free.remaining }, config, { currency: settings.frenzAiCurrency });
+    // 0185: the member's tier decides the month's characters; the partial rule decides how many of them this text may use
+    const fctx = await featureContext(ownerId, feature.id, plans);
+    const free = await readFreeCharacters(ownerId, monthKey, textToAudioAllowance(config, fctx.tier));
+    const coverage = textToAudioCoverage({ characters, remaining: free.remaining, policy: config.partialAllowance, choice: parsed.data.partial ?? null });
+    // while the member has not chosen, the figure shown is the cheaper option (what is left + credits) — Generate asks before taking anything
+    const quote = quoteTextToAudio({ characters, freeCharactersAvailable: coverage.choiceRequired ? free.remaining : coverage.covered }, config, { currency: settings.frenzAiCurrency });
+    const partial = characters > free.remaining && free.remaining > 0 ? { policy: config.partialAllowance, choiceRequired: coverage.choiceRequired, remaining: free.remaining, characters, options: textToAudioPartialOptions(characters, free.remaining, config, plans, settings.frenzAiCurrency) } : null;
     let credits: ReturnType<typeof creditDecisionView> | null = null;
     if (quote.totalCents > 0 && plans.enabled) {
       const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
@@ -61,7 +68,7 @@ export async function POST(request: Request) {
     }
     // 🔴 0184: what the wallet would be charged, in credits — the same engine figure a plan would count
     const walletCredits = quote.totalCents > 0 ? textToAudioCredits(quote, config, plans).creditsRequired : 0;
-    return NextResponse.json({ quote: { ...publicTextToAudioQuote(quote), credits: walletCredits }, unit: "CREDIT", free: { allowance: free.allowance, used: free.used, remaining: free.remaining, afterThis: Math.max(0, free.remaining - quote.freeCharactersCovered) }, credits, walletFallback: plans.enabled ? plans.walletFallback : "allow" });
+    return NextResponse.json({ quote: { ...publicTextToAudioQuote(quote), credits: walletCredits }, unit: "CREDIT", access: fctx.view, free: { allowance: free.allowance, used: free.used, remaining: free.remaining, afterThis: Math.max(0, free.remaining - quote.freeCharactersCovered), tier: fctx.tier, monthKey }, partial, credits, walletFallback: plans.enabled ? plans.walletFallback : "allow" });
   } catch (e) {
     console.error("[ai/tta/quote] failed", { subject: subject.key, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });

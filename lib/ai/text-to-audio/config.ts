@@ -22,6 +22,7 @@ import { isTtsDelivery, normalizeTtsVoiceSettings, TTS_VOICE_SETTINGS_DEFAULTS, 
  * ElevenLabs is the only vendor either way (the fal.ai brief §17).
  */
 export type TextToAudioRoute = "replicate" | "elevenlabs";
+export type TextToAudioPartialPolicy = "ask" | "split" | "all_credits";
 export const TEXT_TO_AUDIO_ROUTES: readonly TextToAudioRoute[] = ["replicate", "elevenlabs"];
 
 /** The model ids each route accepts — the adapters' own registries (lib/ai/voice/elevenlabs-models.ts). */
@@ -54,8 +55,21 @@ export interface TextToAudioConfig {
   /** The most characters one generation may carry (the model's own ceiling still applies). */
   maximumCharacters: number;
   minimumCharacters: number;
-  /** The monthly free allowance in characters — for free members AND every plan (owner). 0 = none. */
+  /** The monthly free allowance in characters for a member on NO AI plan (the Free tier). 0 = none. */
   freeCharactersPerMonth: number;
+  /**
+   * 0185 (credit brief §7, §9): the allowance for an ACTIVE AI plan. null = the
+   * same as Free (the owner's 2026-09-21 rule "500 for free and all sub users"
+   * stays the default until an operator sets a plan apart).
+   */
+  tierCharacters: { ai_pro: number | null; ai_max: number | null };
+  /**
+   * 0185 (brief §11): a text longer than what is left of the month's characters.
+   *   ask         the member chooses — use what is left + credits for the rest, or credits for all of it (or shortens the text)
+   *   split       what is left is used, the excess is charged in credits (the behaviour before 0185)
+   *   all_credits the allowance only covers a text that fits entirely; otherwise the whole text is charged
+   */
+  partialAllowance: TextToAudioPartialPolicy;
   /** Catalogue voice ids offered (Character Replace's catalogue); empty = every voice of the active route's provider. */
   voiceIds: readonly string[];
   languageCodes: readonly string[];
@@ -117,6 +131,9 @@ export const TEXT_TO_AUDIO_DEFAULTS: TextToAudioConfig = {
   maximumCharacters: 5_000,
   minimumCharacters: 1,
   freeCharactersPerMonth: 500,
+  tierCharacters: { ai_pro: null, ai_max: null },
+  // owner, 2026-10-07: "ask each time"
+  partialAllowance: "ask",
   voiceIds: [],
   languageCodes: [],
   libraryRetentionDays: 0,
@@ -139,6 +156,8 @@ const num = (v: unknown, d: number, min: number, max: number, round = false) => 
 };
 const int = (v: unknown, d: number, min: number, max: number) => num(v, d, min, max, true);
 const text = (v: unknown, d: string, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : d);
+/** A per-plan character count that may be unset (null = the Free tier's). */
+const optionalChars = (v: unknown): number | null => (v === null || v === undefined || v === "" ? null : int(v, 0, TEXT_TO_AUDIO_BOUNDS.freeCharacters.min, TEXT_TO_AUDIO_BOUNDS.freeCharacters.max));
 const ids = (v: unknown, d: readonly string[]): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && /^[A-Za-z0-9_\-./:]{1,80}$/.test(x)).slice(0, 200) : [...d]);
 
 function normalizeModel(raw: unknown, d: TextToAudioModelChoice, route: TextToAudioRoute): TextToAudioModelChoice {
@@ -174,6 +193,11 @@ export function normalizeTextToAudioConfig(raw: unknown): TextToAudioConfig {
     maximumCharacters: Math.max(minChars, int(raw.maximumCharacters, d.maximumCharacters, TEXT_TO_AUDIO_BOUNDS.characters.min, TEXT_TO_AUDIO_BOUNDS.characters.max)),
     minimumCharacters: minChars,
     freeCharactersPerMonth: int(raw.freeCharactersPerMonth, d.freeCharactersPerMonth, TEXT_TO_AUDIO_BOUNDS.freeCharacters.min, TEXT_TO_AUDIO_BOUNDS.freeCharacters.max),
+    tierCharacters: {
+      ai_pro: optionalChars(isRecord(raw.tierCharacters) ? raw.tierCharacters.ai_pro : null),
+      ai_max: optionalChars(isRecord(raw.tierCharacters) ? raw.tierCharacters.ai_max : null),
+    },
+    partialAllowance: raw.partialAllowance === "split" || raw.partialAllowance === "all_credits" ? raw.partialAllowance : "ask",
     voiceIds: ids(raw.voiceIds, d.voiceIds),
     languageCodes: ids(raw.languageCodes, d.languageCodes),
     libraryRetentionDays: int(raw.libraryRetentionDays, d.libraryRetentionDays, TEXT_TO_AUDIO_BOUNDS.retentionDays.min, TEXT_TO_AUDIO_BOUNDS.retentionDays.max),
@@ -190,7 +214,7 @@ export function normalizeTextToAudioConfig(raw: unknown): TextToAudioConfig {
 const stable = (v: unknown): string => JSON.stringify(v, (_k, val) => (val && typeof val === "object" && !Array.isArray(val) ? Object.fromEntries(Object.keys(val as Record<string, unknown>).sort().map((k) => [k, (val as Record<string, unknown>)[k]])) : val));
 
 export function textToAudioPricingFingerprint(c: TextToAudioConfig): string {
-  return stable({ models: TEXT_TO_AUDIO_ROUTES.map((r) => [r, c.models[r].perCharacterCents, c.models[r].perRequestCents, c.models[r].qualityMultiplier, c.models[r].creditMultiplier]), minimum: c.minimumChargeCents, free: c.freeCharactersPerMonth });
+  return stable({ models: TEXT_TO_AUDIO_ROUTES.map((r) => [r, c.models[r].perCharacterCents, c.models[r].perRequestCents, c.models[r].qualityMultiplier, c.models[r].creditMultiplier]), minimum: c.minimumChargeCents, free: c.freeCharactersPerMonth, tiers: c.tierCharacters, partial: c.partialAllowance });
 }
 export function textToAudioFingerprint(c: TextToAudioConfig): string {
   return stable({ enabled: c.enabled, route: c.route, models: TEXT_TO_AUDIO_ROUTES.map((r) => [r, c.models[r].model, c.models[r].enabled]), chars: [c.minimumCharacters, c.maximumCharacters], free: c.freeCharactersPerMonth, voices: c.voiceIds, languages: c.languageCodes, retention: c.libraryRetentionDays, delivery: [c.voiceSettings, c.deliveryChoice, c.defaultDelivery] });
@@ -199,6 +223,29 @@ export function versionTextToAudioConfig(previous: TextToAudioConfig, next: Text
   const priced = textToAudioPricingFingerprint(previous) !== textToAudioPricingFingerprint(next);
   const changed = priced || textToAudioFingerprint(previous) !== textToAudioFingerprint(next);
   return { ...next, pricingVersion: priced ? previous.pricingVersion + 1 : previous.pricingVersion, pricingUpdatedAt: priced ? now.toISOString() : previous.pricingUpdatedAt, version: changed ? previous.version + 1 : previous.version, updatedAt: changed ? now.toISOString() : previous.updatedAt };
+}
+
+/** The month's characters for a tier (Free / AI Pro / AI Max) — a plan without its own number gets Free's. */
+export function textToAudioAllowance(c: TextToAudioConfig, tier: "free" | "ai_pro" | "ai_max"): number {
+  if (tier === "free") return c.freeCharactersPerMonth;
+  return c.tierCharacters[tier] ?? c.freeCharactersPerMonth;
+}
+
+/**
+ * How many of the month's characters a text may use, under the operator's
+ * partial-allowance rule and the member's choice (brief §11). Pure.
+ *   fits entirely            → all of it, no choice
+ *   none left                → 0, no choice (the whole text is charged — and the member presses "Use N credits")
+ *   partly (ask, no choice)  → choiceRequired
+ */
+export function textToAudioCoverage(input: { characters: number; remaining: number; policy: TextToAudioPartialPolicy; choice?: "split" | "all_credits" | null }): { covered: number; choiceRequired: boolean } {
+  const characters = Math.max(0, Math.round(input.characters));
+  const remaining = Math.max(0, Math.round(input.remaining));
+  if (characters === 0 || remaining >= characters) return { covered: characters, choiceRequired: false };
+  if (remaining === 0) return { covered: 0, choiceRequired: false };
+  const rule = input.policy === "ask" ? (input.choice ?? null) : input.policy;
+  if (rule === null) return { covered: 0, choiceRequired: true };
+  return { covered: rule === "split" ? remaining : 0, choiceRequired: false };
 }
 
 /** The active model id — the switch decides the route, the route its model. */

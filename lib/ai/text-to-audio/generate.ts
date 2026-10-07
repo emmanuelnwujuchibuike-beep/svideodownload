@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { policyBlockEvent, screenAiText } from "@/lib/ai/acceptable-use";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { featureContext, featureRefusal, payAsYouGoRefusal } from "@/lib/ai/credits/feature-gate";
 import { walletShortfall } from "@/lib/ai/credits/units";
 import type { AiEntitlement } from "@/lib/ai/entitlement";
 import type { AiErrorCode } from "@/lib/ai/errors";
@@ -20,7 +21,8 @@ import { cloneIdFromVoiceId, isCloneVoiceId } from "@/lib/ai/voice-clone/usable"
 import { finalizeTextToAudioJob, runDirectTextToAudio } from "@/lib/ai/text-to-audio/finalize";
 import { consumeFreeCharacters, readFreeCharacters } from "@/lib/ai/text-to-audio/free";
 import { defaultAudioName } from "@/lib/ai/text-to-audio/job-meta";
-import { countTextToAudioCharacters, publicTextToAudioQuote, quoteTextToAudio, textToAudioCredits, textToAudioMonthKey, type TextToAudioQuote } from "@/lib/ai/text-to-audio/pricing";
+import { textToAudioAllowance, textToAudioCoverage } from "@/lib/ai/text-to-audio/config";
+import { countTextToAudioCharacters, publicTextToAudioQuote, quoteTextToAudio, textToAudioCredits, textToAudioMonthKey, textToAudioPartialOptions, type TextToAudioQuote } from "@/lib/ai/text-to-audio/pricing";
 import type { CreateTextToAudioJobRequest } from "@/lib/ai/text-to-audio/schemas";
 import { elevenLabsTtsModel } from "@/lib/ai/voice/elevenlabs-models";
 import { voiceSettingsForDelivery, type TtsDelivery } from "@/lib/ai/voice/voice-settings";
@@ -119,6 +121,10 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
   const gate = await textToAudioGate(shared, subject);
   if (!gate.ok) return refuse(gate.code!, gate.extra);
   const resolved = gate.resolved;
+  // 0185: the admin feature table — may this tier use it at all? (its allowance is characters, below)
+  const fctx = await featureContext(ownerId, feature.id, plans);
+  const barred = featureRefusal(fctx);
+  if (barred) return refuse(barred.code as AiErrorCode, barred.extra);
 
   /* ── V · validate ──────────────────────────────────────────────────────── */
   const text = body.text.trim();
@@ -183,14 +189,31 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
 
   /* ── F · the month's free characters, taken first ─────────────────────── */
   const monthKey = textToAudioMonthKey(new Date(), plans.reset.timezone);
-  const allowance = config.freeCharactersPerMonth;
+  // 0185: the month's characters for THIS member's tier (Free / AI Pro / AI Max)
+  const allowance = textToAudioAllowance(config, fctx.tier);
   const before = await readFreeCharacters(ownerId, monthKey, allowance);
-  const shown = quoteTextToAudio({ characters, freeCharactersAvailable: before.remaining }, config, { currency: settings.frenzAiCurrency });
+  /*
+    0185 (brief §11): a text longer than what is left. Under "ask" the member
+    chooses — the rest of the allowance + credits for the excess, or credits
+    for all of it — and nothing is taken until they have.
+  */
+  const coverage = textToAudioCoverage({ characters, remaining: before.remaining, policy: config.partialAllowance, choice: body.partial ?? null });
+  if (coverage.choiceRequired) {
+    return refuse("TTA_ALLOWANCE_CHOICE", { remaining: before.remaining, characters, options: textToAudioPartialOptions(characters, before.remaining, config, plans, settings.frenzAiCurrency) });
+  }
+  const shown = quoteTextToAudio({ characters, freeCharactersAvailable: coverage.covered }, config, { currency: settings.frenzAiCurrency });
+  const shownView = () => ({ ...publicTextToAudioQuote(shown), credits: shown.totalCents > 0 ? textToAudioCredits(shown, config, plans).creditsRequired : 0 });
+  /*
+    🔴 brief §19: credits are never spent without the member's explicit choice.
+    A paid generation must carry the price the member was shown and pressed
+    "Use N credits" on; one without it is shown the price instead.
+  */
+  if (shown.totalCents > 0 && !body.quote) return refuse("PRICE_CHANGED", { quote: shownView() });
   // the member was shown a price; if today's price for this text differs, they see the new one before anything is taken
   if (body.quote && (body.quote.totalCents !== shown.totalCents || body.quote.pricingConfigVersion !== shown.pricingConfigVersion)) {
-    return refuse("PRICE_CHANGED", { quote: { ...publicTextToAudioQuote(shown), credits: shown.totalCents > 0 ? textToAudioCredits(shown, config, plans).creditsRequired : 0 } });
+    return refuse("PRICE_CHANGED", { quote: shownView() });
   }
-  const taken = await consumeFreeCharacters(ownerId, monthKey, characters, allowance);
+  const taken = coverage.covered > 0 ? await consumeFreeCharacters(ownerId, monthKey, coverage.covered, allowance) : { covered: 0, used: before.used };
   if (!taken) return refuse("INTERNAL_ERROR");
   const giveBack = async (why: string) => {
     if (taken.covered > 0) await createAdminClient().rpc("release_tta_free_characters", { p_user_id: ownerId, p_month_key: monthKey, p_characters: taken.covered }).then(({ error }) => error && console.error("[tta/generate] free release failed", { userId: ownerId, why, message: error.message }));
@@ -226,6 +249,12 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
   const walletCharge = textToAudioCredits(quote, config, plans);
   const balanceBefore = free || useCredits ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
   if (!free && !useCredits) {
+    // 0185: the wallet may be closed for this feature — a plan's allowance only
+    const closed = payAsYouGoRefusal(fctx);
+    if (closed) {
+      await giveBack("pay-as-you-go off");
+      return refuse(closed.code, { ...closed.extra, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
+    }
     if (balanceBefore === null) {
       await giveBack("balance read failed");
       return refuse("INTERNAL_ERROR");

@@ -117,7 +117,11 @@ export function TextToAudioWorkspace({
   const generating = ws.launch.phase === "generating";
   const watching = !!ws.jobId;
   const job = ws.watch.job;
-  const canGenerate = !!quoted && !generating && !creditsShort && !shortOfBalance && ws.ready && (ws.config?.processingAvailable ?? false);
+  // 0185 (brief §11): a text longer than what is left, under "ask" — nothing is generated until the member picks how to pay for the rest
+  const partialPending = !!quoted?.partial?.choiceRequired && ws.partial === null;
+  const canGenerate = !!quoted && !generating && !creditsShort && !shortOfBalance && !partialPending && ws.ready && (ws.config?.processingAvailable ?? false);
+  const allowance = ws.config?.free ?? null;
+  const tierLabel = allowance?.tier === "ai_max" ? "AI Max" : allowance?.tier === "ai_pro" ? "AI Pro" : "Free";
 
   const voices = cfg?.voices ?? [];
   const voice = voices.find((v) => v.id === ws.voiceId) ?? null;
@@ -363,6 +367,49 @@ export function TextToAudioWorkspace({
                 <Notice tone="error">{ws.quote.message}</Notice>
               ) : quoted ? (
                 <div className="space-y-2">
+                  {/* 0185: whose allowance this is, and how much of it is left this month */}
+                  {allowance && allowance.allowance > 0 ? (
+                    <p className="text-[12px] text-muted-foreground">
+                      <span className="font-semibold text-foreground">{tierLabel} allowance</span> · {allowance.remaining.toLocaleString("en-US")} of {allowance.allowance.toLocaleString("en-US")} characters left this month
+                    </p>
+                  ) : null}
+                  {allowance && allowance.allowance > 0 && allowance.remaining === 0 && quoted.quote.totalCents > 0 ? (
+                    <Notice tone="muted">Your included characters for this month are used. You can continue with credits — nothing is charged until you press Generate.</Notice>
+                  ) : null}
+                  {quoted.partial ? (
+                    <div className="rounded-2xl bg-violet-500/[0.06] px-3.5 py-3 text-[12.5px] leading-relaxed ring-1 ring-inset ring-violet-500/20">
+                      <p>
+                        You have <strong className="tabular-nums">{quoted.partial.remaining.toLocaleString("en-US")}</strong> included characters left. This text has{" "}
+                        <strong className="tabular-nums">{quoted.partial.characters.toLocaleString("en-US")}</strong>.
+                      </p>
+                      {quoted.partial.policy === "ask" ? (
+                        <>
+                          <div role="radiogroup" aria-label="How to pay for the rest" className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {(["split", "all_credits"] as const).map((k) => {
+                              const o = quoted.partial!.options[k];
+                              const active = ws.partial === k;
+                              return (
+                                <button
+                                  key={k}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={active}
+                                  onClick={() => ws.setPartial(k)}
+                                  className={cn("min-h-[48px] rounded-xl px-3 py-2 text-left ring-1 ring-inset transition", active ? "bg-indigo-600 text-white ring-indigo-600" : "bg-card ring-black/[0.08] hover:ring-indigo-400 dark:ring-white/15")}
+                                >
+                                  <span className="block text-[13px] font-semibold">{k === "split" ? `Use ${o.freeCharacters.toLocaleString("en-US")} included + ${formatCredits(o.credits)}` : `Use ${formatCredits(o.credits)} for all of it`}</span>
+                                  <span className={cn("block text-[11.5px]", active ? "text-white/80" : "text-muted-foreground")}>{k === "split" ? "The rest of the text is paid with credits." : "Keeps your included characters for later."}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-2 text-[11.5px] text-muted-foreground">Or shorten the text to {quoted.partial.remaining.toLocaleString("en-US")} characters to use only your allowance.</p>
+                        </>
+                      ) : (
+                        <p className="mt-1 text-[11.5px] text-muted-foreground">{quoted.partial.policy === "split" ? "The included characters cover the start; the rest uses credits." : "Included characters only cover a text that fits entirely — this one uses credits."}</p>
+                      )}
+                    </div>
+                  ) : null}
                   {/* 0184: members see credits only — the free characters, then the charge */}
                   {quoted.quote.lines.filter((l) => l.key === "free").map((l) => (
                     <Row key={l.key} label={l.label} value="Free" />
@@ -448,7 +495,7 @@ export function TextToAudioWorkspace({
                 className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
               >
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <AudioLines className="h-4 w-4" aria-hidden />}
-                {generating ? "Generating…" : free ? "Generate · Free" : quoted ? `Generate · ${formatCredits(creditsCover ? (credits?.required ?? 0) : walletCredits)}` : "Generate"}
+                {generating ? "Generating…" : partialPending ? "Choose how to pay for the rest" : free ? "Generate · Free" : quoted ? `Use ${formatCredits(creditsCover ? (credits?.required ?? 0) : walletCredits)} · Generate` : "Generate"}
               </button>
             )}
             <p className="text-center text-[11.5px] text-muted-foreground">

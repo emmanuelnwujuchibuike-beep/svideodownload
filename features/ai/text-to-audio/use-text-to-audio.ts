@@ -59,6 +59,8 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
   */
   const [delivery, setDelivery] = useState<TtsDelivery | null>(null);
   const [funding, setFunding] = useState<"credits" | "wallet" | null>(null);
+  // 0185: the member's choice when the text is longer than what is left of the month (the server re-prices with it)
+  const [partial, setPartial] = useState<"split" | "all_credits" | null>(null);
   const [quote, setQuote] = useState<{ status: "idle" } | { status: "pending" } | { status: "quoted"; answer: TtaQuoteAnswer } | { status: "error"; code: string; message: string }>({ status: "idle" });
   const [launch, setLaunch] = useState<TtaLaunch>({ phase: "idle" });
   const [jobId, setJobId] = useState<string | null>(opts.initialJobId ?? null);
@@ -97,7 +99,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
     quoteAbort.current = controller;
     setQuote({ status: "pending" });
     const timer = window.setTimeout(async () => {
-      const res = await getTextToAudioQuote({ characters }, controller.signal);
+      const res = await getTextToAudioQuote({ characters, ...(partial ? { partial } : {}) }, controller.signal);
       if (controller.signal.aborted) return;
       if (res.ok) setQuote({ status: "quoted", answer: res });
       else setQuote({ status: "error", code: res.code, message: res.error });
@@ -106,7 +108,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [ready, characters, config?.config.enabled]);
+  }, [ready, characters, config?.config.enabled, partial]);
 
   const generate = useCallback(async () => {
     if (!ready || quote.status !== "quoted") return;
@@ -122,6 +124,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
       ...(config?.config.deliveryChoice && delivery ? { delivery } : {}),
       quote: { totalCents: quote.answer.quote.totalCents, pricingConfigVersion: quote.answer.quote.pricingConfigVersion },
       ...(funding ? { funding } : {}),
+      ...(partial ? { partial } : {}),
     });
     if (!res.ok) {
       setLaunch({ phase: "error", code: res.code, message: res.error, extra: res.extra });
@@ -134,7 +137,7 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
     requestId.current = null;
     setLaunch({ phase: "idle" });
     setJobId(res.job.id);
-  }, [ready, quote, text, name, voiceId, languageCode, delivery, config?.config.deliveryChoice, funding, characters]);
+  }, [ready, quote, text, name, voiceId, languageCode, delivery, config?.config.deliveryChoice, funding, partial, characters]);
 
   const reset = useCallback(() => {
     setJobId(null);
@@ -172,6 +175,8 @@ export function useTextToAudio(opts: { initialJobId?: string | null; initialVoic
     quote,
     funding,
     setFunding,
+    partial,
+    setPartial,
     launch,
     clearLaunchError,
     generate,

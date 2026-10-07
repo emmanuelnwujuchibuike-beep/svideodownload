@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCharacterReplaceFreeEligibility } from "@/lib/ai/character-replace/free-access";
+import { featureContext } from "@/lib/ai/credits/feature-gate";
 import { affordability } from "@/lib/ai/character-replace/pricing";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
       credits,
       walletFallback: plans.walletFallback,
       walletOffered,
+      // 0185: tier, included generations left, pay-as-you-go
+      access: (await featureContext(subject.userId, feature.id, plans)).view,
       balanceCents,
       afterCents: complimentary ? balanceCents : money.afterCents,
       sufficient: complimentary ? true : money.sufficient,

@@ -62,6 +62,10 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
   const [maxChars, setMaxChars] = useState(String(cfg.maximumCharacters));
   const [minChars, setMinChars] = useState(String(cfg.minimumCharacters));
   const [freeChars, setFreeChars] = useState(String(cfg.freeCharactersPerMonth));
+  // 0185: an AI plan's own monthly characters (blank = the same as Free) and the rule for a text longer than what is left
+  const [proChars, setProChars] = useState(cfg.tierCharacters.ai_pro === null ? "" : String(cfg.tierCharacters.ai_pro));
+  const [maxChars2, setMaxChars2] = useState(cfg.tierCharacters.ai_max === null ? "" : String(cfg.tierCharacters.ai_max));
+  const [partialRule, setPartialRule] = useState(cfg.partialAllowance);
   const [voiceIds, setVoiceIds] = useState<string[]>([...cfg.voiceIds]);
   const [languageCodes, setLanguageCodes] = useState<string[]>([...cfg.languageCodes]);
   const [retention, setRetention] = useState(String(cfg.libraryRetentionDays));
@@ -102,6 +106,8 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
         maximumCharacters: int(maxChars, cfg.maximumCharacters),
         minimumCharacters: int(minChars, cfg.minimumCharacters),
         freeCharactersPerMonth: int(freeChars, cfg.freeCharactersPerMonth),
+        tierCharacters: { ai_pro: proChars.trim() === "" ? null : int(proChars, 0), ai_max: maxChars2.trim() === "" ? null : int(maxChars2, 0) },
+        partialAllowance: partialRule,
         voiceIds,
         languageCodes,
         libraryRetentionDays: int(retention, cfg.libraryRetentionDays),
@@ -194,11 +200,27 @@ export function TextToAudioSettingsPanel({ settings, stats, voices, languages }:
 
           {/* ── the free characters ────────────────────────────────────────── */}
           <div className="rounded-2xl border border-border/70 p-4">
-            <p className="text-sm font-semibold">Free characters a month</p>
-            <p className="mt-1 text-xs text-muted-foreground">Every member — free and every plan — gets this many characters a month before anything is charged. Taken atomically at Generate and given back if the generation fails.</p>
+            <p className="text-sm font-semibold">Included characters a month</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Per tier: a member on no AI plan gets the Free number; AI Pro and AI Max get their own (blank = the same as Free). Taken atomically at Generate and given back if the
+              generation fails. When they run out, the rest is paid with credits — only after the member chooses to.
+            </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <Field label="Characters / member / month">
+              <Field label="Free · characters / month">
                 <input inputMode="numeric" value={freeChars} onChange={(e) => setFreeChars(e.target.value)} className={input} />
+              </Field>
+              <Field label="AI Pro · characters / month" hint="Blank = same as Free.">
+                <input inputMode="numeric" value={proChars} onChange={(e) => setProChars(e.target.value)} className={input} />
+              </Field>
+              <Field label="AI Max · characters / month" hint="Blank = same as Free.">
+                <input inputMode="numeric" value={maxChars2} onChange={(e) => setMaxChars2(e.target.value)} className={input} />
+              </Field>
+              <Field label="Text longer than what is left" hint="How the rest is paid for.">
+                <select value={partialRule} onChange={(e) => setPartialRule(e.target.value as typeof partialRule)} className={input}>
+                  <option value="ask">Ask the member each time</option>
+                  <option value="split">Use what is left + credits for the rest</option>
+                  <option value="all_credits">Credits for the whole text</option>
+                </select>
               </Field>
               <Field label="Minimum charge" hint="Never applies to a generation the allowance covers in full.">
                 <input inputMode="decimal" value={minCharge} onChange={(e) => setMinCharge(e.target.value)} className={input} />

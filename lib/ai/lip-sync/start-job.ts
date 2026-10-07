@@ -8,6 +8,9 @@ import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch
 import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { featureContext, featureRefusal, payAsYouGoRefusal } from "@/lib/ai/credits/feature-gate";
+import { overMaxInput } from "@/lib/ai/credits/features";
+import { consumeIncludedUse } from "@/lib/ai/credits/included";
 import { walletShortfall } from "@/lib/ai/credits/units";
 import { getAiEntitlement, type AiEntitlement } from "@/lib/ai/entitlement";
 import type { AiErrorCode } from "@/lib/ai/errors";
@@ -201,14 +204,23 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
     if (open.length > 0) return refuse("PROVIDER_UNAVAILABLE", { error: "Lip Sync Pro is temporarily unavailable. Try again in a few minutes — nothing was charged." });
   }
 
-  /* ── B · fund ──────────────────────────────────────────────────────────── */
+  /* ── the admin feature table: this tier, this length (0185) ────────────── */
   const plans = settings.frenzAiPlans;
+  const fctx = await featureContext(ownerId, feature.id, plans);
+  const barred = featureRefusal(fctx);
+  if (barred) return refuse(barred.code, barred.extra);
+  const ceiling = overMaxInput(fctx.policy, selectedMs / 1000);
+  if (ceiling !== null) return refuse("INVALID_INPUT", { error: `Clips can be up to ${ceiling} seconds right now. Trim your video — nothing has been charged.`, limit: "too_long", maxInputSeconds: ceiling });
+
+  /* ── B · fund ──────────────────────────────────────────────────────────── */
   // the complimentary creations are the AI studio's, shared with Character Replace (the same pool, the same device rule)
   const eligibility = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, isAdmin: shared.isAdmin, plans });
   const complimentary = eligibility.eligible && (eligibility.remainingFreeUses === null || eligibility.remainingFreeUses > 0);
+  // 0185: one of the month's included generations for this tier, before any credit is spent
+  const included = !complimentary && fctx.includedRemaining > 0;
   let creditDecision: CreditDecision | null = null;
   let useCredits = false;
-  if (!complimentary && plans.enabled) {
+  if (!complimentary && !included && plans.enabled) {
     const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
     if (creditEntitlement.plan) {
       const estimate = lipSyncCredits(snapshot, config, plans);
@@ -221,8 +233,11 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
   }
   // 🔴 the wallet holds credits (0184): the same engine figure an AI plan would count
   const walletCharge = lipSyncCredits(snapshot, config, plans);
-  const balanceBefore = complimentary || useCredits ? null : await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
-  if (!complimentary && !useCredits) {
+  const balanceBefore = complimentary || included || useCredits ? null : await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
+  if (!complimentary && !included && !useCredits) {
+    // 0185: the wallet may be closed for this feature — a plan's allowance only
+    const closed = payAsYouGoRefusal(fctx);
+    if (closed) return refuse(closed.code, { ...closed.extra, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
     if (balanceBefore === null) return refuse("INTERNAL_ERROR");
     if (balanceBefore < walletCharge.creditsRequired) return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore, walletCharge.creditsRequired, creditDecision ? { credits: creditDecisionView(creditDecision) } : {}));
   }
@@ -238,6 +253,8 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
     provider_plan: { id: adapter.id, model: adapter.model, version: adapter.version || null, scope: "lip_sync", speechPath, providersVersion, decidedAt: new Date().toISOString(), test: shared.isAdmin && settings.frenzAiProviders.adminJobsAreTests },
     billing: complimentary
       ? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }
+      : included
+        ? { type: "INCLUDED", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 0, currency: snapshot.currency, tier: fctx.tier }
       : useCredits && creditDecision
         ? { type: "CREDITS", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 0, currency: snapshot.currency, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan, creditsConfigVersion: creditDecision.estimate.configVersion }
         : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency, credits: walletCharge.creditsRequired, unit: "CREDIT" },
@@ -245,6 +262,7 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
     provider_cost_estimate: snapshot.providerCostEstimate.totalUsdCents !== null ? { totalUsdCents: snapshot.providerCostEstimate.totalUsdCents, lipSyncUsdCents: snapshot.providerCostEstimate.lipSyncUsdCents, ttsUsdCents: snapshot.providerCostEstimate.ttsUsdCents } : null,
     consent_at: new Date().toISOString(),
     audience: shared.isAdmin ? "admin" : entitlement.audience,
+    ...(included ? { included_use: { feature: feature.id, periodKey: fctx.periodKey } } : {}),
   };
 
   const maxActive = Math.min(concurrencyLimitFor(cr, { audience: entitlement.audience, isAdmin: shared.isAdmin, policyMaxConcurrent: entitlement.maxConcurrent }), config.models[route.vendor].maxConcurrent > 0 ? config.models[route.vendor].maxConcurrent : Infinity);
@@ -255,9 +273,9 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
     maxActivePerUser: Number.isFinite(maxActive) ? maxActive : 1,
     maxActiveGlobal: cr.limits.maxActiveJobsGlobal,
     maxPerDay: cr.limits.maxJobsPerUserPerDay,
-    chargedCents: complimentary || useCredits ? 0 : snapshot.totalCents,
+    chargedCents: complimentary || included || useCredits ? 0 : snapshot.totalCents,
     metadata: startMetadata,
-    funding: complimentary ? "free" : useCredits ? "credits" : "balance",
+    funding: complimentary || included ? "free" : useCredits ? "credits" : "balance",
     queue: false,
   });
   if (claim === "user_limit" || claim === "waiting") return refuse("CR_ACTIVE_LIMIT");
@@ -276,6 +294,12 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
   if (complimentary) {
     const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof consumeFreeUse>[0]["snapshot"], granted: eligibility.remainingFreeUses === null ? null : eligibility.granted });
     if (!use.ok) {
+      await revertJobStartClaim(job.id, job.metadata ?? {});
+      return refuse("CR_FREE_UNAVAILABLE");
+    }
+  } else if (included) {
+    // atomic per member; refused when another tab took the month's last one between the read and now
+    if (!(await consumeIncludedUse(ownerId, feature.id, fctx.periodKey, fctx.includedPerMonth))) {
       await revertJobStartClaim(job.id, job.metadata ?? {});
       return refuse("CR_FREE_UNAVAILABLE");
     }

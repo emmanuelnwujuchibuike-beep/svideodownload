@@ -220,6 +220,11 @@ export async function releaseJobFunding(opts: {
         // a clone the allowance covered in full reserved nothing else
         if (opts.job.funding_source === "free") return;
       }
+      // 0185: a generation from the month's INCLUDED allowance comes back to that allowance, once (guarded on the row) — and nothing else was taken for it
+      if (opts.job.funding_source === "free") {
+        const { releaseIncludedUseForJob } = await import("@/lib/ai/credits/included");
+        if (await releaseIncludedUseForJob(opts.job.id, `job undone (${opts.cause ?? "undo"})`).catch(() => false)) return;
+      }
       // Part 11: a complimentary creation comes back as an ENTITLEMENT, once (restore_free_use); a paid one as money, once. Never both.
       if (opts.job.funding_source === "free") {
         await restoreFreeUse(opts.job.id, "job undone");

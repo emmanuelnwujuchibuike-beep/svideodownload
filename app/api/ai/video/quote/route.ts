@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { deviceCookieHeader, getCharacterReplaceFreeEligibility, newDeviceId, readDeviceId } from "@/lib/ai/character-replace/free-access";
+import { featureContext } from "@/lib/ai/credits/feature-gate";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { aiFeature } from "@/lib/ai/jobs";
@@ -71,15 +72,27 @@ export async function POST(request: Request) {
     rules (3 s · 720p · no reference video), so changing other options never
     touches the allowance read. Display only — /jobs decides again.
   */
-  let complimentary: { eligible: boolean; rules: string } = { eligible: false, rules: FREE_VIDEO_SUMMARY };
-  if (freeVideoQualifies(parsed.data.input as unknown as FreeVideoRequest).ok) {
-    const cr = settings.frenzAiCharacterReplace;
-    const isAdmin = !!(await getAdminUser().catch(() => null));
-    if (deviceId || isAdmin || !cr.antiAbuse.deviceDetection) {
-      const e = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, isAdmin, plans: settings.frenzAiPlans }).catch(() => null);
-      complimentary = { eligible: !!e?.eligible && (e.remainingFreeUses === null || e.remainingFreeUses > 0), rules: FREE_VIDEO_SUMMARY };
-    }
+  /*
+    Owner, 2026-10-07: "make users who want to use free video generation be
+    informed that free only supports 720p, 3 seconds and no reference video
+    or native audio". So the page is told whether the member HAS a free video
+    left at all (`available`), whether THESE settings would use it
+    (`eligible`), and if not, which setting is in the way (`blockedBy`).
+    Display only — /jobs decides again with the same rule.
+  */
+  const verdict = freeVideoQualifies(parsed.data.input as unknown as FreeVideoRequest);
+  const oneMinute = (parsed.data.input as { options?: { durationSeconds?: unknown } }).options?.durationSeconds === 60;
+  let complimentary: { eligible: boolean; available: boolean; rules: string; blockedBy: string | null } = { eligible: false, available: false, rules: FREE_VIDEO_SUMMARY, blockedBy: null };
+  const cr = settings.frenzAiCharacterReplace;
+  const isAdmin = !!(await getAdminUser().catch(() => null));
+  if (deviceId || isAdmin || !cr.antiAbuse.deviceDetection) {
+    const e = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, isAdmin, plans: settings.frenzAiPlans }).catch(() => null);
+    const available = !!e?.eligible && (e.remainingFreeUses === null || e.remainingFreeUses > 0);
+    const fits = verdict.ok && !oneMinute;
+    complimentary = { eligible: available && fits, available, rules: FREE_VIDEO_SUMMARY, blockedBy: available && !fits ? (verdict.ok ? "The complimentary video is 3 seconds long." : verdict.message) : null };
   }
   const credits = videoCredits(quote, feature.id, pipeline.label, settings.frenzAiPlans).creditsRequired;
-  return NextResponse.json({ ok: true, quote: publicKlingQuote(quote, credits), currency: settings.frenzAiCurrency, complimentary }, { status: 200, headers });
+  // 0185: the member's rules for this feature — tier, included generations left, pay-as-you-go (display; /jobs decides again)
+  const access = (await featureContext(subject.userId, feature.id, settings.frenzAiPlans)).view;
+  return NextResponse.json({ ok: true, quote: publicKlingQuote(quote, credits), currency: settings.frenzAiCurrency, complimentary, access }, { status: 200, headers });
 }

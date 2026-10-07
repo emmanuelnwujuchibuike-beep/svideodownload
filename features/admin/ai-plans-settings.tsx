@@ -6,7 +6,11 @@ import { useMemo, useState } from "react";
 import { quoteCharacterReplace } from "@/lib/ai/character-replace/pricing";
 import { REPLACEMENT_MODES, replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { AI_PLAN_IDS, AI_PLANS_BOUNDS, normalizeAiPlansConfig, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits/config";
+import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS, AI_FEATURES_BY_CHARACTER, AI_FEATURES_WITH_DURATION, AI_TIERS, type AiCreditFeatureId, type AiFeaturePolicies, type AiTier } from "@/lib/ai/credits/features";
 import { WALLET_BOUNDS } from "@/lib/ai/credits/wallet-config";
+
+const TIER_LABEL: Record<AiTier, string> = { free: "Free", ai_pro: "AI Pro", ai_max: "AI Max" };
+type FeatureRow = { enabled: boolean; payAsYouGo: boolean; tiers: Record<AiTier, boolean>; multiplier: string; minimum: string; maxSeconds: string; included: Record<AiTier, string> };
 import { calculateCredits } from "@/lib/ai/credits/engine";
 import { formatCents } from "@/lib/ai/economy";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
@@ -67,6 +71,15 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [customMin, setCustomMin] = useState(String(cfg.wallet.custom.minCredits));
   const [customMax, setCustomMax] = useState(String(cfg.wallet.custom.maxCredits));
   const [provider, setProvider] = useState(cfg.wallet.provider);
+  // 0185: one row of rules per paid tool (lib/ai/credits/features.ts); the credit multiplier is credits.featureMultiplier
+  const [features, setFeatures] = useState<Record<AiCreditFeatureId, FeatureRow>>(
+    Object.fromEntries(
+      AI_CREDIT_FEATURES.map((id) => {
+        const p = cfg.features[id];
+        return [id, { enabled: p.enabled, payAsYouGo: p.payAsYouGo, tiers: { ...p.tiers }, multiplier: String(cfg.credits.featureMultiplier[id] ?? 1), minimum: String(p.minimumCredits), maxSeconds: p.maxInputSeconds === null ? "" : String(p.maxInputSeconds), included: { free: String(p.monthlyIncluded.free), ai_pro: String(p.monthlyIncluded.ai_pro), ai_max: String(p.monthlyIncluded.ai_max) } }];
+      }),
+    ) as Record<AiCreditFeatureId, FeatureRow>,
+  );
   const [timezone, setTimezone] = useState(cfg.reset.timezone);
   const [weekStartsOn, setWeekStartsOn] = useState(String(cfg.reset.weekStartsOn));
   const [busy, setBusy] = useState(false);
@@ -116,7 +129,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         rounding,
         modeMultiplier: Object.fromEntries(Object.entries(modeMult).map(([k, v]) => [k, mult(v)])),
         qualityMultiplier: Object.fromEntries(Object.entries(qualityMult).map(([k, v]) => [k, mult(v)])),
-        featureMultiplier: cfg.credits.featureMultiplier,
+        featureMultiplier: { ...cfg.credits.featureMultiplier, ...Object.fromEntries(AI_CREDIT_FEATURES.map((id) => [id, mult(features[id].multiplier)])) },
       },
       reset: { timezone: timezone.trim() || cfg.reset.timezone, weekStartsOn: int(weekStartsOn, cfg.reset.weekStartsOn) },
       walletFallback,
@@ -125,8 +138,14 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         custom: { enabled: customEnabled, minCredits: int(customMin, cfg.wallet.custom.minCredits), maxCredits: int(customMax, cfg.wallet.custom.maxCredits) },
         provider,
       },
+      features: Object.fromEntries(
+        AI_CREDIT_FEATURES.map((id) => {
+          const f = features[id];
+          return [id, { enabled: f.enabled, payAsYouGo: f.payAsYouGo, tiers: f.tiers, minimumCredits: int(f.minimum, 0), maxInputSeconds: f.maxSeconds.trim() === "" ? null : int(f.maxSeconds, 0), monthlyIncluded: { free: int(f.included.free, 0), ai_pro: int(f.included.ai_pro, 0), ai_max: int(f.included.ai_max, 0) } }];
+        }),
+      ) as AiFeaturePolicies,
     }),
-    [centsPerCredit, cfg, customEnabled, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
+    [centsPerCredit, cfg, customEnabled, features, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
   );
 
   /* the same bounds the server enforces, refused before the request leaves */
@@ -144,6 +163,12 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     if (payload.wallet.packs.length > WALLET_BOUNDS.packs) out.push(`At most ${WALLET_BOUNDS.packs} packs.`);
     if (new Set(payload.wallet.packs.map((p) => p.credits)).size !== payload.wallet.packs.length) out.push("Two packs have the same number of credits — each size can be one pack.");
     if (payload.wallet.custom.maxCredits < payload.wallet.custom.minCredits) out.push("The custom maximum is below the minimum.");
+    for (const id of AI_CREDIT_FEATURES) {
+      const f = payload.features[id];
+      const m = payload.credits.featureMultiplier[id] ?? 1;
+      if (m < B.multiplier.min || m > B.multiplier.max) out.push(`${AI_FEATURE_LABELS[id]}: the credit multiplier must be ${B.multiplier.min}–${B.multiplier.max}.`);
+      if (f.maxInputSeconds !== null && f.maxInputSeconds < 1) out.push(`${AI_FEATURE_LABELS[id]}: a maximum length must be at least 1 second (blank = the tool's own).`);
+    }
     for (const [k, v] of [...Object.entries(payload.credits.modeMultiplier), ...Object.entries(payload.credits.qualityMultiplier)]) if (v < B.multiplier.min || v > B.multiplier.max) out.push(`Multiplier ${k} must be ${B.multiplier.min}–${B.multiplier.max}.`);
     try {
       new Intl.DateTimeFormat("en-US", { timeZone: payload.reset.timezone });
@@ -159,6 +184,12 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     for (const id of AI_PLAN_IDS) if (payload.plans[id].enabled && !payload.plans[id].paystackPlanCode) out.push(`${payload.plans[id].label} has no Paystack plan code — it is shown as coming soon and cannot be bought.`);
     if (payload.walletFallback === "allow") out.push("Wallet fallback = allow: a plan member whose allowance is short is charged from their balance without being asked.");
     if (!payload.wallet.packs.some((p) => p.enabled) && !payload.wallet.custom.enabled) out.push("No pack is on and the custom amount is off: nobody can buy credits.");
+    for (const id of AI_CREDIT_FEATURES) {
+      const f = payload.features[id];
+      if (!f.enabled) out.push(`${AI_FEATURE_LABELS[id]} is OFF for everyone.`);
+      else if (!f.payAsYouGo && !AI_TIERS.some((t) => t !== "free" && f.tiers[t])) out.push(`${AI_FEATURE_LABELS[id]}: pay-as-you-go is off and no AI plan may use it — nobody can.`);
+      else if (!f.payAsYouGo) out.push(`${AI_FEATURE_LABELS[id]}: wallet credits cannot pay for it — only an AI plan's allowance or included generations.`);
+    }
     if (payload.wallet.provider === "bachs") out.push("Top-ups go through Bachs. Make sure its keys are set on the server; Paystack payments already started still credit through their webhook.");
     if (payload.walletFallback === "off") out.push("Wallet fallback = off: a plan member whose allowance is short can only upgrade — their balance is not offered for that generation.");
     return out;
@@ -328,6 +359,48 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
               </ul>
             </div>
           ) : null}
+        </Group>
+
+        <Group title="AI features — the rules for each tool">
+          <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+            Cost in credits = the tool&apos;s priced total (its own pricing tab) ÷ the credit value × the multiplier here, at least the minimum. Tiers: who may use it (Free, or an
+            active AI plan). Included: generations a month that cost nothing, per tier — Text to Audio counts characters and Voice Cloning free voices on their own tabs, so they have
+            none here. Blank maximum = the tool&apos;s own limit.
+          </p>
+          <div className="space-y-3">
+            {AI_CREDIT_FEATURES.map((id) => {
+              const f = features[id];
+              const set = (patch: Partial<FeatureRow>) => setFeatures((all) => ({ ...all, [id]: { ...all[id], ...patch } }));
+              const ownAllowance = AI_FEATURES_BY_CHARACTER.includes(id);
+              const hasLength = AI_FEATURES_WITH_DURATION.includes(id);
+              return (
+                <div key={id} className="rounded-xl border border-border/60 px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <p className="min-w-[8rem] text-sm font-semibold">{AI_FEATURE_LABELS[id]}</p>
+                    <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={f.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> On</label>
+                    <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={f.payAsYouGo} onChange={(e) => set({ payAsYouGo: e.target.checked })} /> Pay with wallet credits</label>
+                    {AI_TIERS.map((t) => (
+                      <label key={t} className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={f.tiers[t]} onChange={(e) => set({ tiers: { ...f.tiers, [t]: e.target.checked } })} /> {TIER_LABEL[t]}</label>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-end gap-3">
+                    <Field id={`f-${id}-mult`} label="Credit multiplier"><input id={`f-${id}-mult`} inputMode="decimal" value={f.multiplier} onChange={(e) => set({ multiplier: e.target.value })} className={small} /></Field>
+                    <Field id={`f-${id}-min`} label="Minimum credits"><input id={`f-${id}-min`} inputMode="numeric" value={f.minimum} onChange={(e) => set({ minimum: e.target.value })} className={small} /></Field>
+                    {hasLength ? <Field id={`f-${id}-max`} label="Max length (s)"><input id={`f-${id}-max`} inputMode="numeric" value={f.maxSeconds} placeholder="tool's own" onChange={(e) => set({ maxSeconds: e.target.value })} className={small} /></Field> : null}
+                    {!ownAllowance ? (
+                      AI_TIERS.map((t) => (
+                        <Field key={t} id={`f-${id}-inc-${t}`} label={`Included / month · ${TIER_LABEL[t]}`}>
+                          <input id={`f-${id}-inc-${t}`} inputMode="numeric" value={f.included[t]} onChange={(e) => set({ included: { ...f.included, [t]: e.target.value } })} className={small} />
+                        </Field>
+                      ))
+                    ) : (
+                      <span className="pb-2 text-[11px] text-muted-foreground">Allowance on its own tab.</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </Group>
 
         <Group title="Credit packs — what members buy">

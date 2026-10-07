@@ -5,6 +5,9 @@ import { consumeFreeUse, getCharacterReplaceFreeEligibility, readDeviceId } from
 import { calculateCredits } from "@/lib/ai/credits/engine";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { featureContext, featureRefusal, payAsYouGoRefusal } from "@/lib/ai/credits/feature-gate";
+import { overMaxInput } from "@/lib/ai/credits/features";
+import { consumeIncludedUse } from "@/lib/ai/credits/included";
 import { walletShortfall } from "@/lib/ai/credits/units";
 import type { AiEntitlement } from "@/lib/ai/entitlement";
 import { AiJobError } from "@/lib/ai/errors";
@@ -156,6 +159,13 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     return refuse("PRICE_CHANGED", { quote: publicKlingQuote(quote, walletCharge.creditsRequired) });
   }
 
+  /* ── 3b · the admin feature table: this tier, this length (0185) ────────── */
+  const fctx = await featureContext(ownerId, featureDef.id, plans);
+  const barred = featureRefusal(fctx);
+  if (barred) return refuse(barred.code, barred.extra);
+  const ceiling = overMaxInput(fctx.policy, quote.seconds);
+  if (ceiling !== null) return refuse("INVALID_INPUT", { error: `Videos can be up to ${ceiling} seconds right now.`, limit: "too_long", maxInputSeconds: ceiling });
+
   /* ── 4 · fund: the complimentary video, then credits, then the wallet ──── */
   /*
     🔴 THE COMPLIMENTARY VIDEO (owner, 2026-10-07): 3 s, 720p, no reference
@@ -181,9 +191,12 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     }
   }
 
+  // 0185: one of the month's included generations for this tier, before any credit is spent
+  const included = !complimentary && fctx.includedRemaining > 0;
+
   let creditDecision: ReturnType<typeof decideCredits> | null = null;
   let useCredits = false;
-  if (!complimentary && plans.enabled) {
+  if (!complimentary && !included && plans.enabled) {
     const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
     if (creditEntitlement.plan) {
       creditDecision = decideCredits(creditEntitlement, { feature: featureDef.id, priceCents: quote.totalUsdCents, mode: "video", quality: quote.resolution, durationMs: Math.round(quote.billableSeconds * 1000), lines: [{ label: pipeline.label, cents: quote.totalUsdCents }] }, plans);
@@ -196,9 +209,12 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     }
   }
 
-  const fundingKind: "free" | "credits" | "balance" = complimentary ? "free" : useCredits ? "credits" : "balance";
-  const balanceBefore = useCredits || complimentary ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
-  if (!useCredits && !complimentary) {
+  const fundingKind: "free" | "credits" | "balance" = complimentary || included ? "free" : useCredits ? "credits" : "balance";
+  const balanceBefore = useCredits || complimentary || included ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
+  if (!useCredits && !complimentary && !included) {
+    // 0185: the wallet may be closed for this feature — a plan's allowance only
+    const closed = payAsYouGoRefusal(fctx);
+    if (closed) return refuse(closed.code, { ...closed.extra, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
     if (balanceBefore === null) return refuse("INTERNAL_ERROR");
     // 🔴 the wallet holds credits (0184): the comparison is credits to credits, never to the list price in cents
     if (balanceBefore < walletCharge.creditsRequired) {
@@ -231,6 +247,8 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     quote,
     billing: complimentary
       ? { type: "FREE_TRIAL", normalPriceCents: quote.totalUsdCents, chargedCents: 0, freeEntitlementUsed: 1 }
+      : included
+      ? { type: "INCLUDED", normalPriceCents: quote.totalUsdCents, chargedCents: 0, tier: fctx.tier }
       : useCredits && creditDecision
       ? { type: "CREDITS", normalPriceCents: quote.totalUsdCents, chargedCents: 0, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan }
       : { type: "PAID", normalPriceCents: quote.totalUsdCents, chargedCents: quote.totalUsdCents, credits: walletCharge.creditsRequired, unit: "CREDIT" },
@@ -242,6 +260,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     provider_cost_estimate: quote.providerCostUsdCents === null ? null : { totalUsdCents: quote.providerCostUsdCents, providerUnits: quote.providerUnits },
     endpoint: pipeline.endpoint,
     audience: opts.isAdmin ? "admin" : entitlement.audience,
+    ...(included ? { included_use: { feature: featureDef.id, periodKey: fctx.periodKey } } : {}),
     /*
       🔴 ONE MINUTE = A CHAIN (2026-10-06). Priced and charged as 60 s above;
       made as four 15 s segments. The worker finalizer reads this: after each
@@ -261,7 +280,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     maxActivePerUser: maxActive,
     maxActiveGlobal: settings.frenzAiCharacterReplace.limits.maxActiveJobsGlobal,
     maxPerDay: settings.frenzAiCharacterReplace.limits.maxJobsPerUserPerDay,
-    chargedCents: useCredits || complimentary ? 0 : quote.totalUsdCents,
+    chargedCents: useCredits || complimentary || included ? 0 : quote.totalUsdCents,
     metadata,
     funding: fundingKind,
     queue: false,
@@ -287,9 +306,17 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
         granted: freeGranted,
       });
       reserved = use.ok;
+    } else if (included) {
+      // atomic per member; refused when another tab took the month's last one between the read and now
+      reserved = await consumeIncludedUse(ownerId, featureDef.id, fctx.periodKey, fctx.includedPerMonth);
     } else if (useCredits && creditDecision) {
       const reservation = await reserveAiCredits({ userId: ownerId, jobId: job.id, feature: featureDef.id, plan: creditDecision.plan!, estimate: creditDecision.estimate, dailyLimit: creditDecision.dailyLimit, weeklyLimit: creditDecision.weeklyLimit, periods: currentPeriods(plans), config: plans }).catch(() => null);
-      reserved = !!reservation;
+      /*
+        🔴 `{ ok: false }` is a REFUSAL (another job took the day's last
+        credits between the read and the lock). This was `!!reservation` —
+        a refused reservation counted as reserved and the video ran unpaid.
+      */
+      reserved = !!reservation && reservation.ok;
     } else {
       /*
         ── 🔴 THE SNAPSHOT MUST CARRY THE WALLET'S CURRENCY ──────────────────
@@ -329,7 +356,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     reserved = false;
   }
   if (!reserved) {
-    const code = complimentary ? "CR_FREE_UNAVAILABLE" : "CR_BALANCE_REQUIRED";
+    const code = complimentary || included ? "CR_FREE_UNAVAILABLE" : useCredits ? "CR_CREDITS_UNAVAILABLE" : "CR_BALANCE_REQUIRED";
     await transitionJob(job.id, ["acquiring", "processing", "queued"], "failed", { error_code: code, completed_at: new Date().toISOString() });
     return refuse(code);
   }

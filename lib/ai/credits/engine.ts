@@ -70,7 +70,9 @@ export function calculateCredits(req: CreditRequest, config: AiPlansConfig): Cre
   const qualityFactor = req.quality ? (rules.qualityMultiplier[req.quality] ?? 1) : 1;
   const scaled = raw * featureFactor * modeFactor * qualityFactor;
   const rounded = rules.rounding === "nearest" ? Math.round(scaled) : Math.ceil(scaled - 1e-9);
-  const credits = cents === 0 ? 0 : Math.max(rules.minimumCredits, rounded);
+  // 0185: a feature may carry its own floor (the admin feature table); the higher of the two applies
+  const minimum = Math.max(rules.minimumCredits, config.features?.[req.feature as keyof typeof config.features]?.minimumCredits ?? 0);
+  const credits = cents === 0 ? 0 : Math.max(minimum, rounded);
 
   const breakdown: CreditLine[] = [];
   if (req.lines?.length) {
@@ -81,7 +83,7 @@ export function calculateCredits(req: CreditRequest, config: AiPlansConfig): Cre
   if (featureFactor !== 1) breakdown.push({ key: "feature", label: "Tool adjustment", factor: featureFactor });
   if (modeFactor !== 1) breakdown.push({ key: "mode", label: `${labelMode(req.mode)} adjustment`, factor: modeFactor });
   if (qualityFactor !== 1) breakdown.push({ key: "quality", label: `${req.quality} adjustment`, factor: qualityFactor });
-  if (cents > 0 && rounded < rules.minimumCredits) breakdown.push({ key: "minimum", label: "Minimum per generation", credits: rules.minimumCredits });
+  if (cents > 0 && rounded < minimum) breakdown.push({ key: "minimum", label: "Minimum per generation", credits: minimum });
 
   return { creditsRequired: credits, priceCents: cents, centsPerCredit: rules.centsPerCredit, feature: req.feature, mode: req.mode ?? null, quality: req.quality ?? null, durationMs: req.durationMs ?? null, breakdown, configVersion: config.version };
 }

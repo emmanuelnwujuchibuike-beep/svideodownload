@@ -33,6 +33,7 @@
  * can take a whole day's allowance — that is the brief's intent.
  */
 
+import { AI_FEATURE_POLICIES_DEFAULT, normalizeAiFeaturePolicies, type AiFeaturePolicies } from "@/lib/ai/credits/features";
 import { AI_WALLET_DEFAULTS, normalizeAiWalletConfig, type AiWalletConfig } from "@/lib/ai/credits/wallet-config";
 
 export type AiPlanId = "ai_pro" | "ai_max";
@@ -92,6 +93,8 @@ export interface AiPlansConfig {
   walletFallback: AiWalletFallback;
   /** The credit packs a member can buy, and which provider takes the payment (0184; lib/ai/credits/wallet-config.ts). */
   wallet: AiWalletConfig;
+  /** One row of rules per paid tool: on/off, pay-as-you-go, tiers, minimum credits, max input, monthly included (lib/ai/credits/features.ts). */
+  features: AiFeaturePolicies;
   /** Increments on every saved change to a value that affects entitlement or cost; stamped on each ledger row. */
   version: number;
   updatedAt: string | null;
@@ -126,6 +129,7 @@ export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   reset: { timezone: "Africa/Lagos", weekStartsOn: 1 },
   walletFallback: "ask",
   wallet: AI_WALLET_DEFAULTS,
+  features: AI_FEATURE_POLICIES_DEFAULT,
   version: 1,
   updatedAt: null,
 };
@@ -233,6 +237,7 @@ export function normalizeAiPlansConfig(raw: unknown): AiPlansConfig {
     reset: { timezone: validTimezone(reset.timezone, d.reset.timezone), weekStartsOn: int(reset.weekStartsOn, d.reset.weekStartsOn, 0, 6) },
     walletFallback: raw.walletFallback === "allow" || raw.walletFallback === "off" ? raw.walletFallback : "ask",
     wallet: normalizeAiWalletConfig(raw.wallet),
+    features: normalizeAiFeaturePolicies(raw.features),
     version: int(raw.version, d.version, 1, 1_000_000_000),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
   };
@@ -253,6 +258,7 @@ export function aiPlansFingerprint(c: AiPlansConfig): string {
     reset: c.reset,
     walletFallback: c.walletFallback,
     wallet: c.wallet,
+    features: c.features,
   });
 }
 

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
+import { WALLET_UNIT } from "@/lib/ai/credits/units";
+import { publicWalletOffer } from "@/lib/ai/credits/wallet-config";
+
 import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
-import { qualityRateCents } from "@/lib/ai/character-replace/pricing";
 import { freeRemaining, isoDate, weekResetsAt, weekStartUtc } from "@/lib/ai/economy";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
@@ -105,16 +107,6 @@ export async function GET(request: Request) {
       getCharacterReplaceBalanceCents(subject.userId ?? ""),
       listCharacterReplaceLedger(subject.userId ?? "", ledgerLimit),
     ]);
-    const cr = settings.frenzAiCharacterReplace;
-    /*
-      The price a member sees on the balance page is the tool's STARTING rate
-      — the cheapest quality that is switched on, per second — and the floor a
-      very short video is billed at. The exact figure for a given video is the
-      quote's (POST /api/ai/character-replace/quote); this is orientation.
-    */
-    const enabledRates = cr.qualities.filter((q) => q.enabled).map((q) => qualityRateCents(cr, q.id));
-    const fromPerSecondCents = enabledRates.length ? Math.min(...enabledRates) : cr.pricePerSecondCents;
-
     const dailyLimit = entitlement.dailyLimit;
     const weeklyLimit = settings.frenzAiWeeklyFreeCredits;
     /*
@@ -138,27 +130,18 @@ export async function GET(request: Request) {
     const usedThisWeekShown = Math.min(usedThisWeek, weeklyLimit);
 
     return NextResponse.json({
+      // 🔴 0184: WHOLE CREDITS — the field keeps its name; `unit` says how to read it
       balanceCents,
+      unit: WALLET_UNIT,
       currency: settings.frenzAiCurrency,
       symbol: aiCurrencySymbol(settings.frenzAiCurrency),
-      priceCents: fromPerSecondCents,
-      priceUnit: "second",
-      minimumChargeCents: cr.minimumChargeCents,
-      /* The ladder the top-up screen offers — generated from the operator's
-         minimum, and re-validated server-side when one is chosen. */
-      topupOptionsCents: cr.recharge.packages.filter((p) => p.enabled).map((p) => p.amountCents),
       /*
-        🔴 THE BOUNDS ON A CUSTOM AMOUNT (owner, 2026-09-09: "the add balance
-        dont have an input field to add a custom amount").
-
-        Sent so the field can say what it will accept BEFORE somebody types an
-        amount and presses a button that fails. They are a courtesy, exactly
-        like `canStart` on the entitlement — `/topup` re-reads both from the
-        operator's settings and refuses anything outside them, so editing these
-        in a browser changes nothing except the message shown locally.
+        The packs and the custom bounds the top-up offers — the operator's,
+        priced in USD and re-validated server-side when one is chosen (the
+        owner's 2026-09-09 "custom amount" field is `offer.custom`). A courtesy
+        for the form: `/topup` re-reads the offer and refuses anything outside it.
       */
-      minTopupCents: cr.recharge.minCents,
-      maxTopupCents: cr.recharge.maxCents,
+      offer: publicWalletOffer(settings.frenzAiPlans.wallet, settings.frenzAiPlans.credits.centsPerCredit),
       usedToday: usedTodayShown,
       dailyLimit,
       usedThisWeek: usedThisWeekShown,

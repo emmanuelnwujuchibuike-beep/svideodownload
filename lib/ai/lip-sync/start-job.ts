@@ -8,6 +8,7 @@ import { dispatchPreparation } from "@/lib/ai/character-replace/prepare-dispatch
 import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { walletShortfall } from "@/lib/ai/credits/units";
 import { getAiEntitlement, type AiEntitlement } from "@/lib/ai/entitlement";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -176,7 +177,7 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
   const characters = meta.speech.source === "text" ? meta.speech.text.trim().length : 0;
   const fresh = quoteLipSync({ durationMs: selectedMs, speechSource: meta.speech.source, speechPath, textCharacters: characters }, config, { currency: settings.frenzAiCurrency });
   if (fresh.totalCents !== given.totalCents || fresh.pricingConfigVersion !== given.pricingConfigVersion || fresh.durationMs !== given.durationMs || fresh.speechSource !== given.speechSource || fresh.speechPath !== given.speechPath || fresh.routeKey !== given.routeKey) {
-    return refuse("PRICE_CHANGED", { quote: publicLipSyncQuote(fresh) });
+    return refuse("PRICE_CHANGED", { quote: { ...publicLipSyncQuote(fresh), credits: lipSyncCredits(fresh, config, settings.frenzAiPlans).creditsRequired } });
   }
   const snapshot = fresh;
   const minVideo = Math.max(config.video.minimumDurationSeconds * 1000, adapter.capabilities.video.minDurationMs ?? 0);
@@ -218,10 +219,12 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
       else if (wantsWallet && plans.walletFallback === "off") return refuse("CR_CREDITS_REQUIRED", { credits: creditDecisionView(creditDecision), walletFallback: plans.walletFallback, priceCents: snapshot.totalCents, currency: snapshot.currency });
     }
   }
+  // 🔴 the wallet holds credits (0184): the same engine figure an AI plan would count
+  const walletCharge = lipSyncCredits(snapshot, config, plans);
   const balanceBefore = complimentary || useCredits ? null : await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
   if (!complimentary && !useCredits) {
     if (balanceBefore === null) return refuse("INTERNAL_ERROR");
-    if (balanceBefore < snapshot.totalCents) return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: snapshot.totalCents - balanceBefore, currency: snapshot.currency, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
+    if (balanceBefore < walletCharge.creditsRequired) return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore, walletCharge.creditsRequired, creditDecision ? { credits: creditDecisionView(creditDecision) } : {}));
   }
 
   const providersVersion = settings.frenzAiProviders.version;
@@ -237,7 +240,7 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
       ? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }
       : useCredits && creditDecision
         ? { type: "CREDITS", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 0, currency: snapshot.currency, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan, creditsConfigVersion: creditDecision.estimate.configVersion }
-        : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency },
+        : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency, credits: walletCharge.creditsRequired, unit: "CREDIT" },
     pipeline,
     provider_cost_estimate: snapshot.providerCostEstimate.totalUsdCents !== null ? { totalUsdCents: snapshot.providerCostEstimate.totalUsdCents, lipSyncUsdCents: snapshot.providerCostEstimate.lipSyncUsdCents, ttsUsdCents: snapshot.providerCostEstimate.ttsUsdCents } : null,
     consent_at: new Date().toISOString(),
@@ -284,11 +287,11 @@ export async function startLipSyncJob(input: { subject: AiSubject & { kind: "use
     }
   } else {
     try {
-      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof reserveCharacterReplaceCharge>[0]["snapshot"] });
+      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...ledgerSnapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } });
     } catch (e) {
       await revertJobStartClaim(job.id, job.metadata ?? {});
       const msg = String(e);
-      if (/insufficient/i.test(msg)) return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: Math.max(0, snapshot.totalCents - (balanceBefore ?? 0)), currency: snapshot.currency });
+      if (/insufficient/i.test(msg)) return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore ?? 0, walletCharge.creditsRequired));
       console.error("[lipsync/start] reserve threw", { jobId: job.id, error: msg.slice(0, 200) });
       return refuse("INTERNAL_ERROR");
     }

@@ -38,14 +38,9 @@ export async function POST(request: Request) {
   }
   if (!user.email) return NextResponse.json({ error: "Add an email to your account first." }, { status: 400 });
 
-  const b = (body ?? {}) as { amountCents?: unknown; returnTo?: unknown };
-  const started = await beginCharacterReplaceTopup({
-    userId: user.id,
-    email: user.email,
-    amountCents: b.amountCents,
-    // The dashboard lives on the usage page; Paystack brings the member back there.
-    returnTo: typeof b.returnTo === "string" ? b.returnTo : "/ai/usage",
-  });
+  // 0184: a pack id or a number of credits (a cached older app may still send amountCents)
+  const b = (body ?? {}) as { packId?: unknown; credits?: unknown; amountCents?: unknown; returnTo?: unknown };
+  const started = await beginCharacterReplaceTopup({ userId: user.id, email: user.email, packId: b.packId, credits: b.credits, amountCents: b.amountCents, returnTo: typeof b.returnTo === "string" ? b.returnTo : "/ai/usage" });
   if (!started.ok) return NextResponse.json({ error: started.error }, { status: started.status });
-  return NextResponse.json({ url: started.url });
+  return NextResponse.json({ url: started.url, credits: started.credits, bonusCredits: started.bonusCredits, priceUsdCents: started.priceUsdCents });
 }

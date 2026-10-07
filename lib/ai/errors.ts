@@ -212,7 +212,7 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   },
   AI_BALANCE_REQUIRED: {
     status: 402,
-    message: "You have used your free AI videos for now. Add AI credit to keep going.",
+    message: "You have used your free AI videos for now. Top up credits or get AI Pro to keep going.",
   },
   // 502 for a provider that answered badly, 500 for work that genuinely broke.
   // The member sees the same sentence either way; the status is for us.
@@ -270,7 +270,7 @@ export const AI_ERRORS: Record<AiErrorCode, AiErrorSpec> = {
   },
   STORAGE_ERROR: { status: 500, message: "We couldn't save that file. Try again in a moment." },
   RATE_LIMITED: { status: 429, message: "You're going a bit fast — give it a moment." },
-  CR_BALANCE_REQUIRED: { status: 402, message: "Your balance doesn't cover this video. Recharge to continue." },
+  CR_BALANCE_REQUIRED: { status: 402, message: "You don't have enough credits for this. Top up credits or get AI Pro to continue." },
   CR_FREE_UNAVAILABLE: { status: 409, message: "Your complimentary creation was just used on another video. Check the price and try again — nothing was charged." },
   CR_ACTIVE_LIMIT: { status: 409, message: "You already have a video being made. Wait for it to finish, then start this one — nothing was charged." },
   CR_DAILY_LIMIT: { status: 429, message: "You've reached today's limit for Character Replace videos. Try again tomorrow — nothing was charged." },

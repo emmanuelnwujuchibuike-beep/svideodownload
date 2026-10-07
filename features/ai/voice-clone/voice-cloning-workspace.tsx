@@ -16,7 +16,7 @@ import { VoiceLibrary } from "@/features/ai/voice-clone/voice-library";
 import { getAiCredits } from "@/lib/ai/credits/client";
 import { VOICE_CLONE_ACCENTS, VOICE_CLONE_AGES, VOICE_CLONE_GENDERS, VOICE_CLONE_LANGUAGES, type VoiceCloneLabels } from "@/lib/ai/voice-clone/labels";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
-import { formatCents } from "@/lib/ai/economy";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { track } from "@/lib/analytics/client";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
@@ -80,7 +80,6 @@ export function VoiceCloningWorkspace({
   const voicesHref = `${basePath.replace(/\/voice-cloning$/, "")}/voices`;
   const ws = useVoiceCloning({ initialJobId });
   const cfg = ws.config?.config ?? null;
-  const symbol = cfg?.symbol ?? "$";
   const picker = useRef<HTMLInputElement | null>(null);
   const [plansSheet, setPlansSheet] = useState(false);
   const [plansCatalogue, setPlansCatalogue] = useState<AiPlansPublic | null>(null);
@@ -300,11 +299,12 @@ export function VoiceCloningWorkspace({
             <Section n={4} title="What it costs">
               {quote ? (
                 <div className="space-y-2">
-                  {quote.lines.map((l) => (
-                    <Row key={l.key} label={l.label} value={l.amountCents === 0 ? "Free" : formatCents(l.amountCents, symbol)} />
+                  {/* 0184: credits only — the free voice line stays, the money lines do not */}
+                  {quote.lines.filter((l) => l.amountCents === 0).map((l) => (
+                    <Row key={l.key} label={l.label} value="Free" />
                   ))}
                   <div className="mt-1 border-t border-border/70 pt-2">
-                    <Row label="Total" value={free ? "Free" : creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quote.totalCents, symbol)} strong />
+                    <Row label="Total" value={free ? "Free" : formatCredits(creditsCover ? (credits?.required ?? 0) : quote.credits)} strong />
                   </div>
                   {ws.config && ws.config.free.allowance > 0 ? (
                     <p className="inline-flex items-center gap-1.5 rounded-full bg-primary/[0.08] px-2.5 py-1 text-[11.5px] font-semibold text-primary">
@@ -321,7 +321,7 @@ export function VoiceCloningWorkspace({
                     <Notice tone="muted">
                       Your plan credits do not cover this one.{" "}
                       <button type="button" onClick={() => ws.setFunding("wallet")} className="font-semibold underline underline-offset-2">
-                        Use my balance
+                        Use my credits
                       </button>{" "}
                       ·{" "}
                       <button type="button" onClick={openPlans} className="font-semibold underline underline-offset-2">
@@ -368,7 +368,7 @@ export function VoiceCloningWorkspace({
                   : free
                     ? "Create my voice · Free"
                     : quote
-                      ? `Create my voice · ${creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quote.totalCents, symbol)}`
+                      ? `Create my voice · ${formatCredits(creditsCover ? (credits?.required ?? 0) : quote.credits)}`
                       : "Create my voice"}
             </button>
             <p className="text-center text-[11.5px] text-muted-foreground">
@@ -408,7 +408,7 @@ export function VoiceCloningWorkspace({
           }}
           plans={plansCatalogue}
           currentPlan={credits?.plan ?? null}
-          shortfall={credits && !credits.affordable ? { ...credits, walletOffered: true, priceLabel: quote ? formatCents(quote.totalCents, symbol) : null } : null}
+          shortfall={credits && !credits.affordable ? { ...credits, walletOffered: true, priceLabel: quote ? formatCredits(quote.credits) : null } : null}
           returnTo={basePath}
           onPayFromWallet={() => {
             ws.setFunding("wallet");
@@ -483,7 +483,7 @@ function Result({ job, missing, basePath, ttaHref, lipSyncHref, voicesHref, onAn
 
   if (!isActiveStatus(job.status)) {
     const ended = job.status === "cancelled" ? "Stopped." : job.status === "expired" ? "That request expired." : "We could not build that voice.";
-    const refund = vc?.billing === "FREE_ALLOWANCE" ? "Your free voice this month is back." : vc?.billing === "CREDITS" ? "Your credits are back." : vc?.refunded ? "Refunded to your balance." : null;
+    const refund = vc?.billing === "FREE_ALLOWANCE" ? "Your free voice this month is back." : vc?.billing === "CREDITS" ? "Your credits are back." : vc?.refunded ? "Refunded to your credits." : null;
     return (
       <div className="space-y-4">
         <Notice tone={job.status === "failed" ? "error" : "muted"}>

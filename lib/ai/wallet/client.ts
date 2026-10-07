@@ -60,9 +60,8 @@ interface WalletBalanceResponse {
   balanceCents: number;
   currency: string;
   symbol: string;
-  topupOptionsCents: number[];
-  minTopupCents: number;
-  maxTopupCents: number;
+  unit: "CREDIT";
+  offer: AiWalletBalance["offer"];
   checkout?: AiWalletBalance["checkout"];
   freeAccess?: AiWalletBalance["freeAccess"];
   processing?: AiWalletBalance["processing"];
@@ -80,9 +79,8 @@ export async function getAiWalletBalance(opts?: { ledger?: number }): Promise<Ai
       balanceCents: res.balanceCents,
       currency: res.currency,
       symbol: res.symbol,
-      topupOptionsCents: res.topupOptionsCents ?? [],
-      minTopupCents: res.minTopupCents,
-      maxTopupCents: res.maxTopupCents,
+      unit: "CREDIT",
+      offer: res.offer,
       checkout: res.checkout ?? null,
       freeAccess: res.freeAccess ?? null,
       processing: res.processing ?? null,
@@ -91,9 +89,13 @@ export async function getAiWalletBalance(opts?: { ledger?: number }): Promise<Ai
   };
 }
 
-/** Begin a recharge. Answers with Paystack's page; nothing here moves money. */
-export function beginAiWalletTopup(amountCents: number, returnTo: string): Promise<AiWalletResult<{ url: string }>> {
-  return request("/api/ai/wallet/topup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ amountCents, returnTo }) });
+/**
+ * Begin buying credits (0184): a pack id from the offer, or a typed number of
+ * credits. Answers with the payment page; nothing here moves money — the
+ * server re-checks the choice against the offer and prices it itself.
+ */
+export function beginAiWalletTopup(choice: { packId: string } | { credits: number }, returnTo: string): Promise<AiWalletResult<{ url: string }>> {
+  return request("/api/ai/wallet/topup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...choice, returnTo }) });
 }
 
 /**

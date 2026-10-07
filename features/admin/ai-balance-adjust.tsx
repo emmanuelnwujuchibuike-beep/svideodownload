@@ -3,15 +3,14 @@
 import { UserRound } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 
-import { formatCents } from "@/lib/ai/economy";
-import { aiCurrencySymbol, majorInputToMinor } from "@/lib/landing/bounds";
+import { formatCredits } from "@/lib/ai/credits/units";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { cn } from "@/lib/utils";
 
 export function AiBalanceAdjustPanel({ settings }: { settings: LandingSettings }) {
   return (
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
-      <AdjustBalance symbol={aiCurrencySymbol(settings.frenzAiCurrency)} />
+      <AdjustBalance centsPerCredit={settings.frenzAiPlans.credits.centsPerCredit} />
     </section>
   );
 }
@@ -25,7 +24,7 @@ export function AiBalanceAdjustPanel({ settings }: { settings: LandingSettings }
  * and never touches the AI wallet. A debit that would take the balance
  * below zero is refused by the database function, and the message says so.
  */
-function AdjustBalance({ symbol }: { symbol: string }) {
+function AdjustBalance({ centsPerCredit }: { centsPerCredit: number }) {
   const [email, setEmail] = useState("");
   const [amount, setAmount] = useState("");
   const [direction, setDirection] = useState<"credit" | "debit">("credit");
@@ -40,8 +39,10 @@ function AdjustBalance({ symbol }: { symbol: string }) {
   */
   const inflight = useRef(false);
 
-  const cents = majorInputToMinor(amount);
-  const valid = email.trim().length > 3 && cents !== null && cents > 0 && note.trim().length > 0;
+  // 0184: whole CREDITS — the wallet's unit
+  const parsed = amount.trim() === "" ? NaN : Number(amount);
+  const cents = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  const valid = email.trim().length > 3 && cents !== null && note.trim().length > 0;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -58,7 +59,7 @@ function AdjustBalance({ symbol }: { symbol: string }) {
       const json = (await res.json()) as { error?: string; balanceCents?: number };
       setMsg(
         res.ok && typeof json.balanceCents === "number"
-          ? { ok: true, text: `Done. Their Character Replace balance is now ${formatCents(json.balanceCents, symbol)}.` }
+          ? { ok: true, text: `Done. They now have ${formatCredits(json.balanceCents)}.` }
           : { ok: false, text: json.error ?? "Failed." },
       );
       if (res.ok) {
@@ -79,23 +80,23 @@ function AdjustBalance({ symbol }: { symbol: string }) {
   return (
     <form onSubmit={submit} className="rounded-2xl border border-border/70 bg-background/60 p-4 sm:p-5">
       <p className="flex items-center gap-2 text-sm font-semibold">
-        <UserRound className="h-4 w-4 text-primary" aria-hidden /> Adjust a member&apos;s Frenz AI balance
+        <UserRound className="h-4 w-4 text-primary" aria-hidden /> Adjust a member&apos;s Frenz AI credits
       </p>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        The one Frenz AI balance (Character Replace), recorded with your id and the reason. Use it for goodwill, a manual
+        The one Frenz AI wallet, in credits (1 credit = ${(centsPerCredit / 100).toFixed(2)}), recorded with your id and the reason. Use it for goodwill, a manual
         refund, or to reverse a mistaken credit — a debit of the same amount undoes a credit. Every press is a new adjustment.
       </p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Field id="cr-adjust-email" label="Member email">
           <input id="cr-adjust-email" type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
         </Field>
-        <Field id="cr-adjust-amount" label={`Amount (${symbol})`}>
+        <Field id="cr-adjust-amount" label="Credits">
           <div className="mt-1 flex gap-2">
             <select value={direction} onChange={(e) => setDirection(e.target.value as "credit" | "debit")} aria-label="Direction" className="rounded-xl border border-border bg-background px-3 py-2 text-sm">
               <option value="credit">Credit</option>
               <option value="debit">Debit</option>
             </select>
-            <input id="cr-adjust-amount" type="number" inputMode="decimal" min={0} step="any" value={amount} onChange={(e) => setAmount(e.target.value)} className={cn(input, "mt-0")} />
+            <input id="cr-adjust-amount" type="number" inputMode="numeric" min={1} step={1} value={amount} onChange={(e) => setAmount(e.target.value)} className={cn(input, "mt-0")} />
           </div>
         </Field>
       </div>

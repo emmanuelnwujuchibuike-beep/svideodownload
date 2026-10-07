@@ -176,7 +176,7 @@ describe("the immutable snapshot and the job's plan (brief §11, §16)", () => {
     for (const k of ["replacementMode: snapshot.mode", "scope: REPLACEMENT_SCOPE[snapshot.mode]", "provider: plannedProvider.id", "providerModel: plannedProvider.model", "originalDurationMs: meta.video.durationMs", "selectedStartMs: selected.startMs", "selectedEndMs: selected.endMs", "selectedDurationMs: snapshot.durationMs", "outputQuality: snapshot.quality", "modeBasePriceCents: snapshot.modeBasePriceCents", "modePerSecondRateCents: snapshot.qualityRateCents", "lipSyncRateCents: snapshot.lipSyncRateCents", "voiceRateCents: snapshot.voiceRateCents", "totalPriceCents: snapshot.totalCents"]) {
       expect(start, k).toContain(k);
     }
-    expect(start).toContain("reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot })");
+    expect(start).toContain("reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...ledgerSnapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } })");
     for (const k of ["id: plannedProvider.id,", "model: plannedProvider.model,", "scope: REPLACEMENT_SCOPE[snapshot.mode],"]) expect(start, k).toContain(k);
     // the plan is read from configuration at Start — never from the body (2026-09-21: through the provider router)
     expect(start).toContain("const route = resolveReplacementRoute(meta.mode, config, settings.frenzAiProviders);");

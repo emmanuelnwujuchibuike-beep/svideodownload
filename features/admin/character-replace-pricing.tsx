@@ -209,9 +209,9 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
   const checkoutSymbol = aiCurrencySymbol(checkoutCurrency);
   /** The rate is "one US dollar in X": X is the checkout currency for a USD wallet, the wallet currency otherwise (margin check only). */
   const rateSymbol = walletIsUsd ? checkoutSymbol : symbol;
-  const [minTopup, setMinTopup] = useState(minorToMajorInput(cr.recharge.minCents));
-  const [maxTopup, setMaxTopup] = useState(minorToMajorInput(cr.recharge.maxCents));
-  const [packages, setPackages] = useState(
+  const [minTopup] = useState(minorToMajorInput(cr.recharge.minCents));
+  const [maxTopup] = useState(minorToMajorInput(cr.recharge.maxCents));
+  const [packages] = useState(
     [...cr.recharge.packages]
       .sort((a, b) => a.order - b.order)
       .map((p) => ({ amount: minorToMajorInput(p.amountCents), enabled: p.enabled })),
@@ -1249,33 +1249,10 @@ export function CharacterReplacePricingPanel({ settings }: { settings: LandingSe
                         : `Live rate: ${formatCents(Math.round((liveRate.rate.marketPerUsd ?? 0) * 100), checkoutSymbol)} per $1 (${liveRate.rate.source === "stored" ? "remembered" : liveRate.rate.provider ?? "market"}${liveRate.rate.fetchedAt ? `, ${new Date(liveRate.rate.fetchedAt).toLocaleString()}` : ""}). With the ${liveRate.rate.markupPercent}% markup a member pays ${formatCents(liveRate.rate.minorPerUsd, checkoutSymbol)} per $1 — $5 is ${formatCents(liveRate.rate.minorPerUsd * 5, checkoutSymbol)}. Refreshed hourly; the rate is pinned to each payment when it starts.`}
             </p>
           ) : null}
-          <p className="mt-4 text-xs font-semibold text-muted-foreground">Bounds, in {settings.frenzAiCurrency}</p>
-          <div className="mt-2 grid gap-4 sm:grid-cols-2">
-            <Field id="cr-topup-min" label="Minimum recharge">
-              <input id="cr-topup-min" type="number" inputMode="decimal" min={1} step="any" value={minTopup} onChange={(e) => setMinTopup(e.target.value)} className={input} />
-            </Field>
-            <Field id="cr-topup-max" label="Maximum recharge">
-              <input id="cr-topup-max" type="number" inputMode="decimal" min={1} step="any" value={maxTopup} onChange={(e) => setMaxTopup(e.target.value)} className={input} />
-            </Field>
-          </div>
-          <p className="mt-4 text-xs font-semibold text-muted-foreground">Packages, in the order the sheet shows them</p>
-          <div className="mt-2 space-y-2">
-            {packages.map((p, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input type="checkbox" aria-label={`Package ${i + 1} on`} checked={p.enabled} onChange={(e) => setPackages((ps) => ps.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))} className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" />
-                <span className="text-sm text-muted-foreground">{symbol}</span>
-                <input type="number" inputMode="decimal" min={1} step="any" aria-label={`Package ${i + 1} amount`} value={p.amount} onChange={(e) => setPackages((ps) => ps.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))} className={cn(input, "mt-0 max-w-[10rem]")} />
-                <button type="button" onClick={() => setPackages((ps) => ps.filter((_, j) => j !== i))} className="text-xs font-semibold text-muted-foreground hover:text-rose-500">
-                  Remove
-                </button>
-              </div>
-            ))}
-            {packages.length < 12 ? (
-              <button type="button" onClick={() => setPackages((ps) => [...ps, { amount: "", enabled: true }])} className="text-xs font-semibold text-primary">
-                + Add a package
-              </button>
-            ) : null}
-          </div>
+          {/* 0184: the wallet holds credits; packs, bonuses and the custom bounds live on the AI Plans & Credits card. The checkout currency and rate above still apply to every top-up. */}
+          <p className="mt-4 rounded-xl bg-secondary/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            Credit packs and the custom top-up bounds moved to <strong>AI Plans &amp; Credits</strong> — members buy credits now, not a dollar amount. The checkout currency and rate here still apply.
+          </p>
         </Group>
 
         {problems.length > 0 ? (

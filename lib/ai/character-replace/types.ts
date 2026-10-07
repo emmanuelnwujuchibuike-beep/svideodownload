@@ -365,13 +365,14 @@ export type PricingState =
  * balance card: the figure, the currency, and where "Recharge" goes.
  */
 export interface CharacterReplaceBalance {
+  /** 🔴 WHOLE CREDITS since 0184 (`unit`). The name stays; every reader formats it with formatCredits. */
   balanceCents: number;
+  unit: "CREDIT";
+  /** The list-price currency packs are priced in (USD). */
   currency: string;
   symbol: string;
-  /** The amounts the recharge sheet offers, from the operator's minimum. */
-  topupOptionsCents: readonly number[];
-  minTopupCents: number;
-  maxTopupCents: number;
+  /** The credit packs and the custom bounds the recharge sheet offers — the operator's, from the server. */
+  offer: import("@/lib/ai/credits/wallet-config").PublicWalletOffer;
   /** 2026-09-20: how Paystack will read a wallet amount when it collects in another currency; null when it collects in the wallet's. */
   checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
   /** Part 11 §6: the complimentary creations, as the server answered them. Display only — /start decides. */
@@ -408,7 +409,7 @@ export interface CharacterReplaceTransaction {
   deltaCents: number;
   balanceAfterCents: number;
   /** This wallet's kinds (wallet.ts): recharge · processing_charge · refund · adjustment · reversal. */
-  kind: "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
+  kind: "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant";
   jobId: string | null;
   note: string | null;
   createdAt: string;

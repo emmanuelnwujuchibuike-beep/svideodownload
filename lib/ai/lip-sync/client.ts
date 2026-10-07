@@ -70,6 +70,8 @@ export interface LipSyncQuoteView {
   lipSyncCents: number;
   ttsCents: number;
   totalCents: number;
+  /** 0184: what the wallet is charged, in credits — the figure the member sees. */
+  credits: number;
   currency: string;
   pricingConfigVersion: number;
   expiresAt: string;
@@ -80,6 +82,7 @@ export interface LipSyncQuoteAnswer {
   credits: CharacterReplaceCreditsView | null;
   walletFallback: "allow" | "ask" | "off";
   walletOffered: boolean;
+  /** 0184: all three are WHOLE CREDITS (the response carries `unit: "CREDIT"`). */
   balanceCents: number;
   afterCents: number;
   sufficient: boolean;

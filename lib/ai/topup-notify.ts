@@ -1,5 +1,6 @@
 import "server-only";
 
+import { formatCredits, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { formatCents } from "@/lib/ai/economy";
 import { claimTopupFailureNotification, claimTopupSuccessNotification } from "@/lib/ai/topup-attempts";
 import { sendTopupReceiptEmail } from "@/lib/email/resend";
@@ -52,6 +53,8 @@ export function topupInvoiceNumber(reference: string): string {
 }
 
 function money(cents: number, currency: string): string {
+  // 0184: a wallet deposit is counted in credits; a row from before keeps its money unit
+  if (currency === WALLET_UNIT) return formatCredits(cents);
   return formatCents(cents, aiCurrencySymbol(currency as AiCurrency));
 }
 

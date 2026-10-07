@@ -15,6 +15,8 @@ import { characterReplaceProviderReady, resolveLipSyncRoute, resolveReplacementR
 import type { StartCharacterReplaceJobRequest } from "@/lib/ai/character-replace/start-schema";
 import { verifyStartQuote } from "@/lib/ai/character-replace/start-verify";
 import { getCharacterReplaceBalanceCents, reserveCharacterReplaceCharge } from "@/lib/ai/character-replace/wallet";
+import { calculateCredits } from "@/lib/ai/credits/engine";
+import { walletShortfall } from "@/lib/ai/credits/units";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
 import { getAiEntitlement, type AiEntitlement } from "@/lib/ai/entitlement";
@@ -340,10 +342,12 @@ export async function startCharacterReplaceJob(input: {
   }
 
   /* ── the balance read, before the claim ─────────────────────────────────── */
+  // 🔴 the wallet holds credits (0184): the same engine figure an AI plan would count
+  const walletCharge = calculateCredits({ feature: feature.id, priceCents: snapshot.totalCents, mode: snapshot.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, lines: snapshot.lines?.filter((l) => typeof l.amountCents === "number" && l.amountCents > 0).map((l) => ({ label: l.label, cents: l.amountCents as number })) }, plans);
   const balanceBefore = await getCharacterReplaceBalanceCents(ownerId).catch(() => null);
   if (balanceBefore === null) return refuse("INTERNAL_ERROR");
-  if (!complimentary && !useCredits && balanceBefore < snapshot.totalCents) {
-    return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: snapshot.totalCents, shortfallCents: snapshot.totalCents - balanceBefore, currency: money.currency, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
+  if (!complimentary && !useCredits && balanceBefore < walletCharge.creditsRequired) {
+    return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore, walletCharge.creditsRequired, creditDecision ? { credits: creditDecisionView(creditDecision) } : {}));
   }
 
   /* ── D · claim ─────────────────────────────────────────────────────────── */
@@ -455,7 +459,7 @@ export async function startCharacterReplaceJob(input: {
       ? { type: "FREE_TRIAL", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 1, currency: snapshot.currency }
       : useCredits && creditDecision
         ? { type: "CREDITS", normalPriceCents: snapshot.totalCents, chargedCents: 0, freeEntitlementUsed: 0, currency: snapshot.currency, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan, creditsConfigVersion: creditDecision.estimate.configVersion }
-        : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency },
+        : { type: "PAID", normalPriceCents: snapshot.totalCents, chargedCents: snapshot.totalCents, freeEntitlementUsed: 0, currency: snapshot.currency, credits: walletCharge.creditsRequired, unit: "CREDIT" },
     audio: audioMeta,
     pipeline,
     provider_cost_estimate: costEstimate ? { ...costEstimate, perSecondUsdCents: modeView.providerCostPerSecondUsdCents } : null,
@@ -557,7 +561,7 @@ export async function startCharacterReplaceJob(input: {
     console.info("[cr/start] included credits reserved", { jobId: job.id, userId: ownerId, plan: creditDecision.plan, credits: reservation.credits, idempotent: reservation.idempotent, usedToday: reservation.usedToday, usedThisWeek: reservation.usedThisWeek, dailyLimit: creditDecision.dailyLimit, weeklyLimit: creditDecision.weeklyLimit, normalPriceCents: snapshot.totalCents, mode: meta.mode, quality: snapshot.quality, durationMs: snapshot.durationMs, configVersion: creditDecision.estimate.configVersion, waiting });
   } else {
     try {
-      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });
+      balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...ledgerSnapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } });
     } catch (e) {
       // The atomic check disagreed with the read (a concurrent spend). The claim goes back so Start can be pressed again after a recharge.
       const message = String((e as Error)?.message ?? e);
@@ -565,7 +569,7 @@ export async function startCharacterReplaceJob(input: {
       console.warn("[cr/start] reservation refused — claim reverted", { jobId: job.id, subject: subject.key, message: message.slice(0, 200), reverted });
       if (/insufficient/i.test(message)) {
         const balance = await getCharacterReplaceBalanceCents(ownerId).catch(() => balanceBefore);
-        return refuse("CR_BALANCE_REQUIRED", { balanceCents: balance, requiredCents: snapshot.totalCents, shortfallCents: Math.max(0, snapshot.totalCents - balance), currency: money.currency });
+        return refuse("CR_BALANCE_REQUIRED", walletShortfall(balance, walletCharge.creditsRequired));
       }
       return refuse("INTERNAL_ERROR");
     }

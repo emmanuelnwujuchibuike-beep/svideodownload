@@ -77,7 +77,6 @@ const DURATIONS = [3, 5, 8, 10, 15] as const;
 
 export function TextToVideoWorkspace({
   historyHref,
-  currencySymbol,
   slides,
   base,
   oneMinute = false,
@@ -85,7 +84,8 @@ export function TextToVideoWorkspace({
   /** The admin's one-minute switch (Kling pricing). On: a "1 minute" length is offered. */
   oneMinute?: boolean;
   historyHref: string;
-  currencySymbol: string;
+  /** Unused since 0184 (the cost is in credits); kept so the pages need not change. */
+  currencySymbol?: string;
   /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
   slides: ShowcaseSlide[];
   /** The door: "/ai" or "/studio/ai". */
@@ -296,8 +296,7 @@ export function TextToVideoWorkspace({
       {/* ── COST + GENERATE, always reachable (§19, §21) ──────────────────── */}
       <AiActionBar>
         <AiCost
-          totalCents={gen.complimentary ? 0 : (gen.quote?.totalCents ?? null)}
-          currencySymbol={currencySymbol}
+          credits={gen.complimentary ? 0 : (gen.quote?.credits ?? null)}
           detail={gen.quote ? `${gen.quote.billableSeconds}s · ${resolution}` : null}
           funding={gen.complimentary ? { label: "Your complimentary video", hint: "free" } : undefined}
           loading={gen.quoting}

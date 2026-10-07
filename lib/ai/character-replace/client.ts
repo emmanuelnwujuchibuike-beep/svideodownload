@@ -180,9 +180,8 @@ interface BalanceResponse {
   balanceCents: number;
   currency: string;
   symbol: string;
-  topupOptionsCents: number[];
-  minTopupCents: number;
-  maxTopupCents: number;
+  unit: "CREDIT";
+  offer: CharacterReplaceBalance["offer"];
   checkout?: { currency: string; symbol: string; minorPerUsd: number } | null;
   ledger: CharacterReplaceTransaction[];
   /** 0166: the member's own processing figures (display only). */
@@ -219,9 +218,8 @@ export async function getCharacterReplaceBalance(opts?: { ledger?: number }): Pr
     balanceCents: res.balanceCents,
     currency: res.currency,
     symbol: res.symbol,
-    topupOptionsCents: res.topupOptionsCents,
-    minTopupCents: res.minTopupCents,
-    maxTopupCents: res.maxTopupCents,
+    unit: "CREDIT",
+    offer: res.offer,
     checkout: res.checkout ?? null,
     processing: res.processing ?? null,
     freeAccess: res.freeAccess ?? null,
@@ -240,7 +238,8 @@ export async function getCharacterReplaceBalance(opts?: { ledger?: number }): Pr
   here is authoritative: the network answer replaces it, and every decision
   that spends money is the server's, made at the moment it matters.
 */
-const BALANCE_CACHE_KEY = "frenzsave_cr_balance_v1";
+// v2 (0184): the balance is credits — a v1 snapshot holds dollars and must never be painted as credits
+const BALANCE_CACHE_KEY = "frenzsave_cr_balance_v2";
 const BALANCE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export function readCachedCharacterReplaceBalance(): CharacterReplaceBalance | null {
@@ -255,14 +254,13 @@ export function readCachedCharacterReplaceBalance(): CharacterReplaceBalance | n
       return null;
     }
     const v = parsed.value;
-    if (typeof v.balanceCents !== "number" || typeof v.symbol !== "string") return null;
+    if (typeof v.balanceCents !== "number" || typeof v.symbol !== "string" || v.unit !== "CREDIT" || !v.offer || !Array.isArray(v.offer.packs)) return null;
     return {
       balanceCents: v.balanceCents,
+      unit: "CREDIT",
       currency: typeof v.currency === "string" ? v.currency : "",
       symbol: v.symbol,
-      topupOptionsCents: Array.isArray(v.topupOptionsCents) ? v.topupOptionsCents.filter((n): n is number => typeof n === "number") : [],
-      minTopupCents: typeof v.minTopupCents === "number" ? v.minTopupCents : 0,
-      maxTopupCents: typeof v.maxTopupCents === "number" ? v.maxTopupCents : 0,
+      offer: v.offer,
     };
   } catch {
     return null;

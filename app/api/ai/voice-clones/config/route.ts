@@ -69,7 +69,8 @@ export async function GET(request: Request) {
       {
         config: pub,
         free: { allowance: free.allowance, used: free.used, remaining: free.remaining, monthKey: free.monthKey },
-        quote: publicVoiceCloneQuote(quote),
+        quote: { ...publicVoiceCloneQuote(quote), credits: quote.totalCents > 0 ? voiceCloneCredits(quote, config, plans).creditsRequired : 0 },
+        unit: "CREDIT",
         credits,
         walletFallback: plans.enabled ? plans.walletFallback : "allow",
         slots: { used, total: voiceCloneSlotsFor(config, { audience: entitlement.audience, isAdmin }) },

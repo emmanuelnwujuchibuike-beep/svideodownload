@@ -19,7 +19,7 @@ import { track } from "@/lib/analytics/client";
 import { deleteAiJob, saveAiJob } from "@/lib/ai/client";
 import { getAiCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
-import { formatCents } from "@/lib/ai/economy";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { LIP_SYNC_EXPRESSIONS } from "@/lib/ai/lip-sync/config";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
@@ -71,7 +71,6 @@ export function LipSyncWorkspace({
 }) {
   const ws = useLipSyncWorkspace({ initialJobId, initialAssetId, initialVoiceId });
   const cfg = ws.config?.config ?? null;
-  const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);
   const [plansCatalogue, setPlansCatalogue] = useState<AiPlansPublic | null>(null);
   const openPlans = useCallback(() => {
@@ -457,12 +456,10 @@ export function LipSyncWorkspace({
                         </>
                       ) : (
                         <>
-                          {quoted.quote.lines.map((l) => (
-                            <Row key={l.key} label={l.label} value={formatCents(l.amountCents, symbol)} />
-                          ))}
-                          <Row label="Total" value={formatCents(quoted.quote.totalCents, symbol)} strong />
-                          {credits?.applicable ? <Row label="In AI credits" value={`${credits.required} needed · ${credits.remainingToday} today · ${credits.remainingThisWeek} this week`} /> : null}
-                          <Row label="Your balance" value={formatCents(quoted.balanceCents, symbol)} />
+                          {/* 0184: credits only — the wallet holds credits and is charged the server's figure */}
+                          <Row label="Total" value={formatCredits(quoted.quote.credits)} strong />
+                          {credits?.applicable ? <Row label="AI plan allowance" value={`${credits.required} needed · ${credits.remainingToday} today · ${credits.remainingThisWeek} this week`} /> : null}
+                          <Row label="Your credits" value={formatCredits(quoted.balanceCents)} />
                         </>
                       )}
                     </>
@@ -489,12 +486,12 @@ export function LipSyncWorkspace({
                 </button>
               ) : shortOfBalance && quoted ? (
                 <Link href={`${usageHref}?recharge=${quoted.shortfallCents}`} className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}>
-                  Add {formatCents(quoted.shortfallCents, symbol)} to continue
+                  Top up {formatCredits(quoted.shortfallCents)} to continue
                 </Link>
               ) : (
                 <button type="button" onClick={() => void ws.generate()} disabled={!canGenerate} className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}>
                   {launching ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
-                  {launchLabel(ws.launch, quoted, credits, complimentary, symbol, creditsCover)}
+                  {launchLabel(ws.launch, quoted, credits, complimentary, creditsCover)}
                 </button>
               )}
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">Nothing is charged until processing starts. A generation that doesn&apos;t finish comes back to you.</p>
@@ -540,7 +537,7 @@ export function LipSyncWorkspace({
           }}
           plans={plansCatalogue}
           currentPlan={credits?.plan ?? null}
-          shortfall={credits && !credits.affordable ? { ...credits, walletOffered: quoted?.walletOffered !== false, priceLabel: quoted ? formatCents(quoted.quote.totalCents, symbol) : null } : null}
+          shortfall={credits && !credits.affordable ? { ...credits, walletOffered: quoted?.walletOffered !== false, priceLabel: quoted ? formatCredits(quoted.quote.credits) : null } : null}
           returnTo={basePath}
           onPayFromWallet={() => {
             ws.setFunding("wallet");
@@ -588,7 +585,7 @@ function JobStage({ job, missing, previewUrl, onCancel, onAnother, historyHref, 
     if (!ls) return null;
     if (ls.billing === "FREE_TRIAL") return ls.freeRestored ? "Your complimentary creation is back." : "This was a complimentary creation — nothing to return.";
     if (ls.billing === "CREDITS") return ls.creditsReleased ? `Your ${ls.credits ?? ""} credits are back.` : "Your credits are on their way back.";
-    if (ls.chargedCents && ls.chargedCents > 0) return ls.refunded ? "Refunded to your balance." : ls.refundPending ? "The refund is on its way." : null;
+    if (ls.chargedCents && ls.chargedCents > 0) return ls.refunded ? "Refunded to your credits." : ls.refundPending ? "The refund is on its way." : null;
     return null;
   }, [ls]);
 
@@ -768,14 +765,14 @@ function Notice({ tone, children }: { tone: "error" | "muted"; children: React.R
   return <p className={cn("rounded-2xl px-4 py-3 text-sm leading-relaxed", tone === "error" ? "bg-rose-500/10 text-rose-700 dark:text-rose-300" : "bg-secondary/70 text-muted-foreground")}>{children}</p>;
 }
 
-function launchLabel(launch: LaunchPhase, quoted: { quote: { totalCents: number } } | null, credits: { required: number } | null, complimentary: boolean, symbol: string, creditsCover: boolean): string {
+function launchLabel(launch: LaunchPhase, quoted: { quote: { credits: number } } | null, credits: { required: number } | null, complimentary: boolean, creditsCover: boolean): string {
   if (launch.phase === "creating") return "Opening…";
   if (launch.phase === "uploading") return `Uploading ${Math.round(launch.progress * 100)}%`;
   if (launch.phase === "starting") return "Starting…";
   if (!quoted) return "Generate Lip Sync";
   if (complimentary) return "Generate Lip Sync · Free";
   if (creditsCover && credits) return `Generate Lip Sync · ${credits.required} credit${credits.required === 1 ? "" : "s"}`;
-  return `Generate Lip Sync · ${formatCents(quoted.quote.totalCents, symbol)}`;
+  return `Generate Lip Sync · ${formatCredits(quoted.quote.credits)}`;
 }
 
 function policyWords(policy: string): string {

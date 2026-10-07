@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { CHARACTER_REPLACE_PRODUCT, type CharacterReplaceQuote } from "@/lib/ai/character-replace/pricing";
+import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -30,7 +31,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const PRODUCT = CHARACTER_REPLACE_PRODUCT;
 
-export type CharacterReplaceLedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
+export type CharacterReplaceLedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant";
 export type CharacterReplaceLedgerStatus = "settled" | "reserved" | "refunded" | "reversed";
 
 export interface CharacterReplaceLedgerEntry {
@@ -54,7 +55,13 @@ export interface CharacterReplaceLedgerEntry {
   details: { mode: string; quality: string; durationMs: number; voiceMode: string; voiceSource: string | null; lipSyncMode: string | null; pricingConfigVersion: number } | null;
 }
 
-/** A missing row is ZERO — most members have never recharged. A failed read THROWS. */
+/**
+ * A missing row is ZERO — most members have never recharged. A failed read THROWS.
+ *
+ * 🔴 From 0184 the number is WHOLE CREDITS (the row's `currency` is 'CREDIT').
+ * The name stays because every caller imports it under the spine's alias
+ * `getAiWalletBalanceCents` — read it as "the balance, in the wallet's unit".
+ */
 export async function getCharacterReplaceBalanceCents(userId: string): Promise<number> {
   const { data, error } = await createAdminClient()
     .from("ai_product_balances")
@@ -125,10 +132,12 @@ function ledgerDetails(snapshot: unknown): CharacterReplaceLedgerEntry["details"
  */
 export async function creditCharacterReplaceBalance(opts: {
   userId: string;
+  /** Whole credits (0184). */
   amountCents: number;
-  kind: Extract<CharacterReplaceLedgerKind, "recharge" | "refund">;
+  kind: Extract<CharacterReplaceLedgerKind, "recharge" | "refund" | "bonus" | "grant">;
   reference: string;
-  currency: string;
+  /** The wallet's unit unless stated; the database refuses any other (0184). */
+  currency?: string;
   note?: string | null;
   adminId?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -139,7 +148,7 @@ export async function creditCharacterReplaceBalance(opts: {
     p_amount: Math.round(opts.amountCents),
     p_kind: opts.kind,
     p_reference: opts.reference,
-    p_currency: opts.currency,
+    p_currency: opts.currency ?? WALLET_UNIT,
     p_note: opts.note ?? null,
     p_admin_id: opts.adminId ?? null,
     p_metadata: opts.metadata ?? null,
@@ -157,16 +166,25 @@ export async function creditCharacterReplaceBalance(opts: {
 export async function reserveCharacterReplaceCharge(opts: {
   userId: string;
   jobId: string;
+  /**
+   * 🔴 WHOLE CREDITS (0184) — the engine's `creditsRequired` for this job, the
+   * same number an AI-plan allowance would have counted. Never the list price
+   * in cents: that would charge ten times the price, and the database refuses
+   * a charge whose unit is not the wallet's.
+   */
+  credits: number;
   /** The signed quote, plus the facts /start adds for the statement (the replacement-scope brief §11): scope, provider, the trim, the rates. */
-  snapshot: CharacterReplaceQuote & Record<string, unknown>;
+  snapshot: object;
 }): Promise<number> {
+  const credits = Math.round(opts.credits);
+  if (!Number.isFinite(credits) || credits < 0) throw new Error("a wallet charge must be a whole, non-negative number of credits");
   const { data, error } = await createAdminClient().rpc("reserve_product_charge", {
     p_user_id: opts.userId,
     p_product: PRODUCT,
     p_job_id: opts.jobId,
-    p_amount: Math.round(opts.snapshot.totalCents),
-    p_currency: opts.snapshot.currency,
-    p_snapshot: opts.snapshot,
+    p_amount: credits,
+    p_currency: WALLET_UNIT,
+    p_snapshot: { ...opts.snapshot, credits, unit: WALLET_UNIT },
   });
   if (error) throw new Error(error.message);
   return Number(data ?? 0);
@@ -214,7 +232,7 @@ export async function adjustCharacterReplaceBalance(opts: {
   reference: string;
   note: string;
   adminId: string;
-  currency: string;
+  currency?: string;
 }): Promise<number> {
   const { data, error } = await createAdminClient().rpc("adjust_product_balance", {
     p_user_id: opts.userId,
@@ -223,7 +241,7 @@ export async function adjustCharacterReplaceBalance(opts: {
     p_reference: opts.reference,
     p_note: opts.note,
     p_admin_id: opts.adminId,
-    p_currency: opts.currency,
+    p_currency: opts.currency ?? WALLET_UNIT,
   });
   if (error) throw new Error(error.message);
   return Number(data ?? 0);

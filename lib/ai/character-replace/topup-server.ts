@@ -6,49 +6,49 @@ import { after } from "next/server";
 
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { checkoutMetadata, quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
-
-import { formatCents } from "@/lib/ai/economy";
+import { resolvePurchase } from "@/lib/ai/credits/wallet-config";
 import { recordTopupAttempt } from "@/lib/ai/topup-attempts";
-import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { CHARACTER_REPLACE_TOPUP_PURPOSE, initializeAiTopup, paystackEnabled } from "@/lib/paystack/paystack";
 import { SITE_URL } from "@/lib/site";
 
 /**
- * Begin a recharge of THE Frenz AI balance (the Character Replace product
- * wallet — one wallet since 0155). Shared by /api/ai/character-replace/topup
- * and the older /api/ai/balance/topup, so a member reaching either endpoint
- * pays into the same place under the same rules.
+ * Begin a purchase of Frenz AI CREDITS (0184) into THE Frenz AI wallet (the
+ * product wallet — one wallet since 0155). Shared by /api/ai/character-replace/topup
+ * and /api/ai/balance/topup, so a member reaching either endpoint pays into
+ * the same place under the same rules.
  *
- * 🔴 THE BOUNDS COME FROM THE SERVER'S SETTINGS (config.recharge), never the
- * body. A package is simply an amount inside that window, so a custom amount
- * is judged by the same rule. Nothing here credits anything: the credit
- * happens when Paystack's webhook or the verify-on-return route confirms the
- * payment, idempotently on the reference.
+ * 🔴 WHAT IS BOUGHT COMES FROM THE SERVER'S OFFER (`frenzAiPlans.wallet`),
+ * never the body: a pack id names an enabled pack, a typed number of credits
+ * must sit inside the custom bounds. The price is credits × centsPerCredit in
+ * USD, converted to the checkout currency below. Nothing here credits
+ * anything: the credit happens when the webhook or the verify-on-return route
+ * confirms the payment, idempotently on the reference — and what is credited
+ * is derived from the VERIFIED amount paid (wallet-config.ts `creditsForPayment`).
  */
-export type TopupStart = { ok: true; url: string } | { ok: false; status: number; error: string };
+export type TopupStart = { ok: true; url: string; credits: number; bonusCredits: number; priceUsdCents: number } | { ok: false; status: number; error: string };
 
 export async function beginCharacterReplaceTopup(opts: {
   userId: string;
   email: string;
-  amountCents: unknown;
+  /** A pack id from the public offer. */
+  packId?: unknown;
+  /** A typed number of credits (custom amount). */
+  credits?: unknown;
+  /** Before 0184 the sheet sent dollars; a cached app may still. Read as that many dollars' worth of credits. */
+  amountCents?: unknown;
   returnTo: unknown;
 }): Promise<TopupStart> {
   if (!(await paystackEnabled())) return { ok: false, status: 503, error: "Payments aren't available right now." };
 
   const settings = await getLandingSettings();
-  const { recharge, enabled } = settings.frenzAiCharacterReplace;
-  if (!enabled) return { ok: false, status: 503, error: "Character Replace isn't available right now." };
-  const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
   const cr = settings.frenzAiCharacterReplace;
-
-  const amount = opts.amountCents;
-  if (typeof amount !== "number" || !Number.isInteger(amount) || amount < recharge.minCents || amount > recharge.maxCents) {
-    return {
-      ok: false,
-      status: 400,
-      error: `Enter an amount between ${formatCents(recharge.minCents, symbol)} and ${formatCents(recharge.maxCents, symbol)}.`,
-    };
-  }
+  const plans = settings.frenzAiPlans;
+  const cpc = plans.credits.centsPerCredit;
+  const legacyCredits = typeof opts.amountCents === "number" && Number.isFinite(opts.amountCents) ? Math.floor(opts.amountCents / Math.max(1, cpc)) : undefined;
+  const purchase = resolvePurchase({ packId: opts.packId, credits: opts.credits ?? legacyCredits }, plans.wallet, cpc);
+  if ("error" in purchase) return { ok: false, status: 400, error: purchase.error };
+  const amount = purchase.priceUsdCents;
 
   /*
     ── A USD wallet, paid for in naira (2026-09-20) ───────────────────────
@@ -81,10 +81,11 @@ export async function beginCharacterReplaceTopup(opts: {
       reference,
       purpose: CHARACTER_REPLACE_TOPUP_PURPOSE,
       callbackUrl: `${SITE_URL}${safeReturnTo(opts.returnTo)}`,
-      pin: checkoutMetadata(quote),
+      // the pack and its size ride along for the statement and the bonus lookup — never as the amount credited
+      pin: { ...checkoutMetadata(quote), ai_topup_pack: purchase.packId, ai_topup_credits: purchase.credits },
     });
     after(() => recordTopupAttempt({ reference, userId: opts.userId, amountCents: amount, currency: settings.frenzAiCurrency }));
-    return { ok: true, url };
+    return { ok: true, url, credits: purchase.credits, bonusCredits: purchase.bonusCredits, priceUsdCents: amount };
   } catch (e) {
     // Never the provider's message: it can carry the request back, with the email in it.
     console.error("[ai/cr/topup] initialize failed", { userId: opts.userId, error: String(e) });

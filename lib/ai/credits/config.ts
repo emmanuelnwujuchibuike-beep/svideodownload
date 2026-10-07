@@ -8,7 +8,7 @@
  * the admin dashboard … 1 credit DOES NOT equal 1 video … one centralized
  * credit calculation engine … configurable without code changes."
  *
- * This module is PURE (no imports, like lib/ai/character-replace/config.ts):
+ * This module is PURE (its one import is the pure pack module beside it):
  * the type, the defaults, the bounds and the normaliser. It is stored under
  * ONE key of the landing settings row (`frenzAiPlans`), merged on the way in
  * and clamped on the way out, exactly as the Character Replace config is.
@@ -32,6 +32,8 @@
  * day; AI Max (50/day, 250/week) about four. A long, high‑quality generation
  * can take a whole day's allowance — that is the brief's intent.
  */
+
+import { AI_WALLET_DEFAULTS, normalizeAiWalletConfig, type AiWalletConfig } from "@/lib/ai/credits/wallet-config";
 
 export type AiPlanId = "ai_pro" | "ai_max";
 export const AI_PLAN_IDS: readonly AiPlanId[] = ["ai_pro", "ai_max"];
@@ -88,6 +90,8 @@ export interface AiPlansConfig {
    * the wallet is their only paid route, as before.
    */
   walletFallback: AiWalletFallback;
+  /** The credit packs a member can buy, and which provider takes the payment (0184; lib/ai/credits/wallet-config.ts). */
+  wallet: AiWalletConfig;
   /** Increments on every saved change to a value that affects entitlement or cost; stamped on each ledger row. */
   version: number;
   updatedAt: string | null;
@@ -121,6 +125,7 @@ export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   },
   reset: { timezone: "Africa/Lagos", weekStartsOn: 1 },
   walletFallback: "ask",
+  wallet: AI_WALLET_DEFAULTS,
   version: 1,
   updatedAt: null,
 };
@@ -227,6 +232,7 @@ export function normalizeAiPlansConfig(raw: unknown): AiPlansConfig {
     },
     reset: { timezone: validTimezone(reset.timezone, d.reset.timezone), weekStartsOn: int(reset.weekStartsOn, d.reset.weekStartsOn, 0, 6) },
     walletFallback: raw.walletFallback === "allow" || raw.walletFallback === "off" ? raw.walletFallback : "ask",
+    wallet: normalizeAiWalletConfig(raw.wallet),
     version: int(raw.version, d.version, 1, 1_000_000_000),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
   };
@@ -246,6 +252,7 @@ export function aiPlansFingerprint(c: AiPlansConfig): string {
     credits: c.credits,
     reset: c.reset,
     walletFallback: c.walletFallback,
+    wallet: c.wallet,
   });
 }
 

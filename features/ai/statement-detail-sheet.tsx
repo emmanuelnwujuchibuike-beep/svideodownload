@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 
 import { REPLACEMENT_MODE_COPY, isReplacementMode } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
-import { formatCents } from "@/lib/ai/economy";
+import { formatLedgerAmount, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { AI_CURRENCIES, isAiCurrency } from "@/lib/landing/bounds";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
@@ -30,13 +30,15 @@ import { cn } from "@/lib/utils";
  * overlay law); transform/opacity only; body scroll lock by overflowY.
  */
 const LABEL: Record<string, string> = {
-  recharge: "Balance added",
-  processing_charge: "Character Replace video",
+  recharge: "Credits added",
+  bonus: "Bonus credits",
+  grant: "Credits from Frenz",
+  processing_charge: "Frenz AI creation",
   refund: "Refunded",
   adjustment: "Adjustment by Frenz",
   reversal: "Reversed",
 };
-const STATUS: Record<string, string> = { settled: "Settled", reserved: "Reserved — the video is still running", refunded: "Refunded", reversed: "Reversed" };
+const STATUS: Record<string, string> = { settled: "Settled", reserved: "Reserved — the creation is still running", refunded: "Refunded", reversed: "Reversed" };
 const QUALITY: Record<string, string> = { standard: "Standard", high: "High", ultra: "Ultra", "480p": "480p", "720p": "720p", "1080p": "1080p" };
 
 export function symbolFor(currency: string | undefined, fallback: string): string {
@@ -81,22 +83,23 @@ export function StatementDetailSheet({ row, symbol, onClose }: { row: CharacterR
   const r = row ?? last;
   if (!mounted || !r || typeof document === "undefined") return null;
 
-  const sym = symbolFor(r.currency, symbol);
+  // 0184: each row in its own unit — credits from the switch, dollars (or naira) before it
+  void symbol;
   const kind = LABEL[r.kind] ?? r.kind;
-  const amount = `${r.deltaCents > 0 ? "+" : ""}${formatCents(r.deltaCents, sym)}`;
+  const amount = formatLedgerAmount(r.deltaCents, r.currency ?? WALLET_UNIT, { signed: true });
   const when = `${formatDate(r.createdAt)} · ${formatTime(r.createdAt)}`;
   const d = r.details;
   const facts: [string, string][] = [
     ["Type", kind],
     ["Amount", amount],
-    ["Balance after", formatCents(r.balanceAfterCents, sym)],
+    ["Balance after", formatLedgerAmount(r.balanceAfterCents, r.currency ?? WALLET_UNIT)],
     ["Status", r.status ? (STATUS[r.status] ?? r.status) : "Settled"],
     ["Date", when],
-    ["Currency", r.currency ?? "—"],
+    ["Unit", r.currency === WALLET_UNIT || !r.currency ? "Credits" : r.currency],
     ["Transaction ID", r.id],
   ];
   if (r.reference) facts.push(["Payment reference", r.reference]);
-  if (r.jobId) facts.push(["Video ID", r.jobId]);
+  if (r.jobId) facts.push(["Creation ID", r.jobId]);
   if (d) {
     facts.push(["Replacement", isReplacementMode(d.mode) ? REPLACEMENT_MODE_COPY[d.mode].label : d.mode]);
     facts.push(["Quality", QUALITY[d.quality] ?? d.quality]);

@@ -32,7 +32,8 @@
 
 // v2 (2026-09-14): the figure is the ONE wallet now (0155); a v1 snapshot held
 // the retired AI Clean balance and must never paint again.
-const KEY = "frenzsave_ai_balance_v2";
+// v3 (0184): the balance is credits — an older snapshot holds dollars and must never be painted as credits
+const KEY = "frenzsave_ai_balance_v3";
 const TTL_MS = 24 * 60 * 60 * 1000;
 
 interface Snapshot<T> {

@@ -45,6 +45,8 @@ export interface VcQuoteView {
   perCloneCents: number;
   lines: { key: string; label: string; amountCents: number }[];
   totalCents: number;
+  /** 0184: what the wallet is charged, in credits — the figure the member sees. 0 when free. */
+  credits: number;
   currency: string;
   pricingConfigVersion: number;
 }

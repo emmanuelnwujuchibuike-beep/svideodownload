@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
 import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
 import { takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
-import { StatementDetailSheet, symbolFor } from "@/features/ai/statement-detail-sheet";
+import { StatementDetailSheet } from "@/features/ai/statement-detail-sheet";
 import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
@@ -16,7 +16,7 @@ import { AiToolTitle } from "@/features/ai/design/ai-surface";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { getCharacterReplaceBalance, takeTopupReturnReference, verifyCharacterReplaceTopup } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib/ai/character-replace/types";
-import { formatCents } from "@/lib/ai/economy";
+import { formatCredits, formatLedgerAmount, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -46,12 +46,15 @@ import { cn } from "@/lib/utils";
  * and the sheet's chunk is fetched only when Recharge is pressed (next/dynamic
  * inside the sheet module).
  */
-type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal";
+type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant";
 
 type LedgerRow = CharacterReplaceTransaction;
 
 const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; tone: "in" | "out" | "neutral" }> = {
-  recharge: { label: "Balance added", Icon: ArrowDownLeft, tone: "in" },
+  recharge: { label: "Credits added", Icon: ArrowDownLeft, tone: "in" },
+  // 0184: a pack's bonus credits, and credits the product gives
+  bonus: { label: "Bonus credits", Icon: Sparkles, tone: "in" },
+  grant: { label: "Credits from Frenz", Icon: Sparkles, tone: "in" },
   // 2026-10-06: the one AI wallet pays for every tool now — Character Replace is retired
   processing_charge: { label: "Frenz AI creation", Icon: Sparkles, tone: "out" },
   refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },
@@ -129,10 +132,11 @@ export function FrenzAIUsagePage({
     let spent = 0;
     let refunded = 0;
     for (const row of ledger) {
-      if (row.kind === "processing_charge") {
-        videos += 1;
-        spent += -row.deltaCents;
-      } else if (row.kind === "refund") refunded += row.deltaCents;
+      if (row.kind === "processing_charge") videos += 1;
+      // 🔴 0184: rows before the switch are dollars — only credit rows are summed, never mixed units
+      if (row.currency !== WALLET_UNIT) continue;
+      if (row.kind === "processing_charge") spent += -row.deltaCents;
+      else if (row.kind === "refund") refunded += row.deltaCents;
     }
     return { videos, spent: Math.max(0, spent - refunded), refunded, partial: ledger.length >= 100 };
   }, [ledger]);
@@ -211,7 +215,7 @@ export function FrenzAIUsagePage({
             >
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">AI balance</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">AI credits</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -222,7 +226,7 @@ export function FrenzAIUsagePage({
                     aria-label={hidden ? "Show balance" : "Hide balance"}
                     className="mt-1.5 block rounded-lg text-left text-[2.35rem] font-bold leading-none tracking-[-0.035em] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:text-[2.7rem]"
                   >
-                    {hidden ? <span aria-hidden>{HIDDEN_AMOUNT}</span> : formatCents(balance.balanceCents, symbol)}
+                    {hidden ? <span aria-hidden>{HIDDEN_AMOUNT}</span> : formatCredits(balance.balanceCents)}
                   </button>
                   <p className="mt-1 text-[11.5px] text-white/60">{hidden ? "Tap to show" : "Tap to hide"}</p>
                 </div>
@@ -250,7 +254,7 @@ export function FrenzAIUsagePage({
                   className="inline-flex min-h-[46px] items-center gap-2 rounded-full bg-white px-5 text-[14px] font-bold text-indigo-700 shadow-sm transition active:scale-[0.98] motion-safe:hover:-translate-y-0.5"
                 >
                   <Plus className="h-4 w-4" aria-hidden />
-                  Recharge
+                  Top up credits
                 </button>
                 <Link
                   href={createHref}
@@ -260,16 +264,16 @@ export function FrenzAIUsagePage({
                   Explore AI tools
                 </Link>
               </div>
-              {balance.topupOptionsCents.length > 0 ? (
-                <div className="relative mt-4 flex flex-wrap gap-1.5" aria-label="Quick recharge amounts">
-                  {balance.topupOptionsCents.slice(0, 4).map((cents) => (
+              {balance.offer.packs.length > 0 ? (
+                <div className="relative mt-4 flex flex-wrap gap-1.5" aria-label="Quick credit packs">
+                  {balance.offer.packs.slice(0, 4).map((p) => (
                     <button
-                      key={cents}
+                      key={p.id}
                       type="button"
-                      onClick={() => openSheet(cents)}
+                      onClick={() => openSheet(p.credits)}
                       className="rounded-full bg-white/12 px-3 py-1.5 text-[12.5px] font-semibold tabular-nums text-white/90 ring-1 ring-inset ring-white/20 transition hover:bg-white/20"
                     >
-                      + {formatCents(cents, symbol)}
+                      + {formatCredits(p.credits)}
                     </button>
                   ))}
                 </div>
@@ -283,8 +287,8 @@ export function FrenzAIUsagePage({
             {figures ? (
               <section aria-label="Your account at a glance" className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
                 <Figure label="Creations" value={String(figures.videos)} />
-                <Figure label="Spent" value={hidden ? HIDDEN_AMOUNT : formatCents(figures.spent, symbol)} />
-                <Figure label="Refunded" value={hidden ? HIDDEN_AMOUNT : formatCents(figures.refunded, symbol)} tone={figures.refunded > 0 ? "in" : undefined} />
+                <Figure label="Credits spent" value={hidden ? HIDDEN_AMOUNT : formatCredits(figures.spent, { short: true })} />
+                <Figure label="Refunded" value={hidden ? HIDDEN_AMOUNT : formatCredits(figures.refunded, { short: true })} tone={figures.refunded > 0 ? "in" : undefined} />
               </section>
             ) : null}
             {figures?.partial ? <p className="mt-2 text-[11.5px] text-muted-foreground">Counted from your most recent 100 lines.</p> : null}
@@ -298,7 +302,7 @@ export function FrenzAIUsagePage({
               {sections.length === 0 ? (
                 <div className="mt-3 rounded-2xl border border-dashed border-border/70 px-5 py-8 text-center">
                   <p className="text-sm font-semibold">Nothing here yet</p>
-                  <p className="mx-auto mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">Your first recharge, video or refund will appear here.</p>
+                  <p className="mx-auto mt-1 max-w-xs text-[12.5px] leading-relaxed text-muted-foreground">Your first top-up, creation or refund will appear here.</p>
                 </div>
               ) : (
                 sections.map((section) => (
@@ -308,7 +312,6 @@ export function FrenzAIUsagePage({
                       {section.items.map((row) => {
                         const copy = LEDGER_COPY[row.kind] ?? LEDGER_COPY.adjustment;
                         const Icon = copy.Icon;
-                        const rowSymbol = symbolFor(row.currency, symbol);
                         return (
                           <li key={row.id}>
                           <button
@@ -318,7 +321,7 @@ export function FrenzAIUsagePage({
                               setOpenLine(row);
                             }}
                             className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-secondary/50 focus-visible:outline-none focus-visible:bg-secondary/60"
-                            aria-label={`${copy.label}, ${formatCents(row.deltaCents, rowSymbol)} — see the details`}
+                            aria-label={`${copy.label}, ${formatLedgerAmount(row.deltaCents, row.currency)} — see the details`}
                           >
                             <span
                               className={cn(
@@ -337,10 +340,9 @@ export function FrenzAIUsagePage({
                             </div>
                             <div className="shrink-0 text-right">
                               <p className={cn("text-[14px] font-bold tabular-nums", row.deltaCents > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
-                                {row.deltaCents > 0 ? "+" : ""}
-                                {formatCents(row.deltaCents, rowSymbol)}
+                                {formatLedgerAmount(row.deltaCents, row.currency, { signed: true })}
                               </p>
-                              <p className="mt-0.5 text-[11.5px] tabular-nums text-muted-foreground">{formatCents(row.balanceAfterCents, rowSymbol)} after</p>
+                              <p className="mt-0.5 text-[11.5px] tabular-nums text-muted-foreground">{formatLedgerAmount(row.balanceAfterCents, row.currency)} after</p>
                             </div>
                             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden />
                           </button>
@@ -372,7 +374,7 @@ export function FrenzAIUsagePage({
           onClose={() => setSheetOpen(false)}
           balance={balance}
           returnTo={typeof window !== "undefined" ? window.location.pathname : "/studio/ai/usage"}
-          suggestedCents={suggested}
+          suggestedCredits={suggested}
         />
       ) : null}
     </FrenzAIEnvironment>

@@ -4,8 +4,9 @@ import { Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 
-import { beginAiWalletTopup, type AiWalletBalance } from "@/lib/ai/wallet/client";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { formatCents } from "@/lib/ai/economy";
+import { beginAiWalletTopup, type AiWalletBalance } from "@/lib/ai/wallet/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -44,54 +45,65 @@ const GlassSheetShell = dynamic(() => import("@/features/ui/glass-sheet-shell").
  * A preset is SELECTED first and confirmed with one button, so a tap on the
  * wrong figure is a tap away from fixing, not a navigation to a payment page.
  * A custom amount types into the same confirm.
+ *
+ * ── 🔴 CREDITS, NOT DOLLARS (0184, owner 2026-10-07) ────────────────────────
+ * The member buys CREDIT PACKS: "100 credits · $10.00". The packs, their
+ * bonuses, their USD prices and the custom bounds are the operator's
+ * (`frenzAiPlans.wallet`, sent as `balance.offer`); the price shown is the
+ * server's `priceUsdCents`. The checkout page shows what it collects in its
+ * own currency.
  */
 export function AiWalletRechargeSheet({
   open,
   onClose,
   balance,
   returnTo,
-  /** What the member is short by, if they came here from the insufficient panel. */
-  suggestedCents = null,
+  /** How many credits the member is short by, if they came here from a "not enough credits" panel. */
+  suggestedCredits = null,
 }: {
   open: boolean;
   onClose: () => void;
   balance: AiWalletBalance;
   returnTo: string;
-  suggestedCents?: number | null;
+  suggestedCredits?: number | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
+  const offer = balance.offer;
+  const packs = offer.packs;
 
   /*
-    Coming from "Short by ₦450": the smallest package that covers it is
-    pre-selected, so the obvious next tap is the right one. Nothing is chosen
-    otherwise — the member picks.
+    Coming from "Short by 40 credits": the smallest pack that covers it is
+    pre-selected, so the obvious next tap is the right one. Otherwise the
+    operator's highlighted pack is, and the member may pick another.
   */
   useEffect(() => {
     if (!open) return;
     setError(null);
-    if (suggestedCents !== null && suggestedCents > 0) {
-      const covering = [...balance.topupOptionsCents].sort((a, b) => a - b).find((c) => c >= suggestedCents) ?? null;
-      setSelected(covering);
-      setCustom(covering === null ? String(Math.ceil(Math.max(suggestedCents, balance.minTopupCents) / 100)) : "");
+    if (suggestedCredits !== null && suggestedCredits > 0) {
+      const covering = packs.find((p) => p.credits + p.bonusCredits >= suggestedCredits) ?? null;
+      setSelected(covering?.id ?? null);
+      setCustom(covering === null && offer.custom ? String(Math.max(suggestedCredits, offer.custom.minCredits)) : "");
     } else {
-      setSelected(null);
+      setSelected(packs.find((p) => p.highlight)?.id ?? null);
       setCustom("");
     }
-  }, [open, suggestedCents, balance.topupOptionsCents, balance.minTopupCents]);
+  }, [open, suggestedCredits, packs, offer.custom]);
 
-  const customCents = custom.trim() === "" ? null : Math.round(Number(custom) * 100);
-  const chosen = selected ?? (customCents !== null && Number.isFinite(customCents) ? customCents : null);
-  const withinBounds = chosen !== null && Number.isInteger(chosen) && chosen >= balance.minTopupCents && chosen <= balance.maxTopupCents;
+  const pack = packs.find((p) => p.id === selected) ?? null;
+  const customCredits = custom.trim() === "" ? null : Number(custom);
+  const customValid = !pack && offer.custom !== null && customCredits !== null && Number.isInteger(customCredits) && customCredits >= offer.custom.minCredits && customCredits <= offer.custom.maxCredits;
+  const priceUsdCents = pack ? pack.priceUsdCents : customValid && customCredits !== null ? customCredits * offer.centsPerCredit : null;
+  const ready = pack !== null || customValid;
 
   const confirm = useCallback(async () => {
-    if (chosen === null || !withinBounds) return;
+    if (!ready) return;
     haptic("selection");
     setBusy(true);
     setError(null);
-    const res = await beginAiWalletTopup(chosen, returnTo);
+    const res = await beginAiWalletTopup(pack ? { packId: pack.id } : { credits: customCredits ?? 0 }, returnTo);
     if (!res.ok) {
       setError(res.error);
       setBusy(false);
@@ -99,45 +111,48 @@ export function AiWalletRechargeSheet({
     }
     // A full navigation to the hosted payment page — never a popup.
     window.location.assign(res.url);
-  }, [chosen, returnTo, withinBounds]);
+  }, [ready, pack, customCredits, returnTo]);
 
   return (
-    <GlassSheetShell open={open} onClose={onClose} title="Add Character Replace balance" fitContent defaultHeightVh={78}>
+    <GlassSheetShell open={open} onClose={onClose} title="Top up credits" fitContent defaultHeightVh={78}>
       <div className="px-4 pb-6">
         <p className="text-[13px] leading-relaxed text-muted-foreground">
-          Choose an amount. You&apos;ll pay on a secure page and come straight back here — the balance is only ever used for
-          Character Replace.
+          Credits pay for every Frenz AI tool. You&apos;ll pay on a secure page and come straight back here.
         </p>
 
-        {suggestedCents !== null && suggestedCents > 0 ? (
+        {suggestedCredits !== null && suggestedCredits > 0 ? (
           <p className="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/[0.07] px-3.5 py-2.5 text-[12.5px] leading-relaxed">
-            You need <strong className="font-bold tabular-nums">{formatCents(suggestedCents, balance.symbol)}</strong> more for this video.
+            You need <strong className="font-bold tabular-nums">{formatCredits(suggestedCredits)}</strong> more for this.
           </p>
         ) : null}
 
-        <div role="radiogroup" aria-label="Recharge amount" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {balance.topupOptionsCents.map((cents) => {
-            const active = selected === cents;
+        <div role="radiogroup" aria-label="Credit pack" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {packs.map((p) => {
+            const active = selected === p.id;
             return (
               <button
-                key={cents}
+                key={p.id}
                 type="button"
                 role="radio"
                 aria-checked={active}
                 disabled={busy}
                 onClick={() => {
                   haptic("selection");
-                  setSelected(cents);
+                  setSelected(p.id);
                   setCustom("");
                 }}
                 className={cn(
-                  "relative min-h-[56px] rounded-2xl border px-2 text-[15px] font-bold tabular-nums transition active:scale-[0.97] disabled:opacity-60",
+                  "relative flex min-h-[64px] flex-col items-center justify-center rounded-2xl border px-2 transition active:scale-[0.97] disabled:opacity-60",
                   active
                     ? "border-foreground bg-foreground text-background shadow-[0_10px_24px_-14px_rgb(0_0_0/0.6)]"
                     : "border-border/70 bg-background hover:border-foreground/25",
                 )}
               >
-                {formatCents(cents, balance.symbol)}
+                <span className="text-[15px] font-bold tabular-nums">{formatCredits(p.credits)}</span>
+                <span className={cn("text-[11.5px] font-semibold tabular-nums", active ? "text-background/75" : "text-muted-foreground")}>
+                  {formatCents(p.priceUsdCents, "$")}
+                  {p.bonusCredits > 0 ? ` · +${p.bonusCredits.toLocaleString("en-US")} bonus` : ""}
+                </span>
                 {active ? (
                   <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-background/20">
                     <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
@@ -148,41 +163,42 @@ export function AiWalletRechargeSheet({
           })}
         </div>
 
-        <label className="relative mt-3 block">
-          <span className="sr-only">Custom amount</span>
-          <span aria-hidden className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[14px] font-bold text-muted-foreground">
-            {balance.symbol}
-          </span>
-          <input
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            placeholder="Custom amount"
-            value={custom}
-            disabled={busy}
-            onChange={(e) => {
-              setCustom(e.target.value.replace(/[^\d.]/g, ""));
-              setSelected(null);
-            }}
-            className={cn(
-              "h-[56px] w-full rounded-2xl border bg-background pl-9 pr-3 text-[15px] font-bold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              selected === null && custom !== "" ? "border-foreground" : "border-border/70",
-            )}
-          />
-        </label>
-        <p className="mt-2 text-[11.5px] text-muted-foreground">
-          From {formatCents(balance.minTopupCents, balance.symbol)} to {formatCents(balance.maxTopupCents, balance.symbol)}.
-        </p>
-        {balance.checkout && chosen !== null && withinBounds ? (
-          /* Owner, 2026-09-20 (evening): no rate arithmetic here — the secure checkout page shows the naira it collects. */
+        {offer.custom ? (
+          <>
+            <label className="relative mt-3 block">
+              <span className="sr-only">Custom number of credits</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="Custom number of credits"
+                value={custom}
+                disabled={busy}
+                onChange={(e) => {
+                  setCustom(e.target.value.replace(/[^\d]/g, ""));
+                  setSelected(null);
+                }}
+                className={cn(
+                  "h-[56px] w-full rounded-2xl border bg-background px-4 text-[15px] font-bold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected === null && custom !== "" ? "border-foreground" : "border-border/70",
+                )}
+              />
+            </label>
+            <p className="mt-2 text-[11.5px] text-muted-foreground">
+              From {formatCredits(offer.custom.minCredits)} to {formatCredits(offer.custom.maxCredits)} · {formatCents(offer.centsPerCredit, "$")} per credit.
+            </p>
+          </>
+        ) : null}
+        {balance.checkout && ready ? (
+          /* Owner, 2026-09-20 (evening): no rate arithmetic here — the secure checkout page shows the amount it collects. */
           <p className="mt-2 text-[11.5px] leading-relaxed text-muted-foreground" aria-live="polite">
-            Your balance is credited in {balance.currency}; the secure page shows what you pay in {balance.checkout.currency}.
+            Priced in {balance.currency}; the secure page shows what you pay in {balance.checkout.currency}.
           </p>
         ) : null}
 
         <button
           type="button"
-          disabled={busy || !withinBounds}
+          disabled={busy || !ready}
           onClick={() => void confirm()}
           className={cn(
             "mt-4 inline-flex min-h-[54px] w-full items-center justify-center gap-2 rounded-full px-6 text-[15px] font-bold text-white",
@@ -190,7 +206,7 @@ export function AiWalletRechargeSheet({
             "transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none",
           )}
         >
-          {busy ? "Opening secure payment…" : chosen !== null && withinBounds ? `Pay ${formatCents(chosen, balance.symbol)}` : "Choose an amount"}
+          {busy ? "Opening secure payment…" : ready && priceUsdCents !== null ? `Pay ${formatCents(priceUsdCents, "$")}` : "Choose a pack"}
         </button>
 
         {error ? (

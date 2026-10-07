@@ -191,7 +191,8 @@ describe("the money order at /start — complimentary → included credits → t
     expect(reserveCredits).toBeGreaterThan(claim);
     expect(reserveMoney).toBeGreaterThan(reserveCredits);
     // the wallet is not asked about when credits cover it; a failed credit reservation reverts the claim
-    expect(start).toContain("if (!complimentary && !useCredits && balanceBefore < snapshot.totalCents) {");
+    // 0184: credits to credits
+    expect(start).toContain("if (!complimentary && !useCredits && balanceBefore < walletCharge.creditsRequired) {");
     expect(start).toContain('funding: complimentary ? "free" : useCredits ? "credits" : "balance",');
     expect(start).toContain('return refuse("CR_CREDITS_UNAVAILABLE"');
     // the operator's policy for a short allowance

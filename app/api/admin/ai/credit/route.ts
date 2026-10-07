@@ -5,8 +5,7 @@ import { z } from "zod";
 
 import { getAdminUser } from "@/lib/admin/guard";
 import { adjustCharacterReplaceBalance } from "@/lib/ai/character-replace/wallet";
-import { formatCents } from "@/lib/ai/economy";
-import { aiCurrencySymbol, getLandingSettings } from "@/lib/landing/settings";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -32,6 +31,7 @@ export const dynamic = "force-dynamic";
  */
 const schema = z.object({
   email: z.string().trim().email().max(320),
+  // 0184: whole CREDITS (the wallet's unit); the field keeps its name for the admin form
   amountCents: z.coerce.number().int().min(1).max(100_000_000),
   note: z.string().trim().min(1).max(500),
 });
@@ -48,12 +48,9 @@ export async function POST(request: Request) {
   }
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Give an email, an amount in cents, and a reason." }, { status: 400 });
+    return NextResponse.json({ error: "Give an email, a number of credits, and a reason." }, { status: 400 });
   }
   const { email, amountCents, note } = parsed.data;
-
-  const { frenzAiCurrency } = await getLandingSettings();
-  const symbol = aiCurrencySymbol(frenzAiCurrency);
 
   const db = createAdminClient();
   const { data: profile, error } = await db.from("profiles").select("id, email").ilike("email", email).maybeSingle();
@@ -73,7 +70,6 @@ export async function POST(request: Request) {
       reference: `admin_${randomUUID()}`,
       note,
       adminId: admin.id,
-      currency: frenzAiCurrency,
     });
     console.info("[admin/ai-credit] credited", { admin: admin.id, user: profile.id, amountCents });
     return NextResponse.json({
@@ -81,8 +77,8 @@ export async function POST(request: Request) {
       email: profile.email,
       creditedCents: amountCents,
       balanceCents: balance,
-      credited: formatCents(amountCents, symbol),
-      balance: formatCents(balance, symbol),
+      credited: formatCredits(amountCents),
+      balance: formatCredits(balance),
     });
   } catch (e) {
     console.error("[admin/ai-credit] failed", { admin: admin.id, user: profile.id, error: String(e) });

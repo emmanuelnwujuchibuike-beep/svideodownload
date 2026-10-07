@@ -1,0 +1,147 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  CREDIT PACKS — what a member can buy, and what a payment is worth (pure)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner, 2026-10-07: credits, "billed in USD / currencies supported by the
+ * provider". A pack is N credits (+ optional bonus credits) priced at
+ * N × centsPerCredit US cents; the payment provider charges that in its own
+ * checkout currency (Paystack: NGN at the pinned live rate, as since 0159).
+ *
+ * Stored inside `frenzAiPlans` (beside `credits.centsPerCredit`, the one rate
+ * that defines a credit) so the credit economy is ONE admin card.
+ *
+ * ── 🔴 WHAT A PAYMENT IS WORTH IS NEVER READ FROM THE PAYMENT'S METADATA ────
+ * Transaction metadata is writable by anybody holding the provider's PUBLIC
+ * key. So `creditsForPayment` derives the credits from the VERIFIED amount
+ * settled (in USD cents, after the checkout-currency check in topup-fx.ts):
+ * ⌊paid ÷ centsPerCredit⌋, and the bonus only from a pack that exists in the
+ * operator's configuration now and whose size matches what was paid for.
+ */
+
+export type TopupProviderId = "paystack" | "bachs";
+export const TOPUP_PROVIDER_IDS: readonly TopupProviderId[] = ["paystack", "bachs"];
+
+export interface CreditPack {
+  /** Stable id the browser sends back ("pack_100"). */
+  id: string;
+  credits: number;
+  /** Extra credits on top, recorded as a separate `bonus` ledger row. 0 = none. */
+  bonusCredits: number;
+  enabled: boolean;
+  /** Marks the one pack the sheet highlights. */
+  highlight: boolean;
+}
+
+export interface AiWalletConfig {
+  packs: CreditPack[];
+  /** A member-typed amount of credits, within bounds. Off = packs only. */
+  custom: { enabled: boolean; minCredits: number; maxCredits: number };
+  /** Which provider takes a top-up. The other stays wired for webhooks of payments already in flight. */
+  provider: TopupProviderId;
+}
+
+export const WALLET_BOUNDS = {
+  packs: 8,
+  credits: { min: 1, max: 1_000_000 },
+  bonus: { min: 0, max: 1_000_000 },
+} as const;
+
+/** $5 · $10 · $25 · $50 · $100 at 10¢ — the dollar shortcuts that were live before 0184, as credits. No bonus is invented. */
+export const AI_WALLET_DEFAULTS: AiWalletConfig = {
+  packs: [50, 100, 250, 500, 1000].map((credits) => ({ id: `pack_${credits}`, credits, bonusCredits: 0, enabled: true, highlight: credits === 100 })),
+  custom: { enabled: true, minCredits: 10, maxCredits: 5000 },
+  provider: "paystack",
+};
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+function int(v: unknown, fallback: number, min: number, max: number): number {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(n)));
+}
+
+export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
+  const d = AI_WALLET_DEFAULTS;
+  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom } };
+  const seen = new Set<string>();
+  const packs: CreditPack[] = [];
+  if (Array.isArray(raw.packs)) {
+    for (const p of raw.packs) {
+      if (!isRecord(p)) continue;
+      const credits = int(p.credits, 0, 0, WALLET_BOUNDS.credits.max);
+      if (credits < WALLET_BOUNDS.credits.min) continue;
+      const id = `pack_${credits}`;
+      // one pack per size: the size IS the identity a payment is matched back to
+      if (seen.has(id)) continue;
+      seen.add(id);
+      packs.push({ id, credits, bonusCredits: int(p.bonusCredits, 0, WALLET_BOUNDS.bonus.min, WALLET_BOUNDS.bonus.max), enabled: p.enabled !== false, highlight: p.highlight === true });
+      if (packs.length >= WALLET_BOUNDS.packs) break;
+    }
+  }
+  const c = isRecord(raw.custom) ? raw.custom : {};
+  const minCredits = int(c.minCredits, d.custom.minCredits, WALLET_BOUNDS.credits.min, WALLET_BOUNDS.credits.max);
+  return {
+    packs: (Array.isArray(raw.packs) ? packs : d.packs.map((p) => ({ ...p }))).sort((a, b) => a.credits - b.credits),
+    custom: { enabled: typeof c.enabled === "boolean" ? c.enabled : d.custom.enabled, minCredits, maxCredits: Math.max(minCredits, int(c.maxCredits, d.custom.maxCredits, WALLET_BOUNDS.credits.min, WALLET_BOUNDS.credits.max)) },
+    provider: raw.provider === "bachs" ? "bachs" : "paystack",
+  };
+}
+
+/* ───────────────────────────── buying ────────────────────────────────────── */
+
+export interface Purchase {
+  credits: number;
+  bonusCredits: number;
+  /** What is charged, in US cents, before any checkout-currency conversion. */
+  priceUsdCents: number;
+  packId: string | null;
+}
+
+/**
+ * What a member asked to buy, checked against the operator's offer. A pack
+ * id must name an enabled pack; a typed amount must be within the custom
+ * bounds (and the custom amount must be switched on). Anything else is refused.
+ */
+export function resolvePurchase(input: { packId?: unknown; credits?: unknown }, cfg: AiWalletConfig, centsPerCredit: number): Purchase | { error: string } {
+  const cpc = Math.max(1, Math.round(centsPerCredit));
+  if (typeof input.packId === "string" && input.packId) {
+    const pack = cfg.packs.find((p) => p.id === input.packId && p.enabled);
+    if (!pack) return { error: "That pack isn't available. Choose another." };
+    return { credits: pack.credits, bonusCredits: pack.bonusCredits, priceUsdCents: pack.credits * cpc, packId: pack.id };
+  }
+  const n = typeof input.credits === "number" ? input.credits : NaN;
+  if (!Number.isInteger(n)) return { error: "Choose how many credits to add." };
+  // a typed amount that happens to equal a pack IS that pack (the same bonus, the same row)
+  const pack = cfg.packs.find((p) => p.credits === n && p.enabled);
+  if (pack) return { credits: pack.credits, bonusCredits: pack.bonusCredits, priceUsdCents: pack.credits * cpc, packId: pack.id };
+  if (!cfg.custom.enabled) return { error: "Choose one of the packs." };
+  if (n < cfg.custom.minCredits || n > cfg.custom.maxCredits) return { error: `Choose between ${cfg.custom.minCredits.toLocaleString("en-US")} and ${cfg.custom.maxCredits.toLocaleString("en-US")} credits.` };
+  return { credits: n, bonusCredits: 0, priceUsdCents: n * cpc, packId: null };
+}
+
+/**
+ * 🔴 What a VERIFIED payment buys. `paidUsdCents` is the amount the provider
+ * settled, already checked against the checkout-currency pin. The credits
+ * come from it alone; the bonus only from a configured, enabled pack of
+ * exactly that size — a pack id in the metadata that does not match what was
+ * paid earns nothing extra.
+ */
+export function creditsForPayment(input: { paidUsdCents: number; packId?: unknown }, cfg: AiWalletConfig, centsPerCredit: number): { credits: number; bonusCredits: number; packId: string | null } {
+  const cpc = Math.max(1, Math.round(centsPerCredit));
+  const credits = Math.max(0, Math.floor(Math.round(input.paidUsdCents) / cpc));
+  const pack = typeof input.packId === "string" ? cfg.packs.find((p) => p.id === input.packId && p.enabled && p.credits === credits) : undefined;
+  return { credits, bonusCredits: pack?.bonusCredits ?? 0, packId: pack?.id ?? null };
+}
+
+/** The offer as a browser may see it: sizes, bonuses and prices — never a provider key. */
+export function publicWalletOffer(cfg: AiWalletConfig, centsPerCredit: number) {
+  const cpc = Math.max(1, Math.round(centsPerCredit));
+  return {
+    packs: cfg.packs.filter((p) => p.enabled).map((p) => ({ id: p.id, credits: p.credits, bonusCredits: p.bonusCredits, priceUsdCents: p.credits * cpc, highlight: p.highlight })),
+    custom: cfg.custom.enabled ? { minCredits: cfg.custom.minCredits, maxCredits: cfg.custom.maxCredits } : null,
+    centsPerCredit: cpc,
+    provider: cfg.provider,
+  };
+}
+export type PublicWalletOffer = ReturnType<typeof publicWalletOffer>;

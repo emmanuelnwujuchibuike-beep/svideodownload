@@ -63,13 +63,15 @@ export async function POST(request: Request) {
     if (speechSource === "text" && textCharacters > config.textMode.maximumCharacters) return NextResponse.json(aiErrorBody("INVALID_INPUT", { error: `Keep the text to ${config.textMode.maximumCharacters} characters.` }), { status: aiErrorStatus("INVALID_INPUT") });
 
     const quote = quoteLipSync({ durationMs: selectedDurationMs, speechSource, speechPath, textCharacters }, config, { currency: settings.frenzAiCurrency });
+    // 🔴 0184: the wallet holds credits — the balance, the charge and the shortfall are all credits
     const balanceCents = await getCharacterReplaceBalanceCents(subject.userId);
-    const money = affordability(quote.totalCents, balanceCents);
+    const walletCharge = lipSyncCredits(quote, config, settings.frenzAiPlans);
+    const money = affordability(walletCharge.creditsRequired, balanceCents);
     const free = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, plans: settings.frenzAiPlans });
     const complimentary = free.eligible && (free.remainingFreeUses === null || free.remainingFreeUses > 0);
     const plans = settings.frenzAiPlans;
     const creditEntitlement = plans.enabled && !complimentary ? await getAiCreditEntitlement(subject.userId, plans) : null;
-    const estimate = lipSyncCredits(quote, config, plans);
+    const estimate = walletCharge;
     const credits = creditEntitlement ? creditDecisionView(decideCredits(creditEntitlement, { feature: feature.id, priceCents: estimate.priceCents, mode: estimate.mode, durationMs: quote.durationMs, lines: quote.lines.filter((l) => l.amountCents > 0).map((l) => ({ label: l.label, cents: l.amountCents })) }, plans)) : null;
     const walletOffered = !credits || !credits.applicable || credits.affordable ? true : plans.walletFallback !== "off";
     // §7 / §14: about how long the text will take to say — an estimate, before the speech exists
@@ -77,8 +79,9 @@ export async function POST(request: Request) {
     const mismatch = speechEstimateMs !== null && Math.abs(speechEstimateMs - selectedDurationMs) / selectedDurationMs > config.duration.significantMismatchFraction ? (speechEstimateMs > selectedDurationMs ? "speech_longer" : "speech_shorter") : null;
     // the member sees the lines and the total, the credits, the complimentary state; never the provider-cost estimate, the vendor or the model
     return NextResponse.json({
-      quote: publicLipSyncQuote(quote),
+      quote: { ...publicLipSyncQuote(quote), credits: walletCharge.creditsRequired },
       creditsEstimate: estimate.creditsRequired,
+      unit: "CREDIT",
       credits,
       walletFallback: plans.walletFallback,
       walletOffered,

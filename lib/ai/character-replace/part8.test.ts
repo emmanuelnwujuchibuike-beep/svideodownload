@@ -155,7 +155,7 @@ describe("/start: switches → breaker → claim (limits, one lock) → reserve 
     const paused = at('if (!config.ops.processingEnabled) return refuse("CR_BUSY");');
     const breaker = at("const { open } = await providerHealthFor(models);");
     const claim = at("const claim = await claimJobStart({");
-    const reserve = at("balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot });");
+    const reserve = at("balanceAfter = await reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...ledgerSnapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } });");
     // Part 11 added a revert on a refused FREE use before the reserve; the one this test pins is the reserve's own
     const revert = start.indexOf("const reverted = await revertJobStartClaim(job.id, job.metadata ?? {});", reserve);
     expect(revert).toBeGreaterThan(0);

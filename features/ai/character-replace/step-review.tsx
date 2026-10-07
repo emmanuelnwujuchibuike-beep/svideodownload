@@ -248,7 +248,8 @@ export function CharacterReplaceReviewStep({
           onClose={closeSheet}
           balance={balance}
           returnTo={returnTo}
-          suggestedCents={short && money ? money.shortfallCents : null}
+          // retired tool (Part 5): its quote is in dollars, the wallet in credits since 0184 — no shortfall suggestion is better than a wrong one
+          suggestedCredits={null}
         />
       ) : null}
       </div>

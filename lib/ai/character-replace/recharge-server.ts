@@ -1,6 +1,8 @@
 import "server-only";
 
 import { creditCharacterReplaceBalance } from "@/lib/ai/character-replace/wallet";
+import { creditsForPayment } from "@/lib/ai/credits/wallet-config";
+import { getLandingSettings } from "@/lib/landing/settings";
 import { markTopupAttempt } from "@/lib/ai/topup-attempts";
 import { notifyTopupSuccess } from "@/lib/ai/topup-notify";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,24 +23,43 @@ import { SITE_URL } from "@/lib/site";
  * idempotent on it, and the announcement claims `notified_at` on the product
  * ledger row so exactly one push and one receipt go out.
  */
+export interface CreditedRecharge {
+  /** The wallet after the credit, in credits. */
+  balanceAfterCents: number;
+  credits: number;
+  bonusCredits: number;
+}
+
+/**
+ * 🔴 0184: the wallet holds CREDITS. `amountCents` is the VERIFIED amount paid
+ * in the list currency (USD cents — the callers have already checked the
+ * settled checkout currency against the pin). What it buys is derived here and
+ * only here (`creditsForPayment`): ⌊paid ÷ centsPerCredit⌋ credits, plus the
+ * bonus of a configured pack of exactly that size. The bonus is its own
+ * `bonus` row on the same reference, so a replay can add neither twice.
+ */
 export async function creditVerifiedCharacterReplaceRecharge(opts: {
   userId: string;
   reference: string;
+  /** Verified, in USD cents. */
   amountCents: number;
+  /** The list currency the amount is in (USD). Recorded on the row's metadata; the row itself is in credits. */
   currency: string;
+  /** The pack named at checkout (metadata) — consulted for a bonus only, never for the amount. */
+  packId?: unknown;
   channel?: string | null;
   paidAt?: string | null;
   gatewayResponse?: string | null;
-}): Promise<number> {
-  const balanceAfterCents = await creditCharacterReplaceBalance({
-    userId: opts.userId,
-    amountCents: opts.amountCents,
-    kind: "recharge",
-    reference: opts.reference,
-    currency: opts.currency,
-    metadata: { channel: opts.channel ?? null, paid_at: opts.paidAt ?? null },
-  });
-  return balanceAfterCents;
+}): Promise<CreditedRecharge> {
+  const plans = (await getLandingSettings()).frenzAiPlans;
+  const bought = creditsForPayment({ paidUsdCents: opts.amountCents, packId: opts.packId }, plans.wallet, plans.credits.centsPerCredit);
+  if (bought.credits <= 0) throw new Error(`a payment of ${opts.amountCents} ${opts.currency} cents buys no credits at ${plans.credits.centsPerCredit}¢ each`);
+  const meta = { channel: opts.channel ?? null, paid_at: opts.paidAt ?? null, paid_cents: opts.amountCents, paid_currency: opts.currency, cents_per_credit: plans.credits.centsPerCredit, pack: bought.packId };
+  let balance = await creditCharacterReplaceBalance({ userId: opts.userId, amountCents: bought.credits, kind: "recharge", reference: opts.reference, metadata: meta });
+  if (bought.bonusCredits > 0) {
+    balance = await creditCharacterReplaceBalance({ userId: opts.userId, amountCents: bought.bonusCredits, kind: "bonus", reference: opts.reference, note: "Pack bonus", metadata: { pack: bought.packId } });
+  }
+  return { balanceAfterCents: balance, credits: bought.credits, bonusCredits: bought.bonusCredits };
 }
 
 /** The off-the-money-path work: the attempt row and the once-only announcement. */
@@ -67,8 +88,8 @@ export async function announceCharacterReplaceRecharge(opts: {
     channel: opts.channel ?? null,
     paidAt: opts.paidAt ?? null,
     claim: () => claimRechargeNotification(opts.userId, opts.reference),
-    productLabel: "Character Replace",
-    ctaUrl: `${SITE_URL}/ai/character-replace`,
+    productLabel: "Frenz AI",
+    ctaUrl: `${SITE_URL}/ai/usage`,
   });
 }
 

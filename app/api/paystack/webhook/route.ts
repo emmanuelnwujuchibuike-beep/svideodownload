@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
+import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
@@ -104,11 +105,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true });
       }
       const currency = credit.currency;
-      const balanceAfterCents = await creditVerifiedCharacterReplaceRecharge({
+      const credited = await creditVerifiedCharacterReplaceRecharge({
         userId,
         reference,
         amountCents: credit.amountCents,
         currency,
+        packId: event.data.metadata?.ai_topup_pack,
         channel: event.data.channel ?? null,
         paidAt: event.data.paid_at ?? null,
         gatewayResponse: event.data.gateway_response ?? null,
@@ -117,9 +119,9 @@ export async function POST(request: Request) {
         announceCharacterReplaceRecharge({
           userId,
           reference,
-          amountCents: credit.amountCents,
-          currency,
-          balanceAfterCents,
+          amountCents: credited.credits + credited.bonusCredits,
+          currency: WALLET_UNIT,
+          balanceAfterCents: credited.balanceAfterCents,
           channel: event.data.channel ?? null,
           paidAt: event.data.paid_at ?? null,
           gatewayResponse: event.data.gateway_response ?? null,
@@ -160,11 +162,12 @@ export async function POST(request: Request) {
         console.error("[paystack] legacy ai topup not creditable", { reference, reason: legacyCredit.reason, got: event.data.currency, amount, wallet: legacyWallet });
         return NextResponse.json({ received: true });
       }
-      const balanceAfterCents = await creditVerifiedCharacterReplaceRecharge({
+      const legacyCredited = await creditVerifiedCharacterReplaceRecharge({
         userId,
         reference,
         amountCents: legacyCredit.amountCents,
         currency: legacyCredit.currency,
+        packId: event.data.metadata?.ai_topup_pack,
         channel: event.data.channel ?? null,
         paidAt: event.data.paid_at ?? null,
         gatewayResponse: event.data.gateway_response ?? null,
@@ -185,9 +188,9 @@ export async function POST(request: Request) {
         announceCharacterReplaceRecharge({
           userId,
           reference,
-          amountCents: legacyCredit.amountCents,
-          currency: legacyCredit.currency,
-          balanceAfterCents,
+          amountCents: legacyCredited.credits + legacyCredited.bonusCredits,
+          currency: WALLET_UNIT,
+          balanceAfterCents: legacyCredited.balanceAfterCents,
           channel: event.data.channel ?? null,
           paidAt: event.data.paid_at ?? null,
           gatewayResponse: event.data.gateway_response ?? null,

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { getCharacterReplaceBalance, readCachedCharacterReplaceBalance } from "@/lib/ai/character-replace/client";
 import type { CharacterReplaceBalance, CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
-import { formatCents } from "@/lib/ai/economy";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { readAiFreeAccessCache, writeAiFreeAccessCache } from "@/lib/ai/free-access-cache";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { cn } from "@/lib/utils";
@@ -120,10 +120,10 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
                     <span className="h-1 w-1 shrink-0 rounded-full bg-indigo-300" aria-hidden />
                   </>
                 ) : null}
-                <span className="shrink-0">AI Balance</span>
+                <span className="shrink-0">AI Credits</span>
               </span>
               <span className="block truncate text-[15px] font-bold leading-tight tabular-nums tracking-[-0.01em]">
-                {balance ? formatCents(balance.balanceCents, balance.symbol) : who === "member" ? "—" : " "}
+                {balance ? formatCredits(balance.balanceCents) : who === "member" ? "—" : " "}
               </span>
             </span>
             <Link href={`${base}/usage`} prefetch={false} className="ai-strip-cta">

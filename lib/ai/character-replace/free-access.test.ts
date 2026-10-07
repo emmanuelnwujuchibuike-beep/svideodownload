@@ -58,7 +58,7 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     const claim = start.indexOf("claimJobStart({");
     // 2026-09-21: the consume carries the operator's CURRENT count (the pill said "1 remaining" after the admin lowered it)
     const consume = start.indexOf("const use = await consumeFreeUse({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot, granted:");
-    const reserve = start.indexOf("reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot })");
+    const reserve = start.indexOf("reserveCharacterReplaceCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...ledgerSnapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } })");
     expect(elig).toBeGreaterThan(-1);
     expect(fits).toBeGreaterThan(elig);
     expect(claim).toBeGreaterThan(fits);
@@ -66,7 +66,9 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(reserve).toBeGreaterThan(consume);
     // the balance check is skipped only for a complimentary creation; the claim carries the funding source and a zero charge
     // 0167: nor for a generation paid with included credits
-    expect(start).toContain("if (!complimentary && !useCredits && balanceBefore < snapshot.totalCents) {");
+    // 0184: the wallet holds credits — the comparison is to the engine's credits, never the cents total
+    expect(start).toContain("if (!complimentary && !useCredits && balanceBefore < walletCharge.creditsRequired) {");
+    expect(start).not.toContain("balanceBefore < snapshot.totalCents");
     expect(start).toContain('funding: complimentary ? "free" : useCredits ? "credits" : "balance",');
     expect(start).toContain("chargedCents: complimentary || useCredits ? 0 : snapshot.totalCents,");
     // a refused free use (the race) reverts the claim and answers its own code

@@ -4,6 +4,7 @@ import { ArrowRight, ChevronDown, ChevronRight, Loader2, Sparkles, type LucideIc
 import { useId, useState, type ReactNode } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,9 +36,8 @@ import { cn } from "@/lib/utils";
 /* ─────────────────────────────── the cost ────────────────────────────────── */
 
 export interface AiCostProps {
-  /** The SERVER's number, in minor units. Never computed in the browser (§55). */
-  totalCents: number | null;
-  currencySymbol: string;
+  /** The SERVER's number, in CREDITS (0184). Never computed in the browser (§55). */
+  credits: number | null;
   /** What the price is for, in the member's terms — "5s · 720p". */
   detail?: string | null;
   /** Which purse this will come out of (§20). */
@@ -58,8 +58,8 @@ export interface AiCostProps {
  * than disappearing, so the bar does not jump and the member is never briefly
  * shown nothing where a price was.
  */
-export function AiCost({ totalCents, currencySymbol, detail, funding, loading, problem }: AiCostProps) {
-  const money = totalCents === null ? null : `${currencySymbol}${(totalCents / 100).toFixed(2)}`;
+export function AiCost({ credits, detail, funding, loading, problem }: AiCostProps) {
+  const money = credits === null ? null : credits === 0 ? "Free" : formatCredits(credits);
   return (
     <div className="min-w-0 shrink-0">
       <div className="flex items-baseline gap-2">

@@ -142,7 +142,7 @@ export async function initializeAiTopup(opts: {
    */
   purpose?: typeof AI_TOPUP_PURPOSE | typeof CHARACTER_REPLACE_TOPUP_PURPOSE;
   /** The wallet amount and the conversion this charge pays for (lib/ai/character-replace/topup-fx.ts). Server-set; never from a browser. */
-  pin?: { ai_topup_cents: number; wallet_currency: string; charged_currency: string; fx_minor_per_usd: number | null };
+  pin?: { ai_topup_cents: number; wallet_currency: string; charged_currency: string; fx_minor_per_usd: number | null; ai_topup_pack?: string | null; ai_topup_credits?: number };
 }): Promise<string> {
   const data = await paystack<{ data: { authorization_url: string } }>(
     "/transaction/initialize",
@@ -219,7 +219,7 @@ export interface PaystackVerifiedCharge {
   amount?: number;
   currency?: string;
   reference?: string;
-  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string; wallet_currency?: string; charged_currency?: string; fx_minor_per_usd?: number | string | null };
+  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string; wallet_currency?: string; charged_currency?: string; fx_minor_per_usd?: number | string | null; ai_topup_pack?: string | null; ai_topup_credits?: number | string };
   /**
    * The receipt fields (2026-09-13). `gateway_response` is Paystack's
    * CUSTOMER-FACING status line — "Approved", "Insufficient Funds",
@@ -269,7 +269,7 @@ export interface PaystackEventData {
    * both arrive as `charge.success`, and this is the only thing that tells them
    * apart — see the branch in the webhook route.
    */
-  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string; wallet_currency?: string; charged_currency?: string; fx_minor_per_usd?: number | string | null };
+  metadata?: { user_id?: string; purpose?: string; ai_topup_cents?: number | string; wallet_currency?: string; charged_currency?: string; fx_minor_per_usd?: number | string | null; ai_topup_pack?: string | null; ai_topup_credits?: number | string };
   /**
    * Minor units, as PAYSTACK reports them.
    *

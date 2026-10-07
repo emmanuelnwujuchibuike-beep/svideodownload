@@ -5,6 +5,7 @@ import { after } from "next/server";
 import { policyBlockEvent, screenAiText } from "@/lib/ai/acceptable-use";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement, type CreditDecision } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { walletShortfall } from "@/lib/ai/credits/units";
 import type { AiEntitlement } from "@/lib/ai/entitlement";
 import type { AiErrorCode } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -187,7 +188,7 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
   const shown = quoteTextToAudio({ characters, freeCharactersAvailable: before.remaining }, config, { currency: settings.frenzAiCurrency });
   // the member was shown a price; if today's price for this text differs, they see the new one before anything is taken
   if (body.quote && (body.quote.totalCents !== shown.totalCents || body.quote.pricingConfigVersion !== shown.pricingConfigVersion)) {
-    return refuse("PRICE_CHANGED", { quote: publicTextToAudioQuote(shown) });
+    return refuse("PRICE_CHANGED", { quote: { ...publicTextToAudioQuote(shown), credits: shown.totalCents > 0 ? textToAudioCredits(shown, config, plans).creditsRequired : 0 } });
   }
   const taken = await consumeFreeCharacters(ownerId, monthKey, characters, allowance);
   if (!taken) return refuse("INTERNAL_ERROR");
@@ -198,7 +199,7 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
   if (quote.totalCents !== shown.totalCents) {
     // a concurrent generation took the last free characters between the read and the take: the price moved, the member decides
     await giveBack("price moved");
-    return refuse("PRICE_CHANGED", { quote: publicTextToAudioQuote(quote) });
+    return refuse("PRICE_CHANGED", { quote: { ...publicTextToAudioQuote(quote), credits: quote.totalCents > 0 ? textToAudioCredits(quote, config, plans).creditsRequired : 0 } });
   }
 
   /* ── B · fund: credits → the wallet; nothing when fully free ──────────── */
@@ -221,15 +222,17 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
       }
     }
   }
+  // 🔴 the wallet holds credits (0184): the same engine figure an AI plan would count
+  const walletCharge = textToAudioCredits(quote, config, plans);
   const balanceBefore = free || useCredits ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
   if (!free && !useCredits) {
     if (balanceBefore === null) {
       await giveBack("balance read failed");
       return refuse("INTERNAL_ERROR");
     }
-    if (balanceBefore < quote.totalCents) {
+    if (balanceBefore < walletCharge.creditsRequired) {
       await giveBack("balance short");
-      return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: quote.totalCents, shortfallCents: quote.totalCents - balanceBefore, currency: quote.currency, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
+      return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore, walletCharge.creditsRequired, creditDecision ? { credits: creditDecisionView(creditDecision) } : {}));
     }
   }
 
@@ -264,7 +267,7 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
       ? { type: "FREE_ALLOWANCE", normalPriceCents: quote.totalCents, chargedCents: 0, currency: quote.currency }
       : useCredits && creditDecision
         ? { type: "CREDITS", normalPriceCents: quote.totalCents, chargedCents: 0, currency: quote.currency, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan, creditsConfigVersion: creditDecision.estimate.configVersion }
-        : { type: "PAID", normalPriceCents: quote.totalCents, chargedCents: quote.totalCents, currency: quote.currency },
+        : { type: "PAID", normalPriceCents: quote.totalCents, chargedCents: quote.totalCents, currency: quote.currency, credits: walletCharge.creditsRequired, unit: "CREDIT" },
     free_characters: { monthKey, covered: taken.covered },
     provider_plan: { id: resolved.route === "replicate" ? "replicate" : "elevenlabs", model: resolved.model, version: resolved.provider.version || null, scope: "text_to_audio", providersVersion: settings.frenzAiProviders.version, decidedAt: now, test: shared.isAdmin && settings.frenzAiProviders.adminJobsAreTests },
     provider_cost_estimate: quote.providerCostEstimateUsdCents !== null ? { totalUsdCents: quote.providerCostEstimateUsdCents, ttsUsdCents: quote.providerCostEstimateUsdCents } : null,
@@ -324,12 +327,12 @@ export async function generateTextToAudio(input: { subject: AiSubject & { kind: 
     }
   } else if (!free) {
     try {
-      balanceAfter = await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, snapshot: ledgerSnapshot as unknown as Parameters<typeof reserveAiWalletCharge>[0]["snapshot"] });
+      balanceAfter = await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...ledgerSnapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } });
     } catch (e) {
       await revertJobStartClaim(job.id, job.metadata ?? {});
       await endUnclaimed("wallet reservation refused");
       const msg = String(e);
-      if (/insufficient/i.test(msg)) return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: quote.totalCents, shortfallCents: Math.max(0, quote.totalCents - (balanceBefore ?? 0)), currency: quote.currency });
+      if (/insufficient/i.test(msg)) return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore ?? 0, walletCharge.creditsRequired));
       console.error("[tta/generate] reserve threw", { jobId: job.id, error: msg.slice(0, 200) });
       return refuse("INTERNAL_ERROR");
     }

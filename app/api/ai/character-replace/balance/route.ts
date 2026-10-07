@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { WALLET_UNIT } from "@/lib/ai/credits/units";
+import { publicWalletOffer } from "@/lib/ai/credits/wallet-config";
+
 import { concurrencyLimitFor } from "@/lib/ai/character-replace/config";
 import { deviceCookieHeader, freeEligibilityMessage, getCharacterReplaceFreeEligibility, newDeviceId, readDeviceId } from "@/lib/ai/character-replace/free-access";
 import { countOpenJobs } from "@/lib/ai/character-replace/open-job";
@@ -104,9 +107,9 @@ export async function GET(request: Request) {
         balanceCents,
         currency: settings.frenzAiCurrency,
         symbol: aiCurrencySymbol(settings.frenzAiCurrency),
-        topupOptionsCents: recharge.packages.filter((p) => p.enabled).map((p) => p.amountCents),
-        minTopupCents: recharge.minCents,
-        maxTopupCents: recharge.maxCents,
+        unit: WALLET_UNIT,
+        // 0184: credit packs priced in USD; the checkout converts (below)
+        offer: publicWalletOffer(settings.frenzAiPlans.wallet, settings.frenzAiPlans.credits.centsPerCredit),
         /*
           2026-09-20: when the wallet is USD and Paystack collects naira, the
           sheet prints "≈ ₦7,500 at checkout" beside "$5.00" from this — the

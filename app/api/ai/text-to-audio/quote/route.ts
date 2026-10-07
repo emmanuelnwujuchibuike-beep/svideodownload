@@ -59,7 +59,9 @@ export async function POST(request: Request) {
         credits = creditDecisionView(decideCredits(creditEntitlement, { feature: feature.id, priceCents: estimate.priceCents, mode: "text_to_audio", durationMs: null, lines: quote.lines.filter((l) => l.amountCents > 0).map((l) => ({ label: l.label, cents: l.amountCents })) }, plans));
       }
     }
-    return NextResponse.json({ quote: publicTextToAudioQuote(quote), free: { allowance: free.allowance, used: free.used, remaining: free.remaining, afterThis: Math.max(0, free.remaining - quote.freeCharactersCovered) }, credits, walletFallback: plans.enabled ? plans.walletFallback : "allow" });
+    // 🔴 0184: what the wallet would be charged, in credits — the same engine figure a plan would count
+    const walletCredits = quote.totalCents > 0 ? textToAudioCredits(quote, config, plans).creditsRequired : 0;
+    return NextResponse.json({ quote: { ...publicTextToAudioQuote(quote), credits: walletCredits }, unit: "CREDIT", free: { allowance: free.allowance, used: free.used, remaining: free.remaining, afterThis: Math.max(0, free.remaining - quote.freeCharactersCovered) }, credits, walletFallback: plans.enabled ? plans.walletFallback : "allow" });
   } catch (e) {
     console.error("[ai/tta/quote] failed", { subject: subject.key, error: String(e) });
     return NextResponse.json(aiErrorBody("INTERNAL_ERROR"), { status: aiErrorStatus("INTERNAL_ERROR") });

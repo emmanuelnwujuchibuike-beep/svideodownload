@@ -213,7 +213,7 @@ export interface TextToAudioPublicConfig {
   minimumCharacters: number;
   maximumCharacters: number;
   freeCharactersPerMonth: number;
-  /** "from $0.005 per character" — a sentence, server-formatted. */
+  /** "3 credits per 100 characters" — a sentence, server-formatted, in credits (0184). */
   priceLine: string | null;
   /** 2026-09-27: whether the workspace offers Natural / Expressive / Calm, and which one starts selected. */
   deliveryChoice: boolean;
@@ -221,9 +221,13 @@ export interface TextToAudioPublicConfig {
   pricingVersion: number;
 }
 
-export function publicTextToAudioConfig(c: TextToAudioConfig, currency: { code: string; symbol: string }, usable: boolean): TextToAudioPublicConfig {
+export function publicTextToAudioConfig(c: TextToAudioConfig, currency: { code: string; symbol: string }, usable: boolean, centsPerCredit = 10): TextToAudioPublicConfig {
   const m = c.models[c.route];
-  const perChar = m.perCharacterCents * m.qualityMultiplier;
-  const priceLine = perChar > 0 ? `${currency.symbol}${(perChar / 100).toFixed(perChar >= 100 ? 2 : 3).replace(/0+$/, "").replace(/\.$/, "")} per character` : m.perRequestCents > 0 ? `${currency.symbol}${(m.perRequestCents / 100).toFixed(2)} per generation` : null;
+  const cpc = Math.max(1, centsPerCredit);
+  // 0184: the rate in CREDITS per 100 characters (per character it is a fraction of a cent)
+  const perHundred = (m.perCharacterCents * m.qualityMultiplier * m.creditMultiplier * 100) / cpc;
+  const round = (n: number) => (n >= 10 ? Math.round(n) : Math.round(n * 10) / 10);
+  const perRequest = round((m.perRequestCents * m.creditMultiplier) / cpc);
+  const priceLine = perHundred > 0 ? `${round(perHundred)} credit${round(perHundred) === 1 ? "" : "s"} per 100 characters` : perRequest > 0 ? `${perRequest} credit${perRequest === 1 ? "" : "s"} per generation` : null;
   return { enabled: c.enabled && usable, currency: currency.code, symbol: currency.symbol, minimumCharacters: c.minimumCharacters, maximumCharacters: c.maximumCharacters, freeCharactersPerMonth: c.freeCharactersPerMonth, priceLine, deliveryChoice: c.deliveryChoice, defaultDelivery: c.defaultDelivery, pricingVersion: c.pricingVersion };
 }

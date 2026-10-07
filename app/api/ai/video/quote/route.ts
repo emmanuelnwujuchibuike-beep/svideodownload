@@ -7,7 +7,7 @@ import { aiFeature } from "@/lib/ai/jobs";
 import { klingConfigured } from "@/lib/ai/kling/client";
 import { klingCapability, klingPipeline } from "@/lib/ai/kling/pipelines/registry";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
-import { publicKlingQuote } from "@/lib/ai/video/create";
+import { publicKlingQuote, videoCredits } from "@/lib/ai/video/create";
 import { FREE_VIDEO_SUMMARY, freeVideoQualifies, type FreeVideoRequest } from "@/lib/ai/video/free-video";
 import { videoQuoteRequestSchema } from "@/lib/ai/video/schemas";
 import { getAdminUser } from "@/lib/admin/guard";
@@ -80,5 +80,6 @@ export async function POST(request: Request) {
       complimentary = { eligible: !!e?.eligible && (e.remainingFreeUses === null || e.remainingFreeUses > 0), rules: FREE_VIDEO_SUMMARY };
     }
   }
-  return NextResponse.json({ ok: true, quote: publicKlingQuote(quote), currency: settings.frenzAiCurrency, complimentary }, { status: 200, headers });
+  const credits = videoCredits(quote, feature.id, pipeline.label, settings.frenzAiPlans).creditsRequired;
+  return NextResponse.json({ ok: true, quote: publicKlingQuote(quote, credits), currency: settings.frenzAiCurrency, complimentary }, { status: 200, headers });
 }

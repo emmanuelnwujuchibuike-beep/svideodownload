@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { quoteCharacterReplace } from "@/lib/ai/character-replace/pricing";
 import { REPLACEMENT_MODES, replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { AI_PLAN_IDS, AI_PLANS_BOUNDS, normalizeAiPlansConfig, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits/config";
+import { WALLET_BOUNDS } from "@/lib/ai/credits/wallet-config";
 import { calculateCredits } from "@/lib/ai/credits/engine";
 import { formatCents } from "@/lib/ai/economy";
 import { aiCurrencySymbol, majorInputToMinor, minorToMajorInput } from "@/lib/landing/bounds";
@@ -60,6 +61,12 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [modeMult, setModeMult] = useState<Record<string, string>>(Object.fromEntries(REPLACEMENT_MODES.map((m) => [m, String(cfg.credits.modeMultiplier[m] ?? 1)])));
   const [qualityMult, setQualityMult] = useState<Record<string, string>>(Object.fromEntries(QUALITY_KEYS.map((q) => [q, String(cfg.credits.qualityMultiplier[q] ?? 1)])));
   const [walletFallback, setWalletFallback] = useState(cfg.walletFallback);
+  // 0184: the credit packs a member buys, and which provider takes the payment
+  const [packs, setPacks] = useState(cfg.wallet.packs.map((p) => ({ credits: String(p.credits), bonus: String(p.bonusCredits), enabled: p.enabled, highlight: p.highlight })));
+  const [customEnabled, setCustomEnabled] = useState(cfg.wallet.custom.enabled);
+  const [customMin, setCustomMin] = useState(String(cfg.wallet.custom.minCredits));
+  const [customMax, setCustomMax] = useState(String(cfg.wallet.custom.maxCredits));
+  const [provider, setProvider] = useState(cfg.wallet.provider);
   const [timezone, setTimezone] = useState(cfg.reset.timezone);
   const [weekStartsOn, setWeekStartsOn] = useState(String(cfg.reset.weekStartsOn));
   const [busy, setBusy] = useState(false);
@@ -113,8 +120,13 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
       },
       reset: { timezone: timezone.trim() || cfg.reset.timezone, weekStartsOn: int(weekStartsOn, cfg.reset.weekStartsOn) },
       walletFallback,
+      wallet: {
+        packs: packs.map((p) => ({ credits: int(p.credits, 0), bonusCredits: int(p.bonus, 0), enabled: p.enabled, highlight: p.highlight })).filter((p) => p.credits > 0),
+        custom: { enabled: customEnabled, minCredits: int(customMin, cfg.wallet.custom.minCredits), maxCredits: int(customMax, cfg.wallet.custom.maxCredits) },
+        provider,
+      },
     }),
-    [centsPerCredit, cfg, enabled, freeCounts, freeEnabled, minimum, modeMult, plans, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
+    [centsPerCredit, cfg, customEnabled, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
   );
 
   /* the same bounds the server enforces, refused before the request leaves */
@@ -129,6 +141,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
       if (p.paystackPlanCode && !/^[A-Za-z0-9_-]{1,100}$/.test(p.paystackPlanCode)) out.push(`${p.label}: that doesn't look like a Paystack plan code (PLN_…).`);
     }
     if (payload.credits.centsPerCredit < B.centsPerCredit.min) out.push("A credit must be worth at least one minor unit.");
+    if (payload.wallet.packs.length > WALLET_BOUNDS.packs) out.push(`At most ${WALLET_BOUNDS.packs} packs.`);
+    if (new Set(payload.wallet.packs.map((p) => p.credits)).size !== payload.wallet.packs.length) out.push("Two packs have the same number of credits — each size can be one pack.");
+    if (payload.wallet.custom.maxCredits < payload.wallet.custom.minCredits) out.push("The custom maximum is below the minimum.");
     for (const [k, v] of [...Object.entries(payload.credits.modeMultiplier), ...Object.entries(payload.credits.qualityMultiplier)]) if (v < B.multiplier.min || v > B.multiplier.max) out.push(`Multiplier ${k} must be ${B.multiplier.min}–${B.multiplier.max}.`);
     try {
       new Intl.DateTimeFormat("en-US", { timeZone: payload.reset.timezone });
@@ -143,6 +158,8 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     if (!payload.enabled) out.push("The AI plans are OFF: nothing can be bought and no credits are spent; the wallet and the complimentary creations work as before.");
     for (const id of AI_PLAN_IDS) if (payload.plans[id].enabled && !payload.plans[id].paystackPlanCode) out.push(`${payload.plans[id].label} has no Paystack plan code — it is shown as coming soon and cannot be bought.`);
     if (payload.walletFallback === "allow") out.push("Wallet fallback = allow: a plan member whose allowance is short is charged from their balance without being asked.");
+    if (!payload.wallet.packs.some((p) => p.enabled) && !payload.wallet.custom.enabled) out.push("No pack is on and the custom amount is off: nobody can buy credits.");
+    if (payload.wallet.provider === "bachs") out.push("Top-ups go through Bachs. Make sure its keys are set on the server; Paystack payments already started still credit through their webhook.");
     if (payload.walletFallback === "off") out.push("Wallet fallback = off: a plan member whose allowance is short can only upgrade — their balance is not offered for that generation.");
     return out;
   }, [payload]);
@@ -311,6 +328,47 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
               </ul>
             </div>
           ) : null}
+        </Group>
+
+        <Group title="Credit packs — what members buy">
+          <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+            A pack is that many credits at {symbol}{(payload.credits.centsPerCredit / 100).toFixed(2)} each; a bonus is extra credits on top, recorded as its own statement line. What a payment buys is
+            worked out from the amount actually paid — never from what the browser says. The checkout converts to its own currency (Paystack: {cr.recharge.checkoutCurrency}).
+          </p>
+          <div className="space-y-2">
+            {packs.map((p, i) => {
+              const set = (patch: Partial<typeof p>) => setPacks((all) => all.map((x, j) => (j === i ? { ...x, ...patch } : patch.highlight ? { ...x, highlight: false } : x)));
+              const credits = int(p.credits, 0);
+              return (
+                <div key={i} className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 px-3 py-2">
+                  <Field id={`pack-${i}-credits`} label="Credits"><input id={`pack-${i}-credits`} inputMode="numeric" value={p.credits} onChange={(e) => set({ credits: e.target.value })} className={small} /></Field>
+                  <Field id={`pack-${i}-bonus`} label="Bonus credits"><input id={`pack-${i}-bonus`} inputMode="numeric" value={p.bonus} onChange={(e) => set({ bonus: e.target.value })} className={small} /></Field>
+                  <span className="pb-2 text-sm tabular-nums text-muted-foreground">= {formatCents(credits * payload.credits.centsPerCredit, symbol)}</span>
+                  <label className="flex items-center gap-1.5 pb-2 text-xs"><input type="checkbox" checked={p.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> On</label>
+                  <label className="flex items-center gap-1.5 pb-2 text-xs"><input type="radio" name="pack-highlight" checked={p.highlight} onChange={() => set({ highlight: true })} /> Highlight</label>
+                  <button type="button" onClick={() => setPacks((all) => all.filter((_, j) => j !== i))} className="pb-2 text-xs font-semibold text-rose-600">Remove</button>
+                </div>
+              );
+            })}
+            {packs.length < WALLET_BOUNDS.packs ? (
+              <button type="button" onClick={() => setPacks((all) => [...all, { credits: "", bonus: "0", enabled: true, highlight: false }])} className="rounded-xl border border-dashed border-border px-3 py-2 text-xs font-semibold">
+                + Add a pack
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Toggle label="Custom amount" hint="Members may type a number of credits within the bounds." checked={customEnabled} onChange={setCustomEnabled} />
+            <Field id="custom-min" label="Custom minimum (credits)"><input id="custom-min" inputMode="numeric" value={customMin} onChange={(e) => setCustomMin(e.target.value)} className={small} /></Field>
+            <Field id="custom-max" label="Custom maximum (credits)"><input id="custom-max" inputMode="numeric" value={customMax} onChange={(e) => setCustomMax(e.target.value)} className={small} /></Field>
+          </div>
+          <div className="mt-4">
+            <Field id="topup-provider" label="Payment provider for top-ups" hint="Payments already started with the other provider still credit when they settle.">
+              <select id="topup-provider" value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)} className={input}>
+                <option value="paystack">Paystack</option>
+                <option value="bachs">Bachs (bachs.io)</option>
+              </select>
+            </Field>
+          </div>
         </Group>
 
         <Group title="Reset">

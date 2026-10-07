@@ -18,7 +18,7 @@ import { AiPlansSheet } from "@/features/ai/credits/ai-plans-sheet";
 import { useTextToAudio } from "@/features/ai/text-to-audio/use-text-to-audio";
 import { getAiCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
-import { formatCents } from "@/lib/ai/economy";
+import { formatCredits } from "@/lib/ai/credits/units";
 import { isActiveStatus, type AiJobView } from "@/lib/ai/jobs";
 import { TTS_DELIVERIES, TTS_DELIVERY_LABEL } from "@/lib/ai/voice/voice-settings";
 import { track } from "@/lib/analytics/client";
@@ -72,7 +72,6 @@ export function TextToAudioWorkspace({
 }) {
   const ws = useTextToAudio({ initialJobId, initialVoiceId });
   const cfg = ws.config?.config ?? null;
-  const symbol = cfg?.symbol ?? "$";
   const [plansSheet, setPlansSheet] = useState(false);
   const [rechargeSheet, setRechargeSheet] = useState(false);
   /*
@@ -110,9 +109,11 @@ export function TextToAudioWorkspace({
     the recharge sheet rather than letting the press fail.
   */
   const needsMoney = !!quoted && quoted.quote.totalCents > 0 && !creditsCover;
-  const balanceCents = ws.balance?.balanceCents ?? null;
-  const shortOfBalance = needsMoney && balanceCents !== null && balanceCents < quoted.quote.totalCents;
-  const shortfallCents = shortOfBalance && quoted ? quoted.quote.totalCents - (balanceCents ?? 0) : 0;
+  // 🔴 0184: the wallet holds credits; the quote's `credits` is what it would be charged
+  const walletCredits = quoted?.quote.credits ?? 0;
+  const balanceCredits = ws.balance?.balanceCents ?? null;
+  const shortOfBalance = needsMoney && balanceCredits !== null && balanceCredits < walletCredits;
+  const shortfallCredits = shortOfBalance ? walletCredits - (balanceCredits ?? 0) : 0;
   const generating = ws.launch.phase === "generating";
   const watching = !!ws.jobId;
   const job = ws.watch.job;
@@ -362,11 +363,13 @@ export function TextToAudioWorkspace({
                 <Notice tone="error">{ws.quote.message}</Notice>
               ) : quoted ? (
                 <div className="space-y-2">
-                  {quoted.quote.lines.map((l) => (
-                    <Row key={l.key} label={l.label} value={l.amountCents === 0 ? "Free" : formatCents(l.amountCents, symbol)} />
+                  {/* 0184: members see credits only — the free characters, then the charge */}
+                  {quoted.quote.lines.filter((l) => l.key === "free").map((l) => (
+                    <Row key={l.key} label={l.label} value="Free" />
                   ))}
+                  {quoted.quote.billableCharacters > 0 ? <Row label={`${quoted.quote.billableCharacters.toLocaleString("en-US")} characters with credits`} value={formatCredits(creditsCover ? (credits?.required ?? 0) : walletCredits)} /> : null}
                   <div className="mt-1 border-t border-border/70 pt-2">
-                    <Row label="Total" value={free ? "Free" : creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quoted.quote.totalCents, symbol)} strong />
+                    <Row label="Total" value={free ? "Free" : formatCredits(creditsCover ? (credits?.required ?? 0) : walletCredits)} strong />
                   </div>
                   <p className="text-[11.5px] text-muted-foreground">
                     {quoted.free.allowance > 0 ? `${quoted.free.afterThis.toLocaleString("en-US")} free characters would be left this month.` : null} {cfg?.priceLine ? `Rate: ${cfg.priceLine}.` : null}
@@ -375,15 +378,15 @@ export function TextToAudioWorkspace({
                   {needsMoney && ws.balance ? (
                     <p className={cn("text-[11.5px]", shortOfBalance ? "font-semibold text-amber-600" : "text-muted-foreground")}>
                       {shortOfBalance
-                        ? `Your balance is ${formatCents(balanceCents ?? 0, symbol)} — ${formatCents(shortfallCents, symbol)} short.`
-                        : `Paid from your balance of ${formatCents(balanceCents ?? 0, symbol)}.`}
+                        ? `You have ${formatCredits(balanceCredits ?? 0)} — ${formatCredits(shortfallCredits)} short.`
+                        : `Paid from your ${formatCredits(balanceCredits ?? 0)}.`}
                     </p>
                   ) : null}
                   {creditsShort ? (
                     <Notice tone="muted">
                       Your plan credits do not cover this one.{" "}
                       <button type="button" onClick={() => ws.setFunding("wallet")} className="font-semibold underline underline-offset-2">
-                        Use my balance
+                        Use my credits
                       </button>{" "}
                       ·{" "}
                       <button type="button" onClick={openPlans} className="font-semibold underline underline-offset-2">
@@ -409,7 +412,7 @@ export function TextToAudioWorkspace({
                     }}
                     className="font-semibold underline underline-offset-2"
                   >
-                    Recharge
+                    Top up credits
                   </button>
                 ) : (
                   <button type="button" onClick={ws.clearLaunchError} className="font-semibold underline underline-offset-2">
@@ -435,7 +438,7 @@ export function TextToAudioWorkspace({
                 }}
                 className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
               >
-                <Plus className="h-4 w-4" aria-hidden /> Recharge to continue · {formatCents(shortfallCents, symbol)} short
+                <Plus className="h-4 w-4" aria-hidden /> Top up to continue · {formatCredits(shortfallCredits)} short
               </button>
             ) : (
               <button
@@ -445,7 +448,7 @@ export function TextToAudioWorkspace({
                 className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
               >
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <AudioLines className="h-4 w-4" aria-hidden />}
-                {generating ? "Generating…" : free ? "Generate · Free" : quoted ? `Generate · ${creditsCover ? `${credits?.required ?? 0} credits` : formatCents(quoted.quote.totalCents, symbol)}` : "Generate"}
+                {generating ? "Generating…" : free ? "Generate · Free" : quoted ? `Generate · ${formatCredits(creditsCover ? (credits?.required ?? 0) : walletCredits)}` : "Generate"}
               </button>
             )}
             <p className="text-center text-[11.5px] text-muted-foreground">
@@ -482,7 +485,7 @@ export function TextToAudioWorkspace({
           }}
           balance={ws.balance}
           returnTo={basePath}
-          suggestedCents={shortfallCents > 0 ? shortfallCents : null}
+          suggestedCredits={shortfallCredits > 0 ? shortfallCredits : null}
         />
       ) : null}
       {plansSheet ? (
@@ -494,7 +497,7 @@ export function TextToAudioWorkspace({
           }}
           plans={plansCatalogue}
           currentPlan={credits?.plan ?? null}
-          shortfall={credits && !credits.affordable ? { ...credits, walletOffered: true, priceLabel: quoted ? formatCents(quoted.quote.totalCents, symbol) : null } : null}
+          shortfall={credits && !credits.affordable ? { ...credits, walletOffered: true, priceLabel: quoted ? formatCredits(walletCredits) : null } : null}
           returnTo={basePath}
           onPayFromWallet={() => {
             ws.setFunding("wallet");

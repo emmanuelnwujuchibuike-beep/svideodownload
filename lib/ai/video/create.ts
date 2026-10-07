@@ -5,6 +5,7 @@ import { consumeFreeUse, getCharacterReplaceFreeEligibility, readDeviceId } from
 import { calculateCredits } from "@/lib/ai/credits/engine";
 import { creditDecisionView, decideCredits, getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 import { currentPeriods, reserveAiCredits } from "@/lib/ai/credits/store";
+import { walletShortfall } from "@/lib/ai/credits/units";
 import type { AiEntitlement } from "@/lib/ai/entitlement";
 import { AiJobError } from "@/lib/ai/errors";
 import { releaseJobFunding } from "@/lib/ai/funding";
@@ -150,8 +151,9 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     one price and would be charged another is asked again rather than silently
     charged the new one.
   */
+  const walletCharge = videoCredits(quote, featureDef.id, pipeline.label, plans);
   if (typeof opts.shownTotalCents === "number" && opts.shownTotalCents !== quote.totalUsdCents) {
-    return refuse("PRICE_CHANGED", { quote: publicKlingQuote(quote) });
+    return refuse("PRICE_CHANGED", { quote: publicKlingQuote(quote, walletCharge.creditsRequired) });
   }
 
   /* ── 4 · fund: the complimentary video, then credits, then the wallet ──── */
@@ -184,8 +186,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   if (!complimentary && plans.enabled) {
     const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
     if (creditEntitlement.plan) {
-      const estimate = calculateCredits({ feature: featureDef.id, priceCents: quote.totalUsdCents, mode: "video", durationMs: Math.round(quote.billableSeconds * 1000), lines: [{ label: pipeline.label, cents: quote.totalUsdCents }] }, plans);
-      creditDecision = decideCredits(creditEntitlement, { feature: featureDef.id, priceCents: estimate.priceCents, mode: "video", durationMs: Math.round(quote.billableSeconds * 1000), lines: [{ label: pipeline.label, cents: quote.totalUsdCents }] }, plans);
+      creditDecision = decideCredits(creditEntitlement, { feature: featureDef.id, priceCents: quote.totalUsdCents, mode: "video", quality: quote.resolution, durationMs: Math.round(quote.billableSeconds * 1000), lines: [{ label: pipeline.label, cents: quote.totalUsdCents }] }, plans);
       if (creditDecision.affordable && !opts.preferWallet) useCredits = true;
       else if (!opts.preferWallet && plans.walletFallback !== "allow") {
         return refuse("CR_CREDITS_REQUIRED", { credits: creditDecisionView(creditDecision), walletFallback: plans.walletFallback, priceCents: quote.totalUsdCents });
@@ -199,8 +200,9 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   const balanceBefore = useCredits || complimentary ? null : await getAiWalletBalanceCents(ownerId).catch(() => null);
   if (!useCredits && !complimentary) {
     if (balanceBefore === null) return refuse("INTERNAL_ERROR");
-    if (balanceBefore < quote.totalUsdCents) {
-      return refuse("CR_BALANCE_REQUIRED", { balanceCents: balanceBefore, requiredCents: quote.totalUsdCents, shortfallCents: quote.totalUsdCents - balanceBefore, ...(creditDecision ? { credits: creditDecisionView(creditDecision) } : {}) });
+    // 🔴 the wallet holds credits (0184): the comparison is credits to credits, never to the list price in cents
+    if (balanceBefore < walletCharge.creditsRequired) {
+      return refuse("CR_BALANCE_REQUIRED", walletShortfall(balanceBefore, walletCharge.creditsRequired, creditDecision ? { credits: creditDecisionView(creditDecision) } : {}));
     }
   }
 
@@ -231,7 +233,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
       ? { type: "FREE_TRIAL", normalPriceCents: quote.totalUsdCents, chargedCents: 0, freeEntitlementUsed: 1 }
       : useCredits && creditDecision
       ? { type: "CREDITS", normalPriceCents: quote.totalUsdCents, chargedCents: 0, credits: creditDecision.estimate.creditsRequired, plan: creditDecision.plan }
-      : { type: "PAID", normalPriceCents: quote.totalUsdCents, chargedCents: quote.totalUsdCents },
+      : { type: "PAID", normalPriceCents: quote.totalUsdCents, chargedCents: quote.totalUsdCents, credits: walletCharge.creditsRequired, unit: "CREDIT" },
     /*
       🔴 The plan says `kling`, and a job keeps its provider for ever. This is
       what `jobVendor()` reads to pick the adapter that polls and cancels it.
@@ -320,7 +322,7 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
         resolution: quote.resolution,
         pricingVersion: quote.pricingVersion,
       };
-      await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, snapshot: snapshot as unknown as Parameters<typeof reserveAiWalletCharge>[0]["snapshot"] });
+      await reserveAiWalletCharge({ userId: ownerId, jobId: job.id, credits: walletCharge.creditsRequired, snapshot: { ...snapshot, creditBreakdown: walletCharge.breakdown, creditsConfigVersion: walletCharge.configVersion } });
       reserved = true;
     }
   } catch {
@@ -384,14 +386,23 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   return { ok: true, jobId: job.id, quote, funding: fundingKind, balanceCents: balanceBefore, credits: creditDecision ? creditDecisionView(creditDecision) : null };
 }
 
-/** The quote as a browser may see it — no provider cost, no units, no margin. */
-export function publicKlingQuote(q: KlingQuote & { ok: true }) {
+/**
+ * What a video costs in credits — the ONE engine, so the wallet charge, the
+ * AI-plan allowance and the number on the page are the same figure (0184).
+ */
+export function videoCredits(q: KlingQuote & { ok: true }, featureId: string, label: string, plans: LandingSettings["frenzAiPlans"]) {
+  return calculateCredits({ feature: featureId, priceCents: q.totalUsdCents, mode: "video", quality: q.resolution, durationMs: Math.round(q.billableSeconds * 1000), lines: [{ label, cents: q.totalUsdCents }] }, plans);
+}
+
+/** The quote as a browser may see it — no provider cost, no units, no margin. `credits` is what the member is charged. */
+export function publicKlingQuote(q: KlingQuote & { ok: true }, credits?: number | null) {
   return {
     feature: q.feature,
     resolution: q.resolution,
     seconds: q.seconds,
     billableSeconds: q.billableSeconds,
     totalCents: q.totalUsdCents,
+    credits: credits ?? null,
     pricingVersion: q.pricingVersion,
   };
 }

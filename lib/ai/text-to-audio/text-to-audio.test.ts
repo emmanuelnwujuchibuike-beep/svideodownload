@@ -112,7 +112,9 @@ describe("the configuration and the admin switch", () => {
     const text = JSON.stringify(pub);
     expect(text).not.toMatch(/replicate|elevenlabs|eleven_v3/i);
     expect(pub.freeCharactersPerMonth).toBe(500);
-    expect(pub.priceLine).toMatch(/per character/);
+    // 0184: the rate is in credits, never a currency
+    expect(pub.priceLine).toMatch(/credits? per 100 characters/);
+    expect(pub.priceLine).not.toMatch(/[₦$]/);
   });
 });
 

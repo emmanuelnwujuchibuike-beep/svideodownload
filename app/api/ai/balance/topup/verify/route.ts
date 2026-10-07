@@ -6,6 +6,7 @@ import { getLandingSettings } from "@/lib/landing/settings";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
+import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -177,11 +178,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ credited: false });
       }
       const crAmount = credit.amountCents;
-      const crBalance = await creditVerifiedCharacterReplaceRecharge({
+      const crCredited = await creditVerifiedCharacterReplaceRecharge({
         userId: user.id,
         reference,
         amountCents: crAmount,
         currency: crCurrency,
+        packId: charge.metadata?.ai_topup_pack,
         channel: charge.channel ?? null,
         paidAt: charge.paid_at ?? null,
         gatewayResponse: charge.gateway_response ?? null,
@@ -190,15 +192,15 @@ export async function POST(request: Request) {
         announceCharacterReplaceRecharge({
           userId: user.id,
           reference,
-          amountCents: crAmount,
-          currency: crCurrency,
-          balanceAfterCents: crBalance,
+          amountCents: crCredited.credits + crCredited.bonusCredits,
+          currency: WALLET_UNIT,
+          balanceAfterCents: crCredited.balanceAfterCents,
           channel: charge.channel ?? null,
           paidAt: charge.paid_at ?? null,
           gatewayResponse: charge.gateway_response ?? null,
         }),
       );
-      return NextResponse.json({ credited: true, balanceCents: crBalance, product: "character_replace" });
+      return NextResponse.json({ credited: true, balanceCents: crCredited.balanceAfterCents, balanceCredits: crCredited.balanceAfterCents, creditsAdded: crCredited.credits + crCredited.bonusCredits, product: "character_replace" });
     }
 
     if (charge.metadata?.purpose !== AI_TOPUP_PURPOSE) {
@@ -253,11 +255,12 @@ export async function POST(request: Request) {
       wallet a `frenz_cr_topup` one does. `ai_balances` is retired at zero;
       nothing writes it any more. Idempotent on the reference as before.
     */
-    const balanceCents = await creditVerifiedCharacterReplaceRecharge({
+    const legacyCredited = await creditVerifiedCharacterReplaceRecharge({
       userId: user.id,
       reference,
       amountCents: amount,
       currency: frenzAiCurrency,
+      packId: charge.metadata?.ai_topup_pack,
       channel: charge.channel ?? null,
       paidAt: charge.paid_at ?? null,
       gatewayResponse: charge.gateway_response ?? null,
@@ -266,16 +269,16 @@ export async function POST(request: Request) {
       announceCharacterReplaceRecharge({
         userId: user.id,
         reference,
-        amountCents: amount,
-        currency: frenzAiCurrency,
-        balanceAfterCents: balanceCents,
+        amountCents: legacyCredited.credits + legacyCredited.bonusCredits,
+        currency: WALLET_UNIT,
+        balanceAfterCents: legacyCredited.balanceAfterCents,
         channel: charge.channel ?? null,
         paidAt: charge.paid_at ?? null,
         gatewayResponse: charge.gateway_response ?? null,
       }),
     );
 
-    return NextResponse.json({ credited: true, balanceCents, product: "character_replace" });
+    return NextResponse.json({ credited: true, balanceCents: legacyCredited.balanceAfterCents, balanceCredits: legacyCredited.balanceAfterCents, creditsAdded: legacyCredited.credits + legacyCredited.bonusCredits, product: "character_replace" });
   } catch (e) {
     /*
       🔴 Never the provider's message, and never a stack. §22: "Do not expose

@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     const config = settings.frenzAiTextToAudio;
     const gate = await textToAudioGate({ settings, entitlement }, subject);
     const paused = gate.code === "CR_BUSY" || gate.code === "CR_MAINTENANCE";
-    const pub = publicTextToAudioConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, gate.resolved.enabled && gate.resolved.configured && entitlement.allowed);
+    const pub = publicTextToAudioConfig(config, { code: settings.frenzAiCurrency, symbol: aiCurrencySymbol(settings.frenzAiCurrency) }, gate.resolved.enabled && gate.resolved.configured && entitlement.allowed, settings.frenzAiPlans.credits.centsPerCredit);
     const { voices, languages } = textToAudioVoices(config, settings.frenzAiCharacterReplace, gate.resolved);
     /*
       2026-09-27: the member's own cloned voices, FIRST in the list — they made

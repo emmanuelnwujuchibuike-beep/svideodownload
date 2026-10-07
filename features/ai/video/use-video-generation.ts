@@ -58,6 +58,8 @@ export interface PublicQuote {
   seconds: number;
   billableSeconds: number;
   totalCents: number;
+  /** 0184: what the member is charged, in credits — the figure shown. */
+  credits: number | null;
   pricingVersion: number;
 }
 

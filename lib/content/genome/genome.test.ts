@@ -66,7 +66,8 @@ describe("Product Genome — the honesty invariants", () => {
     // "wallpapers" joined 2026-08-16 — a real, live route (app/wallpapers) with
     // a genome backing every claimed capability, same bar as download/community.
     const ids = getClaimableProfiles().map((p) => p.platform.id).sort();
-    expect(ids).toEqual(["community", "download", "wallpapers"]);
+    // "ai" (Frenz AI — credits, rewards, withdrawals) joined 2026-10-07, every capability on a live route
+    expect(ids).toEqual(["ai", "community", "download", "wallpapers"]);
   });
 
   it("never emits JSON-LD for an unbuilt product", () => {
@@ -86,7 +87,14 @@ describe("Product Genome — the honesty invariants", () => {
   it("holds the 'Smart' brand rule — no product is named with 'AI'", () => {
     // The mockup labels this product "Frenzsave AI". The established rule is that
     // the suite is "Smart"; see the comment on the module entry in modules.ts.
+    // 2026-10-07: ONE exception, by the owner's own naming — "Frenz AI" is the
+    // live AI product (every /ai page, push and plan says it). Every other
+    // module still may not carry "AI".
     for (const m of getModules()) {
+      if (m.id === "ai") {
+        expect(m.name).toBe("Frenz AI");
+        continue;
+      }
       expect(m.name, `${m.id} is named with "AI"`).not.toMatch(/\bAI\b/);
     }
   });

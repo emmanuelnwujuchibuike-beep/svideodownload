@@ -38,6 +38,8 @@ function healthySnapshot(overrides: Partial<RepoSnapshot> = {}): RepoSnapshot {
       "/api/download", "/api/assistant",
       // "wallpapers" joined the genome 2026-08-16 — see lib/content/genome/registry.ts.
       "/wallpapers", "/api/wallpapers/allowance", "/api/wallpapers/engage",
+      // "ai" (Frenz AI, with credits, rewards and withdrawals) joined 2026-10-07
+      "/ai", "/ai/text-to-video", "/ai/image-to-video", "/ai/lip-sync", "/ai/text-to-audio", "/ai/voice-cloning", "/ai/usage", "/rewards",
     ],
     migrations: ["0084_guest_likes.sql", "0085_content_authoring.sql", "0086_editorial_workflow.sql"],
     files: {},

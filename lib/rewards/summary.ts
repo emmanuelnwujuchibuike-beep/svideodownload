@@ -14,7 +14,7 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
   const [wallet, profile, user, links, referred, rewards, withdrawals] = await Promise.all([
     db.from("ai_product_balances").select("balance_cents, withdrawable_cents, currency").eq("user_id", userId).eq("product", "character_replace").maybeSingle(),
     // 0189: the earned totals are running counters on the profile row, not a scan of reward_events
-    db.from("reward_profiles").select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable").eq("user_id", userId).maybeSingle(),
+    db.from("reward_profiles").select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable, qualification_status, qualification_applied_at").eq("user_id", userId).maybeSingle(),
     db.auth.admin.getUserById(userId),
     db.from("share_links").select("clicks, signups").eq("owner_id", userId).limit(500),
     db.from("referral_attributions").select("referred_user_id", { count: "exact", head: false }).eq("referrer_id", userId).eq("status", "active").limit(1),
@@ -35,6 +35,10 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
     qualification: {
       qualified: !!p?.qualified_at,
       qualifiedAt: p?.qualified_at ?? null,
+      // 0191: withdrawals need an ADMIN's approval of an application — none | applied | approved | rejected
+      status: (p?.qualification_status ?? (p?.qualified_at ? "approved" : "none")) as "none" | "applied" | "approved" | "rejected",
+      appliedAt: p?.qualification_applied_at ?? null,
+      canApply: !p?.restricted && !p?.qualified_at && p?.qualification_status !== "applied" && ageDays >= config.qualification.minAccountAgeDays && (p?.qualifying_engagements ?? 0) >= config.qualification.minEngagements,
       restricted: !!p?.restricted,
       accountAgeDays: ageDays,
       requiredAccountAgeDays: config.qualification.minAccountAgeDays,
@@ -47,9 +51,9 @@ export async function loadRewardsSummary(userId: string, config: RewardsConfig) 
     rules: publicRewardsConfig(config),
   };
 }
-type ProfileRow = { qualified_at: string | null; qualifying_engagements: number; restricted: boolean; earned_usable: number; earned_withdrawable: number };
+type ProfileRow = { qualified_at: string | null; qualifying_engagements: number; restricted: boolean; earned_usable: number; earned_withdrawable: number; qualification_status?: "none" | "applied" | "approved" | "rejected"; qualification_applied_at?: string | null };
 
-/** Before 0189 is live (the counter columns do not exist yet): the old profile read plus the old bounded scan. */
+/** Before 0189/0191 are live (the counter or application columns do not exist yet): the old profile read plus the old bounded scan. */
 async function legacyProfile(userId: string): Promise<ProfileRow | null> {
   const db = createAdminClient();
   const [profile, events] = await Promise.all([

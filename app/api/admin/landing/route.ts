@@ -429,7 +429,7 @@ const schema = z.object({
     .object({
       enabled: z.boolean().optional(),
       events: z.record(z.string().max(40), z.object({ enabled: z.boolean().optional(), actorCredits: z.number().int().min(0).max(100_000).optional(), referrerCredits: z.number().int().min(0).max(100_000).optional(), referrerRepeatable: z.boolean().optional(), actorOncePerUser: z.boolean().optional(), features: z.array(z.string().max(40)).max(12).optional(), includeComplimentary: z.boolean().optional(), minDurationSeconds: z.number().int().min(1).max(3600).optional() }).strict()).optional(),
-      qualification: z.object({ minAccountAgeDays: z.number().int().min(0).max(3650).optional(), minEngagements: z.number().int().min(0).max(1_000_000).optional() }).strict().optional(),
+      qualification: z.object({ minAccountAgeDays: z.number().int().min(0).max(3650).optional(), minEngagements: z.number().int().min(0).max(1_000_000).optional(), extraRequirements: z.array(z.string().max(120)).max(8).optional() }).strict().optional(),
       attribution: z.object({ windowDays: z.number().int().min(1).max(90).optional() }).strict().optional(),
       withdrawals: z
         .object({

@@ -255,7 +255,7 @@ export function ImageToVideoWorkspace({
       </AiPanel>
 
       {gen.status === "running" ? <AiGenerationStatus className="mt-4" title="Creating your video…" /> : null}
-      {gen.result ? <AiVideoResult className="mt-4" job={gen.result} historyHref={historyHref} onAgain={gen.reset} /> : null}
+      {gen.result ? <AiVideoResult className="mt-4" job={gen.result} historyHref={historyHref} onAgain={gen.reset} feature="ai_image_to_video" /> : null}
       {gen.error ? (
         <div className="mt-4 rounded-[1.5rem] bg-rose-50/80 p-4 ring-1 ring-inset ring-rose-200/70" role="alert">
           <p className="text-[14px] font-bold text-rose-900">Something went wrong.</p>

@@ -88,7 +88,14 @@ export interface RewardRule {
 export interface RewardsConfig {
   enabled: boolean;
   events: Record<RewardEventType, RewardRule>;
-  qualification: { minAccountAgeDays: number; minEngagements: number };
+  /**
+   * What a member must meet to APPLY for withdrawals (0191: an admin then
+   * reviews). Age and engagements are checked by the server (0 = not required);
+   * `extraRequirements` are the operator's own lines (owner 2026-10-07: "should
+   * be able to be changed, added or rewritten from admin"), shown to members and
+   * checked by the team at review.
+   */
+  qualification: { minAccountAgeDays: number; minEngagements: number; extraRequirements: string[] };
   /** A new member is attributed to a share link only within this many days of their account being created. */
   attribution: { windowDays: number };
   withdrawals: {
@@ -117,7 +124,7 @@ export const REWARDS_DEFAULTS: RewardsConfig = {
     ai_video_completed: { enabled: true, actorCredits: 5, referrerCredits: 5, referrerRepeatable: false, actorOncePerUser: false, features: ["ai_text_to_video", "ai_image_to_video"], includeComplimentary: false },
     ai_video_shared: { enabled: true, actorCredits: 3, referrerCredits: 0, referrerRepeatable: false, actorOncePerUser: false, minDurationSeconds: 30 },
   },
-  qualification: { minAccountAgeDays: 30, minEngagements: 100 },
+  qualification: { minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] },
   attribution: { windowDays: 7 },
   withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["bank_transfer"] },
   version: 1,
@@ -157,7 +164,17 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
   return {
     enabled: bool(r.enabled, d.enabled),
     events: Object.fromEntries(REWARD_EVENTS.map((e) => [e, normalizeRule(ev[e], d.events[e])])) as Record<RewardEventType, RewardRule>,
-    qualification: { minAccountAgeDays: int(q.minAccountAgeDays, d.qualification.minAccountAgeDays, 0, 3650), minEngagements: int(q.minEngagements, d.qualification.minEngagements, 0, 1_000_000) },
+    qualification: {
+      minAccountAgeDays: int(q.minAccountAgeDays, d.qualification.minAccountAgeDays, 0, 3650),
+      minEngagements: int(q.minEngagements, d.qualification.minEngagements, 0, 1_000_000),
+      extraRequirements: Array.isArray(q.extraRequirements)
+        ? q.extraRequirements
+            .filter((x): x is string => typeof x === "string")
+            .map((x) => x.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120))
+            .filter(Boolean)
+            .slice(0, 8)
+        : [],
+    },
     attribution: { windowDays: int(a.windowDays, d.attribution.windowDays, 1, 90) },
     withdrawals: {
       enabled: bool(w.enabled, d.withdrawals.enabled),

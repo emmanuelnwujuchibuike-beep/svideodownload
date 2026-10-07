@@ -3,6 +3,7 @@
 import { startDownload } from "@/features/downloads/manager";
 import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
 import type { AiJobView } from "@/lib/ai/jobs";
+import type { DownloadRecord } from "@/types";
 import { haptic } from "@/lib/motion/haptics";
 
 /**
@@ -37,8 +38,47 @@ export function aiResultDownloadHref(jobId: string): string {
   return `/api/ai/jobs/${encodeURIComponent(jobId)}/result?download=1&redirect=1`;
 }
 
+/**
+ * 2026-10-07 (owner: "make the ai history video preview use the same preview
+ * with the download history viewer"): an AI result as a record the downloads
+ * viewer can open. It streams our same-origin result route (`directUrl`) —
+ * never the link extractor — and carries the job id so the viewer offers
+ * "Share to AI Reels" rather than a plain publish.
+ */
+export function aiJobRecord(job: AiJobView): DownloadRecord {
+  const href = `/api/ai/jobs/${encodeURIComponent(job.id)}/result?redirect=1`;
+  return {
+    id: `ai-${job.id}`,
+    url: href,
+    directUrl: href,
+    aiJobId: job.id,
+    platform: "generic",
+    platformName: "Frenz AI",
+    title: resultFileName(job.source.name, resultSuffixFor(job.feature)),
+    thumbnail: job.result?.hasPoster ? `/api/ai/jobs/${encodeURIComponent(job.id)}/poster` : null,
+    formatId: "frenz-ai",
+    kind: "video",
+    qualityLabel: "Frenz AI",
+    durationSeconds: job.result?.durationSeconds ?? job.source.durationSeconds ?? null,
+    createdAt: Date.now(),
+    favorite: false,
+  };
+}
+
 /** Starts the download through the platform's one manager; answers the task id (null = refused by the storage ceiling). */
 export function startAiResultDownload(job: AiJobView): string | null {
+  haptic("light");
+  return startAiResultDownloadById({ id: job.id, feature: job.feature, name: job.source.name, durationSeconds: job.source.durationSeconds ?? null });
+}
+
+/**
+ * The same save from a screen that only has the id (the result card under a
+ * finished generation). 🔴 2026-10-07: that card used `<a href={signedUrl}
+ * download>` — `download` is ignored cross-origin, so on iPhone it opened the
+ * file in the browser instead of saving it. It now goes through the
+ * downloader's own manager like every other save.
+ */
+export function startAiResultDownloadById(job: { id: string; feature: string; name?: string | null; durationSeconds?: number | null }): string | null {
   haptic("light");
   const href = aiResultDownloadHref(job.id);
   return startDownload({
@@ -46,11 +86,11 @@ export function startAiResultDownload(job: AiJobView): string | null {
     directUrl: href,
     platform: "generic",
     platformName: "Frenz AI",
-    title: resultFileName(job.source.name, resultSuffixFor(job.feature)),
+    title: resultFileName(job.name ?? null, resultSuffixFor(job.feature)),
     thumbnail: null,
     formatId: "frenz-ai",
     kind: "video",
     qualityLabel: job.feature === "ai_character_replace" ? "Character Replace" : "Frenz AI",
-    durationSeconds: job.source.durationSeconds ?? null,
+    durationSeconds: job.durationSeconds ?? null,
   });
 }

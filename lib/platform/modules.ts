@@ -96,6 +96,29 @@ export const MODULES: PlatformModule[] = [
     nav: [{ label: "Wallpapers", href: "/wallpapers", icon: ImageIcon }],
   },
   {
+    /*
+      Owner, 2026-10-07: "add the AI and credit withdraw features to the
+      features page". The features page is rendered from the genome, so Frenz AI
+      enters as a product here — every capability below is a live route.
+    */
+    id: "ai",
+    name: "Frenz AI",
+    shortName: "AI",
+    tagline: "AI video, audio, voice and lip sync — paid in credits you can also earn.",
+    basePath: "/ai",
+    icon: Sparkles,
+    accent: "from-blue-600 to-violet-600",
+    status: "live",
+    veracity: {
+      stage: "live",
+      claimable: true,
+      provingRoute: "/ai",
+      evidence: "app/(marketing)/ai + app/(app)/studio/ai — Kling video, ElevenLabs audio/voice, credits wallet, rewards (0187-0191)",
+      verifiedAt: "2026-10-07",
+    },
+    canAccess: everyone,
+  },
+  {
     id: "studio",
     name: "Frenz Studio",
     shortName: "Studio",

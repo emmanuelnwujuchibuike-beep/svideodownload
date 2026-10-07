@@ -33,7 +33,8 @@ export function ProductGrid() {
   // Admin is real but internal — never a marketing card. (getClaimableProfiles
   // already excludes every unbuilt product; admin still needs its own filter
   // since it IS claimable, just not something to advertise.)
-  const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin");
+  // Frenz AI has its own landing tile (the AI promotion) — not a second card here (2026-10-07)
+  const profiles = getClaimableProfiles().filter(({ platform }) => platform.id !== "admin" && platform.id !== "ai");
 
   return (
     <section id="products" className="frenz-reveal container max-w-6xl scroll-mt-24 px-3 py-10 sm:py-14">

@@ -65,8 +65,8 @@ describe("two credit classes, said plainly", () => {
     expect(page).toContain("Your referral rewards can be used for AI features. Withdrawable rewards unlock after you meet the withdrawal requirements.");
     expect(page).toContain("they don&apos;t become withdrawable later");
   });
-  it("withdrawing is offered only to a qualified, unrestricted member with enough withdrawable credits", () => {
-    expect(page).toContain("const canWithdraw = q.qualified && !q.restricted && !!withdrawRules && wallet.withdrawableCredits >= withdrawRules.minCredits;");
+  it("withdrawing is offered only to an approved, unrestricted member with enough withdrawable credits", () => {
+    expect(page).toContain("const canWithdraw = approved && !q.restricted && !!w && wallet.withdrawableCredits >= w.minCredits;");
   });
 });
 

@@ -22,7 +22,9 @@ import {
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { aiJobRecord } from "@/features/ai/ai-result-download";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { openPlayer } from "@/features/downloads/player-store";
 import { useAiHistory } from "@/features/ai/use-ai-history";
 import {
   AI_HISTORY_EMPTY_COPY,
@@ -92,6 +94,9 @@ import { cn, formatDuration } from "@/lib/utils";
   page that most visits never tap through — see the standing rule about
   code-splitting heavy widgets off first load.
 */
+// the downloads viewer (2026-10-07) — its chunk loads after hydration, exactly as on the downloads page
+const ReviewPlayerMount = dynamic(() => import("@/features/downloads/review-player-mount").then((m) => m.ReviewPlayerMount), { ssr: false });
+
 const FrenzAIHistoryPlayer = dynamic(
   () => import("@/features/ai/frenz-ai-history-player").then((m) => m.FrenzAIHistoryPlayer),
   { ssr: false },
@@ -264,6 +269,16 @@ export function FrenzAIHistory({
     if (job.feature === "ai_text_to_audio") {
       // Text to Audio (2026-09-21): the workspace shows this generation (its player, its library row)
       router.push(resultHref(job.id).replace(/\/character-replace\/result\/.*$/, `/text-to-audio?job=${encodeURIComponent(job.id)}`));
+      return;
+    }
+    /*
+      2026-10-07 (owner: "make the ai history video preview use the same
+      preview with the download history viewer"): a finished AI video opens in
+      the downloads viewer (full-screen, swipe, save, send, Share to AI Reels).
+      Anything else keeps the details sheet.
+    */
+    if ((job.feature === "ai_text_to_video" || job.feature === "ai_image_to_video") && job.status === "completed") {
+      openPlayer(aiJobRecord(job));
       return;
     }
     setOpenJob(job);
@@ -454,6 +469,7 @@ export function FrenzAIHistory({
       ) : null}
 
       {live ? <FrenzAIHistoryPlayer job={live} now={now} onClose={close} /> : null}
+      <ReviewPlayerMount />
     </section>
   );
 }

@@ -367,6 +367,89 @@ const wallpapers: ProductGenome = {
   roadmap: [],
 };
 
+/* ---------------------------------- Frenz AI ---------------------------------- */
+
+/**
+ * Owner, 2026-10-07: "add the AI and credit withdraw features to the features
+ * page". Every capability is live and names the route that proves it. Withdrawal
+ * is live code whose window the operator opens and closes in admin, and it is
+ * described as exactly that: credits become withdrawable after an approved
+ * application.
+ */
+const ai: ProductGenome = {
+  id: "ai",
+  purpose: "Create AI videos, audio, voices and lip sync with credits — bought, included in a plan, or earned by creating, sharing and inviting.",
+
+  capabilities: [
+    { id: "text-to-video", name: "Text to Video", description: "Describe a scene and get a video, with native audio on paid plans.", stage: "live", provingRoute: "/ai/text-to-video" },
+    { id: "image-to-video", name: "Image to Video", description: "Bring a photo to life, with optional reference images or a motion reference video.", stage: "live", provingRoute: "/ai/image-to-video" },
+    { id: "lip-sync", name: "Lip Sync", description: "Make a face in a video speak your audio or typed words.", stage: "live", provingRoute: "/ai/lip-sync" },
+    { id: "text-to-audio", name: "Text to Audio", description: "Natural voiceovers from text, kept in your Audio Library.", stage: "live", provingRoute: "/ai/text-to-audio" },
+    { id: "voice-cloning", name: "Voice Cloning", description: "A voice of your own, made from a short recording you have the rights to.", stage: "live", provingRoute: "/ai/voice-cloning" },
+    { id: "ai-reels", name: "AI Reels", description: "Publish your AI videos to their own Reels feed, marked AI Generated.", stage: "live", provingRoute: "/reels" },
+    { id: "credits", name: "AI credits", description: "One balance for every AI tool: top up with Paystack or Bachs, or get a daily allowance with AI Pro or AI Max.", stage: "live", provingRoute: "/ai/usage" },
+    { id: "rewards", name: "Earn credits", description: "Earn credits for paid AI videos, for sharing 30-second-plus AI videos to AI Reels, and when people you invite download, create or subscribe.", stage: "live", provingRoute: "/rewards" },
+    { id: "withdraw", name: "Withdraw reward credits", description: "Once your account meets the requirements and your application is approved, rewards you earn become withdrawable to your bank account.", stage: "live", provingRoute: "/rewards" },
+  ],
+
+  features: {
+    core: [
+      { id: "generate", name: "Generate video and audio", stage: "live", essential: true },
+      { id: "wallet", name: "Credits wallet and statement", stage: "live", essential: true },
+      { id: "history", name: "AI history and downloads", stage: "live", essential: true },
+    ],
+    optional: [
+      { id: "plans", name: "AI Pro and AI Max plans", stage: "live", essential: false },
+      { id: "share-reels", name: "Share to AI Reels", stage: "live", essential: false },
+      { id: "referrals", name: "Referral link and rewards", stage: "live", essential: false },
+      { id: "withdrawals", name: "Reward withdrawals after approval", stage: "live", essential: false },
+    ],
+  },
+
+  dependencies: [],
+  integrations: [
+    { name: "Kling AI", kind: "media", active: true, notes: "Video generation." },
+    { name: "ElevenLabs", kind: "media", active: true, notes: "Text to audio and voice cloning." },
+    { name: "Paystack", kind: "payments", active: true, notes: "Credit top-ups and AI plans." },
+    { name: "Bachs", kind: "payments", active: true, notes: "Credit top-ups and AI plans, where the admin routes them." },
+  ],
+
+  surfaces: [
+    { kind: "web", stage: "live" },
+    { kind: "pwa", stage: "live" },
+  ],
+
+  permissions: [],
+
+  learning: { tutorials: [], academy: [], faqs: [] },
+  developer: { apiRefs: [], guides: [] },
+
+  releases: [],
+  compatibility: [],
+
+  accessibility: { wcagLevel: "AA", notes: ["Every AI page shares the Frenz AI surface: labelled controls, visible focus, reduced-motion fallbacks."] },
+  privacy: {
+    dataCollected: ["Prompts and uploaded media for a generation", "Generated results (kept for a limited time)", "Credit and reward ledger"],
+    retention: "Results are kept for a limited time; the credit ledger for as long as the account exists.",
+    policyAnchor: "/privacy",
+  },
+  security: { authRequired: true, rlsPolicies: [], threatNotes: ["Prices, credits and rewards are decided on the server; the browser never names an amount."] },
+  performance: { budgetMs: 2000, lcpTargetMs: 2000 },
+
+  analytics: [],
+  seo: {
+    title: "Frenz AI — AI video, audio, voice and lip sync",
+    description: "Create AI videos, voiceovers, cloned voices and lip sync with credits you can buy, get with a plan, or earn.",
+    keywords: ["AI video generator", "text to video", "image to video", "lip sync", "AI voice"],
+    canonical: "/ai",
+  },
+  structuredData: [],
+
+  related: ["download", "community"],
+  workflows: [],
+  roadmap: [],
+};
+
 /* ------------------------------ Studio (concept) ------------------------------ */
 
 /**
@@ -522,6 +605,7 @@ export const GENOMES: Record<string, ProductGenome> = {
   download,
   community,
   wallpapers,
+  ai,
   studio,
   cloud,
   smart,

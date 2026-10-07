@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { MediaProtection } from "@/features/media/media-protection";
 import { VastDownloadCompleteTrigger } from "@/features/monetization/vast-interstitial/download-complete-trigger";
+import { ReferralBannerTrigger } from "@/features/rewards/referral-banner-trigger";
 import { StreakTracker } from "@/features/streaks/streak-tracker";
 
 /**
@@ -145,6 +146,14 @@ export function DeferredShell() {
         dynamic import that only runs once a download actually completes.
       */}
       <VastDownloadCompleteTrigger />
+      {/*
+        The referral banner after a download, from the 3rd on (owner,
+        2026-10-07) — guests included, every kind of download. Same weight
+        rule as the ad above: one listener and one string; the banner is a
+        dynamic import that loads only when it is about to show, and it waits
+        for the ad to close rather than stacking on it.
+      */}
+      <ReferralBannerTrigger />
       {/*
         The storage ceiling gate. Mounted globally because the download MANAGER
         is what refuses now, and it refuses from every surface — the batch panel

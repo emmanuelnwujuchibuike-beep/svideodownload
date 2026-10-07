@@ -22,6 +22,7 @@ import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
 import { downloadUrl, isIosDevice, saveToDevice } from "@/lib/client-download";
 import { haptic } from "@/lib/motion/haptics";
+import { attributionLink } from "@/lib/referrals/share-client";
 import { springs } from "@/lib/motion/springs";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
 import { presignUpload, uploadWithPlan, type UploadPlan } from "@/lib/storage/client-upload";
@@ -36,7 +37,7 @@ async function prefetchMedia(rec: DownloadRecord): Promise<void> {
   try {
     const key = mediaKey(rec.url, rec.formatId, rec.kind);
     if (await getMedia(key)) return; // already on device
-    const res = await fetch(downloadUrl({ url: rec.url, formatId: rec.formatId, kind: rec.kind, title: rec.title }));
+    const res = await fetch(rec.directUrl || downloadUrl({ url: rec.url, formatId: rec.formatId, kind: rec.kind, title: rec.title }));
     if (!res.ok) return;
     const blob = await res.blob();
     void saveMedia(key, blob);
@@ -402,7 +403,8 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
       // Not cached yet → stream it once for in-browser playback, then store it.
       setCachePct(0);
       try {
-        const res = await fetch(downloadUrl({ url: rec.url, formatId: rec.formatId, kind: rec.kind, title: rec.title }), { signal: controller.signal });
+        // 2026-10-07: a record that names its own file (an AI result, a wallpaper) is fetched from it — the extractor knows nothing about those
+        const res = await fetch(rec.directUrl || downloadUrl({ url: rec.url, formatId: rec.formatId, kind: rec.kind, title: rec.title }), { signal: controller.signal });
         if (!res.ok || !res.body) throw new Error();
         const total = Number(res.headers.get("content-length")) || 0;
         const ct = res.headers.get("content-type") || "video/mp4";
@@ -509,9 +511,36 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
     }
   };
 
+  /*
+    2026-10-07: a Frenz AI result opened from AI history publishes as an AI
+    REEL — through its job (POST /api/ai/jobs/[id]/publish), so it carries the
+    AI mark and the share reward is decided by the server — never as a plain
+    upload. The +N is said only when the server granted it.
+  */
+  const publishAiReel = async () => {
+    if (!rec.aiJobId || publishing) return;
+    setPublishing(true);
+    const tid = toast("Sharing to AI Reels…", "loading");
+    try {
+      const res = await fetch(`/api/ai/jobs/${encodeURIComponent(rec.aiJobId)}/publish`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visibility: "public" }) });
+      const json = (await res.json().catch(() => ({}))) as { postId?: string; reward?: { credits: number } | null; error?: string };
+      if (!res.ok || !json.postId) {
+        toast(json.error ?? "Couldn't share it.", "error", { id: tid, duration: 3500 });
+        return;
+      }
+      setPostId(json.postId);
+      toast(json.reward ? `Shared to AI Reels · +${json.reward.credits} AI Credits` : "Shared to AI Reels.", "success", { id: tid, duration: 3500 });
+    } catch {
+      toast("Network error.", "error", { id: tid, duration: 3000 });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const share = async () => {
     if (!postId) return;
-    const link = `${window.location.origin}/p/${postId}`;
+    // the member's own reel → their attribution link (one share helper); else the plain link
+    const link = (await attributionLink(rec.aiJobId ? "ai_video" : "post", postId)) ?? `${window.location.origin}/p/${postId}`;
     try {
       if (navigator.share) await navigator.share({ title: rec.title, url: link });
       else {
@@ -1234,7 +1263,9 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
                     <>
                       {postId ? (
                         <MenuItem icon={Share2} label="Share" onClick={() => { setMoreOpen(false); void share(); }} />
-                      ) : (
+                      ) : rec.aiJobId ? (
+                        <MenuItem icon={Globe2} label={publishing ? "Sharing…" : "Share to AI Reels"} onClick={() => { if (!publishing) void publishAiReel(); }} />
+                      ) : rec.formatId === "frenz-ai" ? null : (
                         <MenuItem icon={Globe2} label={publishing ? "Publishing…" : "Publish to everyone"} onClick={() => { if (!publishing) void publish(); }} />
                       )}
                       <MenuItem icon={MessageCircle} label="Send to chat" onClick={() => { setMoreOpen(false); setSendToChatOpen(true); }} />

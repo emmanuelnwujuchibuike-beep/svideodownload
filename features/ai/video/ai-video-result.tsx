@@ -3,6 +3,7 @@
 import { Download, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
+import { startAiResultDownloadById } from "@/features/ai/ai-result-download";
 import { AiResultShare } from "@/features/ai/video/ai-result-share";
 import type { FinishedJob } from "@/features/ai/video/use-video-generation";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,10 @@ export function AiVideoResult({
   historyHref,
   onAgain,
   className,
+  feature = "ai_text_to_video",
 }: {
+  /** Which tool made it — names the saved file. */
+  feature?: string;
   job: FinishedJob;
   historyHref: string;
   onAgain?: () => void;
@@ -65,14 +69,22 @@ export function AiVideoResult({
 
       <div className="flex flex-wrap items-center gap-2 p-3.5 sm:p-4">
         {src ? (
-          <a
-            href={src}
-            download
+          /*
+            🔴 2026-10-07 (owner: "the ai video completed modal doesn't
+            download directly like the downloader, it passes through ios
+            browser"): this was <a href={signedUrl} download>. `download` is
+            ignored on another origin, so iPhone opened the file in Safari.
+            It now saves through the downloader's own manager — same-origin
+            route, progress, completion card, the history row.
+          */
+          <button
+            type="button"
+            onClick={() => startAiResultDownloadById({ id: job.id, feature })}
             className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-foreground px-4 text-[13.5px] font-semibold text-background transition active:scale-[0.97] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
           >
             <Download className="h-4 w-4" aria-hidden />
             Download
-          </a>
+          </button>
         ) : null}
         {onAgain ? (
           <button

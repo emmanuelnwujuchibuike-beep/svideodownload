@@ -240,6 +240,8 @@ export interface DownloadRecord {
   directUrl?: string | null;
   createdAt: number;
   favorite: boolean;
+  /** 2026-10-07: a Frenz AI result opened from AI history — its job id, so the viewer can offer "Share to AI Reels" instead of a plain publish. */
+  aiJobId?: string | null;
 }
 
 export interface ApiError {

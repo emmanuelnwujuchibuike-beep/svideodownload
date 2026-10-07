@@ -22,7 +22,7 @@ describe("the rules: defaults, bounds, versions", () => {
     expect(REWARDS_DEFAULTS.events.ai_video_completed).toMatchObject({ enabled: true, actorCredits: 5, referrerCredits: 5, referrerRepeatable: false, includeComplimentary: false });
     expect(REWARDS_DEFAULTS.events.ai_video_shared).toMatchObject({ enabled: true, actorCredits: 3, minDurationSeconds: 30 });
     for (const e of REWARD_EVENTS.filter((x) => x !== "ai_video_completed" && x !== "ai_video_shared")) expect(REWARDS_DEFAULTS.events[e].enabled).toBe(false);
-    expect(REWARDS_DEFAULTS.qualification).toEqual({ minAccountAgeDays: 30, minEngagements: 100 });
+    expect(REWARDS_DEFAULTS.qualification).toEqual({ minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] });
     expect(REWARDS_DEFAULTS.withdrawals.enabled).toBe(false);
   });
   it("🔴 the SQL engine's defaults are the same numbers (reward_default_rule)", () => {
@@ -199,7 +199,7 @@ describe("🔴 0189 — the engine made cheap, the rules unchanged (performance 
   });
   it("a member's earned totals are the counters, not a scan (the scan survives only as the pre-0189 fallback)", () => {
     const s = code("lib/rewards/summary.ts");
-    expect(s).toContain('select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable")');
+    expect(s).toContain('select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable, qualification_status, qualification_applied_at")');
     expect(s.slice(0, s.indexOf("async function legacyProfile"))).not.toContain(".limit(5000)");
   });
   it("the admin tab sums in SQL and reads only bounded lists", () => {

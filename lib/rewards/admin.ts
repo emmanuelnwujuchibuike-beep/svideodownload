@@ -33,6 +33,27 @@ export interface RewardsAdminView {
   withdrawals: { pending: number; reviewing: number; approved: number; processing: number; completedCredits: number; completedUsdCents: number };
   recentReferrals: { at: string; referrer: string; referred: string | null; event: string; amount: number; creditClass: string; contentType: string | null }[];
   queue: { id: string; user: string; userId: string; credits: number; usdCents: number; status: string; method: string; details: Record<string, string>; createdAt: string }[];
+  /**
+   * 0191 (owner 2026-10-07: "admin can track users if they reach the requirement, account activity per day, week and month, and show progress"):
+   * each member's application status, progress against the thresholds, and rewarded activity over a day, a week and a month — computed in SQL
+   * when the tab opens. Applications waiting first. Empty before 0191 is live.
+   */
+  members: RewardsAdminMember[];
+}
+
+export interface RewardsAdminMember {
+  userId: string;
+  user: string;
+  status: "none" | "applied" | "approved" | "rejected";
+  appliedAt: string | null;
+  restricted: boolean;
+  accountAgeDays: number;
+  engagements: number;
+  earnedUsable: number;
+  earnedWithdrawable: number;
+  withdrawableNow: number;
+  referral: { day: number; week: number; month: number };
+  own: { day: number; week: number; month: number };
 }
 
 /**
@@ -44,20 +65,23 @@ export interface RewardsAdminView {
 export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
   const db = createAdminClient();
   const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
-  const [totals, recent, open] = await Promise.all([
+  const [totals, recent, open, membersRpc] = await Promise.all([
     db.rpc("rewards_admin_totals", { p_since: since }),
     db.from("reward_events").select("beneficiary_id, event_type, amount, credit_class, referred_user_id, created_at").eq("role", "referrer").order("created_at", { ascending: false }).limit(50),
     db.from("withdrawal_requests").select("id, user_id, credits, amount_usd_cents, status, payout_method, payout_details, created_at").in("status", [...OPEN]).order("created_at", { ascending: true }).limit(500),
+    db.rpc("rewards_admin_members", { p_limit: 200 }),
   ]);
+  const memberRows = (membersRpc.error ? [] : ((membersRpc.data ?? []) as Record<string, unknown>[]));
   if (totals.error || !totals.data) return loadRewardsAdminLegacy();
   const t = totals.data as Partial<Record<keyof RewardsAdminView["totals"], unknown>> & { withdrawals?: Partial<Record<keyof RewardsAdminView["withdrawals"], unknown>> };
   const ev = (recent.data ?? []) as { beneficiary_id: string; event_type: string; amount: number; credit_class: string; referred_user_id: string | null; created_at: string }[];
   const queue = (open.data ?? []) as { id: string; user_id: string; credits: number; amount_usd_cents: number; status: string; payout_method: string; payout_details: Record<string, string>; created_at: string }[];
   const referredIds = [...new Set(ev.map((e) => e.referred_user_id).filter((x): x is string => !!x))];
-  const ids = [...new Set([...ev.flatMap((e) => [e.beneficiary_id, e.referred_user_id]), ...queue.map((w) => w.user_id)].filter((x): x is string => !!x))];
+  const memberIds = memberRows.map((m) => String(m.user_id));
+  const ids = [...new Set([...memberIds, ...ev.flatMap((e) => [e.beneficiary_id, e.referred_user_id]), ...queue.map((w) => w.user_id)].filter((x): x is string => !!x))];
   const [attributions, profiles] = await Promise.all([
     referredIds.length ? db.from("referral_attributions").select("referred_user_id, content_type").in("referred_user_id", referredIds) : Promise.resolve({ data: [] }),
-    ids.length ? db.from("profiles").select("id, handle, email").in("id", ids.slice(0, 200)) : Promise.resolve({ data: [] }),
+    ids.length ? db.from("profiles").select("id, handle, email").in("id", ids.slice(0, 400)) : Promise.resolve({ data: [] }),
   ]);
   const contentOf = new Map(((attributions.data ?? []) as { referred_user_id: string; content_type: string | null }[]).map((a) => [a.referred_user_id, a.content_type]));
   const names = new Map<string, string>();
@@ -92,6 +116,20 @@ export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
     },
     recentReferrals: ev.map((e) => ({ at: e.created_at, referrer: name(e.beneficiary_id) ?? "?", referred: name(e.referred_user_id), event: e.event_type, amount: e.amount, creditClass: e.credit_class, contentType: e.referred_user_id ? (contentOf.get(e.referred_user_id) ?? null) : null })),
     queue: queue.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at })),
+    members: memberRows.map((m) => ({
+      userId: String(m.user_id),
+      user: name(String(m.user_id)) ?? String(m.user_id).slice(0, 8),
+      status: (m.status as RewardsAdminMember["status"]) ?? "none",
+      appliedAt: (m.applied_at as string | null) ?? null,
+      restricted: m.restricted === true,
+      accountAgeDays: n(m.account_age_days),
+      engagements: n(m.engagements),
+      earnedUsable: n(m.earned_usable),
+      earnedWithdrawable: n(m.earned_withdrawable),
+      withdrawableNow: n(m.withdrawable_now),
+      referral: { day: n(m.referral_day), week: n(m.referral_week), month: n(m.referral_month) },
+      own: { day: n(m.own_day), week: n(m.own_week), month: n(m.own_month) },
+    })),
   };
 }
 
@@ -156,6 +194,7 @@ async function loadRewardsAdminLegacy(): Promise<RewardsAdminView> {
       .slice(0, 50)
       .map((e) => ({ at: e.created_at, referrer: name(e.beneficiary_id) ?? "?", referred: name(e.referred_user_id), event: e.event_type, amount: e.amount, creditClass: e.credit_class, contentType: e.referred_user_id ? (contentOf.get(e.referred_user_id) ?? null) : null })),
     queue: open.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at })),
+    members: [],
   };
 }
 

@@ -19,6 +19,7 @@ import { claimFinalization, getJobAsService, noteJobDiagnostic, scheduleFinaliza
 import { notifyAiJobFailed, notifyAiJobFinished } from "@/lib/ai/notify";
 import { subjectFromRow, subjectOwnerId } from "@/lib/ai/subject";
 import { probeColor } from "@/server/services/ai-color-probe";
+import { advanceOrJoinChain, readChain } from "@/server/services/ai-video-chain";
 import { aiErrorMessage } from "@/lib/ai/errors";
 import { getLandingSettings } from "@/lib/landing/settings";
 import {
@@ -136,9 +137,27 @@ export async function finalizeCharacterReplaceJob(jobId: string): Promise<Finali
     const bytes = await downloadToFile(providerOutputUrl, outputFile, MAX_OUTPUT_BYTES).catch((e) => {
       throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `download: ${String(e)}`);
     });
-    const probe = await probeMedia(outputFile);
+    let probe = await probeMedia(outputFile);
     if (!probe?.hasVideo || !probe.durationSeconds || probe.durationSeconds <= 0) {
       throw new CrFinalizeFailure("INVALID_AI_OUTPUT", "the provider's output has no readable video stream");
+    }
+    /*
+      🔴 ONE-MINUTE CHAIN (2026-10-06). A segment is not the result: continue
+      the chain from its last frame and stop here, or — on the last segment —
+      join all four and let the file below be finalized as the minute. Before
+      the length check on purpose: a 15 s segment is not "a third of the
+      length that was priced", it is a quarter of it, by design.
+    */
+    const chain = klingVideo ? readChain(job.metadata) : null;
+    if (chain) {
+      const step = await advanceOrJoinChain({ job, ownerId, chain, outputFile, providerOutputUrl, dir }).catch((e) => {
+        throw new CrFinalizeFailure("INVALID_AI_OUTPUT", `one-minute chain: ${String(e).slice(0, 300)}`);
+      });
+      if (step.continued) return { ok: true, jobId, skipped: step.note };
+      probe = step.probe;
+      if (!probe.hasVideo || !probe.durationSeconds || probe.durationSeconds <= 0) {
+        throw new CrFinalizeFailure("INVALID_AI_OUTPUT", "the joined minute has no readable video stream");
+      }
     }
     /*
       The output should be the length that was priced. A frame's rounding is

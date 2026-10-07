@@ -27,7 +27,12 @@ import { KLING_RUNNABLE_FEATURES } from "@/lib/ai/kling/pipelines/registry";
 /** The settings every Omni generation shares. */
 const omniOptions = z
   .object({
-    durationSeconds: z.number().int().min(KLING_OMNI.duration.minSeconds).max(KLING_OMNI.duration.maxSeconds).optional(),
+    // 3–15, or exactly 60 (the one-minute option, made as four 15 s segments)
+    durationSeconds: z
+      .number()
+      .int()
+      .refine((d) => d === 60 || (d >= KLING_OMNI.duration.minSeconds && d <= KLING_OMNI.duration.maxSeconds), { message: "Choose a length from the list." })
+      .optional(),
     resolution: z.enum(KLING_VIDEO_RESOLUTIONS).optional(),
     aspectRatio: z.enum(KLING_ASPECT_RATIOS).optional(),
     audio: z.enum(KLING_AUDIO_MODES).optional(),

@@ -184,8 +184,36 @@ const tier = (over: Partial<KlingTierPricing> = {}): KlingTierPricing => ({
   ...over,
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  ONE MINUTE (owner, 2026-10-06: "60 seconds video should be enabled but only
+ *  60 secs which is 1 minute and the price of it will be different, and the
+ *  admin configuration")
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Omni makes at most 15 s, and Kling refuses to extend an Omni video ("This
+ * video not supported extend-video", probed 2026-10-06). So a minute is FOUR
+ * 15 s segments, each starting on the previous one's last frame (a
+ * first_frame — the proven Image to Video path), joined on the worker. The
+ * seam was generated and inspected: continuous person, place and light.
+ *
+ * Its own price per quality, set in admin. 0 = "60 × that quality's per-second
+ * price". 4k is not offered — four 4k segments are a very large file and bill.
+ */
+export const ONE_MINUTE_SECONDS = 60;
+export const ONE_MINUTE_SEGMENT_SECONDS = 15;
+export const ONE_MINUTE_SEGMENTS = ONE_MINUTE_SECONDS / ONE_MINUTE_SEGMENT_SECONDS;
+export type OneMinuteResolution = "720p" | "1080p";
+
+export interface KlingOneMinutePricing {
+  enabled: boolean;
+  /** Whole price of a one-minute video, per quality. 0 = 60 × the per-second price. */
+  priceUsdCents: Record<OneMinuteResolution, number>;
+}
+
 export interface KlingPricingConfig {
   matrix: Record<KlingTierKey, KlingTierPricing>;
+  oneMinute: KlingOneMinutePricing;
   /** §26 emergency control: nothing new is accepted; jobs in flight finish. */
   paused: boolean;
   version: number;
@@ -193,6 +221,8 @@ export interface KlingPricingConfig {
 }
 
 export const KLING_PRICING_DEFAULTS: KlingPricingConfig = {
+  // OFF until a real one-minute generation has been inspected end to end (2026-10-06); the admin switches it on.
+  oneMinute: { enabled: false, priceUsdCents: { "720p": 0, "1080p": 0 } },
   matrix: {
     // ✅ 0.6 units/second, measured twice (1.8 units at 3 s, 3 units at 5 s).
     "text_to_video:720p": tier({ providerUnitsPerSecond: 0.6, notes: "Measured 2026-09-28: 1.8 units at 3s and 3 units at 5s." }),
@@ -266,6 +296,17 @@ export function normalizeKlingPricing(raw: unknown): KlingPricingConfig {
   const matrix = isRecord(raw.matrix) ? raw.matrix : {};
   return {
     matrix: Object.fromEntries(KLING_TIER_KEYS.map((k) => [k, normalizeTier(matrix[k], d.matrix[k])])) as Record<KlingTierKey, KlingTierPricing>,
+    oneMinute: (() => {
+      const om = isRecord(raw.oneMinute) ? raw.oneMinute : {};
+      const pr = isRecord(om.priceUsdCents) ? om.priceUsdCents : {};
+      return {
+        enabled: bool(om.enabled, d.oneMinute.enabled),
+        priceUsdCents: {
+          "720p": num(pr["720p"], d.oneMinute.priceUsdCents["720p"], KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
+          "1080p": num(pr["1080p"], d.oneMinute.priceUsdCents["1080p"], KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
+        },
+      };
+    })(),
     paused: bool(raw.paused, d.paused),
     version: int(raw.version, d.version, 1, 1_000_000_000),
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
@@ -275,7 +316,7 @@ export function normalizeKlingPricing(raw: unknown): KlingPricingConfig {
 /** The fields whose change alters what a NEW job costs — a change bumps `version`. */
 export function klingPricingFingerprint(c: KlingPricingConfig): string {
   const matrix = Object.fromEntries(KLING_TIER_KEYS.map((k) => [k, { ...c.matrix[k], notes: undefined }]));
-  return JSON.stringify({ matrix, paused: c.paused });
+  return JSON.stringify({ matrix, oneMinute: c.oneMinute, paused: c.paused });
 }
 
 export function versionKlingPricing(previous: KlingPricingConfig, next: KlingPricingConfig, now: Date = new Date()): KlingPricingConfig {
@@ -360,6 +401,23 @@ export function quoteKling(c: KlingPricingConfig, req: KlingQuoteRequest): Kling
 
   if (!Number.isFinite(req.seconds) || req.seconds <= 0) return { ok: false, reason: "The length could not be measured." };
   const seconds = Math.round(req.seconds * 1000) / 1000;
+
+  if (seconds === ONE_MINUTE_SECONDS && (req.feature === "text_to_video" || req.feature === "image_to_video")) {
+    if (!c.oneMinute.enabled) return { ok: false, reason: "One-minute videos are not available right now." };
+    if (req.resolution !== "720p" && req.resolution !== "1080p") return { ok: false, reason: "One-minute videos are made at 720p or 1080p." };
+    // an edit comes back at the reference clip length, never a minute
+    if (req.referenceVideo === true) return { ok: false, reason: "A one-minute video can't use a reference video. Remove the video, or choose 15 seconds or less." };
+    const audioOn = req.audio === true;
+    const fixed = c.oneMinute.priceUsdCents[req.resolution];
+    const perSecond = t.priceUsdCentsPerSecond + (audioOn ? t.audioSurchargeUsdCentsPerSecond : 0);
+    const imageCount = Math.max(0, Math.floor(req.referenceImages ?? 0));
+    // reference images ride on EVERY segment, so their per-run surcharge counts once per segment
+    const referenceCents = imageCount * t.referenceImageSurchargeUsdCentsPerRun * ONE_MINUTE_SEGMENTS;
+    const totalUsdCents = Math.ceil((fixed > 0 ? fixed + (audioOn ? ONE_MINUTE_SECONDS * t.audioSurchargeUsdCentsPerSecond : 0) : ONE_MINUTE_SECONDS * perSecond) + referenceCents);
+    const units = klingTierCostKnown(t) ? Math.round(ONE_MINUTE_SECONDS * t.providerUnitsPerSecond * 1000) / 1000 : null;
+    const providerCostUsdCents = units !== null && t.unitCostUsdCents > 0 ? Math.round(units * t.unitCostUsdCents * 100) / 100 : null;
+    return { ok: true, feature: req.feature, resolution: req.resolution, tier: key, seconds, billableSeconds: seconds, totalUsdCents, providerUnits: units, providerCostUsdCents, pricingVersion: c.version };
+  }
   if (seconds < t.minSeconds) return { ok: false, reason: `This option needs at least ${t.minSeconds} seconds.` };
   if (seconds > t.maxSeconds) return { ok: false, reason: `This option goes up to ${t.maxSeconds} seconds.` };
 

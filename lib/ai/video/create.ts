@@ -1,3 +1,4 @@
+import { ONE_MINUTE_SECONDS, ONE_MINUTE_SEGMENT_SECONDS, ONE_MINUTE_SEGMENTS } from "@/lib/ai/kling/pricing";
 import "server-only";
 
 import { calculateCredits } from "@/lib/ai/credits/engine";
@@ -94,6 +95,18 @@ type Refusal = { ok: false; code: string; extra?: Record<string, unknown> };
 
 const refuse = (code: string, extra?: Record<string, unknown>): Refusal => ({ ok: false, code, extra });
 
+/** A one-minute request (four chained 15 s segments). */
+function isOneMinute(input: unknown): boolean {
+  const o = (input as { options?: { durationSeconds?: unknown } } | null)?.options;
+  return o?.durationSeconds === ONE_MINUTE_SECONDS;
+}
+
+/** The same request, as the first 15 s segment. */
+function asFirstSegment<T>(input: T): T {
+  const i = input as unknown as { options?: Record<string, unknown> };
+  return { ...i, options: { ...(i.options ?? {}), durationSeconds: ONE_MINUTE_SEGMENT_SECONDS } } as unknown as T;
+}
+
 export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: CreateKlingVideoOptions<K>): Promise<CreateKlingVideoResult | Refusal> {
   const { feature: featureId, subject, settings, entitlement } = opts;
   const pipeline = klingPipeline(featureId);
@@ -188,6 +201,15 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
     provider_cost_estimate: quote.providerCostUsdCents === null ? null : { totalUsdCents: quote.providerCostUsdCents, providerUnits: quote.providerUnits },
     endpoint: pipeline.endpoint,
     audience: opts.isAdmin ? "admin" : entitlement.audience,
+    /*
+      🔴 ONE MINUTE = A CHAIN (2026-10-06). Priced and charged as 60 s above;
+      made as four 15 s segments. The worker finalizer reads this: after each
+      segment it stores the clip, takes its LAST frame and submits the next
+      segment from it (first_frame), and after the last it joins all four.
+    */
+    ...(isOneMinute(opts.input)
+      ? { chain: { segments: ONE_MINUTE_SEGMENTS, segmentSeconds: ONE_MINUTE_SEGMENT_SECONDS, done: [] as string[], callbackUrl: opts.callbackUrl } }
+      : {}),
   };
 
   const maxActive = concurrencyLimitFor(settings.frenzAiCharacterReplace, { audience: entitlement.audience, isAdmin: opts.isAdmin, policyMaxConcurrent: entitlement.maxConcurrent });
@@ -283,7 +305,8 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
       second submit re-stamping a job that already has one.
     */
     await stampJobProvider(job.id, "kling", pipeline.model);
-    const submission = await submitKlingPipeline({ feature: featureId, input: opts.input, jobId: job.id, callbackUrl: opts.callbackUrl });
+    // a one-minute job submits its FIRST 15 s segment; the rest follow from the worker
+    const submission = await submitKlingPipeline({ feature: featureId, input: isOneMinute(opts.input) ? asFirstSegment(opts.input) : opts.input, jobId: job.id, callbackUrl: opts.callbackUrl });
     const moved = await transitionJob(
       job.id,
       ["queued", "acquiring"],

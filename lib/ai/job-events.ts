@@ -25,6 +25,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * provider's stack trace, never a signed URL, never a member's file name.
  */
 export type AiJobEventKind =
+  /* one-minute videos (2026-10-06): a segment finished and the next was submitted; the four were joined */
+  | "chain.segment"
+  | "chain.joined"
   /* 0166 (multi-video): the member's own line — paid for, admitted, or ended without running */
   | "queue.waiting"
   | "queue.admitted"

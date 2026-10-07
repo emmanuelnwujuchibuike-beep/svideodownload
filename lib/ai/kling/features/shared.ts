@@ -74,12 +74,22 @@ export function validatePrompt(prompt: string | null | undefined, opts: { requir
  * only a non-numeric value is refused. An unenforced range is a member charged
  * for a length the model may silently truncate.
  */
+/** One minute is made at 720p or 1080p only — 4k segments are refused before the charge. */
+function validateOneMinute(options: KlingCommonOptions): KlingValidation {
+  if (options.resolution !== undefined && options.resolution !== "720p" && options.resolution !== "1080p") {
+    return invalid("One-minute videos are made at 720p or 1080p.");
+  }
+  return validateCommonOptions({ ...options, durationSeconds: undefined });
+}
+
 export function validateCommonOptions(options: KlingCommonOptions | undefined): KlingValidation {
   if (!options) return ok;
 
   if (options.durationSeconds !== undefined) {
     const d = options.durationSeconds;
     if (!Number.isFinite(d) || !Number.isInteger(d)) return invalid("The duration must be a whole number of seconds.");
+    // 60 = the one-minute option: four 15 s segments chained on the worker (lib/ai/kling/pricing.ts ONE_MINUTE_*).
+    if (d === 60) return validateOneMinute(options);
     if (d < KLING_OMNI.duration.minSeconds || d > KLING_OMNI.duration.maxSeconds) {
       return invalid(`This engine makes videos between ${KLING_OMNI.duration.minSeconds} and ${KLING_OMNI.duration.maxSeconds} seconds.`);
     }

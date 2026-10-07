@@ -687,6 +687,8 @@ export interface JobPatch {
   finalize_next_at?: string | null;
   finalize_lease_until?: string | null;
   finalize_error?: string | null;
+  /** Reset to 0 when a one-minute chain hands the job back to processing for its next segment. */
+  finalize_attempts?: number;
 }
 
 /**

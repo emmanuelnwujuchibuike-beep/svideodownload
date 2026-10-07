@@ -203,7 +203,9 @@ const TRANSITIONS: Record<AiJobStatus, readonly AiJobStatus[]> = {
     call it done.
   */
   processing: ["finalizing", "failed", "cancelled", "expired"],
-  finalizing: ["completed", "failed", "cancelled", "expired"],
+  // "processing": ONLY a one-minute chain returning for its next 15 s segment
+  // (server/services/ai-video-chain.ts) — the result is still never completed without a finalize.
+  finalizing: ["completed", "processing", "failed", "cancelled", "expired"],
   // A finished job may be deleted by its owner (Part 7); an expired one too (its row is otherwise identical).
   completed: ["expired", "deleted"],
   failed: ["expired", "deleted"],

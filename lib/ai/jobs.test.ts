@@ -274,9 +274,34 @@ describe("status transitions", () => {
   it("lets finalization fail or be cancelled like any other work", () => {
     expect(canTransition("finalizing", "failed")).toBe(true);
     expect(canTransition("finalizing", "cancelled")).toBe(true);
-    // But never backwards: a retry is a new run, not a rewound one.
-    expect(canTransition("finalizing", "processing")).toBe(false);
+    // Never backwards from a finished state: a retry is a new run, not a rewound one.
     expect(canTransition("completed", "finalizing")).toBe(false);
+  });
+
+  /*
+    The ONE forward-to-processing move out of finalizing (2026-10-06): a
+    one-minute chain hands the job back under a NEW Kling task for its next
+    15 s segment. It is not a retry rewinding — the finished segment is
+    recorded and the next is a different task. It keeps the finalize claim's
+    lease as its lock, which is what stops two finalize dispatches from each
+    submitting (and paying for) the next segment. No other code may use it.
+  */
+  it("only the one-minute chain may move finalizing → processing", async () => {
+    expect(canTransition("finalizing", "processing")).toBe(true);
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const users: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.tsx?$/.test(e.name) && !e.name.includes(".test.")) {
+          if (/\["finalizing"\],\s*"processing"/.test(readFileSync(p, "utf8"))) users.push(p.replace(/\\/g, "/"));
+        }
+      }
+    };
+    for (const root of ["lib", "server", "app", "features"]) walk(join(process.cwd(), root));
+    expect(users.map((u) => u.slice(u.indexOf(process.cwd().replace(/\\/g, "/")) + process.cwd().length + 1))).toEqual(["server/services/ai-video-chain.ts"]);
   });
 });
 

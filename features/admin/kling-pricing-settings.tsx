@@ -102,6 +102,10 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
   const cfg: KlingPricingConfig = settings.frenzAiKlingPricing;
   const [draft, setDraft] = useState<Draft>(() => toDraft(cfg.matrix));
   const [paused, setPaused] = useState(cfg.paused);
+  // One minute (owner, 2026-10-06): its own switch and price, sent with every save so a save never resets it.
+  const [oneMinuteOn, setOneMinuteOn] = useState(cfg.oneMinute.enabled);
+  const [oneMinute720, setOneMinute720] = useState(String(cfg.oneMinute.priceUsdCents["720p"]));
+  const [oneMinute1080, setOneMinute1080] = useState(String(cfg.oneMinute.priceUsdCents["1080p"]));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -135,7 +139,13 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
           ];
         }),
       );
-      const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ frenzAiKlingPricing: { matrix, paused } }) });
+      const res = await fetch("/api/admin/landing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+          frenzAiKlingPricing: {
+            matrix,
+            paused,
+            oneMinute: { enabled: oneMinuteOn, priceUsdCents: { "720p": num(oneMinute720, 0), "1080p": num(oneMinute1080, 0) } },
+          },
+        }) });
       const json = await res.json().catch(() => ({}));
       setMsg(res.ok ? { ok: true, text: "Saved. New quotes use this; a job already quoted keeps the price it was quoted at." } : { ok: false, text: json.error ?? "Failed to save." });
       if (res.ok) router.refresh();
@@ -167,6 +177,38 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
             </span>
           </span>
         </label>
+
+        <div className="mt-4 rounded-2xl border border-border/70 p-4">
+          <label className="flex items-start gap-3">
+            <input type="checkbox" checked={oneMinuteOn} onChange={(e) => setOneMinuteOn(e.target.checked)} className="mt-1 size-4" />
+            <span>
+              <span className="block text-sm font-semibold">One-minute videos (60 s)</span>
+              <span className="block text-[11px] text-muted-foreground">
+                Made as four 15 s segments, each starting on the last frame of the one before, joined into one video. Text to Video and Image to Video, at 720p or 1080p.
+                Kling bills four segments: about {Math.round(60 * (cfg.matrix["text_to_video:720p"].providerUnitsPerSecond || 0.6) * 10) / 10} units at 720p.
+                A one-minute video cannot use a reference video.
+              </span>
+            </span>
+          </label>
+          <div className="mt-3 grid max-w-md grid-cols-2 gap-3">
+            {(
+              [
+                ["720p", oneMinute720, setOneMinute720, "text_to_video:720p"],
+                ["1080p", oneMinute1080, setOneMinute1080, "text_to_video:1080p"],
+              ] as const
+            ).map(([res, value, setValue, tierKey]) => (
+              <label key={res} className="text-xs font-medium">
+                Price at {res} (US cents)
+                <input inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} className={input} />
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">
+                  {num(value, 0) > 0
+                    ? `Members pay ${usd(num(value, 0))}.`
+                    : `0 = 60 × the per-second price: ${usd(Math.ceil(60 * cfg.matrix[tierKey].priceUsdCentsPerSecond))}.`}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-5 space-y-4">
           {KLING_TIER_KEYS.map((key) => {

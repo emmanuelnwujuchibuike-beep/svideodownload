@@ -280,6 +280,14 @@ const schema = z.object({
               priceUsdCentsPerSecond: z.number().min(0).max(100000).optional(),
               priceUsdCentsPerRun: z.number().min(0).max(100000).optional(),
               audioSurchargeUsdCentsPerSecond: z.number().min(0).max(100000).optional(),
+              /*
+                🔴 The form has sent these two since 2026-10-04 and a `.strict()`
+                object without them refused every save of this panel. Listed
+                now, with the video-input rate (2026-10-06).
+              */
+              referenceVideoSurchargeUsdCentsPerRun: z.number().min(0).max(100000).optional(),
+              referenceImageSurchargeUsdCentsPerRun: z.number().min(0).max(100000).optional(),
+              videoInputMultiplier: z.number().min(1).max(5).optional(),
               minBillableSeconds: z.number().int().min(1).max(60).optional(),
               minSeconds: z.number().int().min(1).max(60).optional(),
               maxSeconds: z.number().int().min(1).max(60).optional(),
@@ -289,6 +297,14 @@ const schema = z.object({
         )
         .optional(),
       paused: z.boolean().optional(),
+      // one-minute videos (2026-10-06): the switch and the price per quality
+      oneMinute: z
+        .object({
+          enabled: z.boolean(),
+          priceUsdCents: z.object({ "720p": z.number().min(0).max(100000), "1080p": z.number().min(0).max(100000) }).strict(),
+        })
+        .strict()
+        .optional(),
     })
     .strict()
     .optional(),

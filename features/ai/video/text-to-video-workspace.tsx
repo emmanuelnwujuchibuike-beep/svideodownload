@@ -80,7 +80,10 @@ export function TextToVideoWorkspace({
   currencySymbol,
   slides,
   base,
+  oneMinute = false,
 }: {
+  /** The admin's one-minute switch (Kling pricing). On: a "1 minute" length is offered. */
+  oneMinute?: boolean;
   historyHref: string;
   currencySymbol: string;
   /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
@@ -190,7 +193,7 @@ export function TextToVideoWorkspace({
             label="Duration"
             value={String(durationSeconds)}
             onChange={(v) => setDuration(Number(v))}
-            options={DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` }))}
+            options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` })), ...(oneMinute ? [{ value: "60", label: "1 minute (60 s)" }] : [])]}
             disabled={locked}
           />
           <AiSettingRow

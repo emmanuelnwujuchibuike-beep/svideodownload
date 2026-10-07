@@ -115,7 +115,15 @@ export async function createKlingVideoJob<K extends KlingRunnableFeature>(opts: 
   const ownerId = subjectOwnerId(subject);
   if (!ownerId) return refuse("AUTH_REQUIRED");
 
-  const pricing = settings.frenzAiKlingPricing;
+  /*
+    Admin preview (2026-10-06): an admin may make a one-minute video while the
+    public switch is still off — the end-to-end check before members see it.
+    Priced exactly as a member would be; only the switch is bypassed.
+  */
+  const pricing =
+    opts.isAdmin && isOneMinute(opts.input) && !settings.frenzAiKlingPricing.oneMinute.enabled
+      ? { ...settings.frenzAiKlingPricing, oneMinute: { ...settings.frenzAiKlingPricing.oneMinute, enabled: true } }
+      : settings.frenzAiKlingPricing;
   const plans = settings.frenzAiPlans;
 
   /* ── 1 · the capability gate: free, and before anything else ───────────── */

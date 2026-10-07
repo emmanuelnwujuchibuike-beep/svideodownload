@@ -23,7 +23,7 @@ export default async function PublicTextToVideoWorkspacePage() {
       <SiteHeader landing />
       {/* px-0: the workspace shell carries the 16 px gutter itself — a second one here squeezed the settings (redesign page 3) */}
       <main className="container max-w-3xl px-0 pb-10 sm:px-3 sm:pb-14" style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}>
-        <TextToVideoWorkspace historyHref="/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} slides={slides} base="/ai" />
+        <TextToVideoWorkspace historyHref="/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} oneMinute={settings.frenzAiKlingPricing.oneMinute.enabled} slides={slides} base="/ai" />
       </main>
       <AIDownloadOverlay />
       <SiteFooterMinimal />

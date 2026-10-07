@@ -24,5 +24,5 @@ export default async function StudioImageToVideoWorkspacePage() {
   if (!user) redirect("/login?next=/studio/ai/image-to-video");
   // The showcase opens every AI page (owner's reference); cached until an admin saves.
   const [settings, slides] = await Promise.all([getLandingSettings(), getShowcaseSlides()]);
-  return <ImageToVideoWorkspace historyHref="/studio/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} slides={slides} base="/studio/ai" />;
+  return <ImageToVideoWorkspace historyHref="/studio/ai/history" currencySymbol={aiCurrencySymbol(settings.frenzAiCurrency)} oneMinute={settings.frenzAiKlingPricing.oneMinute.enabled} slides={slides} base="/studio/ai" />;
 }

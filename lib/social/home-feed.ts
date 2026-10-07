@@ -757,6 +757,8 @@ export async function getHomeFeed(opts: {
    * promises the viewer specific posts. Everything else reshuffles.
    */
   pinNew?: boolean;
+  /** 0187: only this kind of content — "ai_video" is the AI Reels feed (rewards brief §5). Absent = everything. */
+  contentType?: "ai_video" | "ai_audio";
 }): Promise<FeedPage> {
   const limit = opts.limit ?? 8;
   const offset = opts.offset ?? 0;
@@ -795,8 +797,8 @@ export async function getHomeFeed(opts: {
   const excludeKey = exclude ? fnv1a([...exclude].sort().join(",")) : "-";
   // `pinNew` joins the key for the same reason `seed` does — it changes the
   // returned ORDER, so a pill refresh and a plain one must not share an entry.
-  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}:${excludeKey}${pinNew ? ":pin" : ""}`;
-  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed, exclude, pinNew));
+  const key = `homefeed:${opts.viewerId ?? "anon"}:${sort}:${format}:${offset}:${limit}:${seed ?? "-"}:${excludeKey}${pinNew ? ":pin" : ""}${opts.contentType ? `:${opts.contentType}` : ""}`;
+  return getCached(key, 20, () => loadHomeFeed(opts.viewerId, sort, offset, limit, format, seed, exclude, pinNew, opts.contentType));
 }
 
 /**
@@ -830,6 +832,7 @@ async function loadHomeFeed(
   seed?: string,
   excludeIds?: string[],
   pinNew = false,
+  contentType?: "ai_video" | "ai_audio",
 ): Promise<FeedPage> {
   try {
     const db = createAdminClient();
@@ -888,6 +891,8 @@ async function loadHomeFeed(
     if (format === "reel") {
       q = q.eq("media_kind", "video");
     }
+    // 0187: AI Reels — the same feed, only what Frenz AI made
+    if (contentType) q = q.eq("content_type", contentType);
     // Base fetch order is newest-first for "following"/"recent" (an unranked,
     // literal view of what was posted) and "for_you" (re-ranked in JS below,
     // falling back to this same recency order as its tiebreak). "trending" is

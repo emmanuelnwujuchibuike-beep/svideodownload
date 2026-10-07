@@ -46,7 +46,7 @@ import { cn } from "@/lib/utils";
  * and the sheet's chunk is fetched only when Recharge is pressed (next/dynamic
  * inside the sheet module).
  */
-type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant";
+type LedgerKind = "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal";
 
 type LedgerRow = CharacterReplaceTransaction;
 
@@ -54,7 +54,10 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
   recharge: { label: "Credits added", Icon: ArrowDownLeft, tone: "in" },
   // 0184: a pack's bonus credits, and credits the product gives
   bonus: { label: "Bonus credits", Icon: Sparkles, tone: "in" },
-  grant: { label: "Credits from Frenz", Icon: Sparkles, tone: "in" },
+  grant: { label: "Credits earned", Icon: Sparkles, tone: "in" },
+  // 0187: cashing out withdrawable reward credits, and a withdrawal that was returned
+  withdrawal: { label: "Withdrawal", Icon: ArrowDownLeft, tone: "out" },
+  withdrawal_reversal: { label: "Withdrawal returned", Icon: RotateCcw, tone: "in" },
   // 2026-10-06: the one AI wallet pays for every tool now — Character Replace is retired
   processing_charge: { label: "Frenz AI creation", Icon: Sparkles, tone: "out" },
   refund: { label: "Refunded — the video didn't finish", Icon: RotateCcw, tone: "in" },

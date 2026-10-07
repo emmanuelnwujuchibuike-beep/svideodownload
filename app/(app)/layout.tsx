@@ -16,6 +16,7 @@ import { VastInterstitialTriggers } from "@/features/monetization/vast-interstit
 import { MobileNav } from "@/features/app-shell/mobile-nav";
 import { DownloadTopAd } from "@/features/monetization/download-top-ad";
 import { OfflineQueueSync } from "@/features/app-shell/offline-queue-sync";
+import { ReferralClaim } from "@/features/app-shell/referral-claim";
 import { PinLockGate } from "@/features/account/pin-lock-gate";
 import { InboxMobileChrome } from "@/features/social/inbox-mobile-chrome";
 import { AutoAwayTracker, PresenceTracker } from "@/features/friends/use-presence";
@@ -137,6 +138,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <InboxRealtimeTracker />
       {/* Replays any offline-queued Like/Save writes on load + reconnect. */}
       <OfflineQueueSync />
+      <ReferralClaim />
       {/* Once-per-browser-session "new device" security check. */}
       <DeviceCheck />
       {/* App-level quick-lock PIN — gates Secret Chats and /account/security only. */}

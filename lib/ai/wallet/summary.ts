@@ -76,11 +76,12 @@ function fromCredits(id: AiCreditFeatureId, settings: LandingSettings): { credit
 export async function loadWalletSummary(userId: string, settings: LandingSettings, opts: { transactions: number }) {
   const plans = settings.frenzAiPlans;
   const db = createAdminClient();
-  const [balance, ledger, entitlement, contexts] = await Promise.all([
+  const [balance, ledger, entitlement, contexts, withdrawable] = await Promise.all([
     getCharacterReplaceBalanceCents(userId),
     listCharacterReplaceLedger(userId, Math.max(1, Math.min(50, opts.transactions))),
     getAiCreditEntitlement(userId, plans),
     Promise.all(AI_CREDIT_FEATURES.map((id) => featureContext(userId, id, plans))),
+    db.from("ai_product_balances").select("withdrawable_cents").eq("user_id", userId).eq("product", "character_replace").maybeSingle().then((r) => Number((r.data as { withdrawable_cents?: number } | null)?.withdrawable_cents ?? 0), () => 0),
   ]);
   const tier = contexts[0]?.tier ?? "free";
 
@@ -103,6 +104,8 @@ export async function loadWalletSummary(userId: string, settings: LandingSetting
   return {
     unit: WALLET_UNIT,
     balanceCredits: balance,
+    // 0187: the cashable part of the balance (withdrawable reward credits); the rest is usable only
+    withdrawableCredits: withdrawable,
     plan: {
       tier,
       label: tier === "free" ? "Free" : (planConfig?.label ?? (tier === "ai_max" ? "AI Max" : "AI Pro")),

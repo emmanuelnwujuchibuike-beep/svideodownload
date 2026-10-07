@@ -1,5 +1,6 @@
 import { recordConfigChange } from "@/lib/platform/config-audit";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeRewardsConfig, versionRewardsConfig, type RewardsConfig } from "@/lib/rewards/config";
 import {
   normalizeCharacterReplaceConfig,
   versionCharacterReplacePricing,
@@ -332,6 +333,8 @@ export interface LandingSettings {
   frenzAiTextToAudio: TextToAudioConfig;
   /** Voice Cloning (2026-09-27): the standalone tool's configuration — lib/ai/voice-clone/config.ts owns the type. */
   frenzAiVoiceClone: VoiceCloneConfig;
+  /** 0187: the reward rules — events, qualification, withdrawals (lib/rewards/config.ts). Read by the SQL engine. */
+  frenzRewards: RewardsConfig;
 }
 
 /** The two engines, as a value the settings row can hold. */
@@ -392,6 +395,7 @@ export const DEFAULT_LANDING: LandingSettings = {
   frenzAiLipSync: normalizeLipSyncConfig(null),
   frenzAiTextToAudio: normalizeTextToAudioConfig(null),
   frenzAiVoiceClone: normalizeVoiceCloneConfig(null),
+  frenzRewards: normalizeRewardsConfig(null),
 };
 
 /** Anything that is not exactly "propainter" is the safe, cheap engine. */
@@ -543,6 +547,7 @@ export async function getLandingSettings(): Promise<LandingSettings> {
       frenzAiLipSync: normalizeLipSyncConfig(raw.frenzAiLipSync),
       frenzAiTextToAudio: normalizeTextToAudioConfig(raw.frenzAiTextToAudio),
       frenzAiVoiceClone: normalizeVoiceCloneConfig(raw.frenzAiVoiceClone),
+      frenzRewards: normalizeRewardsConfig(raw.frenzRewards),
     };
     cache = { at: Date.now(), value };
     return value;
@@ -581,9 +586,10 @@ export async function getLandingSettings(): Promise<LandingSettings> {
  * What a caller may send: any flat field, and for the nested Character Replace
  * object a PARTIAL of it — the admin panel posts only the knobs it shows.
  */
-export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">> & {
+export type LandingSettingsPatch = Partial<Omit<LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards">> & {
   /** Voice Cloning: the same deep merge — the panel posts the slots without erasing the sample limits. */
   frenzAiVoiceClone?: Record<string, unknown>;
+  frenzRewards?: Record<string, unknown>;
   /** Lip Sync Pro: the same deep merge. */
   frenzAiLipSync?: Record<string, unknown>;
   /** Text to Audio: the same deep merge. */
@@ -621,7 +627,7 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
   const db = createAdminClient();
   const current = await getLandingSettings();
 
-  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone">>(key: K): LandingSettings[K] =>
+  const pick = <K extends Exclude<keyof LandingSettings, "frenzAiCharacterReplace" | "frenzAiPlans" | "frenzAiProviders" | "frenzAiKlingPricing" | "frenzAiLipSync" | "frenzAiTextToAudio" | "frenzAiVoiceClone" | "frenzRewards">>(key: K): LandingSettings[K] =>
     s[key] === undefined ? current[key] : (s[key] as unknown as LandingSettings[K]);
 
   const value: LandingSettings = {
@@ -698,6 +704,8 @@ export async function setLandingSettings(s: LandingSettingsPatch, audit: { chang
       current.frenzAiVoiceClone,
       normalizeVoiceCloneConfig(mergeCharacterReplacePatch(current.frenzAiVoiceClone as unknown as Record<string, unknown>, (s.frenzAiVoiceClone ?? {}) as Record<string, unknown>)),
     ),
+    // 0187: the reward rules — merged, normalised, versioned (the version is stamped on every reward after it)
+    frenzRewards: versionRewardsConfig(current.frenzRewards, normalizeRewardsConfig(mergeCharacterReplacePatch(current.frenzRewards as unknown as Record<string, unknown>, (s.frenzRewards ?? {}) as Record<string, unknown>))),
   };
   await db.from("settings").upsert({ key: "landing", value }, { onConflict: "key" });
   cache = null;

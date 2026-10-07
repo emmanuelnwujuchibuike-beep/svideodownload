@@ -1,6 +1,7 @@
 import "server-only";
 
 import { freeUseState } from "@/lib/ai/character-replace/free-access";
+import { rewardsForSource } from "@/lib/rewards/engine";
 import { characterReplaceRefundState } from "@/lib/ai/character-replace/wallet";
 import { recordJobEvent } from "@/lib/ai/job-events";
 import { claimAiNotification, getJobAsService, noteJobDiagnostic } from "@/lib/ai/job-store";
@@ -151,13 +152,22 @@ export async function notifyAiJobFinished(opts: {
     outcome: "completed",
     durationMs: opts.durationMs ?? null,
   });
+  /*
+    0187: the database granted this job's generation reward when it completed
+    (the ai_jobs trigger → process_reward_event). The ready push carries the
+    line — one push, not two. Read only; nothing is granted here.
+  */
+  const earned = await rewardsForSource("ai_job", opts.jobId)
+    .then((r) => r.find((g) => g.role === "actor" && g.beneficiary_id === opts.userId))
+    .catch(() => undefined);
+  const body = earned ? `${copy.body} You earned ${earned.amount} credit${earned.amount === 1 ? "" : "s"}.` : copy.body;
 
   try {
     await sendSmartPush(
       opts.userId,
       {
         title: copy.title,
-        body: copy.body,
+        body,
         /*
           🔴 Straight to the RESULT, not the homepage. The id is carried in the
           url and re-authorised server-side when the page asks for the file —

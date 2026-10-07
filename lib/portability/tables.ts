@@ -180,6 +180,11 @@ export const OWNER_COLUMN: Record<string, string> = {
   ai_audio_assets: "user_id",
   ai_tta_free_usage: "user_id",
   ai_feature_included_usage: "user_id",
+  share_links: "owner_id",
+  referral_attributions: "referred_user_id",
+  reward_profiles: "user_id",
+  reward_events: "beneficiary_id",
+  withdrawal_requests: "user_id",
   /*
     Voice Cloning (0171). An export carries the member's own facts — the names,
     the dates, the rights record they signed, how much audio each voice was built

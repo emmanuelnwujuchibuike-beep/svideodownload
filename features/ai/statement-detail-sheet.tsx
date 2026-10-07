@@ -32,13 +32,16 @@ import { cn } from "@/lib/utils";
 const LABEL: Record<string, string> = {
   recharge: "Credits added",
   bonus: "Bonus credits",
-  grant: "Credits from Frenz",
+  grant: "Credits earned",
+  withdrawal: "Withdrawal",
+  withdrawal_reversal: "Withdrawal returned",
   processing_charge: "Frenz AI creation",
   refund: "Refunded",
   adjustment: "Adjustment by Frenz",
   reversal: "Reversed",
 };
 const STATUS: Record<string, string> = { settled: "Settled", reserved: "Reserved — the creation is still running", refunded: "Refunded", reversed: "Reversed" };
+// a withdrawal reads "Reserved" while an admin reviews it
 const QUALITY: Record<string, string> = { standard: "Standard", high: "High", ultra: "Ultra", "480p": "480p", "720p": "720p", "1080p": "1080p" };
 
 export function symbolFor(currency: string | undefined, fallback: string): string {

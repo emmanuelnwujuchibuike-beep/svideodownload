@@ -68,6 +68,8 @@ export async function GET(request: Request) {
     format: "reel",
     seed,
     excludeIds: exclude.length ? exclude : undefined,
+    // 0187: ?content=ai → AI Reels (Frenz AI videos only)
+    contentType: sp.get("content") === "ai" ? "ai_video" : undefined,
   });
   /*
     🔴 A seeded or excluded response is PER-DEVICE and must never sit in a shared

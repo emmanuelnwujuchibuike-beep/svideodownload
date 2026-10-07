@@ -118,6 +118,10 @@ export const NOTIFICATIONS = [
     exactly the bug that rule exists for.
   */
   { id: "ai_deposit_successful", label: "AI deposit received", category: "premium" },
+  // 0187: rewards, referrals and withdrawals
+  { id: "reward_earned", label: "Credits earned", category: "premium" },
+  { id: "referral_reward", label: "Referral reward", category: "premium" },
+  { id: "withdrawal_update", label: "Withdrawal update", category: "premium" },
   { id: "ai_deposit_failed", label: "AI deposit failed", category: "premium" },
   { id: "renewal_reminder", label: "Renewal reminder", category: "premium" },
   { id: "premium_expiring", label: "Premium expiring", category: "premium" },

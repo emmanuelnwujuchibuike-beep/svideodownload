@@ -170,3 +170,10 @@ export function AiPromoEditorLazy({ initial }: { initial: AiPromo | null }) {
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {
   return <AiCreditsMonitor rows={rows} stats={stats} symbol={symbol} />;
 }
+
+// Rewards brief part 1 (2026-10-07): AI → Rewards — the reward rules, referral analytics, the manual withdrawal queue.
+const RewardsPanel = dynamic(() => import("@/features/admin/rewards-panel").then((m) => m.RewardsPanel), { loading: skeleton("Loading rewards") });
+
+export function RewardsPanelLazy({ settings }: { settings: LandingSettings }) {
+  return <RewardsPanel settings={settings} />;
+}

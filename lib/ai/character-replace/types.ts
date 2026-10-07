@@ -409,7 +409,7 @@ export interface CharacterReplaceTransaction {
   deltaCents: number;
   balanceAfterCents: number;
   /** This wallet's kinds (wallet.ts): recharge · processing_charge · refund · adjustment · reversal. */
-  kind: "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant";
+  kind: "recharge" | "processing_charge" | "refund" | "adjustment" | "reversal" | "bonus" | "grant" | "withdrawal" | "withdrawal_reversal";
   jobId: string | null;
   note: string | null;
   createdAt: string;

@@ -175,7 +175,7 @@ import { CharacterReplaceFreeAccessPanel } from "@/features/admin/character-repl
 import { AiProvidersOverview } from "@/features/admin/ai-providers-overview";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiShowcaseEditorLazy, AiPromoEditorLazy, AiOperationsPanelLazy, AiMoneyPanelLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiShowcaseEditorLazy, AiPromoEditorLazy, AiOperationsPanelLazy, AiMoneyPanelLazy, RewardsPanelLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
 import { loadAiProviderOverview } from "@/lib/ai/providers/overview";
 import { readStoredShowcase } from "@/lib/ai/showcase/server";
@@ -1006,6 +1006,8 @@ async function FrenzAISection() {
             <AiProvidersOverview overview={providerOverview} />
           ),
         },
+        /* Rewards brief part 1 (2026-10-07): one reward engine, referrals, usable vs withdrawable credits, manual withdrawals. */
+        { id: "rewards", label: "Rewards & referrals", content: <RewardsPanelLazy settings={landing} /> },
         { id: "balances", label: "Member balances", content: <AiBalanceAdjustLazy settings={landing} /> },
         { id: "access", label: "Access & allowances", content: <FrenzAISettings settings={landing} /> },
         /* Redesign Phase 1 (2026-10-05): the welcome page carousel — image, chip, title, highlight, description, link, order, on/off, with the real card as preview. */

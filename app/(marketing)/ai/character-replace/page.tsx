@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SiteFooterMinimal } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { FrenzAIExplore } from "@/features/ai/frenz-ai-explore";
-import { getShowcaseCards, getShowcaseSlides } from "@/lib/ai/showcase/server";
+import { getShowcaseSlides } from "@/lib/ai/showcase/server";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -38,7 +38,7 @@ export const dynamic = "force-static";
 
 export default async function PublicCharacterReplacePage() {
   // Baked at build; an admin save drops this page (SHOWCASE_PAGES) — visitors never ask.
-  const [slides, cards] = await Promise.all([getShowcaseSlides(), getShowcaseCards()]);
+  const slides = await getShowcaseSlides();
   return (
     <>
       <SiteHeader landing />
@@ -46,7 +46,7 @@ export default async function PublicCharacterReplacePage() {
         className="container max-w-3xl px-3 pb-10 sm:pb-14"
         style={{ paddingTop: "calc(var(--frenz-header-bottom, calc(var(--frenz-safe-top, 0px) + 4rem)) + 1rem)" }}
       >
-        <FrenzAIExplore createPath="/ai/character-replace/create" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" slides={slides} cards={cards} />
+        <FrenzAIExplore createPath="/ai/character-replace/create" aiHref="/ai" historyHref="/ai/history" usageHref="/ai/usage" slides={slides} />
       </main>
       <SiteFooterMinimal />
     </>

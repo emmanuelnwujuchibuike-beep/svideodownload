@@ -2,20 +2,19 @@
 
 import {
   ArrowRight,
-  AudioLines,
-  History,
-  Image as ImageIcon,
-  Mic,
-  Mic2,
+  AudioWaveform,
+  Clapperboard,
+  Film,
+  ImagePlay,
+  ListMusic,
+  MicVocal,
   Sparkles,
-  Type,
-  UserRoundCheck,
+  Speech,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
 
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
-import type { ShowcaseImage } from "@/lib/ai/showcase/slides";
 import { cn } from "@/lib/utils";
 
 /**
@@ -126,7 +125,7 @@ export function aiToolCards(
     ? [
         {
           id: "text_to_audio",
-          icon: Type,
+          icon: AudioWaveform,
           tint: "bg-indigo-500/[0.10] text-indigo-600 dark:text-indigo-300",
           name: "Text to Audio",
           blurb: "Turn your words into natural AI audio.",
@@ -137,7 +136,7 @@ export function aiToolCards(
         },
         {
           id: "voice_clone",
-          icon: Mic2,
+          icon: MicVocal,
           tint: "bg-rose-500/[0.10] text-rose-600 dark:text-rose-300",
           name: "Voice Cloning",
           blurb: "Clone a voice you own and type with it anywhere.",
@@ -148,7 +147,7 @@ export function aiToolCards(
         },
         {
           id: "audio_library",
-          icon: AudioLines,
+          icon: ListMusic,
           tint: "bg-teal-500/[0.10] text-teal-600 dark:text-teal-300",
           name: "Audio Library",
           blurb: "Your saved audio — play, download, reuse in Lip Sync Pro.",
@@ -159,7 +158,7 @@ export function aiToolCards(
         },
         {
           id: "voice_library",
-          icon: UserRoundCheck,
+          icon: UsersRound,
           tint: "bg-emerald-500/[0.10] text-emerald-600 dark:text-emerald-300",
           name: "Your Voices",
           blurb: "The voices you have cloned, ready to speak.",
@@ -174,7 +173,7 @@ export function aiToolCards(
     ...audio,
     {
       id: "lip_sync_pro",
-      icon: Mic,
+      icon: Speech,
       tint: "bg-cyan-500/[0.10] text-cyan-600 dark:text-cyan-300",
       name: "Lip Sync Pro",
       blurb: "Give an existing video natural lip synchronization using any audio.",
@@ -185,7 +184,7 @@ export function aiToolCards(
     },
     {
       id: "text_to_video",
-      icon: Sparkles,
+      icon: Clapperboard,
       tint: "bg-violet-500/[0.10] text-violet-600 dark:text-violet-300",
       name: "Text to Video",
       /*
@@ -204,7 +203,7 @@ export function aiToolCards(
     },
     {
       id: "image_to_video",
-      icon: ImageIcon,
+      icon: ImagePlay,
       tint: "bg-indigo-500/[0.10] text-indigo-600 dark:text-indigo-300",
       name: "Image to Video",
       /* Same reason as Text to Video above: the style is described, not fixed. */
@@ -216,7 +215,7 @@ export function aiToolCards(
     },
     {
       id: "history",
-      icon: History,
+      icon: Film,
       tint: "bg-amber-500/[0.12] text-amber-600 dark:text-amber-300",
       name: "Your AI Videos",
       blurb: "Everything you have created, in one place.",
@@ -234,16 +233,10 @@ export function FrenzAIToolsGrid({
   include = "all",
   onFlowTool,
   disabled,
-  images,
-  clips,
   className,
 }: {
   characterReplaceHref: string;
   historyHref: string;
-  /** A real picture per tool, from the admin's showcase uploads (see ToolCardView). */
-  images?: Partial<Record<AiToolId, ShowcaseImage>>;
-  /** A short muted clip per tool (Admin → Frenz AI → Tool cards); plays only while its card is on screen. */
-  clips?: Partial<Record<AiToolId, string>>;
   /** "all" — the Explore page; "beyond-scopes" is kept for a host that draws the scopes itself. */
   include?: "all" | "beyond-scopes";
   /** When given, a flow tool (Voice Replace) is a button that hands its id back instead of a link. */
@@ -305,8 +298,6 @@ export function FrenzAIToolsGrid({
                     tool={tool}
                     onFlowTool={onFlowTool}
                     disabledNote={disabled?.[tool.id] ?? null}
-                    image={images?.[tool.id] ?? null}
-                    clip={clips?.[tool.id] ?? null}
                     wide={rows.length % 2 === 1 && i === rows.length - 1}
                   />
                 </li>
@@ -345,15 +336,24 @@ export function FrenzAIToolsGrid({
  * upload costs zero image bytes. A group with one card gets the wide
  * banner shape so it never reads as a gap.
  */
-const TOOL_ART: Record<AiToolId, string> = {
-  text_to_video: "radial-gradient(80% 90% at 85% 10%, rgba(139,92,246,.75), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(59,130,246,.6), transparent 62%), #131a4a",
-  image_to_video: "radial-gradient(80% 90% at 85% 10%, rgba(99,102,241,.75), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(14,165,233,.55), transparent 62%), #131a4a",
-  lip_sync_pro: "radial-gradient(80% 90% at 85% 10%, rgba(6,182,212,.6), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(99,102,241,.6), transparent 62%), #131a4a",
-  text_to_audio: "radial-gradient(80% 90% at 85% 10%, rgba(129,140,248,.7), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(56,189,248,.5), transparent 62%), #131a4a",
-  voice_clone: "radial-gradient(80% 90% at 85% 10%, rgba(217,70,239,.55), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(99,102,241,.6), transparent 62%), #131a4a",
-  audio_library: "radial-gradient(80% 90% at 85% 10%, rgba(20,184,166,.55), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(59,130,246,.55), transparent 62%), #131a4a",
-  voice_library: "radial-gradient(80% 90% at 85% 10%, rgba(16,185,129,.5), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(99,102,241,.55), transparent 62%), #131a4a",
-  history: "radial-gradient(80% 90% at 85% 10%, rgba(245,158,11,.5), transparent 60%), radial-gradient(70% 80% at 0% 100%, rgba(139,92,246,.55), transparent 62%), #131a4a",
+/*
+  ── 🔴 GRADIENT ICON ART, NEVER A PICTURE (owner, 2026-10-07) ─────────────
+  "they should show a premium professional gradient icon in respective of
+  their features, icons must match features — so the page doesn't feel heavy
+  and so images don't go through Vercel." Each card: a soft tinted panel, and
+  a glossy two-tone "app icon" in the feature's own colours with a matching
+  glow. Pure CSS — zero image bytes, nothing fetched, nothing optimised.
+  Classes are literal so Tailwind keeps them.
+*/
+const TOOL_ART: Record<AiToolId, { panel: string; badge: string; glow: string; mark: string }> = {
+  text_to_video: { panel: "from-violet-100 via-fuchsia-50 to-white dark:from-violet-950/70 dark:via-fuchsia-950/40 dark:to-slate-950", badge: "from-violet-500 to-fuchsia-500", glow: "shadow-[0_10px_28px_-8px_rgba(168,85,247,0.75)]", mark: "text-violet-500/[0.10]" },
+  image_to_video: { panel: "from-sky-100 via-indigo-50 to-white dark:from-sky-950/70 dark:via-indigo-950/40 dark:to-slate-950", badge: "from-sky-500 to-indigo-500", glow: "shadow-[0_10px_28px_-8px_rgba(79,70,229,0.75)]", mark: "text-indigo-500/[0.10]" },
+  lip_sync_pro: { panel: "from-cyan-100 via-blue-50 to-white dark:from-cyan-950/70 dark:via-blue-950/40 dark:to-slate-950", badge: "from-cyan-400 to-blue-600", glow: "shadow-[0_10px_28px_-8px_rgba(37,99,235,0.7)]", mark: "text-cyan-500/[0.12]" },
+  text_to_audio: { panel: "from-indigo-100 via-violet-50 to-white dark:from-indigo-950/70 dark:via-violet-950/40 dark:to-slate-950", badge: "from-indigo-500 to-violet-500", glow: "shadow-[0_10px_28px_-8px_rgba(99,102,241,0.75)]", mark: "text-indigo-500/[0.10]" },
+  voice_clone: { panel: "from-pink-100 via-rose-50 to-white dark:from-pink-950/70 dark:via-rose-950/40 dark:to-slate-950", badge: "from-pink-500 to-rose-500", glow: "shadow-[0_10px_28px_-8px_rgba(244,63,94,0.7)]", mark: "text-rose-500/[0.10]" },
+  audio_library: { panel: "from-teal-100 via-emerald-50 to-white dark:from-teal-950/70 dark:via-emerald-950/40 dark:to-slate-950", badge: "from-teal-400 to-emerald-600", glow: "shadow-[0_10px_28px_-8px_rgba(16,185,129,0.7)]", mark: "text-teal-500/[0.12]" },
+  voice_library: { panel: "from-emerald-100 via-green-50 to-white dark:from-emerald-950/70 dark:via-green-950/40 dark:to-slate-950", badge: "from-emerald-400 to-green-600", glow: "shadow-[0_10px_28px_-8px_rgba(22,163,74,0.7)]", mark: "text-emerald-500/[0.12]" },
+  history: { panel: "from-amber-100 via-orange-50 to-white dark:from-amber-950/70 dark:via-orange-950/40 dark:to-slate-950", badge: "from-amber-400 to-orange-600", glow: "shadow-[0_10px_28px_-8px_rgba(234,88,12,0.7)]", mark: "text-amber-500/[0.14]" },
 };
 
 /*
@@ -370,34 +370,24 @@ function ToolCardView({
   tool,
   onFlowTool: _onFlowTool,
   disabledNote,
-  image,
-  clip,
   wide,
 }: {
   tool: AiToolCard;
   onFlowTool?: (id: FlowToolId) => void;
   disabledNote: string | null;
-  image?: ShowcaseImage | null;
-  clip?: string | null;
   wide?: boolean;
 }) {
   const { icon: Icon, href, name, blurb, id } = tool;
 
+  const art = TOOL_ART[id];
   const header = (
-    <span
-      className={cn("relative block overflow-hidden", wide ? "aspect-[2.6/1]" : "aspect-[16/10]")}
-      style={{ background: TOOL_ART[id] }}
-    >
-      {image ? (
-        // eslint-disable-next-line @next/next/no-img-element -- a pre-sized webp on the storage CDN; the optimizer would bill a second encode
-        <img src={image.sm} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
-      ) : (
-        <Icon className="absolute -bottom-3 -right-2 h-20 w-20 text-white/[0.1]" strokeWidth={1.25} aria-hidden />
-      )}
-      {image && clip ? <CardClip src={clip} poster={image.sm} /> : null}
-      <span className="absolute inset-0 bg-gradient-to-t from-[#0b1340]/45 to-transparent" aria-hidden />
-      <span className="absolute left-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.18] text-white ring-1 ring-inset ring-white/35">
-        <Icon className="h-4 w-4" aria-hidden />
+    <span className={cn("relative flex items-center justify-center overflow-hidden bg-gradient-to-br", art.panel, wide ? "aspect-[2.6/1]" : "aspect-[16/10]")}>
+      {/* the feature's mark, large and faint — depth without a picture */}
+      <Icon className={cn("absolute -bottom-4 -right-3 h-24 w-24", art.mark)} strokeWidth={1.25} aria-hidden />
+      {/* the app-icon: two-tone gradient, a glossy top highlight, the feature's own glow */}
+      <span className={cn("relative flex h-14 w-14 items-center justify-center rounded-[1.1rem] bg-gradient-to-br text-white ring-1 ring-inset ring-white/25", art.badge, art.glow)}>
+        <span className="pointer-events-none absolute inset-x-1 top-1 h-1/2 rounded-t-[0.9rem] bg-gradient-to-b from-white/35 to-transparent" aria-hidden />
+        <Icon className="relative h-7 w-7 drop-shadow-[0_1px_1px_rgba(0,0,0,0.18)]" strokeWidth={1.9} aria-hidden />
       </span>
     </span>
   );
@@ -439,36 +429,4 @@ function ToolCardView({
       <LinkPendingStripe />
     </Link>
   );
-}
-
-/**
- * A card's clip (2026-10-07). Nothing is downloaded until the card is on
- * screen (`preload="none"`), it plays muted only while at least half of it is
- * visible, and it pauses the moment it is not — no timer, no request while the
- * page sits idle. Reduced motion or Save-Data keeps the still picture.
- */
-function CardClip({ src, poster }: { src: string; poster: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const v = ref.current;
-    if (!v) return;
-    const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || c?.saveData) {
-      v.style.display = "none";
-      return;
-    }
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e?.isIntersecting) v.play().catch(() => undefined);
-        else v.pause();
-      },
-      { threshold: 0.5 },
-    );
-    io.observe(v);
-    return () => {
-      io.disconnect();
-      v.pause();
-    };
-  }, []);
-  return <video ref={ref} src={src} poster={poster} muted loop playsInline preload="none" aria-hidden className="absolute inset-0 h-full w-full object-cover" />;
 }

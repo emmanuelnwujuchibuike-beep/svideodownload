@@ -2,8 +2,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getAdminUser } from "@/lib/admin/guard";
-import { cardFiles, normalizeShowcaseCards } from "@/lib/ai/showcase/cards";
-import { SHOWCASE_TAG, readStoredShowcase, readStoredShowcaseCards, writeStoredShowcase } from "@/lib/ai/showcase/server";
+import { SHOWCASE_TAG, readStoredShowcase, writeStoredShowcase } from "@/lib/ai/showcase/server";
 import { SHOWCASE_BUCKET, SHOWCASE_PAGES, SHOWCASE_VIDEO, normalizeShowcase } from "@/lib/ai/showcase/slides";
 import { makeSizedWebp } from "@/lib/media/thumbnail";
 import { recordConfigChange } from "@/lib/platform/config-audit";
@@ -20,7 +19,7 @@ export const maxDuration = 60;
  *   uses (~720 px and ~1280 px webp, sharp, the wallpaper route's pattern) and
  *   put them in the public `ai-showcase` bucket. Returns the image record; it
  *   is not on any slide until the admin presses Save.
- * PUT  (JSON `{ slides }`, `{ cards }` or both — the hub's tool cards, 2026-10-07) — validate with the same normaliser the page reads
+ * PUT  (JSON `{ slides }`) — validate with the same normaliser the page reads
  *   through, store, and drop the cached page for both doors.
  *
  * Only an admin reaches either (getAdminUser). Visitors never call this route:
@@ -142,33 +141,26 @@ export async function PUT(request: Request) {
   const admin = await getAdminUser();
   if (!admin) return bad("Not authorised.", 403);
 
-  let body: { slides?: unknown; cards?: unknown };
+  let body: { slides?: unknown };
   try {
     body = await request.json();
   } catch {
     return bad("Malformed request.");
   }
-  const hasSlides = Array.isArray(body.slides);
-  const hasCards = !!body.cards && typeof body.cards === "object" && !Array.isArray(body.cards);
-  if (!hasSlides && !hasCards) return bad("Missing slides or cards.");
+  if (!Array.isArray(body.slides)) return bad("Missing slides.");
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const slidesIn = hasSlides ? normalizeShowcase(body.slides, supabaseUrl) : undefined;
-  const cardsIn = hasCards ? normalizeShowcaseCards(body.cards, supabaseUrl) : undefined;
-  const [before, cardsBefore] = await Promise.all([readStoredShowcase(), readStoredShowcaseCards()]);
-  const saved = await writeStoredShowcase({ slides: slidesIn, cards: cardsIn });
+  const slides = normalizeShowcase(body.slides, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const before = await readStoredShowcase();
+  const saved = await writeStoredShowcase(slides);
   if (!saved.ok) return bad(saved.error, 500);
-  // what is stored now — the part not sent was kept as it was
-  const slides = slidesIn ?? before ?? [];
-  const cards = cardsIn ?? cardsBefore;
 
   recordConfigChange({
     actorId: admin.id,
     surface: "ai_showcase",
-    targetId: hasCards && !hasSlides ? "cards" : "settings",
+    targetId: "settings",
     action: "settings.update",
-    before: hasCards && !hasSlides ? cardsBefore : before,
-    after: hasCards && !hasSlides ? cards : slides,
+    before,
+    after: slides,
   });
 
   /*
@@ -181,8 +173,9 @@ export async function PUT(request: Request) {
     return at === -1 ? null : decodeURIComponent(url.slice(at + marker.length));
   };
   const files = (s: (typeof slides)[number]) => [...(s.image ? [s.image.sm, s.image.lg] : []), ...(s.video ? [s.video.url] : [])];
-  const kept = new Set([...slides.flatMap(files), ...cardFiles(cards)]);
-  const gone = [...(before ?? []).flatMap(files), ...cardFiles(cardsBefore)]
+  const kept = new Set(slides.flatMap(files));
+  const gone = (before ?? [])
+    .flatMap(files)
     .filter((u) => !kept.has(u))
     .map(keyOf)
     .filter((k): k is string => !!k);
@@ -194,5 +187,5 @@ export async function PUT(request: Request) {
   revalidateTag(SHOWCASE_TAG);
   for (const page of SHOWCASE_PAGES) revalidatePath(page);
 
-  return NextResponse.json({ ok: true, slides, cards });
+  return NextResponse.json({ ok: true, slides });
 }

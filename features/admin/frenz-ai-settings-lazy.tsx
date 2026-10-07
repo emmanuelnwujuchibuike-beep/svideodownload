@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
 import type { AiPromo } from "@/lib/ai/promo/config";
-import type { ShowcaseCards } from "@/lib/ai/showcase/cards";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
@@ -143,13 +142,6 @@ const AiShowcaseEditor = dynamic(() => import("@/features/admin/ai-showcase-edit
 
 export function AiShowcaseEditorLazy({ initial }: { initial: ShowcaseSlide[] | null }) {
   return <AiShowcaseEditor initial={initial} />;
-}
-
-// 2026-10-07: AI → Tool cards — a picture (and optional clip) per card on the Frenz AI hub.
-const AiToolCardsEditor = dynamic(() => import("@/features/admin/ai-tool-cards-editor").then((m) => m.AiToolCardsEditor), { loading: skeleton("Loading the tool cards") });
-
-export function AiToolCardsEditorLazy({ initial }: { initial: ShowcaseCards }) {
-  return <AiToolCardsEditor initial={initial} />;
 }
 
 // Brief C (2026-10-06): AI → Landing promotion — the Frenz AI tile on the landing page.

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { FrenzAIAllowanceBar } from "@/features/ai/frenz-ai-chrome";
 import { FrenzAITierLabel } from "@/features/ai/frenz-ai-tier-label";
@@ -29,8 +29,7 @@ import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/co
 import { REPLACEMENT_MODES } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
-import type { ShowcaseCards } from "@/lib/ai/showcase/cards";
-import type { ShowcaseImage, ShowcaseSlide, ShowcaseTarget } from "@/lib/ai/showcase/slides";
+import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import {
   readAiEntitlementCache,
   writeAiEntitlementCache,
@@ -99,16 +98,6 @@ function writeCachedConfig(config: CharacterReplacePublicConfig): void {
   }
 }
 
-/** Which tool card a showcase slide's picture belongs to. */
-const SHOWCASE_TARGET_TOOL: Partial<Record<ShowcaseTarget, AiToolId>> = {
-  "text-to-video": "text_to_video",
-  "image-to-video": "image_to_video",
-  "lip-sync": "lip_sync_pro",
-  "text-to-audio": "text_to_audio",
-  "voice-cloning": "voice_clone",
-  history: "history",
-};
-
 const HOW = [
   {
     icon: MousePointerClick,
@@ -133,7 +122,6 @@ export function FrenzAIExplore({
   historyHref,
   usageHref,
   slides,
-  cards,
 }: {
   /** The create page, given the scope in `?mode=`. */
   createPath: string;
@@ -142,30 +130,8 @@ export function FrenzAIExplore({
   usageHref: string;
   /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
   slides: ShowcaseSlide[];
-  /** Each tool card's own picture/clip, set in Admin → Frenz AI → Tool cards (2026-10-07). */
-  cards?: ShowcaseCards;
 }) {
   const router = useRouter();
-  /*
-    A tool card shows a real picture when the admin uploaded one for that tool
-    in the showcase — the first ENABLED slide that opens it. Derived from the
-    props the page was rendered with: no request.
-  */
-  const toolImages = useMemo(() => {
-    const out: Partial<Record<AiToolId, ShowcaseImage>> = {};
-    // a card's own upload first; a slide's picture is the fallback for the rest
-    for (const [id, media] of Object.entries(cards ?? {})) if (media?.image) out[id as AiToolId] = media.image;
-    for (const s of slides) {
-      const id = SHOWCASE_TARGET_TOOL[s.target];
-      if (id && s.image && !out[id]) out[id] = s.image;
-    }
-    return out;
-  }, [slides, cards]);
-  const toolClips = useMemo(() => {
-    const out: Partial<Record<AiToolId, string>> = {};
-    for (const [id, media] of Object.entries(cards ?? {})) if (media?.video) out[id as AiToolId] = media.video.url;
-    return out;
-  }, [cards]);
   const characterReplaceHref = createPath.replace(/\/create$/, "");
   const [config, setConfig] = useState<CharacterReplacePublicConfig | null>(
     null,
@@ -355,8 +321,6 @@ export function FrenzAIExplore({
             characterReplaceHref={characterReplaceHref}
             historyHref={historyHref}
             disabled={disabled}
-            images={toolImages}
-            clips={toolClips}
             onFlowTool={(id) => {
               setHint(FLOW_TOOL_HINT[id] ?? null);
               haptic("selection");

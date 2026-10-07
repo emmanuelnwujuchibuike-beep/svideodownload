@@ -42,8 +42,8 @@ describe("only our own media, and only safe timing, reach the landing", () => {
     expect(normalizePromo({ video: { url: ours("a.mov") } }, SUPA).video).toBeNull();
   });
   it("clamps timing to its bounds and defaults what is missing", () => {
-    const p = normalizePromo({ timing: { delay: 0, intro: 999, video: "x" } }, SUPA);
-    expect(p.timing).toEqual({ delay: 1, intro: 10, video: DEFAULT_PROMO_TIMING.video, image: DEFAULT_PROMO_TIMING.image });
+    const p = normalizePromo({ timing: { delay: -5, intro: 999, video: "x" } }, SUPA);
+    expect(p.timing).toEqual({ delay: 0, intro: 10, video: DEFAULT_PROMO_TIMING.video, image: DEFAULT_PROMO_TIMING.image });
   });
   it("garbage is the empty promotion, never a crash", () => {
     expect(normalizePromo(null, SUPA)).toEqual(EMPTY_PROMO);
@@ -83,5 +83,30 @@ describe("the landing pays nothing up front (§8–§9, §19)", () => {
     const route = read("app/api/admin/ai/promo/route.ts");
     expect(route).toContain("revalidateTag(PROMO_TAG);");
     expect(route).toContain('revalidatePath("/");');
+  });
+});
+
+/*
+  Owner, 2026-10-06: "it delays and it reloads each time the pages opens or when
+  the page make any movement". The driver paused at half-visibility and, on
+  pausing, reset to the intro and unmounted the clip.
+*/
+describe("the promotion never restarts or re-buffers on a scroll", () => {
+  const driver = read("features/downloads/ai-promo-driver.tsx");
+  it("pauses only when the tile is wholly off screen", () => {
+    expect(driver).toContain("{ threshold: 0 }");
+    expect(driver).not.toContain("intersectionRatio >= 0.5");
+  });
+  it("a pause keeps the stage — it never resets to the intro", () => {
+    expect(driver).not.toMatch(/if \(!running\) \{\s*setStage\("intro"\)/);
+  });
+  it("the clip is loaded once and only paused, never unmounted by the cycle", () => {
+    expect(driver).toContain('preload="auto"');
+    expect(driver).not.toMatch(/running && \(stage === "video"/);
+    expect(driver).toContain("v.pause();");
+  });
+  it("the player arrives right after load; the delay runs while the clip warms", () => {
+    expect(read("features/downloads/ai-promo-loader.tsx")).not.toContain("promo.timing.delay * 1000");
+    expect(driver).toContain("setTimeout(() => setStarted(true), promo.timing.delay * 1000)");
   });
 });

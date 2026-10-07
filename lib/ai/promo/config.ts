@@ -50,12 +50,13 @@ export interface AiPromo {
   timing: AiPromoTiming;
 }
 
-export const DEFAULT_PROMO_TIMING: AiPromoTiming = { delay: 2, intro: 3, video: 3, image: 3 };
+// Faster than Brief C's 2/3 (owner, 2026-10-06: "it delays"); the admin can go lower still.
+export const DEFAULT_PROMO_TIMING: AiPromoTiming = { delay: 1, intro: 2, video: 3, image: 3 };
 
 /** The only bounds the admin can move within (Brief C §7: no setting that can create a performance problem). */
 export const PROMO_TIMING_LIMITS = {
-  delay: { min: 1, max: 10 },
-  intro: { min: 2, max: 10 },
+  delay: { min: 0, max: 10 },
+  intro: { min: 1, max: 10 },
   video: { min: 2, max: 10 },
   image: { min: 2, max: 10 },
 } as const;

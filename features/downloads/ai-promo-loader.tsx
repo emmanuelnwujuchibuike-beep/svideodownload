@@ -18,6 +18,7 @@ export function AiPromoLoader({ promo }: { promo: AiPromo }) {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Right after load (and idle) — the driver itself waits the delay, warming the clip meanwhile (owner: "it delays").
     const start = () => {
       timer = setTimeout(() => {
         const go = () =>
@@ -25,9 +26,9 @@ export function AiPromoLoader({ promo }: { promo: AiPromo }) {
             if (!cancelled) setDriver(() => m.AiPromoDriver);
           });
         const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-        if (ric) ric(go, { timeout: 2000 });
+        if (ric) ric(go, { timeout: 1000 });
         else go();
-      }, promo.timing.delay * 1000);
+      }, 0);
     };
     if (document.readyState === "complete") start();
     else window.addEventListener("load", start, { once: true });
@@ -36,7 +37,7 @@ export function AiPromoLoader({ promo }: { promo: AiPromo }) {
       window.removeEventListener("load", start);
       if (timer) clearTimeout(timer);
     };
-  }, [promo.timing.delay]);
+  }, []);
 
   return Driver ? <Driver promo={promo} /> : null;
 }

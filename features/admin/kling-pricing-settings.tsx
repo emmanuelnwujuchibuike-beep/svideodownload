@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { KlingConnectionCard } from "@/features/admin/kling-connection-card";
 import {
   klingQuoteMarginUsdCents,
   klingTierCostKnown,
@@ -161,6 +162,7 @@ export function KlingPricingSettingsPanel({ settings }: { settings: LandingSetti
 
   return (
     <div className="space-y-6">
+      <KlingConnectionCard />
       <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
         <h2 className="mb-1 font-semibold">Kling pricing</h2>
         <p className="mb-5 text-sm text-muted-foreground">

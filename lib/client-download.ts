@@ -102,7 +102,14 @@ export async function saveFilesToDevice(
   return true;
 }
 
-export async function saveToDevice(blob: Blob, filename: string): Promise<void> {
+/**
+ * What a save actually did. `"needs-tap"`: iOS refused the share sheet because
+ * the tap's permission was already spent (an await ran first) — the caller
+ * asks for one more tap; the file is ready by then.
+ */
+export type SaveOutcome = "shared" | "cancelled" | "saved" | "needs-tap";
+
+export async function saveToDevice(blob: Blob, filename: string): Promise<SaveOutcome> {
   const safe = safeDownloadFilename(filename);
   if (isIosDevice() && typeof navigator.share === "function") {
     try {
@@ -114,12 +121,22 @@ export async function saveToDevice(blob: Blob, filename: string): Promise<void> 
       const file = new File([blob], safe, { type: blob.type || mimeForExtension(safe) });
       if (!navigator.canShare || navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file] });
-        return;
+        return "shared";
       }
     } catch (e) {
-      // User closed the sheet — done. Anything else → anchor fallback below.
-      if (e instanceof Error && e.name === "AbortError") return;
+      // User closed the sheet — done.
+      if (e instanceof Error && e.name === "AbortError") return "cancelled";
+      /*
+        🔴 NOT A BROWSER DOWNLOAD (owner, 2026-10-06: "save to device button is
+        redownloading the media and give an ios download complete sound like it
+        going through the browser"). NotAllowedError means the tap's permission
+        was spent before the sheet was asked for. Falling through to the anchor
+        below turned "Save to Photos" into a Safari download. Ask for one more
+        tap instead — the share sheet will open on it.
+      */
+      if (e instanceof Error && e.name === "NotAllowedError") return "needs-tap";
     }
   }
   saveBlob(blob, safe);
+  return "saved";
 }

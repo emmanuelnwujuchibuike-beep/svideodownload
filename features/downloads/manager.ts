@@ -769,8 +769,13 @@ export async function saveTaskToDevice(id: string): Promise<void> {
   // where the alternative was failing outright.
   const kept = finishedBlobs.get(id);
   if (kept) {
-    await saveToDevice(kept.blob, kept.filename);
-    patch(id, { awaitingSave: false });
+    const outcome = await saveToDevice(kept.blob, kept.filename);
+    if (outcome === "needs-tap") {
+      // iOS refused the sheet (the tap was spent) — never a Safari download; one more tap opens it.
+      toast("Ready — tap Save to device again.", "success", { duration: 2500 });
+      return;
+    }
+    if (outcome !== "cancelled") patch(id, { awaitingSave: false });
     return;
   }
 
@@ -779,8 +784,18 @@ export async function saveTaskToDevice(id: string): Promise<void> {
     toast("File expired — download it again.", "error");
     return;
   }
-  await saveToDevice(file.blob, file.filename);
-  patch(id, { awaitingSave: false });
+  /*
+    The library read above was an await, which spends iOS's tap permission —
+    keep the file in memory and ask for one more tap rather than letting the
+    share sheet be refused and turn into a browser download (2026-10-06).
+  */
+  retainBlob(id, file.blob, file.filename);
+  if (isIosDevice()) {
+    toast("Ready — tap Save to device again.", "success", { duration: 2500 });
+    return;
+  }
+  const outcome = await saveToDevice(file.blob, file.filename);
+  if (outcome !== "cancelled" && outcome !== "needs-tap") patch(id, { awaitingSave: false });
 }
 
 /** Every completed download still waiting to be handed to the device. */

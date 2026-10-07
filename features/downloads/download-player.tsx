@@ -20,7 +20,7 @@ import { StoryAdSlide } from "@/features/monetization/story-ad-slide";
 import { SendToChatSheet } from "@/features/downloads/send-to-chat-sheet";
 import { removeDownload, toggleFavorite } from "@/features/history/store";
 import { toast } from "@/features/ui/toast";
-import { downloadUrl, saveToDevice } from "@/lib/client-download";
+import { downloadUrl, isIosDevice, saveToDevice } from "@/lib/client-download";
 import { haptic } from "@/lib/motion/haptics";
 import { springs } from "@/lib/motion/springs";
 import { isSlowConnection } from "@/lib/pwa/use-network-status";
@@ -527,14 +527,34 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
    *  (the iOS-aware share-sheet path), reading the blob we already have in memory
    *  or the on-device library — no re-download. */
   const saveToDeviceNow = async () => {
-    const blob = blobRef.current ?? (await getMedia(mediaKey(rec.url, rec.formatId, rec.kind)).catch(() => null));
+    /*
+      🔴 iOS opens the share sheet ONLY inside the tap. The in-memory copy is
+      used synchronously; when it is not there, reading it from the device
+      library is an await that spends the tap — so on iOS the file is loaded,
+      kept, and the member asked for one more tap, instead of the old fallback
+      that turned "Save to Photos" into a Safari download (owner, 2026-10-06).
+    */
+    let blob = blobRef.current;
     if (!blob) {
-      toast("Still preparing — try again in a moment.", "error");
-      return;
+      blob = await getMedia(mediaKey(rec.url, rec.formatId, rec.kind)).catch(() => null);
+      if (!blob) {
+        toast("Still preparing — try again in a moment.", "error");
+        return;
+      }
+      blobRef.current = blob;
+      if (isIosDevice()) {
+        toast("Ready — tap Save to device again.", "success", { duration: 2500 });
+        return;
+      }
     }
     const ext = rec.kind === "audio" ? "mp3" : rec.kind === "image" ? "jpg" : "mp4";
     try {
-      await saveToDevice(blob, `${rec.title || "download"}.${ext}`);
+      const outcome = await saveToDevice(blob, `${rec.title || "download"}.${ext}`);
+      if (outcome === "needs-tap") {
+        toast("Ready — tap Save to device again.", "success", { duration: 2500 });
+        return;
+      }
+      if (outcome === "cancelled") return;
       setSavedToDevice(true);
       setTimeout(() => setSavedToDevice(false), 2000);
     } catch {

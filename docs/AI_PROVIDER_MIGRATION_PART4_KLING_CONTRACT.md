@@ -221,7 +221,7 @@ types, then real generations settled them:
 |---|---|---|
 | `refer_image` (`url`) | a subject / look to use | "The man in `<<<image_1>>>` waves…" → the same man (task 936598943772442698, 1.8 units / 3 s) |
 | `base_video` (`url`) | the video to EDIT — scene, motion, camera kept | "Replace the woman in `<<<video_1>>>` with the man in `<<<image_1>>>`" → replaced, same scene (936598991629459463, 4.5 units / 5 s) |
-| `feature_video` (`url`) | motion / style reference | accepted and url-validated; **not yet generation-tested** |
+| `feature_video` (`url`) | motion / style reference | a waving man as reference + "a silver robot in a futuristic city at night" → the robot makes the same movements at the same moments, same framing (task 936709291275984940, 2.7 units / 3 s = 0.9/s, the video-input rate) |
 
 Rules learned the same night:
 - the prompt must NAME the inputs (`<<<image_N>>>`, `<<<video_1>>>`, numbered in `contents` order);

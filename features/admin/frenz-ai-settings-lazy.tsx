@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
+import type { AiMoneySummary } from "@/lib/ai/admin-money-view";
 import type { AiOperations } from "@/lib/ai/admin-ops-view";
 import type { AiPromo } from "@/lib/ai/promo/config";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
@@ -150,6 +151,13 @@ const AiOperationsPanel = dynamic(() => import("@/features/admin/ai-operations-p
 
 export function AiOperationsPanelLazy(props: { ops: AiOperations; labels: Record<string, string>; kling: "healthy" | "degraded" | "unavailable" | "unknown"; currencySymbol: string }) {
   return <AiOperationsPanel {...props} />;
+}
+
+// Credit brief §18 (2026-10-07): AI → Overview — top-ups, revenue, credits spent and refunded, by tool and by member.
+const AiMoneyPanel = dynamic(() => import("@/features/admin/ai-money-panel").then((m) => m.AiMoneyPanel), { loading: skeleton("Loading AI money") });
+
+export function AiMoneyPanelLazy(props: { money: AiMoneySummary; labels: Record<string, string> }) {
+  return <AiMoneyPanel {...props} />;
 }
 
 // Brief C (2026-10-06): AI → Landing promotion — the Frenz AI tile on the landing page.

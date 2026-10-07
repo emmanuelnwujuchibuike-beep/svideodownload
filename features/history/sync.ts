@@ -4,6 +4,7 @@ import { PLATFORMS } from "@/lib/platforms";
 import type { BrowserClient } from "@/lib/supabase/client-instance";
 import { getClient } from "@/lib/supabase/client-lazy";
 import type { DownloadRecord, MediaKind, PlatformId } from "@/types";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 /**
  * Optional Supabase sync for download history. When the visitor is signed in,
@@ -63,7 +64,7 @@ async function userId(
   supabase: BrowserClient,
 ): Promise<string | null> {
   try {
-    const { data } = await supabase.auth.getUser();
+    const { data } = await getClientAuthUser(supabase);
     return data.user?.id ?? null;
   } catch {
     return null;

@@ -10,6 +10,7 @@ import {
   subscribeMyPresenceStatus,
 } from "@/lib/social/presence-status-client";
 import { createClient } from "@/lib/supabase/client";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 /**
  * Online presence via Supabase Realtime Presence — no extra infrastructure.
@@ -35,7 +36,7 @@ function ensureStarted(): void {
   if (started || typeof window === "undefined") return;
   started = true;
   const supabase = createClient();
-  supabase.auth.getUser().then(async ({ data }) => {
+  getClientAuthUser(supabase).then(async ({ data }) => {
     const uid = data.user?.id;
     if (!uid || channel) return;
     const myStatus = await ensureMyPresenceStatusLoaded(uid);

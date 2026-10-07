@@ -18,6 +18,7 @@ import { PullToRefresh } from "@/features/ui/pull-to-refresh";
 import type { GroupedNotificationsResult, NotificationCategory, NotificationGroup } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 type Tab = "all" | "unread" | NotificationCategory;
 
@@ -48,7 +49,7 @@ export function NotificationCenter({ initial }: { initial: GroupedNotificationsR
     const supabase = createClient();
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
-    supabase.auth.getUser().then(({ data: auth }) => {
+    getClientAuthUser(supabase).then(({ data: auth }) => {
       const uid = auth.user?.id;
       if (!uid || cancelled) return;
       channel = supabase

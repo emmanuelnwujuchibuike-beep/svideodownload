@@ -44,11 +44,22 @@ export async function GET(request: Request) {
       them, they are looking for them. Only on the direct route, which is the
       only one that can speak one (lib/ai/voice-clone/usable.ts).
     */
-    const own = subject.kind === "user" ? await usableCloneOptions(subjectOwnerId(subject), { allowed: routeAllowsClones(gate.resolved.route) && settings.frenzAiVoiceClone.enabled }) : [];
     const monthKey = textToAudioMonthKey(new Date(), settings.frenzAiPlans.reset.timezone);
-    // 0185: the month's characters for THIS member's tier (Free / AI Pro / AI Max), and the rule for a text longer than what is left
-    const tier = subject.kind === "user" ? (await featureContext(subjectOwnerId(subject), "ai_text_to_audio", settings.frenzAiPlans)).tier : "free";
-    const free = subject.kind === "user" ? await readFreeCharacters(subjectOwnerId(subject), monthKey, textToAudioAllowance(config, tier)) : { allowance: 0, used: 0, remaining: 0, monthKey };
+    /*
+      2026-10-07 (owner: "buttons respond slow"): the member's own voices and
+      the month's characters for their tier leave together — they were three
+      round trips in a row on every Text to Audio page open.
+    */
+    const ownerId = subject.kind === "user" ? subjectOwnerId(subject) : null;
+    const [own, { tier, free }] = await Promise.all([
+      ownerId ? usableCloneOptions(ownerId, { allowed: routeAllowsClones(gate.resolved.route) && settings.frenzAiVoiceClone.enabled }) : Promise.resolve([]),
+      (async () => {
+        // 0185: the month's characters for THIS member's tier (Free / AI Pro / AI Max)
+        const t = ownerId ? (await featureContext(ownerId, "ai_text_to_audio", settings.frenzAiPlans)).tier : "free";
+        const f = ownerId ? await readFreeCharacters(ownerId, monthKey, textToAudioAllowance(config, t)) : { allowance: 0, used: 0, remaining: 0, monthKey };
+        return { tier: t, free: f };
+      })(),
+    ]);
     const reason = gate.ok ? null : typeof gate.extra?.error === "string" ? gate.extra.error : gate.code === "CR_BUSY" ? "Processing is paused for a moment." : gate.code === "CR_MAINTENANCE" ? "Frenz AI is under maintenance." : !config.enabled ? "Text to Audio is not available right now." : "Text to Audio is temporarily unavailable.";
     return NextResponse.json({
       config: { ...pub, maximumCharacters: Math.min(pub.maximumCharacters, modelCharacterCeiling(gate.resolved.model)), voices: [...own, ...voices], languages },

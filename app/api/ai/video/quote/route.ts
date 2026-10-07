@@ -84,7 +84,9 @@ export async function POST(request: Request) {
   const oneMinute = (parsed.data.input as { options?: { durationSeconds?: unknown } }).options?.durationSeconds === 60;
   let complimentary: { eligible: boolean; available: boolean; rules: string; blockedBy: string | null } = { eligible: false, available: false, rules: FREE_VIDEO_SUMMARY, blockedBy: null };
   const cr = settings.frenzAiCharacterReplace;
-  const isAdmin = !!(await getAdminUser().catch(() => null));
+  // 2026-10-07: the admin check and the member's feature rules leave together (they were two more round trips in a row on every option change)
+  const [adminUser, fctx] = await Promise.all([getAdminUser().catch(() => null), featureContext(subject.userId, feature.id, settings.frenzAiPlans)]);
+  const isAdmin = !!adminUser;
   if (deviceId || isAdmin || !cr.antiAbuse.deviceDetection) {
     const e = await getCharacterReplaceFreeEligibility({ subject, config: cr, request, isAdmin, plans: settings.frenzAiPlans }).catch(() => null);
     const available = !!e?.eligible && (e.remainingFreeUses === null || e.remainingFreeUses > 0);
@@ -93,6 +95,6 @@ export async function POST(request: Request) {
   }
   const credits = videoCredits(quote, feature.id, pipeline.label, settings.frenzAiPlans).creditsRequired;
   // 0185: the member's rules for this feature — tier, included generations left, pay-as-you-go (display; /jobs decides again)
-  const access = (await featureContext(subject.userId, feature.id, settings.frenzAiPlans)).view;
+  const access = fctx.view;
   return NextResponse.json({ ok: true, quote: publicKlingQuote(quote, credits), currency: settings.frenzAiCurrency, complimentary, access }, { status: 200, headers });
 }

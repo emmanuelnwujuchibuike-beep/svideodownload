@@ -18,6 +18,7 @@ import { playSound } from "@/lib/notifications/sound-fx";
 import { categoryForType } from "@/lib/platform/notifications-registry";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 export function NotificationBell() {
   // Cached-first: the bell shows last-known notifications instantly on every page
@@ -56,7 +57,7 @@ export function NotificationBell() {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
-    supabase.auth.getUser().then(({ data: auth }) => {
+    getClientAuthUser(supabase).then(({ data: auth }) => {
       const uid = auth.user?.id;
       if (!uid || cancelled) return;
       channel = supabase

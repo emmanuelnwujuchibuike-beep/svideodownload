@@ -12,6 +12,7 @@ import { categoryForType } from "@/lib/platform/notifications-registry";
 import type { NotificationItem } from "@/lib/social/notifications";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 /** What the drop-down can show: a social notification or an incoming DM. */
 type Toast =
@@ -43,7 +44,7 @@ export function NotificationLiveToast() {
       hideTimer.current = setTimeout(() => setItem(null), 5200);
     };
 
-    supabase.auth.getUser().then(({ data: auth }) => {
+    getClientAuthUser(supabase).then(({ data: auth }) => {
       const uid = auth.user?.id;
       if (!uid || cancelled) return;
 

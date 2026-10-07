@@ -10,6 +10,7 @@ import type { PresenceStatus } from "@/lib/social/presence-status";
 import { ensureMyPresenceStatusLoaded, getCachedMyPresenceStatus, setMyPresenceStatusLocal, subscribeMyPresenceStatus } from "@/lib/social/presence-status-client";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 const OPTIONS: { value: PresenceStatus; label: string; hint: string; dot: string }[] = [
   { value: "available", label: "Available", hint: "Shown as online as usual", dot: "bg-emerald-400" },
@@ -50,7 +51,7 @@ export function PresenceStatusPicker({ onCloseAll }: { onCloseAll?: () => void }
   useEffect(() => {
     let cancelled = false;
     const supabase = createClient();
-    void supabase.auth.getUser().then(({ data }) => {
+    void getClientAuthUser(supabase).then(({ data }) => {
       const uid = data.user?.id;
       if (!uid) return;
       void ensureMyPresenceStatusLoaded(uid).then((s) => {

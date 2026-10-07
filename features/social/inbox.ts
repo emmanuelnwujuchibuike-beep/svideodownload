@@ -7,6 +7,7 @@ import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import type { ConversationSummary } from "@/lib/social/messages";
 import type { BrowserClient } from "@/lib/supabase/client-instance";
 import { getClient } from "@/lib/supabase/client-lazy";
+import { getClientAuthUser } from "@/lib/supabase/client-user";
 
 /**
  * Shared inbox state for the topbar badge AND the /messages list — one cache key
@@ -69,7 +70,7 @@ export function useInboxRealtime(): void {
       .then(async (client) => {
         if (cancelled) return;
         supabase = client;
-        const { data: auth } = await client.auth.getUser();
+        const { data: auth } = await getClientAuthUser(client);
         const uid = auth.user?.id;
         if (!uid || cancelled) return;
         channel = client

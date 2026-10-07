@@ -52,15 +52,15 @@ export async function POST(request: Request) {
     const plans = settings.frenzAiPlans;
     const monthKey = textToAudioMonthKey(new Date(), plans.reset.timezone);
     // 0185: the member's tier decides the month's characters; the partial rule decides how many of them this text may use
-    const fctx = await featureContext(ownerId, feature.id, plans);
+    // 2026-10-07: the feature rules and the plan allowance leave together (they were two round trips in a row on every quote)
+    const [fctx, creditEntitlement] = await Promise.all([featureContext(ownerId, feature.id, plans), plans.enabled ? getAiCreditEntitlement(ownerId, plans) : Promise.resolve(null)]);
     const free = await readFreeCharacters(ownerId, monthKey, textToAudioAllowance(config, fctx.tier));
     const coverage = textToAudioCoverage({ characters, remaining: free.remaining, policy: config.partialAllowance, choice: parsed.data.partial ?? null });
     // while the member has not chosen, the figure shown is the cheaper option (what is left + credits) — Generate asks before taking anything
     const quote = quoteTextToAudio({ characters, freeCharactersAvailable: coverage.choiceRequired ? free.remaining : coverage.covered }, config, { currency: settings.frenzAiCurrency });
     const partial = characters > free.remaining && free.remaining > 0 ? { policy: config.partialAllowance, choiceRequired: coverage.choiceRequired, remaining: free.remaining, characters, options: textToAudioPartialOptions(characters, free.remaining, config, plans, settings.frenzAiCurrency) } : null;
     let credits: ReturnType<typeof creditDecisionView> | null = null;
-    if (quote.totalCents > 0 && plans.enabled) {
-      const creditEntitlement = await getAiCreditEntitlement(ownerId, plans);
+    if (quote.totalCents > 0 && creditEntitlement) {
       if (creditEntitlement.plan) {
         const estimate = textToAudioCredits(quote, config, plans);
         credits = creditDecisionView(decideCredits(creditEntitlement, { feature: feature.id, priceCents: estimate.priceCents, mode: "text_to_audio", durationMs: null, lines: quote.lines.filter((l) => l.amountCents > 0).map((l) => ({ label: l.label, cents: l.amountCents })) }, plans));

@@ -61,27 +61,31 @@ export async function GET(request: Request) {
       listCharacterReplaceLedger(subject.userId, ledgerLimit),
     ]);
     const recharge = settings.frenzAiCharacterReplace.recharge;
-    // the live rate (cached an hour) so the sheet previews exactly what checkout will charge
-    const rate = await resolveCheckoutRate(settings.frenzAiCharacterReplace, settings.frenzAiCurrency);
-    /*
-      Part 11 §6, §16: the complimentary creations, from the one authoritative
-      read — granted on first sight against the device cookie, answered from
-      the row after that. The message is the member's; the reason is a word.
-    */
     const headers = new Headers({ "cache-control": "no-store" });
     if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));
-    const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request, plans: settings.frenzAiPlans });
     /*
-      0166: the member's own processing figures, for the picker and the board
-      — how many videos may run at once for THEM (their plan, an admin's
-      figure, the operator's caps), how many may be open, how many are open
-      now. Display only; the claim and the pump decide with the same function.
+      ── 🔴 ONE WAVE, NOT FIVE (2026-10-07, owner: "buttons respond slow") ──
+      Measured on production: this answered in 0.8–1.4 s on every call — five
+      independent reads awaited one after another (the checkout rate, the
+      complimentary creations, the admin check, the entitlement, the open
+      jobs), each a round trip. None needs another's answer, so they leave
+      together and the slowest one is the cost.
+
+      · the live rate (cached an hour) so the sheet previews what checkout charges
+      · Part 11 §6, §16: the complimentary creations, from the one authoritative
+        read — granted on first sight against the device cookie
+      · 0166: the member's own processing figures — how many videos may run at
+        once for THEM, how many may be open, how many are. Display only.
     */
-    const adminUser = await getAdminUser().catch(() => null);
-    const entitlement = await getAiEntitlement(subject, feature);
+    const [rate, free, adminUser, entitlement, openJobs] = await Promise.all([
+      resolveCheckoutRate(settings.frenzAiCharacterReplace, settings.frenzAiCurrency),
+      getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request, plans: settings.frenzAiPlans }),
+      getAdminUser().catch(() => null),
+      getAiEntitlement(subject, feature),
+      countOpenJobs(subject, feature, { includeDrafts: false }).catch(() => 0),
+    ]);
     const processing = settings.frenzAiCharacterReplace.processing;
     const concurrency = concurrencyLimitFor(settings.frenzAiCharacterReplace, { audience: entitlement.audience, isAdmin: !!adminUser, policyMaxConcurrent: entitlement.maxConcurrent });
-    const openJobs = await countOpenJobs(subject, feature, { includeDrafts: false }).catch(() => 0);
     return NextResponse.json(
       {
         processing: {

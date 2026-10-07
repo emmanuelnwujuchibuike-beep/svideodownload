@@ -113,7 +113,8 @@ describe("the server is authoritative (§3, §4, §16, §17)", () => {
     expect(store).toContain('error.code === "PGRST202" || error.code === "PGRST203"');
   });
   it("the routes answer the entitlement and a display-only billing fact; the client never computes either", () => {
-    expect(code("app/api/ai/character-replace/balance/route.ts")).toContain("const free = await getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request, plans: settings.frenzAiPlans });");
+    // 2026-10-07: read in one parallel wave with the other balance-page facts (the route was 0.8–1.4 s of sequential awaits)
+    expect(code("app/api/ai/character-replace/balance/route.ts")).toContain("getCharacterReplaceFreeEligibility({ subject, config: settings.frenzAiCharacterReplace, request, plans: settings.frenzAiPlans }),");
     expect(code("app/api/ai/character-replace/config/route.ts")).toContain('if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));');
     const quote = code("app/api/ai/character-replace/quote/route.ts");
     expect(quote).toContain("const complimentary = free.eligible && fit?.ok === true;");

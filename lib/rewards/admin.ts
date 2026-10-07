@@ -32,7 +32,68 @@ export interface RewardsAdminView {
   queue: { id: string; user: string; userId: string; credits: number; usdCents: number; status: string; method: string; details: Record<string, string>; createdAt: string }[];
 }
 
+/**
+ * 0189: the totals are summed in SQL (`rewards_admin_totals`) and the two
+ * lists are small bounded reads — the tab no longer ships up to 20,000 rows to
+ * the server to add up. Open withdrawals are counted whatever their age (the
+ * old window missed a request older than 90 days that was still pending).
+ */
 export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
+  const db = createAdminClient();
+  const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
+  const [totals, recent, open] = await Promise.all([
+    db.rpc("rewards_admin_totals", { p_since: since }),
+    db.from("reward_events").select("beneficiary_id, event_type, amount, credit_class, referred_user_id, created_at").eq("role", "referrer").order("created_at", { ascending: false }).limit(50),
+    db.from("withdrawal_requests").select("id, user_id, credits, amount_usd_cents, status, payout_method, payout_details, created_at").in("status", [...OPEN]).order("created_at", { ascending: true }).limit(500),
+  ]);
+  if (totals.error || !totals.data) return loadRewardsAdminLegacy();
+  const t = totals.data as Partial<Record<keyof RewardsAdminView["totals"], unknown>> & { withdrawals?: Partial<Record<keyof RewardsAdminView["withdrawals"], unknown>> };
+  const ev = (recent.data ?? []) as { beneficiary_id: string; event_type: string; amount: number; credit_class: string; referred_user_id: string | null; created_at: string }[];
+  const queue = (open.data ?? []) as { id: string; user_id: string; credits: number; amount_usd_cents: number; status: string; payout_method: string; payout_details: Record<string, string>; created_at: string }[];
+  const referredIds = [...new Set(ev.map((e) => e.referred_user_id).filter((x): x is string => !!x))];
+  const ids = [...new Set([...ev.flatMap((e) => [e.beneficiary_id, e.referred_user_id]), ...queue.map((w) => w.user_id)].filter((x): x is string => !!x))];
+  const [attributions, profiles] = await Promise.all([
+    referredIds.length ? db.from("referral_attributions").select("referred_user_id, content_type").in("referred_user_id", referredIds) : Promise.resolve({ data: [] }),
+    ids.length ? db.from("profiles").select("id, handle, email").in("id", ids.slice(0, 200)) : Promise.resolve({ data: [] }),
+  ]);
+  const contentOf = new Map(((attributions.data ?? []) as { referred_user_id: string; content_type: string | null }[]).map((a) => [a.referred_user_id, a.content_type]));
+  const names = new Map<string, string>();
+  for (const p of (profiles.data ?? []) as { id: string; handle: string | null; email: string | null }[]) names.set(p.id, p.handle ? `@${p.handle}` : (p.email ?? p.id.slice(0, 8)));
+  const name = (id: string | null) => (id ? (names.get(id) ?? id.slice(0, 8)) : null);
+  const n = (v: unknown) => Number(v ?? 0);
+  return {
+    windowDays: WINDOW_DAYS,
+    capped: queue.length >= 500,
+    totals: {
+      clicks: n(t.clicks),
+      signupsFromLinks: n(t.signupsFromLinks),
+      referredAccounts: n(t.referredAccounts),
+      activeReferred30d: n(t.activeReferred30d),
+      qualifyingEngagements: n(t.qualifyingEngagements),
+      aiGenerationRewards: n(t.aiGenerationRewards),
+      aiShareRewards: n(t.aiShareRewards),
+      usableIssued: n(t.usableIssued),
+      withdrawableIssued: n(t.withdrawableIssued),
+      qualifiedMembers: n(t.qualifiedMembers),
+      restrictedMembers: n(t.restrictedMembers),
+    },
+    withdrawals: {
+      pending: n(t.withdrawals?.pending),
+      reviewing: n(t.withdrawals?.reviewing),
+      approved: n(t.withdrawals?.approved),
+      processing: n(t.withdrawals?.processing),
+      completedCredits: n(t.withdrawals?.completedCredits),
+      completedUsdCents: n(t.withdrawals?.completedUsdCents),
+    },
+    recentReferrals: ev.map((e) => ({ at: e.created_at, referrer: name(e.beneficiary_id) ?? "?", referred: name(e.referred_user_id), event: e.event_type, amount: e.amount, creditClass: e.credit_class, contentType: e.referred_user_id ? (contentOf.get(e.referred_user_id) ?? null) : null })),
+    queue: queue.map((w) => ({ id: w.id, user: name(w.user_id) ?? w.user_id.slice(0, 8), userId: w.user_id, credits: w.credits, usdCents: w.amount_usd_cents, status: w.status, method: w.payout_method, details: w.payout_details ?? {}, createdAt: w.created_at })),
+  };
+}
+
+const OPEN = ["pending", "reviewing", "approved", "processing"] as const;
+
+/** Before 0189 is live (no `rewards_admin_totals` yet): the original paginated, capped read. Remove once 0189 is verified on production. */
+async function loadRewardsAdminLegacy(): Promise<RewardsAdminView> {
   const db = createAdminClient();
   const since = new Date(Date.now() - WINDOW_DAYS * 86_400_000).toISOString();
   const month = Date.now() - 30 * 86_400_000;

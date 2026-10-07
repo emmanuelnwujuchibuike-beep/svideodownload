@@ -1,6 +1,9 @@
 import "server-only";
 
+import { after } from "next/server";
+
 import { AI_RESULT_BUCKET } from "@/lib/ai/storage";
+import { DEFAULT_CAPTION_LANGUAGES, copyToStream, generateStreamCaptionsMulti, hasStream } from "@/lib/media/stream";
 import { processRewardEvent, type GrantedReward } from "@/lib/rewards/engine";
 import { publishPost } from "@/lib/social/posts";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,6 +29,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * Frenz AI made it, the publisher owns it, it is public, it is at least the
  * operator's minimum length (30 s) — and rewards it at most once per video.
  * Publishing the same generation again returns the reel that exists.
+ *
+ * Delivery (performance brief part 2): an AI reel plays exactly like a member's
+ * own video post — after the response, the MP4 is pulled into Cloudflare
+ * Stream (adaptive HLS, the reel player's Pulse Buffer) and the uid stored on
+ * the post, the same steps `/api/posts/:id/stream-ingest` runs for a studio
+ * upload. Until Stream is ready (or without Stream) the 1-year-cached MP4 plays.
+ * The copy into post-media stays an upload, NOT a storage `copy()`: a copy
+ * keeps the results bucket's default 1-hour cache header, and every play of a
+ * public reel would go back to the origin.
  */
 const VIDEO_FEATURES = new Set(["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"]);
 const POST_MEDIA_BUCKET = "post-media";
@@ -98,6 +110,20 @@ export async function publishAiReel(input: { userId: string; jobId: string; capt
     return { ok: true, postId: id, created: false, rewards: [], durationSeconds };
   }
   console.info("[ai/reels] published", { jobId: j.id, postId: published.id, durationSeconds, visibility: input.visibility });
+  if (hasStream) after(() => ingestReel(published.id, mediaUrl, input.userId));
   const rewards = await processRewardEvent({ eventType: "ai_video_shared", actorUserId: input.userId, sourceType: "ai_job", sourceId: j.id, metadata: { post_id: published.id } });
   return { ok: true, postId: published.id, created: true, rewards, durationSeconds };
+}
+
+/** The studio's own Stream steps (app/api/posts/[id]/stream-ingest), after the response — never delays the publish. */
+async function ingestReel(postId: string, mediaUrl: string, userId: string): Promise<void> {
+  const uid = await copyToStream(mediaUrl, userId);
+  if (!uid) {
+    console.warn("[ai/reels] stream ingest failed - the MP4 keeps playing", { postId });
+    return;
+  }
+  const db = createAdminClient();
+  await db.from("posts").update({ stream_uid: uid }).eq("id", postId).is("stream_uid", null);
+  const langs = await generateStreamCaptionsMulti(uid, DEFAULT_CAPTION_LANGUAGES).catch(() => [] as string[]);
+  if (langs.length) await db.from("posts").update({ caption_languages: langs }).eq("id", postId);
 }

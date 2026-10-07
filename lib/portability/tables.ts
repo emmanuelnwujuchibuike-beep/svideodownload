@@ -70,6 +70,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   ai_provider_health: "Provider health for the AI circuit breaker. Not personal data.",
   /* One row per verified payment-provider webhook delivery (0186): provider, event id, type, our reference. The payment it concerns is exported with the member's top-ups and statement. */
   payment_provider_events: "Payment-provider delivery log keyed by event id; the payment itself is exported with the statement.",
+  reward_config: "The operator's reward rules (one row, a mirror of the admin settings) - about nobody.",
   poll_options: "Options belonging to a poll; the poll itself is exported.",
   /* Rows belonging to a streak, keyed by `streak_id` rather than by a person —
      the same shape as `post_media` above. The streak itself IS exported, and it

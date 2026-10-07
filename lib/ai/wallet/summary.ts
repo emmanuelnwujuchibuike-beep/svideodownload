@@ -4,7 +4,8 @@ import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger, type Chara
 import { calculateCredits } from "@/lib/ai/credits/engine";
 import { getAiCreditEntitlement } from "@/lib/ai/credits/entitlement";
 import { featureContext } from "@/lib/ai/credits/feature-gate";
-import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS, type AiCreditFeatureId } from "@/lib/ai/credits/features";
+import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS, tierOf, type AiCreditFeatureId } from "@/lib/ai/credits/features";
+import { getAiSubscription } from "@/lib/ai/credits/subscription";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { publicWalletOffer } from "@/lib/ai/credits/wallet-config";
 import { klingPipeline } from "@/lib/ai/kling/pipelines/registry";
@@ -76,29 +77,32 @@ function fromCredits(id: AiCreditFeatureId, settings: LandingSettings): { credit
 export async function loadWalletSummary(userId: string, settings: LandingSettings, opts: { transactions: number }) {
   const plans = settings.frenzAiPlans;
   const db = createAdminClient();
-  const [balance, ledger, entitlement, contexts, withdrawable] = await Promise.all([
+  // Part 2 performance: TWO parallel waves. The subscription is read once (it
+  // was read six times — once by the entitlement and once per feature) and the
+  // reads that used to run one after another after the first wave join wave two.
+  const [balance, ledger, subscription, withdrawable, pendingRows] = await Promise.all([
     getCharacterReplaceBalanceCents(userId),
     listCharacterReplaceLedger(userId, Math.max(1, Math.min(50, opts.transactions))),
-    getAiCreditEntitlement(userId, plans),
-    Promise.all(AI_CREDIT_FEATURES.map((id) => featureContext(userId, id, plans))),
+    plans.enabled ? getAiSubscription(userId).catch(() => null) : Promise.resolve(null),
     db.from("ai_product_balances").select("withdrawable_cents").eq("user_id", userId).eq("product", "character_replace").maybeSingle().then((r) => Number((r.data as { withdrawable_cents?: number } | null)?.withdrawable_cents ?? 0), () => 0),
+    // pending: credits held by creations still running (reserved, not yet settled or refunded)
+    db.from("ai_product_ledger").select("delta_cents").eq("user_id", userId).eq("kind", "processing_charge").eq("status", "reserved").eq("currency", WALLET_UNIT).limit(50).then((r) => (r.data ?? []) as { delta_cents: number }[], () => []),
   ]);
-  const tier = contexts[0]?.tier ?? "free";
-
+  const known = { subscription };
+  // the same tier rule as featureContext — the plan counts only while the offer is on, the plan enabled and the subscription active
+  const tier = tierOf(plans.enabled && subscription?.active && plans.plans[subscription.plan]?.enabled ? subscription.plan : null);
+  const now = new Date();
+  const tta = settings.frenzAiTextToAudio;
   // which tool each charge paid for — one bounded lookup by the jobs on this page of the statement
   const jobIds = [...new Set(ledger.map((r) => r.jobId).filter((x): x is string => !!x))];
-  const featureOf = new Map<string, string>();
-  if (jobIds.length) {
-    const { data } = await db.from("ai_jobs").select("id, feature").in("id", jobIds);
-    for (const j of (data ?? []) as { id: string; feature: string }[]) featureOf.set(j.id, j.feature);
-  }
-  // pending: credits held by creations still running (reserved, not yet settled or refunded)
-  const { data: pendingRows } = await db.from("ai_product_ledger").select("delta_cents").eq("user_id", userId).eq("kind", "processing_charge").eq("status", "reserved").eq("currency", WALLET_UNIT).limit(50);
-  const pending = (pendingRows ?? []) as { delta_cents: number }[];
-
-  const tta = settings.frenzAiTextToAudio;
-  const ttaMonth = textToAudioMonthKey(new Date(), plans.reset.timezone);
-  const ttaFree = await readFreeCharacters(userId, ttaMonth, textToAudioAllowance(tta, tier));
+  const [entitlement, contexts, jobs, ttaFree] = await Promise.all([
+    getAiCreditEntitlement(userId, plans, now, known),
+    Promise.all(AI_CREDIT_FEATURES.map((id) => featureContext(userId, id, plans, now, known))),
+    jobIds.length ? db.from("ai_jobs").select("id, feature").in("id", jobIds).then((r) => (r.data ?? []) as { id: string; feature: string }[], () => []) : Promise.resolve([]),
+    readFreeCharacters(userId, textToAudioMonthKey(now, plans.reset.timezone), textToAudioAllowance(tta, tier)),
+  ]);
+  const featureOf = new Map(jobs.map((j) => [j.id, j.feature]));
+  const pending = pendingRows;
 
   const planConfig = entitlement.plan ? plans.plans[entitlement.plan] : null;
   return {

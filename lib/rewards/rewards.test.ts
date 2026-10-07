@@ -161,3 +161,69 @@ describe("🔴 safety", () => {
     expect(e).toMatch(/catch \(e\) \{\s+console\.warn\("\[rewards\] push failed \(the reward stands\)"/);
   });
 });
+
+describe("🔴 0189 — the engine made cheap, the rules unchanged (performance brief part 2)", () => {
+  const perf = code("supabase/migrations/0189_reward_engine_performance.sql");
+  const body = (src: string, name: string) => {
+    const start = src.indexOf(`create or replace function public.${name}(`);
+    expect(start, name).toBeGreaterThan(-1);
+    return src.slice(start, src.indexOf("$$;", start));
+  };
+  const COUNTERS = /\n  -- 0189: running totals[^\n]*\n  update public\.reward_profiles\n[^\n]*\n[^\n]*\n   where user_id = p_beneficiary;\n/;
+  const RULES_READ = "  select value -> 'frenzRewards' into v_cfg from public.settings where key = 'landing';";
+
+  it("grant_reward is 0187's, word for word, plus ONLY the running totals", () => {
+    const now = body(perf, "grant_reward");
+    expect(now).toMatch(COUNTERS);
+    expect(now.replace(COUNTERS, "")).toBe(fn("grant_reward"));
+  });
+  it("process_reward_event is 0187's, word for word, except it reads the small rules row", () => {
+    const now = body(perf, "process_reward_event");
+    expect(now).not.toContain("from public.settings");
+    expect(now).toContain("select rules into v_cfg from public.reward_config where id;");
+    const back = now.replace(/  -- 0189: the rules[^\n]*\n  -- [^\n]*\n  select rules into v_cfg from public\.reward_config where id;/, RULES_READ);
+    expect(back).toBe(fn("process_reward_event"));
+  });
+  it("teeth: the comparison sees a changed amount", () => {
+    expect(body(perf, "grant_reward").replace(COUNTERS, "").replace("p_amount <= 0", "p_amount < 0")).not.toBe(fn("grant_reward"));
+  });
+  it("the rules row is kept in step by a trigger on every settings save, and seeded from the live row", () => {
+    expect(perf).toContain("create trigger reward_config_sync_trg after insert or update on public.settings");
+    expect(perf).toContain("coalesce(new.value -> 'frenzRewards', '{}'::jsonb)");
+    expect(perf).toMatch(/insert into public\.reward_config \(id, rules\)\nselect true, coalesce\(\(select value -> 'frenzRewards' from public\.settings where key = 'landing'\)/);
+  });
+  it("the counters are backfilled once, and the new definer functions are closed to the browser", () => {
+    expect(perf).toContain("update public.reward_profiles p\n     set earned_usable = coalesce(t.u, 0), earned_withdrawable = coalesce(t.w, 0)");
+    for (const f of ["grant_reward(", "process_reward_event(", "reward_config_sync()", "rewards_admin_totals(timestamptz)"]) expect(perf).toContain(`'public.${f}`);
+    expect(perf).toContain("revoke all on public.reward_config from public, anon, authenticated;");
+  });
+  it("a member's earned totals are the counters, not a scan (the scan survives only as the pre-0189 fallback)", () => {
+    const s = code("lib/rewards/summary.ts");
+    expect(s).toContain('select("qualified_at, qualifying_engagements, restricted, earned_usable, earned_withdrawable")');
+    expect(s.slice(0, s.indexOf("async function legacyProfile"))).not.toContain(".limit(5000)");
+  });
+  it("the admin tab sums in SQL and reads only bounded lists", () => {
+    const a = code("lib/rewards/admin.ts");
+    const fast = a.slice(a.indexOf("export async function loadRewardsAdmin"), a.indexOf("async function loadRewardsAdminLegacy"));
+    expect(fast).toContain('db.rpc("rewards_admin_totals", { p_since: since })');
+    expect(fast).not.toContain("paginatedSelect");
+    expect(fast).toContain("if (totals.error || !totals.data) return loadRewardsAdminLegacy();");
+  });
+  it("an AI reel goes to Stream after the response, like a studio video post", () => {
+    const p = code("lib/ai/reels/publish.ts");
+    expect(p).toContain("if (hasStream) after(() => ingestReel(published.id, mediaUrl, input.userId));");
+    expect(p).toContain('.update({ stream_uid: uid }).eq("id", postId).is("stream_uid", null)');
+    expect(p).toContain('cacheControl: "31536000"');
+  });
+});
+
+describe("the wallet summary reads the AI plan once (performance brief part 2)", () => {
+  it("one subscription read, passed to the entitlement and every feature", () => {
+    const s = code("lib/ai/wallet/summary.ts");
+    expect(s.match(/getAiSubscription\(/g)).toHaveLength(1);
+    expect(s).toContain("getAiCreditEntitlement(userId, plans, now, known)");
+    expect(s).toContain("featureContext(userId, id, plans, now, known)");
+    expect(code("lib/ai/credits/feature-gate.ts")).toContain("known ? known.subscription : await getAiSubscription(userId)");
+    expect(code("lib/ai/credits/entitlement.ts")).toContain("known ? known.subscription : await getAiSubscription(userId)");
+  });
+});

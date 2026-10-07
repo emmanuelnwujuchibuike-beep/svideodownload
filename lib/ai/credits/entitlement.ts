@@ -36,7 +36,8 @@ export interface AiCreditEntitlement {
   timezone: string;
 }
 
-export async function getAiCreditEntitlement(userId: string, config: AiPlansConfig, now: Date = new Date()): Promise<AiCreditEntitlement> {
+/** `known.subscription` — pass a subscription already read (the wallet summary); omitted = read it. */
+export async function getAiCreditEntitlement(userId: string, config: AiPlansConfig, now: Date = new Date(), known?: { subscription: AiSubscription | null }): Promise<AiCreditEntitlement> {
   const periods = currentPeriods(config, now);
   const base: AiCreditEntitlement = {
     enabled: config.enabled,
@@ -54,7 +55,7 @@ export async function getAiCreditEntitlement(userId: string, config: AiPlansConf
     timezone: periods.timezone,
   };
   if (!config.enabled) return base;
-  const subscription = await getAiSubscription(userId);
+  const subscription = known ? known.subscription : await getAiSubscription(userId);
   if (!subscription) return base;
   const planConfig = config.plans[subscription.plan];
   if (!subscription.active || !planConfig.enabled) return { ...base, subscription };

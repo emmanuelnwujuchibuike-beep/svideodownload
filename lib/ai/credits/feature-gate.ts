@@ -3,7 +3,7 @@ import "server-only";
 import type { AiPlansConfig } from "@/lib/ai/credits/config";
 import { featureAccess, featurePolicy, includedPeriodKey, publicFeatureAccess, tierOf, type AiFeaturePolicy, type AiTier, type FeatureAccess } from "@/lib/ai/credits/features";
 import { readIncludedUsed } from "@/lib/ai/credits/included";
-import { getAiSubscription } from "@/lib/ai/credits/subscription";
+import { getAiSubscription, type AiSubscription } from "@/lib/ai/credits/subscription";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -31,10 +31,20 @@ export interface FeatureContext {
   view: ReturnType<typeof publicFeatureAccess>;
 }
 
-export async function featureContext(userId: string, featureId: string, plans: AiPlansConfig, now: Date = new Date()): Promise<FeatureContext> {
+/**
+ * `known.subscription` — a caller asking for several features at once (the
+ * wallet summary) reads the subscription ONCE and passes it in. Omitted = read it.
+ */
+export async function featureContext(
+  userId: string,
+  featureId: string,
+  plans: AiPlansConfig,
+  now: Date = new Date(),
+  known?: { subscription: AiSubscription | null },
+): Promise<FeatureContext> {
   const policy = featurePolicy(plans.features, featureId);
   // the AI plan counts only while the offer is on and the subscription is active
-  const sub = plans.enabled ? await getAiSubscription(userId).catch(() => null) : null;
+  const sub = plans.enabled ? (known ? known.subscription : await getAiSubscription(userId).catch(() => null)) : null;
   const tier = tierOf(sub?.active && plans.plans[sub.plan]?.enabled ? sub.plan : null);
   const access = featureAccess(policy, tier);
   const periodKey = includedPeriodKey(now, plans.reset.timezone);

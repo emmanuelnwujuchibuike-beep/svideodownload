@@ -92,13 +92,24 @@ export function openAiPlanManage(): Promise<Result<{ url: string }>> {
   return request<{ url: string }>("/api/ai/subscriptions/manage", { method: "POST" });
 }
 
-/** The `?reference=`/`?trxref=` Paystack appends on return, taken once (and removed from the URL). */
+/**
+ * The return from an AI PLAN checkout, taken once (and removed from the URL).
+ *
+ * 🔴 2026-10-07: only when `ai_plan` is in the address — every plan checkout
+ * puts it there (the Paystack callback and both Bachs URLs). This used to claim
+ * ANY `?reference=`, so on the credits page — the return target of every
+ * wallet top-up — a deposit's reference was taken as a plan return, checked by
+ * the plan route (which refuses a top-up), and the top-up verify never ran: a
+ * paid deposit waited for the webhook alone and a cancelled one stayed
+ * "pending" forever with no notice (@chris, four in a day). A wallet top-up's
+ * reference is left for `takeTopupReturnReference`.
+ */
 export function takeAiPlanReturn(): { plan: string | null; reference: string | null } | null {
   if (typeof window === "undefined") return null;
   const params = new URLSearchParams(window.location.search);
   const plan = params.get("ai_plan");
   const reference = params.get("reference") ?? params.get("trxref");
-  if (!plan && !reference) return null;
+  if (!plan) return null;
   for (const k of ["ai_plan", "reference", "trxref"]) params.delete(k);
   const rest = params.toString();
   window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);

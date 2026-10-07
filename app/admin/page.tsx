@@ -185,6 +185,7 @@ import { getTextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import { getVoiceCloneAdminStats } from "@/lib/ai/voice-clone/admin";
 import { getAiAdminStats, getCharacterReplaceFreeAccessStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
 import { loadAiMoney } from "@/lib/ai/admin-money";
+import { loadPlanSurveySummary } from "@/lib/ai/credits/plan-survey-admin";
 import { loadAiOperations } from "@/lib/ai/admin-ops";
 import { aiFeature } from "@/lib/ai/jobs";
 import { LandingEditor } from "@/features/admin/landing-editor";
@@ -931,8 +932,8 @@ async function FrenzAISection() {
   // Part 8 (2026-10-05): the Replicate / fal.ai switchboard, its 200-row run
   // ledger read, the dead circuit-breaker rows and the Character Replace audit
   // trail (three loaders) are replaced by ONE bounded ai_jobs read.
-  const [creditRows, planStats, providerOverview, lipSyncStats, textToAudioStats, voiceCloneStats, showcase, promo, aiMoney] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProviderOverview(landing.frenzAiProviders.adminJobsAreTests), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null), readStoredShowcase(), readStoredPromo(), loadAiMoney(landing.frenzAiPlans.credits.centsPerCredit)]);
-  const moneyLabels: Record<string, string> = { text_to_video: "Text to Video", image_to_video: "Image to Video", lip_sync: "Lip Sync", text_to_audio: "Text to Audio", voice_clone: "Voice Cloning", character_replace: "Character Replace", ...aiOpsLabels };
+  const [creditRows, planStats, providerOverview, lipSyncStats, textToAudioStats, voiceCloneStats, showcase, promo, aiMoney, planSurvey] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProviderOverview(landing.frenzAiProviders.adminJobsAreTests), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null), readStoredShowcase(), readStoredPromo(), loadAiMoney(landing.frenzAiPlans.credits.centsPerCredit), loadPlanSurveySummary().catch(() => null)]);
+  const moneyLabels: Record<string, string> = { text_to_video: "Text to Video", image_to_video: "Image to Video", lip_sync: "Lip Sync", text_to_audio: "Text to Audio", voice_clone: "Voice Cloning", character_replace: "Character Replace", ai_pro: landing.frenzAiPlans.plans.ai_pro.label, ai_max: landing.frenzAiPlans.plans.ai_max.label, ...aiOpsLabels };
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in
@@ -953,7 +954,7 @@ async function FrenzAISection() {
               <FrenzAIHealth stats={aiStats} />
               {/* Part 8 §7/§62, §35–§39 (2026-10-07): every tool's jobs, failures grouped and split by owner. */}
               <AiOperationsPanelLazy ops={aiOps} labels={aiOpsLabels} kling={klingStateOf(providerOverview)} currencySymbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
-              <AiMoneyPanelLazy money={aiMoney} labels={moneyLabels} />
+              <AiMoneyPanelLazy money={aiMoney} labels={moneyLabels} survey={planSurvey} />
               <CharacterReplaceFreeAccessPanel stats={freeStats} symbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
             </div>
           ),

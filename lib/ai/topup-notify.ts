@@ -185,3 +185,32 @@ export async function notifyTopupFailed(opts: {
     console.error("[ai/topup] failure notification failed", { reference: opts.reference, error: String(e) });
   }
 }
+
+/**
+ * A deposit the member CANCELLED — closed the checkout without paying (owner,
+ * 2026-10-07: "they are supposed to receive a push notification when their
+ * deposit was successful or cancelled"). Push + in-app only, no email: nothing
+ * was charged, so there is no invoice to send. Claimed once on the attempt row,
+ * the same claim a failure uses, so it is never told twice.
+ */
+export async function notifyTopupCancelled(opts: { userId: string; reference: string; amountCents: number; currency: string }): Promise<void> {
+  try {
+    if (!(await claimTopupFailureNotification(opts.userId, opts.reference))) return;
+    const amount = money(opts.amountCents, opts.currency);
+    await sendSmartPush(
+      opts.userId,
+      {
+        title: "Deposit cancelled",
+        body: `Your ${amount} deposit was cancelled — nothing was charged. Tap to try again.`,
+        url: USAGE_URL,
+        genericBody: "Your Frenz AI deposit was cancelled.",
+        tag: `ai-topup-${opts.reference}`,
+      },
+      "high",
+      "premium",
+      { type: "ai_deposit_failed" },
+    );
+  } catch (e) {
+    console.error("[ai/topup] cancelled notification failed", { reference: opts.reference, error: String(e) });
+  }
+}

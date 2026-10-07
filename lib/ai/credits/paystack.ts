@@ -1,5 +1,8 @@
 import "server-only";
 
+import { after } from "next/server";
+
+import { welcomeAiPlan } from "@/lib/ai/credits/plan-welcome";
 import { AI_PLAN_IDS, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits/config";
 import { upsertAiSubscription, type AiSubscriptionStatus } from "@/lib/ai/credits/subscription";
 import { trackEvent } from "@/lib/analytics/events";
@@ -132,6 +135,11 @@ export async function syncAiPlanEvent(eventType: string, data: PaystackEventData
   if (written.written) {
     trackEvent(status === "canceled" ? "subscribe_cancel" : "subscribe", { userId, metadata: { plan: written.plan, status, provider: "paystack", kind: "ai_plan" } });
   }
+  // the celebration push, once per plan whichever path activated it first (lib/ai/credits/plan-welcome.ts)
+  if (status === "active" && userId && written.plan) {
+    const welcomed = written.plan;
+    after(() => welcomeAiPlan(userId, welcomed, config));
+  }
   return { handled: true, userId, plan: written.plan, status };
 }
 
@@ -149,5 +157,6 @@ export async function activateAiPlanFromVerifiedCharge(userId: string, charge: P
   const plan = isAiPlanId(meta.ai_plan) ? meta.ai_plan : null;
   if (!plan || !config.plans[plan].enabled) return { ok: false, reason: "plan unknown or disabled" };
   await upsertAiSubscription({ userId, plan, status: "active", planCode: config.plans[plan].paystackPlanCode || null, reference: charge.reference ?? null, currentPeriodStart: charge.paid_at ?? new Date().toISOString() });
+  after(() => welcomeAiPlan(userId, plan, config));
   return { ok: true, plan };
 }

@@ -1,12 +1,14 @@
 "use client";
 
 import { ArrowDownLeft, ArrowLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, ShieldCheck, Sparkles, Wallet } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/recharge-sheet";
 import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
-import { takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
+import type { PlanCelebrationProps } from "@/features/ai/credits/plan-celebration";
+import { getAiCredits, takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
 import { StatementDetailSheet } from "@/features/ai/statement-detail-sheet";
 import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
@@ -65,6 +67,20 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
   reversal: { label: "Reversed", Icon: RotateCcw, tone: "neutral" },
 };
 
+// 2026-10-07 (owner): the subscription celebration + optional survey — its chunk loads only when there is a plan to celebrate
+const PlanCelebration = dynamic(() => import("@/features/ai/credits/plan-celebration").then((m) => m.PlanCelebration), { ssr: false });
+
+/** The welcome push opens `?plan_welcome=1` (lib/ai/credits/plan-welcome.ts) — taken once and removed from the address. */
+function takePlanWelcome(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("plan_welcome")) return false;
+  params.delete("plan_welcome");
+  const rest = params.toString();
+  window.history.replaceState(window.history.state, "", `${window.location.pathname}${rest ? `?${rest}` : ""}${window.location.hash}`);
+  return true;
+}
+
 export function FrenzAIUsagePage({
   aiHref = "/ai",
   createHref = "/studio/ai/character-replace",
@@ -86,6 +102,8 @@ export function FrenzAIUsagePage({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMounted, setSheetMounted] = useState(false);
   const [suggested, setSuggested] = useState<number | null>(null);
+  const [celebrate, setCelebrate] = useState<Omit<PlanCelebrationProps, "onClose"> | null>(null);
+  const closeCelebration = useCallback(() => setCelebrate(null), []);
 
   const load = useCallback(async () => {
     setFailed(false);
@@ -108,11 +126,20 @@ export function FrenzAIUsagePage({
     // 0167: the return from an AI plan checkout — verified by its reference on the server, never by the URL's word
     const planReturn = takeAiPlanReturn();
     const reference = planReturn ? null : takeTopupReturnReference();
+    const welcome = takePlanWelcome();
     void (async () => {
       if (planReturn?.reference) {
         const verified = await verifyAiPlanReturn(planReturn.reference);
         setNotice(verified.ok ? (verified.activated ? `${verified.planLabel ?? "Your AI plan"} is active — ${verified.dailyLimit} credits a day, ${verified.weeklyLimit} a week.` : verified.status === "success" ? "Payment received — your plan will activate as soon as Paystack confirms it." : "Your payment wasn't completed. Nothing was charged.") : verified.error);
+        if (verified.ok && verified.activated && verified.plan) {
+          setCelebrate({ plan: verified.plan, planLabel: verified.planLabel ?? "your AI plan", dailyCredits: verified.dailyLimit ?? 0, weeklyCredits: verified.weeklyLimit ?? 0 });
+        }
         setCreditsKey((k) => k + 1);
+      } else if (welcome) {
+        // opened from the welcome push: celebrate the plan the server says is active, never one the URL names
+        const credits = await getAiCredits();
+        const e = credits.ok ? credits.entitlement : null;
+        if (e?.plan && e.subscription?.active) setCelebrate({ plan: e.plan, planLabel: e.planLabel ?? "your AI plan", dailyCredits: e.dailyLimit, weeklyCredits: e.weeklyLimit });
       } else if (reference) {
         const verified = await verifyCharacterReplaceTopup(reference);
         setNotice(verified.ok ? (verified.credited ? "Payment received — your balance has been updated." : verified.pending ? "Your payment is still being confirmed. This will update shortly." : null) : null);
@@ -362,6 +389,7 @@ export function FrenzAIUsagePage({
             <StatementDetailSheet row={openLine} symbol={symbol} onClose={() => setOpenLine(null)} />
           </>
         ) : null}
+        {celebrate ? <PlanCelebration {...celebrate} onClose={closeCelebration} /> : null}
 
         <div className="mt-8">
           <Link href={aiHref} prefetch={false} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>

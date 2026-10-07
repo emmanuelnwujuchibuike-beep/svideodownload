@@ -1,6 +1,7 @@
 "use client";
 
 import type { AiMoneySummary } from "@/lib/ai/admin-money-view";
+import type { PlanSurveySummary } from "@/lib/ai/credits/plan-survey";
 import { formatCredits } from "@/lib/ai/credits/units";
 import { formatCents } from "@/lib/ai/economy";
 
@@ -11,7 +12,7 @@ import { formatCents } from "@/lib/ai/economy";
  * ledger by lib/ai/admin-money.ts; a figure the data cannot support is shown as
  * "—", never as an invented zero.
  */
-export function AiMoneyPanel({ money, labels }: { money: AiMoneySummary; labels: Record<string, string> }) {
+export function AiMoneyPanel({ money, labels, survey = null }: { money: AiMoneySummary; labels: Record<string, string>; survey?: (PlanSurveySummary & { capped: boolean }) | null }) {
   const usd = (c: number) => formatCents(c, "$");
   const cards: { label: string; value: string; hint: string }[] = [
     { label: "Top-up revenue", value: usd(money.topups.revenueUsdCents), hint: `${money.topups.count} top-up${money.topups.count === 1 ? "" : "s"}${money.topups.withoutPaidAmount ? ` · ${money.topups.withoutPaidAmount} without a settled amount` : ""}` },
@@ -79,6 +80,51 @@ export function AiMoneyPanel({ money, labels }: { money: AiMoneySummary; labels:
           )}
         </div>
       </div>
+      {/* 0190 (owner 2026-10-07): the optional survey new AI Pro / AI Max members answer on the celebration sheet */}
+      {survey ? (
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold">AI plan survey · {survey.responses} answer{survey.responses === 1 ? "" : "s"}</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Optional, asked once on the welcome screen after subscribing.{" "}
+            {Object.entries(survey.byPlan).map(([plan, count]) => `${labels[plan] ?? plan}: ${count}`).join(" · ")}
+            {survey.capped ? " Counted over the most recent 1,000 answers." : ""}
+          </p>
+          {survey.responses ? (
+            <div className="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <ul className="divide-y divide-border/60 rounded-2xl border border-border/70">
+                {survey.features.map((f) => (
+                  <li key={f.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span>{f.label}</span>
+                    <span className="tabular-nums text-muted-foreground">{f.count}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="divide-y divide-border/60 self-start rounded-2xl border border-border/70">
+                {survey.goals.map((g) => (
+                  <li key={g.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span>{g.label}</span>
+                    <span className="tabular-nums text-muted-foreground">{g.count}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="space-y-2 self-start">
+                {survey.comments.length ? (
+                  survey.comments.map((c, i) => (
+                    <li key={`${c.at}-${i}`} className="rounded-2xl border border-border/70 px-3 py-2 text-sm">
+                      <p>{c.comment}</p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{labels[c.plan] ?? c.plan} · {c.at.slice(0, 10)}</p>
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-sm text-muted-foreground">No written comments yet.</li>
+                )}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted-foreground">No answers yet.</p>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 }

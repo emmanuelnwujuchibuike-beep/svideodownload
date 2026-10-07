@@ -186,6 +186,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   reward_profiles: "user_id",
   reward_events: "beneficiary_id",
   withdrawal_requests: "user_id",
+  // 0190: the optional plan survey - the member's own answers
+  ai_plan_survey_responses: "user_id",
   /*
     Voice Cloning (0171). An export carries the member's own facts — the names,
     the dates, the rights record they signed, how much audio each voice was built

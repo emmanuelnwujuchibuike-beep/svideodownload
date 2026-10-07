@@ -1,13 +1,11 @@
 import { after, NextResponse } from "next/server";
 
-import { markTopupAttempt } from "@/lib/ai/topup-attempts";
-import { notifyTopupFailed } from "@/lib/ai/topup-notify";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharge } from "@/lib/ai/character-replace/recharge-server";
 import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
-import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { creditBachsTopup, readBachsAttempt } from "@/lib/ai/wallet/bachs-topup";
+import { settleCharacterReplaceCharge, settleUnpaidTopup } from "@/lib/ai/wallet/paystack-settle";
 import { BACHS_TOPUP_PREFIX, bachsConfigured, bachsStatusIsPaid, getBachsCheckout } from "@/lib/payments/bachs";
 import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, paystackEnabled, verifyTransaction } from "@/lib/paystack/paystack";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -146,8 +144,10 @@ export async function POST(request: Request) {
         customer-facing reason line and nothing else of theirs.
 
         "abandoned" is a member who closed the checkout without paying; it is
-        recorded so the statement is complete, and NOT announced — nobody
-        needs an email about a page they closed. "pending" is left alone: the
+        recorded so the statement is complete and, since 2026-10-07 (owner:
+        "a push notification when their deposit was successful or cancelled"),
+        announced once by push — "cancelled, nothing was charged" — never by
+        email, there being no invoice for money that never moved. "pending" is left alone: the
         dashboard keeps polling it.
 
         Ownership is checked the same way as the success path below — the
@@ -159,25 +159,19 @@ export async function POST(request: Request) {
         charge.metadata?.user_id === user.id
       ) {
         const outcome = charge.status;
-        const amountCents = Number(charge.amount);
         // `after()`: kept alive past the response — see the webhook for why.
-        after(async () => {
-          await markTopupAttempt(reference, {
-            status: outcome,
+        // 2026-10-07 (owner): a cancelled checkout is announced too — "cancelled, nothing was charged"
+        after(() =>
+          settleUnpaidTopup({
+            userId: user.id,
+            reference,
+            outcome,
+            amountCents: Number(charge.amount),
+            currency: charge.currency ?? "",
             gatewayResponse: charge.gateway_response ?? null,
             channel: charge.channel ?? null,
-          });
-          if (outcome === "failed" && Number.isFinite(amountCents) && amountCents > 0) {
-            await notifyTopupFailed({
-              userId: user.id,
-              reference,
-              amountCents,
-              currency: charge.currency ?? "",
-              reason: charge.gateway_response ?? null,
-              channel: charge.channel ?? null,
-            });
-          }
-        });
+          }),
+        );
       }
       return NextResponse.json({ credited: false, pending: charge.status === "pending" });
     }
@@ -195,42 +189,11 @@ export async function POST(request: Request) {
         console.warn("[ai/topup-verify] cr reference does not belong to caller", { userId: user.id, reference });
         return NextResponse.json({ credited: false });
       }
-      const { frenzAiCurrency: crCurrency } = await getLandingSettings();
-      /*
-        A USD wallet paid for in naira (2026-09-20): the settled naira is
-        checked against the pin Paystack stored at initialize, and the WALLET
-        amount pinned there is what is credited. Same rule as the webhook —
-        lib/ai/character-replace/topup-fx.ts.
-      */
-      const credit = resolveCredit({ amount: Number(charge.amount), currency: charge.currency }, charge.metadata, crCurrency);
-      if (!credit.ok) {
-        console.error("[ai/topup-verify] cr charge not creditable", { reference, reason: credit.reason, got: charge.currency, amount: charge.amount, wallet: crCurrency });
-        return NextResponse.json({ credited: false });
-      }
-      const crAmount = credit.amountCents;
-      const crCredited = await creditVerifiedCharacterReplaceRecharge({
-        userId: user.id,
-        reference,
-        amountCents: crAmount,
-        currency: crCurrency,
-        packId: charge.metadata?.ai_topup_pack,
-        channel: charge.channel ?? null,
-        paidAt: charge.paid_at ?? null,
-        gatewayResponse: charge.gateway_response ?? null,
-      });
-      after(() =>
-        announceCharacterReplaceRecharge({
-          userId: user.id,
-          reference,
-          amountCents: crCredited.credits + crCredited.bonusCredits,
-          currency: WALLET_UNIT,
-          balanceAfterCents: crCredited.balanceAfterCents,
-          channel: charge.channel ?? null,
-          paidAt: charge.paid_at ?? null,
-          gatewayResponse: charge.gateway_response ?? null,
-        }),
-      );
-      return NextResponse.json({ credited: true, balanceCents: crCredited.balanceAfterCents, balanceCredits: crCredited.balanceAfterCents, creditsAdded: crCredited.credits + crCredited.bonusCredits, product: "character_replace" });
+      // the one settle path, shared with the reconciler (lib/ai/wallet/paystack-settle.ts)
+      const settled = await settleCharacterReplaceCharge(user.id, reference, charge);
+      if (settled.kind !== "credited") return NextResponse.json({ credited: false });
+      after(settled.announce);
+      return NextResponse.json({ credited: true, balanceCents: settled.balanceAfterCents, balanceCredits: settled.balanceAfterCents, creditsAdded: settled.creditsAdded, product: "character_replace" });
     }
 
     if (charge.metadata?.purpose !== AI_TOPUP_PURPOSE) {

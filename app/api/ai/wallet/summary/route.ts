@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { primaryAiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
+import { reconcileMemberTopupsWithin } from "@/lib/ai/wallet/reconcile-topups";
 import { loadWalletSummary } from "@/lib/ai/wallet/summary";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
@@ -29,7 +30,8 @@ export async function GET(request: Request) {
   }
   const param = Number(new URL(request.url).searchParams.get("transactions") ?? "");
   try {
-    const settings = await getLandingSettings();
+    // a deposit paid or cancelled in a checkout the member never came back from is settled before the read (lib/ai/wallet/reconcile-topups.ts)
+    const [settings] = await Promise.all([getLandingSettings(), reconcileMemberTopupsWithin(subject.userId)]);
     const summary = await loadWalletSummary(subject.userId, settings, { transactions: Number.isFinite(param) && param > 0 ? Math.floor(param) : 8 });
     return NextResponse.json(summary, { headers: { "cache-control": "no-store" } });
   } catch (e) {

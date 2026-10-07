@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
+import type { PlanSurveySummary } from "@/lib/ai/credits/plan-survey";
 import type { AiMoneySummary } from "@/lib/ai/admin-money-view";
 import type { AiOperations } from "@/lib/ai/admin-ops-view";
 import type { AiPromo } from "@/lib/ai/promo/config";
@@ -156,7 +157,7 @@ export function AiOperationsPanelLazy(props: { ops: AiOperations; labels: Record
 // Credit brief §18 (2026-10-07): AI → Overview — top-ups, revenue, credits spent and refunded, by tool and by member.
 const AiMoneyPanel = dynamic(() => import("@/features/admin/ai-money-panel").then((m) => m.AiMoneyPanel), { loading: skeleton("Loading AI money") });
 
-export function AiMoneyPanelLazy(props: { money: AiMoneySummary; labels: Record<string, string> }) {
+export function AiMoneyPanelLazy(props: { money: AiMoneySummary; labels: Record<string, string>; survey?: (PlanSurveySummary & { capped: boolean }) | null }) {
   return <AiMoneyPanel {...props} />;
 }
 

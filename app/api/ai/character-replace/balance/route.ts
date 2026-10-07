@@ -14,6 +14,7 @@ import { primaryAiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { aiCurrencySymbol, getLandingSettings, isAiCurrency } from "@/lib/landing/settings";
+import { reconcileMemberTopupsWithin } from "@/lib/ai/wallet/reconcile-topups";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -55,11 +56,23 @@ export async function GET(request: Request) {
   const ledgerParam = Number(new URL(request.url).searchParams.get("ledger") ?? "");
   const ledgerLimit = Number.isFinite(ledgerParam) && ledgerParam > 0 ? Math.min(100, Math.floor(ledgerParam)) : 10;
   try {
-    const [settings, balanceCents, ledger] = await Promise.all([
+    /*
+      2026-10-07 (owner: deposits missing from @chris's statement): the
+      member's own pending top-ups are asked of Paystack alongside the read —
+      a deposit paid or cancelled in a checkout they never came back from is
+      settled and announced here (lib/ai/wallet/reconcile-topups.ts). In the
+      same wave, so it costs nothing when nothing is pending; when something
+      was credited the balance and statement are read again.
+    */
+    const [settings, firstBalance, firstLedger, reconciled] = await Promise.all([
       getLandingSettings(),
       getCharacterReplaceBalanceCents(subject.userId),
       listCharacterReplaceLedger(subject.userId, ledgerLimit),
+      reconcileMemberTopupsWithin(subject.userId),
     ]);
+    const [balanceCents, ledger] = reconciled.credited > 0
+      ? await Promise.all([getCharacterReplaceBalanceCents(subject.userId), listCharacterReplaceLedger(subject.userId, ledgerLimit)])
+      : [firstBalance, firstLedger];
     const recharge = settings.frenzAiCharacterReplace.recharge;
     const headers = new Headers({ "cache-control": "no-store" });
     if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));

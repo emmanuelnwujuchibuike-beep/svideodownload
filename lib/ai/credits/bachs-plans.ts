@@ -2,7 +2,11 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { after } from "next/server";
+
+
 import { AI_PLAN_IDS, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits/config";
+import { welcomeAiPlan } from "@/lib/ai/credits/plan-welcome";
 import { upsertAiSubscription } from "@/lib/ai/credits/subscription";
 import { markTopupAttempt } from "@/lib/ai/topup-attempts";
 import type { BachsAttempt } from "@/lib/ai/wallet/bachs-topup";
@@ -88,6 +92,8 @@ export async function activateBachsPlan(attempt: BachsAttempt, config: AiPlansCo
   });
   await markTopupAttempt(attempt.reference, { status: "success", gatewayResponse: `bachs ${facts.via}` }).catch(() => null);
   console.info("[payments] subscription_activated", { provider: "bachs", userId: attempt.user_id, plan, reference: attempt.reference, via: facts.via });
+  // the celebration push, once per plan whichever path activated it first (lib/ai/credits/plan-welcome.ts)
+  after(() => welcomeAiPlan(attempt.user_id, plan, config));
   return { ok: true, plan };
 }
 

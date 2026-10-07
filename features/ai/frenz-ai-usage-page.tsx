@@ -9,6 +9,7 @@ import { CharacterReplaceRechargeSheet } from "@/features/ai/character-replace/r
 import { AiCreditsCard } from "@/features/ai/credits/ai-credits-card";
 import type { PlanCelebrationProps } from "@/features/ai/credits/plan-celebration";
 import { getAiCredits, takeAiPlanReturn, verifyAiPlanReturn } from "@/lib/ai/credits/client";
+import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS } from "@/lib/ai/credits/features";
 import { StatementDetailSheet } from "@/features/ai/statement-detail-sheet";
 import { HIDDEN_AMOUNT, useBalanceHidden } from "@/lib/ai/character-replace/balance-privacy";
 import { FrenzAIEnvironment } from "@/features/ai/core/frenz-ai-environment";
@@ -71,6 +72,11 @@ const LEDGER_COPY: Record<LedgerKind, { label: string; Icon: typeof Sparkles; to
 const PlanCelebration = dynamic(() => import("@/features/ai/credits/plan-celebration").then((m) => m.PlanCelebration), { ssr: false });
 
 /** The welcome push opens `?plan_welcome=1` (lib/ai/credits/plan-welcome.ts) — taken once and removed from the address. */
+/** An AI plan's celebration: its allowance as the headline, every Frenz AI tool as the benefits. */
+function aiCelebration(plan: "ai_pro" | "ai_max", planLabel: string, daily: number, weekly: number): Omit<PlanCelebrationProps, "onClose"> {
+  return { plan, family: "ai", planLabel, subtitle: `Your plan is active — ${daily} credits a day, ${weekly} a week.`, benefits: AI_CREDIT_FEATURES.map((id) => AI_FEATURE_LABELS[id]) };
+}
+
 function takePlanWelcome(): boolean {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
@@ -132,14 +138,14 @@ export function FrenzAIUsagePage({
         const verified = await verifyAiPlanReturn(planReturn.reference);
         setNotice(verified.ok ? (verified.activated ? `${verified.planLabel ?? "Your AI plan"} is active — ${verified.dailyLimit} credits a day, ${verified.weeklyLimit} a week.` : verified.status === "success" ? "Payment received — your plan will activate as soon as Paystack confirms it." : "Your payment wasn't completed. Nothing was charged.") : verified.error);
         if (verified.ok && verified.activated && verified.plan) {
-          setCelebrate({ plan: verified.plan, planLabel: verified.planLabel ?? "your AI plan", dailyCredits: verified.dailyLimit ?? 0, weeklyCredits: verified.weeklyLimit ?? 0 });
+          setCelebrate(aiCelebration(verified.plan, verified.planLabel ?? "your AI plan", verified.dailyLimit ?? 0, verified.weeklyLimit ?? 0));
         }
         setCreditsKey((k) => k + 1);
       } else if (welcome) {
         // opened from the welcome push: celebrate the plan the server says is active, never one the URL names
         const credits = await getAiCredits();
         const e = credits.ok ? credits.entitlement : null;
-        if (e?.plan && e.subscription?.active) setCelebrate({ plan: e.plan, planLabel: e.planLabel ?? "your AI plan", dailyCredits: e.dailyLimit, weeklyCredits: e.weeklyLimit });
+        if (e?.plan && e.subscription?.active) setCelebrate(aiCelebration(e.plan, e.planLabel ?? "your AI plan", e.dailyLimit, e.weeklyLimit));
       } else if (reference) {
         const verified = await verifyCharacterReplaceTopup(reference);
         setNotice(verified.ok ? (verified.credited ? "Payment received — your balance has been updated." : verified.pending ? "Your payment is still being confirmed. This will update shortly." : null) : null);
@@ -312,6 +318,22 @@ export function FrenzAIUsagePage({
 
             {/* ── 0167: the AI plan and its allowance — or the door to one ─────── */}
             <AiCreditsCard className="mt-4" refreshKey={creditsKey} returnTo="/studio/ai/usage" />
+
+            {/* 2026-10-07 (owner brief §7, §11): rewards and referrals — AI Credits vs Withdrawable live on /rewards */}
+            <Link
+              href="/rewards"
+              prefetch={false}
+              className="mt-4 flex items-center gap-3 rounded-2xl bg-card/95 px-4 py-3.5 ring-1 ring-inset ring-black/[0.05] transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:ring-white/10"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-500 text-white">
+                <Sparkles className="h-4 w-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">Rewards &amp; referrals</span>
+                <span className="block text-[12.5px] text-muted-foreground">Earn credits by creating, sharing and inviting friends.</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            </Link>
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (

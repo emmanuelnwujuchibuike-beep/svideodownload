@@ -38,6 +38,8 @@ alter table public.reward_profiles add column if not exists earned_withdrawable 
 
 create index if not exists reward_events_event_created_idx on public.reward_events (event_type, created_at desc);
 create index if not exists withdrawal_requests_status_created_idx on public.withdrawal_requests (status, created_at);
+-- the AI Reels tab (/api/reels?content=ai) and the admin count read only the AI posts - a small partial index
+create index if not exists posts_ai_video_created_idx on public.posts (created_at desc) where content_type = 'ai_video';
 
 -- ── the engine: reads the small rules row, keeps the running totals ──
 create or replace function public.grant_reward(
@@ -200,6 +202,8 @@ language sql security definer set search_path = public stable as $$
     'qualifyingEngagements', coalesce((select sum(qualifying_engagements) from public.reward_profiles), 0),
     'aiGenerationRewards', (select count(*) from public.reward_events where event_type = 'ai_video_completed' and role = 'actor' and created_at >= p_since),
     'aiShareRewards', (select count(*) from public.reward_events where event_type = 'ai_video_shared' and role = 'actor' and created_at >= p_since),
+    'aiReels', (select count(*) from public.posts where content_type = 'ai_video' and status = 'published'),
+    'aiVideoGenerations', (select count(*) from public.ai_jobs where feature in ('ai_text_to_video', 'ai_image_to_video', 'ai_lip_sync') and status = 'completed' and created_at >= p_since),
     'usableIssued', coalesce((select sum(amount) from public.reward_events where credit_class = 'usable' and created_at >= p_since), 0),
     'withdrawableIssued', coalesce((select sum(amount) from public.reward_events where credit_class = 'withdrawable' and created_at >= p_since), 0),
     'qualifiedMembers', (select count(*) from public.reward_profiles where qualified_at is not null),

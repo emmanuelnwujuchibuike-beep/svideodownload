@@ -9,7 +9,7 @@ vi.mock("server-only", () => ({}));
 import { isBachsProductId, normalizeAiPlansConfig } from "@/lib/ai/credits/config";
 import { normalizeAiWalletConfig, normalizePaymentRouting } from "@/lib/ai/credits/wallet-config";
 import { bachsBaseUrl, bachsStatusIsPaid, bachsSubscriptionStatus, decimalToMinor, usdCentsToDecimal, verifyBachsSignature } from "@/lib/payments/bachs";
-import { paymentMarket, routePayment } from "@/lib/payments/router";
+import { offeredProviders, paymentMarket, routePayment } from "@/lib/payments/router";
 
 /**
  * Bachs (bachs.io) beside Paystack — owner 2026-10-07. The pieces that
@@ -120,5 +120,25 @@ describe("🔴 the source order that keeps a payment single and verified", () =>
   it("secrets never reach a browser bundle", () => {
     for (const f of ["lib/payments/bachs.ts", "lib/ai/wallet/bachs-topup.ts", "lib/ai/credits/bachs-plans.ts"]) expect(code(f)).toContain('import "server-only";');
     expect(code("lib/payments/bachs.ts")).not.toContain("NEXT_PUBLIC_BACHS");
+  });
+});
+
+describe("the member's pick (2026-10-07) only reorders what the route allows", () => {
+  const routing = normalizeAiWalletConfig(null).routing;
+  const both = () => true;
+  it("a pick inside the route goes first; the rest stay as fallback", () => {
+    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing, usable: both, preferred: "paystack" })).toEqual(["paystack", "bachs"]);
+    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing, usable: both })).toEqual(["bachs", "paystack"]);
+  });
+  it("teeth: a pick the route does not offer, or that is not set up, is ignored — never added", () => {
+    expect(routePayment({ purpose: "wallet_topup", market: "other", routing, usable: both, preferred: "bachs" })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing, usable: (p) => p === "paystack", preferred: "bachs" })).toEqual(["paystack"]);
+    expect(routePayment({ purpose: "wallet_topup", market: "NG", routing, usable: both, preferred: "stripe" })).toEqual(["bachs", "paystack"]);
+  });
+  it("the sheet is offered a choice only when the admin allows it", () => {
+    expect(offeredProviders({ purpose: "ai_subscription", market: "NG", routing, usable: both, memberChoice: true })).toEqual(["bachs", "paystack"]);
+    expect(offeredProviders({ purpose: "ai_subscription", market: "NG", routing, usable: both, memberChoice: false })).toEqual(["bachs"]);
+    expect(normalizeAiWalletConfig({ memberChoice: false }).memberChoice).toBe(false);
+    expect(normalizeAiWalletConfig({}).memberChoice).toBe(true);
   });
 });

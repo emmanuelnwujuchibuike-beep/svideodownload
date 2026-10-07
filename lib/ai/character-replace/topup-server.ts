@@ -43,6 +43,8 @@ export async function beginCharacterReplaceTopup(opts: {
   returnTo: unknown;
   /** The member's market, from the edge (lib/payments/router.ts `paymentMarket`) — never from the body. Absent = "other". */
   market?: PaymentMarket;
+  /** The member's pick of provider (2026-10-07) — honoured only when the admin allows a choice, and only among what the route offers. */
+  provider?: unknown;
 }): Promise<TopupStart> {
   const settings = await getLandingSettings();
   const plans = settings.frenzAiPlans;
@@ -60,7 +62,7 @@ export async function beginCharacterReplaceTopup(opts: {
     nothing else is opened.
   */
   const paystackOk = await paystackEnabled();
-  const candidates = routePayment({ purpose: "wallet_topup", market: opts.market ?? "other", routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() : paystackOk) });
+  const candidates = routePayment({ purpose: "wallet_topup", market: opts.market ?? "other", routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() : paystackOk), preferred: plans.wallet.memberChoice ? opts.provider : undefined });
   if (!candidates.length) return { ok: false, status: 503, error: "Payments aren't available right now." };
   let last: TopupStart = { ok: false, status: 503, error: "Payments aren't available right now." };
   for (const [i, provider] of candidates.entries()) {

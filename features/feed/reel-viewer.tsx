@@ -2676,6 +2676,14 @@ function ReelCard({
             </button>
           ) : null}
         </div>
+        {item.contentType === "ai_video" ? (
+          /* 2026-10-07 (owner brief §3): an AI Reel says so — subtle, typographic, never a cartoon badge */
+          <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/[0.14] px-2 py-0.5 text-[11px] font-semibold tracking-[0.02em] text-white/90 ring-1 ring-inset ring-white/20">
+            <span aria-hidden className="text-[10px] text-indigo-200">✦</span>
+            AI Generated
+            <span className="sr-only"> with Frenz AI</span>
+          </p>
+        ) : null}
         {title ? (
           <p className={cn("mt-1.5 max-w-md text-sm text-white/90", !infoOpen && "line-clamp-2")}>
             <RichText text={title} linkClassName="font-semibold text-white hover:underline" />
@@ -3097,6 +3105,8 @@ function ReelCard({
             onClose={() => setShareOpen(false)}
             onRepost={item.isOwner ? undefined : () => openComposer("create", null)}
             onQrCode={() => setQrOpen(true)}
+            isOwner={!!item.isOwner}
+            kind={item.contentType === "ai_video" ? "ai_video" : "reel"}
           />
           <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${item.id}`} open={qrOpen} onClose={() => setQrOpen(false)} />
         </>

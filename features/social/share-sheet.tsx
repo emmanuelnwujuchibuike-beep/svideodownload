@@ -8,6 +8,7 @@ import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { loadGroups, loadPeople, PeoplePickerGrid, type Group, type Person } from "@/features/social/people-picker";
 import { toast } from "@/features/ui/toast";
 import { haptic, hapticPattern } from "@/lib/motion/haptics";
+import { attributionLink, shareTitle, type ShareKind } from "@/lib/referrals/share-client";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,9 +27,15 @@ export function ShareSheet({
   onClose,
   onRepost,
   onQrCode,
+  isOwner = false,
+  kind = "post",
 }: {
   postId: string;
   title?: string;
+  /** The viewer published this — their links carry their referral attribution (lib/referrals/share-client.ts). */
+  isOwner?: boolean;
+  /** What is shared — names the sheet ("Share Reel", "Share AI Reel"…) and the attribution link's type. */
+  kind?: Extract<ShareKind, "post" | "reel" | "ai_video">;
   open: boolean;
   onClose: () => void;
   /** When provided, a Repost row appears (opens the existing repost flow). */
@@ -81,7 +88,23 @@ export function ShareSheet({
   };
 
   const totalSelected = selected.size + selectedGroups.size;
-  const postUrl = () => `${window.location.origin}/p/${postId}`;
+  /*
+    2026-10-07 (brief §12): the member's OWN post is shared with their
+    attribution link (/r/<token>), asked once when the sheet opens; anything
+    else — or until that answers — is the plain public URL, exactly as before.
+  */
+  const [ownLink, setOwnLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !isOwner) return;
+    let live = true;
+    void attributionLink(kind, postId).then((u) => {
+      if (live && u) setOwnLink(u);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, isOwner, kind, postId]);
+  const postUrl = () => ownLink ?? `${window.location.origin}/p/${postId}`;
 
   // Bumps posts.shares_count via the existing whitelisted counter RPC — every
   // OTHER "Share" entry point in the app already did this via its own bare
@@ -180,7 +203,7 @@ export function ShareSheet({
       open={open}
       onClose={onClose}
       onOpen={loadDestinations}
-      title="Share"
+      title={shareTitle(kind)}
       defaultHeightVh={62}
       overlay={
         sentCount !== null ? (

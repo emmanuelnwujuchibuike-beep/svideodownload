@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { formatCredits } from "@/lib/ai/credits/units";
 import { formatCents } from "@/lib/ai/economy";
+import { PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import { beginAiWalletTopup, type AiWalletBalance } from "@/lib/ai/wallet/client";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,11 @@ export function AiWalletRechargeSheet({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
+  // 2026-10-07: Paystack or Bachs, when the admin lets members choose and both are live here
+  const options = usePaymentOptions(open);
+  const providers = options?.walletTopup ?? [];
+  const [provider, setProvider] = useState<PaymentProvider | null>(null);
+  const chosen = provider && providers.includes(provider) ? provider : (providers[0] ?? null);
   const offer = balance.offer;
   const packs = offer.packs;
 
@@ -103,7 +109,7 @@ export function AiWalletRechargeSheet({
     haptic("selection");
     setBusy(true);
     setError(null);
-    const res = await beginAiWalletTopup(pack ? { packId: pack.id } : { credits: customCredits ?? 0 }, returnTo);
+    const res = await beginAiWalletTopup(pack ? { packId: pack.id } : { credits: customCredits ?? 0 }, returnTo, providers.length > 1 ? chosen : null);
     if (!res.ok) {
       setError(res.error);
       setBusy(false);
@@ -111,7 +117,7 @@ export function AiWalletRechargeSheet({
     }
     // A full navigation to the hosted payment page — never a popup.
     window.location.assign(res.url);
-  }, [ready, pack, customCredits, returnTo]);
+  }, [ready, pack, customCredits, returnTo, providers.length, chosen]);
 
   return (
     <GlassSheetShell open={open} onClose={onClose} title="Top up credits" fitContent defaultHeightVh={78}>
@@ -195,6 +201,8 @@ export function AiWalletRechargeSheet({
             Priced in {balance.currency}; the secure page shows what you pay in {balance.checkout.currency}.
           </p>
         ) : null}
+
+        <PaymentProviderPicker providers={providers} value={chosen} onChange={setProvider} disabled={busy} className="mt-4" />
 
         <button
           type="button"

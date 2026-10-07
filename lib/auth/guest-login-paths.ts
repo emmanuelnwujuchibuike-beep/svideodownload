@@ -24,6 +24,7 @@ export const GUEST_LOGIN_PREFIXES = [
   "/friends",
   "/home",
   "/notifications",
+  "/rewards",
   "/saved",
   "/welcome",
 ] as const;

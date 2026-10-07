@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  * activated here — the webhook and the verify-on-return route do that
  * after Paystack confirms the charge.
  */
-const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional() }).strict();
+const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]), returnTo: z.string().max(200).optional(), provider: z.enum(["paystack", "bachs"]).optional() }).strict();
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     not CREATE a checkout — nothing was shown, so nothing can have been paid.
   */
   const paystackOk = (await paystackEnabled()) && !!plan.paystackPlanCode;
-  const candidates = routePayment({ purpose: "ai_subscription", market: paymentMarket(request.headers), routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() && !!plan.bachsProductId : paystackOk) });
+  const candidates = routePayment({ purpose: "ai_subscription", market: paymentMarket(request.headers), routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() && !!plan.bachsProductId : paystackOk), preferred: plans.wallet.memberChoice ? parsed.data.provider : undefined });
   if (!candidates.length) return NextResponse.json({ error: "That plan isn't available for purchase yet." }, { status: 503 });
   if (candidates[0] === "bachs") {
     const started = await beginBachsPlanCheckout({ userId: user.id, email: user.email, plan: parsed.data.plan, config: plans, successUrl: `${base}${returnTo}`, cancelUrl: `${base}${returnTo}` });

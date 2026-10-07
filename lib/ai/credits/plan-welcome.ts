@@ -42,6 +42,46 @@ export async function claimPlanWelcome(userId: string, plan: AiPlanId): Promise<
   return (data?.length ?? 0) > 0;
 }
 
+/**
+ * The Frenzsave plans (Pro / Business — the `subscriptions` row) get the same
+ * welcome (owner 2026-10-07: "on all plans and not just AI plans"), claimed the
+ * same way on THAT row and opening the account page's celebration.
+ */
+export async function welcomeSitePlan(userId: string, plan: "pro" | "business"): Promise<void> {
+  try {
+    const { data, error } = await createAdminClient()
+      .from("subscriptions")
+      .update({ welcomed_plan: plan, welcomed_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("plan", plan)
+      .in("status", ["active", "trialing"])
+      .or(`welcomed_plan.is.null,welcomed_plan.neq.${plan}`)
+      .select("user_id");
+    if (error) {
+      console.error("[plans] site welcome claim failed", { userId, plan, message: error.message });
+      return;
+    }
+    if (!data?.length) return;
+    const label = plan === "business" ? "Frenzsave Business" : "Frenzsave Pro";
+    await sendSmartPush(
+      userId,
+      {
+        title: `🎉 Welcome to ${label}`,
+        body: "Your plan is active — no ads on downloads, bigger batches and more storage. Tap to see everything that's included.",
+        url: `${SITE_URL}/account?${PLAN_WELCOME_PARAM}=1`,
+        genericBody: "Your Frenzsave plan is active.",
+        tag: `site-plan-welcome-${plan}`,
+      },
+      "high",
+      "premium",
+      { type: "subscription_activated" },
+    );
+    console.info("[plans] site plan welcomed", { userId, plan });
+  } catch (e) {
+    console.error("[plans] site welcome failed", { userId, plan, error: String(e).slice(0, 200) });
+  }
+}
+
 export async function welcomeAiPlan(userId: string, plan: AiPlanId, config: AiPlansConfig): Promise<void> {
   try {
     if (!(await claimPlanWelcome(userId, plan))) return;

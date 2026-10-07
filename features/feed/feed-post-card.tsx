@@ -1026,6 +1026,8 @@ function FeedPostCardImpl({
             setQrReady(true);
             setQrOpen(true);
           }}
+          isOwner={!!item.isOwner}
+          kind={item.contentType === "ai_video" ? "ai_video" : "post"}
         />
       ) : null}
       {qrReady ? <ShareQrSheet postId={item.id} url={`${typeof window !== "undefined" ? window.location.origin : ""}${postHref(item)}`} open={qrOpen} onClose={() => setQrOpen(false)} /> : null}

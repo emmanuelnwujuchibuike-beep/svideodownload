@@ -62,7 +62,7 @@ import { GLYPH_SHADOW, layer, reelMotion } from "./design";
  * breaks the moment a translation changes them.
  */
 
-export type ReelTabId = "for_you" | "following" | "friends" | "communities" | "nearby";
+export type ReelTabId = "for_you" | "following" | "ai" | "friends" | "communities" | "nearby";
 
 /**
  * Every tab the viewer will ever have, in display order.
@@ -74,6 +74,8 @@ export type ReelTabId = "for_you" | "following" | "friends" | "communities" | "n
 export const REEL_TABS: { id: ReelTabId; label: string }[] = [
   { id: "for_you", label: "For You" },
   { id: "following", label: "Following" },
+  // 2026-10-07 (owner): AI Reels — Frenz AI videos only (/api/reels?content=ai), a tab of the same deck, not a second product
+  { id: "ai", label: "AI Reels" },
   { id: "friends", label: "Friends" },
   { id: "communities", label: "Communities" },
   { id: "nearby", label: "Nearby" },

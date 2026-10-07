@@ -1,3 +1,6 @@
+import { after } from "next/server";
+
+import { welcomeSitePlan } from "@/lib/ai/credits/plan-welcome";
 import { trackEvent } from "@/lib/analytics/events";
 import { emit } from "@/lib/platform/event-bus";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -126,5 +129,11 @@ export async function syncPaystackEvent(
   // Domain event (in-process, fire-and-forget) for an activation.
   if (status !== "canceled" && effectivePlan !== "free") {
     emit("subscription.activated", { userId, plan: effectivePlan });
+    // the celebration push, once per plan (owner 2026-10-07: the welcome on ALL plans) — lib/ai/credits/plan-welcome.ts
+    if (status === "active" && (effectivePlan === "pro" || effectivePlan === "business")) {
+      const welcomed = effectivePlan;
+      const uid = userId;
+      after(() => welcomeSitePlan(uid, welcomed));
+    }
   }
 }

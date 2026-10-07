@@ -933,7 +933,7 @@ async function FrenzAISection() {
   // ledger read, the dead circuit-breaker rows and the Character Replace audit
   // trail (three loaders) are replaced by ONE bounded ai_jobs read.
   const [creditRows, planStats, providerOverview, lipSyncStats, textToAudioStats, voiceCloneStats, showcase, promo, aiMoney, planSurvey] = await Promise.all([listAiCreditMonitor(150).catch(() => []), getAiPlansAdminStats(landing.frenzAiPlans, landing.frenzAiCurrency).catch(() => null), loadAiProviderOverview(landing.frenzAiProviders.adminJobsAreTests), getLipSyncAdminStats(landing.frenzAiCurrency).catch(() => null), getTextToAudioAdminStats(landing.frenzAiCurrency).catch(() => null), getVoiceCloneAdminStats(landing.frenzAiCurrency).catch(() => null), readStoredShowcase(), readStoredPromo(), loadAiMoney(landing.frenzAiPlans.credits.centsPerCredit), loadPlanSurveySummary().catch(() => null)]);
-  const moneyLabels: Record<string, string> = { text_to_video: "Text to Video", image_to_video: "Image to Video", lip_sync: "Lip Sync", text_to_audio: "Text to Audio", voice_clone: "Voice Cloning", character_replace: "Character Replace", ai_pro: landing.frenzAiPlans.plans.ai_pro.label, ai_max: landing.frenzAiPlans.plans.ai_max.label, ...aiOpsLabels };
+  const moneyLabels: Record<string, string> = { text_to_video: "Text to Video", image_to_video: "Image to Video", lip_sync: "Lip Sync", text_to_audio: "Text to Audio", voice_clone: "Voice Cloning", character_replace: "Character Replace", ai_pro: landing.frenzAiPlans.plans.ai_pro.label, ai_max: landing.frenzAiPlans.plans.ai_max.label, pro: "Frenzsave Pro", business: "Frenzsave Business", ...aiOpsLabels };
 
   /*
     Owner, 2026-09-14: "put all the Frenz AI sections below the Frenz AI tab in

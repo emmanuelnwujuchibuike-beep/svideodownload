@@ -3,6 +3,7 @@
 import { Download, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
+import { AiResultShare } from "@/features/ai/video/ai-result-share";
 import type { FinishedJob } from "@/features/ai/video/use-video-generation";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +91,8 @@ export function AiVideoResult({
           All your videos
         </Link>
       </div>
+      {/* 2026-10-07 (owner brief §5–§6): the reward it earned and "Share to AI Reels" — the server's answer, once */}
+      {src ? <AiResultShare jobId={job.id} /> : null}
     </section>
   );
 }

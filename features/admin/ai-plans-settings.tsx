@@ -73,6 +73,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [provider] = useState(cfg.wallet.provider);
   // 2026-10-07: which rail takes a payment, per market and purpose (lib/payments/router.ts)
   const [routing, setRouting] = useState<PaymentRouting>(cfg.wallet.routing);
+  const [memberChoice, setMemberChoice] = useState<boolean>(cfg.wallet.memberChoice);
   // 0185: one row of rules per paid tool (lib/ai/credits/features.ts); the credit multiplier is credits.featureMultiplier
   const [features, setFeatures] = useState<Record<AiCreditFeatureId, FeatureRow>>(
     Object.fromEntries(
@@ -159,6 +160,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         custom: { enabled: customEnabled, minCredits: int(customMin, cfg.wallet.custom.minCredits), maxCredits: int(customMax, cfg.wallet.custom.maxCredits) },
         provider,
         routing,
+        memberChoice,
       },
       features: Object.fromEntries(
         AI_CREDIT_FEATURES.map((id) => {
@@ -167,7 +169,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         }),
       ) as AiFeaturePolicies,
     }),
-    [centsPerCredit, cfg, customEnabled, features, routing, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
+    [centsPerCredit, cfg, customEnabled, features, routing, memberChoice, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
   );
 
   /* the same bounds the server enforces, refused before the request leaves */
@@ -471,6 +473,14 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
             <Field id="custom-max" label="Custom maximum (credits)"><input id="custom-max" inputMode="numeric" value={customMax} onChange={(e) => setCustomMax(e.target.value)} className={small} /></Field>
           </div>
           <div className="mt-4">
+            <div className="mb-3">
+              <Toggle
+                label="Let members choose Paystack or Bachs"
+                hint="On: when a route below has BOTH a primary and a fallback that are set up, the top-up and plan sheets show 'Pay with Paystack / Pay with Bachs' (the primary pre-selected). Off: the route picks silently. Bachs needs BACHS_SECRET_KEY and BACHS_WEBHOOK_SECRET on the server, and for a plan its prod_… id above. To offer Bachs outside Nigeria, set it as the fallback for Other countries."
+                checked={memberChoice}
+                onChange={setMemberChoice}
+              />
+            </div>
             <p className="text-xs font-semibold text-muted-foreground">Payment routing — which provider takes a payment</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
               The market is the member&apos;s country as the network edge reports it (never what the browser says). The fallback is used only when the primary is not configured or its checkout could

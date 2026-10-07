@@ -5,8 +5,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS } from "@/lib/ai/credits/features";
-import { PLAN_SURVEY_COMMENT_MAX, PLAN_SURVEY_FEATURES, PLAN_SURVEY_GOALS } from "@/lib/ai/credits/plan-survey";
+import { PLAN_SURVEY_COMMENT_MAX, PLAN_SURVEY_GOALS, surveyFeaturesFor, type PlanFamily, type SurveyPlanId } from "@/lib/ai/credits/plan-survey";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +17,11 @@ import { cn } from "@/lib/utils";
  * Owner, 2026-10-07: "when they subscribe for pro, they should receive a
  * subscription celebration and an optional survey around the plans features."
  *
- * Shown on the credits page when a plan checkout returns activated, or when
- * the welcome push (lib/ai/credits/plan-welcome.ts) is opened
- * (`?plan_welcome=1`). The survey is optional in every part — Skip closes the
+ * Every plan (owner, same day: "on all plans and not just AI plans"): the AI
+ * plans on the credits page, the Frenzsave plans on the account page — when a
+ * plan checkout returns activated, or when the welcome push
+ * (lib/ai/credits/plan-welcome.ts) is opened (`?plan_welcome=1`). Each plan
+ * shows its own benefits and asks about its own features. The survey is optional in every part — Skip closes the
  * sheet — and asked once per plan per browser; the server keeps the first
  * answer per plan whatever the browser does.
  *
@@ -29,10 +30,13 @@ import { cn } from "@/lib/utils";
  * (next/dynamic in the credits page). Portalled to <body> (the fixed-overlay law).
  */
 export interface PlanCelebrationProps {
-  plan: "ai_pro" | "ai_max";
+  plan: SurveyPlanId;
+  family: PlanFamily;
   planLabel: string;
-  dailyCredits: number;
-  weeklyCredits: number;
+  /** One line under the title — the plan's headline fact. */
+  subtitle: string;
+  /** What the plan includes, from the plan's own list (never written here). */
+  benefits: readonly string[];
   onClose: () => void;
 }
 
@@ -54,7 +58,7 @@ function markSurveyDone(plan: string) {
   }
 }
 
-export function PlanCelebration({ plan, planLabel, dailyCredits, weeklyCredits, onClose }: PlanCelebrationProps) {
+export function PlanCelebration({ plan, family, planLabel, subtitle, benefits, onClose }: PlanCelebrationProps) {
   const [mounted, setMounted] = useState(false);
   const [askSurvey, setAskSurvey] = useState(false);
   const [features, setFeatures] = useState<string[]>([]);
@@ -87,7 +91,7 @@ export function PlanCelebration({ plan, planLabel, dailyCredits, weeklyCredits, 
       const res = await fetch("/api/ai/subscriptions/survey", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ features, goal, comment }),
+        body: JSON.stringify({ family, features, goal, comment }),
       });
       if (!res.ok) throw new Error(String(res.status));
       markSurveyDone(plan);
@@ -122,16 +126,14 @@ export function PlanCelebration({ plan, planLabel, dailyCredits, weeklyCredits, 
           <h2 id="plan-celebration-title" className="mt-1 text-[22px] font-bold leading-tight">
             Welcome to {planLabel}
           </h2>
-          <p className="mt-1.5 text-[14px] text-muted-foreground">
-            Your plan is active — {dailyCredits} credits a day, {weeklyCredits} a week.
-          </p>
+          <p className="mt-1.5 text-[14px] text-muted-foreground">{subtitle}</p>
         </div>
 
         <ul className="mt-4 space-y-2 rounded-2xl bg-muted/50 p-3.5 text-[13.5px]">
-          {AI_CREDIT_FEATURES.map((id) => (
-            <li key={id} className="flex items-center gap-2">
-              <Check className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-              {AI_FEATURE_LABELS[id]}
+          {benefits.map((line) => (
+            <li key={line} className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              {line}
             </li>
           ))}
         </ul>
@@ -143,7 +145,7 @@ export function PlanCelebration({ plan, planLabel, dailyCredits, weeklyCredits, 
             </h3>
             <p className="mt-0.5 text-[13px] text-muted-foreground">Which features did you subscribe for?</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {PLAN_SURVEY_FEATURES.map((f) => {
+              {surveyFeaturesFor(family).map((f) => {
                 const on = features.includes(f.id);
                 return (
                   <button

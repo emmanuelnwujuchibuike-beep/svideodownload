@@ -4,6 +4,7 @@ import { Download, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { startAiResultDownload } from "@/features/ai/ai-result-download";
+import { AiResultShare } from "@/features/ai/video/ai-result-share";
 import { GlassSheetShell } from "@/features/ui/glass-sheet-shell";
 import { getAiJobResult } from "@/lib/ai/client";
 import { hoursUntilExpiry, historyResultSentence, historyTitleFor } from "@/lib/ai/history";
@@ -138,6 +139,8 @@ export function FrenzAIHistoryPlayer({
           <Download className="h-4 w-4" aria-hidden />
           {downloading ? "Preparing…" : "Download video"}
         </button>
+        {/* 2026-10-07 (owner brief §4): your own AI video — Share to AI Reels, or share the reel it already is */}
+        {["ai_text_to_video", "ai_image_to_video", "ai_lip_sync"].includes(job.feature) ? <AiResultShare jobId={job.id} /> : null}
       </div>
     </GlassSheetShell>
   );

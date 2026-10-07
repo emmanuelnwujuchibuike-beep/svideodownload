@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useState } from "react";
 
 import { aiButtonClass } from "@/features/ai/design/ai-button";
+import { PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
 import { beginAiPlanCheckout } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
@@ -56,13 +57,23 @@ export function AiPlansSheet({
 }) {
   const [busy, setBusy] = useState<"ai_pro" | "ai_max" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 2026-10-07: Paystack or Bachs per plan, when the admin lets members choose and both can sell it here
+  const options = usePaymentOptions(open);
+  const [provider, setProvider] = useState<PaymentProvider | null>(null);
+  const providersFor = (plan: "ai_pro" | "ai_max") => options?.plans[plan] ?? [];
+  const chosenFor = (plan: "ai_pro" | "ai_max") => {
+    const list = providersFor(plan);
+    return provider && list.includes(provider) ? provider : (list[0] ?? null);
+  };
 
   const subscribe = useCallback(
     async (plan: "ai_pro" | "ai_max") => {
       setBusy(plan);
       setError(null);
       haptic("medium");
-      const res = await beginAiPlanCheckout(plan, returnTo);
+      const list = options?.plans[plan] ?? [];
+      const pick = provider && list.includes(provider) ? provider : (list[0] ?? null);
+      const res = await beginAiPlanCheckout(plan, returnTo, list.length > 1 ? pick : null);
       if (!res.ok) {
         setBusy(null);
         setError(res.error);
@@ -70,7 +81,7 @@ export function AiPlansSheet({
       }
       window.location.assign(res.url);
     },
-    [returnTo],
+    [returnTo, options, provider],
   );
 
   const offered = plans?.plans ?? [];
@@ -152,6 +163,9 @@ export function AiPlansSheet({
                       </li>
                     ))}
                   </ul>
+                  {!isCurrent && !lower && p.purchasable ? (
+                    <PaymentProviderPicker providers={providersFor(p.id)} value={chosenFor(p.id)} onChange={setProvider} disabled={busy !== null} light={top} className="mt-4" />
+                  ) : null}
                   <button
                     type="button"
                     disabled={isCurrent || lower || !p.purchasable || busy !== null}
@@ -174,7 +188,7 @@ export function AiPlansSheet({
             {error}
           </p>
         ) : null}
-        <p className="mt-3 text-center text-[11.5px] leading-relaxed text-muted-foreground">You pay on a secure Paystack page and come straight back. Credits don&apos;t carry over between days or weeks. Cancel any time from Credit Balance.</p>
+        <p className="mt-3 text-center text-[11.5px] leading-relaxed text-muted-foreground">You pay on a secure checkout page and come straight back. Credits don&apos;t carry over between days or weeks. Cancel any time from Credit Balance.</p>
       </div>
     </GlassSheetShell>
   );

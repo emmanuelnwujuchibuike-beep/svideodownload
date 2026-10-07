@@ -57,6 +57,13 @@ export interface AiWalletConfig {
    * provider's webhook whatever this says now.
    */
   routing: PaymentRouting;
+  /**
+   * Owner, 2026-10-07: "checkout doesn't show to choose Paystack or Bachs" —
+   * on: when a market's route has BOTH providers usable, the member picks
+   * one in the sheet (the route's primary pre-selected). Off: the route
+   * decides silently. Either way the server offers only what the route allows.
+   */
+  memberChoice: boolean;
   /** @deprecated 0184's single switch — read only when a saved config predates `routing`. */
   provider: TopupProviderId;
 }
@@ -75,6 +82,7 @@ export const AI_WALLET_DEFAULTS: AiWalletConfig = {
     NG: { wallet_topup: { primary: "bachs", fallback: "paystack" }, ai_subscription: { primary: "bachs", fallback: "paystack" } },
     other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null } },
   },
+  memberChoice: true,
   provider: "paystack",
 };
 
@@ -128,6 +136,7 @@ export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
     packs: (Array.isArray(raw.packs) ? packs : d.packs.map((p) => ({ ...p }))).sort((a, b) => a.credits - b.credits),
     custom: { enabled: typeof c.enabled === "boolean" ? c.enabled : d.custom.enabled, minCredits, maxCredits: Math.max(minCredits, int(c.maxCredits, d.custom.maxCredits, WALLET_BOUNDS.credits.min, WALLET_BOUNDS.credits.max)) },
     routing: normalizePaymentRouting(raw.routing),
+    memberChoice: typeof raw.memberChoice === "boolean" ? raw.memberChoice : d.memberChoice,
     provider: raw.provider === "bachs" ? "bachs" : "paystack",
   };
 }

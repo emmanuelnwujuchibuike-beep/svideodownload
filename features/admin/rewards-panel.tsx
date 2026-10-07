@@ -174,6 +174,8 @@ function RewardsActivity() {
     ["Qualifying engagements", t.qualifyingEngagements.toLocaleString("en-US")],
     ["AI generation rewards", t.aiGenerationRewards.toLocaleString("en-US")],
     ["AI share rewards", t.aiShareRewards.toLocaleString("en-US")],
+    ["AI Reels published", t.aiReels === null ? "—" : t.aiReels.toLocaleString("en-US")],
+    ["AI videos generated", t.aiVideoGenerations === null ? "—" : t.aiVideoGenerations.toLocaleString("en-US")],
     ["Usable issued", formatCredits(t.usableIssued, { short: true })],
     ["Withdrawable issued", formatCredits(t.withdrawableIssued, { short: true })],
     ["Qualified members", t.qualifiedMembers.toLocaleString("en-US")],

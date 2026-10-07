@@ -73,8 +73,8 @@ export function getAiCredits(opts?: { ledger?: number }): Promise<Result<AiCredi
 }
 
 /** Begin an AI plan checkout: the server answers Paystack's hosted page; the browser navigates there. */
-export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string): Promise<Result<{ url: string }>> {
-  return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo }) });
+export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "paystack" | "bachs" | null): Promise<Result<{ url: string }>> {
+  return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo, ...(provider ? { provider } : {}) }) });
 }
 
 /** Back from Paystack: the server reads the charge by its reference and activates the plan only if it is genuine. */

@@ -36,8 +36,27 @@ export function paymentMarket(headers: Headers): PaymentMarket {
   return c === "NG" ? "NG" : "other";
 }
 
-export function routePayment(input: { purpose: PaymentPurpose; market: PaymentMarket; routing: PaymentRouting; usable: (p: TopupProviderId) => boolean }): TopupProviderId[] {
+export function routePayment(input: {
+  purpose: PaymentPurpose;
+  market: PaymentMarket;
+  routing: PaymentRouting;
+  usable: (p: TopupProviderId) => boolean;
+  /**
+   * The member's pick from the sheet (2026-10-07, when the admin lets members
+   * choose). Only REORDERS what the route already allows — a provider the
+   * route does not offer, or one that is not usable, is ignored, never added.
+   */
+  preferred?: unknown;
+}): TopupProviderId[] {
   const route = input.routing[input.market][input.purpose];
   const order = [route.primary, ...(route.fallback ? [route.fallback] : [])];
-  return order.filter((p, i) => order.indexOf(p) === i && input.usable(p));
+  const allowed = order.filter((p, i) => order.indexOf(p) === i && input.usable(p));
+  const pick = allowed.find((p) => p === input.preferred);
+  return pick ? [pick, ...allowed.filter((p) => p !== pick)] : allowed;
+}
+
+/** The providers a sheet may offer this member for a purpose: the route's usable ones, in the route's order. A choice is shown only when there are two. */
+export function offeredProviders(input: { purpose: PaymentPurpose; market: PaymentMarket; routing: PaymentRouting; usable: (p: TopupProviderId) => boolean; memberChoice: boolean }): TopupProviderId[] {
+  const all = routePayment(input);
+  return input.memberChoice ? all : all.slice(0, 1);
 }

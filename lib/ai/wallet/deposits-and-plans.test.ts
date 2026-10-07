@@ -74,7 +74,8 @@ describe("🔴 a new AI plan is celebrated once", () => {
   });
   it("the survey route trusts the session's active plan, never the body", () => {
     const r = code("app/api/ai/subscriptions/survey/route.ts");
-    expect(r).toContain("plan: sub.plan");
+    expect(r).toContain("upsert({ user_id: user.id, plan, features:");
+    expect(r).toContain("plan = sub?.active ? sub.plan : null;");
     expect(r).toContain("ignoreDuplicates: true");
     expect(code("supabase/migrations/0190_ai_plan_welcome_survey.sql")).toContain("revoke all on public.ai_plan_survey_responses from public, anon, authenticated;");
   });
@@ -104,5 +105,28 @@ describe("the optional plan survey", () => {
     expect(s.features[0]).toMatchObject({ id: "ai_lip_sync", count: 2 });
     expect(s.goals.find((g) => g.id === "fun")?.count).toBe(1);
     expect(s.comments).toEqual([{ plan: "ai_pro", comment: "great", at: "2026-10-07T00:00:00Z" }]);
+  });
+});
+
+describe("🔴 the welcome and survey cover EVERY plan (owner 2026-10-07: not just AI plans)", () => {
+  it("a Frenzsave Pro / Business activation is welcomed once, claimed on the subscriptions row", () => {
+    const sync = code("lib/paystack/sync.ts");
+    expect(sync).toContain("after(() => welcomeSitePlan(uid, welcomed));");
+    const w = code("lib/ai/credits/plan-welcome.ts");
+    const site = w.slice(w.indexOf("export async function welcomeSitePlan"), w.indexOf("export async function welcomeAiPlan"));
+    expect(site).toContain('.from("subscriptions")');
+    expect(site).toContain(".or(`welcomed_plan.is.null,welcomed_plan.neq.${plan}`)");
+    expect(code("supabase/migrations/0190_ai_plan_welcome_survey.sql")).toContain("alter table public.subscriptions add column if not exists welcomed_plan text;");
+  });
+  it("the account page celebrates the plan the SERVER read, and the survey asks the site plan's own features", () => {
+    expect(code("app/(app)/account/page.tsx")).toContain("<SitePlanWelcome");
+    expect(code("features/account/site-plan-welcome.tsx")).toContain('if (plan === "pro" || plan === "business") setShow(true);');
+    expect(normalizePlanSurvey({ features: ["no_ads", "ai_lip_sync"] }, "site")).toEqual({ features: ["no_ads"], goal: null, comment: null });
+    expect(normalizePlanSurvey({ features: ["no_ads"] }, "ai")).toBeNull();
+  });
+  it("teeth: the site survey trusts the PAID row, not a promo-inflated plan", () => {
+    const r = code("app/api/ai/subscriptions/survey/route.ts");
+    expect(r).not.toContain("getUserPlan(");
+    expect(r).toContain('.from("subscriptions").select("plan, status")');
   });
 });

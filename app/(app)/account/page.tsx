@@ -32,9 +32,11 @@ import { redirect } from "next/navigation";
 import { DiamondCrownBadge } from "@/components/badges/diamond-crown-badge";
 import { IdentityBadges } from "@/components/badges/identity-badges";
 import { SettingsSearch } from "@/features/account/settings-search";
+import { SitePlanWelcome } from "@/features/account/site-plan-welcome";
 import { SETTINGS_TINTS } from "@/features/account/settings-ui";
 import { AppContent } from "@/features/app-shell/app-content";
 import { isAdmin } from "@/lib/admin";
+import { BUSINESS_FEATURES, PRO_FEATURES } from "@/lib/monetization/plan-features";
 import type { BillingPlan } from "@/lib/monetization/types";
 import { effectiveModules } from "@/lib/profile/engine";
 import { BAND_LABEL } from "@/lib/profile/health";
@@ -235,6 +237,11 @@ export default async function AccountPage() {
 
   return (
     <AppContent>
+      {/* 2026-10-07: the plan welcome + optional survey, for the Frenzsave plans too */}
+      <SitePlanWelcome
+        plan={plan as "free" | "pro" | "business"}
+        benefits={(plan === "business" ? BUSINESS_FEATURES : PRO_FEATURES).filter((l) => !l.startsWith("Everything in"))}
+      />
       {/* No extra safe-area padding — AppTopbar (the sticky app header) already
           reserves it; adding it again doubled the top gap on notch devices. */}
       <div className="mx-auto max-w-2xl">

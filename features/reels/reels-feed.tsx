@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Clapperboard } from "lucide-react";
+import { Clapperboard, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,7 +23,9 @@ import {
 } from "@/lib/social/reels-session";
 import { cn } from "@/lib/utils";
 
-type Tab = "for_you" | "following";
+type Tab = "for_you" | "following" | "ai";
+/** Left-to-right, as the tab row shows them — the slide direction and the swipe order both read this. */
+const TAB_ORDER: Tab[] = ["for_you", "following", "ai"];
 
 // Module-level (not component state) so it survives a fresh mount when the
 // Router Cache restores a cached in-app navigation back to /reels — the exact
@@ -168,11 +170,11 @@ export function ReelsFeed({
   // restored verbatim (items, pagination cursor, dedup set) on return.
   const cacheRef = useRef<Record<Tab, { items: FeedItem[]; offset: number | null; seen: Set<string> } | null> | null>(null);
   if (!cacheRef.current) {
-    cacheRef.current = { for_you: { items, offset, seen: seen.current }, following: null };
+    cacheRef.current = { for_you: { items, offset, seen: seen.current }, following: null, ai: null };
   }
   // Remembers the last reel index viewed per tab, so returning to a tab lands
   // on the same reel instead of jumping back to the first one ("the top").
-  const lastIndexRef = useRef<Record<Tab, number>>({ for_you: resumingFromCache ? resumeDeck!.activeIndex : 0, following: 0 });
+  const lastIndexRef = useRef<Record<Tab, number>>({ for_you: resumingFromCache ? resumeDeck!.activeIndex : 0, following: 0, ai: 0 });
   // True once For You has reported an active index at least once — after that,
   // a return visit resumes from `lastIndexRef` instead of re-seeking `startId`.
   const forYouSeeded = useRef(false);
@@ -193,7 +195,9 @@ export function ReelsFeed({
       const res = await getApi().action<{ items: FeedItem[]; nextOffset: number | null }>("/api/reels", {
         method: "GET",
         query: {
-          sort,
+          // AI Reels is For You's ranking over Frenz AI posts only — the same endpoint, one filter (0187)
+          sort: sort === "ai" ? "for_you" : sort,
+          ...(sort === "ai" ? { content: "ai" } : {}),
           offset: off,
           limit: 24,
           seed: seedRef.current,
@@ -244,7 +248,7 @@ export function ReelsFeed({
       // Snapshot exactly where we're leaving so returning here is instant and
       // resumes on the same reel.
       cacheRef.current![tab] = { items, offset, seen: seen.current };
-      setDirection(next === "following" ? 1 : -1);
+      setDirection(TAB_ORDER.indexOf(next) > TAB_ORDER.indexOf(tab) ? 1 : -1);
       setTab(next);
       const cached = cacheRef.current![next];
       if (cached) {
@@ -476,7 +480,7 @@ export function ReelsFeed({
       <ReelTabs
         active={tab}
         onChange={(id) => switchTab(id as Tab)}
-        available={["for_you", "following"]}
+        available={["for_you", "following", "ai"]}
         className="lg:left-[calc(50%-4.5rem)]"
         feedHref="/feed"
       />
@@ -495,7 +499,19 @@ export function ReelsFeed({
           instead of "Discover creators", which would only lead to the same
           dead end (following someone still needs an account).
         */
-        tab === "following" && !viewerHandle ? (
+        tab === "ai" ? (
+          /* AI Reels, nothing published yet (owner brief 2026-10-07 §13) — light, one CTA */
+          <div className="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
+            <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-500 to-violet-500 text-white">
+              <Sparkles className="h-6 w-6" aria-hidden />
+            </span>
+            <p className="font-semibold">AI Reels are just getting started.</p>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Create something with Frenz AI and be one of the first to share it.</p>
+            <Link href="/ai/text-to-video" prefetch={false} className="mt-4 rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white shadow-md brand-glow">
+              Create AI Video
+            </Link>
+          </div>
+        ) : tab === "following" && !viewerHandle ? (
           <div className="flex min-h-[80vh] flex-col items-center justify-center px-6 text-center">
             <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-3xl bg-secondary text-muted-foreground">
               <Clapperboard className="h-6 w-6" />
@@ -582,7 +598,11 @@ export function ReelsFeed({
               autoOpenCommentsId={tab === "for_you" ? autoOpenCommentsId : null}
               // Swipe left reveals the next tab (Following, to the right in the tab
               // list); swipe right goes back — same instant switch as tapping.
-              onSwipeTab={(dir) => void switchTab(dir === "left" ? "following" : "for_you")}
+              onSwipeTab={(dir) => {
+                const i = TAB_ORDER.indexOf(tab) + (dir === "left" ? 1 : -1);
+                const next = TAB_ORDER[Math.max(0, Math.min(TAB_ORDER.length - 1, i))]!;
+                if (next !== tab) void switchTab(next);
+              }}
               onActiveIndexChange={(i) => {
                 lastIndexRef.current[tab] = i;
                 if (tab === "for_you") {

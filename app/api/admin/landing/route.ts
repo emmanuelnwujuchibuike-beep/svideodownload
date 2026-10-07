@@ -253,6 +253,7 @@ const schema = z.object({
             .optional(),
           custom: z.object({ enabled: z.boolean().optional(), minCredits: z.number().int().min(1).max(1_000_000).optional(), maxCredits: z.number().int().min(1).max(1_000_000).optional() }).strict().optional(),
           provider: z.enum(["paystack", "bachs"]).optional(),
+          memberChoice: z.boolean().optional(),
           routing: z
             .record(
               z.enum(["NG", "other"]),

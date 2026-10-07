@@ -60,6 +60,8 @@ export interface FeedItem {
   streamFailed?: boolean;
   category: string | null;
   durationSec: number | null;
+  /** 2026-10-07: present only on Frenz AI posts (AI Reels) — the deck's "✦ AI Generated" mark. Absent = an ordinary post. */
+  contentType?: "ai_video" | "ai_audio";
   viewsCount: number;
   likesCount: number;
   commentsCount: number;
@@ -193,12 +195,19 @@ export interface Row {
   downloads_count: number;
   created_at: string;
   is_nsfw?: boolean;
+  /** 0187: 'standard' | 'ai_video' | 'ai_audio' — the AI Reels marker. */
+  content_type?: string | null;
   /** Feature 15 Part 8 — absent pre-migration 0133 (see `hasMomentumColumn`). */
   momentum_score?: number;
 }
 
+/** Only an AI post carries the field — an ordinary post's payload is unchanged. */
+function aiContent(v: string | null | undefined): { contentType?: "ai_video" | "ai_audio" } {
+  return v === "ai_video" || v === "ai_audio" ? { contentType: v } : {};
+}
+
 const SELECT =
-  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at, is_nsfw";
+  "id, publisher_id, source_url, platform, media_kind, title, description, category, thumbnail_url, media_url, stream_uid, duration_sec, visibility, status, views_count, likes_count, saves_count, shares_count, comments_count, downloads_count, created_at, is_nsfw, content_type";
 
 // `posts.momentum_score` arrives with migration 0133 — same straddle pattern
 // as `hasFormatColumn` above, so the whole feed doesn't 500 on an
@@ -595,6 +604,7 @@ export async function getFeedItemById(id: string, viewerId: string | null): Prom
       streamFailed: streamStat?.failed ?? false,
       category: row.category,
       durationSec: row.duration_sec,
+      ...aiContent(row.content_type),
       viewsCount: row.views_count,
       likesCount: row.likes_count,
       commentsCount: row.comments_count,
@@ -1056,6 +1066,7 @@ async function loadHomeFeed(
         streamUid: r.stream_uid ?? null,
         category: r.category,
         durationSec: r.duration_sec,
+        ...aiContent(r.content_type),
         viewsCount: r.views_count,
         likesCount: r.likes_count,
         commentsCount: r.comments_count,
@@ -1558,6 +1569,7 @@ async function surfaceFollowedReposts(
       streamUid: r.stream_uid ?? null,
       category: r.category,
       durationSec: r.duration_sec,
+      ...aiContent(r.content_type),
       viewsCount: r.views_count,
       likesCount: r.likes_count,
       commentsCount: r.comments_count,

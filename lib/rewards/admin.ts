@@ -22,6 +22,9 @@ export interface RewardsAdminView {
     qualifyingEngagements: number;
     aiGenerationRewards: number;
     aiShareRewards: number;
+    /** 2026-10-07 (brief §18): published AI Reels (all time) and completed AI videos in the window. Null on the pre-0189 path. */
+    aiReels: number | null;
+    aiVideoGenerations: number | null;
     usableIssued: number;
     withdrawableIssued: number;
     qualifiedMembers: number;
@@ -72,6 +75,8 @@ export async function loadRewardsAdmin(): Promise<RewardsAdminView> {
       qualifyingEngagements: n(t.qualifyingEngagements),
       aiGenerationRewards: n(t.aiGenerationRewards),
       aiShareRewards: n(t.aiShareRewards),
+      aiReels: t.aiReels === undefined ? null : n(t.aiReels),
+      aiVideoGenerations: t.aiVideoGenerations === undefined ? null : n(t.aiVideoGenerations),
       usableIssued: n(t.usableIssued),
       withdrawableIssued: n(t.withdrawableIssued),
       qualifiedMembers: n(t.qualifiedMembers),
@@ -131,6 +136,8 @@ async function loadRewardsAdminLegacy(): Promise<RewardsAdminView> {
       qualifyingEngagements: profiles.rows.reduce((a, p) => a + p.qualifying_engagements, 0),
       aiGenerationRewards: ev.filter((e) => e.event_type === "ai_video_completed" && e.role === "actor").length,
       aiShareRewards: ev.filter((e) => e.event_type === "ai_video_shared" && e.role === "actor").length,
+      aiReels: null,
+      aiVideoGenerations: null,
       usableIssued: ev.filter((e) => e.credit_class === "usable").reduce((a, e) => a + e.amount, 0),
       withdrawableIssued: ev.filter((e) => e.credit_class === "withdrawable").reduce((a, e) => a + e.amount, 0),
       qualifiedMembers: profiles.rows.filter((p) => !!p.qualified_at).length,

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import { AppOverlays } from "@/features/app-shell/app-overlays";
 import { PageRefresh } from "@/features/app-shell/page-refresh";
-import { EdgeSwipeBack } from "@/features/app-shell/edge-swipe-back";
 import { OfflineBanner } from "@/features/app-shell/offline-banner";
 import { StatusBarScrim } from "@/features/app-shell/status-bar-scrim";
 import { ScrollPerfMonitor } from "@/features/perf/scroll-perf-monitor";
@@ -103,7 +102,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         pure cost there.
       */}
       <StatusBarScrim />
-      <EdgeSwipeBack />
+      {/*
+        🔴 NO CUSTOM BACK-SWIPE HERE ANY MORE (owner, 2026-10-07: "profile menu,
+        settings, discovery, search, messages, chat and edit cover always reload
+        or go back twice when back-swiping — they should back-swipe like the AI
+        pages that never reload and go back once").
+
+        `EdgeSwipeBack` (features/app-shell/edge-swipe-back.tsx) was mounted only
+        in THIS layout. The AI pages the owner compared against are under
+        app/(marketing)/ai, which never mounted it — there the back-swipe is the
+        platform's own, and it is exactly right: one step back, restored from
+        the router cache, no reload. Here the same swipe was handled TWICE: the
+        platform went back, and the custom gesture called router.back() again
+        (or, when it believed nothing was behind the page, router.replace()d to
+        a guessed parent — the "reload / lands somewhere else"). Every page
+        named is in this route group; none of the AI pages are.
+
+        The platform gesture is now the only one, everywhere — the same
+        behaviour the AI pages have always had.
+      */}
       <OfflineBanner />
       <ScrollPerfMonitor />
       {/* The mobile inbox's persistent top chrome (title + profile/tools +

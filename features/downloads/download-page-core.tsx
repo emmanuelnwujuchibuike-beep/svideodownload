@@ -6,6 +6,7 @@ import Link from "next/link";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
+import type { AiPromo } from "@/lib/ai/promo/config";
 import { HilltopSlot } from "@/features/monetization/hilltop-slot";
 import { LazyAdSurface } from "@/features/monetization/lazy-ad-surface";
 import { LazyExoClickSlot } from "@/features/monetization/lazy-exoclick-slot";
@@ -90,6 +91,7 @@ export function DownloadPageCore({
    * layout rather than accidentally advertising the feature.
    */
   showFrenzAi = false,
+  aiPromo = null,
 }: {
   platformStatus?: PlatformStatusMap;
   ctaWallpaperUrl?: string | null;
@@ -109,6 +111,8 @@ export function DownloadPageCore({
    */
   installBanner?: boolean;
   showFrenzAi?: boolean;
+  /** The landing promotion played over the Frenz AI tile (Brief C). Landing only. */
+  aiPromo?: AiPromo | null;
   /**
    * Whether to render the ExoClick multi-format slot above the Cloud storage
    * card. LANDING ONLY.
@@ -183,7 +187,7 @@ export function DownloadPageCore({
         feature. It still holds, on the page where a member is signed in.
       */}
       <div className="mt-3 grid grid-cols-2 gap-3">
-        {showFrenzAi ? <FrenzAICta /> : <ExploreFeaturesBar variant="tile" />}
+        {showFrenzAi ? <FrenzAICta promo={aiPromo} /> : <ExploreFeaturesBar variant="tile" />}
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
 

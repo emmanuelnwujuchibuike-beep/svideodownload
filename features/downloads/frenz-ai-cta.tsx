@@ -1,6 +1,8 @@
 import { ArrowRight, Compass, Wand2 } from "lucide-react";
 import Link from "next/link";
 
+import { AiPromoLoader } from "@/features/downloads/ai-promo-loader";
+import { PROMO_FEATURES, promoStages, type AiPromo } from "@/lib/ai/promo/config";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,7 +33,19 @@ import { cn } from "@/lib/utils";
  * is three composited transforms — see the note on it for why that number and
  * those properties are the budget rather than a preference.
  */
-export function FrenzAICta({ className }: { className?: string }) {
+export function FrenzAICta({
+  className,
+  promo = null,
+}: {
+  className?: string;
+  /**
+   * The landing promotion (Brief C, lib/ai/promo/config.ts). When it has media,
+   * a tiny loader plays it over this tile after the page has loaded. Absent or
+   * empty, the tile is exactly what it was — plus the rotating tool name.
+   */
+  promo?: AiPromo | null;
+}) {
+  const playsMedia = !!promo && promoStages(promo).length > 1;
   return (
     <Link
       href="/ai"
@@ -231,14 +245,29 @@ export function FrenzAICta({ className }: { className?: string }) {
           <span className="block text-[1.05rem] font-bold leading-tight tracking-[-0.01em]">
             Frenz <span className="text-gradient">AI</span>
           </span>
-          <span className="mt-1 block text-xs leading-snug text-slate-500 dark:text-white/70">
-            Put yourself into your video.
+          {/*
+            🔴 THE ROTATING TOOL NAME — CSS ONLY (Brief C §2, 2026-10-06).
+            Every name sits in the SAME grid cell, so the cell is as wide as
+            the longest and nothing around it ever moves (no layout shift).
+            One keyframe, written below for exactly this many names; each name
+            is offset by 3 s. No JavaScript, no timer, no re-render. The old
+            line ("Put yourself into your video.") described Character
+            Replace, which is retired.
+          */}
+          <span className="frenz-ai-rotor mt-1 grid text-xs leading-snug text-slate-500 dark:text-white/70">
+            {PROMO_FEATURES.map((name, i) => (
+              <span key={name} className="col-start-1 row-start-1 truncate" style={{ animationDelay: `${i * 3}s` }}>
+                {name}
+              </span>
+            ))}
           </span>
+          <style>{rotorCss(PROMO_FEATURES.length)}</style>
         </span>
         <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200/80 transition group-hover:bg-slate-200 dark:bg-white/10 dark:ring-white/15">
           <ArrowRight className="h-[1.05rem] w-[1.05rem] text-slate-700 transition-transform group-hover:translate-x-0.5 dark:text-white" />
         </span>
       </span>
+      {playsMedia ? <AiPromoLoader promo={promo!} /> : null}
     </Link>
   );
 }
@@ -253,6 +282,21 @@ export function FrenzAICta({ className }: { className?: string }) {
  * `aria-hidden` is on the wrapper, not here: the whole decorative layer is
  * hidden from assistive technology in one place.
  */
+/**
+ * The rotor keyframe for `n` names, 3 s each: in over 0.3 s, held, out over
+ * 0.3 s, then hidden while the other names take their turn. Opacity and a
+ * 3 px translate only (composited). Reduced motion: the first name, still.
+ */
+function rotorCss(n: number): string {
+  const total = n * 3;
+  const pct = (s: number) => `${((s / total) * 100).toFixed(3)}%`;
+  return (
+    `@keyframes frenz-ai-rotor{0%{opacity:0;transform:translateY(3px)}${pct(0.3)}{opacity:1;transform:none}${pct(2.7)}{opacity:1;transform:none}${pct(3)},100%{opacity:0;transform:translateY(-3px)}}` +
+    `.frenz-ai-rotor>span{opacity:0;animation:frenz-ai-rotor ${total}s linear infinite both}` +
+    `@media (prefers-reduced-motion:reduce){.frenz-ai-rotor>span{animation:none}.frenz-ai-rotor>span:first-child{opacity:1}}`
+  );
+}
+
 function Spark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden focusable="false">

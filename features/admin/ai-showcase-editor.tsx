@@ -404,7 +404,7 @@ function VideoUploadButton({ busy, label, onFile }: { busy: boolean; label: stri
 }
 
 /** Downscale a large photo in the browser so it fits under the 4.5 MB function body limit. */
-async function shrinkForUpload(file: File): Promise<File> {
+export async function shrinkForUpload(file: File): Promise<File> {
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 2400 / Math.max(bitmap.width, bitmap.height));

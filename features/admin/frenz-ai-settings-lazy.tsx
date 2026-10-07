@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
+import type { AiPromo } from "@/lib/ai/promo/config";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import type { TextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
@@ -141,6 +142,13 @@ const AiShowcaseEditor = dynamic(() => import("@/features/admin/ai-showcase-edit
 
 export function AiShowcaseEditorLazy({ initial }: { initial: ShowcaseSlide[] | null }) {
   return <AiShowcaseEditor initial={initial} />;
+}
+
+// Brief C (2026-10-06): AI → Landing promotion — the Frenz AI tile on the landing page.
+const AiPromoEditor = dynamic(() => import("@/features/admin/ai-promo-editor").then((m) => m.AiPromoEditor), { loading: skeleton("Loading the landing promotion") });
+
+export function AiPromoEditorLazy({ initial }: { initial: AiPromo | null }) {
+  return <AiPromoEditor initial={initial} />;
 }
 
 export function AiCreditsMonitorLazy({ rows, stats, symbol }: { rows: AiCreditMonitorRow[]; stats: AiPlansAdminStats | null; symbol: string }) {

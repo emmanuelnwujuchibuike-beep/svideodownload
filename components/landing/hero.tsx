@@ -1,5 +1,6 @@
 import { DownloadPageCore } from "@/features/downloads/download-page-core";
 import { getMultiLinkSettings, publicMultiLinkConfig } from "@/lib/downloads/multi-link";
+import { getAiPromo } from "@/lib/ai/promo/server";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
@@ -48,7 +49,7 @@ export async function Hero() {
     the tile falls back to the admin's own static pick, exactly like before
     this existed.
   */
-  const [landing, platformStatus, recentWallpaperUrls, multiLink] = await Promise.all([
+  const [landing, platformStatus, recentWallpaperUrls, multiLink, aiPromo] = await Promise.all([
     getLandingSettings(),
     getPlatformStatus(),
     listWallpapers(null, 10)
@@ -57,6 +58,8 @@ export async function Hero() {
     // Joins the existing parallel fetch rather than adding a serial await —
     // it is a cached settings read, so it adds no measurable time to the hero.
     getMultiLinkSettings(),
+    // Brief C: the landing promotion, baked into this static page (cached; refreshed only by an admin save).
+    getAiPromo(),
   ]);
 
   return (
@@ -84,6 +87,16 @@ export async function Hero() {
           wordmark and a search field and no room for the group.
         */
         installBanner={false}
+        /*
+          🔴 FRENZ AI ON THE LANDING (owner, 2026-10-05: "the promo should replace
+          rule, and replace the explore button in the landing page with the
+          frenz ai promo showcase, and it should be very noticeable"). The
+          2026-09-09 "AI not publicly exposed" rule is REPLACED: guests may open
+          /ai (the welcome page); every tool behind it still asks them to sign in.
+          Explore Features moves to the full-width bar below, as on /downloads.
+        */
+        showFrenzAi
+        aiPromo={aiPromo}
       />
     </section>
   );

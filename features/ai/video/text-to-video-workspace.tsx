@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock, Palette, Play, RectangleHorizontal } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import {
@@ -97,6 +97,33 @@ export function TextToVideoWorkspace({
   /* Optional references — the model keeps a face, a product or a place consistent. Priced by the server. */
   const [referenceImageUrls, setReferenceImages] = useState<string[]>([]);
   const [referenceVideoUrl, setReferenceVideo] = useState<string | null>(null);
+  /*
+    🔴 What the reference video is FOR, and how long it is (2026-10-06).
+    "base" = edit that clip (keep its scene and motion, apply the prompt) — what
+    members were asking for; "feature" = only follow its motion and style. The
+    length is read from the clip once (metadata only): an edit comes back at
+    the clip length whatever duration is picked, and the server prices it so.
+  */
+  const [referenceVideoMode, setReferenceVideoMode] = useState<"base" | "feature">("base");
+  const [referenceVideoSeconds, setReferenceVideoSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    setReferenceVideoSeconds(null);
+    if (!referenceVideoUrl) return;
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    const done = () => {
+      if (Number.isFinite(v.duration) && v.duration > 0) setReferenceVideoSeconds(Math.round(v.duration * 100) / 100);
+      v.removeAttribute("src");
+      v.load();
+    };
+    v.onloadedmetadata = done;
+    v.src = referenceVideoUrl;
+    return () => {
+      v.onloadedmetadata = null;
+      v.removeAttribute("src");
+    };
+  }, [referenceVideoUrl]);
 
   /*
     The request the SERVER will price and run. Memoised on the settings alone so
@@ -108,10 +135,12 @@ export function TextToVideoWorkspace({
       // Omitted entirely when empty: the wire schema is strict, and an empty
       // array would re-quote as though something had been attached.
       ...(referenceImageUrls.length ? { referenceImageUrls } : {}),
-      ...(referenceVideoUrl ? { referenceVideoUrl } : {}),
+      ...(referenceVideoUrl
+        ? { referenceVideoUrl, referenceVideoMode, ...(referenceVideoSeconds ? { referenceVideoSeconds } : {}) }
+        : {}),
       options: { durationSeconds, aspectRatio, resolution, audio },
     }),
-    [prompt, style, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl],
+    [prompt, style, durationSeconds, aspectRatio, resolution, audio, referenceImageUrls, referenceVideoUrl, referenceVideoMode, referenceVideoSeconds],
   );
 
   const gen = useVideoGeneration({ feature: "text_to_video", input, ready: prompt.trim().length > 0, label: prompt.trim() });
@@ -185,6 +214,27 @@ export function TextToVideoWorkspace({
           onVideoChange={setReferenceVideo}
           disabled={locked}
         />
+
+        {referenceVideoUrl ? (
+          <AiField
+            label="Use the reference video to"
+            hint={
+              referenceVideoMode === "base"
+                ? `Your video is kept — its scene, motion and camera — and your prompt and reference images change it. The result is as long as your video${referenceVideoSeconds ? ` (${Math.round(referenceVideoSeconds)} s)` : ""}.`
+                : "Only the motion and style of your video are followed; everything else comes from your prompt."
+            }
+          >
+            <AiSegmented
+              ariaLabel="Use the reference video to"
+              value={referenceVideoMode}
+              onChange={setReferenceVideoMode}
+              options={[
+                { value: "base", label: "Edit this video" },
+                { value: "feature", label: "Copy its motion" },
+              ]}
+            />
+          </AiField>
+        ) : null}
 
         <AiAdvancedSettings>
           <AiField label="Quality" hint="Higher quality costs more and takes longer.">

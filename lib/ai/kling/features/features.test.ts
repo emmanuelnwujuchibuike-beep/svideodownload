@@ -49,8 +49,8 @@ describe("Kling settings — the verified vocabulary, not the guessed one", () =
     expect(klingTextToVideo.validate({ prompt: "a cat", options: { aspectRatio: "16:9", audio: "original" as never } }).ok).toBe(false);
   });
 
-  it("the content types are exactly the seven the vendor accepts", () => {
-    expect(KLING_OMNI.contentTypes).toEqual(["prompt", "image", "video", "element", "first_frame", "last_frame", "voice"]);
+  it("the content types are exactly the ten the vendor accepts (three found by probing 2026-10-06)", () => {
+    expect(KLING_OMNI.contentTypes).toEqual(["prompt", "image", "video", "element", "first_frame", "last_frame", "voice", "refer_image", "base_video", "feature_video"]);
     // `end_frame` was Part 3's guess and is rejected live.
     expect(KLING_OMNI.contentTypes as readonly string[]).not.toContain("end_frame");
   });

@@ -143,6 +143,13 @@ export interface KlingTierPricing {
   referenceVideoSurchargeUsdCentsPerRun: number;
   /** Charged once per attached reference image, so 5 images cost 5×. */
   referenceImageSurchargeUsdCentsPerRun: number;
+  /**
+   * How much MORE a second costs when a reference video goes in (2026-10-06).
+   * Kling bills Omni with video input at 0.9 units/s against 0.6 without — measured:
+   * 4.5 units for a 5 s edit (task 936598991629459463). 1.5 = that ratio; applied to
+   * the member price and to our cost estimate alike.
+   */
+  videoInputMultiplier: number;
 
   /* ── the shape of what may be asked for ── */
   /** A floor, so a 3-second job is not priced at almost nothing. */
@@ -156,6 +163,7 @@ export const KLING_PRICING_BOUNDS = {
   providerUnits: { min: 0, max: 1_000 },
   usdCents: { min: 0, max: 100_000 },
   seconds: { min: 1, max: 60 },
+  videoInputMultiplier: { min: 1, max: 5 },
 } as const;
 
 const tier = (over: Partial<KlingTierPricing> = {}): KlingTierPricing => ({
@@ -168,6 +176,7 @@ const tier = (over: Partial<KlingTierPricing> = {}): KlingTierPricing => ({
   audioSurchargeUsdCentsPerSecond: 0,
   referenceVideoSurchargeUsdCentsPerRun: 0,
   referenceImageSurchargeUsdCentsPerRun: 0,
+  videoInputMultiplier: 1.5,
   minBillableSeconds: 3,
   minSeconds: 3,
   maxSeconds: 15,
@@ -242,6 +251,7 @@ function normalizeTier(raw: unknown, d: KlingTierPricing): KlingTierPricing {
     audioSurchargeUsdCentsPerSecond: num(r.audioSurchargeUsdCentsPerSecond, d.audioSurchargeUsdCentsPerSecond, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
     referenceVideoSurchargeUsdCentsPerRun: num(r.referenceVideoSurchargeUsdCentsPerRun, d.referenceVideoSurchargeUsdCentsPerRun, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
     referenceImageSurchargeUsdCentsPerRun: num(r.referenceImageSurchargeUsdCentsPerRun, d.referenceImageSurchargeUsdCentsPerRun, KLING_PRICING_BOUNDS.usdCents.min, KLING_PRICING_BOUNDS.usdCents.max),
+    videoInputMultiplier: num(r.videoInputMultiplier, d.videoInputMultiplier, KLING_PRICING_BOUNDS.videoInputMultiplier.min, KLING_PRICING_BOUNDS.videoInputMultiplier.max),
     // Clamped INTO the tier's own window, so a floor can never exceed the ceiling.
     minBillableSeconds: int(r.minBillableSeconds, d.minBillableSeconds, minSeconds, maxSeconds),
     minSeconds,
@@ -357,7 +367,9 @@ export function quoteKling(c: KlingPricingConfig, req: KlingQuoteRequest): Kling
 
   // Native audio is an Omni setting; Lip Sync carries its own speech and never surcharges.
   const audioOn = req.feature !== "lip_sync" && req.audio === true;
-  const perSecond = t.priceUsdCentsPerSecond + (audioOn ? t.audioSurchargeUsdCentsPerSecond : 0);
+  // A reference video raises the per-second rate (Kling: 0.9 vs 0.6 units/s) — never Lip Sync, whose video is its required input.
+  const videoRate = req.feature !== "lip_sync" && req.referenceVideo === true ? t.videoInputMultiplier : 1;
+  const perSecond = (t.priceUsdCentsPerSecond + (audioOn ? t.audioSurchargeUsdCentsPerSecond : 0)) * videoRate;
 
   /*
     ── The reference surcharges (2026-10-04) ───────────────────────────────────
@@ -381,7 +393,7 @@ export function quoteKling(c: KlingPricingConfig, req: KlingQuoteRequest): Kling
   // Rounded to a whole cent at the END, once — a wallet cannot hold a third of a cent.
   const totalUsdCents = Math.ceil(billableSeconds * perSecond + t.priceUsdCentsPerRun + referenceCents);
 
-  const units = klingTierCostKnown(t) ? Math.round((billableSeconds * t.providerUnitsPerSecond + t.providerUnitsPerRun) * 1000) / 1000 : null;
+  const units = klingTierCostKnown(t) ? Math.round((billableSeconds * t.providerUnitsPerSecond * videoRate + t.providerUnitsPerRun) * 1000) / 1000 : null;
   const providerCostUsdCents = units !== null && t.unitCostUsdCents > 0 ? Math.round(units * t.unitCostUsdCents * 100) / 100 : null;
 
   return {

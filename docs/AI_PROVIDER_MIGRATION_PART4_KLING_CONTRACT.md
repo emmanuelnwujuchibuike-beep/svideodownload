@@ -209,6 +209,29 @@ estimated forever.
 
 ---
 
+## 4.9 · ✅ CORRECTION 2026-10-06 — references DO work on `kling-v3-omni`
+
+The two ❌ reference rows below were settled by generation, but on the WRONG
+request: `{type:"image"}` / `{type:"video"}`, which Omni accepts and ignores.
+§2.1's "complete accepted set" was incomplete. Probing (an invalid url first,
+then a blank prompt, so no task could be created) found three more valid
+types, then real generations settled them:
+
+| type | meaning | settled by |
+|---|---|---|
+| `refer_image` (`url`) | a subject / look to use | "The man in `<<<image_1>>>` waves…" → the same man (task 936598943772442698, 1.8 units / 3 s) |
+| `base_video` (`url`) | the video to EDIT — scene, motion, camera kept | "Replace the woman in `<<<video_1>>>` with the man in `<<<image_1>>>`" → replaced, same scene (936598991629459463, 4.5 units / 5 s) |
+| `feature_video` (`url`) | motion / style reference | accepted and url-validated; **not yet generation-tested** |
+
+Rules learned the same night:
+- the prompt must NAME the inputs (`<<<image_N>>>`, `<<<video_1>>>`, numbered in `contents` order);
+- any video input requires `settings.multi_shot: false` ("multi_shot is not supported with video input");
+- with `base_video`, `duration` is ignored — the output is the clip length (asked 3 s → 5.04 s) and is billed at **0.9 units/s** (vs 0.6): Kling's "With Video Input" price.
+
+The production builder (`referenceItems` / `bindReferencePrompt` in
+`lib/ai/kling/features/shared.ts`) was then run with a plain prompt and no
+typed tokens → the reference person, on the prompted beach (936605150150537239).
+
 ## 5 · Capability verdicts — SETTLED BY GENERATION
 
 Nine real generations were run on 2026-09-28 with the owner's authorisation, at

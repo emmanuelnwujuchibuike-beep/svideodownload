@@ -179,7 +179,23 @@ export function promptItem(text: string): Record<string, unknown> {
 export interface KlingReferenceInputs {
   referenceImageUrls?: string[];
   referenceVideoUrl?: string;
+  /**
+   * What the reference video is FOR (2026-10-06):
+   *   "base"    — the video to EDIT: its scene, motion and camera are kept and
+   *               the prompt's change is applied to it (Kling `base_video`);
+   *   "feature" — a reference for motion / style only (Kling `feature_video`).
+   * Default "base" — keeping the clip is what members were asking for.
+   */
+  referenceVideoMode?: KlingReferenceVideoMode;
+  /**
+   * The reference video length, measured in the browser at upload. Used ONLY to
+   * price an edit: Kling returns (and bills) the base clip length whatever
+   * duration is asked (asked 3 s, got 5.04 s, billed 5 s; 2026-10-06).
+   */
+  referenceVideoSeconds?: number;
 }
+
+export type KlingReferenceVideoMode = "base" | "feature";
 
 export function validateReferenceInputs(input: KlingReferenceInputs): KlingValidation {
   const images = input.referenceImageUrls ?? [];
@@ -216,11 +232,66 @@ export function validateReferenceInputs(input: KlingReferenceInputs): KlingValid
   return ok;
 }
 
-/** The `contents` items for the references, in the order the prompt's placeholders count them. */
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 THE REFERENCE TYPES THAT KLING ACTUALLY READS (root cause, 2026-10-06)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Owner: reference image and video "giving a wrong, not related result".
+ * They were sent as `{type:"image"}` and `{type:"video"}`. Omni ACCEPTS those
+ * types and then ignores them — an `image` url is never even fetched (a broken
+ * one still "succeeds"), and a `video` is discarded. Probing the type list
+ * found three it never told us about: `refer_image`, `base_video`,
+ * `feature_video`. Settled by generation the same night, direct to Kling:
+ *
+ *   refer_image + "The man in <<<image_1>>> waves…"  → the SAME man, same
+ *       sweater, waving in a park (task 936598943772442698, 1.8 units / 3 s);
+ *   base_video + refer_image + "Replace the woman in <<<video_1>>> with the
+ *       man in <<<image_1>>>…" → the woman replaced by that man, same scene
+ *       (task 936598991629459463, 4.5 units / 5 s = 0.9 units/s — Kling's
+ *       "with video input" rate).
+ *
+ * So: images go as `refer_image`, the video as `base_video` (edit it) or
+ * `feature_video` (copy its motion/style). The prompt must NAME them — see
+ * `bindReferencePrompt` — and a video input requires `multi_shot: false`
+ * ("multi_shot is not supported with video input").
+ */
 export function referenceItems(input: KlingReferenceInputs): Record<string, unknown>[] {
   const items: Record<string, unknown>[] = [];
-  for (const url of input.referenceImageUrls ?? []) items.push(contentItem("image", { url }));
+  for (const url of input.referenceImageUrls ?? []) items.push(contentItem("refer_image", { url }));
   const video = input.referenceVideoUrl?.trim();
-  if (video) items.push(contentItem("video", { url: video }));
+  if (video) items.push(contentItem(input.referenceVideoMode === "feature" ? "feature_video" : "base_video", { url: video }));
   return items;
+}
+
+/** True when a reference video rides along — Kling then bills its "with video input" rate and refuses multi-shot. */
+export function hasReferenceVideo(input: KlingReferenceInputs): boolean {
+  return !!input.referenceVideoUrl?.trim();
+}
+
+/**
+ * The prompt with its references NAMED, which is how Omni binds them
+ * (`<<<image_1>>>`, `<<<video_1>>>` — numbered in the order of `contents`).
+ * A member writes "put me in this video", not placeholder syntax, so when the
+ * prompt names none of them the binding is added here. A prompt that already
+ * names them (a power user) is sent exactly as typed.
+ */
+export function bindReferencePrompt(prompt: string, input: KlingReferenceInputs): string {
+  const text = prompt.trim();
+  const images = input.referenceImageUrls?.length ?? 0;
+  const video = hasReferenceVideo(input);
+  const parts: string[] = [];
+  if (video && !text.includes("<<<video_1>>>")) {
+    parts.push(
+      input.referenceVideoMode === "feature"
+        ? "Follow the motion, camera movement and style of <<<video_1>>>."
+        : "Edit <<<video_1>>>: keep its scene, background, lighting, motion and camera movement unless asked otherwise.",
+    );
+  }
+  if (text) parts.push(text);
+  if (images > 0 && !/<<<image_\d+>>>/.test(text)) {
+    const names = Array.from({ length: images }, (_, i) => `<<<image_${i + 1}>>>`).join(", ");
+    parts.push(images === 1 ? `Use the subject from ${names}.` : `Use the subjects from ${names}.`);
+  }
+  return parts.join(" ");
 }

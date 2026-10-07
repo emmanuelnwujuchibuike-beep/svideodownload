@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { KLING_OMNI, klingMaxReferenceImages } from "./capabilities";
 import { klingImageToVideo } from "./image-to-video";
-import { referenceItems, validateReferenceInputs } from "./shared";
+import { bindReferencePrompt, referenceItems, validateReferenceInputs } from "./shared";
 import { klingTextToVideo } from "./text-to-video";
 import { KLING_PRICING_DEFAULTS, quoteKling, type KlingPricingConfig } from "../pricing";
 
@@ -86,17 +86,51 @@ describe("both Omni features enforce it", () => {
 });
 
 describe("the request body carries them", () => {
-  it("sends one `image` item per reference and one `video` item", () => {
+  /*
+    🔴 ROOT CAUSE, 2026-10-06: these went as `image` / `video`, which Omni
+    accepts and IGNORES. Settled by generation: `refer_image` and
+    `base_video` are read (the reference person appeared; the base clip was
+    edited). This test used to assert the broken shape.
+  */
+  it("sends one `refer_image` item per reference and the video as `base_video` (edit) by default", () => {
     const body = klingTextToVideo.buildRequest({
       prompt: "a cat",
       options: { aspectRatio: "16:9" },
       referenceImageUrls: img(3),
       referenceVideoUrl: VIDEO,
-    }) as { contents: { type: string; url?: string }[] };
-    expect(body.contents.filter((c) => c.type === "image")).toHaveLength(3);
-    expect(body.contents.filter((c) => c.type === "video")).toHaveLength(1);
-    // every type sent must be one the vendor accepts
+    }) as { contents: { type: string; url?: string; text?: string }[]; settings: Record<string, unknown> };
+    expect(body.contents.filter((c) => c.type === "refer_image")).toHaveLength(3);
+    expect(body.contents.filter((c) => c.type === "base_video")).toHaveLength(1);
+    expect(body.contents.some((c) => c.type === "image" || c.type === "video")).toBe(false);
     for (const c of body.contents) expect(KLING_OMNI.contentTypes).toContain(c.type);
+    // Kling refuses video input in multi-shot mode
+    expect(body.settings.multi_shot).toBe(false);
+  });
+
+  it("a motion reference goes as `feature_video`", () => {
+    const body = klingTextToVideo.buildRequest({ prompt: "a cat", options: { aspectRatio: "16:9" }, referenceVideoUrl: VIDEO, referenceVideoMode: "feature" }) as { contents: { type: string }[] };
+    expect(body.contents.map((c) => c.type)).toContain("feature_video");
+  });
+
+  it("the prompt NAMES the references (how Omni binds them), and a prompt that already does is left as typed", () => {
+    const bound = bindReferencePrompt("make me dance", { referenceImageUrls: img(2), referenceVideoUrl: VIDEO });
+    expect(bound).toContain("<<<video_1>>>");
+    expect(bound).toContain("<<<image_1>>>, <<<image_2>>>");
+    expect(bound).toContain("make me dance");
+    const typed = "Replace the woman in <<<video_1>>> with <<<image_1>>>";
+    expect(bindReferencePrompt(typed, { referenceImageUrls: img(1), referenceVideoUrl: VIDEO })).toBe(typed);
+    expect(bindReferencePrompt("a cat", {})).toBe("a cat");
+  });
+
+  it("Image to Video sends a reference video as motion to follow, never a clip to edit", () => {
+    const body = klingImageToVideo.buildRequest({ firstFrameUrl: img(1)[0]!, prompt: "dance", referenceVideoUrl: VIDEO, referenceVideoMode: "base" }) as { contents: { type: string }[]; settings: Record<string, unknown> };
+    expect(body.contents.map((c) => c.type)).toContain("feature_video");
+    expect(body.contents.map((c) => c.type)).not.toContain("base_video");
+    expect(body.settings.multi_shot).toBe(false);
+  });
+
+  it("multi-shot with a reference video is refused before the charge", () => {
+    expect(klingTextToVideo.validate({ prompt: "a cat", multiShot: true, options: { aspectRatio: "16:9" }, referenceVideoUrl: VIDEO }).ok).toBe(false);
   });
 
   it("sends nothing when nothing was attached", () => {
@@ -151,5 +185,34 @@ describe("the surcharge is the operator's, never ours", () => {
     };
     const q = quoteKling(c, { feature: "lip_sync", resolution: "720p", seconds: 5, referenceVideo: true });
     expect(q.ok && q.totalUsdCents).toBe(100);
+  });
+});
+
+/*
+  2026-10-06, measured direct to Kling: a 5 s edit billed 4.5 units (0.9/s, the
+  "with video input" rate) and an edit asked for 3 s came back — and billed —
+  at the base clip length (5.04 s). The member price must follow both.
+*/
+describe("a reference video is priced at Kling's video-input rate and an edit at the clip length", () => {
+  const paid: KlingPricingConfig = {
+    ...KLING_PRICING_DEFAULTS,
+    matrix: { ...KLING_PRICING_DEFAULTS.matrix, "text_to_video:720p": { ...KLING_PRICING_DEFAULTS.matrix["text_to_video:720p"], priceUsdCentsPerSecond: 12 } },
+  };
+  it("the per-second price rises by the video-input multiplier (1.5 by default)", () => {
+    const plain = quoteKling(paid, { feature: "text_to_video", resolution: "720p", seconds: 5 });
+    const withVideo = quoteKling(paid, { feature: "text_to_video", resolution: "720p", seconds: 5, referenceVideo: true });
+    expect(plain.ok && plain.totalUsdCents).toBe(60);
+    expect(withVideo.ok && withVideo.totalUsdCents).toBe(90);
+  });
+  it("an edit bills the longer of the asked length and the clip; an unmeasured clip bills the longest Kling accepts", async () => {
+    const { klingTextToVideoPipeline } = await import("../pipelines/text-to-video");
+    const q = (extra: Record<string, unknown>) =>
+      klingTextToVideoPipeline.quote({ prompt: "x", options: { aspectRatio: "16:9", durationSeconds: 3 }, referenceVideoUrl: VIDEO, ...extra } as never, paid);
+    const measured = q({ referenceVideoSeconds: 5.04 });
+    expect(measured.ok && measured.seconds).toBeCloseTo(5.04, 2);
+    const unmeasured = q({});
+    expect(unmeasured.ok && unmeasured.seconds).toBe(KLING_OMNI.video.maxSeconds);
+    const motionOnly = q({ referenceVideoMode: "feature", referenceVideoSeconds: 8 });
+    expect(motionOnly.ok && motionOnly.seconds).toBe(3); // a motion reference does not set the length
   });
 });

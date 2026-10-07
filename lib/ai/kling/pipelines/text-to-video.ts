@@ -1,6 +1,6 @@
 import { KLING_OMNI_VIDEO_PATH } from "@/lib/ai/kling/config";
 import { klingTextToVideo, type KlingTextToVideoInput } from "@/lib/ai/kling/features/text-to-video";
-import { KLING_OMNI_MODEL_NAME } from "@/lib/ai/kling/features/capabilities";
+import { KLING_OMNI, KLING_OMNI_MODEL_NAME } from "@/lib/ai/kling/features/capabilities";
 import { quoteKling, type KlingPricingConfig, type KlingQuote } from "@/lib/ai/kling/pricing";
 import type { KlingSupportedPipeline } from "@/lib/ai/kling/pipelines/types";
 
@@ -51,7 +51,16 @@ export const klingTextToVideoPipeline: KlingSupportedPipeline<KlingTextToVideoIn
       us or on a frontend assumption — this reads the request, and the request
       alone.
     */
-    const seconds = input.options?.durationSeconds ?? 5;
+    const asked = input.options?.durationSeconds ?? 5;
+    /*
+      An EDIT of a reference video comes back at the length of that clip, not
+      the asked one, and Kling bills that length (asked 3 s, got 5.04 s, billed
+      4.5 units; 2026-10-06). So an edit is priced on the longer of the two,
+      and an unmeasured clip on the longest one Kling accepts: never a guess
+      that undercharges.
+    */
+    const editing = !!input.referenceVideoUrl && input.referenceVideoMode !== "feature";
+    const seconds = editing ? Math.max(asked, Math.min(KLING_OMNI.video.maxSeconds, input.referenceVideoSeconds ?? KLING_OMNI.video.maxSeconds)) : asked;
     return quoteKling(pricing, {
       feature: "text_to_video",
       resolution: input.options?.resolution ?? "720p",

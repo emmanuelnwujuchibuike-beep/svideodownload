@@ -53,6 +53,10 @@ const mediaUrl = z.string().url().max(2000);
 const referenceInputs = {
   referenceImageUrls: z.array(mediaUrl).max(KLING_OMNI.images.max).optional(),
   referenceVideoUrl: mediaUrl.optional(),
+  /** What the reference video is for: edit it ("base") or copy its motion ("feature"). 2026-10-06. */
+  referenceVideoMode: z.enum(["base", "feature"]).optional(),
+  /** Its length as the browser measured it; prices an edit (Kling bills the clip length). */
+  referenceVideoSeconds: z.number().positive().max(600).optional(),
 };
 
 export const textToVideoInputSchema = z

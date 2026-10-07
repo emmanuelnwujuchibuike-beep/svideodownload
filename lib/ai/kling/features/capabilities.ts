@@ -121,7 +121,8 @@ export const KLING_OMNI = {
    * ✅ `contents[].type` — the COMPLETE accepted set. Anything else answers
    * `contents[i].type value '<x>' is invalid`.
    */
-  contentTypes: ["prompt", "image", "video", "element", "first_frame", "last_frame", "voice"] as const,
+  // refer_image, base_video, feature_video: found by probing 2026-10-06 and settled by generation — the reference types Omni actually reads (`image`/`video` are accepted and IGNORED)
+  contentTypes: ["prompt", "image", "video", "element", "first_frame", "last_frame", "voice", "refer_image", "base_video", "feature_video"] as const,
 
   /** ⚠️ Image limits from the model guide (min 300 px, 10 MB, jpg/png). Not vendor-verified. */
   images: {

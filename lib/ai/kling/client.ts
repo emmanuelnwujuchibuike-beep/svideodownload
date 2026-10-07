@@ -254,6 +254,28 @@ export interface KlingCreateTaskOptions {
  * and, optionally, our handle) and refuses to let either be overridden by a
  * handler's body.
  */
+/**
+ * Safe diagnostics for the request Kling actually receives (2026-10-06, the
+ * reference-input investigation). Signed-URL tokens are masked; the key and the
+ * headers are never in `body` and never logged.
+ */
+export function maskSignedUrl(url: string): string {
+  return url.replace(/([?&](token|sig|signature|X-Amz-[A-Za-z]+)=)[^&]+/g, "$1***");
+}
+
+function logKlingPayload(label: string, path: string, body: Record<string, unknown>): void {
+  const masked = JSON.parse(JSON.stringify(body, (_k, v) => (typeof v === "string" ? maskSignedUrl(v) : v))) as Record<string, unknown>;
+  const contents = Array.isArray(masked.contents) ? (masked.contents as { type?: string; text?: string; url?: string }[]) : [];
+  console.info(`[Kling Debug] ${label}`, {
+    endpoint: path,
+    types: contents.map((c) => c.type),
+    hasReferenceImage: contents.some((c) => c.type === "refer_image"),
+    hasReferenceVideo: contents.some((c) => c.type === "base_video" || c.type === "feature_video"),
+    prompt: contents.find((c) => c.type === "prompt")?.text ?? null,
+    finalPayload: JSON.stringify(masked),
+  });
+}
+
 export async function klingCreateTask(opts: KlingCreateTaskOptions): Promise<KlingCreateResult> {
   const started = Date.now();
   /*
@@ -292,6 +314,9 @@ export async function klingCreateTask(opts: KlingCreateTaskOptions): Promise<Kli
     ...(opts.externalTaskId ? { external_task_id: opts.externalTaskId } : {}),
   };
   const body: Record<string, unknown> = { ...opts.input, options };
+
+  // The FINAL payload, after every transformation — off unless KLING_DEBUG=1 (each log line is billed observability).
+  if (env("KLING_DEBUG") === "1") logKlingPayload(opts.label, path, body);
 
   const res = await withTimeout((signal) => klingCall(path, { method: "POST", body: JSON.stringify(body), signal }), REQUEST_TIMEOUT_MS, "create");
 

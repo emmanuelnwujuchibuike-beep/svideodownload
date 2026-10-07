@@ -1,5 +1,5 @@
 import { KLING_OMNI_MODEL_NAME } from "@/lib/ai/kling/features/capabilities";
-import { contentItem, promptItem, referenceItems, settingsField, validateCommonOptions, validateMediaUrl, validatePrompt, validateReferenceInputs, type KlingReferenceInputs } from "@/lib/ai/kling/features/shared";
+import { bindReferencePrompt, contentItem, hasReferenceVideo, promptItem, referenceItems, settingsField, validateCommonOptions, validateMediaUrl, validatePrompt, validateReferenceInputs, type KlingReferenceInputs } from "@/lib/ai/kling/features/shared";
 import { invalid, ok, type KlingCommonOptions, type KlingFeatureHandler } from "@/lib/ai/kling/features/types";
 
 /**
@@ -95,13 +95,23 @@ export const klingImageToVideo: KlingFeatureHandler<KlingImageToVideoInput> = {
   },
 
   buildRequest(input) {
+    /*
+      🔴 References bound and typed the way Omni reads them (see the root-cause
+      note on `referenceItems`, 2026-10-06). Here the photo IS the opening
+      frame, so a reference video can only be MOTION to follow — never a clip
+      to edit, which would contradict the frame — hence `feature` always.
+    */
+    const refs: KlingReferenceInputs = { ...input, referenceVideoMode: "feature" };
     const contents: Record<string, unknown>[] = [];
-    const prompt = input.prompt?.trim();
+    const prompt = bindReferencePrompt(input.prompt ?? "", refs);
     if (prompt) contents.push(promptItem(prompt));
     contents.push(contentItem("first_frame", { url: input.firstFrameUrl }));
     if (input.lastFrameUrl?.trim()) contents.push(contentItem("last_frame", { url: input.lastFrameUrl }));
-    contents.push(...referenceItems(input));
+    contents.push(...referenceItems(refs));
 
-    return { contents, settings: settingsField(input.options) };
+    const settings = settingsField(input.options);
+    // A video input REQUIRES multi_shot false (Kling refuses it otherwise).
+    if (hasReferenceVideo(refs)) settings.multi_shot = false;
+    return { contents, settings };
   },
 };

@@ -1,5 +1,5 @@
 import { KLING_OMNI_MODEL_NAME } from "@/lib/ai/kling/features/capabilities";
-import { promptItem, referenceItems, settingsField, validateAspectRatioPresence, validateCommonOptions, validatePrompt, validateReferenceInputs, type KlingReferenceInputs } from "@/lib/ai/kling/features/shared";
+import { bindReferencePrompt, hasReferenceVideo, promptItem, referenceItems, settingsField, validateAspectRatioPresence, validateCommonOptions, validatePrompt, validateReferenceInputs, type KlingReferenceInputs } from "@/lib/ai/kling/features/shared";
 import { invalid, type KlingCommonOptions, type KlingFeatureHandler } from "@/lib/ai/kling/features/types";
 
 /**
@@ -68,6 +68,8 @@ export const klingTextToVideo: KlingFeatureHandler<KlingTextToVideoInput> = {
     if (!common.ok) return common;
 
     if (input.multiShot !== undefined && typeof input.multiShot !== "boolean") return invalid("The multi-shot setting must be on or off.");
+    // Kling: "multi_shot is not supported with video input" — a sentence before the charge, not a 400 after it.
+    if (input.multiShot === true && hasReferenceVideo(input)) return invalid("Multi-shot can't be used with a reference video. Turn one of them off.");
 
     // 7 images, or 4 alongside a reference video — the vendor rule, in one place.
     const refs = validateReferenceInputs(input);
@@ -83,8 +85,11 @@ export const klingTextToVideo: KlingFeatureHandler<KlingTextToVideoInput> = {
   buildRequest(input) {
     const settings = settingsField(input.options);
     if (input.multiShot !== undefined) settings.multi_shot = input.multiShot;
+    // A video input REQUIRES multi_shot false (Kling's own refusal otherwise; the model defaults it on).
+    if (hasReferenceVideo(input)) settings.multi_shot = false;
     return {
-      contents: [promptItem(input.prompt), ...referenceItems(input)],
+      // the references NAMED in the prompt — how Omni binds them (see bindReferencePrompt)
+      contents: [promptItem(bindReferencePrompt(input.prompt, input)), ...referenceItems(input)],
       settings,
     };
   },

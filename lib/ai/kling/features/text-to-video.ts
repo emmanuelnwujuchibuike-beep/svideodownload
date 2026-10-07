@@ -72,7 +72,7 @@ export const klingTextToVideo: KlingFeatureHandler<KlingTextToVideoInput> = {
     if (input.multiShot === true && hasReferenceVideo(input)) return invalid("Multi-shot can't be used with a reference video. Turn one of them off.");
 
     // 7 images, or 4 alongside a reference video — the vendor rule, in one place.
-    const refs = validateReferenceInputs(input);
+    const refs = validateReferenceInputs(input, input.options);
     if (!refs.ok) return refs;
 
     /*

@@ -96,10 +96,26 @@ export function TextToVideoWorkspace({
   const [durationSeconds, setDuration] = useState<number>(KLING_OMNI.duration.defaultSeconds);
   const [aspectRatio, setAspect] = useState<"16:9" | "9:16" | "1:1">("16:9");
   const [resolution, setResolution] = useState<"720p" | "1080p" | "4k">("720p");
-  const [audio, setAudio] = useState<"off" | "native">("off");
+  const [audio, setAudio] = useState<"off" | "native" | "original">("off");
   /* Optional references — the model keeps a face, a product or a place consistent. Priced by the server. */
   const [referenceImageUrls, setReferenceImages] = useState<string[]>([]);
   const [referenceVideoUrl, setReferenceVideo] = useState<string | null>(null);
+  /*
+    🔴 A reference video brings ITS OWN SOUND by default (owner, 2026-10-07:
+    "reference videos don't take the audio from the reference video"). Kling's
+    `audio: "original"` keeps it — proven by generation, no extra cost
+    (lib/ai/kling/features/capabilities.ts). Attaching a video selects it;
+    removing the video drops it (it needs a video). A minute can't use a
+    reference video, so the 60 s choice steps back to the default.
+  */
+  useEffect(() => {
+    if (referenceVideoUrl) {
+      setAudio("original");
+      setDuration((d) => (d === 60 ? KLING_OMNI.duration.defaultSeconds : d));
+    } else {
+      setAudio((a) => (a === "original" ? "off" : a));
+    }
+  }, [referenceVideoUrl]);
   /*
     🔴 What the reference video is FOR, and how long it is (2026-10-06).
     "base" = edit that clip (keep its scene and motion, apply the prompt) — what
@@ -193,7 +209,7 @@ export function TextToVideoWorkspace({
             label="Duration"
             value={String(durationSeconds)}
             onChange={(v) => setDuration(Number(v))}
-            options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` })), ...(oneMinute ? [{ value: "60", label: "1 minute (60 s)" }] : [])]}
+            options={[...DURATIONS.map((d) => ({ value: String(d), label: `${d} seconds` })), ...(oneMinute && !referenceVideoUrl ? [{ value: "60", label: "1 minute (60 s)" }] : [])]}
             disabled={locked}
           />
           <AiSettingRow
@@ -252,13 +268,14 @@ export function TextToVideoWorkspace({
               ]}
             />
           </AiField>
-          <AiField label="Sound" hint="Generated audio to match the scene.">
+          <AiField label="Sound" hint={audio === "original" ? "The reference video's own sound, kept as it is." : "Generated audio to match the scene."}>
             <AiSegmented
               ariaLabel="Sound"
               value={audio}
               onChange={setAudio}
               options={[
                 { value: "off", label: "No sound" },
+                ...(referenceVideoUrl ? [{ value: "original" as const, label: "Keep video's sound" }] : []),
                 { value: "native", label: "Generate sound" },
               ]}
             />

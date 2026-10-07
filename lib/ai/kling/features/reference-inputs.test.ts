@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { KLING_OMNI, klingMaxReferenceImages } from "./capabilities";
@@ -214,5 +217,30 @@ describe("a reference video is priced at Kling's video-input rate and an edit at
     expect(unmeasured.ok && unmeasured.seconds).toBe(KLING_OMNI.video.maxSeconds);
     const motionOnly = q({ referenceVideoMode: "feature", referenceVideoSeconds: 8 });
     expect(motionOnly.ok && motionOnly.seconds).toBe(3); // a motion reference does not set the length
+  });
+});
+
+describe("keep the reference video's own sound (owner 2026-10-07; proven by generation, task 936753170905833539)", () => {
+  it("audio 'original' is accepted with a reference video and sent as settings.audio", () => {
+    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO }, { audio: "original" }).ok).toBe(true);
+    const body = klingTextToVideo.buildRequest({ prompt: "Make it a watercolor", referenceVideoUrl: VIDEO, options: { audio: "original" } } as never) as { settings: Record<string, unknown> };
+    expect(body.settings.audio).toBe("original");
+    expect(body.settings.multi_shot).toBe(false);
+  });
+
+  it("teeth: 'original' without a video is refused before a charge (Kling refuses it: no sound to keep)", () => {
+    const v = validateReferenceInputs({}, { audio: "original" });
+    expect(v.ok).toBe(false);
+    expect(klingTextToVideo.validate({ prompt: "A cat", options: { audio: "original", aspectRatio: "16:9" } } as never).ok).toBe(false);
+  });
+
+  it("teeth: a one-minute video can't use a reference video (Kling ignores the length with one)", () => {
+    expect(validateReferenceInputs({ referenceVideoUrl: VIDEO }, { durationSeconds: 60 }).ok).toBe(false);
+    expect(validateReferenceInputs({}, { durationSeconds: 60 }).ok).toBe(true);
+  });
+
+  it("keeping the sound is not priced as generated sound (billed 2.7 units = plain 0.9/s)", () => {
+    const src = readFileSync(join(process.cwd(), "lib/ai/kling/pipelines/text-to-video.ts"), "utf8");
+    expect(src).toContain('audio: input.options?.audio === "native"');
   });
 });

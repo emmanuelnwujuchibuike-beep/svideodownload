@@ -207,7 +207,7 @@ export interface KlingReferenceInputs {
 
 export type KlingReferenceVideoMode = "base" | "feature";
 
-export function validateReferenceInputs(input: KlingReferenceInputs): KlingValidation {
+export function validateReferenceInputs(input: KlingReferenceInputs, options?: KlingCommonOptions): KlingValidation {
   const images = input.referenceImageUrls ?? [];
   const video = input.referenceVideoUrl?.trim() || null;
 
@@ -215,6 +215,14 @@ export function validateReferenceInputs(input: KlingReferenceInputs): KlingValid
     const verdict = validateMediaUrl(video, "The reference video");
     if (!verdict.ok) return verdict;
   }
+  // "Keep the video's sound" needs a video to keep it from (Kling refuses it without one)
+  if (!video && options?.audio === "original") return invalid("Keep the video's sound needs a reference video. Attach one, or choose another sound setting.");
+  /*
+    🔴 A minute is four chained 15 s segments — and a reference video makes Kling
+    IGNORE the length (it returns the clip's own length), so the chain could
+    never be built from it. Refused here, before the charge.
+  */
+  if (video && options?.durationSeconds === 60) return invalid("A one-minute video can't use a reference video. Choose up to 15 seconds, or remove the video.");
 
   const max = klingMaxReferenceImages(!!video);
   if (images.length > max) {

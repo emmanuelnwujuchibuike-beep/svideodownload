@@ -79,16 +79,21 @@ export type KlingAspectRatio = (typeof KLING_ASPECT_RATIOS)[number];
 
 /**
  * `settings.audio`. ✅ VERIFIED the vendor accepts three names —
- * `"allowed values: native, off, original"` — but on `kling-v3-omni`,
- * `original` answers `"audio mode 'original' is not supported by the current
- * model"`. So the usable set for this model is two.
+ * `"allowed values: native, off, original"`.
  *
- * 🔴 Recorded as "the vendor's set minus what this model refuses" rather than
- * silently shortened, because a later model may accept `original` and the next
- * reader should know the difference between "never a value" and "not this one".
+ * 🔴 `original` = KEEP THE REFERENCE VIDEO'S OWN SOUND (2026-10-07, owner:
+ * "reference videos don't take the audio from the reference video"). The
+ * 10-04 refusal ("not supported by the current model") was a request with NO
+ * video — there is no original sound to keep. With a `base_video` or a
+ * `feature_video` it is accepted, and it was settled by GENERATION, not by a
+ * 200: a 3 s clip carrying a 440 Hz tone, edited with `audio: "original"`,
+ * came back with that tone (spectral centroid 457 Hz vs 462 Hz, a pure tone in
+ * both) and was billed 2.7 units — the plain 0.9 units/s of a reference video,
+ * so no sound surcharge (task 936753170905833539). Valid ONLY with a reference
+ * video: lib/ai/kling/features/shared.ts refuses it otherwise, before a charge.
  */
 export const KLING_AUDIO_MODES_VENDOR = ["native", "off", "original"] as const;
-export const KLING_AUDIO_MODES = ["native", "off"] as const;
+export const KLING_AUDIO_MODES = ["native", "off", "original"] as const;
 export type KlingAudioMode = (typeof KLING_AUDIO_MODES)[number];
 
 /**

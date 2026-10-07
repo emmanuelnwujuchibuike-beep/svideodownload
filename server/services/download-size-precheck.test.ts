@@ -36,12 +36,12 @@ describe("the size cap is checked before Telegram is touched", () => {
     ).rejects.toBeInstanceOf(DownloadTooLargeError);
     expect(telegramStream).not.toHaveBeenCalled();
     expect(telegramMedia).not.toHaveBeenCalled();
-  });
+  }, 20_000); // the first test pays the cold dynamic import; under a full parallel run it crossed the 5 s default
 
   it("a Pro caller (no cap) goes on to Telegram", async () => {
     telegramStream.mockResolvedValueOnce({ stream: new ReadableStream(), ext: "mp4", contentType: "video/mp4", filesize: 749_928_164 });
     const { resolveDownload } = await import("./download-service");
     await resolveDownload("https://t.me/estrellitasof/848", "tg-mt-0", "video", "v", { maxBytes: Number.POSITIVE_INFINITY });
     expect(telegramStream).toHaveBeenCalledTimes(1);
-  });
+  }, 20_000);
 });

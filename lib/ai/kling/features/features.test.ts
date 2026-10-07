@@ -44,9 +44,10 @@ describe("Kling settings — the verified vocabulary, not the guessed one", () =
     expect(KLING_RESOLUTIONS as readonly string[]).not.toContain("pro");
   });
 
-  it("🔴 the audio modes usable on kling-v3-omni are native/off — `original` is refused BY THE MODEL", () => {
-    expect(KLING_OMNI.audioModes).toEqual(["native", "off"]);
-    expect(klingTextToVideo.validate({ prompt: "a cat", options: { aspectRatio: "16:9", audio: "original" as never } }).ok).toBe(false);
+  it("🔴 audio modes: native/off always; `original` (keep the reference video's sound) ONLY with a reference video", () => {
+    // 10-04 read the model's refusal of `original` as final — it was a request with no video (2026-10-07: proven with one)
+    expect(KLING_OMNI.audioModes).toEqual(["native", "off", "original"]);
+    expect(klingTextToVideo.validate({ prompt: "a cat", options: { aspectRatio: "16:9", audio: "original" } }).ok).toBe(false);
   });
 
   it("the content types are exactly the ten the vendor accepts (three found by probing 2026-10-06)", () => {

@@ -87,7 +87,7 @@ export const klingImageToVideo: KlingFeatureHandler<KlingImageToVideoInput> = {
     if (!prompt.ok) return prompt;
 
     // 7 images, or 4 alongside a reference video — the vendor rule, in one place.
-    const refs = validateReferenceInputs(input);
+    const refs = validateReferenceInputs(input, input.options);
     if (!refs.ok) return refs;
 
     // A first frame is present, so the aspect ratio is genuinely optional here.

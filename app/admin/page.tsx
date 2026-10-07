@@ -175,7 +175,7 @@ import { CharacterReplaceFreeAccessPanel } from "@/features/admin/character-repl
 import { AiProvidersOverview } from "@/features/admin/ai-providers-overview";
 import { FrenzAIHealth } from "@/features/admin/frenz-ai-health";
 // Code-split behind a client wrapper — see features/admin/frenz-ai-settings-lazy.tsx.
-import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiShowcaseEditorLazy, AiPromoEditorLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
+import { AiBalanceAdjustLazy, AiCreditsMonitorLazy as AiCreditsMonitor, AiPlansSettingsLazy, AiShowcaseEditorLazy, AiPromoEditorLazy, AiOperationsPanelLazy, KlingPricingSettingsLazy, LipSyncSettingsLazy, TextToAudioSettingsLazy, VoiceCloneSettingsLazy, CharacterReplaceJobsTableLazy as CharacterReplaceJobsTable, CharacterReplacePricingLazy, CharacterReplaceProcessingLazy, FrenzAISettingsLazy as FrenzAISettings } from "@/features/admin/frenz-ai-settings-lazy";
 import { getAiPlansAdminStats, listAiCreditMonitor } from "@/lib/ai/credits/admin";
 import { loadAiProviderOverview } from "@/lib/ai/providers/overview";
 import { readStoredShowcase } from "@/lib/ai/showcase/server";
@@ -184,6 +184,8 @@ import { getLipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
 import { getTextToAudioAdminStats } from "@/lib/ai/text-to-audio/admin";
 import { getVoiceCloneAdminStats } from "@/lib/ai/voice-clone/admin";
 import { getAiAdminStats, getCharacterReplaceFreeAccessStats, listCharacterReplaceAdminJobs } from "@/lib/ai/admin-stats";
+import { loadAiOperations } from "@/lib/ai/admin-ops";
+import { aiFeature } from "@/lib/ai/jobs";
 import { LandingEditor } from "@/features/admin/landing-editor";
 import { PlatformStatusEditor } from "@/features/admin/platform-status-editor";
 import { getPlatformStatus } from "@/lib/platform-status-store";
@@ -906,12 +908,22 @@ async function LandingSection() {
  * They stay separate FORMS for the reason recorded in frenz-ai-settings.tsx:
  * each POSTs only the fields it displays, so neither can clobber the other's.
  */
+/** The video provider's state for the overview card: the worst of its tools' health (§9 — never green on no data). */
+function klingStateOf(o: { features: { vendor: string; state: "healthy" | "degraded" | "unavailable" | "unknown" }[] }): "healthy" | "degraded" | "unavailable" | "unknown" {
+  const states = o.features.filter((f) => f.vendor === "kling").map((f) => f.state);
+  for (const s of ["unavailable", "degraded", "healthy"] as const) if (states.includes(s)) return s;
+  return "unknown";
+}
+
 async function FrenzAISection() {
-  const [landing, aiStats, crJobs] = await Promise.all([
+  const [landing, aiStats, crJobs, aiOps] = await Promise.all([
     getLandingSettings(),
     getAiAdminStats(),
     listCharacterReplaceAdminJobs(60),
+    // Part 8 §7, §35–§39: every tool's jobs, one bounded read (lib/ai/admin-ops.ts)
+    loadAiOperations(),
   ]);
+  const aiOpsLabels = Object.fromEntries([...new Set(aiOps.jobs.map((j) => j.feature))].map((f) => [f, aiFeature(f)?.label ?? f]));
   // Part 11 §19: the complimentary-creation figures, beside the health panel
   const freeStats = await getCharacterReplaceFreeAccessStats(landing.frenzAiCurrency);
   // 0167: the AI plans' usage and figures (read once, rendered under their own tab)
@@ -937,13 +949,23 @@ async function FrenzAISection() {
           content: (
             <div className="space-y-6">
               <FrenzAIHealth stats={aiStats} />
+              {/* Part 8 §7/§62, §35–§39 (2026-10-07): every tool's jobs, failures grouped and split by owner. */}
+              <AiOperationsPanelLazy ops={aiOps} labels={aiOpsLabels} kling={klingStateOf(providerOverview)} currencySymbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
               <CharacterReplaceFreeAccessPanel stats={freeStats} symbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
-              {/* Part 4, §29: the jobs, the provider state, the money — under the AI grouping. */}
+            </div>
+          ),
+        },
+        {
+          id: "pricing",
+          label: "Character Replace (retired)",
+          content: (
+            <div className="space-y-6">
+              <CharacterReplacePricingLazy settings={landing} />
+              {/* Moved from Overview 2026-10-07: the retired tool's own job history. Live tools are in the operations panel. */}
               <CharacterReplaceJobsTable jobs={crJobs} symbol={aiCurrencySymbol(landing.frenzAiCurrency)} />
             </div>
           ),
         },
-        { id: "pricing", label: "Character Replace pricing", content: <CharacterReplacePricingLazy settings={landing} /> },
         /* 0166 (multi-video brief §16): concurrency per plan, the queue, batch size, retries, timeout, the failed-job refund. */
         { id: "processing", label: "Processing", content: <CharacterReplaceProcessingLazy settings={landing} /> },
         /* Lip Sync Pro (2026-09-21): the provider switch (Replicate | fal.ai Sync-3), the models, text and audio modes, limits, presets, the mismatch policy, the prices, the numbers. */

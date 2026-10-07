@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 
 import type { CharacterReplaceAdminJob } from "@/lib/ai/admin-job-view";
 import type { AiCreditMonitorRow, AiPlansAdminStats } from "@/lib/ai/credits/admin";
+import type { AiOperations } from "@/lib/ai/admin-ops-view";
 import type { AiPromo } from "@/lib/ai/promo/config";
 import type { ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import type { LipSyncAdminStats } from "@/lib/ai/lip-sync/admin";
@@ -142,6 +143,13 @@ const AiShowcaseEditor = dynamic(() => import("@/features/admin/ai-showcase-edit
 
 export function AiShowcaseEditorLazy({ initial }: { initial: ShowcaseSlide[] | null }) {
   return <AiShowcaseEditor initial={initial} />;
+}
+
+// Part 8 (2026-10-07): AI → Overview — the operations panel (cards, grouped failures, every tool's jobs).
+const AiOperationsPanel = dynamic(() => import("@/features/admin/ai-operations-panel").then((m) => m.AiOperationsPanel), { loading: skeleton("Loading AI operations") });
+
+export function AiOperationsPanelLazy(props: { ops: AiOperations; labels: Record<string, string>; kling: "healthy" | "degraded" | "unavailable" | "unknown"; currencySymbol: string }) {
+  return <AiOperationsPanel {...props} />;
 }
 
 // Brief C (2026-10-06): AI → Landing promotion — the Frenz AI tile on the landing page.

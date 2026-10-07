@@ -116,6 +116,9 @@ describe("the showcase slides", () => {
       expect(read(f), f).toContain("<AiShowcase");
       expect(read(f), f).not.toContain("desktopOnly");
     }
+    // 2026-10-07 (owner): HIDDEN on Explore, kept for the coming self-ad — the render is behind a switch that is off
+    expect(read("features/ai/frenz-ai-explore.tsx")).toContain("const EXPLORE_SHOWCASE_VISIBLE = false;");
+    expect(read("features/ai/frenz-ai-explore.tsx")).toContain("{EXPLORE_SHOWCASE_VISIBLE ? <AiShowcase");
     // every tool page that renders it does so for large screens only
     for (const f of [
       "features/ai/video/text-to-video-workspace.tsx",

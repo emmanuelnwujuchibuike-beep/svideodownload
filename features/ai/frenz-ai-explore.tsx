@@ -116,6 +116,9 @@ const HOW = [
   },
 ] as const;
 
+/** The showcase carousel at the top of Explore — hidden 2026-10-07, kept for the self-ad slot (see the render below). */
+const EXPLORE_SHOWCASE_VISIBLE = false;
+
 export function FrenzAIExplore({
   createPath,
   aiHref,
@@ -253,7 +256,13 @@ export function FrenzAIExplore({
         page opens with the showcase and the credits strip, then its own
         heading — the same two components as the welcome page, not copies.
       */}
-      <AiShowcase slides={slides} base={aiHref} className="mt-3" />
+      {/*
+        HIDDEN, not removed (owner, 2026-10-07: "don't remove it entirely, just
+        hide it — the self ad that will be implemented will use it"). The
+        component, its slides and the admin editor stay; flip
+        EXPLORE_SHOWCASE_VISIBLE to bring it back (or hand the slot to the ad).
+      */}
+      {EXPLORE_SHOWCASE_VISIBLE ? <AiShowcase slides={slides} base={aiHref} className="mt-3" /> : null}
       <AiCreditStrip base={aiHref} className="mt-3" />
       <header className="mt-6">
         {/*

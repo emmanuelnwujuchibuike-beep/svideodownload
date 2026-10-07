@@ -233,9 +233,8 @@ describe("the studio has its own page (owner, 2026-09-20 — Explore AI Studio r
     // the header strip skeleton sits on the create routes
     expect(src("app/(app)/studio/ai/character-replace/create/loading.tsx")).toContain("CharacterReplaceCreateSkeleton");
     expect(src("app/(marketing)/ai/character-replace/create/loading.tsx")).toContain("CharacterReplaceCreateSkeleton");
-    // Paystack may send a member back to the create pages
-    expect(code("lib/ai/character-replace/topup-server.ts")).toContain('"/studio/ai/character-replace/create"');
-    expect(code("lib/ai/character-replace/topup-server.ts")).toContain('"/ai/character-replace/create"');
+    // 2026-10-07: a payment page sends every member back to the credits page of their section — the page that verifies the return (Character Replace is retired)
+    expect(code("lib/ai/character-replace/topup-server.ts")).toContain('? "/studio/ai/usage" : "/ai/usage"');
   });
   it("the Explore page prefetches every create link on landing, paints from a cached config, sends an older ?job= link to the create page, and its scope cards open the workspace on that scope", () => {
     const page = code("features/ai/frenz-ai-explore.tsx");

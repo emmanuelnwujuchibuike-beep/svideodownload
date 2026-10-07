@@ -59,7 +59,7 @@ export async function GET(request: Request) {
           weekResetsAt: entitlement.weekResetsAt,
           timezone: entitlement.timezone,
           subscription: entitlement.subscription
-            ? { plan: entitlement.subscription.plan, status: entitlement.subscription.status, active: entitlement.subscription.active, currentPeriodEnd: entitlement.subscription.currentPeriodEnd, cancelAtPeriodEnd: entitlement.subscription.cancelAtPeriodEnd, manageable: !!entitlement.subscription.subscriptionRef }
+            ? { plan: entitlement.subscription.plan, status: entitlement.subscription.status, active: entitlement.subscription.active, currentPeriodEnd: entitlement.subscription.currentPeriodEnd, cancelAtPeriodEnd: entitlement.subscription.cancelAtPeriodEnd, manageable: !!entitlement.subscription.subscriptionRef, provider: entitlement.subscription.provider }
             : null,
         },
         ledger: ledger.map((r) => ({ id: r.id, jobId: r.job_id, feature: r.feature, plan: r.plan, reserved: r.credits_reserved, consumed: r.credits_consumed, refunded: r.credits_refunded, status: r.status, dayKey: r.day_key, weekKey: r.week_key, at: r.created_at, updatedAt: r.updated_at })),

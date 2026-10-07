@@ -6,7 +6,10 @@ import { after } from "next/server";
 
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { checkoutMetadata, quoteCheckout } from "@/lib/ai/character-replace/topup-fx";
-import { resolvePurchase } from "@/lib/ai/credits/wallet-config";
+import { resolvePurchase, type PaymentMarket, type Purchase, type TopupProviderId } from "@/lib/ai/credits/wallet-config";
+import { beginBachsTopup } from "@/lib/ai/wallet/bachs-topup";
+import { bachsConfigured } from "@/lib/payments/bachs";
+import { routePayment } from "@/lib/payments/router";
 import { recordTopupAttempt } from "@/lib/ai/topup-attempts";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { CHARACTER_REPLACE_TOPUP_PURPOSE, initializeAiTopup, paystackEnabled } from "@/lib/paystack/paystack";
@@ -26,7 +29,7 @@ import { SITE_URL } from "@/lib/site";
  * confirms the payment, idempotently on the reference — and what is credited
  * is derived from the VERIFIED amount paid (wallet-config.ts `creditsForPayment`).
  */
-export type TopupStart = { ok: true; url: string; credits: number; bonusCredits: number; priceUsdCents: number } | { ok: false; status: number; error: string };
+export type TopupStart = { ok: true; url: string; credits: number; bonusCredits: number; priceUsdCents: number; provider: TopupProviderId } | { ok: false; status: number; error: string };
 
 export async function beginCharacterReplaceTopup(opts: {
   userId: string;
@@ -38,16 +41,49 @@ export async function beginCharacterReplaceTopup(opts: {
   /** Before 0184 the sheet sent dollars; a cached app may still. Read as that many dollars' worth of credits. */
   amountCents?: unknown;
   returnTo: unknown;
+  /** The member's market, from the edge (lib/payments/router.ts `paymentMarket`) — never from the body. Absent = "other". */
+  market?: PaymentMarket;
 }): Promise<TopupStart> {
-  if (!(await paystackEnabled())) return { ok: false, status: 503, error: "Payments aren't available right now." };
-
   const settings = await getLandingSettings();
-  const cr = settings.frenzAiCharacterReplace;
   const plans = settings.frenzAiPlans;
   const cpc = plans.credits.centsPerCredit;
   const legacyCredits = typeof opts.amountCents === "number" && Number.isFinite(opts.amountCents) ? Math.floor(opts.amountCents / Math.max(1, cpc)) : undefined;
   const purchase = resolvePurchase({ packId: opts.packId, credits: opts.credits ?? legacyCredits }, plans.wallet, cpc);
   if ("error" in purchase) return { ok: false, status: 400, error: purchase.error };
+
+  /*
+    ── WHICH RAIL (owner, 2026-10-07) ─────────────────────────────────────
+    The router orders the providers for this market; a provider is skipped
+    when it is not configured. The next one is tried ONLY when the previous
+    could not CREATE a checkout — the member never saw a payment page, so
+    nothing can have been paid. Once a checkout URL exists it is returned and
+    nothing else is opened.
+  */
+  const paystackOk = await paystackEnabled();
+  const candidates = routePayment({ purpose: "wallet_topup", market: opts.market ?? "other", routing: plans.wallet.routing, usable: (p) => (p === "bachs" ? bachsConfigured() : paystackOk) });
+  if (!candidates.length) return { ok: false, status: 503, error: "Payments aren't available right now." };
+  let last: TopupStart = { ok: false, status: 503, error: "Payments aren't available right now." };
+  for (const [i, provider] of candidates.entries()) {
+    if (i > 0) console.warn("[payments] fallback_triggered", { purpose: "wallet_topup", from: candidates[i - 1], to: provider, userId: opts.userId });
+    if (provider === "bachs") {
+      const returnPath = `${SITE_URL}${safeReturnTo(opts.returnTo)}`;
+      const started = await beginBachsTopup({ userId: opts.userId, email: opts.email, purchase, successUrl: returnPath, cancelUrl: returnPath });
+      if (started.ok) {
+        console.info("[payments] checkout_created", { provider, purpose: "wallet_topup", userId: opts.userId, credits: purchase.credits });
+        return { ok: true, url: started.url, credits: purchase.credits, bonusCredits: purchase.bonusCredits, priceUsdCents: purchase.priceUsdCents, provider };
+      }
+      last = started;
+      continue;
+    }
+    last = await beginPaystackTopup(opts, settings, purchase);
+    if (last.ok) return last;
+  }
+  return last;
+}
+
+/** The Paystack rail — the code that has taken every top-up since 2026-09-09, unchanged in what it does. */
+async function beginPaystackTopup(opts: { userId: string; email: string; returnTo: unknown }, settings: Awaited<ReturnType<typeof getLandingSettings>>, purchase: Purchase): Promise<TopupStart> {
+  const cr = settings.frenzAiCharacterReplace;
   const amount = purchase.priceUsdCents;
 
   /*
@@ -85,7 +121,8 @@ export async function beginCharacterReplaceTopup(opts: {
       pin: { ...checkoutMetadata(quote), ai_topup_pack: purchase.packId, ai_topup_credits: purchase.credits },
     });
     after(() => recordTopupAttempt({ reference, userId: opts.userId, amountCents: amount, currency: settings.frenzAiCurrency }));
-    return { ok: true, url, credits: purchase.credits, bonusCredits: purchase.bonusCredits, priceUsdCents: amount };
+    console.info("[payments] checkout_created", { provider: "paystack", purpose: "wallet_topup", userId: opts.userId, reference });
+    return { ok: true, url, credits: purchase.credits, bonusCredits: purchase.bonusCredits, priceUsdCents: amount, provider: "paystack" };
   } catch (e) {
     // Never the provider's message: it can carry the request back, with the email in it.
     console.error("[ai/cr/topup] initialize failed", { userId: opts.userId, error: String(e) });
@@ -93,10 +130,13 @@ export async function beginCharacterReplaceTopup(opts: {
   }
 }
 
-/** Where Paystack may send the member back. Anything else becomes the workspace. */
-const RETURN_PATHS = new Set(["/ai", "/ai/character-replace", "/ai/character-replace/create", "/ai/usage", "/studio/ai", "/studio/ai/character-replace", "/studio/ai/character-replace/create", "/studio/ai/usage"]);
-const DEFAULT_RETURN = "/ai/character-replace";
-
+/**
+ * Where a payment page may send the member back: ALWAYS the credits page of
+ * the section they were in (/ai/usage or /studio/ai/usage). That page is the
+ * one that verifies the return and shows "verifying → added / still
+ * confirming" — a tool page would show nothing while the webhook credits.
+ * Anything else (an unknown path, a foreign host) becomes /ai/usage.
+ */
 export function safeReturnTo(value: unknown): string {
-  return typeof value === "string" && RETURN_PATHS.has(value) ? value : DEFAULT_RETURN;
+  return typeof value === "string" && (value === "/studio/ai" || value.startsWith("/studio/ai/")) ? "/studio/ai/usage" : "/ai/usage";
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AiPlansSheet, relative } from "@/features/ai/credits/ai-plans-sheet";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
-import { getAiCredits, openAiPlanManage, type AiCreditsAnswer } from "@/lib/ai/credits/client";
+import { cancelAiPlan, getAiCredits, openAiPlanManage, type AiCreditsAnswer } from "@/lib/ai/credits/client";
 import { formatCents } from "@/lib/ai/economy";
 import { haptic } from "@/lib/motion/haptics";
 import { cn } from "@/lib/utils";
@@ -52,13 +52,24 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
   }, [load, refreshKey]);
 
   const manage = useCallback(async () => {
-    setManaging(true);
     haptic("selection");
+    // 2026-10-07: a Bachs-billed plan has no hosted manage page — the member cancels through us, at the end of the paid period, after confirming
+    if (data?.entitlement.subscription?.provider === "bachs") {
+      const ends = data.entitlement.subscription.currentPeriodEnd ? new Date(data.entitlement.subscription.currentPeriodEnd).toLocaleDateString() : "the end of this period";
+      if (!window.confirm(`Cancel your plan? It stays active until ${ends}, then stops renewing.`)) return;
+      setManaging(true);
+      const res = await cancelAiPlan();
+      setManaging(false);
+      if (res.ok) void load();
+      else setError(res.error);
+      return;
+    }
+    setManaging(true);
     const res = await openAiPlanManage();
     setManaging(false);
     if (res.ok) window.location.assign(res.url);
     else setError(res.error);
-  }, []);
+  }, [data, load]);
 
   if (!data) {
     return <div className={cn("h-28 animate-pulse rounded-[1.5rem] bg-secondary/60", className)} aria-busy="true" aria-label="Loading your AI allowance" />;
@@ -146,11 +157,12 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
                 Upgrade to {data.plans.plans.find((p) => p.id === "ai_max")?.label ?? "AI Max"}
               </button>
             ) : null}
-            {e.subscription?.manageable ? (
+            {e.subscription?.manageable && !(e.subscription.provider === "bachs" && e.subscription.cancelAtPeriodEnd) ? (
               <button type="button" onClick={() => void manage()} disabled={managing} className={aiButtonClass({ variant: "secondary", size: "sm" })}>
-                {managing ? "Opening…" : "Manage"}
+                {managing ? "Opening…" : e.subscription.provider === "bachs" ? "Cancel plan" : "Manage"}
               </button>
             ) : null}
+            {e.subscription?.cancelAtPeriodEnd && e.subscription.currentPeriodEnd ? <span className="text-[12px] text-muted-foreground">Ends {new Date(e.subscription.currentPeriodEnd).toLocaleDateString()}</span> : null}
           </span>
         </div>
         {error ? <p className="relative mt-2 text-[12px] font-semibold text-rose-500">{error}</p> : null}

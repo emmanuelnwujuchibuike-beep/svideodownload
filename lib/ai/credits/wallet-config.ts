@@ -33,11 +33,31 @@ export interface CreditPack {
   highlight: boolean;
 }
 
+/** What is being paid for — each has its own routing row. */
+export type PaymentPurpose = "wallet_topup" | "ai_subscription";
+export const PAYMENT_PURPOSES: readonly PaymentPurpose[] = ["wallet_topup", "ai_subscription"];
+/** Where the member is, decided SERVER-SIDE from the edge's country header (lib/payments/router.ts). */
+export type PaymentMarket = "NG" | "other";
+export const PAYMENT_MARKETS: readonly PaymentMarket[] = ["NG", "other"];
+export interface PaymentRoute {
+  primary: TopupProviderId;
+  /** Tried only when the primary is unavailable or its checkout could not be CREATED — never after a checkout exists. */
+  fallback: TopupProviderId | null;
+}
+export type PaymentRouting = Record<PaymentMarket, Record<PaymentPurpose, PaymentRoute>>;
+
 export interface AiWalletConfig {
   packs: CreditPack[];
   /** A member-typed amount of credits, within bounds. Off = packs only. */
   custom: { enabled: boolean; minCredits: number; maxCredits: number };
-  /** Which provider takes a top-up. The other stays wired for webhooks of payments already in flight. */
+  /**
+   * Which provider takes a payment, per market and purpose (owner, 2026-10-07:
+   * "Nigeria: Bachs primary, Paystack fallback; other countries: Paystack").
+   * Payments already started with a provider still credit through that
+   * provider's webhook whatever this says now.
+   */
+  routing: PaymentRouting;
+  /** @deprecated 0184's single switch — read only when a saved config predates `routing`. */
   provider: TopupProviderId;
 }
 
@@ -51,8 +71,31 @@ export const WALLET_BOUNDS = {
 export const AI_WALLET_DEFAULTS: AiWalletConfig = {
   packs: [50, 100, 250, 500, 1000].map((credits) => ({ id: `pack_${credits}`, credits, bonusCredits: 0, enabled: true, highlight: credits === 100 })),
   custom: { enabled: true, minCredits: 10, maxCredits: 5000 },
+  routing: {
+    NG: { wallet_topup: { primary: "bachs", fallback: "paystack" }, ai_subscription: { primary: "bachs", fallback: "paystack" } },
+    other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null } },
+  },
   provider: "paystack",
 };
+
+function normalizeRoute(raw: unknown, d: PaymentRoute): PaymentRoute {
+  const r = isRecord(raw) ? raw : {};
+  const primary: TopupProviderId = r.primary === "bachs" || r.primary === "paystack" ? r.primary : d.primary;
+  const fb = r.fallback === null ? null : r.fallback === "bachs" || r.fallback === "paystack" ? r.fallback : d.fallback;
+  // a fallback to the primary itself is no fallback
+  return { primary, fallback: fb === primary ? null : fb };
+}
+
+export function normalizePaymentRouting(raw: unknown): PaymentRouting {
+  const r = isRecord(raw) ? raw : {};
+  const d = AI_WALLET_DEFAULTS.routing;
+  return Object.fromEntries(
+    PAYMENT_MARKETS.map((m) => {
+      const mr = isRecord(r[m]) ? (r[m] as Record<string, unknown>) : {};
+      return [m, Object.fromEntries(PAYMENT_PURPOSES.map((p) => [p, normalizeRoute(mr[p], d[m][p])]))];
+    }),
+  ) as PaymentRouting;
+}
 
 const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 function int(v: unknown, fallback: number, min: number, max: number): number {
@@ -63,7 +106,7 @@ function int(v: unknown, fallback: number, min: number, max: number): number {
 
 export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
   const d = AI_WALLET_DEFAULTS;
-  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom } };
+  if (!isRecord(raw)) return { ...d, packs: d.packs.map((p) => ({ ...p })), custom: { ...d.custom }, routing: normalizePaymentRouting(null) };
   const seen = new Set<string>();
   const packs: CreditPack[] = [];
   if (Array.isArray(raw.packs)) {
@@ -84,6 +127,7 @@ export function normalizeAiWalletConfig(raw: unknown): AiWalletConfig {
   return {
     packs: (Array.isArray(raw.packs) ? packs : d.packs.map((p) => ({ ...p }))).sort((a, b) => a.credits - b.credits),
     custom: { enabled: typeof c.enabled === "boolean" ? c.enabled : d.custom.enabled, minCredits, maxCredits: Math.max(minCredits, int(c.maxCredits, d.custom.maxCredits, WALLET_BOUNDS.credits.min, WALLET_BOUNDS.credits.max)) },
+    routing: normalizePaymentRouting(raw.routing),
     provider: raw.provider === "bachs" ? "bachs" : "paystack",
   };
 }
@@ -141,7 +185,6 @@ export function publicWalletOffer(cfg: AiWalletConfig, centsPerCredit: number) {
     packs: cfg.packs.filter((p) => p.enabled).map((p) => ({ id: p.id, credits: p.credits, bonusCredits: p.bonusCredits, priceUsdCents: p.credits * cpc, highlight: p.highlight })),
     custom: cfg.custom.enabled ? { minCredits: cfg.custom.minCredits, maxCredits: cfg.custom.maxCredits } : null,
     centsPerCredit: cpc,
-    provider: cfg.provider,
   };
 }
 export type PublicWalletOffer = ReturnType<typeof publicWalletOffer>;

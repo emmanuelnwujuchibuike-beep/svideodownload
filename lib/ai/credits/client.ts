@@ -21,7 +21,7 @@ export interface AiCreditEntitlementView {
   dayResetsAt: string;
   weekResetsAt: string;
   timezone: string;
-  subscription: { plan: "ai_pro" | "ai_max"; status: string; active: boolean; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; manageable: boolean } | null;
+  subscription: { plan: "ai_pro" | "ai_max"; status: string; active: boolean; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; manageable: boolean; provider?: "paystack" | "bachs" } | null;
 }
 
 export interface AiCreditLedgerView {
@@ -80,6 +80,11 @@ export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string)
 /** Back from Paystack: the server reads the charge by its reference and activates the plan only if it is genuine. */
 export function verifyAiPlanReturn(reference: string): Promise<Result<{ activated: boolean; plan?: "ai_pro" | "ai_max"; planLabel?: string; status?: string; reason?: string | null; dailyLimit?: number; weeklyLimit?: number }>> {
   return request(`/api/ai/subscriptions/verify?reference=${encodeURIComponent(reference)}`);
+}
+
+/** A Bachs-billed plan: stop it at the end of the paid period (Bachs has no hosted manage page). */
+export function cancelAiPlan(): Promise<Result<{ endsAt?: string | null; alreadyCanceled?: boolean }>> {
+  return request("/api/ai/subscriptions/cancel", { method: "POST" });
 }
 
 /** Paystack's hosted page for the member's AI plan (card, cancellation). */

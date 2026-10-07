@@ -102,6 +102,7 @@ const aiPlanSchema = z
     interval: z.enum(["monthly", "yearly"]).optional(),
     dailyCredits: z.number().int().min(0).max(100_000).optional(),
     weeklyCredits: z.number().int().min(0).max(1_000_000).optional(),
+    bachsProductId: z.string().max(80).optional(),
     paystackPlanCode: z.string().max(100).optional(),
     blurb: z.string().max(160).optional(),
   })
@@ -252,6 +253,12 @@ const schema = z.object({
             .optional(),
           custom: z.object({ enabled: z.boolean().optional(), minCredits: z.number().int().min(1).max(1_000_000).optional(), maxCredits: z.number().int().min(1).max(1_000_000).optional() }).strict().optional(),
           provider: z.enum(["paystack", "bachs"]).optional(),
+          routing: z
+            .record(
+              z.enum(["NG", "other"]),
+              z.record(z.enum(["wallet_topup", "ai_subscription"]), z.object({ primary: z.enum(["paystack", "bachs"]), fallback: z.enum(["paystack", "bachs"]).nullable() }).strict()),
+            )
+            .optional(),
         })
         .strict()
         .optional(),

@@ -7,7 +7,7 @@ import { quoteCharacterReplace } from "@/lib/ai/character-replace/pricing";
 import { REPLACEMENT_MODES, replacementModeLabel } from "@/lib/ai/character-replace/modes";
 import { AI_PLAN_IDS, AI_PLANS_BOUNDS, normalizeAiPlansConfig, type AiPlanId, type AiPlansConfig } from "@/lib/ai/credits/config";
 import { AI_CREDIT_FEATURES, AI_FEATURE_LABELS, AI_FEATURES_BY_CHARACTER, AI_FEATURES_WITH_DURATION, AI_TIERS, type AiCreditFeatureId, type AiFeaturePolicies, type AiTier } from "@/lib/ai/credits/features";
-import { WALLET_BOUNDS } from "@/lib/ai/credits/wallet-config";
+import { PAYMENT_MARKETS, PAYMENT_PURPOSES, WALLET_BOUNDS, type PaymentRouting } from "@/lib/ai/credits/wallet-config";
 
 const TIER_LABEL: Record<AiTier, string> = { free: "Free", ai_pro: "AI Pro", ai_max: "AI Max" };
 type FeatureRow = { enabled: boolean; payAsYouGo: boolean; tiers: Record<AiTier, boolean>; multiplier: string; minimum: string; maxSeconds: string; included: Record<AiTier, string> };
@@ -53,9 +53,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
 
   const [enabled, setEnabled] = useState(cfg.enabled);
-  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; blurb: string }>>({
-    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, blurb: cfg.plans.ai_pro.blurb },
-    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, blurb: cfg.plans.ai_max.blurb },
+  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; bachs: string; blurb: string }>>({
+    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, bachs: cfg.plans.ai_pro.bachsProductId, blurb: cfg.plans.ai_pro.blurb },
+    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, bachs: cfg.plans.ai_max.bachsProductId, blurb: cfg.plans.ai_max.blurb },
   });
   const [freeEnabled, setFreeEnabled] = useState(cfg.freeCreations.enabled);
   const [freeCounts, setFreeCounts] = useState({ free: cfg.freeCreations.free === null ? "" : String(cfg.freeCreations.free), pro: cfg.freeCreations.pro === null ? "" : String(cfg.freeCreations.pro), business: cfg.freeCreations.business === null ? "" : String(cfg.freeCreations.business) });
@@ -70,7 +70,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const [customEnabled, setCustomEnabled] = useState(cfg.wallet.custom.enabled);
   const [customMin, setCustomMin] = useState(String(cfg.wallet.custom.minCredits));
   const [customMax, setCustomMax] = useState(String(cfg.wallet.custom.maxCredits));
-  const [provider, setProvider] = useState(cfg.wallet.provider);
+  const [provider] = useState(cfg.wallet.provider);
+  // 2026-10-07: which rail takes a payment, per market and purpose (lib/payments/router.ts)
+  const [routing, setRouting] = useState<PaymentRouting>(cfg.wallet.routing);
   // 0185: one row of rules per paid tool (lib/ai/credits/features.ts); the credit multiplier is credits.featureMultiplier
   const [features, setFeatures] = useState<Record<AiCreditFeatureId, FeatureRow>>(
     Object.fromEntries(
@@ -104,6 +106,24 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
     }
   };
 
+  // 2026-10-07: "Check with Bachs" — the product as Bachs holds it (needs the key's products:read scope)
+  const [bachsCheck, setBachsCheck] = useState<Record<AiPlanId, { busy: boolean; text: string | null; ok: boolean }>>({ ai_pro: { busy: false, text: null, ok: false }, ai_max: { busy: false, text: null, ok: false } });
+  const checkBachs = async (id: AiPlanId) => {
+    setBachsCheck((c) => ({ ...c, [id]: { busy: true, text: null, ok: false } }));
+    try {
+      const res = await fetch("/api/admin/ai/plans/verify-bachs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId: plans[id].bachs.trim() }) });
+      const json = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; product?: { name: string; amount: string | null; currency: string | null; interval: string | null; recurring: boolean } } | null;
+      if (json?.ok && json.product) {
+        const pr = json.product;
+        setBachsCheck((c) => ({ ...c, [id]: { busy: false, ok: pr.recurring, text: `Bachs: "${pr.name}" — ${pr.currency ?? ""} ${pr.amount ?? "?"}${pr.interval ? ` / ${pr.interval}` : ""}${pr.recurring ? "" : " — NOT recurring: a one-off product cannot be a subscription."}` } }));
+      } else {
+        setBachsCheck((c) => ({ ...c, [id]: { busy: false, ok: false, text: json?.error ?? "Bachs did not answer." } }));
+      }
+    } catch {
+      setBachsCheck((c) => ({ ...c, [id]: { busy: false, ok: false, text: "Network error." } }));
+    }
+  };
+
   const payload = useMemo(
     () => ({
       enabled,
@@ -118,6 +138,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
             dailyCredits: int(plans[id].daily, cfg.plans[id].dailyCredits),
             weeklyCredits: int(plans[id].weekly, cfg.plans[id].weeklyCredits),
             paystackPlanCode: plans[id].code.trim(),
+            bachsProductId: plans[id].bachs.trim(),
             blurb: plans[id].blurb.trim() || cfg.plans[id].blurb,
           },
         ]),
@@ -137,6 +158,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         packs: packs.map((p) => ({ credits: int(p.credits, 0), bonusCredits: int(p.bonus, 0), enabled: p.enabled, highlight: p.highlight })).filter((p) => p.credits > 0),
         custom: { enabled: customEnabled, minCredits: int(customMin, cfg.wallet.custom.minCredits), maxCredits: int(customMax, cfg.wallet.custom.maxCredits) },
         provider,
+        routing,
       },
       features: Object.fromEntries(
         AI_CREDIT_FEATURES.map((id) => {
@@ -145,7 +167,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
         }),
       ) as AiFeaturePolicies,
     }),
-    [centsPerCredit, cfg, customEnabled, features, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
+    [centsPerCredit, cfg, customEnabled, features, routing, customMax, customMin, enabled, freeCounts, freeEnabled, minimum, modeMult, packs, plans, provider, qualityMult, rounding, timezone, walletFallback, weekStartsOn],
   );
 
   /* the same bounds the server enforces, refused before the request leaves */
@@ -181,7 +203,11 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const warnings = useMemo(() => {
     const out: string[] = [];
     if (!payload.enabled) out.push("The AI plans are OFF: nothing can be bought and no credits are spent; the wallet and the complimentary creations work as before.");
-    for (const id of AI_PLAN_IDS) if (payload.plans[id].enabled && !payload.plans[id].paystackPlanCode) out.push(`${payload.plans[id].label} has no Paystack plan code — it is shown as coming soon and cannot be bought.`);
+    for (const id of AI_PLAN_IDS) {
+      const p = payload.plans[id];
+      if (p.enabled && !p.paystackPlanCode && !p.bachsProductId) out.push(`${p.label} has neither a Paystack plan code nor a Bachs product — it is shown as coming soon and cannot be bought.`);
+      else if (p.enabled && !p.bachsProductId && payload.wallet.routing.NG.ai_subscription.primary === "bachs") out.push(`${p.label} has no Bachs product: members in Nigeria will be sent to Paystack for it.`);
+    }
     if (payload.walletFallback === "allow") out.push("Wallet fallback = allow: a plan member whose allowance is short is charged from their balance without being asked.");
     if (!payload.wallet.packs.some((p) => p.enabled) && !payload.wallet.custom.enabled) out.push("No pack is on and the custom amount is off: nobody can buy credits.");
     for (const id of AI_CREDIT_FEATURES) {
@@ -190,7 +216,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
       else if (!f.payAsYouGo && !AI_TIERS.some((t) => t !== "free" && f.tiers[t])) out.push(`${AI_FEATURE_LABELS[id]}: pay-as-you-go is off and no AI plan may use it — nobody can.`);
       else if (!f.payAsYouGo) out.push(`${AI_FEATURE_LABELS[id]}: wallet credits cannot pay for it — only an AI plan's allowance or included generations.`);
     }
-    if (payload.wallet.provider === "bachs") out.push("Top-ups go through Bachs. Make sure its keys are set on the server; Paystack payments already started still credit through their webhook.");
+    if (PAYMENT_MARKETS.some((m) => PAYMENT_PURPOSES.some((p) => payload.wallet.routing[m][p].primary === "bachs" || payload.wallet.routing[m][p].fallback === "bachs"))) out.push("Bachs is routed: it is only used while BACHS_SECRET_KEY and BACHS_WEBHOOK_SECRET are set on the server — until then those payments go to the other rail.");
     if (payload.walletFallback === "off") out.push("Wallet fallback = off: a plan member whose allowance is short can only upgrade — their balance is not offered for that generation.");
     return out;
   }, [payload]);
@@ -275,6 +301,16 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                       </div>
                       {p.code.trim() && !/^PLN_[A-Za-z0-9]{4,60}$/.test(p.code.trim()) ? <span className="mt-1 block text-[11px] text-rose-600">Not a plan code — it must start with PLN_. Saving will leave the plan as “coming soon”.</span> : null}
                       {codeCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", codeCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{codeCheck[id].text}</span> : null}
+                    </Field>
+                    <Field id={`${id}-bachs`} label="Bachs product (prod_…)" hint="Bachs dashboard → Products → this plan's RECURRING product (monthly, same price) → its id. Not a payment link: the id lets us tie the payment to the member. Empty = Bachs does not sell this plan.">
+                      <div className="mt-1 flex gap-2">
+                        <input id={`${id}-bachs`} value={p.bachs} onChange={(e) => set({ bachs: e.target.value })} className={cn(input, "mt-0 min-w-0 flex-1")} placeholder="prod_…" />
+                        <button type="button" onClick={() => checkBachs(id)} disabled={bachsCheck[id].busy || !p.bachs.trim()} className="shrink-0 rounded-xl border border-border px-3 text-xs font-semibold disabled:opacity-50">
+                          {bachsCheck[id].busy ? "Checking…" : "Check with Bachs"}
+                        </button>
+                      </div>
+                      {p.bachs.trim() && !/^prod_[A-Za-z0-9]{4,60}$/.test(p.bachs.trim()) ? <span className="mt-1 block text-[11px] text-rose-600">Not a product id — it must start with prod_. A payment link can&apos;t be used here.</span> : null}
+                      {bachsCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", bachsCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{bachsCheck[id].text}</span> : null}
                     </Field>
                     <Field id={`${id}-daily`} label="Daily credits"><input id={`${id}-daily`} inputMode="numeric" value={p.daily} onChange={(e) => set({ daily: e.target.value })} className={input} /></Field>
                     <Field id={`${id}-weekly`} label="Weekly credits" hint="Both must cover a generation."><input id={`${id}-weekly`} inputMode="numeric" value={p.weekly} onChange={(e) => set({ weekly: e.target.value })} className={input} /></Field>
@@ -435,12 +471,43 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
             <Field id="custom-max" label="Custom maximum (credits)"><input id="custom-max" inputMode="numeric" value={customMax} onChange={(e) => setCustomMax(e.target.value)} className={small} /></Field>
           </div>
           <div className="mt-4">
-            <Field id="topup-provider" label="Payment provider for top-ups" hint="Payments already started with the other provider still credit when they settle.">
-              <select id="topup-provider" value={provider} onChange={(e) => setProvider(e.target.value as typeof provider)} className={input}>
-                <option value="paystack">Paystack</option>
-                <option value="bachs">Bachs (bachs.io)</option>
-              </select>
-            </Field>
+            <p className="text-xs font-semibold text-muted-foreground">Payment routing — which provider takes a payment</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+              The market is the member&apos;s country as the network edge reports it (never what the browser says). The fallback is used only when the primary is not configured or its checkout could
+              not be created — never after a checkout was opened, so nobody pays twice. Payments already started still complete through their own provider.
+            </p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {PAYMENT_MARKETS.flatMap((m) =>
+                PAYMENT_PURPOSES.map((pp) => {
+                  const r = routing[m][pp];
+                  const set = (patch: Partial<typeof r>) => setRouting((all) => ({ ...all, [m]: { ...all[m], [pp]: { ...all[m][pp], ...patch } } }));
+                  return (
+                    <div key={`${m}-${pp}`} className="rounded-xl border border-border/60 px-3 py-2">
+                      <p className="text-xs font-semibold">
+                        {m === "NG" ? "Nigeria" : "Other countries"} · {pp === "wallet_topup" ? "Credit top-ups" : "AI plans"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <label className="text-[11px] text-muted-foreground">
+                          Primary{" "}
+                          <select value={r.primary} onChange={(e) => set({ primary: e.target.value as "paystack" | "bachs" })} className="rounded-lg border border-border bg-background px-2 py-1 text-xs">
+                            <option value="bachs">Bachs</option>
+                            <option value="paystack">Paystack</option>
+                          </select>
+                        </label>
+                        <label className="text-[11px] text-muted-foreground">
+                          Fallback{" "}
+                          <select value={r.fallback ?? ""} onChange={(e) => set({ fallback: e.target.value === "" ? null : (e.target.value as "paystack" | "bachs") })} className="rounded-lg border border-border bg-background px-2 py-1 text-xs">
+                            <option value="">None</option>
+                            <option value="bachs">Bachs</option>
+                            <option value="paystack">Paystack</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                }),
+              )}
+            </div>
           </div>
         </Group>
 

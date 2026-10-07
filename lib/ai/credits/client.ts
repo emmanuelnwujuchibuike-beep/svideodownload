@@ -21,7 +21,7 @@ export interface AiCreditEntitlementView {
   dayResetsAt: string;
   weekResetsAt: string;
   timezone: string;
-  subscription: { plan: "ai_pro" | "ai_max"; status: string; active: boolean; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; manageable: boolean; provider?: "paystack" | "bachs" } | null;
+  subscription: { plan: "ai_pro" | "ai_max"; status: string; active: boolean; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; manageable: boolean; provider?: "paystack" | "bachs" | "credits" } | null;
 }
 
 export interface AiCreditLedgerView {
@@ -75,6 +75,11 @@ export function getAiCredits(opts?: { ledger?: number }): Promise<Result<AiCredi
 /** Begin an AI plan checkout: the server answers Paystack's hosted page; the browser navigates there. */
 export function beginAiPlanCheckout(plan: "ai_pro" | "ai_max", returnTo: string, provider?: "paystack" | "bachs" | null): Promise<Result<{ url: string }>> {
   return request<{ url: string }>("/api/ai/subscriptions/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan, returnTo, ...(provider ? { provider } : {}) }) });
+}
+
+/** 0192: one period of an AI plan paid with wallet credits — the server prices it and debits atomically. */
+export function buyAiPlanWithCredits(plan: "ai_pro" | "ai_max"): Promise<Result<{ plan: "ai_pro" | "ai_max"; planLabel: string; credits: number; periodEnd: string }>> {
+  return request("/api/ai/subscriptions/credits", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan }) });
 }
 
 /** Back from Paystack: the server reads the charge by its reference and activates the plan only if it is genuine. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -126,8 +126,14 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
                 {balance ? formatCredits(balance.balanceCents) : who === "member" ? "—" : " "}
               </span>
             </span>
+            {/* 2026-10-07 (owner): "an earn credits button" — the daily and weekly quests */}
+            <Link href="/quests" prefetch={false} aria-label="Earn credits" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-2.5 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)] transition active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100">
+              <Trophy className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden min-[400px]:inline">Earn</span>
+            </Link>
             <Link href={`${base}/usage`} prefetch={false} className="ai-strip-cta">
-              View credits <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              <span className="min-[400px]:hidden">Credits</span>
+              <span className="hidden min-[400px]:inline">View credits</span> <ArrowRight className="h-3.5 w-3.5" aria-hidden />
             </Link>
           </>
         )}

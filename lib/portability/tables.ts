@@ -188,6 +188,9 @@ export const OWNER_COLUMN: Record<string, string> = {
   withdrawal_requests: "user_id",
   // 0190: the optional plan survey - the member's own answers
   ai_plan_survey_responses: "user_id",
+  // 0192: your quest progress and the activities that counted toward it
+  quest_progress: "user_id",
+  quest_event_log: "user_id",
   /*
     Voice Cloning (0171). An export carries the member's own facts — the names,
     the dates, the rights record they signed, how much audio each voice was built

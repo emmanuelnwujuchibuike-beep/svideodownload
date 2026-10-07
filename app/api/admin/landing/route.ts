@@ -431,6 +431,18 @@ const schema = z.object({
       events: z.record(z.string().max(40), z.object({ enabled: z.boolean().optional(), actorCredits: z.number().int().min(0).max(100_000).optional(), referrerCredits: z.number().int().min(0).max(100_000).optional(), referrerRepeatable: z.boolean().optional(), actorOncePerUser: z.boolean().optional(), features: z.array(z.string().max(40)).max(12).optional(), includeComplimentary: z.boolean().optional(), minDurationSeconds: z.number().int().min(1).max(3600).optional() }).strict()).optional(),
       qualification: z.object({ minAccountAgeDays: z.number().int().min(0).max(3650).optional(), minEngagements: z.number().int().min(0).max(1_000_000).optional(), extraRequirements: z.array(z.string().max(120)).max(8).optional() }).strict().optional(),
       attribution: z.object({ windowDays: z.number().int().min(1).max(90).optional() }).strict().optional(),
+      /** 0192: quests (lib/rewards/quests.ts — the normaliser cleans again). */
+      quests: z
+        .object({
+          enabled: z.boolean().optional(),
+          weeklyCreditCap: z.number().int().min(0).max(1_000_000).optional(),
+          items: z
+            .array(z.object({ id: z.string().max(60).optional(), title: z.string().max(80), event: z.string().max(40), target: z.number().int().min(1).max(1000), credits: z.number().int().min(0).max(10_000), period: z.enum(["daily", "weekly"]), enabled: z.boolean().optional() }).strict())
+            .max(20)
+            .optional(),
+        })
+        .strict()
+        .optional(),
       withdrawals: z
         .object({
           enabled: z.boolean().optional(),

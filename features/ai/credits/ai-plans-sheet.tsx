@@ -7,7 +7,7 @@ import { useCallback, useState } from "react";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
 import { PaymentProviderPicker, usePaymentOptions, type PaymentProvider } from "@/features/ai/wallet/payment-provider-picker";
 import type { CharacterReplaceCreditsView } from "@/lib/ai/character-replace/types";
-import { beginAiPlanCheckout } from "@/lib/ai/credits/client";
+import { beginAiPlanCheckout, buyAiPlanWithCredits } from "@/lib/ai/credits/client";
 import type { AiPlansPublic } from "@/lib/ai/credits/config";
 import { formatCents } from "@/lib/ai/economy";
 import { haptic } from "@/lib/motion/haptics";
@@ -83,6 +83,26 @@ export function AiPlansSheet({
     },
     [returnTo, options, provider],
   );
+
+  // 0192 (owner 2026-10-07): a plan can be paid with credits — one period, never renews; the server prices and debits it
+  const [creditsBusy, setCreditsBusy] = useState<"ai_pro" | "ai_max" | null>(null);
+  const payWithCredits = useCallback(
+    async (plan: "ai_pro" | "ai_max") => {
+      setCreditsBusy(plan);
+      setError(null);
+      haptic("medium");
+      const res = await buyAiPlanWithCredits(plan);
+      if (!res.ok) {
+        setCreditsBusy(null);
+        setError(res.error);
+        return;
+      }
+      // the credits page celebrates the plan the server now holds (?plan_welcome=1)
+      window.location.assign(`${returnTo}${returnTo.includes("?") ? "&" : "?"}plan_welcome=1`);
+    },
+    [returnTo],
+  );
+  const creditPrice = (priceCents: number) => Math.ceil(priceCents / Math.max(1, plans?.centsPerCredit ?? 10));
 
   const offered = plans?.plans ?? [];
   const rank = (p: "ai_pro" | "ai_max" | null) => (p === "ai_max" ? 2 : p === "ai_pro" ? 1 : 0);
@@ -178,6 +198,20 @@ export function AiPlansSheet({
                   >
                     {busy === p.id ? "Opening checkout…" : isCurrent ? "Current plan" : lower ? "Included in your plan" : !p.purchasable ? "Coming soon" : currentPlan ? `Upgrade to ${p.label}` : `Get ${p.label}`}
                   </button>
+                  {!isCurrent && !lower ? (
+                    <button
+                      type="button"
+                      disabled={busy !== null || creditsBusy !== null}
+                      onClick={() => void payWithCredits(p.id)}
+                      className={cn(
+                        "mt-2 flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-full text-[13px] font-semibold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60",
+                        top ? "bg-white/15 text-white ring-1 ring-inset ring-white/40" : "bg-secondary text-foreground ring-1 ring-inset ring-black/[0.06]",
+                      )}
+                    >
+                      <Wallet className="h-3.5 w-3.5" aria-hidden />
+                      {creditsBusy === p.id ? "Paying with credits…" : `Pay with credits · ${creditPrice(p.priceCents).toLocaleString("en-US")} credits`}
+                    </button>
+                  ) : null}
                 </article>
               );
             })}

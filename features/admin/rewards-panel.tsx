@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/ai/economy";
 import type { LandingSettings } from "@/lib/landing/settings";
 import { REWARD_EVENT_LABELS, REWARD_EVENT_SOURCE, REWARD_EVENTS, type RewardEventType, type RewardRule } from "@/lib/rewards/config";
 import type { RewardsAdminView } from "@/lib/rewards/admin";
+import { QUEST_EVENT_LABELS, QUEST_EVENTS, questId, type Quest, type QuestEvent } from "@/lib/rewards/quests";
 import { cn } from "@/lib/utils";
 
 /**
@@ -23,6 +24,10 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
   const router = useRouter();
   const cfg = settings.frenzRewards;
   const [enabled, setEnabled] = useState(cfg.enabled);
+  // 0192: the quests — rows the operator adds, edits and removes
+  const [questsOn, setQuestsOn] = useState(cfg.quests.enabled);
+  const [questCap, setQuestCap] = useState(String(cfg.quests.weeklyCreditCap));
+  const [quests, setQuests] = useState<(Omit<Quest, "target" | "credits"> & { target: string; credits: string })[]>(cfg.quests.items.map((q) => ({ ...q, target: String(q.target), credits: String(q.credits) })));
   const [rules, setRules] = useState<Record<RewardEventType, RuleRow>>(
     Object.fromEntries(REWARD_EVENTS.map((e) => { const r = cfg.events[e]; return [e, { enabled: r.enabled, actor: String(r.actorCredits), referrer: String(r.referrerCredits), repeatable: r.referrerRepeatable, once: r.actorOncePerUser, minSeconds: String(r.minDurationSeconds ?? ""), includeFree: !!r.includeComplimentary }]; })) as Record<RewardEventType, RuleRow>,
   );
@@ -48,9 +53,16 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
       ),
       qualification: { minAccountAgeDays: n(q.age, 30), minEngagements: n(q.eng, 100), extraRequirements: q.extra.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 8) },
       attribution: { windowDays: Math.max(1, n(q.window, 7)) },
+      quests: {
+        enabled: questsOn,
+        weeklyCreditCap: Math.max(0, n(questCap, 0)),
+        items: quests
+          .filter((x) => x.title.trim())
+          .map((x) => ({ id: x.id || questId(x.title), title: x.title.trim(), event: x.event, target: Math.max(1, n(x.target, 1)), credits: Math.max(0, n(x.credits, 0)), period: x.period, enabled: x.enabled })),
+      },
       withdrawals: { enabled: w.enabled, creditsPerUsd: Math.max(1, n(w.rate, 10)), minCredits: Math.max(1, n(w.min, 100)), maxCredits: Math.max(1, n(w.max, 10000)), maxRequestsPerDay: Math.max(1, n(w.perDay, 1)), maxCreditsPerMonth: Math.max(1, n(w.perMonth, 50000)), manualReviewAboveCredits: n(w.review, 0), methods: cfg.withdrawals.methods },
     }),
-    [cfg.events, cfg.withdrawals.methods, enabled, q, rules, w],
+    [cfg.events, cfg.withdrawals.methods, enabled, q, rules, w, questsOn, questCap, quests],
   );
 
   const save = async () => {
@@ -115,6 +127,47 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
           Extra withdrawal requirements — one per line, up to 8 (shown to members; your team checks them when reviewing an application). Set age or engagements to 0 to drop that requirement.
           <textarea value={q.extra} onChange={(x) => setQ({ ...q, extra: x.target.value })} rows={3} placeholder={"Verified email address\nProfile photo and display name set"} className={cn(input, "mt-1 block w-full")} />
         </label>
+        {/* 0192 — quests: daily (reset 01:00 Lagos) and weekly (reset Sunday 01:00 Lagos) */}
+        <div className="mt-5 rounded-2xl border border-border/70 px-4 py-3">
+          <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={questsOn} onChange={(x) => setQuestsOn(x.target.checked)} /> Quests on (members earn credits for finishing them)</label>
+          <p className="mt-1 text-xs text-muted-foreground">Daily quests reset at 1:00 AM Lagos time; weekly quests reset Sunday 1:00 AM Lagos time. Each activity counts once per item (a like, a download, a video), each quest pays once per period, and the weekly cap limits what quests pay a member in a week.</p>
+          <label className="mt-3 block text-xs text-muted-foreground">Weekly quest credit cap per member (0 = no cap)<input inputMode="numeric" value={questCap} onChange={(x) => setQuestCap(x.target.value)} className={cn(input, "mt-1 block w-32")} /></label>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-xs">
+              <thead className="text-[11px] uppercase tracking-[0.05em] text-muted-foreground">
+                <tr><th className="py-1 pr-2">On</th><th className="py-1 pr-2">Quest title</th><th className="py-1 pr-2">Counts</th><th className="py-1 pr-2">Target</th><th className="py-1 pr-2">Credits</th><th className="py-1 pr-2">Resets</th><th /></tr>
+              </thead>
+              <tbody>
+                {quests.map((x, i) => {
+                  const set = (patch: Partial<typeof x>) => setQuests((all) => all.map((y, j) => (j === i ? { ...y, ...patch } : y)));
+                  return (
+                    <tr key={x.id || i} className="align-top">
+                      <td className="py-1 pr-2"><input type="checkbox" checked={x.enabled} onChange={(e) => set({ enabled: e.target.checked })} aria-label="Quest on" /></td>
+                      <td className="py-1 pr-2"><input value={x.title} maxLength={60} onChange={(e) => set({ title: e.target.value })} className={cn(input, "w-48")} /></td>
+                      <td className="py-1 pr-2">
+                        <select value={x.event} onChange={(e) => set({ event: e.target.value as QuestEvent })} className={cn(input, "w-44")}>
+                          {QUEST_EVENTS.map((ev) => <option key={ev} value={ev}>{QUEST_EVENT_LABELS[ev]}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-1 pr-2"><input inputMode="numeric" value={x.target} onChange={(e) => set({ target: e.target.value })} className={cn(input, "w-16")} /></td>
+                      <td className="py-1 pr-2"><input inputMode="numeric" value={x.credits} onChange={(e) => set({ credits: e.target.value })} className={cn(input, "w-16")} /></td>
+                      <td className="py-1 pr-2">
+                        <select value={x.period} onChange={(e) => set({ period: e.target.value as "daily" | "weekly" })} className={cn(input, "w-24")}>
+                          <option value="daily">Daily</option>
+                          <option value="weekly">Weekly</option>
+                        </select>
+                      </td>
+                      <td className="py-1"><button type="button" onClick={() => setQuests((all) => all.filter((_, j) => j !== i))} className="text-rose-600">Remove</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {quests.length < 20 ? (
+            <button type="button" onClick={() => setQuests((all) => [...all, { id: "", title: "", event: "download_completed", target: "1", credits: "1", period: "daily", enabled: true }])} className="mt-2 text-xs font-semibold text-primary">+ Add a quest</button>
+          ) : null}
+        </div>
         <div className="mt-5 rounded-2xl border border-border/70 px-4 py-3">
           <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={w.enabled} onChange={(x) => setW({ ...w, enabled: x.target.checked })} /> Withdrawals open (paid out by hand)</label>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -1,3 +1,5 @@
+import { normalizeQuests, QUESTS_DEFAULTS, type QuestsConfig } from "@/lib/rewards/quests";
+
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  *  REWARD RULES — the operator's, in one settings key (pure)
@@ -98,6 +100,8 @@ export interface RewardsConfig {
   qualification: { minAccountAgeDays: number; minEngagements: number; extraRequirements: string[] };
   /** A new member is attributed to a share link only within this many days of their account being created. */
   attribution: { windowDays: number };
+  /** 0192: daily and weekly quests (lib/rewards/quests.ts) — counted and paid by the SQL engine. */
+  quests: QuestsConfig;
   withdrawals: {
     enabled: boolean;
     /** 10 = 10 credits are worth $1. */
@@ -126,6 +130,7 @@ export const REWARDS_DEFAULTS: RewardsConfig = {
   },
   qualification: { minAccountAgeDays: 30, minEngagements: 100, extraRequirements: [] },
   attribution: { windowDays: 7 },
+  quests: QUESTS_DEFAULTS,
   withdrawals: { enabled: false, creditsPerUsd: 10, minCredits: 100, maxCredits: 10_000, maxRequestsPerDay: 1, maxCreditsPerMonth: 50_000, manualReviewAboveCredits: 0, methods: ["bank_transfer"] },
   version: 1,
   updatedAt: null,
@@ -176,6 +181,7 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
         : [],
     },
     attribution: { windowDays: int(a.windowDays, d.attribution.windowDays, 1, 90) },
+    quests: normalizeQuests(r.quests),
     withdrawals: {
       enabled: bool(w.enabled, d.withdrawals.enabled),
       creditsPerUsd: int(w.creditsPerUsd, d.withdrawals.creditsPerUsd, 1, 1_000_000),
@@ -193,7 +199,7 @@ export function normalizeRewardsConfig(raw: unknown): RewardsConfig {
 
 /** A save that changes any amount or rule bumps the version stamped on every reward after it. */
 export function versionRewardsConfig(previous: RewardsConfig, next: RewardsConfig, now: Date = new Date()): RewardsConfig {
-  const fp = (c: RewardsConfig) => JSON.stringify({ e: c.enabled, ev: c.events, q: c.qualification, a: c.attribution, w: c.withdrawals });
+  const fp = (c: RewardsConfig) => JSON.stringify({ e: c.enabled, ev: c.events, q: c.qualification, a: c.attribution, w: c.withdrawals, qs: c.quests });
   if (fp(previous) === fp(next)) return { ...next, version: previous.version, updatedAt: previous.updatedAt };
   return { ...next, version: previous.version + 1, updatedAt: now.toISOString() };
 }

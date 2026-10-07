@@ -50,25 +50,27 @@ export interface AiSubscription {
   cancelAtPeriodEnd: boolean;
   subscriptionRef: string | null;
   emailToken: string | null;
-  /** Which rail bills it — Paystack (a manage link) or Bachs (cancel through us). */
-  provider: "paystack" | "bachs";
+  /** Which rail bills it — Paystack (a manage link), Bachs (cancel through us), or credits (one period, never renews — 0192). */
+  provider: "paystack" | "bachs" | "credits";
 }
 
 /** A period end more than this far in the past means the renewal is not coming (Paystack retries for a few days). */
 const GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
-export function subscriptionIsActive(row: Pick<AiSubscriptionRow, "status" | "current_period_end">, now: number = Date.now()): boolean {
+export function subscriptionIsActive(row: Pick<AiSubscriptionRow, "status" | "current_period_end"> & { provider?: string | null }, now: number = Date.now()): boolean {
   if (row.status !== "active" && row.status !== "trialing" && row.status !== "past_due") return false;
   if (!row.current_period_end) return row.status !== "past_due";
   const end = Date.parse(row.current_period_end);
   if (!Number.isFinite(end)) return row.status !== "past_due";
+  // 0192: a plan paid with credits is one period and never renews — no renewal grace, it ends when it ends
+  if (row.provider === "credits") return now <= end;
   // active/trialing: honoured until the period end plus a grace for the renewal charge; past_due: only inside the paid period
   return row.status === "past_due" ? now <= end : now <= end + GRACE_MS;
 }
 
 export function toAiSubscription(row: AiSubscriptionRow | null, now: number = Date.now()): AiSubscription | null {
   if (!row) return null;
-  return { plan: row.plan, status: row.status, active: subscriptionIsActive(row, now), currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end, subscriptionRef: row.subscription_ref, emailToken: row.email_token, provider: (row as { provider?: string }).provider === "bachs" ? "bachs" : "paystack" };
+  return { plan: row.plan, status: row.status, active: subscriptionIsActive(row as AiSubscriptionRow & { provider?: string | null }, now), currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end, subscriptionRef: row.subscription_ref, emailToken: row.email_token, provider: (row as { provider?: string }).provider === "bachs" ? "bachs" : (row as { provider?: string }).provider === "credits" ? "credits" : "paystack" };
 }
 
 export async function getAiSubscription(userId: string): Promise<AiSubscription | null> {

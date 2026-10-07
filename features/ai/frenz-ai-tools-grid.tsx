@@ -12,6 +12,7 @@ import {
   UserRoundCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 
 import { LinkPendingStripe } from "@/features/navigation/link-pending-stripe";
 import type { ShowcaseImage } from "@/lib/ai/showcase/slides";
@@ -234,12 +235,15 @@ export function FrenzAIToolsGrid({
   onFlowTool,
   disabled,
   images,
+  clips,
   className,
 }: {
   characterReplaceHref: string;
   historyHref: string;
   /** A real picture per tool, from the admin's showcase uploads (see ToolCardView). */
   images?: Partial<Record<AiToolId, ShowcaseImage>>;
+  /** A short muted clip per tool (Admin → Frenz AI → Tool cards); plays only while its card is on screen. */
+  clips?: Partial<Record<AiToolId, string>>;
   /** "all" — the Explore page; "beyond-scopes" is kept for a host that draws the scopes itself. */
   include?: "all" | "beyond-scopes";
   /** When given, a flow tool (Voice Replace) is a button that hands its id back instead of a link. */
@@ -302,6 +306,7 @@ export function FrenzAIToolsGrid({
                     onFlowTool={onFlowTool}
                     disabledNote={disabled?.[tool.id] ?? null}
                     image={images?.[tool.id] ?? null}
+                    clip={clips?.[tool.id] ?? null}
                     wide={rows.length % 2 === 1 && i === rows.length - 1}
                   />
                 </li>
@@ -366,12 +371,14 @@ function ToolCardView({
   onFlowTool: _onFlowTool,
   disabledNote,
   image,
+  clip,
   wide,
 }: {
   tool: AiToolCard;
   onFlowTool?: (id: FlowToolId) => void;
   disabledNote: string | null;
   image?: ShowcaseImage | null;
+  clip?: string | null;
   wide?: boolean;
 }) {
   const { icon: Icon, href, name, blurb, id } = tool;
@@ -387,6 +394,7 @@ function ToolCardView({
       ) : (
         <Icon className="absolute -bottom-3 -right-2 h-20 w-20 text-white/[0.1]" strokeWidth={1.25} aria-hidden />
       )}
+      {image && clip ? <CardClip src={clip} poster={image.sm} /> : null}
       <span className="absolute inset-0 bg-gradient-to-t from-[#0b1340]/45 to-transparent" aria-hidden />
       <span className="absolute left-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.18] text-white ring-1 ring-inset ring-white/35">
         <Icon className="h-4 w-4" aria-hidden />
@@ -431,4 +439,36 @@ function ToolCardView({
       <LinkPendingStripe />
     </Link>
   );
+}
+
+/**
+ * A card's clip (2026-10-07). Nothing is downloaded until the card is on
+ * screen (`preload="none"`), it plays muted only while at least half of it is
+ * visible, and it pauses the moment it is not — no timer, no request while the
+ * page sits idle. Reduced motion or Save-Data keeps the still picture.
+ */
+function CardClip({ src, poster }: { src: string; poster: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || c?.saveData) {
+      v.style.display = "none";
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e?.isIntersecting) v.play().catch(() => undefined);
+        else v.pause();
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(v);
+    return () => {
+      io.disconnect();
+      v.pause();
+    };
+  }, []);
+  return <video ref={ref} src={src} poster={poster} muted loop playsInline preload="none" aria-hidden className="absolute inset-0 h-full w-full object-cover" />;
 }

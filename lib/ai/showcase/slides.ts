@@ -181,7 +181,7 @@ export function isShowcaseImageUrl(value: unknown, supabaseUrl: string | undefin
 
 export const SHOWCASE_BUCKET = "ai-showcase";
 
-function normalizeVideo(value: unknown, supabaseUrl: string | undefined): ShowcaseVideo | null {
+export function normalizeShowcaseVideo(value: unknown, supabaseUrl: string | undefined): ShowcaseVideo | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
   if (!isShowcaseImageUrl(v.url, supabaseUrl) || !/.(mp4|webm)$/i.test(v.url)) return null;
@@ -189,7 +189,7 @@ function normalizeVideo(value: unknown, supabaseUrl: string | undefined): Showca
   return { url: v.url, bytes };
 }
 
-function normalizeImage(value: unknown, supabaseUrl: string | undefined): ShowcaseImage | null {
+export function normalizeShowcaseImage(value: unknown, supabaseUrl: string | undefined): ShowcaseImage | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
   if (!isShowcaseImageUrl(v.sm, supabaseUrl) || !isShowcaseImageUrl(v.lg, supabaseUrl)) return null;
@@ -224,8 +224,8 @@ export function normalizeShowcase(value: unknown, supabaseUrl: string | undefine
       highlight,
       description: cleanText(r.description, SHOWCASE_LIMITS.description),
       target: isShowcaseTarget(r.target) ? r.target : "explore",
-      image: normalizeImage(r.image, supabaseUrl),
-      video: normalizeVideo(r.video, supabaseUrl),
+      image: normalizeShowcaseImage(r.image, supabaseUrl),
+      video: normalizeShowcaseVideo(r.video, supabaseUrl),
       alt: cleanText(r.alt, SHOWCASE_LIMITS.alt),
     });
     if (out.length >= SHOWCASE_LIMITS.slides) break;

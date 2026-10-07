@@ -129,5 +129,16 @@ export function promoStages(p: AiPromo): PromoStage[] {
   return out;
 }
 
+/**
+ * The stage the tile OPENS on (owner, 2026-10-07: "it should be like the
+ * wallpaper button"): the picture pair, else the clip, else the intro — media
+ * first and at once; the intro takes its turn in the loop after them.
+ */
+export function firstStage(p: AiPromo): PromoStage {
+  if (p.image?.enabled) return "image";
+  if (p.video?.enabled) return "video";
+  return "intro";
+}
+
 /** Same limits as the showcase clip — one bucket, one rule. */
 export const PROMO_VIDEO = SHOWCASE_VIDEO;

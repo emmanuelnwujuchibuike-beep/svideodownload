@@ -29,6 +29,7 @@ import type { CharacterReplacePublicConfig } from "@/lib/ai/character-replace/co
 import { REPLACEMENT_MODES } from "@/lib/ai/character-replace/modes";
 import type { CharacterReplaceFreeAccess } from "@/lib/ai/character-replace/types";
 import { getAiEntitlement, type AiMemberEntitlement } from "@/lib/ai/client";
+import type { ShowcaseCards } from "@/lib/ai/showcase/cards";
 import type { ShowcaseImage, ShowcaseSlide, ShowcaseTarget } from "@/lib/ai/showcase/slides";
 import {
   readAiEntitlementCache,
@@ -132,6 +133,7 @@ export function FrenzAIExplore({
   historyHref,
   usageHref,
   slides,
+  cards,
 }: {
   /** The create page, given the scope in `?mode=`. */
   createPath: string;
@@ -140,6 +142,8 @@ export function FrenzAIExplore({
   usageHref: string;
   /** The showcase slides, read by the server page (lib/ai/showcase/server.ts). */
   slides: ShowcaseSlide[];
+  /** Each tool card's own picture/clip, set in Admin → Frenz AI → Tool cards (2026-10-07). */
+  cards?: ShowcaseCards;
 }) {
   const router = useRouter();
   /*
@@ -149,12 +153,19 @@ export function FrenzAIExplore({
   */
   const toolImages = useMemo(() => {
     const out: Partial<Record<AiToolId, ShowcaseImage>> = {};
+    // a card's own upload first; a slide's picture is the fallback for the rest
+    for (const [id, media] of Object.entries(cards ?? {})) if (media?.image) out[id as AiToolId] = media.image;
     for (const s of slides) {
       const id = SHOWCASE_TARGET_TOOL[s.target];
       if (id && s.image && !out[id]) out[id] = s.image;
     }
     return out;
-  }, [slides]);
+  }, [slides, cards]);
+  const toolClips = useMemo(() => {
+    const out: Partial<Record<AiToolId, string>> = {};
+    for (const [id, media] of Object.entries(cards ?? {})) if (media?.video) out[id as AiToolId] = media.video.url;
+    return out;
+  }, [cards]);
   const characterReplaceHref = createPath.replace(/\/create$/, "");
   const [config, setConfig] = useState<CharacterReplacePublicConfig | null>(
     null,
@@ -345,6 +356,7 @@ export function FrenzAIExplore({
             historyHref={historyHref}
             disabled={disabled}
             images={toolImages}
+            clips={toolClips}
             onFlowTool={(id) => {
               setHint(FLOW_TOOL_HINT[id] ?? null);
               haptic("selection");

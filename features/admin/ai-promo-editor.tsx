@@ -133,7 +133,7 @@ export function AiPromoEditor({ initial }: { initial: AiPromo | null }) {
     <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
       <h2 className="mb-1 font-semibold">Landing promotion</h2>
       <p className="mb-5 text-sm text-muted-foreground">
-        The Frenz AI tile on the landing page, in the slot Explore used to hold. After the page has loaded it plays: Frenz AI intro → your video → your before/after pair → again. A part with nothing uploaded, or switched off, is skipped; with nothing at all the tile shows the intro alone. Visitors never ask the server for this — it is built into the page when you save.
+        The Frenz AI tile on the landing page, in the slot Explore used to hold. It starts on your media the moment the page appears: your before/after pair → the Frenz AI intro → your video → again. A part with nothing uploaded, or switched off, is skipped; with nothing at all the tile shows the intro alone. Visitors never ask the server for this — it is built into the page when you save.
       </p>
 
       {/* ── Promotional video ── */}
@@ -207,11 +207,11 @@ export function AiPromoEditor({ initial }: { initial: AiPromo | null }) {
       {/* ── Timing ── */}
       <div className="mt-4 rounded-2xl border border-border/70 p-4">
         <p className="text-sm font-semibold">Timing (seconds)</p>
-        <p className="mt-1 text-xs text-muted-foreground">Defaults: wait {DEFAULT_PROMO_TIMING.delay} s after the page loads, then intro {DEFAULT_PROMO_TIMING.intro} s, video {DEFAULT_PROMO_TIMING.video} s, picture {DEFAULT_PROMO_TIMING.image} s. Each is kept within safe bounds.</p>
+        <p className="mt-1 text-xs text-muted-foreground">The tile starts on your media as soon as the page appears, like the Wallpapers tile — picture first, then the intro, then video. Defaults: picture {DEFAULT_PROMO_TIMING.image} s, video {DEFAULT_PROMO_TIMING.video} s, intro {DEFAULT_PROMO_TIMING.intro} s. Each is kept within safe bounds.</p>
         <div className="mt-3 grid max-w-md grid-cols-2 gap-3 sm:grid-cols-4">
-          {(Object.keys(PROMO_TIMING_LIMITS) as (keyof AiPromoTiming)[]).map((key) => (
+          {(Object.keys(PROMO_TIMING_LIMITS) as (keyof AiPromoTiming)[]).filter((key) => key !== "delay").map((key) => (
             <label key={key} className="flex flex-col gap-1 text-xs font-medium capitalize">
-              {key === "delay" ? "Start after" : key === "image" ? "Picture" : key}
+              {key === "image" ? "Picture" : key}
               <input
                 type="number"
                 inputMode="decimal"

@@ -2,6 +2,7 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
+import { normalizeShowcaseCards, type ShowcaseCards } from "@/lib/ai/showcase/cards";
 import { DEFAULT_SHOWCASE, SHOWCASE_LIMITS, normalizeShowcase, visibleSlides, type ShowcaseSlide } from "@/lib/ai/showcase/slides";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -45,12 +46,37 @@ export async function readStoredShowcase(): Promise<ShowcaseSlide[] | null> {
   }
 }
 
-export async function writeStoredShowcase(slides: ShowcaseSlide[]): Promise<{ ok: true } | { ok: false; error: string }> {
+/** Stored tool-card media (lib/ai/showcase/cards.ts); `{}` when none. Uncached — the admin editor's read. */
+export async function readStoredShowcaseCards(): Promise<ShowcaseCards> {
+  if (!hasSupabase) return {};
+  try {
+    const db = createAdminClient();
+    const { data, error } = await db.from("settings").select("value").eq("key", SETTINGS_KEY).maybeSingle();
+    if (error || !data) return {};
+    return normalizeShowcaseCards((data.value as { cards?: unknown } | null)?.cards, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save the slides, the cards, or both. 🔴 The two share ONE row: whichever is
+ * not being saved is read back and kept — saving the slides must never wipe
+ * the cards (or the reverse).
+ */
+export async function writeStoredShowcase(next: { slides?: ShowcaseSlide[]; cards?: ShowcaseCards }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!hasSupabase) return { ok: false, error: "Storage is not configured." };
   const db = createAdminClient();
-  const { error } = await db
-    .from("settings")
-    .upsert({ key: SETTINGS_KEY, value: { slides } }, { onConflict: "key" });
+  const { data, error: readError } = await db.from("settings").select("value").eq("key", SETTINGS_KEY).maybeSingle();
+  if (readError) return { ok: false, error: readError.message };
+  const current = (data?.value as { slides?: unknown; cards?: unknown } | null) ?? {};
+  const value = {
+    slides: next.slides ?? (Array.isArray(current.slides) ? current.slides : []),
+    cards: next.cards ?? normalizeShowcaseCards(current.cards, process.env.NEXT_PUBLIC_SUPABASE_URL),
+  };
+  // a row never saved before keeps the default carousel until slides are saved
+  if (!next.slides && !Array.isArray(current.slides)) delete (value as { slides?: unknown }).slides;
+  const { error } = await db.from("settings").upsert({ key: SETTINGS_KEY, value }, { onConflict: "key" });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
@@ -70,3 +96,9 @@ export const getShowcaseSlides = unstable_cache(
   ["ai-showcase-slides", JSON.stringify(DEFAULT_SHOWCASE), JSON.stringify(SHOWCASE_LIMITS)],
   { tags: [SHOWCASE_TAG], revalidate: false },
 );
+
+/** The hub's tool-card media. Same cache and tag as the slides: refreshed only by an admin save. */
+export const getShowcaseCards = unstable_cache(async (): Promise<ShowcaseCards> => readStoredShowcaseCards(), ["ai-showcase-cards"], {
+  tags: [SHOWCASE_TAG],
+  revalidate: false,
+});

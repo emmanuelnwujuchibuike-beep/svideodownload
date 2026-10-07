@@ -347,7 +347,7 @@ function IconButton({ label, onClick, disabled, children }: { label: string; onC
   );
 }
 
-function ImageUploadButton({ busy, hasImage, onFile }: { busy: boolean; hasImage: boolean; onFile: (f: File) => void }) {
+export function ImageUploadButton({ busy, hasImage, onFile }: { busy: boolean; hasImage: boolean; onFile: (f: File) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -375,7 +375,7 @@ function ImageUploadButton({ busy, hasImage, onFile }: { busy: boolean; hasImage
   );
 }
 
-function VideoUploadButton({ busy, label, onFile }: { busy: boolean; label: string; onFile: (f: File) => void }) {
+export function VideoUploadButton({ busy, label, onFile }: { busy: boolean; label: string; onFile: (f: File) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>

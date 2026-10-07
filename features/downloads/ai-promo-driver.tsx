@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { promoStages, type AiPromo, type PromoStage } from "@/lib/ai/promo/config";
+import { firstStage, promoStages, type AiPromo, type PromoStage } from "@/lib/ai/promo/config";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,8 +31,17 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
   const video = useRef<HTMLVideoElement>(null);
   const [onScreen, setOnScreen] = useState(true);
   const [tabVisible, setTabVisible] = useState(true);
-  const [started, setStarted] = useState(false);
-  const [stage, setStage] = useState<PromoStage>("intro");
+  /*
+    🔴 MEDIA FIRST, AT ONCE (owner, 2026-10-07: "it should be like the wallpaper
+    button"). The Wallpapers tile opens on a picture; this one opened on its
+    own intro after a delay, so the media arrived after the visitor had moved
+    on. Now it opens on the before/after pair (a picture paints at once), else
+    the clip, and the intro takes its turn in the loop after them. No opening
+    delay: the admin's "start after" is no longer applied.
+  */
+  const [stage, setStage] = useState<PromoStage>(() => firstStage(promo));
+  // both pictures decoded — until then the intro stays up, never a black box
+  const [pairLoaded, setPairLoaded] = useState(0);
   const [reduced, setReduced] = useState(false);
   const [lite, setLite] = useState(false);
   /*
@@ -59,20 +68,18 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     io.observe(el);
     const onVis = () => setTabVisible(document.visibilityState === "visible");
     document.addEventListener("visibilitychange", onVis);
-    // the opening delay runs while the clip warms up below
-    const t = setTimeout(() => setStarted(true), promo.timing.delay * 1000);
     return () => {
       io.disconnect();
       document.removeEventListener("visibilitychange", onVis);
-      clearTimeout(t);
     };
-  }, [promo.timing.delay]);
+  }, []);
 
   const useClip = !!promo.video?.enabled && !lite && !clipBlocked;
 
   useEffect(() => {
     const v = video.current;
-    if (!v || !useClip || reduced) return;
+    // a clip that opens the loop simply plays (the stage effect below); only a LATER turn is warmed
+    if (!v || !useClip || reduced || firstStage(promo) === "video") return;
     let warmed = false;
     const onPlaying = () => {
       if (warmed) return;
@@ -83,11 +90,11 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
     v.addEventListener("playing", onPlaying, { once: true });
     v.play().catch(() => setClipBlocked(true));
     return () => v.removeEventListener("playing", onPlaying);
-    // once, at mount — the warm-up is the whole point of the opening delay
+    // once, at mount — warms a clip whose turn comes after the picture pair
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const stages = promoStages(promo).filter((s) => s !== "video" || useClip || !!promo.video?.poster);
-  const running = started && onScreen && tabVisible && stages.length > 1;
+  const running = onScreen && tabVisible && stages.length > 1;
 
   // the cycle: a single timeout for the current stage; paused = no timer, stage kept
   useEffect(() => {
@@ -149,11 +156,11 @@ export function AiPromoDriver({ promo }: { promo: AiPromo }) {
         </div>
       ) : null}
       {promo.image && stages.includes("image") ? (
-        <div className={cn("absolute inset-0 grid grid-cols-2 bg-black", fade, stage === "image" ? "opacity-100" : "opacity-0")}>
+        <div className={cn("absolute inset-0 grid grid-cols-2 bg-black", fade, stage === "image" && pairLoaded >= 2 ? "opacity-100" : "opacity-0")}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={promo.image.before} alt="" decoding="async" className="h-full w-full object-cover" />
+          <img src={promo.image.before} alt="" decoding="async" fetchPriority="low" onLoad={() => setPairLoaded((n) => n + 1)} className="h-full w-full object-cover" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={promo.image.after} alt="" decoding="async" className="h-full w-full object-cover" />
+          <img src={promo.image.after} alt="" decoding="async" fetchPriority="low" onLoad={() => setPairLoaded((n) => n + 1)} className="h-full w-full object-cover" />
           <span className="absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.7)]" />
           <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white">Original</span>
           <span className="absolute bottom-2 right-2 rounded-full bg-indigo-600/90 px-2 py-0.5 text-[10px] font-semibold text-white">Frenz AI</span>

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_PROMO_TIMING, EMPTY_PROMO, PROMO_FEATURES, normalizePromo, promoStages } from "@/lib/ai/promo/config";
+import { DEFAULT_PROMO_TIMING, EMPTY_PROMO, PROMO_FEATURES, firstStage, normalizePromo, promoStages } from "@/lib/ai/promo/config";
 import { SHOWCASE_TARGETS } from "@/lib/ai/showcase/slides";
 
 /** Brief C — the Frenz AI landing promotion (docs/FRENZ_AI_REDESIGN_BRIEFS.md). */
@@ -11,10 +11,10 @@ import { SHOWCASE_TARGETS } from "@/lib/ai/showcase/slides";
 const SUPA = "https://example.supabase.co";
 const ours = (name: string) => `${SUPA}/storage/v1/object/public/ai-showcase/promo/${name}`;
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
+const video = { url: ours("a.mp4"), poster: ours("p.webp"), enabled: true };
+const image = { before: ours("b.webp"), after: ours("c.webp"), enabled: true };
 
 describe("the promotion's stages fall back gracefully (§20)", () => {
-  const video = { url: ours("a.mp4"), poster: ours("p.webp"), enabled: true };
-  const image = { before: ours("b.webp"), after: ours("c.webp"), enabled: true };
   it("all media → intro, video, image", () => {
     expect(promoStages({ video, image, timing: DEFAULT_PROMO_TIMING })).toEqual(["intro", "video", "image"]);
   });
@@ -70,13 +70,20 @@ describe("the landing pays nothing up front (§8–§9, §19)", () => {
     expect(tile).not.toContain('"use client"');
     expect(tile).toContain("rotorCss(PROMO_FEATURES.length)");
   });
-  it("the media driver is fetched only after load + the delay, and never polls", () => {
+  it("the media driver starts at hydration like the Wallpapers tile (owner 2026-10-07), and never polls", () => {
     const loader = read("features/downloads/ai-promo-loader.tsx");
-    expect(loader).toContain('window.addEventListener("load", start, { once: true })');
+    // no wait for load / idle / a delay — the visitor has pasted a link by then
+    expect(loader).not.toMatch(/addEventListener\("load"|requestIdleCallback|setTimeout/);
     expect(loader).toContain('import("@/features/downloads/ai-promo-driver")');
     const driver = read("features/downloads/ai-promo-driver.tsx");
     expect(driver).not.toMatch(/setInterval|fetch\(|supabase/);
     expect(driver).toContain("IntersectionObserver");
+  });
+  it("the tile opens on media, never on a delayed intro", () => {
+    expect(firstStage({ video, image, timing: DEFAULT_PROMO_TIMING })).toBe("image");
+    expect(firstStage({ video, image: null, timing: DEFAULT_PROMO_TIMING })).toBe("video");
+    expect(firstStage(EMPTY_PROMO)).toBe("intro");
+    expect(read("features/downloads/ai-promo-driver.tsx")).not.toMatch(/timing\.delay/);
   });
   it("the config is read from cache and refreshed only by an admin save", () => {
     expect(read("lib/ai/promo/server.ts")).toContain("revalidate: false");
@@ -105,8 +112,9 @@ describe("the promotion never restarts or re-buffers on a scroll", () => {
     expect(driver).not.toMatch(/running && \(stage === "video"/);
     expect(driver).toContain("v.pause();");
   });
-  it("the player arrives right after load; the delay runs while the clip warms", () => {
-    expect(read("features/downloads/ai-promo-loader.tsx")).not.toContain("promo.timing.delay * 1000");
-    expect(driver).toContain("setTimeout(() => setStarted(true), promo.timing.delay * 1000)");
+  it("no opening wait anywhere — the tile runs as soon as it is on screen", () => {
+    expect(read("features/downloads/ai-promo-loader.tsx")).not.toContain("timing.delay");
+    expect(driver).not.toContain("setStarted");
+    expect(driver).toContain("useState<PromoStage>(() => firstStage(promo))");
   });
 });

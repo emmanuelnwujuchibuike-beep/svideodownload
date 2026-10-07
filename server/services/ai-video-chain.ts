@@ -160,6 +160,31 @@ export async function advanceOrJoinChain(opts: {
   } catch {
     await ffmpeg(["-f", "concat", "-safe", "0", "-i", list, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-movflags", "+faststart", joined]);
   }
+  /*
+    🔴 FIT THE STORAGE LIMIT (first live run, 2026-10-06). The joined minute
+    was ~57 MB and the upload failed: "The object exceeded the maximum allowed
+    size" — the project's per-file upload limit (Supabase default 50 MB; the
+    results bucket sets none of its own). Over the budget, the minute is
+    re-encoded to a bitrate that fits it (~6 Mbps for 60 s — sharp at 720p,
+    fine at 1080p). Under it, the lossless stream-copy join is kept as is.
+  */
+  const { stat } = await import("node:fs/promises");
+  const MAX_RESULT_BYTES = 45 * 1024 * 1024;
+  if ((await stat(joined)).size > MAX_RESULT_BYTES) {
+    const joinedProbe = await probeMedia(joined);
+    const seconds = Math.max(1, joinedProbe?.durationSeconds ?? chain.segments * chain.segmentSeconds);
+    const audioKbps = joinedProbe?.hasAudio ? 128 : 0;
+    const videoKbps = Math.max(1500, Math.floor((MAX_RESULT_BYTES * 8 * 0.94) / seconds / 1000) - audioKbps);
+    const fitted = path.join(opts.dir, "fitted.mp4");
+    await ffmpeg([
+      "-i", joined,
+      "-c:v", "libx264", "-preset", "veryfast", "-b:v", `${videoKbps}k`, "-maxrate", `${videoKbps}k`, "-bufsize", `${videoKbps * 2}k`, "-pix_fmt", "yuv420p",
+      ...(joinedProbe?.hasAudio ? ["-c:a", "aac", "-b:a", `${audioKbps}k`] : ["-an"]),
+      "-movflags", "+faststart", fitted,
+    ]);
+    await rename(fitted, joined);
+    await recordJobEvent(job.id, "chain.joined", { fitted: true, videoKbps });
+  }
   await rename(joined, opts.outputFile);
   const probe = await probeMedia(opts.outputFile);
   if (!probe?.hasVideo || !probe.durationSeconds) throw new Error("chain: the joined minute has no readable video");

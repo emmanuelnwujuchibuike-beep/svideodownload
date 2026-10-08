@@ -8,7 +8,7 @@ import { deviceCookieHeader, freeEligibilityMessage, getCharacterReplaceFreeElig
 import { countOpenJobs } from "@/lib/ai/character-replace/open-job";
 import { getAiEntitlement } from "@/lib/ai/entitlement";
 import { getAdminUser } from "@/lib/admin/require-admin";
-import { getCharacterReplaceBalanceCents, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
+import { getCharacterReplaceWallet, listCharacterReplaceLedger } from "@/lib/ai/character-replace/wallet";
 import { aiErrorBody, aiErrorStatus } from "@/lib/ai/errors";
 import { primaryAiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
@@ -64,9 +64,9 @@ export async function GET(request: Request) {
       same wave, so it costs nothing when nothing is pending; when something
       was credited the balance and statement are read again.
     */
-    const [settings, balanceCents, ledger] = await Promise.all([
+    const [settings, wallet, ledger] = await Promise.all([
       getLandingSettings(),
-      getCharacterReplaceBalanceCents(subject.userId),
+      getCharacterReplaceWallet(subject.userId),
       listCharacterReplaceLedger(subject.userId, ledgerLimit),
     ]);
     // 2026-10-07 (owner: "since the last push everything is slow"): the deposit check ran IN this
@@ -121,7 +121,9 @@ export async function GET(request: Request) {
           limits: free.limits,
         },
         product: "character_replace",
-        balanceCents,
+        balanceCents: wallet.balance,
+        // 0199 (owner, 2026-10-08): the two kinds shown apart on the credits page; the rest of the balance is non-withdrawable
+        withdrawableCents: wallet.withdrawable,
         currency: settings.frenzAiCurrency,
         symbol: aiCurrencySymbol(settings.frenzAiCurrency),
         unit: WALLET_UNIT,

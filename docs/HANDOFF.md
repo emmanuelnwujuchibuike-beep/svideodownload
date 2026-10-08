@@ -8,9 +8,18 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 | Area | State |
 |---|---|
-| **Self-serve ad platform** | Parts 1–3 shipped: engine, advertiser application, payments. Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. **Next: Part 4** (render live campaigns on the site), then admin screens (Part 6). |
+| **Self-serve ad platform** | Parts 1–6 shipped (engine, application, payments, serving through the shared slots, advertiser dashboard). Slot management groundwork is in the existing Ad placements tab (`c950db3`). Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. **Next: Part 7** (the admin side), built by upgrading the existing admin under the shared-slot rules. The owner has an interim change list to do first. |
 | Payments | Paystack + Bachs as two rails under one router (`lib/payments/router.ts`, purposes `wallet_topup`, `ai_subscription`, `ad_campaign`). See `docs/PAYMENTS.md`. |
-| Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. |
+| Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. The balance has a withdrawable part (`withdrawable_cents`, 0187), and the rest is non-withdrawable. |
+| Credit transfers | 0193 + **0199**: the sender chooses non-withdrawable or withdrawable. The amount and the fee come only from that kind, and the recipient receives the same kind. Cashing out still needs the recipient's own approval (0191). The credits page (`/ai/usage`) shows the two kinds apart. The AI and download credit strip keeps the total. The 6-argument 0193 function is kept for the deploy window. |
+
+### Live probes owed (production)
+
+This container's network policy blocks `frenzsave.com` and `*.supabase.co`, so these
+were not probed live from here. Probe each object after the push:
+
+- **0198:** table `ad_campaign_extensions`; functions `ad_swap_creative`, `ad_edit_creative_details`, `ad_advertiser_pause`, `ad_price_for`, `ad_campaign_quote`, `ad_extension_quote`, `ad_apply_extension`, `ad_my_summary`, `ad_my_payments`; creative status `staged`. The full list is in `docs/AD_PLATFORM.md` (Part 6 files).
+- **0199:** `credit_transfers.credit_class` (`.select("credit_class").limit(1)`). Also call the 7-argument `transfer_credits` through the service role with a bad kind and expect `{ok:false, reason:"invalid"}`.
 
 ### Ad platform: owner decisions still open
 
@@ -99,3 +108,5 @@ and bucket), not just one.
 - Part 2: `8ea15b9`
 - Admin Bachs field fix: `9b2a010`
 - Part 3: see `git log --grep "ads"`
+- Parts 5–6: `773f297`, `f50266c`, `075ee4e`. Slots groundwork: `c950db3`
+- Credit kinds on transfers (0199): see `git log --grep "credit kind"`

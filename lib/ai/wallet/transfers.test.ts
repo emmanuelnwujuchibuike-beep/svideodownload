@@ -68,6 +68,59 @@ describe("🔴 transfer_credits — one transaction, once, never withdrawable", 
   });
 });
 
+/* 0199 (owner, 2026-10-08): the sender chooses withdrawable or non-withdrawable; the recipient receives the same kind */
+const m99 = code("supabase/migrations/0199_credit_transfer_kinds.sql");
+const fn99 = (() => {
+  const start = m99.indexOf("create or replace function public.transfer_credits(");
+  return m99.slice(start, m99.indexOf("$$;", start));
+})();
+
+/** The pins on the kind rule — a function so the teeth below can run them against a broken copy. */
+function kindRuleHolds(t: string): boolean {
+  const recipient = t.slice(t.indexOf("-- the recipient"), t.indexOf("return jsonb_build_object('ok', true, 'transfer_id'"));
+  const sender = t.slice(t.indexOf("-- the sender"), t.indexOf("-- the recipient"));
+  return (
+    t.includes("p_kind not in ('usable', 'withdrawable')") &&
+    // only the chosen part pays the amount AND the fee
+    t.includes("v_avail := case when v_wd then v_s_wd else v_s_bal - v_s_wd end;") &&
+    t.includes("if v_avail < v_total then") &&
+    sender.includes("withdrawable_cents = withdrawable_cents - case when v_wd then v_total else 0 end") &&
+    // the recipient gains withdrawable credits exactly when withdrawable credits were sent
+    recipient.includes("withdrawable_cents = withdrawable_cents + case when v_wd then p_amount else 0 end") &&
+    recipient.includes("p_kind, case when v_wd then p_amount else 0 end);")
+  );
+}
+
+describe("🔴 0199 — the kind sent is the kind received", () => {
+  it("the 7-argument transfer checks, debits and credits only the chosen kind", () => {
+    expect(kindRuleHolds(fn99)).toBe(true);
+  });
+  it("teeth: a copy that pays the fee from the other kind, or credits the recipient as usable, fails", () => {
+    expect(kindRuleHolds(fn99.replace("v_avail := case when v_wd then v_s_wd else v_s_bal - v_s_wd end;", "v_avail := v_s_bal;"))).toBe(false);
+    expect(kindRuleHolds(fn99.replace("withdrawable_cents = withdrawable_cents + case when v_wd then p_amount else 0 end", "withdrawable_cents = withdrawable_cents"))).toBe(false);
+  });
+  it("the kind is recorded on the transfer and closed to the browser; the 0193 form stays for the deploy window", () => {
+    expect(m99).toContain("check (credit_class in ('usable', 'withdrawable'))");
+    expect(fn99).toContain("insert into public.credit_transfers (sender_id, recipient_id, amount, fee, idempotency_key, note, credit_class)");
+    expect(m99).toContain("revoke all on function public.transfer_credits(uuid, text, integer, integer, text, text, text) from public, anon, authenticated");
+    expect(m99).not.toMatch(/drop function[^\n]*transfer_credits/);
+  });
+  it("the server passes the member's choice; the sheet offers both kinds and checks the chosen one", () => {
+    expect(code("lib/ai/wallet/transfers.ts")).toContain("p_note: note, p_kind: input.kind });");
+    expect(code("app/api/ai/wallet/transfer/route.ts")).toContain('kind: z.enum(TRANSFER_KINDS).default("usable"),');
+    const p = code("features/ai/wallet/transfer-panel.tsx");
+    expect(p).toContain("credits: n, kind, idempotencyKey: key.current");
+    expect(p).toContain('{(["usable", "withdrawable"] as const).map((k) => {');
+  });
+  it("the credits page shows the two kinds apart; the AI and download strip keeps the total", () => {
+    const u = code("features/ai/frenz-ai-usage-page.tsx");
+    expect(u).toContain('<KindFigure label="Non-withdrawable"');
+    expect(u).toContain('<KindFigure label="Withdrawable"');
+    expect(code("app/api/ai/character-replace/balance/route.ts")).toContain("withdrawableCents: wallet.withdrawable,");
+    expect(code("features/ai/design/ai-credit-strip.tsx")).not.toContain("withdrawable");
+  });
+});
+
 describe("the dashboard", () => {
   it("one idempotency key per transfer attempt — minted when the sheet opens, renewed only after success", () => {
     const p = code("features/ai/wallet/transfer-panel.tsx");

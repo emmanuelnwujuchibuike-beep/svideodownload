@@ -178,6 +178,7 @@ export async function startCharacterReplaceJob(
 interface BalanceResponse {
   product: "character_replace";
   balanceCents: number;
+  withdrawableCents?: number;
   currency: string;
   symbol: string;
   unit: "CREDIT";
@@ -216,6 +217,7 @@ export async function getCharacterReplaceBalance(opts?: { ledger?: number }): Pr
   if (!res.ok) return res;
   const balance: CharacterReplaceBalance = {
     balanceCents: res.balanceCents,
+    withdrawableCents: typeof res.withdrawableCents === "number" ? res.withdrawableCents : undefined,
     currency: res.currency,
     symbol: res.symbol,
     unit: "CREDIT",
@@ -257,6 +259,7 @@ export function readCachedCharacterReplaceBalance(): CharacterReplaceBalance | n
     if (typeof v.balanceCents !== "number" || typeof v.symbol !== "string" || v.unit !== "CREDIT" || !v.offer || !Array.isArray(v.offer.packs)) return null;
     return {
       balanceCents: v.balanceCents,
+      withdrawableCents: typeof v.withdrawableCents === "number" ? v.withdrawableCents : undefined,
       unit: "CREDIT",
       currency: typeof v.currency === "string" ? v.currency : "",
       symbol: v.symbol,

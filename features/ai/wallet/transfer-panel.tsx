@@ -26,6 +26,10 @@ const GlassSheetShell = dynamic(() => import("@/features/ui/glass-sheet-shell").
  * when the sheet opens, not per tap, so a double tap or a retry after a lost
  * answer is the same transfer, never a second one. Every number shown is a
  * preview; the server re-decides all of it.
+ *
+ * 0199 (owner, 2026-10-08): the sender chooses WHICH credits to send —
+ * non-withdrawable or withdrawable — and the recipient receives the same kind.
+ * The amount and the fee come only from the chosen kind.
  */
 export interface TransferRules {
   feePercent: number;
@@ -34,11 +38,16 @@ export interface TransferRules {
   dailyMaxCredits: number;
 }
 
+export type TransferKind = "usable" | "withdrawable";
+
+const KIND_LABEL: Record<TransferKind, string> = { usable: "Non-withdrawable", withdrawable: "Withdrawable" };
+
 interface TransferRow {
   id: string;
   direction: "sent" | "received";
   amount: number;
   fee: number;
+  kind?: TransferKind;
   with: string;
   note: string | null;
   at: string;
@@ -84,7 +93,7 @@ function writeKept(patch: Partial<NonNullable<typeof kept>>) {
 
 const feeOf = (amount: number, pct: number) => (amount > 0 && pct > 0 ? Math.ceil((Math.floor(amount) * pct) / 100) : 0);
 
-export function TransferPanel({ rules, balance, onChanged, className }: { rules: TransferRules | null; balance: number | null; onChanged: () => void; className?: string }) {
+export function TransferPanel({ rules, balance, withdrawable = null, onChanged, className }: { rules: TransferRules | null; balance: number | null; withdrawable?: number | null; onChanged: () => void; className?: string }) {
   const [account, setAccount] = useState<string | null>(null);
   const [history, setHistory] = useState<TransferRow[] | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -218,6 +227,7 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
                   <p className="truncate text-[13.5px] font-medium">{t.direction === "received" ? `From ${t.with}` : `To ${t.with}`}</p>
                   <p className="truncate text-[11.5px] text-muted-foreground">
                     {new Date(t.at).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                    {t.kind === "withdrawable" ? " · withdrawable" : ""}
                     {t.fee ? ` · ${formatCredits(t.fee)} fee` : ""}
                     {t.note ? ` · ${t.note}` : ""}
                   </p>
@@ -241,6 +251,7 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
         <SendSheet
           rules={rules}
           balance={balance}
+          withdrawable={withdrawable}
           onClose={() => setSheetOpen(false)}
           onSent={() => {
             setSheetOpen(false);
@@ -261,11 +272,27 @@ export interface PresetRecipient {
   avatarUrl: string | null;
 }
 
-export function SendSheet({ rules, balance, onClose, onSent, recipient = null }: { rules: TransferRules; balance: number | null; onClose: () => void; onSent: () => void; recipient?: PresetRecipient | null }) {
+export function SendSheet({
+  rules,
+  balance,
+  withdrawable = null,
+  onClose,
+  onSent,
+  recipient = null,
+}: {
+  rules: TransferRules;
+  balance: number | null;
+  /** The withdrawable part of `balance`; null when unknown (the server still decides). */
+  withdrawable?: number | null;
+  onClose: () => void;
+  onSent: () => void;
+  recipient?: PresetRecipient | null;
+}) {
   const [number, setNumber] = useState("");
   const [who, setWho] = useState<{ name: string; handle: string | null; avatarUrl: string | null } | null>(recipient ? { name: recipient.name, handle: recipient.handle, avatarUrl: recipient.avatarUrl } : null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [kind, setKind] = useState<TransferKind>("usable");
   const [busy, setBusy] = useState<"lookup" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
   // ONE key per transfer attempt (minted when the sheet opens) — a retry is the same transfer
@@ -275,7 +302,9 @@ export function SendSheet({ rules, balance, onClose, onSent, recipient = null }:
   const fee = feeOf(n, rules.feePercent);
   const total = Number.isInteger(n) && n > 0 ? n + fee : 0;
   const amountOk = Number.isInteger(n) && n >= rules.minCredits && n <= rules.maxCredits;
-  const enough = balance === null || total <= balance;
+  // only the chosen kind pays the amount and the fee
+  const available = balance === null ? null : withdrawable === null ? (kind === "usable" ? balance : null) : kind === "withdrawable" ? withdrawable : Math.max(0, balance - withdrawable);
+  const enough = available === null || total <= available;
 
   async function lookup() {
     const num = number.replace(/\s+/g, "");
@@ -303,14 +332,14 @@ export function SendSheet({ rules, balance, onClose, onSent, recipient = null }:
       const r = await fetch("/api/ai/wallet/transfer", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...(recipient ? { recipientUserId: recipient.userId } : { accountNumber: number.replace(/\s+/g, "") }), credits: n, idempotencyKey: key.current, note: note.trim() || null }),
+        body: JSON.stringify({ ...(recipient ? { recipientUserId: recipient.userId } : { accountNumber: number.replace(/\s+/g, "") }), credits: n, kind, idempotencyKey: key.current, note: note.trim() || null }),
       });
       const j = (await r.json().catch(() => ({}))) as { amount?: number; fee?: number; error?: string };
       if (!r.ok) {
         setError(j.error ?? "Couldn't send that.");
         return;
       }
-      toast(`Sent ${formatCredits(j.amount ?? n)} to ${who.name}.`, "success");
+      toast(`Sent ${formatCredits(j.amount ?? n)}${kind === "withdrawable" ? " withdrawable" : ""} to ${who.name}.`, "success");
       key.current = newKey();
       onSent();
     } catch {
@@ -356,20 +385,49 @@ export function SendSheet({ rules, balance, onClose, onSent, recipient = null }:
                 </button>
               )}
             </div>
+            <fieldset className="mt-4">
+              <legend className="text-[13px] font-semibold">Which credits</legend>
+              <div role="radiogroup" aria-label="Which credits to send" className="mt-1 grid grid-cols-2 gap-2">
+                {(["usable", "withdrawable"] as const).map((k) => {
+                  const have = balance === null ? null : withdrawable === null ? (k === "usable" ? balance : null) : k === "withdrawable" ? withdrawable : Math.max(0, balance - withdrawable);
+                  const on = kind === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => {
+                        haptic("selection");
+                        setKind(k);
+                        setError(null);
+                      }}
+                      className={cn(
+                        "min-h-[3.25rem] rounded-2xl px-3 py-2 text-left ring-1 ring-inset transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400",
+                        on ? "bg-indigo-500/10 ring-indigo-500" : "bg-background ring-border/70",
+                      )}
+                    >
+                      <span className={cn("block text-[13px] font-semibold", on ? "text-indigo-700 dark:text-indigo-300" : "")}>{KIND_LABEL[k]}</span>
+                      <span className="block text-[11.5px] tabular-nums text-muted-foreground">{have === null ? "—" : `${formatCredits(have)} available`}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
             <label className="mt-4 block text-[13px] font-semibold">
               Credits to send
               <input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder={`${rules.minCredits}–${rules.maxCredits.toLocaleString("en-US")}`} className={cn(field, "font-bold tabular-nums")} />
             </label>
             <dl className="mt-2 space-y-1 text-[13px]">
               <div className="flex justify-between"><dt className="text-muted-foreground">Transfer fee ({rules.feePercent}%)</dt><dd className="tabular-nums">{formatCredits(fee)}</dd></div>
-              <div className="flex justify-between font-semibold"><dt>Total from your balance</dt><dd className="tabular-nums">{formatCredits(total)}</dd></div>
-              {balance !== null ? <div className="flex justify-between text-muted-foreground"><dt>Your balance</dt><dd className="tabular-nums">{formatCredits(balance)}</dd></div> : null}
+              <div className="flex justify-between font-semibold"><dt>Total ({KIND_LABEL[kind].toLowerCase()})</dt><dd className="tabular-nums">{formatCredits(total)}</dd></div>
+              {available !== null ? <div className="flex justify-between text-muted-foreground"><dt>{KIND_LABEL[kind]} available</dt><dd className="tabular-nums">{formatCredits(available)}</dd></div> : null}
             </dl>
             <label className="mt-3 block text-[13px] font-semibold">
               Note <span className="font-normal text-muted-foreground">(optional)</span>
               <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} className={field} />
             </label>
-            <p className="mt-2 text-[11.5px] text-muted-foreground">{who.name} receives the full amount as AI credits. Transfers can&apos;t be undone.</p>
+            <p className="mt-2 text-[11.5px] text-muted-foreground">{who.name} receives the full amount as {kind === "withdrawable" ? "withdrawable" : "non-withdrawable"} credits. Transfers can&apos;t be undone.</p>
             <button
               type="button"
               onClick={() => void send()}
@@ -380,7 +438,7 @@ export function SendSheet({ rules, balance, onClose, onSent, recipient = null }:
               {busy === "send" ? "Sending…" : amountOk ? `Send ${formatCredits(n)}` : "Enter an amount"}
             </button>
             {amount && !amountOk ? <p className="mt-2 text-[12px] text-muted-foreground">Between {rules.minCredits} and {rules.maxCredits.toLocaleString("en-US")} credits per transfer.</p> : null}
-            {amountOk && !enough ? <p className="mt-2 text-[12px] font-semibold text-rose-600">Not enough credits for this amount plus the fee.</p> : null}
+            {amountOk && !enough ? <p className="mt-2 text-[12px] font-semibold text-rose-600">Not enough {KIND_LABEL[kind].toLowerCase()} credits for this amount plus the fee.</p> : null}
           </>
         )}
         {error ? (

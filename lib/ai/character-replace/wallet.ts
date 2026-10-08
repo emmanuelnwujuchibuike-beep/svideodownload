@@ -63,9 +63,14 @@ export interface CharacterReplaceLedgerEntry {
  * `getAiWalletBalanceCents` — read it as "the balance, in the wallet's unit".
  */
 export async function getCharacterReplaceBalanceCents(userId: string): Promise<number> {
+  return (await getCharacterReplaceWallet(userId)).balance;
+}
+
+/** The balance and its withdrawable part (0187), in one read — the rest of the balance is non-withdrawable. Throws on a read fault, like the balance. */
+export async function getCharacterReplaceWallet(userId: string): Promise<{ balance: number; withdrawable: number }> {
   const { data, error } = await createAdminClient()
     .from("ai_product_balances")
-    .select("balance_cents")
+    .select("balance_cents, withdrawable_cents")
     .eq("user_id", userId)
     .eq("product", PRODUCT)
     .maybeSingle();
@@ -74,7 +79,7 @@ export async function getCharacterReplaceBalanceCents(userId: string): Promise<n
     console.error("[cr/wallet] read failed", { userId, error: error.message });
     throw new Error(error.message);
   }
-  return Number(data?.balance_cents ?? 0);
+  return { balance: Number(data?.balance_cents ?? 0), withdrawable: Number((data as { withdrawable_cents?: number | null } | null)?.withdrawable_cents ?? 0) };
 }
 
 /**

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getCharacterReplaceBalanceCents } from "@/lib/ai/character-replace/wallet";
-import { getWalletNumber, sendCredits } from "@/lib/ai/wallet/transfers";
+import { getWalletKinds, getWalletNumber, sendCredits, TRANSFER_KINDS } from "@/lib/ai/wallet/transfers";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
@@ -18,21 +17,23 @@ const schema = z
     credits: z.number().int().positive().max(100_000_000),
     idempotencyKey: z.string().max(80),
     note: z.string().max(200).nullable().optional(),
+    // 0199 (owner, 2026-10-08): which credits to send - the recipient receives the same kind
+    kind: z.enum(TRANSFER_KINDS).default("usable"),
   })
   .strict()
   .refine((b) => !!b.accountNumber !== !!b.recipientUserId, { message: "one recipient" });
 
-/** GET — what the send sheet needs when it opens outside the credits page (a chat): the rules and the balance. */
+/** GET — what the send sheet needs when it opens outside the credits page (a chat): the rules and the balance, split by kind. */
 export async function GET() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
-  const [settings, balance] = await Promise.all([getLandingSettings(), getCharacterReplaceBalanceCents(user.id).catch(() => null)]);
+  const [settings, kinds] = await Promise.all([getLandingSettings(), getWalletKinds(user.id).catch(() => null)]);
   const t = settings.frenzAiPlans.wallet.transfers;
   return NextResponse.json(
-    { rules: t.enabled ? { feePercent: t.feePercent, minCredits: t.minCredits, maxCredits: t.maxCredits, dailyMaxCredits: t.dailyMaxCredits } : null, balance },
+    { rules: t.enabled ? { feePercent: t.feePercent, minCredits: t.minCredits, maxCredits: t.maxCredits, dailyMaxCredits: t.dailyMaxCredits } : null, balance: kinds?.balance ?? null, withdrawable: kinds?.withdrawable ?? null },
     { headers: { "cache-control": "no-store" } },
   );
 }
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
     credits: parsed.data.credits,
     idempotencyKey: parsed.data.idempotencyKey,
     note: parsed.data.note ?? null,
+    kind: parsed.data.kind,
     config: settings.frenzAiPlans.wallet.transfers,
   });
   if (!out.ok) return NextResponse.json({ error: out.error, reason: out.reason }, { status: out.status });

@@ -311,6 +311,13 @@ export function FrenzAIUsagePage({
                   {hidden ? <EyeOff className="h-5 w-5" aria-hidden /> : <Eye className="h-5 w-5" aria-hidden />}
                 </button>
               </div>
+              {/* 0199 (owner, 2026-10-08): the two kinds apart — the total above is what every tool spends from */}
+              {typeof balance.withdrawableCents === "number" ? (
+                <dl aria-label="Your credits by kind" className="relative mt-4 grid grid-cols-2 gap-2">
+                  <KindFigure label="Non-withdrawable" hint="For Frenz AI tools" value={hidden ? HIDDEN_AMOUNT : formatCredits(Math.max(0, balance.balanceCents - balance.withdrawableCents))} />
+                  <KindFigure label="Withdrawable" hint="Can be cashed out" value={hidden ? HIDDEN_AMOUNT : formatCredits(balance.withdrawableCents)} />
+                </dl>
+              ) : null}
               {notice ? (
                 <p role="status" className="relative mt-3 rounded-xl bg-white/15 px-3 py-2 text-[12.5px] font-medium ring-1 ring-inset ring-white/20">
                   {notice}
@@ -369,7 +376,7 @@ export function FrenzAIUsagePage({
             </Link>
 
             {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
-            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} onChanged={() => void load()} />
+            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={balance?.withdrawableCents ?? null} onChanged={() => void load()} />
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (
@@ -491,6 +498,17 @@ function UsageSkeleton() {
         <div className="h-16 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
       </div>
       <div className="h-40 animate-pulse rounded-2xl bg-foreground/[0.05] dark:bg-white/[0.06]" />
+    </div>
+  );
+}
+
+/** One kind of credit inside the hero (0199) — the label, the figure, what it is for. */
+function KindFigure({ label, hint, value }: { label: string; hint: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl bg-white/12 px-3 py-2.5 ring-1 ring-inset ring-white/20">
+      <dt className="text-[11.5px] font-semibold leading-tight text-white/75">{label}</dt>
+      <dd className="mt-0.5 truncate text-[17px] font-bold tabular-nums">{value}</dd>
+      <dd className="truncate text-[11px] text-white/60">{hint}</dd>
     </div>
   );
 }

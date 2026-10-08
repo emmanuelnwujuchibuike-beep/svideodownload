@@ -14,12 +14,12 @@ import { toast } from "@/features/ui/toast";
  * until "Send credits" is tapped (callers import this lazily).
  */
 export function ChatSendCredits({ recipient, onClose }: { recipient: PresetRecipient; onClose: () => void }) {
-  const [state, setState] = useState<{ rules: TransferRules | null; balance: number | null } | null>(null);
+  const [state, setState] = useState<{ rules: TransferRules | null; balance: number | null; withdrawable?: number | null } | null>(null);
 
   useEffect(() => {
     let live = true;
     fetch("/api/ai/wallet/transfer", { cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ rules: TransferRules | null; balance: number | null }>) : null))
+      .then((r) => (r.ok ? (r.json() as Promise<{ rules: TransferRules | null; balance: number | null; withdrawable?: number | null }>) : null))
       .then((d) => {
         if (!live) return;
         if (!d?.rules) {
@@ -41,5 +41,5 @@ export function ChatSendCredits({ recipient, onClose }: { recipient: PresetRecip
   }, [onClose]);
 
   if (!state?.rules) return null;
-  return <SendSheet rules={state.rules} balance={state.balance} recipient={recipient} onClose={onClose} onSent={onClose} />;
+  return <SendSheet rules={state.rules} balance={state.balance} withdrawable={state.withdrawable ?? null} recipient={recipient} onClose={onClose} onSent={onClose} />;
 }

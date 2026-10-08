@@ -367,6 +367,8 @@ export type PricingState =
 export interface CharacterReplaceBalance {
   /** 🔴 WHOLE CREDITS since 0184 (`unit`). The name stays; every reader formats it with formatCredits. */
   balanceCents: number;
+  /** 0187/0199: the withdrawable part of balanceCents; the rest is non-withdrawable. Absent in an old snapshot — show the total only. */
+  withdrawableCents?: number;
   unit: "CREDIT";
   /** The list-price currency packs are priced in (USD). */
   currency: string;

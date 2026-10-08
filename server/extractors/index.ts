@@ -63,8 +63,11 @@ const METADATA_TTL_SECONDS = Number(
  * serving that stale wrong answer for the rest of its 30-minute TTL
  * regardless of the code fix — exactly the trap this constant exists to
  * avoid (see the TikTok note above). Bumping retires every v2 snapshot.
+ * v4 — 2026-10-08: TikTok native formats carry the page's cookies. A v3
+ * snapshot holds the cookieless CDN URLs that 403, so without this bump every
+ * TikTok link previewed before the deploy would keep failing for 30 minutes.
  */
-const EXTRACTOR_SHAPE_VERSION = "v3";
+const EXTRACTOR_SHAPE_VERSION = "v4";
 
 function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;

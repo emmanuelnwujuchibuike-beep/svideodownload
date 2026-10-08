@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { cacheBackend, cacheGet, cacheSet } from "@/lib/cache";
+import { trustedClientIp } from "@/lib/downloads/browser-direct";
 import { downloadConcurrencyStats } from "@/lib/concurrency";
 import { checkStream } from "@/lib/media/stream";
 import { hasWebPush } from "@/lib/push/web-push";
@@ -46,7 +47,35 @@ async function extractorHealth(): Promise<{ role: string; ytdlp: string | null; 
  * *configured*; the probe below actually writes then reads a key and times it, so
  * `cache.live` proves Redis is reachable and `cache.latencyMs` shows how fast.
  */
-export async function GET() {
+/**
+ * `?whoami=1` — what THIS machine sees of the caller, for verifying the
+ * browser-direct path (2026-10-08): which IP the limiters key on, the raw hops
+ * it came from, and whether the settings that path needs are present (booleans
+ * only — never a value). Echoes nothing the caller did not send or cannot see.
+ */
+function whoami(request: Request) {
+  const h = request.headers;
+  return NextResponse.json(
+    {
+      role: hasWorker ? "frontend" : "worker",
+      keyedIp: trustedClientIp(h),
+      xForwardedFor: h.get("x-forwarded-for"),
+      xRealIp: h.get("x-real-ip"),
+      cfConnectingIp: h.get("cf-connecting-ip"),
+      configured: {
+        supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        supabaseAnon: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        supabaseService: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+        redis: !!process.env.UPSTASH_REDIS_REST_URL,
+        workerSecret: !!WORKER_SECRET,
+      },
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+export async function GET(request: Request) {
+  if (new URL(request.url).searchParams.get("whoami") === "1") return whoami(request);
   const probeKey = `health:probe:${Date.now()}`;
   const token = Math.random().toString(36).slice(2);
   let live = false;

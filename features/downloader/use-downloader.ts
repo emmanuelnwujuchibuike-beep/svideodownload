@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import type { ApiError, VideoMetadata } from "@/types";
+import { postMetadata } from "@/features/downloads/worker-direct";
 
 type Status = "idle" | "fetching" | "ready" | "error";
 
@@ -30,12 +31,7 @@ export function useDownloader() {
 
     setState({ status: "fetching", metadata: null, error: null });
     try {
-      const res = await fetch("/api/metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
-        signal: controller.signal,
-      });
+      const res = await postMetadata(url, controller.signal);
       const json = await res.json();
       if (!res.ok || json.ok === false) {
         const err = json as ApiError;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { browserCorsHeaders, isBrowserDirectCall, trustedClientIp } from "@/lib/downloads/browser-direct";
 import { getMetadata } from "@/server/extractors";
 import { ContentUnavailableError } from "@/server/extractors/types";
 import { LINK_NOT_SERVABLE_MESSAGE } from "@/lib/downloads/failure-copy";
@@ -22,11 +23,31 @@ function fail(error: string, code: ApiError["code"], status: number) {
   return NextResponse.json<ApiError>({ error, code }, { status });
 }
 
+/**
+ * The browser asks the WORKER directly (owner, 2026-10-08: no Vercel on the
+ * download path) — a `text/plain` POST, so no preflight; `request.json()`
+ * reads the body whatever its content type. The limiter keys on the IP the
+ * edge saw, never on a header the browser wrote (lib/downloads/browser-direct.ts).
+ * A call carrying the worker secret is the old server-to-server path, unchanged.
+ */
 export async function POST(request: Request) {
-  const unauthorized = rejectIfUnauthorizedWorker(request);
-  if (unauthorized) return unauthorized;
+  const browser = isBrowserDirectCall(request);
+  const res = await handle(request, browser);
+  if (browser) for (const [k, v] of Object.entries(browserCorsHeaders(request))) res.headers.set(k, v);
+  return res;
+}
 
-  const id = clientId(request.headers);
+export function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: browserCorsHeaders(request) });
+}
+
+async function handle(request: Request, browser: boolean): Promise<Response> {
+  if (!browser) {
+    const unauthorized = rejectIfUnauthorizedWorker(request);
+    if (unauthorized) return unauthorized;
+  }
+
+  const id = browser ? trustedClientIp(request.headers) : clientId(request.headers);
   const { success, reset } = await metadataLimiter.limit(id);
   if (!success) {
     return NextResponse.json<ApiError>(

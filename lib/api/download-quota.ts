@@ -82,13 +82,19 @@ export async function checkDownloadQuota(
    * receipt to it, so one paid id cannot be reused for a different file.
    */
   subject?: string | null,
+  /**
+   * The caller's identity when the route already established it — a
+   * browser-direct call to the worker carries a verified access token, not a
+   * cookie (lib/downloads/browser-direct.ts). `undefined` = read the cookie.
+   */
+  knownUserId?: string | null,
 ): Promise<DownloadQuota> {
   // Resolve the caller's identity from the session cookie (null = anonymous).
   // Skip the Supabase round-trip entirely when there's no auth cookie — the
   // common case on this anonymous-heavy endpoint.
-  let userId: string | null = null;
+  let userId: string | null = knownUserId ?? null;
   const hasAuthCookie = (request.headers.get("cookie") ?? "").includes("-auth-token");
-  if (hasAuthCookie) {
+  if (knownUserId === undefined && hasAuthCookie) {
     try {
       const supabase = await createClient();
       const {

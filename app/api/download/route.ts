@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { checkDownloadQuota, isInternalWorkerCall } from "@/lib/api/download-quota";
+import { browserCorsHeaders, isBrowserDirectCall, readTextJson, trustedClientIp, userIdFromAccessToken } from "@/lib/downloads/browser-direct";
 import { capForDownload, capFromHeader, capToHeader, MAX_BYTES_HEADER, maxDownloadBytes, maxDownloadBytesFor } from "@/lib/downloads/size-cap";
 import { directDownloadsEnabled, directWorkerBase, mintDirectTicket } from "@/lib/downloads/direct-ticket";
 import { RewardError, redeemRewardItem } from "@/lib/monetization/reward-sessions";
@@ -41,6 +42,8 @@ async function enforceDailyCap(
   batchId?: string | null,
   /** What is being downloaded — binds the retry receipt to it (2026-10-06). */
   data?: DownloadRequest,
+  /** Identity the route already verified (browser-direct calls); undefined = the cookie. */
+  knownUserId?: string | null,
 ): Promise<{ denied: Response | null; maxBytes: number }> {
   /*
     The worker learns the caller's size cap from the trusted proxy (it carries
@@ -48,7 +51,7 @@ async function enforceDailyCap(
   */
   if (isInternalWorkerCall(request)) return { denied: null, maxBytes: capFromHeader(request.headers.get(MAX_BYTES_HEADER)) };
   const subject = data ? `${data.url}|${data.formatId}|${data.kind}` : null;
-  const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId, subject);
+  const quota = await checkDownloadQuota(request, clientIp, downloadId, batchId, subject, knownUserId);
   // Owner, 2026-10-06: files of 200 MB and over are for Pro / Business only.
   // …and a Telegram source has its own ceiling on every path (lib/downloads/size-cap.ts).
   const maxBytes = data
@@ -87,12 +90,14 @@ async function processDownload(
   wantsDirect = false,
   /** The caller's size cap (lib/downloads/size-cap.ts) — Infinity for paid plans. */
   maxBytes: number = maxDownloadBytes(),
+  /** CORS headers for a browser-direct call (lib/downloads/browser-direct.ts). */
+  extraHeaders: Record<string, string> = {},
 ): Promise<Response> {
   const { success, reset } = await downloadLimiter.limit(clientIp);
   if (!success) {
     return NextResponse.json<ApiError>(
       { error: "Too many downloads. Please wait a moment.", code: "RATE_LIMITED" },
-      { status: 429, headers: { "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)) } },
+      { status: 429, headers: { ...extraHeaders, "Retry-After": String(Math.ceil((reset - Date.now()) / 1000)) } },
     );
   }
 
@@ -128,11 +133,63 @@ async function processDownload(
     }
   }
 
-  return streamResolvedDownload(data, clientPlaysHevc, {}, maxBytes);
+  return streamResolvedDownload(data, clientPlaysHevc, extraHeaders, maxBytes);
+}
+
+/** Untrusted id input → a Redis-key-safe id (see `t` / `b` in GET below). */
+const idParam = (v: unknown): string | null => (typeof v === "string" ? v.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || null : null);
+
+/**
+ * The browser, straight to the worker (owner, 2026-10-08: no Vercel on the
+ * download path). Every check the Vercel hop ran runs HERE: the per-IP limiter,
+ * the daily cap and size cap (by the verified member, else the trusted IP),
+ * and reward redemption — then the worker streams the file in the same
+ * response. One request, where there used to be a ticket call AND this.
+ * See lib/downloads/browser-direct.ts for the request shape.
+ */
+async function browserDirectDownload(request: Request): Promise<Response> {
+  const cors = browserCorsHeaders(request);
+  const refuse = (error: string, code: ApiError["code"], status: number, extra: Record<string, string> = {}) =>
+    NextResponse.json<ApiError>({ error, code }, { status, headers: { ...cors, "Cache-Control": "no-store", ...extra } });
+
+  const body = await readTextJson(request);
+  if (!body) return refuse("Invalid request.", "INVALID_URL", 400);
+  const clientIp = trustedClientIp(request.headers);
+  const userId = await userIdFromAccessToken(body.accessToken);
+
+  let data: DownloadRequest;
+  const rewardToken = typeof body.rewardToken === "string" ? body.rewardToken.slice(0, 128) : null;
+  if (rewardToken) {
+    const itemIndex = Number.parseInt(String(body.itemIndex ?? "0"), 10);
+    try {
+      const item = await redeemRewardItem({ rewardSessionId: rewardToken, itemIndex: Number.isFinite(itemIndex) ? itemIndex : 0, userId, ip: clientIp });
+      data = { url: item.url, formatId: item.formatId, kind: item.kind, title: item.title };
+    } catch (e) {
+      if (e instanceof RewardError) return refuse(e.message, e.code, e.code === "DAILY_LIMIT_REACHED" ? 429 : 400);
+      return refuse("Couldn't authorize this download.", "DOWNLOAD_TOKEN_EXPIRED", 400);
+    }
+  } else {
+    const parsed = downloadRequestSchema.safeParse({ url: body.url, formatId: body.formatId, kind: body.kind ?? "video", title: body.title ?? undefined });
+    if (!parsed.success) return refuse(parsed.error.issues[0]?.message ?? "Invalid request.", "INVALID_URL", 400);
+    data = parsed.data;
+  }
+
+  const { denied, maxBytes } = await enforceDailyCap(request, clientIp, idParam(body.t), idParam(body.b), data, userId);
+  if (denied) {
+    for (const [k, v] of Object.entries(cors)) denied.headers.set(k, v);
+    return denied;
+  }
+  return processDownload(data, clientIp, body.hevc === true, false, maxBytes, cors);
+}
+
+/** Only a non-simple request would preflight; answered anyway, cheaply. */
+export function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: browserCorsHeaders(request) });
 }
 
 /** Programmatic JSON download (used by background fetches). */
 export async function POST(request: Request) {
+  if (isBrowserDirectCall(request)) return browserDirectDownload(request);
   const unauthorized = rejectIfUnauthorizedWorker(request);
   if (unauthorized) return unauthorized;
 

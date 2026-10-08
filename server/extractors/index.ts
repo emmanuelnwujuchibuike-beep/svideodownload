@@ -68,8 +68,9 @@ const METADATA_TTL_SECONDS = Number(
  * TikTok link previewed before the deploy would keep failing for 30 minutes.
  * v5 — 2026-10-08: streamable tiers sort ahead of "converts on download"
  * (quality-ladder.ts) — the ORDER is cached, and the default is formats[0].
+ * v6 — 2026-10-08: TikTok video prefers the native route (preferTikTokRoute).
  */
-const EXTRACTOR_SHAPE_VERSION = "v5";
+const EXTRACTOR_SHAPE_VERSION = "v6";
 
 function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;

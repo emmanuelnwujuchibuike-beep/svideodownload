@@ -1,3 +1,5 @@
+import { postDirectDownload, workerDirectEnabled } from "./worker-direct";
+
 /**
  * The download's bytes — from the worker DIRECTLY when the server allows it.
  *
@@ -30,8 +32,32 @@ function unreachable(): Response {
   });
 }
 
+/** Our own answer (the file, or one of our JSON refusals) — anything else is a broken door. */
+function isOurAnswer(res: Response): boolean {
+  return res.ok || (res.headers.get("content-type") ?? "").includes("application/json");
+}
+
 export async function fetchDownload(target: string, signal: AbortSignal): Promise<Response> {
   if (!target.startsWith("/api/download?")) return fetch(target, { signal });
+
+  /*
+    2026-10-08 (owner: "fix the vercel issue … the speed is what needs
+    attention"): straight to the worker, which runs the checks AND streams the
+    file in one response — no ticket call first (see ./worker-direct.ts).
+    Same retry rule as below: one more attempt, never Vercel.
+  */
+  if (workerDirectEnabled()) {
+    for (let attempt = 0; attempt < DIRECT_ATTEMPTS; attempt++) {
+      try {
+        const res = await postDirectDownload(target, signal);
+        if (isOurAnswer(res)) return res;
+      } catch (e) {
+        if (signal.aborted) throw e;
+      }
+    }
+    return unreachable();
+  }
+
   for (let attempt = 0; attempt < DIRECT_ATTEMPTS; attempt++) {
     const res = await fetch(`${target}&direct=1`, { signal });
     if (!res.ok || res.headers.get("x-frenz-direct") !== "1") return res;
@@ -50,7 +76,7 @@ export async function fetchDownload(target: string, signal: AbortSignal): Promis
         too large, rate limited, expired). Anything else — a 404 from a worker
         mid-deploy, a gateway's HTML error page — is worth one more ticket.
       */
-      if (direct.ok || (direct.headers.get("content-type") ?? "").includes("application/json")) return direct;
+      if (isOurAnswer(direct)) return direct;
     } catch (e) {
       if (signal.aborted) throw e;
       /* not reachable this time — one more ticket, then an honest failure */

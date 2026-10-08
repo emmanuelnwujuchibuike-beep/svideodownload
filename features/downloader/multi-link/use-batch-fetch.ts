@@ -6,6 +6,7 @@ import { sourceUrlSchema } from "@/lib/validation";
 import type { ApiError, VideoMetadata } from "@/types";
 
 import type { BatchAction, BatchSource } from "./state";
+import { postMetadata } from "@/features/downloads/worker-direct";
 
 /**
  * Source extraction with controlled concurrency (§10), request dedup and real
@@ -92,12 +93,7 @@ export function useBatchFetch(
       dispatch({ type: "fetchStart", sourceId: source.id });
 
       try {
-        const res = await fetch("/api/metadata", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-          signal: controller.signal,
-        });
+        const res = await postMetadata(url, controller.signal);
         const json = await res.json().catch(() => ({}));
         if (!res.ok || json?.ok === false || !json?.data) {
           const err = json as ApiError;

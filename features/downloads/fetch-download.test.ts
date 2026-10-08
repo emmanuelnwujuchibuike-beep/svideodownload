@@ -1,6 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/supabase/client-lazy", () => ({
+  getClient: async () => ({ auth: { getSession: async () => ({ data: { session: sessionToken ? { access_token: sessionToken } : null } }) } }),
+}));
+let sessionToken: string | null = null;
 
 import { fetchDownload } from "@/features/downloads/fetch-download";
+import { directDownloadBody, DOWNLOAD_ORIGIN } from "@/features/downloads/worker-direct";
 
 /**
  * FOT brief (owner, 2026-10-06): a download's bytes come from the worker
@@ -17,9 +23,76 @@ function ticketResponse(url: unknown = TICKET): Response {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  sessionToken = null;
+});
 
-describe("fetchDownload", () => {
+/*
+  2026-10-08: the default is now browser → worker in ONE request (no ticket,
+  no Vercel). The ticket tests below describe the kill-switch path
+  (NEXT_PUBLIC_DOWNLOAD_DIRECT=0), which must still never touch Vercel's proxy.
+*/
+describe("worker-direct (the default): one request to the worker, never Vercel", () => {
+  const WORKER = `${DOWNLOAD_ORIGIN}/api/download`;
+
+  it("POSTs the download as a CORS-simple text/plain body to the worker", async () => {
+    const calls: { u: string; init?: RequestInit }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string, init?: RequestInit) => {
+      calls.push({ u, init });
+      return new Response("bytes");
+    }));
+    const res = await fetchDownload("/api/download?url=https%3A%2F%2Fx.com%2Fa&formatId=f1&kind=video&t=T1&hevc=1", new AbortController().signal);
+    expect(await res.text()).toBe("bytes");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.u).toBe(WORKER);
+    expect(calls[0]!.init?.method).toBe("POST");
+    expect(calls[0]!.init?.headers).toEqual({ "Content-Type": "text/plain;charset=UTF-8" });
+    expect(JSON.parse(String(calls[0]!.init?.body))).toEqual({ url: "https://x.com/a", formatId: "f1", kind: "video", t: "T1", hevc: true });
+  });
+
+  it("a signed-in member's token rides in the BODY, never the URL", async () => {
+    sessionToken = "eyJ.member.token";
+    const calls: { u: string; init?: RequestInit }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string, init?: RequestInit) => {
+      calls.push({ u, init });
+      return new Response("bytes");
+    }));
+    await fetchDownload("/api/download?url=u&formatId=f&kind=video", new AbortController().signal);
+    expect(calls[0]!.u).not.toContain("token");
+    expect(JSON.parse(String(calls[0]!.init?.body)).accessToken).toBe("eyJ.member.token");
+  });
+
+  it("network failure: one retry at the worker, then an honest 503 — no same-origin request", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      calls.push(u);
+      throw new TypeError("Failed to fetch");
+    }));
+    const res = await fetchDownload("/api/download?url=u&formatId=f", new AbortController().signal);
+    expect(res.status).toBe(503);
+    expect(calls).toEqual([WORKER, WORKER]);
+  });
+
+  it("our JSON refusal (429 daily cap) is returned as-is, not retried", async () => {
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      n += 1;
+      return new Response(JSON.stringify({ error: "Daily download limit reached" }), { status: 429, headers: { "content-type": "application/json" } });
+    }));
+    const res = await fetchDownload("/api/download?url=u&formatId=f", new AbortController().signal);
+    expect(res.status).toBe(429);
+    expect(n).toBe(1);
+  });
+
+  it("forwards only the manager's own parameters", () => {
+    expect(directDownloadBody("/api/download?rewardToken=R&itemIndex=2&b=B&evil=1&direct=1", null)).toEqual({ rewardToken: "R", itemIndex: "2", b: "B" });
+  });
+});
+
+describe("fetchDownload — the kill switch (NEXT_PUBLIC_DOWNLOAD_DIRECT=0), ticket path", () => {
+  beforeEach(() => vi.stubEnv("NEXT_PUBLIC_DOWNLOAD_DIRECT", "0"));
   it("asks for a ticket and takes it straight to the worker", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
@@ -101,6 +174,7 @@ describe("fetchDownload", () => {
 });
 
 describe("a broken direct door gets one more ticket, never Vercel", () => {
+  beforeEach(() => vi.stubEnv("NEXT_PUBLIC_DOWNLOAD_DIRECT", "0"));
   it("a 404 / gateway page from the worker is retried once with a fresh ticket", async () => {
     for (const bad of [
       new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } }),

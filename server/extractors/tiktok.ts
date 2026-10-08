@@ -438,16 +438,12 @@ function abs(u: string): string {
  */
 const TIKWM_TIMEOUT_MS = Number(process.env.TIKWM_TIMEOUT_MS || 12000);
 /**
- * How long to keep waiting for TikWM after the NATIVE route has already
- * answered (see the race in `extract`).
- *
- * Native's formats point at TikTok's own CDN and 403 without the page session
- * cookie, so a native win is an extraction that cannot be downloaded. This is
- * the extra latency we are willing to spend to avoid handing a member formats
- * that will fail — and it is only ever spent when native wins, which is the
- * case that was already broken.
+ * The grace window in `preferTikTokRoute`: how long the PREFERRED route gets
+ * once the other one has answered — native, for a video (its CDN delivers the
+ * file far faster than TikWM's host); TikWM, for a photo post (Live Photos).
+ * A little preview latency, spent only when the preferred route is behind.
  */
-const NATIVE_GRACE_MS = Number(process.env.TIKTOK_NATIVE_GRACE_MS || 3500);
+const NATIVE_GRACE_MS = Number(process.env.TIKTOK_NATIVE_GRACE_MS || 1500);
 
 /**
  * TikWM data → our format list. Pure, so the slide mapping is testable.
@@ -662,22 +658,54 @@ const TIKWM_RATE_LIMIT_RETRY_MS = 1200;
  * Exported for the test: the grace window is the whole behaviour, and a rule
  * that cannot be asserted on is a rule nobody can trust.
  */
-export async function preferTikWm(
+/** A photo / slideshow result — only TikWM reads TikTok Live Photos (live_images, 2026-09-09). */
+function isPhotoPost(m: VideoMetadata): boolean {
+  return m.formats.some((f) => f.kind === "image") || m.formats.some((f) => f.formatId.startsWith("live-"));
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  🔴 NATIVE LEADS FOR VIDEO, TIKWM FOR PHOTOS (2026-10-08)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * The 2026-09-28 rule ("TikWM preferred") existed because native's formats
+ * 403'd without the page's cookies. They carry those cookies now
+ * (`nativeHeaders`), and measured on production the same day the two routes
+ * differ where the member feels it — the FILE:
+ *
+ *   TikWM   6.8 MB from TikWM's own server: first byte 2.3 s, total 29 s
+ *           (~250 KB/s). Its free tier is also 1 request/s per IP.
+ *   native  2.3 MB from TikTok's CDN in ~2 s; real per-height tiers, H.264
+ *           first (quality-ladder.ts).
+ *
+ * Owner, 2026-10-08: "the speed is what needs attention". So for a VIDEO:
+ *   · native answers first → it wins at once (no waiting for TikWM);
+ *   · TikWM answers first  → native gets a short grace (`graceMs`) — a little
+ *     preview latency buys a much faster download — then TikWM is used.
+ * For a PHOTO post TikWM is still preferred: only it reports Live Photo slides.
+ *
+ * The route is tagged by which promise resolved, never sniffed from the format
+ * ids (`tt-0` is emitted by both). Exported for the test.
+ */
+export async function preferTikTokRoute(
   viaApi: Promise<VideoMetadata>,
   viaNative: Promise<VideoMetadata>,
   graceMs: number,
   /** For the log line only. */
   url = "",
 ): Promise<VideoMetadata> {
-  const tagged = await Promise.any([viaApi.then((m) => ({ route: "tikwm" as const, m })), viaNative.then((m) => ({ route: "native" as const, m }))]);
-  if (tagged.route === "tikwm") return tagged.m;
+  const within = <T>(p: Promise<T>) => Promise.race([p.catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), graceMs))]);
+  const first = await Promise.any([viaApi.then((m) => ({ route: "tikwm" as const, m })), viaNative.then((m) => ({ route: "native" as const, m }))]);
 
-  // Native answered first. Spend a little longer on the route whose formats work.
-  const preferred = await Promise.race([viaApi.catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), graceMs))]);
-  if (preferred) return preferred;
-
-  console.warn("[tiktok] native won and TikWM did not answer within the grace window — formats point at TikTok's CDN and may 403 on download", { url: url.slice(0, 120) });
-  return tagged.m;
+  if (first.route === "native") {
+    if (!isPhotoPost(first.m)) return first.m;
+    return (await within(viaApi)) ?? first.m;
+  }
+  if (isPhotoPost(first.m)) return first.m;
+  const native = await within(viaNative);
+  if (native && !isPhotoPost(native)) return native;
+  console.warn("[tiktok] native did not answer within the grace window — serving TikWM (slower file host)", { url: url.slice(0, 120) });
+  return first.m;
 }
 
 async function tikwmExtract(
@@ -847,34 +875,9 @@ export const tiktokExtractor: Extractor = {
     const viaNative = nativeExtract(canonical, platform);
 
     try {
-      /*
-        ── 🔴 TIKWM IS PREFERRED, AND THE RACE NO LONGER DECIDES (2026-09-28) ──
-
-        `Promise.any` handed the member whichever route answered FIRST. That is
-        the right shape for LATENCY and the wrong shape for this pair, because
-        the two routes do not produce equally usable results:
-
-          TikWM   `tt-sd` / `tt-0` pointing at TikWM's own re-encode. Downloads.
-          native  `tt-0…tt-N` pointing at TikTok's CDN (`v16-webapp-prime…`),
-                  which answers Akamai **403 Access Denied** without the page's
-                  session cookie — and `buildFormats` does not carry it.
-
-        So when native won, extraction "succeeded" and every video download then
-        failed: ffmpeg could not open the URL, `/api/download` answered 502, and
-        Cloudflare served its own HTML 502 page over it. Measured on production
-        the same day, on one video, twice:
-
-          canonical URL → native (`tt-1,tt-2,tt-0`) → download **502**
-          short link    → TikWM  (`tt-sd,tt-0`)     → download **200, 6.8 MB**
-
-        This exact outcome was predicted in the 2026-09-13 notes ("so 'let native
-        win' would 403 at download time today"); it became an outage once TikWM
-        got slow enough — helped by its one-request-per-second limit — to start
-        losing the race routinely.
-
-        The rule, and the evidence for it, are in `preferTikWm` above.
-      */
-      return await preferTikWm(viaApi, viaNative, NATIVE_GRACE_MS, canonical);
+      // The rule and its measurements: `preferTikTokRoute` above (2026-10-08; it
+      // replaced 2026-09-28's "TikWM preferred", which predates the cookie fix).
+      return await preferTikTokRoute(viaApi, viaNative, NATIVE_GRACE_MS, canonical);
     } catch (err) {
       /*
         Both routes failed — the registry falls back to yt-dlp from here, same

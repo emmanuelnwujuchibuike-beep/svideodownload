@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { VideoMetadata } from "@/types";
 
-import { preferTikWm } from "./tiktok";
+import { preferTikTokRoute } from "./tiktok";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -24,8 +24,10 @@ import { preferTikWm } from "./tiktok";
  *   canonical URL → native → download 502
  *   short link    → TikWM  → download 200, 6.8 MB
  *
- * These tests are the teeth on the rule. The first one FAILS against a plain
- * `Promise.any`, which is the code this replaced.
+ * 2026-10-08: native's formats now carry the page cookies and download, and
+ * native's CDN delivers the file far faster than TikWM's host (measured 2 s vs
+ * 29 s), so the rule became: VIDEO → native preferred; PHOTO → TikWM preferred
+ * (only TikWM reports Live Photo slides). See `preferTikTokRoute`.
  */
 
 const meta = (route: string): VideoMetadata =>
@@ -49,42 +51,50 @@ const meta = (route: string): VideoMetadata =>
 
 const TIKWM = meta("tikwm");
 const NATIVE = meta("native");
+const photo = (route: string): VideoMetadata =>
+  ({ ...meta(route), formats: [{ formatId: "img-0", kind: "image" }] }) as unknown as VideoMetadata;
+const TIKWM_PHOTO = photo("tikwm-photo");
+const NATIVE_PHOTO = photo("native-photo");
 
 const after = <T>(ms: number, value: T): Promise<T> => new Promise((r) => setTimeout(() => r(value), ms));
 const failsAfter = (ms: number, why = "no"): Promise<never> => new Promise((_, rej) => setTimeout(() => rej(new Error(why)), ms));
 
-describe("TikTok — TikWM is preferred over native (the 502 download fix)", () => {
-  it("🔴 native answering FIRST does not win: TikWM is waited for inside the grace window", async () => {
-    // This is the exact shape of the outage — and the assertion a plain
-    // `Promise.any` fails, because it would return NATIVE here.
-    const result = await preferTikWm(after(60, TIKWM), after(5, NATIVE), 500);
-    expect(result).toBe(TIKWM);
-  });
-
-  it("TikWM answering first is used immediately", async () => {
-    const result = await preferTikWm(after(5, TIKWM), after(60, NATIVE), 500);
-    expect(result).toBe(TIKWM);
-  });
-
-  it("native IS used when TikWM cannot answer at all — it is still a real fallback", async () => {
-    const result = await preferTikWm(failsAfter(5, "TikWM returned no usable media"), after(10, NATIVE), 500);
-    expect(result).toBe(NATIVE);
-  });
-
-  it("native is used when TikWM misses the grace window — a bounded wait, not an unbounded one", async () => {
+describe("TikTok — native leads for video, TikWM for photos (2026-10-08)", () => {
+  it("video: native answering first wins at once — no waiting for TikWM", async () => {
     const started = Date.now();
-    const result = await preferTikWm(after(5_000, TIKWM), after(5, NATIVE), 80);
+    const result = await preferTikTokRoute(after(2_000, TIKWM), after(5, NATIVE), 500);
     expect(result).toBe(NATIVE);
-    // The whole point of the window: we do not wait out TikWM's full timeout.
+    expect(Date.now() - started).toBeLessThan(400);
+  });
+
+  it("video: TikWM answering first waits the grace window for native (the faster file)", async () => {
+    const result = await preferTikTokRoute(after(5, TIKWM), after(60, NATIVE), 500);
+    expect(result).toBe(NATIVE);
+  });
+
+  it("video: native missing the grace window → TikWM, after a BOUNDED wait", async () => {
+    const started = Date.now();
+    const result = await preferTikTokRoute(after(5, TIKWM), after(5_000, NATIVE), 80);
+    expect(result).toBe(TIKWM);
     expect(Date.now() - started).toBeLessThan(1_000);
   });
 
-  it("both routes failing still rejects, so the caller can fall back to yt-dlp", async () => {
-    await expect(preferTikWm(failsAfter(5, "tikwm"), failsAfter(10, "native"), 500)).rejects.toBeInstanceOf(AggregateError);
+  it("native failing outright (a WAF page) → TikWM is still a real fallback", async () => {
+    const result = await preferTikTokRoute(after(10, TIKWM), failsAfter(5, "waf"), 500);
+    expect(result).toBe(TIKWM);
   });
 
-  it("a grace window of zero degrades to 'native wins', not to a hang", async () => {
-    const result = await preferTikWm(after(50, TIKWM), after(1, NATIVE), 0);
-    expect(result).toBe(NATIVE);
+  it("photo: native first still waits for TikWM — only TikWM reads Live Photos", async () => {
+    const result = await preferTikTokRoute(after(60, TIKWM_PHOTO), after(5, NATIVE_PHOTO), 500);
+    expect(result).toBe(TIKWM_PHOTO);
+  });
+
+  it("photo: TikWM first is used at once", async () => {
+    const result = await preferTikTokRoute(after(5, TIKWM_PHOTO), after(60, NATIVE_PHOTO), 500);
+    expect(result).toBe(TIKWM_PHOTO);
+  });
+
+  it("both routes failing still rejects, so the caller can fall back to yt-dlp", async () => {
+    await expect(preferTikTokRoute(failsAfter(5, "tikwm"), failsAfter(10, "native"), 500)).rejects.toBeInstanceOf(AggregateError);
   });
 });

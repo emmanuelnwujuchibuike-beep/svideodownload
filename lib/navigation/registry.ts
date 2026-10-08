@@ -24,6 +24,7 @@ import {
   KeyRound,
   LayoutGrid,
   LogOut,
+  Megaphone,
   MessageCircle,
   Moon,
   Newspaper,
@@ -116,6 +117,9 @@ export const DESTINATIONS: Destination[] = [
   { id: "create-story", label: "Create story", href: "/create/story", kind: "create", icon: Sparkles, workspace: "social", keywords: ["new story", "24 hours"], canAccess: everyone, requiresAuth: true },
 
   { id: "account", label: "Account settings", href: "/account", kind: "account", icon: Settings, keywords: ["profile", "preferences", "settings", "privacy", "password", "security"], canAccess: everyone, requiresAuth: true },
+  // Landing + Download brief §18/§19 (2026-10-08): the two ecosystem gateways the menu and search can reach
+  { id: "frenz-ai", label: "Frenz AI", href: "/ai", kind: "page", icon: Sparkles, keywords: ["ai", "create", "text to video", "image to video", "voice", "lip sync", "audio"], canAccess: everyone },
+  { id: "advertise", label: "Advertise", href: "/advertise", kind: "page", icon: Megaphone, keywords: ["ads", "promote", "business", "campaign", "advertising"], canAccess: everyone },
   { id: "pricing", label: "Pricing", href: "/pricing", kind: "page", icon: CreditCard, keywords: ["upgrade", "pro", "plans", "billing", "subscription"], canAccess: everyone },
   { id: "developers", label: "Developer API", href: "/developers", kind: "docs", icon: KeyRound, workspace: "developer", keywords: ["api", "docs", "keys", "integration", "rest"], canAccess: everyone },
   { id: "learn", label: "Learning Academy", href: "/learn", kind: "docs", icon: GraduationCap, workspace: "learning", keywords: ["guides", "tutorials", "how to", "help", "academy", "learn", "editing", "subtitles", "captions", "quality"], canAccess: everyone },

@@ -31,11 +31,13 @@ export const en = {
   /* ------------------------------- site header ------------------------------- */
   "nav.home": "Home",
   "nav.features": "Features",
-  "nav.products": "Products",
   "nav.download": "Download",
   "nav.pricing": "Pricing",
   "nav.academy": "Academy",
   "nav.support": "Support",
+  // Landing + Download brief §18 (2026-10-08): the AI and Advertise gateways
+  "nav.ai": "Frenz AI",
+  "nav.advertise": "Advertise",
   "nav.login": "Log in",
   "nav.openMenu": "Open menu",
   "nav.closeMenu": "Close menu",

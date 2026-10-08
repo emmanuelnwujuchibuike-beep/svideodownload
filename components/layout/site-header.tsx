@@ -48,9 +48,13 @@ import { cn } from "@/lib/utils";
 const NAV_LINKS: { href: string; labelKey: MessageKey }[] = [
   { href: "/", labelKey: "nav.home" },
   { href: "/features", labelKey: "nav.features" },
-  { href: "/#products", labelKey: "nav.products" },
+  // Landing + Download brief §18 (2026-10-08): AI is the gateway to Frenz AI. It replaced "Products",
+  // whose anchor (#products) is now the landing's Discover section.
+  { href: "/ai", labelKey: "nav.ai" },
   { href: "/#download", labelKey: "nav.download" },
   { href: "/pricing", labelKey: "nav.pricing" },
+  // §17/§18: the business door, for everyone (signed in or not)
+  { href: "/advertise", labelKey: "nav.advertise" },
   /*
     Academy sits in the top nav rather than only in the footer. It is the deepest
     content on the site and the hub the ~148 generated downloader pages link into,
@@ -93,11 +97,13 @@ const NAV_LINKS: { href: string; labelKey: MessageKey }[] = [
   "Learn more" is how trust content goes unread.
 */
 const MENU_GROUPS: { title: string; ids: string[] }[] = [
-  { title: "Discover", ids: ["home", "explore", "reels", "search"] },
+  { title: "Discover", ids: ["home", "frenz-ai", "explore", "reels", "search"] },
   { title: "Create", ids: ["create-post", "create-reel", "create-story"] },
   { title: "Your stuff", ids: ["downloads", "saved", "messages", "friends", "notifications"] },
   { title: "Learn", ids: ["academy", "topics", "learn", "glossary", "blog"] },
   { title: "Help & trust", ids: ["help", "trust", "contact", "developers", "pricing"] },
+  // §19 (2026-10-08): advertising reachable from the menu, not a permanent nav item
+  { title: "Business", ids: ["advertise"] },
 ];
 
 /* The tiny client catalogue, NOT seo-pages — see lib/seo/primary-links.ts:
@@ -397,7 +403,7 @@ export function SiteHeader({
               // "/" is a member's home only by redirect — see `homeHref` above.
               href={l.href === "/" ? homeHref : l.href}
               prefetch={l.href === "/" ? homePrefetch : undefined}
-              className="relative transition-colors hover:text-foreground after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-primary after:transition-all hover:after:w-full"
+              className="relative whitespace-nowrap transition-colors hover:text-foreground after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-primary after:transition-all hover:after:w-full"
             >
               {t(l.labelKey)}
             </Link>

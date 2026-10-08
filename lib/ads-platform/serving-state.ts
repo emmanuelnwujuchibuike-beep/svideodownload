@@ -24,20 +24,8 @@ import type { ServingPayload } from "./serving-payload";
 
 /* ─────────────────────────────── pages ─────────────────────────────── */
 
-/**
- * The content area a pathname belongs to, or null for a page that is none of
- * them (academy, help, settings…). A null page can still show a placement whose
- * scope is `all_pages` — the global top banner — and nothing else.
- */
-export function pageForPath(pathname: string | null | undefined, reelsTab?: string | null): AdPageContext | null {
-  const p = (pathname ?? "").split("?")[0]!.replace(/\/+$/, "") || "/";
-  if (p === "/" || p === "/downloads" || p === "/library") return "download";
-  // AI Reels is the Reels deck's AI tab (/reels?tab=ai), not a route of its own
-  if (p === "/reels" || p.startsWith("/reels/")) return reelsTab === "ai" ? "ai_reels" : "reels";
-  if (p === "/feed" || p.startsWith("/feed/")) return "feed";
-  if (p === "/ai" || p.startsWith("/ai/") || p === "/studio/ai" || p.startsWith("/studio/ai/")) return "ai";
-  return null;
-}
+// `pageForPath` lives in ./pages (tiny — the top banner imports it on every content page).
+export { pageForPath } from "./pages";
 
 /** Stage 2 for a page that may be null (see `pageForPath`). */
 function servableOn(ad: EligibleAd, placementPages: readonly string[], page: AdPageContext | null, now: number): boolean {

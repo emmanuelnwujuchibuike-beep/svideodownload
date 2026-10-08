@@ -7,7 +7,8 @@ import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
 import { AI_VIDEO_SAVE_EVENT } from "@/lib/ads-platform/moment-events";
 import { claimMoment, mayShowAgain, nextFromPool, pageForPath, poolFor, recordShown } from "@/lib/ads-platform/serving-state";
-import { AD_SLOTS, providerOrder, resolveSlotProvider } from "@/lib/ads-platform/slot-registry";
+import { MOMENT_SLOTS } from "@/lib/ads-platform/slot-moments";
+import { providerOrder, resolveSlotProvider } from "@/lib/ads-platform/slot-registry";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
 import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 import { peekAdInventory } from "@/features/monetization/ad-inventory-client";
@@ -73,7 +74,7 @@ export function SelfMoments() {
       providers that can serve. When the network leads, the network's own
       trigger keeps the moment and this stays out of the way.
     */
-    const slot = AD_SLOTS.find((x) => x.kind === "moment" && x.paidPlacement === placement);
+    const slot = MOMENT_SLOTS.find((x) => x.paidPlacement === placement);
     if (slot) {
       const inv = peekAdInventory();
       const network = slot.networkZone ? inv === null || mayServeSlot(inv, slot.networkZone) || inv.vast.length > 0 : false;

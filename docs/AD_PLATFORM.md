@@ -437,7 +437,7 @@ Providers inside a "zone" are whatever rows the operator configures for it
 | No live campaign (`self:false`) | **0** payload requests, 0 ad-layer chunks loaded |
 | Ads on vs off: landing | LCP 192–220 ms vs 220–224 ms; CLS 0.003 both |
 | Ads on vs off: /ai, /academy | LCP 168→176 ms, 132→148 ms; CLS unchanged |
-| Bundle | landing first load 217 → 224 kB (the pool hook in AdSurface plus the gate); the renderers are dynamic imports |
+| Bundle | the slot hooks import only the shared inventory check + the lean box registry; the engine (`paid-runtime`), every renderer and the moments are dynamic imports fetched only when a campaign is live. All route budgets pass: landing 220 kB (ceiling 218 kB cold-entry measure passes), `/home` 368.9 kB (ceiling 370) |
 | Tests | `features/ads-platform/serve/part5-serving.test.ts` (37) + the scan for no polling or Realtime now covers `serve/`; 2 mutants (failed-creative skip, reward limit) caught |
 
 Not measured here: real iPhone/Android devices, throttled 3G, memory. A real

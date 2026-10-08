@@ -6,11 +6,8 @@ import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import type { AdPageContext } from "@/lib/ads-platform/catalog";
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { onCreativeFailed, poolFor } from "@/lib/ads-platform/serving-state";
-import { creativeFitsSlot, providerOrder, resolveSlotProvider, slotById, type SlotProvider } from "@/lib/ads-platform/slot-registry";
-import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
-
-import { loadSelfAds } from "../serving-client";
+import { providerOrder, resolveSlotProvider, slotById, type SlotProvider } from "@/lib/ads-platform/slot-registry";
+import { mayServeSelf, mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
 
 export type SlotState =
   | { status: "pending" }
@@ -25,12 +22,13 @@ export type SlotState =
  *   · "network"   → the container's existing network unit, exactly as before
  *   · null        → nothing (the container collapses as it always did)
  *
- * Deciding is cheap and loads no provider: the paid side reads the cached
- * payload (no request at all while no campaign is live — the shared inventory
- * says so), the network side reads the same shared inventory the network unit
- * consults before it asks. The order is the admin's (`ad_slot_provider_order`
- * in the payload), else the registry default. When the network unit reports
- * it did not fill, `networkEmpty()` hands the slot to the next provider.
+ * Deciding is cheap and loads no provider. The shared inventory (one CDN
+ * answer the network units already wait for) says which zones can fill and
+ * whether ANY paid campaign is live; only then is the paid engine fetched
+ * (`paid-runtime`, a dynamic import) to read the cached payload. With no
+ * live campaign that chunk is never downloaded. The order is the admin's
+ * (`ad_slot_provider_order` in the payload), else the registry default; when
+ * the network unit reports it did not fill, `networkEmpty()` hands the slot on.
  */
 export function useSlotProvider(slotId: string, page: AdPageContext | null): { state: SlotState; networkEmpty: () => void } {
   const { showAds, ready } = useShowAds();
@@ -45,26 +43,35 @@ export function useSlotProvider(slotId: string, page: AdPageContext | null): { s
       return;
     }
     let alive = true;
-    const resolve = () =>
-      void Promise.all([slot.paidPlacement ? loadSelfAds() : Promise.resolve(null), loadAdInventory()])
-        .then(([payload, inv]) => {
-          if (!alive) return;
-          const pool = slot.paidPlacement ? poolFor(payload, slot.paidPlacement, page) : { ads: [], rules: null };
-          const ads = pool.ads.filter((a) => creativeFitsSlot(slot, a.w, a.h));
-          const order: SlotProvider[] = providerOrder(slot, payload?.order);
-          const network = slot.networkZone ? mayServeSlot(inv, slot.networkZone) : false;
-          const pick = resolveSlotProvider(order, { frenzsave: ads.length > 0, network, networkEmpty: empty });
-          setState(pick === "frenzsave" ? { status: "ready", provider: "frenzsave", ads, rules: pool.rules } : { status: "ready", provider: pick });
-        })
-        .catch(() => {
-          // the ad layer failing must never take the network unit with it
-          if (alive) setState({ status: "ready", provider: slot.networkZone && !empty ? "network" : null });
-        });
-    resolve();
-    const off = onCreativeFailed(resolve);
+    let off: (() => void) | null = null;
+    const resolve = async () => {
+      const inv = await loadAdInventory();
+      const network = slot.networkZone ? mayServeSlot(inv, slot.networkZone) : false;
+      let ads: EligibleAd[] = [];
+      let rules: FormatRules | null = null;
+      let configured: Record<string, unknown> | undefined;
+      if (slot.paidPlacement && mayServeSelf(inv)) {
+        const rt = await import("./paid-runtime");
+        const payload = await rt.loadSelfAds();
+        const pool = rt.poolFor(payload, slot.paidPlacement, page);
+        ads = pool.ads.filter((a) => rt.creativeFitsSlot(slot, a.w, a.h));
+        rules = pool.rules;
+        configured = payload?.order;
+        // a creative that fails anywhere this session leaves every slot at once
+        off ??= rt.onCreativeFailed(() => void resolve().catch(() => {}));
+      }
+      if (!alive) return;
+      const order: SlotProvider[] = providerOrder(slot, configured);
+      const pick = resolveSlotProvider(order, { frenzsave: ads.length > 0, network, networkEmpty: empty });
+      setState(pick === "frenzsave" ? { status: "ready", provider: "frenzsave", ads, rules } : { status: "ready", provider: pick });
+    };
+    resolve().catch(() => {
+      // the ad layer failing must never take the network unit with it
+      if (alive) setState({ status: "ready", provider: slot.networkZone && !empty ? "network" : null });
+    });
     return () => {
       alive = false;
-      off();
+      off?.();
     };
   }, [ready, showAds, slotId, page, empty]);
 

@@ -19,7 +19,10 @@ import {
   poolFor,
   recordShown,
 } from "@/lib/ads-platform/serving-state";
-import { AD_SLOTS, creativeFitsSlot, NETWORK_ONLY_ZONES, providerOrder, resolveSlotProvider, slotById, slotForZone } from "@/lib/ads-platform/slot-registry";
+import { AD_SLOTS as BOX_SLOTS, creativeFitsSlot, providerOrder, resolveSlotProvider, slotById, slotForZone } from "@/lib/ads-platform/slot-registry";
+import { MOMENT_SLOTS } from "@/lib/ads-platform/slot-moments";
+const AD_SLOTS = [...BOX_SLOTS, ...MOMENT_SLOTS];
+import { NETWORK_ONLY_ZONES, SLOT_DESCRIPTIONS } from "@/lib/ads-platform/slot-inventory";
 import { AD_PLACEMENT_CODES } from "@/lib/ads-platform/catalog";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 
@@ -311,10 +314,11 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
   });
 
   it("new inventory only where no network slot existed", () => {
-    const created = AD_SLOTS.filter((x) => x.newInventory);
+    const created = AD_SLOTS.filter((x) => SLOT_DESCRIPTIONS[x.id]!.newInventory);
     expect(created.map((x) => x.id).sort()).toEqual(["ai_hub_card", "ai_save_moment", "stories_between"]);
     for (const x of created) expect(x.networkZone, x.id).toBeNull();
-    for (const x of AD_SLOTS.filter((y) => !y.newInventory)) expect(x.networkZone, x.id).not.toBeNull();
+    for (const x of AD_SLOTS.filter((y) => !SLOT_DESCRIPTIONS[y.id]!.newInventory)) expect(x.networkZone, x.id).not.toBeNull();
+    expect(Object.keys(SLOT_DESCRIPTIONS).sort()).toEqual(AD_SLOTS.map((x) => x.id).sort());
   });
 
   it("the order is the admin's when valid, else the registry default", () => {
@@ -372,7 +376,21 @@ describe("ONE physical slot → ONE provider (slots addendum)", () => {
 
   it("a story card only between two people's stories, within the gap", () => {
     const s = src("features/app-shell/dashboard/stories-row.tsx");
-    expect(s).toMatch(/else if \(gi < groups\.length - 1\) \{\s*if \(storyAds\.status === "ready" && storyAds\.ads\.length && mayShowAgain\("stories_card", storyAds\.rules\)\)/);
+    expect(s).toMatch(/else if \(gi < groups\.length - 1\) \{[\s\S]{0,160}const ad = storyAds\.status === "ready" \? storyAds\.take\(\) : null;/);
     expect(s).toContain("replying || holding || paidCard");
+    // take() = within the admin gap, never the last one, recorded as shown
+    const pool = src("features/ads-platform/serve/use-self-ad-pool.ts");
+    expect(pool).toContain("if (!pool.ads.length || !rt.mayShowAgain(placement, pool.rules)) return null;");
+    expect(pool).toContain("const ad = rt.nextFromPool(placement, pool.ads);");
+    expect(pool).toContain("if (ad) rt.recordShown(placement, ad.cr);");
+  });
+
+  it("COST: the slot hooks import no engine — it is fetched only when a paid campaign is live", () => {
+    for (const f of ["features/ads-platform/serve/use-slot-provider.ts", "features/ads-platform/serve/use-self-ad-pool.ts", "features/app-shell/dashboard/stories-row.tsx", "features/monetization/top-page-banner-ad.tsx", "features/monetization/ad-surface.tsx"]) {
+      const c = src(f);
+      expect(c, f).not.toMatch(/^import (?!type)[^;]*ads-platform\/(serving-state|serving-payload|eligibility|serving-client)"/m);
+      expect(c, f).not.toMatch(/^import (?!type)[^;]*"\.\.\/serving-client"/m);
+    }
+    expect(src("features/ads-platform/serve/use-slot-provider.ts")).toContain('if (slot.paidPlacement && mayServeSelf(inv)) {\n        const rt = await import("./paid-runtime");');
   });
 });

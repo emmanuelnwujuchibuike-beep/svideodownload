@@ -2,62 +2,76 @@
 
 import { useEffect, useState } from "react";
 
+import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import type { AdPageContext } from "@/lib/ads-platform/catalog";
-import { onCreativeFailed, poolFor, type Pool } from "@/lib/ads-platform/serving-state";
+import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
+import { mayServeSelf } from "@/lib/monetization/ad-inventory-shape";
 
-import { loadSelfAds } from "../serving-client";
+export type PoolState =
+  | { status: "pending" }
+  | {
+      status: "ready";
+      ads: EligibleAd[];
+      rules: FormatRules | null;
+      /**
+       * For one-at-a-time placements (a Story card): the next ad that may show
+       * NOW — never the one shown last, within the format's admin gap — and it
+       * is recorded as shown. Null when nothing may show.
+       */
+      take: () => EligibleAd | null;
+    };
 
-export type PoolState = { status: "pending" } | ({ status: "ready" } & Pool);
-
-const PENDING: PoolState = { status: "pending" };
-const NONE: PoolState = { status: "ready", ads: [], rules: null };
+const none = (): EligibleAd | null => null;
+const NONE: PoolState = { status: "ready", ads: [], rules: null, take: none };
 
 /**
- * One placement's pool of paid campaigns, for a renderer.
+ * One paid-only placement's pool (Stories): no network unit shares it.
  *
- * Request budget is the serving client's, not this hook's: every placement on
- * every page shares ONE cached payload per 5-minute bucket, and with no live
- * campaign the shared ad inventory says so and nothing is requested at all.
- * Mounting, re-rendering, Strict Mode's double effect, a tab change — none of
- * them is a request; `loadSelfAds` answers from memory.
- *
- * `pending` until the answer is known, so a call site that also has a NETWORK
- * fallback can wait for it instead of asking both. That wait costs nothing
- * extra: the self check rides the same inventory promise the network slot
- * awaits anyway.
- *
- * Ad-free members (Pro/Business) are `ready` and empty at once — no fetch.
- * Fails EMPTY: any error is an empty pool, never a broken surface.
+ * Imports only the shared inventory check; the engine (`paid-runtime`) is a
+ * dynamic import fetched only when the inventory says a paid campaign is live,
+ * so a page with no campaign downloads none of it. Mounting, re-rendering and
+ * Strict Mode are not requests: the payload is memoised per 5-minute bucket.
+ * Ad-free members get an empty pool at once. Fails EMPTY.
  */
-export function useSelfAdPool(placement: string, page: AdPageContext | null, opts: { enabled?: boolean } = {}): PoolState {
+export function useSelfAdPool(placement: string, page: AdPageContext | null): PoolState {
   const { showAds, ready } = useShowAds();
-  const enabled = opts.enabled ?? true;
-  const [state, setState] = useState<PoolState>(PENDING);
+  const [state, setState] = useState<PoolState>({ status: "pending" });
 
   useEffect(() => {
     if (!ready) return;
-    if (!showAds || !enabled) {
+    if (!showAds) {
       setState(NONE);
       return;
     }
     let alive = true;
-    const compute = () =>
-      void loadSelfAds()
-        .then((payload) => {
-          if (alive) setState({ status: "ready", ...poolFor(payload, placement, page) });
-        })
-        .catch(() => {
-          if (alive) setState(NONE);
-        });
-    compute();
-    // a creative that fails anywhere this session leaves every pool at once
-    const off = onCreativeFailed(compute);
+    let off: (() => void) | null = null;
+    const compute = async () => {
+      const inv = await loadAdInventory();
+      if (!mayServeSelf(inv)) {
+        if (alive) setState(NONE);
+        return;
+      }
+      const rt = await import("./paid-runtime");
+      const pool = rt.poolFor(await rt.loadSelfAds(), placement, page);
+      off ??= rt.onCreativeFailed(() => void compute().catch(() => {}));
+      if (!alive) return;
+      const take = () => {
+        if (!pool.ads.length || !rt.mayShowAgain(placement, pool.rules)) return null;
+        const ad = rt.nextFromPool(placement, pool.ads);
+        if (ad) rt.recordShown(placement, ad.cr);
+        return ad;
+      };
+      setState({ status: "ready", ads: pool.ads, rules: pool.rules, take });
+    };
+    compute().catch(() => {
+      if (alive) setState(NONE);
+    });
     return () => {
       alive = false;
-      off();
+      off?.();
     };
-  }, [ready, showAds, enabled, placement, page]);
+  }, [ready, showAds, placement, page]);
 
   return state;
 }

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
 import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
-import { pageForPath } from "@/lib/ads-platform/serving-state";
+import { pageForPath } from "@/lib/ads-platform/pages";
 
 import { cn } from "@/lib/utils";
 

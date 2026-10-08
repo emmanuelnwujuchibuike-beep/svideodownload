@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Check, Clock, Gift, Lock, Share2, Sparkles, Trophy, Wallet } from "lucide-react";
+import { ArrowLeft, Check, Clock, Coins, Gift, Lock, Share2, Sparkles, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { attributionLink, shareOrCopy } from "@/lib/referrals/share-client";
@@ -54,8 +55,14 @@ const LABEL: Record<string, string> = {
 function howToEarn(rules: Summary["rules"]): string[] {
   const ev = rules.events as Record<string, { actorCredits: number; referrerCredits: number; minDurationSeconds: number | null }>;
   const out: string[] = [];
-  const referral = Object.values(ev).filter((r) => r.referrerCredits > 0);
-  if (referral.length) out.push(`Share your Frenzsave link → earn ${Math.max(...referral.map((r) => r.referrerCredits))} credits each time a friend you invite downloads, creates or subscribes.`);
+  // 2026-10-07 (owner): referrals are the main source — each paying event said with its own amount
+  const signup = ev.account_created?.referrerCredits ?? 0;
+  const topup = ev.wallet_topup?.referrerCredits ?? 0;
+  const sub = ev.subscription_started?.referrerCredits ?? 0;
+  if (signup) out.push(`Invite a friend with your link → earn ${signup} credits when they sign up.`);
+  if (topup) out.push(`Earn ${topup} credits every time a friend you invited tops up.`);
+  if (sub) out.push(`Earn ${sub} credits every time a friend you invited subscribes.`);
+  out.push("Finish your daily and weekly quests → earn credits (they reset at 1:00 AM and on Sunday, Lagos time).");
   const v = ev.ai_video_completed;
   if (v?.actorCredits) out.push(`Generate an AI video → earn ${v.actorCredits} credits.`);
   const s = ev.ai_video_shared;
@@ -81,10 +88,10 @@ export function RewardsPage({ summary }: { summary: Summary }) {
         <h1 className="mt-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-[28px] font-bold tracking-[-0.03em] text-transparent">Rewards</h1>
         <p className="mt-1 text-[14px] text-muted-foreground">Earn credits by creating, sharing and inviting friends.</p>
         {/* 2026-10-07 (owner): the daily and weekly quests */}
-        <Link href="/quests" prefetch={false} className="mt-3 inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-4 text-[13.5px] font-bold text-white shadow-[0_10px_22px_-12px_rgba(249,115,22,0.9)] transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100">
-          <Trophy className="h-4 w-4" aria-hidden />
+        <TapOnceLink href="/quests" className="mt-3 inline-flex min-h-[2.75rem] items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-4 text-[13.5px] font-bold text-white shadow-[0_10px_22px_-12px_rgba(249,115,22,0.9)] transition-[transform,opacity] duration-200 active:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100">
+          <Coins className="h-4 w-4" aria-hidden />
           Earn credits · daily &amp; weekly quests
-        </Link>
+        </TapOnceLink>
 
         {/* ── the two classes, side by side ── */}
         <section aria-label="Your credits" className="mt-5 grid grid-cols-2 gap-3">

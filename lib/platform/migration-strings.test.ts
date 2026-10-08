@@ -35,3 +35,32 @@ describe("migrations survive the runner's semicolon split", () => {
     for (const f of files) expect(quotedStringsWithSemicolon(readFileSync(join(DIR, f), "utf8")), f).toEqual([]);
   });
 });
+
+/**
+ * 2026-10-07: 0192 reached the runner with three `$$` turned into `$` (a JS
+ * String.replace treats `$$` in its replacement as an escaped `$`). Postgres
+ * rejected the file — "syntax error at or near $" — and the runner skipped it
+ * whole while the next migration applied. A dollar quote is always `$$` (or a
+ * named `$tag$`); a lone `$` outside a quoted string is never valid here.
+ */
+export function loneDollars(sql: string): number[] {
+  const noComments = sql.replace(/--[^\n]*/g, "");
+  const bad: number[] = [];
+  noComments.split("\n").forEach((line, i) => {
+    const stripped = line.replace(/'(?:[^']|'')*'/g, "''").replace(/\$[A-Za-z_]*\$/g, "");
+    if (stripped.includes("$")) bad.push(i + 1);
+  });
+  return bad;
+}
+
+describe("dollar quotes are whole", () => {
+  it("the detector has teeth", () => {
+    expect(loneDollars("create function f() returns int as $\nselect 1\n$;")).toEqual([1, 3]);
+    expect(loneDollars("create function f() returns int as $$\nselect 1\n$$;\ndo $tag$ begin end $tag$;")).toEqual([]);
+    expect(loneDollars("select 'costs $5';")).toEqual([]);
+  });
+  it("no migration from 0188 on has a lone $", () => {
+    const files = readdirSync(DIR).filter((f) => /^\d{4}_/.test(f) && Number(f.slice(0, 4)) >= 188);
+    for (const f of files) expect(loneDollars(readFileSync(join(DIR, f), "utf8")), f).toEqual([]);
+  });
+});

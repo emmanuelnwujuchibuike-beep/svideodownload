@@ -39,7 +39,9 @@ describe("the referral banner after a download", () => {
     // the code (comments stripped) never writes a number of credits — the owner's "2" lives in the admin rule
     const live = banner.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(live).not.toMatch(/earn \d+ credit/);
-    expect(live).toContain("earn {n} credit");
+    expect(live).toContain("Earn credits with Frenzsave");
+    expect(live).toContain("{referralSentence(rules, n)}");
+    expect(live).toContain("withdraw them once your account has reached the qualifications");
     expect(banner).toContain("const SKIP_AFTER_S = 4;");
     expect(banner).toContain("disabled={!canSkip}");
     expect(banner).toContain("Sign in to get your link");
@@ -110,6 +112,8 @@ describe("AI history opens in the downloads viewer", () => {
     expect(code("features/ai/frenz-ai-history.tsx")).toContain("openPlayer(aiJobRecord(job));");
     const d = code("features/ai/ai-result-download.ts");
     expect(d).toContain("directUrl: href,");
+    // the address must be a real redirect to the file (download=1&redirect=1), never the JSON answer
+    expect(d.slice(d.indexOf("export function aiJobRecord"))).toContain("const href = aiResultDownloadHref(job.id);");
     expect(d).toContain("aiJobId: job.id,");
     expect(code("features/downloads/download-player.tsx")).toContain("fetch(rec.directUrl || downloadUrl(");
   });
@@ -117,5 +121,15 @@ describe("AI history opens in the downloads viewer", () => {
     const p = code("features/downloads/download-player.tsx");
     expect(p).toContain(') : rec.formatId === "frenz-ai" ? null : (');
     expect(p).toContain("/api/ai/jobs/${encodeURIComponent(rec.aiJobId)}/publish");
+  });
+});
+
+describe("the banner's referral sentence comes from the live amounts (owner 2026-10-07: sign-up 2, top-up 10, subscribe 10)", () => {
+  it("says each paying event with its own amount", async () => {
+    const { referralSentence } = await import("@/lib/rewards/referral-copy");
+    expect(referralSentence({ referral: { signup: 2, topup: 10, subscribe: 10 } }, 10)).toBe(
+      "Share your Frenzsave link. Earn 2 credits when someone you invite signs up, and 10 credits every time they top up or subscribe.",
+    );
+    expect(referralSentence({ referral: { signup: 2, topup: 0, subscribe: 0 } }, 2)).toBe("Share your Frenzsave link. Earn 2 credits when someone you invite signs up.");
   });
 });

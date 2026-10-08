@@ -1,5 +1,6 @@
 import "server-only";
 
+import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import type { RewardsConfig } from "@/lib/rewards/config";
 import { SITE_URL } from "@/lib/site";
@@ -90,5 +91,15 @@ export async function reviewQualification(input: { userId: string; approve: bool
     "premium",
     { type: "withdrawal_update" },
   ).catch(() => {});
+  await emailMember(input.userId, {
+    subject: input.approve ? "You're approved for withdrawals" : "Your withdrawal application",
+    heading: input.approve ? "You're approved for withdrawals" : "Withdrawal application not approved",
+    intro: input.approve
+      ? "Rewards you earn from now on are withdrawable. Your earlier rewards stay usable for Frenz AI."
+      : "Your application wasn't approved this time. Your AI credits are unaffected, and you can apply again later.",
+    body: !input.approve && input.note ? input.note : undefined,
+    ctaLabel: "View your rewards",
+    ctaPath: "/rewards",
+  });
   return { ok: true };
 }

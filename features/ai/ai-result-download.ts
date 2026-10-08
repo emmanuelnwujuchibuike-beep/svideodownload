@@ -46,7 +46,10 @@ export function aiResultDownloadHref(jobId: string): string {
  * "Share to AI Reels" rather than a plain publish.
  */
 export function aiJobRecord(job: AiJobView): DownloadRecord {
-  const href = `/api/ai/jobs/${encodeURIComponent(job.id)}/result?redirect=1`;
+  // 🔴 2026-10-07 (owner: "AI video in AI history does not play, it shows white"): `redirect=1` alone is NOT a redirect —
+  // the route answers JSON `{url}` unless `download=1` is set too, and the viewer played that JSON as a video.
+  // The same address the working download uses.
+  const href = aiResultDownloadHref(job.id);
   return {
     id: `ai-${job.id}`,
     url: href,

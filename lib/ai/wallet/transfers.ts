@@ -1,6 +1,7 @@
 import "server-only";
 
 import { transferFee, type CreditTransferConfig } from "@/lib/ai/credits/wallet-config";
+import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { SITE_URL } from "@/lib/site";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -91,6 +92,15 @@ export async function sendCredits(input: { senderId: string; accountNumber: stri
       "premium",
       { type: "ai_deposit_successful" },
     ).catch(() => {});
+    // 2026-10-07 (owner: "let users receive email"): the recipient is emailed too
+    await emailMember(recipientId, {
+      subject: `You received ${amount.toLocaleString("en-US")} credits`,
+      heading: `You received ${amount.toLocaleString("en-US")} credits`,
+      intro: `${who} sent you ${amount.toLocaleString("en-US")} AI credits on Frenzsave. They are in your wallet now.`,
+      body: note ?? undefined,
+      ctaLabel: "Open your wallet",
+      ctaPath: "/ai/usage",
+    });
     console.info("[wallet/transfer] sent", { sender: input.senderId, recipient: recipientId, amount, fee });
   }
   return { ok: true, transferId: String(out.transfer_id), amount: Number(out.amount ?? amount), fee: Number(out.fee ?? fee), balanceAfter: out.balance_after ?? null, duplicate: !!out.duplicate };

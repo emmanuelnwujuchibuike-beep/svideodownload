@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════════
---  0192 — daily and weekly quests that earn credits (2026-10-07)
+--  0194 — daily and weekly quests that earn credits (2026-10-07, first pushed as 0192)
 -- ═══════════════════════════════════════════════════════════════════════════
 --
 -- Owner: "a weekly quest that resets every Sunday 1am Lagos time … a daily quest
@@ -213,7 +213,7 @@ $$;
 -- credits (the non-withdrawable part first, like every charge), write the ledger line and activate the
 -- plan for ONE period with no renewal. Nothing renews from credits on its own.
 create or replace function public.buy_ai_plan_with_credits(p_user uuid, p_plan text, p_credits integer, p_period_end timestamptz, p_label text) returns jsonb
-language plpgsql security definer set search_path = public as $
+language plpgsql security definer set search_path = public as $$
 declare
   v_balance bigint;
   v_wd      bigint;
@@ -250,9 +250,9 @@ begin
     activated_at = coalesce(public.ai_subscriptions.activated_at, now()), canceled_at = null, updated_at = now();
   return jsonb_build_object('ok', true, 'balance_after', v_balance, 'reference', v_ref, 'withdrawable_part', v_wpart);
 end;
-$;
+$$;
 
-do $
+do $$
 declare
   fn text;
 begin

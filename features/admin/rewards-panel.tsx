@@ -86,14 +86,14 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
       <section className="rounded-3xl border border-border bg-card px-3 py-6 shadow-card sm:px-6">
         <h2 className="font-semibold">Rewards &amp; referrals — the rules</h2>
         <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-          Every reward is granted by the server, once per event (a referred member + an event type = one reward unless marked repeatable). Rewards earned before a member qualifies are
+          Every reward is granted by the server, once per event (a referred member + an event type = ONE reward — unless &ldquo;Pay referrer every time&rdquo; is ticked, then the referrer is paid on every occurrence, e.g. every top-up). Rewards earned before a member qualifies are
           usable credits forever; after qualification, new rewards are withdrawable. Nothing is recalculated later.
         </p>
         <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Rewards on</label>
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead className="text-left text-xs text-muted-foreground">
-              <tr><th className="py-1">Event</th><th>On</th><th>To the member</th><th>To their referrer</th><th>Referrer repeatable</th><th>Once per member</th><th>Extra</th></tr>
+              <tr><th className="py-1">Event</th><th>On</th><th>To the member</th><th>To their referrer</th><th title="On: the referrer is paid EVERY time this happens (each top-up, each subscription). Off: once per invited member, the first time.">Pay referrer every time</th><th>Once per member</th><th>Extra</th></tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {REWARD_EVENTS.map((e) => {
@@ -118,8 +118,11 @@ export function RewardsPanel({ settings }: { settings: LandingSettings }) {
             </tbody>
           </table>
         </div>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="text-xs text-muted-foreground">Withdrawal qualification: account age (days)<input inputMode="numeric" value={q.age} onChange={(x) => setQ({ ...q, age: x.target.value })} className={cn(input, "mt-1 block")} /></label>
+        {/* 2026-10-07 (owner could not find these): the requirements get their own titled section */}
+        <h3 className="mt-6 text-sm font-semibold">Withdrawal requirements</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">What a member must meet before they can apply for withdrawals. You then approve or reject each application in the table below.</p>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <label className="text-xs text-muted-foreground">Account age (days)<input inputMode="numeric" value={q.age} onChange={(x) => setQ({ ...q, age: x.target.value })} className={cn(input, "mt-1 block")} /></label>
           <label className="text-xs text-muted-foreground">Qualifying referral engagements<input inputMode="numeric" value={q.eng} onChange={(x) => setQ({ ...q, eng: x.target.value })} className={cn(input, "mt-1 block")} /></label>
           <label className="text-xs text-muted-foreground">Attribution window for a new account (days)<input inputMode="numeric" value={q.window} onChange={(x) => setQ({ ...q, window: x.target.value })} className={cn(input, "mt-1 block")} /></label>
         </div>

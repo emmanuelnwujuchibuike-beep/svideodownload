@@ -1,11 +1,12 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BadgeCheck, Check, ChevronRight, Clock, Image as ImageIcon, Loader2, Palette, ShieldBan, Sparkles, Trash2, User, UserCircle, X } from "lucide-react";
+import { BadgeCheck, Check, ChevronRight, Clock, Coins, Image as ImageIcon, Loader2, Palette, ShieldBan, Sparkles, Trash2, User, UserCircle, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamicImport from "next/dynamic";
 
 import { ModuleIconBadge } from "@/components/icons/module-icon-badge";
 import { BlockOptionsSheet } from "@/features/social/block-options-sheet";
@@ -75,6 +76,9 @@ async function patchWithRetry(url: string, body: Record<string, unknown>): Promi
  * Chats), and the per-user Delete-conversation hide from the inbox swipe
  * action, reachable from inside the thread too.
  */
+// the send sheet loads only when Send credits is tapped (2026-10-07)
+const ChatSendCredits = dynamicImport(() => import("@/features/ai/wallet/chat-send-credits").then((m) => m.ChatSendCredits), { ssr: false });
+
 export function ThreadOptionsSheet({
   conversationId,
   otherUserId,
@@ -141,6 +145,8 @@ export function ThreadOptionsSheet({
   const [showCustom, setShowCustom] = useState(false);
   const [busy, setBusy] = useState(false);
   const [blockSheetOpen, setBlockSheetOpen] = useState(false);
+  const [sendCreditsOpen, setSendCreditsOpen] = useState(false);
+  const closeSendCredits = useCallback(() => setSendCreditsOpen(false), []);
   const [appearanceSheetOpen, setAppearanceSheetOpen] = useState(false);
 
   const patch = async (body: Record<string, unknown>) => {
@@ -552,6 +558,26 @@ export function ThreadOptionsSheet({
                   type="button"
                   onClick={() => {
                     haptic("light");
+                    setSendCreditsOpen(true);
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={springs.press}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-card px-4 py-3.5 text-sm font-semibold shadow-sm ring-1 ring-border/50 transition hover:bg-secondary/40"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_3px_10px_-2px] shadow-orange-500/40">
+                    <Coins className="h-4 w-4" />
+                  </span>
+                  Send credits
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
+                </motion.button>
+              ) : null}
+
+              {otherUserId ? (
+                <motion.button
+                  variants={SHEET_ITEM_VARIANTS}
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
                     setBlockSheetOpen(true);
                   }}
                   whileTap={{ scale: 0.98 }}
@@ -592,6 +618,12 @@ export function ThreadOptionsSheet({
         />
       ) : null}
       <ChatAppearanceSheet conversationId={conversationId} open={appearanceSheetOpen} onClose={() => setAppearanceSheetOpen(false)} />
+      {sendCreditsOpen && otherUserId ? (
+        <ChatSendCredits
+          recipient={{ userId: otherUserId, name: otherName || (otherHandle ? `@${otherHandle}` : "Frenz member"), handle: otherHandle ?? null, avatarUrl: otherAvatarUrl ?? null }}
+          onClose={closeSendCredits}
+        />
+      ) : null}
     </AnimatePresence>,
     document.body,
   );

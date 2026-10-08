@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { planCreditsPrice } from "@/lib/ai/credits/config";
 import { subscriptionIsActive } from "@/lib/ai/credits/subscription";
 import { normalizeRewardsConfig } from "@/lib/rewards/config";
 import { buildQuestBoard, normalizeQuests, QUESTS_DEFAULTS } from "@/lib/rewards/quests";
@@ -14,7 +15,7 @@ import { buildQuestBoard, normalizeQuests, QUESTS_DEFAULTS } from "@/lib/rewards
  * the operator switching it on, or let a plan outlive what was paid.
  */
 const code = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
-const m92 = code("supabase/migrations/0192_quests.sql");
+const m92 = code("supabase/migrations/0194_quests.sql");
 const body = (src: string, name: string) => {
   const start = src.indexOf(`create or replace function public.${name}(`);
   expect(start, name).toBeGreaterThan(-1);
@@ -99,7 +100,12 @@ describe("🔴 an AI plan paid with credits", () => {
   it("the price is the plan's, rounded up — never the browser's", () => {
     const r = code("app/api/ai/subscriptions/credits/route.ts");
     expect(r).toContain("const schema = z.object({ plan: z.enum([\"ai_pro\", \"ai_max\"]) }).strict();");
-    expect(r).toContain("return Math.ceil(Math.max(0, priceCents) / Math.max(1, centsPerCredit));");
+    expect(r).toContain("const credits = planCreditsPrice(plan, plans.credits.centsPerCredit);");
+  });
+  it("the admin's own credit price wins; without one, the plan price at the credit rate, rounded up", () => {
+    expect(planCreditsPrice({ priceCents: 1000, creditsPrice: 0 }, 10)).toBe(100);
+    expect(planCreditsPrice({ priceCents: 1001, creditsPrice: 0 }, 10)).toBe(101);
+    expect(planCreditsPrice({ priceCents: 1000, creditsPrice: 60 }, 10)).toBe(60);
   });
   it("teeth: a credits plan ends AT its period end (no renewal grace); a card plan keeps its grace", () => {
     const end = "2026-11-07T00:00:00Z";
@@ -116,6 +122,11 @@ describe("the quest page never reloads for nothing", () => {
     expect(page).toContain("if (!cached || JSON.stringify(cached.board) !== JSON.stringify(next)) setBoard(next);");
   });
   it("an Earn button sits on every AI page's credit strip", () => {
-    expect(code("features/ai/design/ai-credit-strip.tsx")).toContain('<Link href="/quests" prefetch={false} aria-label="Earn credits"');
+    const strip = code("features/ai/design/ai-credit-strip.tsx");
+    // a link that goes ONCE — the double tap opened a second quest page (owner, 2026-10-07)
+    expect(strip).toContain('<TapOnceLink href="/quests" aria-label="Earn credits"');
+    expect(strip).not.toContain("Trophy");
+    const once = code("features/ui/tap-once-link.tsx");
+    expect(once).toContain("if (pending.current) {\n          e.preventDefault();");
   });
 });

@@ -113,6 +113,10 @@ const brandDisplay = Outfit({
  */
 export const revalidate = 86400;
 
+/** The one sentence every Frenzsave link preview carries (owner, 2026-10-07). */
+const SHARE_DESCRIPTION =
+  "Download videos for free, earn credits you can cash out, chat and meet up with friends, make AI videos and download wallpapers — free on Frenzsave.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   /*
@@ -147,19 +151,26 @@ export const metadata: Metadata = {
   description:
     "Save public videos, photos and sounds you have the right to keep, then reuse them — organise them into collections, publish to your feed, watch reels and connect with friends. All in one place.",
   alternates: { canonical: "/" },
+  /*
+    THE SHARED-LINK PREVIEW (owner, 2026-10-07: "the Frenzsave link should
+    change to: download, earn credits to cash, chat and meet up, make AI videos
+    and download wallpapers for free — a different description from the old one,
+    from when the platform was very different"). This is what WhatsApp, X,
+    Telegram and iMessage show for a Frenzsave link — including every member's
+    invite link, which lands here. The search-result title/description above are
+    left as they are (a ranking decision, not a preview one).
+  */
   openGraph: {
     type: "website",
     url: siteUrl,
-    siteName: "FrenzSave",
-    title: "Download Videos Online Free | Frenzsave",
-    description:
-      "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
+    siteName: "Frenzsave",
+    title: "Frenzsave — Download, earn credits, chat and create with AI",
+    description: SHARE_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Download Videos Online Free | Frenzsave",
-    description:
-      "Download videos online for free, connect with new friends, watch trending reels, and stay updated with the latest news—all in one place.",
+    title: "Frenzsave — Download, earn credits, chat and create with AI",
+    description: SHARE_DESCRIPTION,
   },
   robots: { index: true, follow: true },
   // Home-screen install identity (iOS). With app/manifest.ts + app/apple-icon.png

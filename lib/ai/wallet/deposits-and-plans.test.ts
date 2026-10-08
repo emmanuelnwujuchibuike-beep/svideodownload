@@ -46,11 +46,18 @@ describe("🔴 a deposit is settled even when the member never comes back", () =
     expect(verify).toContain("settleCharacterReplaceCharge(user.id, reference, charge)");
     expect(code("lib/ai/wallet/paystack-settle.ts")).toContain("creditVerifiedCharacterReplaceRecharge({");
   });
-  it("the credits page's reads run it in the same wave, and re-read only when something was credited", () => {
+  it("🔴 the wallet reads NEVER wait on it — it runs after the response (it held every AI page's strip up to 4 s)", () => {
     const bal = code("app/api/ai/character-replace/balance/route.ts");
-    expect(bal).toContain("reconcileMemberTopupsWithin(subject.userId),");
-    expect(bal).toContain("reconciled.credited > 0");
-    expect(code("app/api/ai/wallet/summary/route.ts")).toContain("reconcileMemberTopupsWithin(subject.userId)");
+    expect(bal).toContain("after(() => reconcileMemberTopups(subject.userId).catch(() => undefined));");
+    expect(bal).not.toContain("reconcileMemberTopupsWithin(");
+    const sum = code("app/api/ai/wallet/summary/route.ts");
+    expect(sum).toContain("after(() => reconcileMemberTopups(subject.userId).catch(() => undefined));");
+    expect(sum).not.toContain("reconcileMemberTopupsWithin(");
+  });
+  it("each pending attempt is asked of Paystack at most once every 5 minutes, stamped before asking", () => {
+    const rec = code("lib/ai/wallet/reconcile-topups.ts");
+    expect(rec).toContain('.lte("updated_at", new Date(now - RECHECK_MS).toISOString())');
+    expect(rec).toContain("const RECHECK_MS = 5 * 60_000;");
   });
   it("a cancelled deposit is announced once (claimed on the attempt row), by push, never by email", () => {
     const n = code("lib/ai/topup-notify.ts");

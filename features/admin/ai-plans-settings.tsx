@@ -53,9 +53,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
   const symbol = aiCurrencySymbol(settings.frenzAiCurrency);
 
   const [enabled, setEnabled] = useState(cfg.enabled);
-  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; bachs: string; blurb: string }>>({
-    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, bachs: cfg.plans.ai_pro.bachsProductId, blurb: cfg.plans.ai_pro.blurb },
-    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, bachs: cfg.plans.ai_max.bachsProductId, blurb: cfg.plans.ai_max.blurb },
+  const [plans, setPlans] = useState<Record<AiPlanId, { enabled: boolean; label: string; price: string; interval: "monthly" | "yearly"; daily: string; weekly: string; code: string; bachs: string; creditsPrice: string; blurb: string }>>({
+    ai_pro: { enabled: cfg.plans.ai_pro.enabled, label: cfg.plans.ai_pro.label, price: minorToMajorInput(cfg.plans.ai_pro.priceCents), interval: cfg.plans.ai_pro.interval, daily: String(cfg.plans.ai_pro.dailyCredits), weekly: String(cfg.plans.ai_pro.weeklyCredits), code: cfg.plans.ai_pro.paystackPlanCode, bachs: cfg.plans.ai_pro.bachsProductId, creditsPrice: String(cfg.plans.ai_pro.creditsPrice || ""), blurb: cfg.plans.ai_pro.blurb },
+    ai_max: { enabled: cfg.plans.ai_max.enabled, label: cfg.plans.ai_max.label, price: minorToMajorInput(cfg.plans.ai_max.priceCents), interval: cfg.plans.ai_max.interval, daily: String(cfg.plans.ai_max.dailyCredits), weekly: String(cfg.plans.ai_max.weeklyCredits), code: cfg.plans.ai_max.paystackPlanCode, bachs: cfg.plans.ai_max.bachsProductId, creditsPrice: String(cfg.plans.ai_max.creditsPrice || ""), blurb: cfg.plans.ai_max.blurb },
   });
   const [freeEnabled, setFreeEnabled] = useState(cfg.freeCreations.enabled);
   const [freeCounts, setFreeCounts] = useState({ free: cfg.freeCreations.free === null ? "" : String(cfg.freeCreations.free), pro: cfg.freeCreations.pro === null ? "" : String(cfg.freeCreations.pro), business: cfg.freeCreations.business === null ? "" : String(cfg.freeCreations.business) });
@@ -142,6 +142,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
             weeklyCredits: int(plans[id].weekly, cfg.plans[id].weeklyCredits),
             paystackPlanCode: plans[id].code.trim(),
             bachsProductId: plans[id].bachs.trim(),
+            creditsPrice: plans[id].creditsPrice.trim() === "" ? 0 : int(plans[id].creditsPrice, 0),
             blurb: plans[id].blurb.trim() || cfg.plans[id].blurb,
           },
         ]),
@@ -306,6 +307,9 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                       </div>
                       {p.code.trim() && !/^PLN_[A-Za-z0-9]{4,60}$/.test(p.code.trim()) ? <span className="mt-1 block text-[11px] text-rose-600">Not a plan code — it must start with PLN_. Saving will leave the plan as “coming soon”.</span> : null}
                       {codeCheck[id].text ? <span className={cn("mt-1 block text-[11px] leading-relaxed", codeCheck[id].ok ? "text-emerald-700 dark:text-emerald-300" : "text-rose-600")}>{codeCheck[id].text}</span> : null}
+                    </Field>
+                    <Field id={`${id}-credits-price`} label="Price when paid with credits" hint="Credits for one period of this plan. Empty = the plan price at the normal credit rate.">
+                      <input id={`${id}-credits-price`} inputMode="numeric" value={p.creditsPrice} onChange={(e) => set({ creditsPrice: e.target.value.replace(/[^0-9]/g, "") })} placeholder="Normal rate" className={small} />
                     </Field>
                     <Field id={`${id}-bachs`} label="Bachs product (prod_…)" hint="Bachs dashboard → Products → this plan's RECURRING product (monthly, same price) → its id. Not a payment link: the id lets us tie the payment to the member. Empty = Bachs does not sell this plan.">
                       <div className="mt-1 flex gap-2">

@@ -58,6 +58,12 @@ export interface AiPlanConfig {
    * cannot sell this plan. A plan with neither is "coming soon".
    */
   bachsProductId: string;
+  /**
+   * 0194 (owner 2026-10-07: "credits used for subscription should not be calculated with the normal
+   * rate — the credit price for a subscription can be set by admin"): what ONE period of this plan
+   * costs when paid with wallet credits. 0 = priced at the normal credit rate (priceCents ÷ centsPerCredit).
+   */
+  creditsPrice: number;
   blurb: string;
 }
 
@@ -120,8 +126,8 @@ export const AI_PLANS_BOUNDS = {
 export const AI_PLANS_DEFAULTS: AiPlansConfig = {
   enabled: true,
   plans: {
-    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", bachsProductId: "", blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
-    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", bachsProductId: "", blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
+    ai_pro: { enabled: true, label: "AI Pro", priceCents: 1000, interval: "monthly", dailyCredits: 15, weeklyCredits: 70, paystackPlanCode: "", bachsProductId: "", creditsPrice: 0, blurb: "Every Frenz AI tool — video, audio, voice cloning and lip sync — with a daily allowance of credits." },
+    ai_max: { enabled: true, label: "AI Max", priceCents: 2000, interval: "monthly", dailyCredits: 50, weeklyCredits: 250, paystackPlanCode: "", bachsProductId: "", creditsPrice: 0, blurb: "Everything in AI Pro with the largest allowance — the maximum AI usage tier." },
   },
   // null = the count on the Character Replace tab (`freeAccess.creationsPerAccount`) — one control until the operator sets a plan apart
   freeCreations: { enabled: true, free: null, pro: null, business: null },
@@ -221,6 +227,7 @@ function normalizePlan(raw: unknown, d: AiPlanConfig): AiPlanConfig {
     weeklyCredits: Math.max(daily, int(r.weeklyCredits, d.weeklyCredits, AI_PLANS_BOUNDS.weeklyCredits.min, AI_PLANS_BOUNDS.weeklyCredits.max)),
     paystackPlanCode: planCode(r.paystackPlanCode),
     bachsProductId: bachsProduct(r.bachsProductId),
+    creditsPrice: int(r.creditsPrice, 0, 0, 10_000_000),
     blurb: text(r.blurb, d.blurb, 160),
   };
 }
@@ -289,7 +296,7 @@ export interface AiPlansPublic {
   enabled: boolean;
   currency: string;
   symbol: string;
-  plans: { id: AiPlanId; label: string; priceCents: number; interval: AiBillingInterval; dailyCredits: number; weeklyCredits: number; blurb: string; purchasable: boolean }[];
+  plans: { id: AiPlanId; label: string; priceCents: number; interval: AiBillingInterval; dailyCredits: number; weeklyCredits: number; blurb: string; purchasable: boolean; creditsPrice: number }[];
   walletFallback: AiWalletFallback;
   centsPerCredit: number;
   reset: { timezone: string; weekStartsOn: number };
@@ -302,7 +309,7 @@ export function publicAiPlansConfig(c: AiPlansConfig, currency: { code: string; 
     symbol: currency.symbol,
     plans: AI_PLAN_IDS.filter((id) => c.plans[id].enabled).map((id) => {
       const p = c.plans[id];
-      return { id, label: p.label, priceCents: p.priceCents, interval: p.interval, dailyCredits: p.dailyCredits, weeklyCredits: p.weeklyCredits, blurb: p.blurb, purchasable: c.enabled && (p.paystackPlanCode.length > 0 || p.bachsProductId.length > 0) };
+      return { id, label: p.label, priceCents: p.priceCents, interval: p.interval, dailyCredits: p.dailyCredits, weeklyCredits: p.weeklyCredits, blurb: p.blurb, purchasable: c.enabled && (p.paystackPlanCode.length > 0 || p.bachsProductId.length > 0), creditsPrice: planCreditsPrice(p, c.credits.centsPerCredit) };
     }),
     walletFallback: c.walletFallback,
     centsPerCredit: c.credits.centsPerCredit,
@@ -320,4 +327,10 @@ export function freeCreationsFor(c: AiPlansConfig, sitePlan: "free" | "pro" | "b
 /** AI Max includes everything AI Pro does: the higher plan wins any comparison. */
 export function aiPlanRank(plan: AiPlanId | null | undefined): number {
   return plan === "ai_max" ? 2 : plan === "ai_pro" ? 1 : 0;
+}
+
+/** One period of a plan, paid in credits: the admin's own credit price when set, else the plan price at the credit rate (rounded UP). */
+export function planCreditsPrice(plan: Pick<AiPlanConfig, "priceCents" | "creditsPrice">, centsPerCredit: number): number {
+  if (plan.creditsPrice > 0) return Math.floor(plan.creditsPrice);
+  return Math.ceil(Math.max(0, plan.priceCents) / Math.max(1, centsPerCredit));
 }

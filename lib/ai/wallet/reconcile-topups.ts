@@ -41,22 +41,27 @@ const MIN_AGE_MS = 60_000;
 const CANCEL_AFTER_MS = 30 * 60_000;
 const WINDOW_MS = 7 * 86_400_000;
 const MAX_PER_PASS = 5;
+const RECHECK_MS = 5 * 60_000;
 
 export async function reconcileMemberTopups(userId: string): Promise<{ credited: number }> {
   const now = Date.now();
   const { data, error } = await createAdminClient()
     .from("ai_topup_attempts")
-    .select("reference, created_at")
+    .select("reference, created_at, updated_at")
     .eq("user_id", userId)
     .eq("status", "pending")
     .eq("provider", "paystack")
     .like("reference", `${CHARACTER_REPLACE_TOPUP_PURPOSE}_%`)
     .gte("created_at", new Date(now - WINDOW_MS).toISOString())
     .lte("created_at", new Date(now - MIN_AGE_MS).toISOString())
+    // asked at most once per RECHECK_MS per attempt — a member opening five AI pages is one Paystack call, not five
+    .lte("updated_at", new Date(now - RECHECK_MS).toISOString())
     .order("created_at", { ascending: false })
     .limit(MAX_PER_PASS);
-  const rows = (data ?? []) as { reference: string; created_at: string }[];
+  const rows = (data ?? []) as { reference: string; created_at: string; updated_at: string }[];
   if (error || !rows.length || !(await paystackEnabled())) return { credited: 0 };
+  // stamp them first, so a concurrent read does not ask Paystack about the same attempts again
+  await createAdminClient().from("ai_topup_attempts").update({ updated_at: new Date().toISOString() }).in("reference", rows.map((r) => r.reference)).eq("status", "pending");
 
   const outcomes = await Promise.all(
     rows.map(async (row) => {

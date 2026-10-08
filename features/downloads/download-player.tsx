@@ -1099,7 +1099,9 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           The original 2026-08-18 note, still the reason this inset exists: "the
           image doesn't reach the safe area boundary, I want it to reach the
           safe area tip at the top but not cross it... I only see a black top." */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center pt-[var(--frenz-safe-top)]">
+      {/* 2026-10-07 (owner: "the viewer should not go to the very bottom in the PWA — the black chrome should occupy the bottom"):
+          the stage stops above a black band (home indicator + the Save button), like Instagram, instead of running under them. */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pt-[var(--frenz-safe-top)]">
         {error ? (
           <div className="max-w-sm px-6 text-center text-white">
             <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><AlertCircle className="h-7 w-7" /></span>

@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { planCreditsPrice } from "@/lib/ai/credits/config";
 import { welcomeAiPlan } from "@/lib/ai/credits/plan-welcome";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { aiJobCreateLimiter } from "@/lib/rate-limit";
@@ -11,11 +12,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({ plan: z.enum(["ai_pro", "ai_max"]) }).strict();
-
-/** The price of one period in credits — the plan's USD price at the credit rate, rounded UP (a member never pays less than the price). */
-function planPriceCredits(priceCents: number, centsPerCredit: number): number {
-  return Math.ceil(Math.max(0, priceCents) / Math.max(1, centsPerCredit));
-}
 
 function periodEnd(interval: "monthly" | "yearly", from = new Date()): Date {
   const d = new Date(from);
@@ -53,7 +49,8 @@ export async function POST(request: Request) {
   const plans = settings.frenzAiPlans;
   const plan = plans.plans[parsed.data.plan];
   if (!plans.enabled || !plan.enabled) return NextResponse.json({ error: "That plan isn't available right now." }, { status: 503 });
-  const credits = planPriceCredits(plan.priceCents, plans.credits.centsPerCredit);
+  // the admin's credit price for this plan, or the normal rate when none is set (lib/ai/credits/config.ts)
+  const credits = planCreditsPrice(plan, plans.credits.centsPerCredit);
   const end = periodEnd(plan.interval);
 
   const { data, error } = await createAdminClient().rpc("buy_ai_plan_with_credits", {

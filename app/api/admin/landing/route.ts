@@ -103,6 +103,7 @@ const aiPlanSchema = z
     dailyCredits: z.number().int().min(0).max(100_000).optional(),
     weeklyCredits: z.number().int().min(0).max(1_000_000).optional(),
     bachsProductId: z.string().max(80).optional(),
+    creditsPrice: z.number().int().min(0).max(10_000_000).optional(),
     paystackPlanCode: z.string().max(100).optional(),
     blurb: z.string().max(160).optional(),
   })

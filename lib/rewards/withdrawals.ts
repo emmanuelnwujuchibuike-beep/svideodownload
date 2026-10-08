@@ -1,5 +1,6 @@
 import "server-only";
 
+import { emailMember } from "@/lib/email/member-email";
 import { sendSmartPush } from "@/lib/notifications/smart-delivery";
 import { withdrawalUsdCents, type RewardsConfig } from "@/lib/rewards/config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -85,6 +86,8 @@ export async function resolveWithdrawal(input: { id: string; status: WithdrawalS
             ? `Your withdrawal was ${input.status}. The credits are back in your wallet.`
             : `Your withdrawal is ${input.status}.`;
       void sendSmartPush(row.user_id, { title: "Withdrawal update", body, url: "/studio/ai/usage", genericBody: "Your withdrawal was updated.", tag: `withdrawal-${input.id}` }, "medium", "premium", "already-recorded").catch(() => null);
+      // 2026-10-07 (owner: "let users receive email")
+      void emailMember(row.user_id, { subject: "Your withdrawal was updated", heading: "Withdrawal update", intro: body, ctaLabel: "View your rewards", ctaPath: "/rewards" });
     }
   }
   return { ok: !!out.ok, reason: out.reason };

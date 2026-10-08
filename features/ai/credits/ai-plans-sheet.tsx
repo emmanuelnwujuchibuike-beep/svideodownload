@@ -102,7 +102,6 @@ export function AiPlansSheet({
     },
     [returnTo],
   );
-  const creditPrice = (priceCents: number) => Math.ceil(priceCents / Math.max(1, plans?.centsPerCredit ?? 10));
 
   const offered = plans?.plans ?? [];
   const rank = (p: "ai_pro" | "ai_max" | null) => (p === "ai_max" ? 2 : p === "ai_pro" ? 1 : 0);
@@ -209,7 +208,7 @@ export function AiPlansSheet({
                       )}
                     >
                       <Wallet className="h-3.5 w-3.5" aria-hidden />
-                      {creditsBusy === p.id ? "Paying with credits…" : `Pay with credits · ${creditPrice(p.priceCents).toLocaleString("en-US")} credits`}
+                      {creditsBusy === p.id ? "Paying with credits…" : `Pay with credits · ${p.creditsPrice.toLocaleString("en-US")} credits`}
                     </button>
                   ) : null}
                 </article>

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, Camera, File as FileIcon, Images, MapPin, Music, User, Video as VideoIcon, X } from "lucide-react";
+import { BarChart3, Camera, Coins, File as FileIcon, Images, MapPin, Music, User, Video as VideoIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -27,6 +27,7 @@ export function MediaComposerSheet({
   onShareLocation,
   onOpenContactPicker,
   onOpenPollComposer,
+  onSendCredits,
 }: {
   open: boolean;
   onClose: () => void;
@@ -34,6 +35,8 @@ export function MediaComposerSheet({
   onShareLocation: () => void;
   onOpenContactPicker: () => void;
   onOpenPollComposer: () => void;
+  /** 2026-10-07: send AI credits to the other person (direct chats only — absent in a group). */
+  onSendCredits?: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -142,6 +145,17 @@ export function MediaComposerSheet({
                   onOpenPollComposer();
                 }}
               />
+              {onSendCredits ? (
+                <PickerButton
+                  icon={Coins}
+                  label="Credits"
+                  tint="from-amber-400 to-orange-500"
+                  onClick={() => {
+                    onClose();
+                    onSendCredits();
+                  }}
+                />
+              ) : null}
             </div>
 
             {/* capture="environment" is what actually distinguishes Camera from

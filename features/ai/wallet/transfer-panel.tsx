@@ -60,6 +60,7 @@ function newKey(): string {
   page shows has moved (a transfer in or out) or the kept copy is old.
 */
 const KEEP_KEY = "frenz:wallet-transfers:v1";
+const HIDE_KEY = "frenz:wallet-transfers:hidden";
 const HISTORY_STALE_MS = 5 * 60_000;
 let kept: { account: string | null; history: TransferRow[] | null; at: number; balance: number | null } | null = null;
 function readKept() {
@@ -87,6 +88,7 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
   const [account, setAccount] = useState<string | null>(null);
   const [history, setHistory] = useState<TransferRow[] | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [historyHidden, setHistoryHidden] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const loadHistory = useCallback(async () => {
@@ -101,6 +103,11 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
 
   // paint the kept copy before the browser shows a frame (no skeleton on re-entry)
   useLayoutEffect(() => {
+    try {
+      setHistoryHidden(localStorage.getItem(HIDE_KEY) === "1");
+    } catch {
+      /* no storage — shown */
+    }
     const k = readKept();
     if (k?.account) setAccount(k.account);
     if (k?.history) setHistory(k.history);
@@ -128,8 +135,9 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
   useEffect(() => {
     const k = readKept();
     const moved = balance !== null && k?.balance !== null && k?.balance !== undefined && k.balance !== balance;
+    if (historyHidden) return; // hidden: nothing is read until it is shown again
     if (!k?.history || moved || Date.now() - (k?.at ?? 0) > HISTORY_STALE_MS) void loadHistory();
-  }, [balance, loadHistory]);
+  }, [balance, loadHistory, historyHidden]);
 
   const copy = async () => {
     if (!account) return;
@@ -174,8 +182,27 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
         <p className="mt-3 text-[12.5px] text-muted-foreground">Sending credits isn&apos;t available right now.</p>
       )}
 
-      <h3 className="mt-4 text-[13px] font-semibold">Transfer history</h3>
-      {shown === null ? (
+      {/* 2026-10-07 (owner): the history can be hidden, so a long list never weighs on the page — remembered per device */}
+      <div className="mt-4 flex items-center justify-between">
+        <h3 className="text-[13px] font-semibold">Transfer history</h3>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !historyHidden;
+            setHistoryHidden(next);
+            try {
+              localStorage.setItem(HIDE_KEY, next ? "1" : "0");
+            } catch {
+              /* fine */
+            }
+          }}
+          aria-expanded={!historyHidden}
+          className="text-[12.5px] font-semibold text-indigo-700"
+        >
+          {historyHidden ? "Show" : "Hide"}
+        </button>
+      </div>
+      {historyHidden ? null : shown === null ? (
         <div className="mt-2 h-14 animate-pulse rounded-xl bg-secondary/60 motion-reduce:animate-none" aria-busy="true" aria-label="Loading transfers" />
       ) : shown.length === 0 ? (
         <p className="mt-1 text-[12.5px] text-muted-foreground">No transfers yet.</p>
@@ -226,9 +253,17 @@ export function TransferPanel({ rules, balance, onChanged, className }: { rules:
   );
 }
 
-function SendSheet({ rules, balance, onClose, onSent }: { rules: TransferRules; balance: number | null; onClose: () => void; onSent: () => void }) {
+/** A member chosen elsewhere (a chat): no number to type — the server resolves their wallet. */
+export interface PresetRecipient {
+  userId: string;
+  name: string;
+  handle: string | null;
+  avatarUrl: string | null;
+}
+
+export function SendSheet({ rules, balance, onClose, onSent, recipient = null }: { rules: TransferRules; balance: number | null; onClose: () => void; onSent: () => void; recipient?: PresetRecipient | null }) {
   const [number, setNumber] = useState("");
-  const [who, setWho] = useState<{ name: string; handle: string | null; avatarUrl: string | null } | null>(null);
+  const [who, setWho] = useState<{ name: string; handle: string | null; avatarUrl: string | null } | null>(recipient ? { name: recipient.name, handle: recipient.handle, avatarUrl: recipient.avatarUrl } : null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<"lookup" | "send" | null>(null);
@@ -268,7 +303,7 @@ function SendSheet({ rules, balance, onClose, onSent }: { rules: TransferRules; 
       const r = await fetch("/api/ai/wallet/transfer", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ accountNumber: number.replace(/\s+/g, ""), credits: n, idempotencyKey: key.current, note: note.trim() || null }),
+        body: JSON.stringify({ ...(recipient ? { recipientUserId: recipient.userId } : { accountNumber: number.replace(/\s+/g, "") }), credits: n, idempotencyKey: key.current, note: note.trim() || null }),
       });
       const j = (await r.json().catch(() => ({}))) as { amount?: number; fee?: number; error?: string };
       if (!r.ok) {
@@ -310,9 +345,16 @@ function SendSheet({ rules, balance, onClose, onSent }: { rules: TransferRules; 
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-semibold">{who.name}</p>
-                <p className="truncate text-[12px] text-muted-foreground">{who.handle ? `@${who.handle} · ` : ""}wallet {number.replace(/\s+/g, "").slice(-4).padStart(10, "•")}</p>
+                <p className="truncate text-[12px] text-muted-foreground">
+                  {who.handle ? `@${who.handle}` : ""}
+                  {recipient ? "" : `${who.handle ? " · " : ""}wallet ${number.replace(/\s+/g, "").slice(-4).padStart(10, "•")}`}
+                </p>
               </div>
-              <button type="button" onClick={() => setWho(null)} className="text-[12.5px] font-semibold text-indigo-700">Change</button>
+              {recipient ? null : (
+                <button type="button" onClick={() => setWho(null)} className="text-[12.5px] font-semibold text-indigo-700">
+                  Change
+                </button>
+              )}
             </div>
             <label className="mt-4 block text-[13px] font-semibold">
               Credits to send

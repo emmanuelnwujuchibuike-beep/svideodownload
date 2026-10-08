@@ -9,6 +9,7 @@ import { toast } from "@/features/ui/toast";
 import { hasAuthCookie } from "@/lib/auth/has-auth-cookie";
 import { haptic } from "@/lib/motion/haptics";
 import { attributionLink, shareOrCopy } from "@/lib/referrals/share-client";
+import { referralSentence, type ReferralAmounts } from "@/lib/rewards/referral-copy";
 
 /**
  * The referral banner shown after a download (see referral-banner-trigger.tsx).
@@ -33,6 +34,8 @@ const RULES_KEY = "frenz:rewards-public";
 interface PublicRules {
   enabled: boolean;
   referralCredits: number;
+  /** Per event (2026-10-07): sign-up, top-up, subscribe — 0 when that event pays nothing. */
+  referral?: ReferralAmounts;
   qualification: { minAccountAgeDays: number; minEngagements: number };
   withdrawals: { creditsPerUsd: number; minCredits: number } | null;
 }
@@ -136,22 +139,21 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
           <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-500 to-violet-500 text-white shadow-[0_10px_24px_-12px_rgba(79,70,229,0.9)]">
             <Gift className="h-5 w-5" aria-hidden />
           </span>
+          {/* owner, 2026-10-07: "Let the title and description be: earn credits with Frenzsave" */}
           <h2 id="referral-banner-title" className="mt-3 text-[21px] font-bold leading-tight tracking-[-0.02em]">
-            Share Frenzsave, earn {n} credit{n === 1 ? "" : "s"}
+            Earn credits with Frenzsave
           </h2>
-          <p className="mt-1.5 text-[14px] leading-relaxed text-slate-600">
-            Share your Frenzsave link. Each time someone you invite downloads, creates or subscribes, you earn {n} credit{n === 1 ? "" : "s"}.
-          </p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-slate-600">{referralSentence(rules, n)}</p>
 
           <ul className="mt-4 space-y-2.5 text-[13.5px]">
             <li className="flex gap-2.5">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" aria-hidden />
-              <span>Use your credits for Frenz AI video generation.</span>
+              <span>Use your credits for Frenz AI videos, and withdraw them once your account has reached the qualifications.</span>
             </li>
             <li className="flex gap-2.5">
               <Wallet className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" aria-hidden />
               <span>
-                Withdraw them once your account is {rules.qualification.minAccountAgeDays} days old with {rules.qualification.minEngagements} qualifying engagements and approved by our team.
+                Qualifications: an account {rules.qualification.minAccountAgeDays} days old with {rules.qualification.minEngagements} qualifying engagements, approved by our team.
               </span>
             </li>
             <li className="flex gap-2.5">

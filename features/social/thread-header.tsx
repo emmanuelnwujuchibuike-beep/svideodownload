@@ -3,8 +3,6 @@
 import {
   ArrowLeft,
   MoreVertical,
-  Phone,
-  Video,
 } from "lucide-react";
 import { VerifiedTick } from "@/components/badges/identity-badges";
 import Link from "next/link";
@@ -16,7 +14,6 @@ import { PresenceBadge } from "@/features/social/presence-badge";
 import { ThreadHeaderMenu } from "@/features/social/thread-header-menu";
 import { useThreadAppearance } from "@/features/social/thread-appearance-context";
 import { ThreadOptionsSheet } from "@/features/social/thread-options-sheet";
-import { toast } from "@/features/ui/toast";
 import { haptic } from "@/lib/motion/haptics";
 import { THEME_HEADER_CLASS } from "@/lib/social/message-meta";
 import type { ConversationMember, ConversationType, MemberRole, OtherUser } from "@/lib/social/messages";
@@ -60,27 +57,8 @@ export function ThreadHeader({
   const [members, setMembers] = useState(initialMembers);
   const otherOnline = usePresence().has(other?.id ?? "");
   const [optionsOpen, setOptionsOpen] = useState(false);
-  // Granular blocking (owner ask, 2026-07-14): calls aren't built yet, but a
-  // "block this person from calling me" restriction should still visibly do
-  // something today — hides the placeholder Phone/Video buttons entirely
-  // (not just disables them) when either party has blocked or calls-
-  // restricted the other, and future-proofs the buttons for when calls ship
-  // for real. Bidirectional by design (`callsUnavailable` from the API), not
-  // just the viewer's own toggle — see app/api/block/[id]/route.ts.
-  const [callsUnavailable, setCallsUnavailable] = useState(false);
-  useEffect(() => {
-    if (type !== "direct" || !other) return;
-    let cancelled = false;
-    fetch(`/api/block/${other.id}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled && d) setCallsUnavailable(!!d.callsUnavailable);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [type, other]);
+  // 2026-10-07 (owner: "remove the voice call and video call buttons since they haven't been implemented — I don't want a coming soon"):
+  // the placeholder call buttons are gone, and with them the per-chat /api/block read that only decided whether to hide them.
   // Live theme/wallpaper from the shared ThreadAppearanceProvider (wraps this
   // header + ConversationRoom together) — real bug fixed 2026-07-14: this
   // used to only ever read the static SSR `initialTheme`/`initialWallpaperUrl`
@@ -261,32 +239,6 @@ export function ThreadHeader({
           state that should invert in dark mode.
         */
         <span className="relative ml-auto flex shrink-0 items-center gap-2">
-          {!callsUnavailable ? (
-            <>
-              <button
-                type="button"
-                aria-label="Voice call"
-                onClick={() => {
-                  haptic("light");
-                  toast("Voice calls are coming soon.", "info");
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_2px_6px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/5 transition active:scale-90"
-              >
-                <Phone className="h-[17px] w-[17px]" />
-              </button>
-              <button
-                type="button"
-                aria-label="Video call"
-                onClick={() => {
-                  haptic("light");
-                  toast("Video calls are coming soon.", "info");
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_2px_6px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/5 transition active:scale-90"
-              >
-                <Video className="h-[18px] w-[18px]" />
-              </button>
-            </>
-          ) : null}
           <button
             type="button"
             aria-label="Conversation options"

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Bookmark, CalendarDays, Check, Clapperboard, Download, Heart, Music4, Sparkles, Sun, Trophy, UserPlus, Video } from "lucide-react";
+import { ArrowLeft, Bookmark, CalendarDays, Check, Clapperboard, Coins, Download, Heart, Music4, Sparkles, Sun, UserPlus, Video } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
@@ -136,7 +136,7 @@ export function QuestsPage() {
         </Link>
         <div className="mt-1 flex items-center gap-3">
           <span className="quest-badge flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 text-white shadow-[0_10px_24px_-12px_rgba(249,115,22,0.9)]">
-            <Trophy className="h-5 w-5" aria-hidden />
+            <Coins className="h-5 w-5" aria-hidden />
           </span>
           <div>
             <h1 className="bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 bg-clip-text text-[26px] font-bold leading-tight tracking-[-0.03em] text-transparent">Earn credits</h1>

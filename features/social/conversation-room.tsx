@@ -34,6 +34,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { type FormEvent, type KeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import dynamicImport from "next/dynamic";
 
 import { RichText } from "@/components/social/rich-text";
 import { revalidate } from "@/features/data";
@@ -211,6 +212,9 @@ function sameDay(a: string, b: string): boolean {
  * lightweight subscription that triggers the existing catch-up resync rather
  * than hand-rolling incremental patching from partial realtime payloads.
  */
+// the send sheet loads only when Credits is tapped (2026-10-07)
+const ChatSendCredits = dynamicImport(() => import("@/features/ai/wallet/chat-send-credits").then((m) => m.ChatSendCredits), { ssr: false });
+
 export function ConversationRoom({
   conversationId,
   viewerId,
@@ -333,6 +337,14 @@ export function ConversationRoom({
   // of becoming a staged chip (matches every real chat app's mic-button
   // behavior: record → release → sent, no separate caption step).
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentInput[]>([]);
+  // 2026-10-07 (owner): send credits from the + sheet — a direct chat's other member
+  const [sendCreditsOpen, setSendCreditsOpen] = useState(false);
+  const closeSendCredits = useCallback(() => setSendCreditsOpen(false), []);
+  const creditsRecipient = useMemo(() => {
+    if (type !== "direct") return null;
+    const m = members.find((x) => x.id !== viewerId);
+    return m ? { userId: m.id, name: m.displayName || `@${m.handle}`, handle: m.handle, avatarUrl: m.avatarUrl } : null;
+  }, [type, members, viewerId]);
   const [uploadingCount, setUploadingCount] = useState(0);
   const [recordingVoice, setRecordingVoice] = useState(false);
   const [mediaSheetOpen, setMediaSheetOpen] = useState(false);
@@ -2630,7 +2642,9 @@ export function ConversationRoom({
         onShareLocation={handleShareLocation}
         onOpenContactPicker={() => setContactPickerOpen(true)}
         onOpenPollComposer={() => setPollComposerOpen(true)}
+        onSendCredits={creditsRecipient ? () => setSendCreditsOpen(true) : undefined}
       />
+      {sendCreditsOpen && creditsRecipient ? <ChatSendCredits recipient={creditsRecipient} onClose={closeSendCredits} /> : null}
       <ContactPickerSheet open={contactPickerOpen} onClose={() => setContactPickerOpen(false)} onPick={handlePickContact} />
       <PollComposerSheet
         open={pollComposerOpen}

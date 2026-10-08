@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { publicWalletOffer } from "@/lib/ai/credits/wallet-config";
@@ -14,7 +14,7 @@ import { primaryAiFeature } from "@/lib/ai/jobs";
 import { resolveAiSubject } from "@/lib/ai/subject-server";
 import { resolveCheckoutRate } from "@/lib/ai/character-replace/fx-rate-server";
 import { aiCurrencySymbol, getLandingSettings, isAiCurrency } from "@/lib/landing/settings";
-import { reconcileMemberTopupsWithin } from "@/lib/ai/wallet/reconcile-topups";
+import { reconcileMemberTopups } from "@/lib/ai/wallet/reconcile-topups";
 import { aiJobReadLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -64,15 +64,15 @@ export async function GET(request: Request) {
       same wave, so it costs nothing when nothing is pending; when something
       was credited the balance and statement are read again.
     */
-    const [settings, firstBalance, firstLedger, reconciled] = await Promise.all([
+    const [settings, balanceCents, ledger] = await Promise.all([
       getLandingSettings(),
       getCharacterReplaceBalanceCents(subject.userId),
       listCharacterReplaceLedger(subject.userId, ledgerLimit),
-      reconcileMemberTopupsWithin(subject.userId),
     ]);
-    const [balanceCents, ledger] = reconciled.credited > 0
-      ? await Promise.all([getCharacterReplaceBalanceCents(subject.userId), listCharacterReplaceLedger(subject.userId, ledgerLimit)])
-      : [firstBalance, firstLedger];
+    // 2026-10-07 (owner: "since the last push everything is slow"): the deposit check ran IN this
+    // read and could hold every AI page's credits strip up to 4 s on Paystack. It runs after the
+    // response now; a deposit it settles reaches an open wallet through realtime (0193).
+    after(() => reconcileMemberTopups(subject.userId).catch(() => undefined));
     const recharge = settings.frenzAiCharacterReplace.recharge;
     const headers = new Headers({ "cache-control": "no-store" });
     if (!readDeviceId(request)) headers.append("set-cookie", deviceCookieHeader(newDeviceId()));

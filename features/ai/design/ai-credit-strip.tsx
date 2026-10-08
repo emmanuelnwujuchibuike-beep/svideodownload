@@ -132,10 +132,10 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
               <Coins className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden min-[400px]:inline">Earn</span>
             </TapOnceLink>
-            <Link href={`${base}/usage`} prefetch={false} className="ai-strip-cta">
+            <TapOnceLink href={`${base}/usage`} className="ai-strip-cta data-[pending]:opacity-80">
               <span className="min-[400px]:hidden">Credits</span>
               <span className="hidden min-[400px]:inline">View credits</span> <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
+            </TapOnceLink>
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Crown, Sparkles } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AiPlansSheet, relative } from "@/features/ai/credits/ai-plans-sheet";
 import { aiButtonClass } from "@/features/ai/design/ai-button";
@@ -26,6 +26,37 @@ import { cn } from "@/lib/utils";
  * plan cards' door instead. Re-read when the page comes back into view and
  * after a start (`refreshKey`), never on a timer.
  */
+/*
+  Cache-first (owner, 2026-10-07, screenshot: "these two cards reload on back
+  swipe, back navigation and every entry"). The card drew a placeholder and
+  fetched on every mount, and the placeholder's height pushed the card below
+  it — so both looked like they reloaded. The last answer is kept for the
+  session and painted before the first frame; it is asked again only when it is
+  older than STALE_MS, after a start (refreshKey) or on return to the app after
+  a while, and the screen changes only when the answer differs.
+*/
+const STALE_MS = 60_000;
+const KEEP_KEY = "frenz:ai-credits:v1";
+let kept: { answer: AiCreditsAnswer; at: number } | null = null;
+function readKept(): typeof kept {
+  if (kept) return kept;
+  try {
+    const raw = sessionStorage.getItem(KEEP_KEY);
+    if (raw) kept = JSON.parse(raw) as NonNullable<typeof kept>;
+  } catch {
+    /* no storage */
+  }
+  return kept;
+}
+function writeKept(answer: AiCreditsAnswer) {
+  kept = { answer, at: Date.now() };
+  try {
+    sessionStorage.setItem(KEEP_KEY, JSON.stringify(kept));
+  } catch {
+    /* fine */
+  }
+}
+
 export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = false, onLoaded }: { className?: string; refreshKey?: number; returnTo: string; compact?: boolean; onLoaded?: (answer: AiCreditsAnswer) => void }) {
   const [data, setData] = useState<AiCreditsAnswer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,16 +67,35 @@ export function AiCreditsCard({ className, refreshKey = 0, returnTo, compact = f
     const res = await getAiCredits();
     if (res.ok) {
       const { ok: _ok, ...answer } = res;
-      setData(answer as AiCreditsAnswer);
+      const next = answer as AiCreditsAnswer;
+      const prev = readKept();
+      // only a real change touches the screen
+      if (!prev || JSON.stringify(prev.answer) !== JSON.stringify(next)) setData(next);
+      writeKept(next);
       setError(null);
-      onLoaded?.(answer as AiCreditsAnswer);
+      onLoaded?.(next);
     } else if (res.code !== "AUTH_REQUIRED") setError(res.error);
   }, [onLoaded]);
 
+  // paint the kept answer before the browser shows a frame — no placeholder on re-entry or back-swipe
+  useLayoutEffect(() => {
+    const k = readKept();
+    if (k) {
+      setData(k.answer);
+      onLoaded?.(k.answer);
+    }
+    // once per mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const firstKey = useRef(refreshKey);
   useEffect(() => {
-    void load();
+    const k = readKept();
+    const forced = refreshKey !== firstKey.current;
+    if (forced || !k || Date.now() - k.at > STALE_MS) void load();
     const onVisible = () => {
-      if (!document.hidden) void load();
+      const kk = readKept();
+      if (!document.hidden && (!kk || Date.now() - kk.at > STALE_MS)) void load();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);

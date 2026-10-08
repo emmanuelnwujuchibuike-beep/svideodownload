@@ -17,7 +17,10 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
  *     press itself — no viewport prefetch, which would bill a render per view);
  *   · ignores every further tap until the route changes (or 4 s pass, in case
  *     the navigation never happened);
- *   · marks itself pressed (`data-pending`), so the member sees the tap landed.
+ *   · marks itself pressed (`data-pending`) AND shows a small spinner the
+ *     instant it is tapped (owner, 2026-10-07: "the Earn and credits buttons
+ *     don't respond on tap — they respond after some time"): the page may take
+ *     a moment to arrive, but the button never looks dead while it does.
  * Scoped to the links that use it — nothing global, nothing that patches history.
  */
 export function TapOnceLink({ href, onClick, className, children, ...rest }: ComponentProps<typeof Link> & { href: string }) {
@@ -50,6 +53,7 @@ export function TapOnceLink({ href, onClick, className, children, ...rest }: Com
       aria-busy={busy || undefined}
       className={className}
       onPointerDown={warm}
+      onTouchStart={warm}
       onClick={(e) => {
         if (pending.current) {
           e.preventDefault();
@@ -65,6 +69,7 @@ export function TapOnceLink({ href, onClick, className, children, ...rest }: Com
       }}
     >
       {children}
+      {busy ? <span aria-hidden className="ml-1 inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" /> : null}
     </Link>
   );
 }

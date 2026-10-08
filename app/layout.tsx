@@ -115,7 +115,9 @@ export const revalidate = 86400;
 
 /** The one sentence every Frenzsave link preview carries (owner, 2026-10-07). */
 const SHARE_DESCRIPTION =
-  "Download videos for free, earn credits you can cash out, chat and meet up with friends, make AI videos and download wallpapers — free on Frenzsave.";
+  "Download, earn credits to cash, chat and meet up, make AI videos and download wallpapers — all for free on Frenzsave.";
+/** The one title every Frenzsave link preview and the browser tab carry (owner, 2026-10-07). */
+const SHARE_TITLE = "Frenzsave — Download, Earn Credits to Cash, Chat & Make AI Videos";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -144,12 +146,17 @@ export const metadata: Metadata = {
     deliberate exchange of some of that directness for a broader, more accurate
     description of the product. Worth watching in Search Console.
   */
+  /*
+    2026-10-07 (owner, with a screenshot of the old preview: "change it from this
+    old description and features and use what I told you"): the page's own title
+    and description now say what Frenzsave is today, in the owner's words — the
+    same text as every link preview below.
+  */
   title: {
-    default: "Frenzsave — Save, Organise and Reuse Videos, Photos & Sounds",
-    template: "%s · FrenzSave",
+    default: SHARE_TITLE,
+    template: "%s · Frenzsave",
   },
-  description:
-    "Save public videos, photos and sounds you have the right to keep, then reuse them — organise them into collections, publish to your feed, watch reels and connect with friends. All in one place.",
+  description: SHARE_DESCRIPTION,
   alternates: { canonical: "/" },
   /*
     THE SHARED-LINK PREVIEW (owner, 2026-10-07: "the Frenzsave link should
@@ -164,12 +171,12 @@ export const metadata: Metadata = {
     type: "website",
     url: siteUrl,
     siteName: "Frenzsave",
-    title: "Frenzsave — Download, earn credits, chat and create with AI",
+    title: SHARE_TITLE,
     description: SHARE_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Frenzsave — Download, earn credits, chat and create with AI",
+    title: SHARE_TITLE,
     description: SHARE_DESCRIPTION,
   },
   robots: { index: true, follow: true },

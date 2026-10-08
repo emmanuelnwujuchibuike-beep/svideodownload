@@ -41,8 +41,11 @@ describe("no placeholder calls", () => {
 describe("the Frenzsave link preview", () => {
   it("says what Frenzsave is now — download, earn, chat and meet, AI videos, wallpapers", () => {
     const l = code("app/layout.tsx");
-    expect(l).toContain('title: "Frenzsave — Download, earn credits, chat and create with AI"');
-    expect(l).toContain("earn credits you can cash out, chat and meet up with friends, make AI videos and download wallpapers");
+    // the owner's own words, in the preview AND the page's title/description
+    expect(l).toContain("Download, earn credits to cash, chat and meet up, make AI videos and download wallpapers — all for free on Frenzsave.");
+    expect(l).toContain("title: SHARE_TITLE,");
+    expect(l).toContain("description: SHARE_DESCRIPTION,");
+    expect(l).not.toContain("Save, Organise and Reuse");
     expect(l).not.toContain("stay updated with the latest news");
   });
 });
@@ -58,5 +61,14 @@ describe("transfer history can be hidden", () => {
     const p = code("features/ai/wallet/transfer-panel.tsx");
     expect(p).toContain('const HIDE_KEY = "frenz:wallet-transfers:hidden";');
     expect(p).toContain("if (historyHidden) return; // hidden: nothing is read until it is shown again");
+  });
+});
+
+describe("the AI plans card never reloads for nothing (owner screenshot, 2026-10-07)", () => {
+  it("paints the kept answer before the first frame and re-asks only when stale, forced or changed", () => {
+    const c = code("features/ai/credits/ai-credits-card.tsx");
+    expect(c).toContain("useLayoutEffect(() => {\n    const k = readKept();");
+    expect(c).toContain("if (forced || !k || Date.now() - k.at > STALE_MS) void load();");
+    expect(c).toContain("if (!prev || JSON.stringify(prev.answer) !== JSON.stringify(next)) setData(next);");
   });
 });

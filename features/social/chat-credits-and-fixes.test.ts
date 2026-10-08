@@ -51,8 +51,9 @@ describe("the Frenzsave link preview", () => {
 });
 
 describe("the downloads viewer in the installed app", () => {
-  it("the stage stops above a black bottom band instead of running under the home indicator", () => {
-    expect(code("features/downloads/download-player.tsx")).toContain("pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pt-[var(--frenz-safe-top)]");
+  it("the stage stops above a black bottom band instead of running under the home indicator — in the installed app ONLY", () => {
+    // 2026-10-08 (owner): a browser already has its own toolbar there, so the band is .pwa-standalone only
+    expect(code("features/downloads/download-player.tsx")).toContain("pb-0 pt-[var(--frenz-safe-top)] [.pwa-standalone_&]:pb-[calc(env(safe-area-inset-bottom)+4.5rem)]");
   });
 });
 

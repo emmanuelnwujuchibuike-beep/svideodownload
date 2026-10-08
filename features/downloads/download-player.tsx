@@ -1100,8 +1100,11 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
           image doesn't reach the safe area boundary, I want it to reach the
           safe area tip at the top but not cross it... I only see a black top." */}
       {/* 2026-10-07 (owner: "the viewer should not go to the very bottom in the PWA — the black chrome should occupy the bottom"):
-          the stage stops above a black band (home indicator + the Save button), like Instagram, instead of running under them. */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pt-[var(--frenz-safe-top)]">
+          the stage stops above a black band (home indicator + the Save button), like Instagram, instead of running under them.
+          2026-10-08 (owner: "the bottom black Chrome that was added to the pwa history view shouldn't be in the browser cause
+          browser already has it"): the band is the INSTALLED app's only — `.pwa-standalone` (set in app/layout.tsx). In a
+          browser its own toolbar sits there, so the picture runs to the bottom and the Save button floats over it. */}
+      <div className="relative flex min-h-0 flex-1 items-center justify-center pb-0 pt-[var(--frenz-safe-top)] [.pwa-standalone_&]:pb-[calc(env(safe-area-inset-bottom)+4.5rem)]">
         {error ? (
           <div className="max-w-sm px-6 text-center text-white">
             <span className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10"><AlertCircle className="h-7 w-7" /></span>

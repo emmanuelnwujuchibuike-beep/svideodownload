@@ -1,16 +1,15 @@
 "use client";
 
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Eye, Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
+import { Eye, Loader2, MoreHorizontal, Plus, Repeat2, Send, Smile, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
 import { useSelfAdPool } from "@/features/ads-platform/serve/use-self-ad-pool";
 import type { EligibleAd } from "@/lib/ads-platform/eligibility";
-import { mayShowAgain, nextFromPool, recordShown } from "@/lib/ads-platform/serving-state";
 import { seed, useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
@@ -18,7 +17,7 @@ import { StoryViewersSheet } from "@/features/social/story-viewers-sheet";
 import { toast } from "@/features/ui/toast";
 import { formatRelative } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
-import { fetchStoryGroups, readCachedStories } from "@/lib/social/story-cache";
+import { fetchStoryGroups, readCachedStories, writeCachedStories } from "@/lib/social/story-cache";
 import type { StoryGroup } from "@/lib/social/stories";
 import { isGroupSeen, loadSeenMap, markGroupSeen, type SeenMap } from "@/lib/social/story-seen";
 import { cn } from "@/lib/utils";
@@ -33,6 +32,9 @@ const IMAGE_MS = 5000;
  * two can never drift apart visually.
  */
 // Ad Platform Part 5: a paid card between two people's Stories — fetched only when one shows.
+// The ••• sheet (send to chat, save, seen by, delete / report) — fetched on the first tap.
+const StoryOptions = dynamic(() => import("@/features/social/story-options").then((m) => m.StoryOptions), { ssr: false });
+
 const SelfStoryCard = dynamic(() => import("@/features/ads-platform/serve/self-story-card").then((m) => m.SelfStoryCard), { ssr: false });
 
 function StoryRing({
@@ -220,7 +222,7 @@ export function StoriesRow({
 }
 
 export function StoryViewer({
-  groups,
+  groups: incomingGroups,
   startGroup,
   onClose,
   onGroupSeen,
@@ -231,6 +233,20 @@ export function StoryViewer({
   /** Fired once per group after it's marked seen (ring-state refresh in the row). */
   onGroupSeen?: () => void;
 }) {
+  /*
+    Stories the author deleted from here (owner, 2026-10-08). Filtered locally
+    so the viewer moves on at once whichever surface opened it (the home row,
+    Friends, a chat), and the shared "stories" cache is updated for the rest.
+  */
+  const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const groups = useMemo(
+    () =>
+      deletedIds.size === 0
+        ? incomingGroups
+        : incomingGroups.map((g) => ({ ...g, stories: g.stories.filter((x) => !deletedIds.has(x.id)) })).filter((g) => g.stories.length > 0),
+    [incomingGroups, deletedIds],
+  );
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [gi, setGi] = useState(startGroup);
   /*
     Ad Platform Part 5 (placement stories_card): BETWEEN two people's stories,
@@ -403,13 +419,9 @@ export function StoryViewer({
     setPct(0);
     if (si < group.stories.length - 1) setSi(si + 1);
     else if (gi < groups.length - 1) {
-      if (storyAds.status === "ready" && storyAds.ads.length && mayShowAgain("stories_card", storyAds.rules)) {
-        const ad = nextFromPool("stories_card", storyAds.ads);
-        if (ad) {
-          recordShown("stories_card", ad.cr);
-          setPaidCard(ad);
-        }
-      }
+      // the next paid card that may show now (never the last one, within the admin gap)
+      const ad = storyAds.status === "ready" ? storyAds.take() : null;
+      if (ad) setPaidCard(ad);
       setGi(gi + 1);
       setSi(0);
     } else onClose();
@@ -438,7 +450,7 @@ export function StoryViewer({
   // clear look — `startedAt` is backdated by whatever had already elapsed, so
   // un-pausing resumes the same segment rather than restarting its 5s.
   useEffect(() => {
-    if (!story || story.mediaKind === "video" || replying || holding || paidCard) return;
+    if (!story || story.mediaKind === "video" || replying || holding || paidCard || optionsOpen) return;
     const startedAt = performance.now() - elapsedRef.current;
     let raf = 0;
     const tick = (now: number) => {
@@ -450,15 +462,15 @@ export function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [gi, si, story, next, replying, holding, paidCard]);
+  }, [gi, si, story, next, replying, holding, paidCard, optionsOpen]);
 
   // Pause the story video while replying, or held for a clear look.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (replying || holding || paidCard) v.pause();
+    if (replying || holding || paidCard || optionsOpen) v.pause();
     else void v.play().catch(() => {});
-  }, [replying, holding, paidCard, gi, si]);
+  }, [replying, holding, paidCard, optionsOpen, gi, si]);
 
   // Escape + scroll lock.
   useEffect(() => {
@@ -581,8 +593,38 @@ export function StoryViewer({
             <Repeat2 className="h-5 w-5" />
           </button>
         ) : null}
+        <button type="button" onClick={() => setOptionsOpen(true)} aria-label="Story options" className="rounded-full bg-white/10 p-2 text-white backdrop-blur transition hover:bg-white/20">
+          <MoreHorizontal className="h-5 w-5" />
+        </button>
         <button type="button" onClick={onClose} aria-label="Close" className="rounded-full bg-white/10 p-2 text-white backdrop-blur"><X className="h-5 w-5" /></button>
       </div>
+
+      {story && optionsOpen ? (
+        <StoryOptions
+          open={optionsOpen}
+          onClose={() => setOptionsOpen(false)}
+          story={story}
+          group={group}
+          isOwn={isOwn}
+          allowShare={effectiveAllow}
+          onSeenBy={() => setViewersOpen(true)}
+          onReshare={() => setResharing(true)}
+          onDeleted={(id) => {
+            const left = group.stories.length - 1;
+            const updated = groups.map((g) => (g.userId === group.userId ? { ...g, stories: g.stories.filter((x) => x.id !== id) } : g)).filter((g) => g.stories.length > 0);
+            seed<StoryGroup[]>("stories", updated);
+            writeCachedStories(updated);
+            setPct(0);
+            if (left > 0) setSi(Math.min(si, left - 1));
+            else if (gi < groups.length - 1) setSi(0); // the next person's stories move into this index
+            else {
+              onClose();
+              return;
+            }
+            setDeletedIds((prev) => new Set(prev).add(id));
+          }}
+        />
+      ) : null}
 
       {story ? (
         <ReshareSheet
@@ -789,8 +831,23 @@ export function StoryViewer({
         stop short, which is true of the BOTTOM (still `0`) and is what the new
         instruction overrides for the top.
       */}
+      {/*
+        ── 🔴 THE PWA KEEPS A BOTTOM BAND (owner, 2026-10-08: "story upload
+        shouldn't go to the bottom below on pwa, the bottom should be comment,
+        react and all") ──────────────────────────────────────────────────────
+        In the INSTALLED app the media stops above a black band, and the reply
+        box and reactions (or, on your own story, Seen by) live in that band —
+        Instagram's shape, and the same rule the History viewer follows
+        (download-player.tsx). In a browser its own toolbar is the bottom, so the
+        media still runs to the edge there.
+      */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-center justify-center",
+          isOwn
+            ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
+            : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)]",
+        )}
         style={{ top: "var(--frenz-safe-top, 0px)" }}
       >
         {story.mediaKind === "video" ? (
@@ -828,6 +885,8 @@ export function StoryViewer({
         <p
           className={cn(
             "pointer-events-none absolute inset-x-0 bottom-28 z-[15] px-6 text-center text-sm text-white/95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-150",
+            // in the PWA the caption sits on the media, just above the band
+            isOwn ? "[.pwa-standalone_&]:bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]" : "[.pwa-standalone_&]:bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+6.75rem)]",
             holding && "opacity-0",
           )}
         >
@@ -877,7 +936,7 @@ function StoryReplyBar({ toUserId, name, onFocusChange }: { toUserId: string; na
   };
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5">
+    <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-5 [.pwa-standalone_&]:bg-black [.pwa-standalone_&]:bg-none [.pwa-standalone_&]:pt-3">
       {sent ? (
         <p className="mb-2 text-center text-xs font-semibold text-emerald-300">Sent to {name} ✓</p>
       ) : (

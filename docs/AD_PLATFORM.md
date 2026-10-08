@@ -348,3 +348,138 @@ Commit b4f7bc5, plus the tap-once follow-up (80a9ece).
 | 60+ | Dark mode: every ad surface uses app tokens or `dark:` pairs. |
 | perf | The upload step is code-split and warmed one step early. `/advertise/create` dropped from 19.9 kB to 17.5 kB. |
 | follow-up | Every advertising button answers the first tap: `AiButtonLink tapOnce` → `TapOnceLink`, with the Earn button's pending look. The wizard shows "Saving…" and "Discarding…". This is pinned by `features/ads-platform/instant-buttons.test.ts`. |
+
+# Part 5 — serving, rotation and delivery on SHARED slots (2026-10-08)
+
+Briefs: docs/AD_PLATFORM_PART5_BRIEF.md and the owner's shared-slot addendum,
+docs/AD_PLATFORM_PART5_SLOTS_ADDENDUM.md (both verbatim). Local commits only.
+
+## The shape
+
+```
+Admin config -> Supabase (ad_serving_snapshot) -> /api/ads/self (CDN, 5-min bucket)
+   + settings.ad_slot_provider_order                  (only when inventory self:true)
+existing container (one physical slot) -> useSlotProvider(slot) -> resolveSlotProvider(order)
+   - "frenzsave": paid creative rendered IN this container
+   - "network":   the container's existing network unit, unchanged
+   - null:        nothing (collapses as before)
+local rotation (one setTimeout) -> CDN media -> impression (>=50 %, 1 s) -> batched rpc/track_ad_events
+```
+
+- **Registry:** `lib/ads-platform/slot-registry.ts`. One identity per physical
+  location. The slot id **is** the existing network zone id where one exists.
+- **Resolver:** `resolveSlotProvider` takes the first *available* provider in
+  the admin's order. The order lives in `settings.ad_slot_provider_order`
+  (`{ slotId: ["frenzsave","network"] }`); the registry default is paid first,
+  and an admin can reverse it with no deploy. When a network zone reports empty,
+  the next provider takes the slot. Deciding loads no provider: the decision
+  reads the cached payload and the shared inventory.
+- **Slot fit (§55):** `creativeFitsSlot`. A 10:1 top-banner creative never
+  lands in a 1.6:1 card, and a 9:16 video never lands in a card.
+- **Moments** (download complete, return to tab, AI save) are slots too. A
+  paid campaign claims the moment (`lib/ads-platform/moment-events.ts`). The
+  network unit for the same moment checks the claim and stands down, so one
+  moment shows one ad.
+
+## Slot inventory (audit of the codebase, 2026-10-08)
+
+Providers inside a "zone" are whatever rows the operator configures for it
+(AdSense, Adsterra/iframe, script, native, ExoClick rows); that ladder is untouched.
+
+| # | Physical location | Component | Existing provider(s) | Canonical slot | Paid (Frenzsave) | Duplicate? | Action |
+|---|---|---|---|---|---|---|---|
+| 1 | Fixed under header, content pages (not `/`, `/library`) | TopPageBannerAd | zone `top_banner` | `top_banner` | global_top_banner, 10:1 | no | **shared**. The paid creative renders in this container; the separate 32 px strip was removed (owner: "use the existing top banner slot") |
+| 2 | Sticky top of /downloads | StickyTopAd | zone `bottom_banner` | `downloads_top` | global_top_banner | ⚠ same zone row as #3 on the same page | **shared**. The duplicate is reported, not changed |
+| 3 | Bottom bar above the nav, all pages | TopBannerAd (AppBottomAd) | zones `bottom_banner`, `mobile_bottom_banner` + ExoClick bottomnav in ONE container | `bottom_banner` | — | no (already one container) | kept |
+| 4 | Under the Download button | AdSurface (DownloadPageCore, Downloader) | zone `under_download` | `under_download` | download_page_banner, 320×200 | no | **shared** |
+| 5 | Under the download result | ResultAd | zone `download_result_page` | `download_result_page` | download_result_banner, 320×200 | no | **shared** |
+| 6 | Feed, every few posts | FeedAdSlot → AdSurface | zone `feed_inline` | `feed_inline` | feed_banner | no | **shared** |
+| 7 | Feed, Hilltop positions | HilltopFeedAd | Hilltop | (network-only) | — | no (its own composed positions) | kept |
+| 8 | Reels slide, every 3 reels (and AI Reels) | ReelsAdSlide | zone `reels_interstitial` | `reels_interstitial` | reels_banner | no | **shared** (wallpaper reels: network only) |
+| 9 | Landing: above the platform strip; SEO pages | AdSurface | zone `homepage_top` | `homepage_top` | — | no | kept |
+| 10 | Landing: between sections | LazyAdSurface | zone `landing_section_break` | `landing_section_break` | — | no | kept |
+| 11 | Landing: under the wallpaper button | LazyAdSurface + HilltopSlot + LazyExoClickSlot | zone `landing_under_wallpaper` + Hilltop + ExoClick, **all three mounted** | `landing_under_wallpaper` | — | ⚠ **B: three providers in one location** | reported. Consolidating changes live network revenue, so it waits for the owner's call (Part 6 admin order) |
+| 12 | Downloader: above the fetch box | AdSurface | zone `downloader_above_fetch` | same | — | no | kept |
+| 13 | On the fetched result | ExoClickSticky + FetchedAd + ResultOffer | ExoClick, zone `result_top`, offer | `result_top` | — | separate stacked units | kept |
+| 14 | While the file prepares | PreparingAd | zone `download_preparing` | same | — | no | kept |
+| 15 | Multi-Link (4 places) | MultiLinkPanel, SourceCard, FetchAdGate | zones `multilink_*` | same | — | no | kept |
+| 16 | History: above the grid / between periods | HistoryGridAd (ExoClick), AdSurface + HilltopSlot | ExoClick; zone `history_between_periods` + Hilltop **together** | same | — | ⚠ B: zone + Hilltop at one spot | reported (as #11) |
+| 17 | Download history top/bottom; history complete | DownloadHistoryAd, HistoryCompleteAd | zones `download_history_*` | same | — | no | kept |
+| 18 | History story ad (media viewer) | StoryAdSlide | zone `history_story_ad` | same | — | no | kept (it is not social Stories) |
+| 19 | Blog sidebar | AdSurface | zone `sidebar` | same | — | no | kept |
+| 20 | Download-complete moment | DownloadCompleteAd + VAST download-complete + Monetag moment | zone `download_complete`, Hilltop/ExoClick VAST, Monetag | `download_complete` | download_completed_interstitial | already coordinated (panel stands down for the VAST) | **shared** (claim) |
+| 21 | Return / idle moment | IdleInterstitial + VAST idle/back-swipe | zone `idle_interstitial`, VAST | `idle_interstitial` | interstitial | no | **shared** (claim) |
+| 22 | Download / batch / wallpaper gates | DownloadInterstitial, batch gates, wallpaper reward ad | zones `idle_interstitial`, `batch_*`, `multilink_fetch_gate`; GPT rewarded | same | — | no | kept |
+| 23 | Exit intent | ExitIntent | zone `exit_intent_popup` | same | — | no | kept |
+| 24 | Page-level scripts | AdScripts, MonetagClient, HilltopVideoSlider, GoogleTag | zone `global`, Monetag, Hilltop, AdSense | same | — | no | kept |
+| 25 | Unmounted components | RewardedAdGate (`reward_video`), WallpaperRewardGate, AdSenseUnit, ExoClickUnit, MonetagTags, BatchAdGate | — | — | — | D: unused (no mount found) | left in place, listed |
+| 26 | **Frenz AI hub, end of page** | SelfAdSlot | none existed | `ai_hub_card` | ai_banner | — | **new** (addendum §7: no slot existed, sold placement, admin can disable) |
+| 27 | **Between two people's Stories** | StoryViewer → SelfStoryCard | none existed (social Stories had no ad) | `stories_between` | stories_card | — | **new** |
+| 28 | **Beside an AI video save** | SelfMoments | none (network reward ads for AI were removed 2026-09-13) | `ai_save_moment` | ai_video_save_reward | — | **new**. It never gates the save |
+
+- **TOTAL EXISTING PHYSICAL AD LOCATIONS DISCOVERED: 25** (rows 1–25; the zone catalogue has 31 zone ids, several sharing a location).
+- **TOTAL CANONICAL SLOTS AFTER CONSOLIDATION: 28** (25 + 3 new).
+- **NEW PHYSICAL SLOTS CREATED: 3** (`ai_hub_card`, `stories_between`, `ai_save_moment`). Each has no network zone; each is in the registry, and each is off when the admin disables its placement.
+- **DUPLICATE PHYSICAL SLOTS REMOVED/CONSOLIDATED: 1.** The separate paid top strip I had first built was folded into the existing `top_banner` / `downloads_top` containers.
+- **Pre-existing network duplicates found and reported, not changed:** #2/#3 (one zone row on one page twice), #11 (three providers mounted in one spot), #16 (two providers in one spot).
+
+## Verified (local production build, fake campaign injected at the network layer)
+
+| Check | Result |
+|---|---|
+| Top banner: 10 ads, 5 s local rotation | in the existing `top_banner` container (1 container), 37 px creative in its 54 px bar on a phone. **0** payload requests per swap; the network zone is not requested while paid holds the slot |
+| Media | current creative + the next image only; videos never preloaded |
+| Events | visible, loaded and impression (≥50 %, 1 s), then click: batched to `rpc/track_ad_events`, nothing per frame or tick |
+| Download-complete moment | only on the manager's completion event; focus on Close, scroll locked then restored, Escape closes; a batch shows one ad |
+| AI save | the sponsor video appears beside the save; a broken video closes itself; the save never waits |
+| AI hub card / under-download card | rendered in their slots (320×200, `aspect-ratio`, no shift) |
+| Expired / empty / global off | 1 payload request, 0 media, 0 events, nothing shown |
+| No live campaign (`self:false`) | **0** payload requests, 0 ad-layer chunks loaded |
+| Ads on vs off: landing | LCP 192–220 ms vs 220–224 ms; CLS 0.003 both |
+| Ads on vs off: /ai, /academy | LCP 168→176 ms, 132→148 ms; CLS unchanged |
+| Bundle | landing first load 217 → 224 kB (the pool hook in AdSurface plus the gate); the renderers are dynamic imports |
+| Tests | `features/ads-platform/serve/part5-serving.test.ts` (37) + the scan for no polling or Realtime now covers `serve/`; 2 mutants (failed-creative skip, reward limit) caught |
+
+Not measured here: real iPhone/Android devices, throttled 3G, memory. A real
+campaign will need a live probe after the push (as in Part 1). A fresh local
+build reloads the page a few times (deploy check), with or without ads; the
+one "extra" payload request seen in testing was that new document, not the
+rotation.
+
+## The 25 questions (§47)
+
+1. Ads every 5 s? **No.** Rotation is local; 0 requests per swap (measured).
+2. Client-side rotation? **Yes.**
+3. Media proxied through Vercel/Railway? **No.** Straight from the storage CDN; no `next/image`.
+4. Queries indexed? Serving reads `ad_serving_snapshot` (0195, active rows only) once per bucket per region; no history tables.
+5. Only active campaigns? **Yes.** Server stage 1 plus browser stage 2 to the second.
+6. Unpaid campaigns? **No.** `payment_verified` is required (server); the guard trigger blocks unpaid `active`.
+7. Expired campaigns? **No.** The window is re-checked in the browser at each render (test + e2e).
+8. Blocked creatives? **No.** `validation_status`/`url_validation_status` must be `valid`.
+9. Same interstitial twice in a row? **No**, while another exists (200-moment test).
+10. Can one broken creative break the system? **No.** It is skipped for the session and the rotation continues.
+11. Empty inventory clean? **Yes.** Nothing rendered, no retry.
+12. Global disable stops loading? **Yes.** `self:false` means 0 requests and 0 chunks.
+13. Analytics batched? **Yes.** ≤20 per batch, 10 s, or on page hide.
+14. Realtime avoided? **Yes** (scanned by a test).
+15. Timers/observers cleaned up? **Yes.** One timeout, stopped while hidden and on unmount; IntersectionObservers disconnected.
+16. Videos paused/unloaded? **Yes.** They play only at ≥50 % visible, pause when hidden, `src` is released on unmount, and they share the video coordinator.
+17. Anonymous? **Yes** (all e2e runs were guests).
+18. Signed-in? Same path; ad-free plans get nothing (`useShowAds`). Not run with a real session.
+19/20. iOS PWA / Android? Built on the existing safe-area, visibility and coordinator patterns; **not device-tested**.
+21. Frenz AI experience? Only the hub end card, never inside a creation flow; the AI save never waits.
+22. Railway/Vercel cost? At most one CDN-cached function run per bucket per region; nothing per impression, click or rotation.
+23. Admin config? Formats, placements, durations, video limit, slot count, rotation, gap, global switch and provider order are all data.
+24. Payment/campaign architecture? Untouched.
+25. Ad failure leaves the product working? **Yes.** Every path fails empty; network units fall back unchanged.
+
+## Gap Ledger (Part 5)
+
+| Item | Status |
+|---|---|
+| Admin screen for slots + provider order (registry + `ad_slot_provider_order`) | **Part 6**. Upgrade the existing admin; no duplicate (owner, 2026-10-08) |
+| Network duplicates #2/#3, #11, #16 | **owner decision**. Consolidation changes live revenue |
+| Network-first order for a *moment*: no paid fallback when the network then fails to fill | known limit (the VAST answer arrives async) |
+| `ai_save_moment` vs the standing "no reward ads for AI" rule | built non-gating; **owner decision** stays open (HANDOFF) |
+| Slot id on ad_events rows | derivable (campaign → placement → slot); `track_ad_events` unchanged |
+| Device + throttled-network measurements | not run in this environment |

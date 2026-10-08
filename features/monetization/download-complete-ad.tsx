@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 import { MONETAG_MOMENT_EVENTS } from "@/lib/monetization/monetag-events";
+import { momentClaimed } from "@/lib/ads-platform/moment-events";
 
 import { AdSlot } from "./ad-slot";
 import { useAdGateCountdown } from "./use-ad-gate-countdown";
@@ -226,6 +227,14 @@ export function DownloadCompleteAd({
    * Escape — all three of which it used to do.
    */
   const shown = open && hasAd === true;
+
+  /*
+    One ad per finished download (Ad Platform Part 5): when a paid campaign
+    took this moment, the panel closes before it ever asks the network.
+  */
+  useEffect(() => {
+    if (open && momentClaimed("download-complete")) close();
+  }, [open, close]);
 
   const { remaining, canSkip: countdownDone, onAdTiming } = useAdGateCountdown({
     fallbackSeconds: config?.skipAfter ?? 5,

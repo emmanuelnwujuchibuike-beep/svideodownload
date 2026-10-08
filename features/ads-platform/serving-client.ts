@@ -29,6 +29,8 @@ import { parseServingPayload, type ServingPayload } from "@/lib/ads-platform/ser
 const STORE_KEY = "frenz.ads.self.v1";
 
 let memo: { b: number; p: Promise<ServingPayload | null> } | null = null;
+/** The last payload that resolved — read synchronously when a moment must decide NOW (Part 5). */
+let resolved: ServingPayload | null = null;
 
 function readStored(b: number): ServingPayload | null {
   try {
@@ -66,10 +68,24 @@ export function loadSelfAds(now: number = Date.now()): Promise<ServingPayload | 
               }),
       ).catch(() => null);
   memo = { b, p };
+  void p.then((v) => {
+    if (memo?.p === p) resolved = v;
+  });
   return p;
+}
+
+/**
+ * The payload already in hand, without a request — null until the first
+ * `loadSelfAds` resolved, or when it resolved empty. A finished download decides
+ * in the same tick whether a paid campaign takes the moment, so it cannot wait.
+ * Stale buckets are fine here: `poolFor` re-checks every window to the second.
+ */
+export function peekSelfAds(): ServingPayload | null {
+  return resolved;
 }
 
 /** Tests only. */
 export function __resetSelfAds(): void {
   memo = null;
+  resolved = null;
 }

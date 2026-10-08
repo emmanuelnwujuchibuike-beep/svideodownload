@@ -2,11 +2,15 @@
 
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
 import { Eye, Loader2, Plus, Repeat2, Send, Smile, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PressIcon } from "@/components/motion/press-icon";
+import { useSelfAdPool } from "@/features/ads-platform/serve/use-self-ad-pool";
+import type { EligibleAd } from "@/lib/ads-platform/eligibility";
+import { mayShowAgain, nextFromPool, recordShown } from "@/lib/ads-platform/serving-state";
 import { seed, useQuery } from "@/features/data";
 import { useEntitlements } from "@/features/auth/use-entitlements";
 import { ReshareSheet } from "@/features/social/reshare-sheet";
@@ -28,6 +32,9 @@ const IMAGE_MS = 5000;
  * One story circle. Shared by the viewer's own row and the friends row so the
  * two can never drift apart visually.
  */
+// Ad Platform Part 5: a paid card between two people's Stories — fetched only when one shows.
+const SelfStoryCard = dynamic(() => import("@/features/ads-platform/serve/self-story-card").then((m) => m.SelfStoryCard), { ssr: false });
+
 function StoryRing({
   group,
   label,
@@ -225,6 +232,14 @@ export function StoryViewer({
   onGroupSeen?: () => void;
 }) {
   const [gi, setGi] = useState(startGroup);
+  /*
+    Ad Platform Part 5 (placement stories_card): BETWEEN two people's stories,
+    never inside one, at most once per the format's admin gap. The story under
+    it is paused until it is done; with no live campaign this is an empty pool
+    and nothing changes.
+  */
+  const storyAds = useSelfAdPool("stories_card", "stories");
+  const [paidCard, setPaidCard] = useState<EligibleAd | null>(null);
   const [si, setSi] = useState(0);
   const [pct, setPct] = useState(0);
   /*
@@ -388,10 +403,17 @@ export function StoryViewer({
     setPct(0);
     if (si < group.stories.length - 1) setSi(si + 1);
     else if (gi < groups.length - 1) {
+      if (storyAds.status === "ready" && storyAds.ads.length && mayShowAgain("stories_card", storyAds.rules)) {
+        const ad = nextFromPool("stories_card", storyAds.ads);
+        if (ad) {
+          recordShown("stories_card", ad.cr);
+          setPaidCard(ad);
+        }
+      }
       setGi(gi + 1);
       setSi(0);
     } else onClose();
-  }, [si, gi, group, groups.length, onClose]);
+  }, [si, gi, group, groups.length, onClose, storyAds]);
 
   const prev = useCallback(() => {
     setPct(0);
@@ -416,7 +438,7 @@ export function StoryViewer({
   // clear look — `startedAt` is backdated by whatever had already elapsed, so
   // un-pausing resumes the same segment rather than restarting its 5s.
   useEffect(() => {
-    if (!story || story.mediaKind === "video" || replying || holding) return;
+    if (!story || story.mediaKind === "video" || replying || holding || paidCard) return;
     const startedAt = performance.now() - elapsedRef.current;
     let raf = 0;
     const tick = (now: number) => {
@@ -428,15 +450,15 @@ export function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [gi, si, story, next, replying, holding]);
+  }, [gi, si, story, next, replying, holding, paidCard]);
 
   // Pause the story video while replying, or held for a clear look.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (replying || holding) v.pause();
+    if (replying || holding || paidCard) v.pause();
     else void v.play().catch(() => {});
-  }, [replying, holding, gi, si]);
+  }, [replying, holding, paidCard, gi, si]);
 
   // Escape + scroll lock.
   useEffect(() => {
@@ -517,6 +539,7 @@ export function StoryViewer({
       dragMomentum={false}
       onDragEnd={handleDragEnd}
     >
+      {paidCard ? <SelfStoryCard ad={paidCard} onDone={() => setPaidCard(null)} /> : null}
       {/*
         Every piece of chrome below fades out together while `holding` —
         "full clear screen on press and hold" (owner, 2026-08-16). One class

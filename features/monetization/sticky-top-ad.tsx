@@ -1,6 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
+
+import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
 
 import { cn } from "@/lib/utils";
 
@@ -20,21 +23,46 @@ import { useShowAds } from "./use-show-ads";
  * outside that wrapper makes the pin reliable. Serves the `bottom_banner` zone,
  * and collapses to nothing until the zone is filled.
  */
+// Ad Platform Part 5: the paid provider's renderer, fetched only when a campaign occupies this slot
+const SelfTopCreative = dynamic(() => import("@/features/ads-platform/serve/self-top-creative").then((m) => m.SelfTopCreative), { ssr: false });
+
 export function StickyTopAd() {
   const { showAds, ready } = useShowAds();
   const [hasAd, setHasAd] = useState<boolean | null>(null);
+  /*
+    Ad Platform Part 5 — this bar IS the canonical `downloads_top` slot: a
+    paid top banner (global_top_banner) or the network zone, ONE of them,
+    in this frame (lib/ads-platform/slot-registry.ts).
+  */
+  const { state: occupant, networkEmpty } = useSlotProvider("downloads_top", "download");
+  const paid = occupant.status === "ready" && occupant.provider === "frenzsave" ? occupant : null;
+  const network = occupant.status === "ready" && occupant.provider === "network";
+  const shown = !!paid || (network && hasAd === true);
 
   if (!ready || !showAds) return null;
 
   return (
     <div
-      className={cn("sticky top-[var(--frenz-safe-top)] z-20", hasAd !== true && "hidden")}
-      aria-hidden={hasAd !== true}
+      data-ad-slot="downloads_top"
+      data-ad-provider={paid ? "frenzsave" : "network"}
+      className={cn("sticky top-[var(--frenz-safe-top)] z-20", !shown && "hidden")}
+      aria-hidden={!shown}
     >
       <div className="border-b border-border/60 bg-card/95 px-3 py-2 shadow-soft backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-3xl flex-col items-center">
           <span className="mb-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/60">Sponsored</span>
-          <AdSlot zone="bottom_banner" dismissible={false} onResolved={setHasAd} />
+          {paid ? (
+            <SelfTopCreative ads={paid.ads} rules={paid.rules} page="download" />
+          ) : network ? (
+            <AdSlot
+              zone="bottom_banner"
+              dismissible={false}
+              onResolved={(has) => {
+                setHasAd(has);
+                if (!has) networkEmpty();
+              }}
+            />
+          ) : null}
         </div>
       </div>
     </div>

@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 
+import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
+import { slotForZone } from "@/lib/ads-platform/slot-registry";
 import type { AdZone } from "@/lib/monetization/types";
 import { cn } from "@/lib/utils";
 
 import { AdSlot } from "./ad-slot";
 import { useShowAds } from "./use-show-ads";
+
+// the paid provider's renderer — fetched only when a paid campaign occupies this slot
+const SelfAdCard = dynamic(() => import("@/features/ads-platform/serve/self-ad-card").then((m) => m.SelfAdCard), { ssr: false });
 
 /**
  * The shared frame for an in-page ad placement.
@@ -82,16 +88,50 @@ export function AdSurface({
 }) {
   const { showAds, ready } = useShowAds();
   const [hasAd, setHasAd] = useState<boolean | null>(null);
+  /*
+    Ad Platform Part 5 — ONE physical slot, ONE provider (owner, 2026-10-08:
+    docs/AD_PLATFORM_PART5_SLOTS_ADDENDUM.md). This container IS the canonical
+    slot named by its zone (lib/ads-platform/slot-registry.ts). Where that slot
+    can carry a paid campaign, the resolver picks the provider first and only
+    that one is mounted: the paid creative here, or the network unit below
+    exactly as before. Zones with no paid placement skip all of this.
+  */
+  const slot = slotForZone(zone);
+  const { state: occupant, networkEmpty } = useSlotProvider(slot?.id ?? "", slot?.pages?.[0] ?? null);
+  const paid = slot && occupant.status === "ready" && occupant.provider === "frenzsave" ? occupant : null;
+  const answered = (has: boolean) => {
+    setHasAd(has);
+    onResolved?.(has);
+    if (!has && slot) networkEmpty();
+  };
+
+  useEffect(() => {
+    if (paid) onResolved?.(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!paid]);
 
   // `ready` guards the premium check: rendering before the plan resolves would
   // flash an ad frame at a paying user.
   if (!ready || !showAds) return null;
 
+  if (slot) {
+    // decide first — never mount two providers in one slot
+    if (occupant.status === "pending") return null;
+    if (paid) {
+      return (
+        <div data-ad-slot={slot.id} data-ad-provider="frenzsave" className={className}>
+          <SelfAdCard ads={paid.ads} rules={paid.rules} placement={slot.paidPlacement!} page={slot.pages?.[0] ?? "all_pages"} />
+        </div>
+      );
+    }
+    if (occupant.provider === null) return null;
+  }
+
   // Full-bleed: no card, no padding, no caption, no width cap — the creative IS
   // the presentation. Still collapses to nothing until the slot confirms an ad.
   if (fullBleed) {
     return (
-      <div className={cn("w-full", hasAd !== true && "hidden", className)} aria-hidden={hasAd !== true}>
+      <div data-ad-slot={slot?.id ?? zone} className={cn("w-full", hasAd !== true && "hidden", className)} aria-hidden={hasAd !== true}>
         {/*
           NOTE: `fullBleed` is deliberately NOT forwarded to AdSlot.
 
@@ -105,10 +145,7 @@ export function AdSurface({
         <AdSlot
           zone={zone}
           dismissible={false}
-          onResolved={(has) => {
-            setHasAd(has);
-            onResolved?.(has);
-          }}
+          onResolved={answered}
         />
       </div>
     );
@@ -126,6 +163,7 @@ export function AdSurface({
       the content column.
     */
     <div
+      data-ad-slot={slot?.id ?? zone}
       className={cn(
         "mx-auto w-fit max-w-full",
         maxWidth,
@@ -149,10 +187,7 @@ export function AdSurface({
         <AdSlot
           zone={zone}
           dismissible={false}
-          onResolved={(has) => {
-            setHasAd(has);
-            onResolved?.(has);
-          }}
+          onResolved={answered}
         />
       </div>
     </div>

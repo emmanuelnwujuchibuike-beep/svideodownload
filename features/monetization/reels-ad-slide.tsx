@@ -1,7 +1,10 @@
 "use client";
 
 import { ChevronUp } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
+
+import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
 
 import { AdSlot } from "./ad-slot";
 
@@ -33,7 +36,22 @@ import { AdSlot } from "./ad-slot";
   only branch has been removed is a prop that will be wired to the wrong
   thing later.
 */
-export function ReelsAdSlide() {
+const SelfAdCard = dynamic(() => import("@/features/ads-platform/serve/self-ad-card").then((m) => m.SelfAdCard), { ssr: false });
+
+export function ReelsAdSlide({
+  paid = null,
+  onNetworkEmpty,
+}: {
+  /** the network zone did not fill — the slot passes to the next provider in order */
+  onNetworkEmpty?: () => void;
+  /**
+   * Ad Platform Part 5: a live PAID campaign for `reels_banner` (the deck
+   * read the pool once). It takes this slide as a 320×200 card on the black
+   * ground; its video plays only while the slide is on screen and holds the
+   * shared video coordinator, so no reel decodes beside it.
+   */
+  paid?: { ads: readonly EligibleAd[]; rules: FormatRules | null; page: string } | null;
+} = {}) {
   /**
    * Whether the zone actually produced a visible creative.
    *
@@ -45,6 +63,17 @@ export function ReelsAdSlide() {
    * rectangle with no explanation.
    */
   const [filled, setFilled] = useState<boolean | null>(null);
+
+  if (paid?.ads.length) {
+    return (
+      <div data-ad-slot="reels_interstitial" data-ad-provider="frenzsave" className="relative flex h-full w-full flex-col items-center justify-center gap-4 bg-black px-6">
+        <SelfAdCard ads={paid.ads} rules={paid.rules} placement="reels_banner" page={paid.page} className="[&>p]:text-white/60" />
+        <p className="flex items-center gap-1.5 text-xs text-white/50">
+          <ChevronUp className="h-3.5 w-3.5" aria-hidden /> Swipe up for the next reel
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -94,7 +123,10 @@ export function ReelsAdSlide() {
           fullBleed
           dismissible={false}
           className="h-full w-full"
-          onResolved={setFilled}
+          onResolved={(has) => {
+            setFilled(has);
+            if (!has) onNetworkEmpty?.();
+          }}
         />
       </div>
 

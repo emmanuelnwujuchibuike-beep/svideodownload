@@ -52,7 +52,8 @@ export function ReferralBannerTrigger() {
   useEffect(() => {
     let lastShown = 0;
     let waitTimer: number | null = null;
-    const adOpen = () => !!document.querySelector('[role="dialog"][aria-label="Advertisement"]');
+    // the network ad's dialog, or a paid campaign's (Ad Platform Part 5)
+    const adOpen = () => !!document.querySelector('[role="dialog"][aria-label="Advertisement"], [role="dialog"][data-paid-ad]');
     const onCompleted = () => {
       let count = 0;
       try {

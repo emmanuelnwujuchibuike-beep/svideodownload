@@ -825,4 +825,6 @@ The final implementation must be production-ready, lightweight, secure, scalable
 | Item | State |
 |---|---|
 | Brief received | 2026-10-08 (owner: "Make sure you don't leave any behind") |
-| §0 audit | not started |
+| §0 audit + shared-slot addendum | done 2026-10-08 — report and slot inventory in docs/AD_PLATFORM.md "Part 5" |
+| Implementation | local commit (no push), 2026-10-08 |
+| Part 6 rule (owner) | "In part 6 don't duplicate what has already been built but instead upgrade and modify it" — same shared-slot rules |

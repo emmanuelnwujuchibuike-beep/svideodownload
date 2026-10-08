@@ -1,3 +1,4 @@
+import { SelfAdSlot } from "@/features/ads-platform/serve/self-ad-slot";
 import { AiCreditStrip } from "@/features/ai/design/ai-credit-strip";
 import { AiMembersGate } from "@/features/ai/design/ai-members-gate";
 import { AiShowcase } from "@/features/ai/design/ai-showcase";
@@ -55,8 +56,12 @@ export function FrenzAIWelcome({
         exploreHref={`${base}/character-replace`}
         historyHref={`${base}/history`}
         footer={
-          /* Secure · Fast · Natural Results — closes both reference images. */
-          <FrenzAITrustRow className="mt-7 border-t border-border/60 pt-5" />
+          <>
+            {/* Ad Platform Part 5: a paid AI-pages card (ai_banner) at the end of the hub — never inside a creation flow. Nothing without a live campaign. */}
+            <SelfAdSlot slot="ai_hub_card" placement="ai_banner" page="ai" className="mt-7" />
+            {/* Secure · Fast · Natural Results — closes both reference images. */}
+            <FrenzAITrustRow className="mt-7 border-t border-border/60 pt-5" />
+          </>
         }
       >
         {/*

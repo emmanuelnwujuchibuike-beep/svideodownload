@@ -65,6 +65,7 @@ import { loadZoneAd } from "@/features/monetization/ad-cache";
 import { ReelsAdSlide } from "@/features/monetization/reels-ad-slide";
 import { useShowAds } from "@/features/monetization/use-show-ads";
 import { insertAdSlots, REELS_AD_INTERVAL } from "@/lib/feed/ad-slots";
+import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
 import { glass, layer, scrimForLuminance } from "@/features/reels/viewer/design";
 import { GlassButton } from "@/features/reels/viewer/glass-button";
 import { ReelProgress } from "@/features/reels/viewer/reel-progress";
@@ -356,6 +357,7 @@ export function ReelDeck({
   autoOpenCommentsId,
   onSwipeTab,
   onActiveIndexChange,
+  adPage = "reels",
 }: {
   items: FeedItem[];
   startIndex: number;
@@ -374,6 +376,8 @@ export function ReelDeck({
   /** Reports the active index as it changes — lets a parent remember scroll
    *  position per tab so returning to it resumes exactly where you left off. */
   onActiveIndexChange?: (index: number) => void;
+  /** Ad Platform Part 5: which content area this deck is, for paid campaigns' page targeting. */
+  adPage?: "reels" | "ai_reels";
 }) {
   // "modal" opens ON TOP of the still-mounted feed (only covered, never
   // unmounted — see smart-feed.tsx); this immediately pauses whatever was
@@ -442,11 +446,21 @@ export function ReelDeck({
    * `insertAdSlots` suppresses a trailing slot, and against a growing prefix
    * that would mean the slide at a given index changing identity mid-scroll.
    */
+  /*
+    Ad Platform Part 5: a live PAID campaign for `reels_banner` also earns the
+    slide (the slide then shows it — see ReelsAdSlide). Same cadence, same
+    slide: no second deck, no second video, nothing for an empty pool.
+  */
+  // the canonical `reels_interstitial` slot: ONE provider for the slide (lib/ads-platform/slot-registry.ts)
+  const { state: occupant, networkEmpty } = useSlotProvider("reels_interstitial", adPage);
+  const paid = occupant.status === "ready" && occupant.provider === "frenzsave" ? occupant : null;
+  const hasPaid = !!paid;
+  const networkSlide = occupant.status === "ready" && occupant.provider === "network" && adSeeded;
   const { slides, itemIndexBySlide, slideIndexByItem } = useMemo(() => {
     const composed = insertAdSlots(items, {
       idOf: (item) => item.id,
       interval: REELS_AD_INTERVAL,
-      enabled: adSeeded,
+      enabled: hasPaid || networkSlide,
     });
     const bySlide: number[] = [];
     const byItem: number[] = [];
@@ -462,7 +476,7 @@ export function ReelDeck({
       bySlide[slideIndex] = Math.max(0, itemIndex);
     });
     return { slides: composed, itemIndexBySlide: bySlide, slideIndexByItem: byItem };
-  }, [items, adSeeded]);
+  }, [items, hasPaid, networkSlide]);
 
   const start = slideIndexByItem[Math.min(Math.max(0, startIndex), items.length - 1)] ?? 0;
   const [active, setActive] = useState(start);
@@ -730,7 +744,7 @@ export function ReelDeck({
               key={`ad-${entry.anchorId}`}
               className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black"
             >
-              <ReelsAdSlide />
+              <ReelsAdSlide paid={paid ? { ads: paid.ads, rules: paid.rules, page: adPage } : null} onNetworkEmpty={networkEmpty} />
             </section>
           ) : (
           <section key={entry.data.id} className="relative flex h-[100dvh] w-full snap-start snap-always justify-center bg-black lg:pr-[400px]">

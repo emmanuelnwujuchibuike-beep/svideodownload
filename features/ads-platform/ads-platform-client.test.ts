@@ -164,7 +164,7 @@ function pollingViolations(files: { name: string; src: string }[]): string[] {
 
 describe("no polling, no Realtime, no per-rotation request", () => {
   it("nothing in the ad platform calls setInterval or opens a Realtime channel", () => {
-    const files = ["lib/ads-platform", "features/ads-platform"].flatMap((d) =>
+    const files = ["lib/ads-platform", "features/ads-platform", "features/ads-platform/serve"].flatMap((d) =>
       readdirSync(join(process.cwd(), d))
         .filter((f) => /\.tsx?$/.test(f) && !f.includes(".test."))
         .map((f) => ({ name: `${d}/${f}`, src: readFileSync(join(process.cwd(), d, f), "utf8") })),

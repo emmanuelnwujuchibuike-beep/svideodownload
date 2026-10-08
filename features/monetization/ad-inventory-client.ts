@@ -15,16 +15,24 @@ import { inventoryBucket, parseAdInventory, type AdInventory } from "@/lib/monet
  * load, which is soon enough for an admin switch and costs nothing between.
  */
 let pending: Promise<AdInventory | null> | null = null;
+let resolved: AdInventory | null = null;
 
 export function loadAdInventory(): Promise<AdInventory | null> {
   pending ??= fetch(`/api/ads/inventory?b=${inventoryBucket()}`)
     .then((r) => (r.ok ? r.json() : null))
     .then(parseAdInventory)
+    .then((inv) => (resolved = inv))
     .catch(() => null);
   return pending;
+}
+
+/** The inventory already in hand, without a request (null = not loaded, or unknown). */
+export function peekAdInventory(): AdInventory | null {
+  return resolved;
 }
 
 /** Tests only. */
 export function __resetAdInventory(): void {
   pending = null;
+  resolved = null;
 }

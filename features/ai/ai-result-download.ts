@@ -4,6 +4,7 @@ import { startDownload } from "@/features/downloads/manager";
 import { resultFileName, resultSuffixFor } from "@/lib/ai/media";
 import type { AiJobView } from "@/lib/ai/jobs";
 import type { DownloadRecord } from "@/types";
+import { AI_VIDEO_SAVE_EVENT } from "@/lib/ads-platform/moment-events";
 import { haptic } from "@/lib/motion/haptics";
 
 /**
@@ -84,7 +85,7 @@ export function startAiResultDownload(job: AiJobView): string | null {
 export function startAiResultDownloadById(job: { id: string; feature: string; name?: string | null; durationSeconds?: number | null }): string | null {
   haptic("light");
   const href = aiResultDownloadHref(job.id);
-  return startDownload({
+  const taskId = startDownload({
     url: href,
     directUrl: href,
     platform: "generic",
@@ -96,4 +97,18 @@ export function startAiResultDownloadById(job: { id: string; feature: string; na
     qualityLabel: job.feature === "ai_character_replace" ? "Character Replace" : "Frenz AI",
     durationSeconds: job.durationSeconds ?? null,
   });
+  /*
+    Ad Platform Part 5: a paid sponsor video MAY play beside this save
+    (placement ai_video_save_reward, admin-controlled). Fired AFTER the save
+    has started and never awaited — the standing rule is no reward ads for AI
+    access, so nothing about the save waits on, or depends on, an ad.
+  */
+  if (taskId) {
+    try {
+      window.dispatchEvent(new Event(AI_VIDEO_SAVE_EVENT));
+    } catch {
+      /* a listener's failure is never the save's */
+    }
+  }
+  return taskId;
 }

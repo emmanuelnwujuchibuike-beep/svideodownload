@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 
+import { momentClaimed } from "@/lib/ads-platform/moment-events";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
 
 /**
@@ -72,7 +73,10 @@ export function VastDownloadCompleteTrigger() {
   useEffect(() => {
     const onCompleted = () => {
       void import("./request")
-        .then((m) => m.requestVastInterstitial("download-complete"))
+        // A paid campaign that took this finished download (Ad Platform Part 5)
+        // is its one ad — checked after the import, so the paid listener has
+        // always run by then whatever the listener order.
+        .then((m) => (momentClaimed("download-complete") ? undefined : m.requestVastInterstitial("download-complete")))
         .catch(() => {
           /*
             An ad that cannot load its own module is not the visitor's problem —

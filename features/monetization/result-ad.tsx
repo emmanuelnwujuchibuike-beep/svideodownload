@@ -1,6 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+
+import { useSlotProvider } from "@/features/ads-platform/serve/use-slot-provider";
 
 import { loadAdInventory } from "@/features/monetization/ad-inventory-client";
 import { mayServeSlot } from "@/lib/monetization/ad-inventory-shape";
@@ -34,7 +37,30 @@ import { AdSlot } from "./ad-slot";
  * front of a black rectangle waiting for a countdown driven by a video that
  * never started.
  */
+const SelfAdCard = dynamic(() => import("@/features/ads-platform/serve/self-ad-card").then((m) => m.SelfAdCard), { ssr: false });
+
+/**
+ * Ad Platform Part 5 — this IS the canonical `download_result_page` slot
+ * (lib/ads-platform/slot-registry.ts): ONE provider, decided before either
+ * loads — a paid campaign (download_result_banner, 320×200) or the network
+ * zone below, exactly as before. Below the result: the file, the save buttons
+ * and retry stay above it and untouched. Only mounted where the result UI
+ * exists, so it never initialises on the empty Download page.
+ */
 export function ResultAd({ className }: { className?: string }) {
+  const { state, networkEmpty } = useSlotProvider("download_result_page", "download_result");
+  if (state.status === "pending" || state.provider === null) return null;
+  if (state.provider === "frenzsave") {
+    return (
+      <div data-ad-slot="download_result_page" data-ad-provider="frenzsave" className={className}>
+        <SelfAdCard ads={state.ads} rules={state.rules} placement="download_result_banner" page="download_result" />
+      </div>
+    );
+  }
+  return <NetworkResultAd className={className} onEmpty={networkEmpty} />;
+}
+
+function NetworkResultAd({ className, onEmpty }: { className?: string; onEmpty?: () => void }) {
   const [ad, setAd] = useState<AdSlotData | null | undefined>(undefined);
   /*
     The countdown is retained even though nothing renders it any more: operators
@@ -48,6 +74,11 @@ export function ResultAd({ className }: { className?: string }) {
      empty. Only `true` earns the frame. */
   const [filled, setFilled] = useState<boolean | undefined>(undefined);
   const started = useRef(false);
+
+  // the zone answered empty — the slot passes to the next provider in order
+  useEffect(() => {
+    if (ad === null) onEmpty?.();
+  }, [ad, onEmpty]);
 
   useEffect(() => {
     let alive = true;

@@ -10,6 +10,7 @@ import {
 } from "@/lib/monetization/hilltop-config";
 
 import { isPlayerOpen } from "@/features/downloads/player-store";
+import { momentClaimed } from "@/lib/ads-platform/moment-events";
 
 import { FullscreenInterstitial } from "./fullscreen-interstitial";
 import { useShowAds } from "./use-show-ads";
@@ -130,6 +131,8 @@ export function IdleInterstitial() {
       // interstitial "shouldn't [show] while video is playing"). The review player
       // can be open on marketing surfaces too (the landing download history).
       if (isPlayerOpen()) return false;
+      // a paid interstitial took this return (Ad Platform Part 5) — one ad per moment
+      if (momentClaimed("return")) return false;
       if (Date.now() - mountedAt.current < MIN_GAP_MS) return false;
       return Date.now() - lastShown() >= COOLDOWN_MS;
     };
@@ -165,7 +168,8 @@ export function IdleInterstitial() {
       // Back in view.
       const away = hiddenAt.current ? Date.now() - hiddenAt.current : 0;
       hiddenAt.current = null;
-      if (away >= AWAY_MS) show();
+      // next tick: the paid layer hears the same visibilitychange and claims first
+      if (away >= AWAY_MS) window.setTimeout(show, 0);
       else arm(); // short flick away — just restart the idle timer
     };
 

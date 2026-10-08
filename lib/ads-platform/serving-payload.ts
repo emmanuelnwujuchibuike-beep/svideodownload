@@ -28,9 +28,15 @@ export interface ServingPayload {
   /** the CDN bucket this answer belongs to; the browser refetches only when it changes */
   b: number;
   placements: Record<string, PayloadPlacement>;
+  /**
+   * Part 5: the admin's provider order per canonical slot (lib/ads-platform/
+   * slot-registry.ts), from the `ad_slot_provider_order` setting. Absent =
+   * every slot's registry default.
+   */
+  order?: Record<string, string[]>;
 }
 
-export function buildServingPayload(snapshot: ServingSnapshot, bucket: number, now: number): ServingPayload {
+export function buildServingPayload(snapshot: ServingSnapshot, bucket: number, now: number, order?: Record<string, string[]> | null): ServingPayload {
   const enabled = !!snapshot.settings?.ads_enabled;
   const placements: Record<string, PayloadPlacement> = {};
   if (enabled) {
@@ -41,7 +47,7 @@ export function buildServingPayload(snapshot: ServingSnapshot, bucket: number, n
       placements[p.code] = { format: p.format_code, pages: p.page_scope, rules: formatRules(format, snapshot.settings!.default_slot_count), ads };
     }
   }
-  return { v: 1, enabled, b: bucket, placements };
+  return order ? { v: 1, enabled, b: bucket, placements, order } : { v: 1, enabled, b: bucket, placements };
 }
 
 /** Malformed ⇒ null ⇒ the browser serves nothing (an ad surface fails EMPTY, never broken). */

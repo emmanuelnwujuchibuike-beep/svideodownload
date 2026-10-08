@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
+import { SelfAdsGate } from "@/features/ads-platform/serve/self-ads-gate";
 import { MediaProtection } from "@/features/media/media-protection";
 import { VastDownloadCompleteTrigger } from "@/features/monetization/vast-interstitial/download-complete-trigger";
 import { ReferralBannerTrigger } from "@/features/rewards/referral-banner-trigger";
@@ -146,6 +147,11 @@ export function DeferredShell() {
         dynamic import that only runs once a download actually completes.
       */}
       <VastDownloadCompleteTrigger />
+      {/*
+        Paid campaigns (Ad Platform Part 5): the full-screen moments. A few hundred bytes until the shared inventory
+        says a campaign is live; the layer itself is a dynamic import.
+      */}
+      <SelfAdsGate />
       {/*
         The referral banner after a download, from the 3rd on (owner,
         2026-10-07) — guests included, every kind of download. Same weight

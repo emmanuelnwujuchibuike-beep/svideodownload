@@ -608,6 +608,7 @@ export function ReelsFeed({
               }
               startSlideIndex={tab === "for_you" && startId && !forYouSeeded.current ? startSlideIndex : undefined}
               variant="page"
+              adPage={tab === "ai" ? "ai_reels" : "reels"}
               onEndReached={loadMore}
               onClose={close}
               autoOpenCommentsId={tab === "for_you" ? autoOpenCommentsId : null}

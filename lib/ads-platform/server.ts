@@ -22,6 +22,18 @@ type Rpc = { ok: boolean; reason?: string; [k: string]: unknown };
 
 /* ─────────────────────────────── serving ─────────────────────────────── */
 
+/** settings key: { [slotId]: ("frenzsave" | "network")[] } — who may occupy each physical slot, in order. */
+export const AD_SLOT_PROVIDER_ORDER_KEY = "ad_slot_provider_order";
+
+function parseProviderOrder(v: unknown): Record<string, string[]> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, string[]> = {};
+  for (const [slot, list] of Object.entries(v as Record<string, unknown>)) {
+    if (Array.isArray(list)) out[slot] = list.filter((p): p is string => p === "frenzsave" || p === "network");
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /**
  * Build the serving payload. Runs on a CDN miss only — at most once per
  * 5-minute bucket per edge region, however many visitors there are.
@@ -33,9 +45,13 @@ type Rpc = { ok: boolean; reason?: string; [k: string]: unknown };
 export async function loadServingPayload(db: Db, now: number = Date.now()): Promise<ServingPayload> {
   const sync = await db.rpc("ad_campaigns_sync_lifecycle");
   if (sync.error) console.warn("[ads-platform] lifecycle sync failed", { error: sync.error.message });
-  const { data, error } = await db.rpc("ad_serving_snapshot");
+  const [{ data, error }, orderRow] = await Promise.all([
+    db.rpc("ad_serving_snapshot"),
+    // Part 5: the admin's provider order per physical slot — optional; a read error serves the defaults
+    db.from("settings").select("value").eq("key", AD_SLOT_PROVIDER_ORDER_KEY).maybeSingle(),
+  ]);
   if (error) throw new Error(`ad_serving_snapshot: ${error.message}`);
-  return buildServingPayload(data as ServingSnapshot, cdnBucket(now), now);
+  return buildServingPayload(data as ServingSnapshot, cdnBucket(now), now, parseProviderOrder(orderRow.data?.value));
 }
 
 /**

@@ -9,6 +9,7 @@ import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback
 import { getMedia, mediaKey, saveMedia } from "@/features/downloads/local-media";
 import {
   closePlayer,
+  SAVED_TO_DEVICE_EVENT,
   playerAdDone,
   playerClipEnded,
   playerNext,
@@ -584,6 +585,11 @@ function PlayerInner({ rec, index, total }: { rec: DownloadRecord; index: number
         return;
       }
       if (outcome === "cancelled") return;
+      try {
+        window.dispatchEvent(new Event(SAVED_TO_DEVICE_EVENT));
+      } catch {
+        /* a listener's failure is never the save's */
+      }
       setSavedToDevice(true);
       setTimeout(() => setSavedToDevice(false), 2000);
     } catch {

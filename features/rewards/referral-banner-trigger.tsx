@@ -3,7 +3,9 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 
+import { isPlayerOpen, onPlayerChange, SAVED_TO_DEVICE_EVENT } from "@/features/downloads/player-store";
 import { DOWNLOAD_COMPLETED_EVENT } from "@/lib/downloads/completion-event";
+import { sharedToday } from "@/features/rewards/referral-shared-today";
 
 const ReferralBanner = dynamic(() => import("@/features/rewards/referral-banner").then((m) => m.ReferralBanner), { ssr: false });
 
@@ -28,6 +30,17 @@ const ReferralBanner = dynamic(() => import("@/features/rewards/referral-banner"
  *  · a batch fires once per file — one banner per burst (a 20 s window);
  *  · never on top of the download-complete video ad: it waits until the ad
  *    has closed (up to 60 s), then shows.
+ *
+ * 2026-10-08 (owner: "it should show after Download completes and not save to
+ * device, and when a user have copy the link once it should not show again to
+ * that device or user for that day"):
+ *  · on iPhone the manager's "completed" is the FETCH — the file is not the
+ *    member's until they tap Save to device in the viewer, which is exactly
+ *    when this used to pop up over that button. While the viewer is open it now
+ *    waits for the real delivery: Save to device succeeding, or the viewer
+ *    closing. Event-driven — no timer runs while it waits;
+ *  · once the link was shared or copied today, nothing shows until tomorrow
+ *    (referral-shared-today.ts).
  */
 const COUNT_KEY = "frenz:downloads-completed";
 const AFTER = 3;
@@ -48,7 +61,7 @@ export function ReferralBannerTrigger() {
       } catch {
         return; // no storage (private mode, sandboxed embed) — no counting, no banner
       }
-      if (count < AFTER || Date.now() - lastShown < BURST_MS) return;
+      if (count < AFTER || Date.now() - lastShown < BURST_MS || sharedToday()) return;
       lastShown = Date.now();
       const started = Date.now();
       // give the ad a moment to open first, then wait for it to close
@@ -57,14 +70,37 @@ export function ReferralBannerTrigger() {
           waitTimer = window.setTimeout(tryShow, 1000);
           return;
         }
+        if (isPlayerOpen()) {
+          waitForDelivery();
+          return;
+        }
         setShow(true);
       };
       waitTimer = window.setTimeout(tryShow, 1500);
+    };
+    // the viewer is open: show once the file is really delivered (saved) or the viewer closes
+    let stopWaiting: (() => void) | null = null;
+    const waitForDelivery = () => {
+      if (stopWaiting) return;
+      const done = () => {
+        stopWaiting?.();
+        stopWaiting = null;
+        if (!sharedToday()) setShow(true);
+      };
+      const offPlayer = onPlayerChange(() => {
+        if (!isPlayerOpen()) done();
+      });
+      window.addEventListener(SAVED_TO_DEVICE_EVENT, done);
+      stopWaiting = () => {
+        offPlayer();
+        window.removeEventListener(SAVED_TO_DEVICE_EVENT, done);
+      };
     };
     window.addEventListener(DOWNLOAD_COMPLETED_EVENT, onCompleted);
     return () => {
       window.removeEventListener(DOWNLOAD_COMPLETED_EVENT, onCompleted);
       if (waitTimer !== null) window.clearTimeout(waitTimer);
+      stopWaiting?.();
     };
   }, []);
   return show ? <ReferralBanner onClose={close} /> : null;

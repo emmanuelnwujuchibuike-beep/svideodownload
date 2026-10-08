@@ -11,6 +11,8 @@ import { haptic } from "@/lib/motion/haptics";
 import { attributionLink, shareOrCopy } from "@/lib/referrals/share-client";
 import { referralSentence, type ReferralAmounts } from "@/lib/rewards/referral-copy";
 
+import { markSharedToday } from "./referral-shared-today";
+
 /**
  * The referral banner shown after a download (see referral-banner-trigger.tsx).
  *
@@ -109,7 +111,10 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
     if (out === "copied") toast("Your invite link is copied.", "success");
     else if (out === "failed") toast("Couldn't share the link.", "error");
     setBusy(false);
-    if (out === "shared" || out === "copied") onClose();
+    if (out === "shared" || out === "copied") {
+      markSharedToday();
+      onClose();
+    }
   }
 
   const n = rules.referralCredits;
@@ -122,7 +127,10 @@ export function ReferralBanner({ onClose }: { onClose: () => void }) {
           onClick={canSkip ? onClose : undefined}
           disabled={!canSkip}
           aria-label={canSkip ? "Skip" : `Skip in ${left} seconds`}
-          className="absolute right-3 top-3 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-white/70 px-2.5 text-[12px] font-semibold text-slate-600 ring-1 ring-inset ring-black/[0.06] transition disabled:cursor-default enabled:hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          // 🔴 z-10 (owner, 2026-10-08: "this card X doesn't work even after skip"): the content block
+          // below is `relative` and comes LATER in the DOM, so without a layer it painted over this
+          // button and swallowed the tap — Skip looked enabled and did nothing.
+          className="absolute right-3 top-3 z-10 inline-flex h-9 min-w-9 items-center justify-center gap-1 rounded-full bg-white/70 px-2.5 text-[12px] font-semibold text-slate-600 ring-1 ring-inset ring-black/[0.06] transition disabled:cursor-default enabled:hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
           {canSkip ? (
             <>

@@ -46,6 +46,15 @@ export function isPlayerOpen(): boolean {
   return current !== null;
 }
 
+/** Subscribe to the viewer opening or closing (the referral banner waits for it to close). */
+export function onPlayerChange(cb: () => void): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+/** Fired when the viewer's Save to device actually delivered the file (iOS's real "download complete"). */
+export const SAVED_TO_DEVICE_EVENT = "frenz:download:saved-to-device";
+
 /** Open a single item with no queue context (e.g. from the Downloads list). */
 export function openPlayer(rec: DownloadRecord) {
   current = { items: [rec], index: 0 };

@@ -252,12 +252,19 @@ export interface ElevenLabsVoiceSample {
   mime: string;
 }
 
-export async function elevenLabsAddVoice(req: { name: string; description: string; samples: readonly ElevenLabsVoiceSample[]; labels?: Record<string, string> }): Promise<ElevenLabsClonedVoice> {
+export async function elevenLabsAddVoice(req: { name: string; description: string; samples: readonly ElevenLabsVoiceSample[]; labels?: Record<string, string>; removeBackgroundNoise?: boolean }): Promise<ElevenLabsClonedVoice> {
   if (req.samples.length === 0) throw new ElevenLabsError("input", null, "add-voice: no samples");
   const form = new FormData();
   form.set("name", req.name.slice(0, 100));
   if (req.description.trim()) form.set("description", req.description.trim().slice(0, 500));
   if (req.labels && Object.keys(req.labels).length > 0) form.set("labels", JSON.stringify(req.labels));
+  /*
+    ElevenLabs' own audio isolation, applied to the samples before cloning.
+    Only when a sample came from a VIDEO (2026-10-08): its docs warn it can
+    lower quality on a recording that is already clean, so a studio-quiet
+    voice note is sent as it is.
+  */
+  if (req.removeBackgroundNoise) form.set("remove_background_noise", "true");
   // one `files` part per sample — the API reads them as one voice, not as several
   for (const s of req.samples) form.append("files", new Blob([new Uint8Array(s.bytes)], { type: s.mime }), s.filename);
   const res = await call("/voices/add", { method: "POST", headers: { Accept: "application/json" }, body: form }, "add-voice");

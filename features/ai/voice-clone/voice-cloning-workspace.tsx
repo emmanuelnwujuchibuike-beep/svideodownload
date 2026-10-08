@@ -166,7 +166,8 @@ export function VoiceCloningWorkspace({
                     ref={picker}
                     type="file"
                     multiple
-                    accept={[...cfg.samples.acceptMimeTypes, ...cfg.samples.acceptExtensions].join(",")}
+                    // video/* too (owner, 2026-10-08): the gallery offers videos, and their sound is taken out on this device
+                    accept={[...cfg.samples.acceptMimeTypes, ...cfg.samples.acceptExtensions, "video/*"].join(",")}
                     onChange={(e) => {
                       const files = e.target.files;
                       if (files?.length) void ws.addFiles(files);
@@ -176,18 +177,22 @@ export function VoiceCloningWorkspace({
                   />
                   <button
                     type="button"
+                    disabled={ws.extracting}
+                    aria-busy={ws.extracting}
                     onClick={() => {
                       haptic("selection");
                       picker.current?.click();
                     }}
                     className="mt-3 flex min-h-[64px] w-full items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-indigo-300/70 bg-indigo-50/30 px-4 text-[13.5px] font-semibold text-indigo-700 transition hover:bg-indigo-50/70 active:scale-[0.99]"
                   >
-                    <Upload className="h-4 w-4" aria-hidden />
-                    {ws.samples.length === 0 ? "Choose your recordings" : "Add another"}
+                    {ws.extracting ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <Upload className="h-4 w-4" aria-hidden />}
+                    {ws.extracting ? "Taking the voice from your video…" : ws.samples.length === 0 ? "Choose recordings or videos" : "Add another"}
                   </button>
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {cfg.samples.formatLabels.join(", ")} · up to {cfg.samples.maximum} files · {Math.round(cfg.samples.maximumBytes / (1024 * 1024))} MB each · audio only, never video
+                    {cfg.samples.formatLabels.join(", ")} or a video from your gallery · up to {cfg.samples.maximum} files · {Math.round(cfg.samples.maximumBytes / (1024 * 1024))} MB each
                   </p>
+                  {/* the sound is taken out on this device — the video itself is never uploaded */}
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">From a video we use only the sound, and clean up background noise.</p>
                   {ws.pickError ? <p className="mt-1.5 text-[11.5px] font-semibold text-amber-600">{ws.pickError}</p> : null}
                 </>
               ) : null}
@@ -356,7 +361,7 @@ export function VoiceCloningWorkspace({
 
             <button
               type="button"
-              disabled={!ws.ready || working || slotsFull}
+              disabled={!ws.ready || working || slotsFull || ws.extracting}
               onClick={() => void ws.create()}
               className={aiButtonClass({ size: "lg", block: true, className: "min-h-[3.5rem]" })}
             >

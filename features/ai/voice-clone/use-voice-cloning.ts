@@ -14,6 +14,7 @@ import {
   type VcConfigAnswer,
 } from "@/lib/ai/voice-clone/client";
 import { EMPTY_VOICE_CLONE_LABELS, type VoiceCloneLabels } from "@/lib/ai/voice-clone/labels";
+import { extractAudioAsWav, looksLikeVideo, NoUsableAudioError } from "@/lib/media/extract-audio";
 import { track } from "@/lib/analytics/client";
 
 /**
@@ -49,6 +50,8 @@ export type VcPhase =
 export interface PickedSample {
   file: File;
   durationMs: number | null;
+  /** The sound was taken out of a video (gallery) — the provider is asked to remove background noise. */
+  fromVideo?: boolean;
   /** Local only, so a member can see which one is which before it is sent. */
   key: string;
 }
@@ -73,6 +76,8 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
   const [samples, setSamples] = useState<PickedSample[]>([]);
   /** What the picker refused, said where the member is looking rather than after an upload. */
   const [pickError, setPickError] = useState<string | null>(null);
+  /** How many videos are having their sound taken out right now. */
+  const [extracting, setExtracting] = useState(0);
   const [agreed, setAgreed] = useState(false);
   const [consentName, setConsentName] = useState("");
   const [funding, setFunding] = useState<"credits" | "wallet" | null>(null);
@@ -97,19 +102,43 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
       const max = limits?.maximum ?? 5;
       const all = Array.from(files);
       /*
-        🔴 A LAST GUARD IN THE BROWSER (2026-09-27). `accept` is a HINT — every
-        OS picker has a "show all files" escape, and some ignore it outright. A
-        video chosen here would travel all the way to the server to be refused,
-        after the member had already watched it upload. The server refuses it
-        too (`voiceCloneFormatAllowed`); this is the half that is kind about it.
+        🔴 VIDEOS ARE VOICES TOO (owner, 2026-10-08: "uploading a file is
+        showing those are not files even when they are" … "it should be able to
+        clone from a video from gallery, it should be clean").
+
+        A phone's gallery offers photos and videos only, so a voice recorded on
+        camera arrived as video/mp4 or video/quicktime — and so did some apps'
+        audio-only .m4a — and this guard refused all of it as "not audio
+        files". Now a video's SOUND is taken out here, in the browser
+        (lib/media/extract-audio.ts → a small mono WAV), and the sample is
+        marked so the provider removes background noise. Images are still
+        refused: there is no voice in a photo.
       */
-      const rejected = all.filter((f) => f.type.startsWith("video/") || f.type.startsWith("image/"));
-      if (rejected.length > 0) setPickError(rejected.length === all.length ? "Those are not audio files. Choose a recording — MP3, WAV, M4A and the rest." : "Some of those were not audio files, so they were left out.");
-      else setPickError(null);
-      const incoming = all.filter((f) => !rejected.includes(f)).slice(0, Math.max(0, max - samples.length));
-      const measured = await Promise.all(
-        incoming.map(async (file) => ({ file, durationMs: await measureAudioDuration(file), key: `${file.name}:${file.size}:${file.lastModified}` })),
-      );
+      const images = all.filter((f) => f.type.startsWith("image/"));
+      const usable = all.filter((f) => !images.includes(f)).slice(0, Math.max(0, max - samples.length));
+      const videos = usable.filter((f) => looksLikeVideo(f));
+      const notes: string[] = [];
+      if (images.length > 0) notes.push(images.length === all.length ? "Photos have no voice in them. Choose a recording or a video." : "Photos were left out — they have no voice in them.");
+
+      setExtracting((n) => n + videos.length);
+      const measured = (
+        await Promise.all(
+          usable.map(async (file): Promise<PickedSample | null> => {
+            const key = `${file.name}:${file.size}:${file.lastModified}`;
+            if (!looksLikeVideo(file)) return { file, durationMs: await measureAudioDuration(file), key };
+            try {
+              const out = await extractAudioAsWav(file, { maxSeconds: limits?.maximumSecondsEach ?? 300 });
+              return { file: out.file, durationMs: out.durationMs, key, fromVideo: true };
+            } catch (e) {
+              notes.push(e instanceof NoUsableAudioError && e.message === "too large" ? `"${file.name}" is too long to use here — trim it to a few minutes.` : `We couldn't hear a voice in "${file.name}". Try another video or a recording.`);
+              return null;
+            } finally {
+              setExtracting((n) => n - 1);
+            }
+          }),
+        )
+      ).filter((m): m is PickedSample => m !== null);
+      setPickError(notes.length ? notes.join(" ") : null);
       // the same file twice is a member clicking twice, not two samples
       setSamples((prev) => [...prev, ...measured.filter((m) => !prev.some((p) => p.key === m.key))]);
     },
@@ -129,7 +158,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
       clientRequestId: requestId.current,
       name: name.trim(),
       ...(description.trim() ? { description: description.trim() } : {}),
-      samples: samples.map((s) => ({ name: s.file.name, mimeType: s.file.type || "audio/mpeg", size: s.file.size, durationMs: s.durationMs })),
+      samples: samples.map((s) => ({ name: s.file.name, mimeType: s.file.type || "audio/mpeg", size: s.file.size, durationMs: s.durationMs, ...(s.fromVideo ? { fromVideo: true } : {}) })),
       labels,
     });
     if (!draft.ok) {
@@ -196,6 +225,7 @@ export function useVoiceCloning(opts: { initialJobId?: string | null }) {
     addFiles,
     removeSample,
     pickError,
+    extracting: extracting > 0,
     totalBytes,
     measuredSeconds,
     measurable,

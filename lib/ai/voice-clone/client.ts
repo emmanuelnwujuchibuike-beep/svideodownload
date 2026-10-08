@@ -79,7 +79,7 @@ export function createVoiceCloneDraft(input: {
   clientRequestId: string;
   name: string;
   description?: string;
-  samples: { name: string; mimeType: string; size: number; durationMs?: number | null }[];
+  samples: { name: string; mimeType: string; size: number; durationMs?: number | null; fromVideo?: boolean }[];
   labels?: { language?: string | null; accent?: string | null; gender?: string | null; age?: string | null };
 }): Promise<VcResult<{ job: AiJobView; created: boolean; uploads: VcUploadTicket[] }>> {
   return request("/api/ai/voice-clones/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) });

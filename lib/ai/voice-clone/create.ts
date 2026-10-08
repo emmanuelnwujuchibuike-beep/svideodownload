@@ -210,7 +210,7 @@ export async function createVoiceCloneJob(ctx: VoiceCloneCreateContext, body: Cr
         description,
         // checked against the offered lists; anything else is dropped rather than sent to the vendor
         labels: normalizeVoiceCloneLabels(body.labels),
-        samples: body.samples.map((s, i) => ({ path: tickets[i]!.path, mime: s.mimeType.toLowerCase(), size: s.size, durationMs: s.durationMs ?? null, name: s.name.slice(0, 200) })),
+        samples: body.samples.map((s, i) => ({ path: tickets[i]!.path, mime: s.mimeType.toLowerCase(), size: s.size, durationMs: s.durationMs ?? null, name: s.name.slice(0, 200), ...(s.fromVideo ? { fromVideo: true } : {}) })),
         quote: null,
         billing: null,
         free_clones: null,

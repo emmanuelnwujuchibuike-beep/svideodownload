@@ -37,6 +37,7 @@ export const voiceCloneSampleSchema = z
     size: z.number().int().nonnegative(),
     durationMs: z.number().int().nonnegative().nullable(),
     name: z.string().min(1).max(200),
+    fromVideo: z.boolean().optional(),
   })
   .passthrough();
 

@@ -25,6 +25,8 @@ export const voiceCloneSampleFacts = z
     mimeType: mime,
     size: z.number().int().positive().max(50 * 1024 * 1024),
     durationMs: z.number().int().positive().max(60 * 60 * 1000).nullable().optional(),
+    /** The browser took this sound out of a video (2026-10-08) — ask the provider to remove background noise. */
+    fromVideo: z.boolean().optional(),
   })
   .strict();
 

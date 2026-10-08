@@ -120,6 +120,8 @@ export async function runVoiceClone(jobId: string): Promise<VoiceCloneRunResult>
       name: meta.name,
       description: meta.description,
       samples,
+      // a voice taken from a video (gallery) carries its room, music and street — the provider's isolation cleans it (owner, 2026-10-08: "it should be clean")
+      removeBackgroundNoise: meta.samples.some((s) => s.fromVideo === true),
       labels: providerLabels(labels, ownerId.slice(0, 8)),
     });
 

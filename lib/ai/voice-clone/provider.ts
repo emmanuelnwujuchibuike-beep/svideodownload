@@ -41,7 +41,7 @@ export interface VoiceCloneProvider {
   readonly model: string;
   isConfigured(): boolean;
   /** Make the voice. Throws `AiJobError` with a code the caller can act on. */
-  clone(req: { name: string; description: string; samples: readonly VoiceCloneSample[]; labels?: Record<string, string> }): Promise<VoiceCloneResult>;
+  clone(req: { name: string; description: string; samples: readonly VoiceCloneSample[]; labels?: Record<string, string>; removeBackgroundNoise?: boolean }): Promise<VoiceCloneResult>;
   /** Best-effort: keep the provider's copy of the name in step with ours. */
   rename(req: { providerVoiceId: string; name: string; description: string }): Promise<void>;
   /** Free the slot. `alreadyGone` is a success. */

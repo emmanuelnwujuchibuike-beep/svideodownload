@@ -19,6 +19,17 @@ import { useEffect } from "react";
  * itself queued on a 3s debounce, so nothing about the timing changes — but the
  * ~1 kB collector no longer rides the critical path on a first visit from search.
  */
+/**
+ * The discovery doors (Landing + Download brief §34, owner 2026-10-08). A link
+ * carrying `data-track="<event>"` reports one event when tapped — ONE delegated,
+ * passive listener for the whole app, instead of code on every link. It only
+ * reads the tap: it never prevents or delays the navigation. Only these names
+ * pass, so a stray attribute cannot invent an event type.
+ */
+export const DISCOVERY_EVENTS = ["ai_clicked", "reels_clicked", "ai_reels_clicked", "wallpapers_clicked", "advertise_clicked"] as const;
+type DiscoveryEvent = (typeof DISCOVERY_EVENTS)[number];
+const isDiscoveryEvent = (v: string | undefined): v is DiscoveryEvent => !!v && (DISCOVERY_EVENTS as readonly string[]).includes(v);
+
 export function AnalyticsTracker() {
   const pathname = usePathname();
   useEffect(() => {
@@ -30,5 +41,19 @@ export function AnalyticsTracker() {
       cancelled = true;
     };
   }, [pathname]);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as Element | null)?.closest?.("[data-track]") as HTMLElement | null;
+      const type = el?.dataset.track;
+      if (!isDiscoveryEvent(type)) return;
+      const from = window.location.pathname;
+      const href = el?.getAttribute("href") ?? null;
+      // batched by the collector like every other event; the tap itself is untouched
+      void import("@/lib/analytics/client").then((m) => m.track(type, { from, href }));
+    };
+    document.addEventListener("click", onClick, { capture: true, passive: true });
+    return () => document.removeEventListener("click", onClick, { capture: true });
+  }, []);
   return null;
 }

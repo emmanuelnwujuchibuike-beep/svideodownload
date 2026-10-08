@@ -56,6 +56,11 @@ import { loadMyApplications, type MyApplication } from "./my-applications-client
 
 const STORE = "frenz.advertise.form.v1";
 
+/** One analytics event, batched by the collector (loaded on demand, never on first paint). */
+function trackAd(type: "advertise_application_started" | "advertise_application_completed", props: Record<string, unknown>) {
+  void import("@/lib/analytics/client").then((m) => m.track(type, props)).catch(() => {});
+}
+
 /**
  * The upload step (file reading, posters, the signed PUT with progress) is only
  * needed at step 4, so it is its own chunk (owner brief §64) — fetched while the
@@ -267,6 +272,8 @@ export function AdvertiseWizard() {
       if (r.code === "not_found" || r.code === "not_editable") update({ campaignId: null, savedKey: null, creative: null });
       return null;
     }
+    // §34: the application began — the first draft exists on the server
+    if (!form.campaignId) trackAd("advertise_application_started", { format: form.formatCode });
     // a format change on the server removes the old creative - mirror it
     const formatChanged = form.campaignId && form.creative && form.savedKey && JSON.parse(form.savedKey)[0] !== form.formatCode;
     setForm((f) => ({ ...f, campaignId: r.data.campaignId, savedKey: key, creative: formatChanged ? null : f.creative }));
@@ -368,6 +375,8 @@ export function AdvertiseWizard() {
       return null;
     }
     const q = { total: r.data.total, currency: r.data.currency, quoteId: r.data.quoteId, expiresAt: r.data.expiresAt };
+    // §34: the application is complete — submitted, price locked, ready to pay
+    trackAd("advertise_application_completed", { format: form.formatCode, placements: form.placementCodes.length });
     setLocked(q);
     return q;
   };

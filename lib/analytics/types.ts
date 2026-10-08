@@ -78,6 +78,21 @@ export type AnalyticsEventType =
    */
   | "reward_completed"
   /**
+   * Ecosystem discovery (Landing + Download brief §34, owner 2026-10-08): a tap
+   * on a door from the landing or the download page — tagged with `data-track`
+   * on the link and sent by one delegated listener (features/analytics/
+   * discovery-tracker.tsx), batched like every other event. `landing_view` is
+   * not added: `page_view` on "/" already is that event.
+   */
+  | "ai_clicked"
+  | "reels_clicked"
+  | "ai_reels_clicked"
+  | "wallpapers_clicked"
+  | "advertise_clicked"
+  /** The ad application: the first draft saved, and the application submitted at a locked price. */
+  | "advertise_application_started"
+  | "advertise_application_completed"
+  /**
    * HD/batch reward-download lifecycle (owner, 2026-08-16 spec, Part 20) — the
    * production reward-session flow in lib/monetization/reward-sessions.ts.
    * Distinct from `reward_completed` above (the older, single wallpaper/

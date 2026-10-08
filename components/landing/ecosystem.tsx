@@ -90,6 +90,7 @@ export function FrenzAiSection() {
                 <Link
                   href={href}
                   prefetch={false}
+                  data-track="ai_clicked"
                   className="inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-full bg-secondary px-3.5 text-[13px] font-semibold text-foreground transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-500/15"
                 >
                   <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-300" aria-hidden />
@@ -99,11 +100,11 @@ export function FrenzAiSection() {
             ))}
           </ul>
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
-            <AiButtonLink href="/ai" prefetch={false} size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
+            <AiButtonLink href="/ai" prefetch={false} data-track="ai_clicked" size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
               Explore Frenz AI
             </AiButtonLink>
             {/* §8 AI Reels: where the made-with-AI work is watched — the secondary action, not another section */}
-            <AiButtonLink href="/reels?tab=ai" prefetch={false} variant="secondary" size="lg" icon={<Wand2 className="h-4 w-4" />}>
+            <AiButtonLink href="/reels?tab=ai" prefetch={false} data-track="ai_reels_clicked" variant="secondary" size="lg" icon={<Wand2 className="h-4 w-4" />}>
               Watch AI Reels
             </AiButtonLink>
           </div>
@@ -115,10 +116,10 @@ export function FrenzAiSection() {
 
 /* ─────────────────────────────── Discover ─────────────────────────────── */
 
-const DISCOVER: { href: string; title: string; body: string; icon: LucideIcon }[] = [
-  { href: "/reels", title: "Reels", body: "Short videos, endlessly — swipe, react and share.", icon: Clapperboard },
+const DISCOVER: { href: string; title: string; body: string; icon: LucideIcon; track?: string }[] = [
+  { href: "/reels", title: "Reels", body: "Short videos, endlessly — swipe, react and share.", icon: Clapperboard, track: "reels_clicked" },
   { href: "/feed", title: "Feed", body: "Posts, photos and clips from the people you follow.", icon: Users },
-  { href: "/wallpapers", title: "Wallpapers", body: "Free HD wallpapers for your phone and desktop.", icon: ImageIcon },
+  { href: "/wallpapers", title: "Wallpapers", body: "Free HD wallpapers for your phone and desktop.", icon: ImageIcon, track: "wallpapers_clicked" },
 ];
 
 /**
@@ -131,9 +132,9 @@ export function DiscoverSection() {
     <section id="products" aria-labelledby="landing-discover" className="container max-w-5xl scroll-mt-24 px-3 py-6 sm:py-10">
       <SectionHead id="landing-discover" eyebrow="Discover" title="More to watch," highlight="share and explore." />
       <ul className="mt-5 grid gap-3 sm:grid-cols-3">
-        {DISCOVER.map(({ href, title, body, icon: Icon }) => (
+        {DISCOVER.map(({ href, title, body, icon: Icon, track }) => (
           <li key={href}>
-            <Link href={href} prefetch={false} className={cn(card, "flex h-full items-start gap-3.5 p-4 transition-transform active:scale-[0.99]")}>
+            <Link href={href} prefetch={false} data-track={track} className={cn(card, "flex h-full items-start gap-3.5 p-4 transition-transform active:scale-[0.99]")}>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-50 to-sky-50 text-indigo-600 ring-1 ring-inset ring-indigo-100 dark:from-indigo-500/15 dark:to-sky-500/10 dark:text-indigo-300 dark:ring-indigo-400/20" aria-hidden>
                 <Icon className="h-5 w-5" />
               </span>
@@ -189,7 +190,7 @@ export function PromoteSection({ ads }: { ads: PublicAdSummary }) {
           </p>
         ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <AiButtonLink href="/advertise" prefetch={false} iconEnd={<ArrowRight className="h-4 w-4" />}>
+          <AiButtonLink href="/advertise" prefetch={false} data-track="advertise_clicked" iconEnd={<ArrowRight className="h-4 w-4" />}>
             Advertise on Frenzsave
           </AiButtonLink>
           <Link href="/advertise/rules" prefetch={false} className="inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">

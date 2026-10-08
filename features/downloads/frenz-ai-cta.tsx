@@ -49,6 +49,7 @@ export function FrenzAICta({
   return (
     <Link
       href="/ai"
+      data-track="ai_clicked"
       /*
         ── 🔴 PREFETCHED, BECAUSE THE OWNER FELT THE COLD FETCH ───────────────
 

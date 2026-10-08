@@ -235,6 +235,7 @@ export function WallpaperCta({
   return (
     <Link
       href="/wallpapers"
+      data-track="wallpapers_clicked"
       prefetch
       /*
         ── The colour is the element's OWN BACKGROUND ─────────────────────────
@@ -340,6 +341,7 @@ function WallpaperCard({
   return (
     <Link
       href="/wallpapers"
+      data-track="wallpapers_clicked"
       prefetch
       className={cn(
         "frenz-wp group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",

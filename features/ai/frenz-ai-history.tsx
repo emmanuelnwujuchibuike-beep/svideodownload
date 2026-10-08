@@ -126,7 +126,19 @@ export function FrenzAIHistory({
   groupByDay = false,
   resultHref = (id) => `/studio/ai/character-replace/result/${encodeURIComponent(id)}`,
   batchHref = (id) => `/studio/ai/character-replace/create?batch=${encodeURIComponent(id)}`,
+  aiBase = "/studio/ai",
 }: {
+  /**
+   * 🔴 WHICH AI DOOR THE TOOL LINKS STAY ON (owner, 2026-10-08: "when I click on
+   * an AI history, it shows something went wrong" — a Lip Sync item). Lip Sync,
+   * Voice Cloning and Text to Audio used to be derived by string-replacing the
+   * Character Replace result URL, whose default is the STUDIO door — so Frenz AI
+   * → History (/ai/history) sent a member out of /ai into /studio/ai/…/result,
+   * a different shell with its own server-side checks. Each tool's link is now
+   * built from the page's own base. Character Replace keeps `resultHref`: it is
+   * retired and only has a studio result route.
+   */
+  aiBase?: "/ai" | "/studio/ai";
   className?: string;
   /**
    * Part 7 §19: where a Character Replace tile goes — the result route, which
@@ -258,17 +270,17 @@ export function FrenzAIHistory({
     }
     if (job.feature === "ai_lip_sync") {
       // Lip Sync Pro (2026-09-21): its own result route, the same rules
-      router.push(resultHref(job.id).replace("/character-replace/result/", "/lip-sync/result/"));
+      router.push(`${aiBase}/lip-sync/result/${encodeURIComponent(job.id)}`);
       return;
     }
     if (job.feature === "ai_voice_clone") {
       // Voice Cloning (2026-09-27): the workspace shows this voice and the library beneath it
-      router.push(resultHref(job.id).replace(/\/character-replace\/result\/.*$/, `/voice-cloning?job=${encodeURIComponent(job.id)}`));
+      router.push(`${aiBase}/voice-cloning?job=${encodeURIComponent(job.id)}`);
       return;
     }
     if (job.feature === "ai_text_to_audio") {
       // Text to Audio (2026-09-21): the workspace shows this generation (its player, its library row)
-      router.push(resultHref(job.id).replace(/\/character-replace\/result\/.*$/, `/text-to-audio?job=${encodeURIComponent(job.id)}`));
+      router.push(`${aiBase}/text-to-audio?job=${encodeURIComponent(job.id)}`);
       return;
     }
     /*

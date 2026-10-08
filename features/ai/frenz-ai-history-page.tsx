@@ -66,7 +66,7 @@ export function FrenzAIHistoryPage({ base = "/ai", slides = [] }: { base?: "/ai"
           section renders its heading when it is a strip on another page and
           stays quiet when it IS the page — one component, two contexts.
         */}
-        <FrenzAIHistory className="mt-4" showHeading={false} groupByDay />
+        <FrenzAIHistory className="mt-4" showHeading={false} groupByDay aiBase={base} />
 
         <div className="mt-8">
           <Link href={base} prefetch={false} className={aiButtonClass({ variant: "secondary", size: "sm", className: "ai-btn--round" })}>

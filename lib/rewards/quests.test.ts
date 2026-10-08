@@ -124,7 +124,9 @@ describe("the quest page never reloads for nothing", () => {
   it("an Earn button sits on every AI page's credit strip", () => {
     const strip = code("features/ai/design/ai-credit-strip.tsx");
     // a link that goes ONCE — the double tap opened a second quest page (owner, 2026-10-07)
-    expect(strip).toContain('<TapOnceLink href="/quests" aria-label="Earn credits"');
+    // EarnButton (2026-10-08) is the one definition, used by the strip and the landing
+    expect(strip).toMatch(/<TapOnceLink\s+href="\/quests"\s+aria-label="Earn credits"/);
+    expect(strip).toContain("<EarnButton />");
     expect(strip).not.toContain("Trophy");
     const once = code("features/ui/tap-once-link.tsx");
     expect(once).toContain("if (pending.current) {\n          e.preventDefault();");

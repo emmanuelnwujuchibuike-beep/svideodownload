@@ -529,7 +529,18 @@ export function MobileNav({
                 while you are already on /feed. */}
             <NavTab label="Feed" href="/feed" icon={LayoutGrid} activeIcon={LayoutGrid} active={pathname.startsWith("/feed")} attract={!pathname.startsWith("/feed")} onWarm={router.prefetch} />
             <NavTab label="History" href="/history" icon={History} activeIcon={History} active={pathname.startsWith("/history")} onWarm={router.prefetch} />
-            <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
+            {/*
+              Signed-in downloader mode: Messages in Support's place (owner,
+              2026-10-08: "replace the support button … with the message
+              button … only in the signed in downloader mode not in the landing
+              page"). A guest — the landing — keeps Support. Same tab, icon and
+              unread badge as the full-mode Chats tab.
+            */}
+            {handle ? (
+              <NavTab label="Chats" href="/messages" icon={FrenzInboxOutline} activeIcon={FrenzInboxSolid} active={pathname.startsWith("/messages")} badge={unread} onWarm={router.prefetch} />
+            ) : (
+              <NavTab label="Support" href="/support" icon={Headset} activeIcon={Headset} active={pathname.startsWith("/support")} onWarm={router.prefetch} />
+            )}
           </>
         ) : (
           <>

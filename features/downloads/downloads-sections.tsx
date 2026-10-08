@@ -113,7 +113,8 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
                       "Explore.", so the one-line clamp above still holds at 320px. */}
                   <span className="whitespace-nowrap">Create.</span>
                 </h1>
-                {trailing ? <div className="shrink-0">{trailing}</div> : null}
+                {/* inset to the header's right-hand controls above it (owner, 2026-10-08: "shift too far out of the edge") */}
+                {trailing ? <div className="mr-3 shrink-0">{trailing}</div> : null}
               </div>
               <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
                 Save from the platforms you already use, discover what people share, and create with AI — all in{" "}

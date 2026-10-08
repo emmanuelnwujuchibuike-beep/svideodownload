@@ -93,6 +93,46 @@ export interface BachsCheckout {
   url: string;
 }
 
+/**
+ * The exact checkout request, built once and STORED before it is sent (0197:
+ * ai_topup_attempts.provider_request). docs.bachs.io/guides/idempotency: an
+ * uncertain write is recovered by repeating the SAME key with the UNCHANGED
+ * body - a successful response is replayed for 24 hours; a body that differs
+ * by one character is a 409 IDEMPOTENCY_CONFLICT.
+ */
+export function bachsCheckoutRequest(opts: { amountUsdCents: number; email: string; reference: string; metadata: Record<string, string>; successUrl: string; cancelUrl: string; expiresInMinutes?: number }): Record<string, unknown> {
+  return {
+    pricing: { currency: "USD", amount: usdCentsToDecimal(opts.amountUsdCents) },
+    customer: { email: opts.email },
+    reference: opts.reference,
+    metadata: opts.metadata,
+    success_url: opts.successUrl,
+    cancel_url: opts.cancelUrl,
+    expires_in_minutes: opts.expiresInMinutes ?? 60,
+  };
+}
+
+/** Send (or REPLAY, same key + same body) a stored checkout request. */
+export async function postBachsCheckout(body: Record<string, unknown>, idempotencyKey: string): Promise<BachsCheckout> {
+  const out = await bachs<{ checkout_id?: string; checkout_url?: string }>("/v1/checkout-sessions", { method: "POST", idempotencyKey, body });
+  if (!out.checkout_id || !out.checkout_url) throw new Error("bachs: checkout created without an id or a url");
+  return { checkoutId: out.checkout_id, url: out.checkout_url };
+}
+
+/**
+ * Did Bachs REFUSE (a 4xx: nothing was created), or is the outcome unknown
+ * (timeout, network, 5xx, 409 IDEMPOTENCY_IN_PROGRESS)? Only a refusal may be
+ * followed by another provider. docs.bachs.io/guides/idempotency: "A timeout
+ * or 5xx leaves a write's outcome uncertain."
+ */
+export function bachsFailureIsDefinite(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  const m = /→ (\d{3}):/.exec(e.message);
+  if (!m) return false;
+  const status = Number(m[1]);
+  return status >= 400 && status < 500 && status !== 409 && status !== 408 && status !== 429;
+}
+
 /** A hosted checkout for an exact USD amount. The reference is ours (unique), and doubles as the idempotency key. */
 export async function createBachsCheckout(opts: { amountUsdCents: number; email: string; reference: string; metadata: Record<string, string>; successUrl: string; cancelUrl: string }): Promise<BachsCheckout> {
   const out = await bachs<{ checkout_id?: string; checkout_url?: string }>("/v1/checkout-sessions", {

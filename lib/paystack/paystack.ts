@@ -180,6 +180,49 @@ export async function initializeAiTopup(opts: {
 export const AI_TOPUP_PURPOSE = "frenz_ai_topup";
 /** A Character Replace recharge. Its own purpose, so no branch can confuse the two wallets. */
 export const CHARACTER_REPLACE_TOPUP_PURPOSE = "frenz_cr_topup";
+/** 0197: an advertiser paying for a campaign. Its own purpose, so the webhook can never credit a wallet with it. */
+export const AD_CAMPAIGN_PURPOSE = "frenz_ad_campaign";
+
+/**
+ * A hosted checkout for an ad campaign (lib/ads-platform/payment-server.ts).
+ * Amount and currency are the server's quote, converted by the server; the
+ * metadata names the application and the quote so the webhook can tie the
+ * charge back without trusting anything the browser said.
+ */
+export async function initializeAdCheckout(opts: {
+  email: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  reference: string;
+  callbackUrl: string;
+  metadata: Record<string, string | number | null>;
+}): Promise<string> {
+  const data = await paystack<{ data: { authorization_url: string } }>("/transaction/initialize", {
+    method: "POST",
+    body: {
+      email: opts.email,
+      amount: opts.amount,
+      currency: opts.currency,
+      reference: opts.reference,
+      callback_url: opts.callbackUrl,
+      metadata: { ...opts.metadata, user_id: opts.userId, purpose: AD_CAMPAIGN_PURPOSE },
+    },
+  });
+  return data.data.authorization_url;
+}
+
+/**
+ * Did Paystack REFUSE (nothing was created), or is the outcome unknown?
+ * A refusal is Paystack answering with its own message. A timeout, a dropped
+ * connection or a body that is not JSON (a 5xx page) is UNKNOWN: the
+ * transaction may exist, so the caller must not open a second checkout - it
+ * verifies the reference instead.
+ */
+export function paystackFailureIsDefinite(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  return !["TimeoutError", "AbortError", "TypeError", "SyntaxError"].includes(e.name);
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -213,6 +256,8 @@ export const CHARACTER_REPLACE_TOPUP_PURPOSE = "frenz_cr_topup";
  * nothing at all, and the caller checks the metadata before crediting anybody.
  */
 export interface PaystackVerifiedCharge {
+  /** Paystack's own transaction id (0197: kept as the ad payment's charge id). */
+  id?: number;
   /** "success", "failed", "abandoned"… Paystack's own word for it. */
   status?: string;
   /** Minor units, in `currency`. What SETTLED, not what we asked for. */

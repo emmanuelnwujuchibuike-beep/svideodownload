@@ -99,6 +99,18 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return "Please sign in to continue.";
     case "rate_limited":
       return "You're going a little fast. Please wait a moment and try again.";
+    case "payments_disabled":
+    case "payments_unavailable":
+      return "Advertising payments are temporarily unavailable. Please try again later.";
+    case "quote_expired":
+      return "Your price has expired. Please review your ad again to get a fresh price.";
+    case "quote_invalid":
+    case "not_payable":
+      return "This price is no longer valid. Please review your ad again to get a fresh price.";
+    case "payment_in_progress":
+      return "A payment for this ad is already in progress. Please finish it, or wait a moment and check its status.";
+    case "payment_not_found":
+      return "We couldn't find that payment.";
     case "payment_not_started":
       return "Payment could not be started. Your campaign has not been charged.";
     default:

@@ -1,11 +1,13 @@
 import { after, NextResponse } from "next/server";
 
+import { handleBachsAdCollection, handleBachsAdReversal } from "@/lib/ads-platform/payment-server";
 import { activateBachsPlan, syncBachsSubscriptionEvent } from "@/lib/ai/credits/bachs-plans";
 import { markTopupAttempt } from "@/lib/ai/topup-attempts";
 import { bachsAmountCovers, creditBachsTopup, readBachsAttempt } from "@/lib/ai/wallet/bachs-topup";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { verifyBachsSignature } from "@/lib/payments/bachs";
 import { claimProviderEvent, markProviderEvent } from "@/lib/payments/events";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,13 +74,24 @@ async function handle(type: string, event: { id?: string; created_at?: string },
     const r = await syncBachsSubscriptionEvent(type, event.id ?? null, data, settings.frenzAiPlans);
     return r.handled ? `subscription ${r.status}` : "subscription event: no member matched";
   }
-  if (type !== "collection.succeeded" && type !== "collection.failed") return "ignored";
+  /*
+    0197: refunds and disputes name the CHARGE, not our reference. Only an ad
+    payment is matched (by the charge id stored when it settled); anything
+    else stays "ignored", exactly as before.
+  */
+  if (type === "refund.paid" || type === "dispute.created" || type === "dispute.updated") {
+    return (await handleBachsAdReversal(createAdminClient(), type, data)) ?? "ignored";
+  }
+  if (type !== "collection.succeeded" && type !== "collection.failed" && type !== "collection.underpaid") return "ignored";
 
   const attempt = reference ? await readBachsAttempt(reference) : null;
   if (!attempt) {
     console.warn("[bachs] event for a reference we did not create", { type, reference: reference?.slice(0, 80), event: event.id });
     return "not ours";
   }
+  // 🔴 0197: an AD payment settles campaigns, never a wallet. Before every wallet line below.
+  if (attempt.purpose === "ad_campaign") return handleBachsAdCollection(createAdminClient(), type, data, attempt);
+  if (type === "collection.underpaid") return "ignored";
   if (type === "collection.failed") {
     await markTopupAttempt(attempt.reference, { status: "failed", gatewayResponse: typeof data.failure_reason === "string" ? data.failure_reason.slice(0, 200) : "payment failed" });
     console.info("[payments] payment_failed", { provider: "bachs", reference: attempt.reference, purpose: attempt.purpose });

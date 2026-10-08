@@ -26,6 +26,7 @@ import {
 } from "@/lib/admin-stats";
 import { Suspense } from "react";
 
+import { AdCampaignPaymentsLazy } from "@/features/admin/ad-campaign-payments-lazy";
 import { AdManager } from "@/features/admin/ad-manager";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { AdminSubsections } from "@/features/admin/section-tabs";
@@ -395,6 +396,8 @@ export default async function AdminPage() {
             <AdminSubsections
               groups={[
                 { id: "placements", label: "Ad placements", content: <AdManager ads={adRecords} /> },
+                /* Self-serve campaigns paid through Paystack/Bachs (Part 3) - loads when shown. */
+                { id: "campaign-payments", label: "Campaign payments", content: <AdCampaignPaymentsLazy /> },
                 {
                   id: "settings",
                   label: "Ad settings",

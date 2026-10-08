@@ -34,8 +34,9 @@ export interface CreditPack {
 }
 
 /** What is being paid for — each has its own routing row. */
-export type PaymentPurpose = "wallet_topup" | "ai_subscription";
-export const PAYMENT_PURPOSES: readonly PaymentPurpose[] = ["wallet_topup", "ai_subscription"];
+export type PaymentPurpose = "wallet_topup" | "ai_subscription" | "ad_campaign";
+/** 0197: ad_campaign — an advertiser paying for a campaign (lib/ads-platform/payment-server.ts). Same rails, its own route. */
+export const PAYMENT_PURPOSES: readonly PaymentPurpose[] = ["wallet_topup", "ai_subscription", "ad_campaign"];
 /** Where the member is, decided SERVER-SIDE from the edge's country header (lib/payments/router.ts). */
 export type PaymentMarket = "NG" | "other";
 export const PAYMENT_MARKETS: readonly PaymentMarket[] = ["NG", "other"];
@@ -85,8 +86,8 @@ export const AI_WALLET_DEFAULTS: AiWalletConfig = {
   packs: [50, 100, 250, 500, 1000].map((credits) => ({ id: `pack_${credits}`, credits, bonusCredits: 0, enabled: true, highlight: credits === 100 })),
   custom: { enabled: true, minCredits: 10, maxCredits: 5000 },
   routing: {
-    NG: { wallet_topup: { primary: "bachs", fallback: "paystack" }, ai_subscription: { primary: "bachs", fallback: "paystack" } },
-    other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null } },
+    NG: { wallet_topup: { primary: "bachs", fallback: "paystack" }, ai_subscription: { primary: "bachs", fallback: "paystack" }, ad_campaign: { primary: "bachs", fallback: "paystack" } },
+    other: { wallet_topup: { primary: "paystack", fallback: null }, ai_subscription: { primary: "paystack", fallback: null }, ad_campaign: { primary: "paystack", fallback: null } },
   },
   memberChoice: true,
   transfers: { enabled: true, feePercent: 5, minCredits: 10, maxCredits: 5000, dailyMaxCredits: 20000 },

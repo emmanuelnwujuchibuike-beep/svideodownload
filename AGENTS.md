@@ -36,6 +36,8 @@ many surfaces.
 
 ## Start here to navigate
 
+- **`docs/HANDOFF.md`** — the CURRENT state, open owner decisions and the hard-won rules. Read it before starting work in a new session.
+
 - **`lib/platform/registries.ts`** — the registry of registries (the Architecture
   Navigator). Every single-source-of-truth list, mapped to real code.
 - **`lib/platform/engineering-registry.ts`** — every doc, generator, SDK and

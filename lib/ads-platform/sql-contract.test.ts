@@ -95,7 +95,7 @@ describe("money: the database decides, once", () => {
     expect(q).toContain("and currency = p_currency and enabled");
     expect(q).toContain("floor(v_price * v_discount / 100)");
   });
-  it("wallet payment: row locked, idempotent, owner-checked, non-withdrawable spent first, one ledger line", () => {
+  it("(0195 history, DROPPED by 0197: ads are not paid from credits) wallet payment was row-locked and owner-checked", () => {
     const p = fn("pay_ad_campaign_with_credits");
     expect(p).toContain("for update of c;");
     expect(p).toContain("if not found or v_owner is distinct from p_user then");
@@ -103,7 +103,7 @@ describe("money: the database decides, once", () => {
     expect(p).toContain("v_wpart := greatest(0, v_total - (v_balance - v_wd));");
     expect(p).toContain("v_q := public.ad_campaign_quote(p_campaign, 'CREDIT');");
   });
-  it("card payment settles only on a SUCCESS attempt for this campaign, for the full amount", () => {
+  it("(0195 history, superseded by 0197 ad_payment_settle) card settle required a SUCCESS attempt and the full amount", () => {
     const s = fn("settle_ad_campaign_payment");
     expect(s).toContain("if v_astatus <> 'success' then");
     expect(s).toContain("if v_cref is distinct from p_reference then");

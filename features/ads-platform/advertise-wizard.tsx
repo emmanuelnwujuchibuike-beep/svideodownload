@@ -142,7 +142,7 @@ export function AdvertiseWizard() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rulesAccepted, setRulesAccepted] = useState(false);
-  const [locked, setLocked] = useState<{ total: number; currency: string } | null>(null);
+  const [locked, setLocked] = useState<{ total: number; currency: string; quoteId: string; expiresAt: string } | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [mine, setMine] = useState<MyApplication[] | null>(null);
   const [localPreview, setLocalPreview] = useState<{ src: string; mediaType: "image" | "video" } | null>(null);
@@ -240,11 +240,40 @@ export function AdvertiseWizard() {
     go(order[Math.min(order.length - 1, stepIndex + 1)]!);
   };
 
-  const submit = async () => {
-    if (!form.campaignId || !rulesAccepted) return;
-    if (!(await checkpoint(true))) return;
+  /**
+   * "Continue to secure payment" — ONE tap: lock the price (a server quote),
+   * then ask the server for the checkout the payment router chose, and go.
+   * The button stays disabled from the first tap until the page leaves, so a
+   * double tap can never open two payments (the server refuses a second one
+   * too). The amount is never sent - only which campaign and which quote.
+   */
+  const pay = async () => {
+    if (!form.campaignId || !rulesAccepted || busy) return;
+    let quote = locked && Date.parse(locked.expiresAt) > Date.now() + 30_000 ? locked : null;
+    if (!quote) {
+      quote = await submit();
+      if (!quote) return;
+    }
+    setBusy("pay");
+    const r = await api<{ url?: string; verifying?: boolean; reference: string }>("/api/ads/payment/create", "POST", { campaignId: form.campaignId, quoteId: quote.quoteId });
+    if (!r.ok) {
+      setBusy(null);
+      setError(r.code === "server" || r.code === "network" ? adMessage("payment_not_started") : r.message);
+      if (r.code === "quote_expired" || r.code === "quote_invalid" || r.code === "not_payable") setLocked(null);
+      return;
+    }
+    if (r.data.url) {
+      window.location.assign(r.data.url);
+      return; // stays busy: the page is leaving
+    }
+    window.location.assign(`/advertise/payment?reference=${encodeURIComponent(r.data.reference)}`);
+  };
+
+  const submit = async (): Promise<{ total: number; currency: string; quoteId: string; expiresAt: string } | null> => {
+    if (!form.campaignId || !rulesAccepted) return null;
+    if (!(await checkpoint(true))) return null;
     setBusy("submit");
-    const r = await api<{ currency: string; total: number }>("/api/ads/advertiser/submit", "POST", {
+    const r = await api<{ currency: string; total: number; quoteId: string; expiresAt: string }>("/api/ads/advertiser/submit", "POST", {
       campaignId: form.campaignId,
       name: form.name,
       businessName: form.businessName,
@@ -258,9 +287,11 @@ export function AdvertiseWizard() {
     if (!r.ok) {
       setError(r.message);
       if (r.code === "rules_outdated") setRulesAccepted(false);
-      return;
+      return null;
     }
-    setLocked({ total: r.data.total, currency: r.data.currency });
+    const q = { total: r.data.total, currency: r.data.currency, quoteId: r.data.quoteId, expiresAt: r.data.expiresAt };
+    setLocked(q);
+    return q;
   };
 
   const discard = async () => {
@@ -602,12 +633,17 @@ export function AdvertiseWizard() {
           {locked ? (
             <AiPanel className="mt-4 ring-emerald-200">
               <p className="flex items-center gap-2 text-[15px] font-bold text-emerald-700">
-                <FileCheck2 className="h-5 w-5" aria-hidden /> {APPLICATION_STATE_LABELS.ready_for_payment}
+                <FileCheck2 className="h-5 w-5" aria-hidden /> Price confirmed: {formatMoney(locked.total, locked.currency as AdCatalog["settings"]["display_currency"])}
               </p>
-              <p className="mt-1 text-[13.5px] text-muted-foreground">
-                Your price is confirmed: <strong className="text-foreground">{formatMoney(locked.total, locked.currency as AdCatalog["settings"]["display_currency"])}</strong>. Payment opens here as soon as card and wallet payments for ads are switched on. You haven&apos;t been charged.
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Held for you until {new Date(locked.expiresAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}. You haven&apos;t been charged.
               </p>
             </AiPanel>
+          ) : null}
+          {busy === "submit" || busy === "pay" ? (
+            <p className="mt-3 flex items-center gap-2 text-[13px] font-semibold text-indigo-700" role="status" aria-live="polite">
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> {busy === "submit" ? "Preparing payment…" : "Opening secure checkout…"}
+            </p>
           ) : null}
         </section>
       ) : null}
@@ -629,8 +665,8 @@ export function AdvertiseWizard() {
         ) : null}
         <div className="flex-1" />
         {form.step === "review" ? (
-          <AiButton size="lg" onClick={() => void submit()} disabled={!rulesAccepted || !!busy || !est || !!locked} iconEnd={busy === "submit" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}>
-            Continue to Payment
+          <AiButton size="lg" onClick={() => void pay()} disabled={!rulesAccepted || !!busy || !est} aria-busy={busy === "submit" || busy === "pay"} iconEnd={busy === "submit" || busy === "pay" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}>
+            Continue to secure payment
           </AiButton>
         ) : (
           <AiButton

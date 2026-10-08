@@ -19,7 +19,7 @@ import { adMessage, type MessageFacts } from "./messages";
  */
 export async function advertiserRoute(
   request: Request,
-  handler: (ctx: { db: SupabaseClient; userId: string; body: Record<string, unknown> }) => Promise<unknown>,
+  handler: (ctx: { db: SupabaseClient; userId: string; email: string | null; body: Record<string, unknown> }) => Promise<unknown>,
 ): Promise<NextResponse> {
   const supabase = await createClient();
   const {
@@ -40,7 +40,7 @@ export async function advertiserRoute(
   }
 
   try {
-    const result = await handler({ db: createAdminClient(), userId: user.id, body });
+    const result = await handler({ db: createAdminClient(), userId: user.id, email: user.email ?? null, body });
     return NextResponse.json(result ?? { ok: true }, { headers: { "cache-control": "no-store" } });
   } catch (e) {
     if (e instanceof AdApplicationError) {

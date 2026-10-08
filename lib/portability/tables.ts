@@ -315,6 +315,8 @@ export const OWNER_COLUMN: Record<string, string> = {
   // 0195: your advertiser profile, and the ads you viewed or tapped while signed in
   advertisers: "user_id",
   ad_events: "user_id",
+  // 0197: the prices you were quoted for your campaigns
+  ad_payment_quotes: "user_id",
   affiliate_clicks: "user_id",
   gateway_impressions: "user_id",
   api_keys: "user_id",

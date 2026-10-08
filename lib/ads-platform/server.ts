@@ -194,33 +194,12 @@ export async function activateCampaign(db: Db, campaignId: string, actor: { id: 
   return data as Rpc;
 }
 
-/**
- * Apply → pay → verified → validated → live, for a wallet payment. The wallet
- * was filled by a webhook-verified top-up, the price is computed by the
- * database from admin rows, and the debit and the `paid` status are one
- * transaction — nothing here takes a number from the browser.
- */
-export async function payCampaignWithCredits(db: Db, userId: string, campaignId: string): Promise<{ payment: Rpc; activation: Rpc | null }> {
-  const { data, error } = await db.rpc("pay_ad_campaign_with_credits", { p_user: userId, p_campaign: campaignId });
-  if (error) throw new Error(`pay_ad_campaign_with_credits: ${error.message}`);
-  const payment = data as Rpc;
-  if (!payment.ok) return { payment, activation: null };
-  return { payment, activation: await activateCampaign(db, campaignId, { id: null, role: "system" }) };
-}
-
-/**
- * A card payment the webhook has verified (Paystack / Bachs). Wired into the
- * webhooks by Part 3 (checkout); the settle is idempotent like every other
- * webhook effect, so the webhook and the verify-on-return may both call it.
- */
-export async function settleCardPaymentAndActivate(db: Db, reference: string): Promise<{ payment: Rpc; activation: Rpc | null }> {
-  const { data, error } = await db.rpc("settle_ad_campaign_payment", { p_reference: reference });
-  if (error) throw new Error(`settle_ad_campaign_payment: ${error.message}`);
-  const payment = data as Rpc;
-  const campaignId = typeof payment.campaign_id === "string" ? payment.campaign_id : null;
-  if (!payment.ok || !campaignId || payment.already_paid) return { payment, activation: null };
-  return { payment, activation: await activateCampaign(db, campaignId, { id: null, role: "system" }) };
-}
+/*
+  Payment lives in ./payment-server.ts (Part 3): the existing Paystack + Bachs
+  rails, a quote, a verified webhook, then activateCampaign above. Part 1's
+  wallet payment and single-campaign card settle were removed with their SQL
+  (0197) - ads are not paid from AI credits (owner, Part 3).
+*/
 
 /**
  * One status move with optimistic concurrency: two admins acting on the same

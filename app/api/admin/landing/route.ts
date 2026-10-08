@@ -259,7 +259,7 @@ const schema = z.object({
           routing: z
             .record(
               z.enum(["NG", "other"]),
-              z.record(z.enum(["wallet_topup", "ai_subscription"]), z.object({ primary: z.enum(["paystack", "bachs"]), fallback: z.enum(["paystack", "bachs"]).nullable() }).strict()),
+              z.record(z.enum(["wallet_topup", "ai_subscription", "ad_campaign"]), z.object({ primary: z.enum(["paystack", "bachs"]), fallback: z.enum(["paystack", "bachs"]).nullable() }).strict()),
             )
             .optional(),
         })

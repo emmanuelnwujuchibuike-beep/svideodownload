@@ -230,3 +230,107 @@ for rule; the locked amount comes from the database.
 | Orphan cleanup of abandoned public creatives / staging uploads: staging is cleared per application on the next ticket | planned |
 | Reputation check of destinations (safe-browsing): today syntax + admin blocklist | planned |
 | Admin screens for prices, durations, promotions, blocklist | Part 6 |
+
+---
+
+# Part 3 — payments on the existing rails (2026-10-08)
+
+Migration: `0197_ad_platform_payments.sql`. Code: `lib/ads-platform/payment-server.ts`
+(advertiser flow, webhooks, activation) and `lib/ads-platform/admin-payments.ts`
+(admin view). Pages: `/advertise/payment` (the return from checkout) and
+`/advertise/campaigns` (my campaigns).
+
+## No second payment system
+
+| Need | What it reuses |
+|---|---|
+| Payment record | `ai_topup_attempts` (purpose `ad_campaign`), extended in 0197 with the quote, provider amount and currency, FX rate, stored Bachs request, charge id, verified/refund/dispute fields |
+| Webhook dedupe | `payment_provider_events` (Paystack key = `event:reference`) |
+| Provider choice | `lib/payments/router.ts`, with a new purpose `ad_campaign`. Admin edits it in AI plans → Payment routing → "Ad campaigns". Default: NG → Bachs then Paystack, elsewhere Paystack. |
+| USD → NGN | `resolveCheckoutRate` + `quoteCheckout`: the live rate, cached, plus the operator's markup. The rate is stored on the attempt. |
+| Bachs client | `lib/payments/bachs.ts` + `bachsCheckoutRequest`/`postBachsCheckout` |
+| Paystack client | `lib/paystack/paystack.ts` + `initializeAdCheckout` (purpose `frenz_ad_campaign`) |
+| Webhooks | the existing `/api/bachs/webhook` and `/api/paystack/webhook`. The ad branch sits **before** every wallet/plan line, so an ad payment can never credit AI credits. |
+
+Ads are **not** paid from AI credits (owner, Part 3). Part 1's
+`pay_ad_campaign_with_credits` and `settle_ad_campaign_payment` are dropped.
+
+## Flow
+
+```
+submit (Part 2) → price locked + ad_payment_quotes row (open, expires after quote_ttl_minutes)
+"Continue to secure payment" → POST /api/ads/payment/create {campaignId, quoteId}
+   ad_payment_begin   (one tx: quote open + unexpired + equals the campaigns' totals,
+                       one open attempt per application, campaigns → payment_processing)
+   router candidates  → Bachs (USD; Bachs converts at its page) or Paystack (NGN at our rate)
+signed webhook / verify-on-return → ad_payment_settle (lock, idempotent: provider, purpose,
+   amount and currency vs the attempt, the checkout window) → campaigns paid → activateCampaign (idempotent)
+```
+
+- **Fallback:** only after a provider **refused** (a 4xx, or Paystack's own
+  message: nothing was created). If the outcome is uncertain (timeout, 5xx,
+  409 in-progress), the attempt becomes `verification_required` and nothing
+  else is opened. Recovery:
+  - Bachs: replay the stored body with the same Idempotency-Key, within 24 h.
+  - Paystack: verify our reference.
+- **Amounts:**
+  - Paystack: the NGN amount must cover the attempt's.
+  - Bachs: a USD amount must cover the USD price. An NGN `collection.succeeded`
+    on **our** checkout session counts as full payment, because Bachs reports
+    underpayment separately as `collection.underpaid`.
+  - A mismatch becomes `mismatch` and is never activated.
+- **Quotes:** an admin price or promo change never touches an open quote. An
+  expired quote is refused at begin.
+- **Late payment:** a payment settling more than `checkout_honour_hours`
+  (24 h) after the checkout opened becomes `verification_required` for a
+  person. It is never activated at an old price.
+- **Refunds and disputes:**
+  - Bachs `refund.paid`, `dispute.created`/`updated` (by charge id).
+  - Paystack `refund.processed`, `charge.dispute.*` (by our reference).
+  - These run `ad_payment_reverse`. A campaign that never started is
+    removed. Otherwise a refund follows `refund_after_start` (remove/pause/keep)
+    and a chargeback follows `chargeback_action` (pause/remove).
+  - A partial refund is recorded and the campaign is left to the admin.
+- **Emergency switch:** `ad_platform_settings.payments_enabled = false` stops
+  new payments. Live campaigns are untouched.
+- **Return page:** checks the server at 0/2/4/8/15/30 s while the payment is
+  settling, then offers "Check again". No setInterval, no Realtime.
+- **Admin:** Admin → Ad placements → **Campaign payments**. Rows have every
+  required column, filters, a reconciliation list (`ad_payment_inconsistencies`)
+  and two idempotent repairs: check with the provider, retry activation.
+
+## Verification
+
+- 0197 was executed against PGlite: 41 payment checks covering T1–T24
+  (118 with Parts 1–2). Mutants of the amount check, the quote check and the
+  checkout window were each caught.
+- `lib/ads-platform/payments.test.ts`: routing, the fallback rule (T2/T3),
+  error classification, webhook ordering, the SQL contract.
+- Not run: a live charge against a Bachs sandbox or Paystack test key. No key
+  is in this environment, and Paystack's docs site refuses automated reads
+  (403). Refund and dispute payload fields are read defensively from every
+  documented location.
+
+## To go live (owner)
+
+1. **Prices:** there is no admin screen until Part 6. Use SQL, e.g. 7 days
+   top banner at $5:
+   `insert into ad_pricing_plans (placement_id, duration_id, currency, price_minor) select p.id, d.id, 'USD', 500 from ad_placements p, ad_durations d where p.code='global_top_banner' and d.duration_days=7;`
+2. **Open applications:** `update ad_platform_settings set applications_open = true;`
+3. **Bachs API key permissions:** `payments:read`, `payments:write`,
+   `products:read`, `refunds:read`, `disputes:read`.
+4. **Bachs webhook endpoint `/api/bachs/webhook`:** subscribe it to
+   `collection.succeeded`, `collection.failed`, `collection.underpaid`,
+   `refund.paid`, `dispute.created` and `dispute.updated`, alongside the
+   existing subscription events.
+5. **Paystack:** the existing webhook URL already receives all events.
+6. **Env vars:** nothing new. `BACHS_SECRET_KEY`, `BACHS_WEBHOOK_SECRET` and
+   the Paystack secret (admin settings) are already in use.
+
+## Gap Ledger (Part 3)
+
+| Item | Status |
+|---|---|
+| Issuing a refund from the admin (`POST /v1/refunds` / Paystack refund API). Today refunds are issued in the provider dashboards and their webhooks update us. | planned |
+| A live end-to-end payment on a sandbox | **owner action** (needs keys) |
+| Rendering live campaigns on the site | Part 4 |

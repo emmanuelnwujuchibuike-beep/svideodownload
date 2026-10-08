@@ -9,6 +9,7 @@ import { IMAGE_MIME_TYPES, validateCreative, VIDEO_MIME_TYPES } from "./creative
 import { probeMedia, sniff, type MediaFacts } from "./media-probe";
 import { maxPlacements, offeredDurations, offeredPlacements, parseCatalog, type AdCatalog } from "./offer";
 import { ADVERTISING_RULES_VERSION } from "./rules";
+import { createQuote } from "./payment-server";
 import { checkDestination, formatLimits, transitionCampaign, type FormatRow } from "./server";
 
 /**
@@ -425,6 +426,9 @@ export interface SubmitInput {
 }
 
 export interface LockedQuote {
+  /** 0197: the quote the advertiser pays - the only price /api/ads/payment/create accepts */
+  quoteId: string;
+  expiresAt: string;
   currency: string;
   total: number;
   lines: { campaignId: string; placementCode: string; list: number; discountPercent: number; total: number; durationDays: number; extraDays: number; promotionId: string | null }[];
@@ -451,6 +455,8 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
   const all = [app.primary, ...app.siblings];
   if (app.advertiser.status !== "active") refuse("advertiser_not_active", 403);
   if (!all.every((r) => EDITABLE.includes(r.status))) refuse("not_editable", 409);
+  const { data: openPay } = await db.from("ai_topup_attempts").select("reference").eq("purpose", "ad_campaign").eq("item_id", app.primary.id).in("status", ["pending", "verification_required"]).limit(1);
+  if (openPay?.length) refuse("payment_in_progress", 409);
 
   const dest = await checkDestination(db, destinationUrl);
   if (dest.status === "blocked") refuse(dest.code, 400, { reason: dest.reason });
@@ -508,5 +514,7 @@ export async function submitApplication(db: Db, userId: string, input: SubmitInp
     const t = await transitionCampaign(db, { campaignId: r.id, to: "awaiting_payment", expectedVersion: null, actorId: userId, actorRole: "advertiser", reason: "submitted" });
     if (!t.ok) throw new Error(`transition: ${t.reason}`);
   }
-  return { currency: cat.settings.display_currency, total: lines.reduce((s, l) => s + l.total, 0), lines };
+  const total = lines.reduce((sum, l) => sum + l.total, 0);
+  const quote = await createQuote(db, { applicationId: app.primary.id, userId, currency: cat.settings.display_currency, total, lines });
+  return { quoteId: quote.id, expiresAt: quote.expiresAt, currency: cat.settings.display_currency, total, lines };
 }

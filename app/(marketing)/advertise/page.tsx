@@ -1,5 +1,6 @@
 import { ArrowRight, BadgeCheck, CreditCard, Eye, ImageUp, LayoutGrid, Lock, ShieldCheck, Zap } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -58,6 +59,9 @@ export default function AdvertisePage() {
               Advertising Rules
             </AiButtonLink>
           </div>
+          <Link href="/advertise/campaigns" prefetch={false} className="mt-3 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700">
+            My campaigns →
+          </Link>
 
           <section className="mt-12" aria-labelledby="how">
             <h2 id="how" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">

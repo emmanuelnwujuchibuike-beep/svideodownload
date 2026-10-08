@@ -78,9 +78,9 @@ describe("no server call per tap or keystroke", () => {
   const wiz = readFileSync(join(process.cwd(), "features/ads-platform/advertise-wizard.tsx"), "utf8");
   const creative = readFileSync(join(process.cwd(), "features/ads-platform/creative-step.tsx"), "utf8");
 
-  it("the wizard calls the server at exactly three checkpoints: save draft, submit, discard", () => {
+  it("the wizard calls the server at exactly four checkpoints: save draft, submit, pay, discard", () => {
     const sites = [...wiz.matchAll(/await api(?:<[^>]*>)?\("([^"]+)", "(POST|DELETE)"/g)].map((m) => `${m[2]} ${m[1]}`);
-    expect(sites.sort()).toEqual(["DELETE /api/ads/advertiser/draft", "POST /api/ads/advertiser/draft", "POST /api/ads/advertiser/submit"]);
+    expect(sites.sort()).toEqual(["DELETE /api/ads/advertiser/draft", "POST /api/ads/advertiser/draft", "POST /api/ads/advertiser/submit", "POST /api/ads/payment/create"]);
     expect(wiz.match(/\bfetch\(/g)).toHaveLength(1); // inside api() only
   });
 

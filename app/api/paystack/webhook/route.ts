@@ -4,9 +4,12 @@ import { announceCharacterReplaceRecharge, creditVerifiedCharacterReplaceRecharg
 import { resolveCredit } from "@/lib/ai/character-replace/topup-fx";
 import { WALLET_UNIT } from "@/lib/ai/credits/units";
 import { getLandingSettings } from "@/lib/landing/settings";
-import { AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
+import { AD_CAMPAIGN_PURPOSE, AI_TOPUP_PURPOSE, CHARACTER_REPLACE_TOPUP_PURPOSE, verifyPaystackSignature, type PaystackEventData } from "@/lib/paystack/paystack";
 import { isAiPlanEvent, syncAiPlanEvent } from "@/lib/ai/credits/paystack";
 import { syncPaystackEvent } from "@/lib/paystack/sync";
+import { handlePaystackAdCharge, handlePaystackAdReversal } from "@/lib/ads-platform/payment-server";
+import { claimProviderEvent, markProviderEvent } from "@/lib/payments/events";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +40,42 @@ export async function POST(request: Request) {
     event = JSON.parse(payload);
   } catch {
     return NextResponse.json({ error: "Bad payload" }, { status: 400 });
+  }
+
+  /*
+    ── AN AD CAMPAIGN (0197) — before every wallet and plan branch ─────────────
+    Its own purpose (set at initialize, echoed back), so it can never credit a
+    wallet or touch a plan. Paystack sends no event id, so the delivery log key
+    is event + reference. Settling is idempotent in the database either way; a
+    failure of ours is a 500 so Paystack redelivers.
+  */
+  if (event.event === "charge.success" && event.data?.metadata?.purpose === AD_CAMPAIGN_PURPOSE) {
+    const ref = event.data.reference ?? null;
+    const key = `charge.success:${ref}`;
+    if ((await claimProviderEvent("paystack", key, event.event, ref)) === "done") return NextResponse.json({ received: true, duplicate: true });
+    try {
+      const outcome = await handlePaystackAdCharge(createAdminClient(), event.data as PaystackEventData & { id?: number });
+      await markProviderEvent("paystack", key, outcome);
+      return NextResponse.json({ received: true });
+    } catch (e) {
+      console.error("[paystack] ad charge failed", { reference: ref, error: String(e).slice(0, 200) });
+      return NextResponse.json({ error: "processing failed" }, { status: 500 });
+    }
+  }
+  if (event.event.startsWith("refund.") || event.event.startsWith("charge.dispute.")) {
+    try {
+      const raw = event.data as unknown as Record<string, unknown>;
+      const outcome = await handlePaystackAdReversal(createAdminClient(), event.event, raw);
+      if (outcome !== null) {
+        const id = typeof raw.id === "number" || typeof raw.id === "string" ? String(raw.id) : "";
+        await claimProviderEvent("paystack", `${event.event}:${id}`, event.event, null);
+        await markProviderEvent("paystack", `${event.event}:${id}`, outcome);
+        return NextResponse.json({ received: true });
+      }
+    } catch (e) {
+      console.error("[paystack] ad reversal failed", { event: event.event, error: String(e).slice(0, 200) });
+      return NextResponse.json({ error: "processing failed" }, { status: 500 });
+    }
   }
 
   /*

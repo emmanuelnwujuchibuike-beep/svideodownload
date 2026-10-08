@@ -28,6 +28,11 @@ export interface AdInventory {
   global: boolean;
   /** Whether Monetag has any tag or placement configured. */
   monetag: boolean;
+  /**
+   * Whether any self-serve campaign is live (0195, lib/ads-platform). Optional:
+   * an answer cached before it existed has no opinion, which reads as NO.
+   */
+  self?: boolean;
 }
 
 /**
@@ -57,7 +62,9 @@ export function parseAdInventory(raw: unknown): AdInventory | null {
   const slots = stringList(r.slots);
   const vast = stringList(r.vast);
   if (r.v !== 1 || !slots || !vast || typeof r.global !== "boolean" || typeof r.monetag !== "boolean") return null;
-  return { v: 1, slots, vast, global: r.global, monetag: r.monetag };
+  const inv: AdInventory = { v: 1, slots, vast, global: r.global, monetag: r.monetag };
+  if (typeof r.self === "boolean") inv.self = r.self;
+  return inv;
 }
 
 /** Should the client ask /api/ads for this zone? Unknown inventory ⇒ yes. */
@@ -73,4 +80,15 @@ export function mayServeVast(inv: AdInventory | null, zone: string): boolean {
 /** Is ANY VAST moment possible at all? Unknown ⇒ yes. */
 export function anyVast(inv: AdInventory | null): boolean {
   return inv === null || inv.vast.length > 0;
+}
+
+/**
+ * Should the client ask /api/ads/self? Unlike the networks this fails CLOSED:
+ * unknown or absent ⇒ no. The networks fail open because an unknown inventory
+ * must never cost a paying zone its impression — but a self-serve request
+ * made while no campaign exists is pure idle cost on every page view, and a
+ * live campaign is announced here within one five-minute bucket.
+ */
+export function mayServeSelf(inv: AdInventory | null): boolean {
+  return inv?.self === true;
 }

@@ -57,6 +57,25 @@ export const NOT_EXPORTED: Record<string, string> = {
 
   /* Not about any individual — reference rows inside a personal domain. */
   ads: "Ad inventory. Not personal data.",
+  /* The self-serve ad platform (0195): admin configuration, not about anyone. */
+  ad_platform_settings: "The ad platform switches. Not personal data.",
+  ad_formats: "Ad format configuration. Not personal data.",
+  ad_placements: "Ad placement configuration. Not personal data.",
+  ad_durations: "The campaign lengths on sale. Not personal data.",
+  ad_pricing_plans: "The ad price list. Not personal data.",
+  ad_promotions: "Ad promotions on offer. Not personal data.",
+  ad_slots: "Positions in an ad rotation. Not personal data.",
+  /*
+    A campaign belongs to an ADVERTISER, and advertiser_id is not a user column,
+    so the generic exporter cannot reach these rows by an owner column. The
+    advertiser profile itself IS exported (advertisers.user_id). Exporting the
+    campaigns through it is planned with the advertiser app (Part 2) — this
+    entry is the honest record of that gap, not a decision that they are not yours.
+  */
+  ad_campaigns: "Your campaigns are tied to your advertiser profile rather than directly to your account, so they are not in this export yet. They are shown in full in the advertiser area.",
+  ad_creatives: "The images, videos and links of your campaigns — tied to the campaign, see ad_campaigns.",
+  ad_campaign_events: "The status history of your campaigns — tied to the campaign, see ad_campaigns.",
+  ad_campaign_daily_stats: "Daily view and click counts of your campaigns — tied to the campaign, see ad_campaigns.",
   affiliate_offers: "Affiliate catalogue. Not personal data.",
   media_assets: "Shared media records, not owned by one member.",
   asset_usage: "Links assets to places they appear. Not personal data.",
@@ -292,6 +311,9 @@ export const OWNER_COLUMN: Record<string, string> = {
   subscriptions: "user_id",
   ad_clicks: "user_id",
   ad_impressions: "user_id",
+  // 0195: your advertiser profile, and the ads you viewed or tapped while signed in
+  advertisers: "user_id",
+  ad_events: "user_id",
   affiliate_clicks: "user_id",
   gateway_impressions: "user_id",
   api_keys: "user_id",

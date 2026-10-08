@@ -1,7 +1,9 @@
+import { anyCampaignLive } from "@/lib/ads-platform/server";
 import { AD_ZONES } from "@/lib/monetization/ad-schema";
 import type { AdInventory } from "@/lib/monetization/ad-inventory-shape";
 import { resolveMonetagPlacements, resolveMonetagTags } from "@/lib/monetization/monetag";
 import { getMonetizationSettings } from "@/lib/monetization/settings";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveGlobalScriptsForFreeVisitor,
   resolveSlotForFreeVisitor,
@@ -21,10 +23,12 @@ import {
 export async function computeAdInventory(): Promise<AdInventory> {
   const settings = await getMonetizationSettings();
   const zones = AD_ZONES.filter((z) => z !== "global");
-  const [slotHits, vastHits, globals] = await Promise.all([
+  const [slotHits, vastHits, globals, self] = await Promise.all([
     Promise.all(zones.map(async (z) => ((await resolveSlotForFreeVisitor(z)) ? z : null))),
     Promise.all(zones.map(async (z) => ((await resolveVastSource(settings, z)) ? z : null))),
     resolveGlobalScriptsForFreeVisitor(),
+    // lazily, so a missing service key is a false here and never a failed inventory
+    Promise.resolve().then(() => anyCampaignLive(createAdminClient())).catch(() => false),
   ]);
   return {
     v: 1,
@@ -32,5 +36,6 @@ export async function computeAdInventory(): Promise<AdInventory> {
     vast: vastHits.filter((z): z is (typeof zones)[number] => z !== null),
     global: globals.some((a) => !!a.scriptCode),
     monetag: resolveMonetagTags(settings).length + resolveMonetagPlacements(settings).length > 0,
+    self,
   };
 }

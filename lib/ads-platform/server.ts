@@ -1,0 +1,210 @@
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { cdnBucket } from "@/lib/net/cdn-bucket";
+
+import type { CampaignStatus } from "./catalog";
+import { checkDestinationUrl, validateCreative } from "./creative-validation";
+import type { ServingSnapshot } from "./eligibility";
+import { buildServingPayload, type ServingPayload } from "./serving-payload";
+
+/**
+ * Server side of the ad platform. Every write that matters is a database
+ * function from 0195 (price, payment, activation, slot, status) — this file
+ * only orders the calls and runs the creative checks whose verdict the
+ * function then trusts. Callers pass the SERVICE-ROLE client: none of these
+ * functions is executable by the browser.
+ */
+
+type Db = SupabaseClient;
+type Rpc = { ok: boolean; reason?: string; [k: string]: unknown };
+
+/* ─────────────────────────────── serving ─────────────────────────────── */
+
+/**
+ * Build the serving payload. Runs on a CDN miss only — at most once per
+ * 5-minute bucket per edge region, however many visitors there are.
+ *
+ * The lifecycle sync (expire/start + prune) rides on the same miss, so status
+ * and the audit stay honest with no cron and no idle cost. Serving never
+ * depends on it: the engine filters on time either way.
+ */
+export async function loadServingPayload(db: Db, now: number = Date.now()): Promise<ServingPayload> {
+  const sync = await db.rpc("ad_campaigns_sync_lifecycle");
+  if (sync.error) console.warn("[ads-platform] lifecycle sync failed", { error: sync.error.message });
+  const { data, error } = await db.rpc("ad_serving_snapshot");
+  if (error) throw new Error(`ad_serving_snapshot: ${error.message}`);
+  return buildServingPayload(data as ServingSnapshot, cdnBucket(now), now);
+}
+
+/**
+ * Is any self-serve campaign live? Feeds the CDN-cached ad inventory, so a
+ * page requests /api/ads/self only when there is something to show. Fails
+ * CLOSED (false) — including before 0195 is applied, when the tables do not
+ * exist: `.select("id").limit(1)` surfaces that as an error, where a head
+ * count would have answered error:null.
+ */
+export async function anyCampaignLive(db: Db, now: number = Date.now()): Promise<boolean> {
+  const [settings, live] = await Promise.all([
+    db.from("ad_platform_settings").select("ads_enabled").limit(1),
+    db.from("ad_campaigns").select("id").eq("status", "active").gt("end_at", new Date(now).toISOString()).limit(1),
+  ]);
+  if (settings.error || live.error) return false;
+  return settings.data?.[0]?.ads_enabled === true && (live.data?.length ?? 0) > 0;
+}
+
+/* ───────────────────────────── validation ───────────────────────────── */
+
+interface CreativeRow {
+  id: string;
+  format_code: string;
+  media_type: string;
+  mime_type: string | null;
+  duration_seconds: number | string | null;
+  file_size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  destination_url: string;
+  headline: string | null;
+  description: string | null;
+  validation_status: string;
+}
+
+interface FormatRow {
+  code: string;
+  media_types: string[];
+  max_duration_seconds: number | null;
+  max_file_bytes: number;
+  max_width: number;
+  max_height: number;
+}
+
+/**
+ * Check every active creative of a campaign against the CURRENT format row
+ * and write the verdict. A creative an admin marked `blocked` stays blocked —
+ * an automated pass never overturns a human decision.
+ */
+export async function validateCampaignCreatives(db: Db, campaignId: string): Promise<{ valid: number; invalid: number }> {
+  const { data: rows, error } = await db
+    .from("ad_creatives")
+    .select("id, format_code, media_type, mime_type, duration_seconds, file_size_bytes, width, height, destination_url, headline, description, validation_status")
+    .eq("campaign_id", campaignId)
+    .eq("status", "active");
+  if (error) throw new Error(`ad_creatives: ${error.message}`);
+  const creatives = (rows ?? []) as CreativeRow[];
+  const codes = [...new Set(creatives.map((c) => c.format_code))];
+  const { data: fmts, error: fErr } = codes.length
+    ? await db.from("ad_formats").select("code, media_types, max_duration_seconds, max_file_bytes, max_width, max_height").in("code", codes)
+    : { data: [], error: null };
+  if (fErr) throw new Error(`ad_formats: ${fErr.message}`);
+  const byCode = new Map(((fmts ?? []) as FormatRow[]).map((f) => [f.code, f]));
+
+  let valid = 0;
+  let invalid = 0;
+  const at = new Date().toISOString();
+  for (const cr of creatives) {
+    if (cr.validation_status === "blocked") {
+      invalid++;
+      continue;
+    }
+    const f = byCode.get(cr.format_code);
+    const verdict = f
+      ? validateCreative(
+          {
+            formatCode: cr.format_code,
+            mediaType: cr.media_type,
+            mimeType: cr.mime_type,
+            durationSeconds: cr.duration_seconds === null ? null : Number(cr.duration_seconds),
+            fileSizeBytes: cr.file_size_bytes,
+            width: cr.width,
+            height: cr.height,
+            destinationUrl: cr.destination_url,
+            headline: cr.headline,
+            description: cr.description,
+          },
+          { code: f.code, mediaTypes: f.media_types, maxDurationSeconds: f.max_duration_seconds, maxFileBytes: f.max_file_bytes, maxWidth: f.max_width, maxHeight: f.max_height },
+        )
+      : ({ status: "invalid", errors: ["format_unknown"] } as const);
+    const url = checkDestinationUrl(cr.destination_url);
+    const { error: wErr } = await db
+      .from("ad_creatives")
+      .update({
+        validation_status: verdict.status,
+        validation_errors: verdict.errors,
+        validated_at: at,
+        url_validation_status: url.status,
+        url_block_reason: url.status === "blocked" ? url.reason : null,
+        url_validated_at: at,
+      })
+      .eq("id", cr.id);
+    if (wErr) throw new Error(`ad_creatives update: ${wErr.message}`);
+    if (verdict.status === "valid" && url.status === "valid") valid++;
+    else invalid++;
+  }
+  return { valid, invalid };
+}
+
+/* ───────────────────────────── activation ───────────────────────────── */
+
+/**
+ * Validate, then ask the database to activate. The database re-checks the
+ * payment, the advertiser, every creative verdict, the placement and takes a
+ * free slot — anything wrong leaves the campaign in `validating` with its
+ * flags written down. A valid paid campaign is LIVE when this returns ok.
+ */
+export async function activateCampaign(db: Db, campaignId: string, actor: { id: string | null; role: "system" | "admin" }): Promise<Rpc> {
+  await validateCampaignCreatives(db, campaignId);
+  const { data, error } = await db.rpc("activate_ad_campaign", { p_campaign: campaignId, p_actor: actor.id, p_actor_role: actor.role });
+  if (error) throw new Error(`activate_ad_campaign: ${error.message}`);
+  return data as Rpc;
+}
+
+/**
+ * Apply → pay → verified → validated → live, for a wallet payment. The wallet
+ * was filled by a webhook-verified top-up, the price is computed by the
+ * database from admin rows, and the debit and the `paid` status are one
+ * transaction — nothing here takes a number from the browser.
+ */
+export async function payCampaignWithCredits(db: Db, userId: string, campaignId: string): Promise<{ payment: Rpc; activation: Rpc | null }> {
+  const { data, error } = await db.rpc("pay_ad_campaign_with_credits", { p_user: userId, p_campaign: campaignId });
+  if (error) throw new Error(`pay_ad_campaign_with_credits: ${error.message}`);
+  const payment = data as Rpc;
+  if (!payment.ok) return { payment, activation: null };
+  return { payment, activation: await activateCampaign(db, campaignId, { id: null, role: "system" }) };
+}
+
+/**
+ * A card payment the webhook has verified (Paystack / Bachs). Wired into the
+ * webhooks by Part 3 (checkout); the settle is idempotent like every other
+ * webhook effect, so the webhook and the verify-on-return may both call it.
+ */
+export async function settleCardPaymentAndActivate(db: Db, reference: string): Promise<{ payment: Rpc; activation: Rpc | null }> {
+  const { data, error } = await db.rpc("settle_ad_campaign_payment", { p_reference: reference });
+  if (error) throw new Error(`settle_ad_campaign_payment: ${error.message}`);
+  const payment = data as Rpc;
+  const campaignId = typeof payment.campaign_id === "string" ? payment.campaign_id : null;
+  if (!payment.ok || !campaignId || payment.already_paid) return { payment, activation: null };
+  return { payment, activation: await activateCampaign(db, campaignId, { id: null, role: "system" }) };
+}
+
+/**
+ * One status move with optimistic concurrency: two admins acting on the same
+ * version — the second is refused as `stale`, never silently overwritten.
+ * Admin emergency controls (pause, remove, reject) are this call.
+ */
+export async function transitionCampaign(
+  db: Db,
+  input: { campaignId: string; to: CampaignStatus; expectedVersion: number | null; actorId: string | null; actorRole: "system" | "admin" | "advertiser"; reason?: string | null },
+): Promise<Rpc> {
+  const { data, error } = await db.rpc("transition_ad_campaign", {
+    p_campaign: input.campaignId,
+    p_to: input.to,
+    p_expected_version: input.expectedVersion,
+    p_actor: input.actorId,
+    p_actor_role: input.actorRole,
+    p_reason: input.reason ?? null,
+  });
+  if (error) throw new Error(`transition_ad_campaign: ${error.message}`);
+  return data as Rpc;
+}

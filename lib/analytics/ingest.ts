@@ -123,7 +123,7 @@ function rpcUrl(fn: string, withKeyInQuery = false): string {
  * action that fired it — a download, a sign-in, a generation.
  */
 export async function postIngest(
-  fn: "track_events" | "track_download_state",
+  fn: "track_events" | "track_download_state" | "track_ad_events",
   payload: Record<string, unknown>,
   unloading = false,
 ): Promise<boolean> {

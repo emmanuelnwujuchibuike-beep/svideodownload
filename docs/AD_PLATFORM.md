@@ -334,3 +334,17 @@ signed webhook / verify-on-return → ad_payment_settle (lock, idempotent: provi
 | Issuing a refund from the admin (`POST /v1/refunds` / Paystack refund API). Today refunds are issued in the provider dashboards and their webhooks update us. | planned |
 | A live end-to-end payment on a sandbox | **owner action** (needs keys) |
 | Rendering live campaigns on the site | Part 4 |
+
+# Part 3 extension — the payment flow on the Frenz AI UI (2026-10-08)
+
+Commit b4f7bc5, plus the tap-once follow-up (80a9ece).
+
+| § | What shipped |
+|---|---|
+| 51–52 | One step rail: Character Replace's stepper became `features/ai/design/ai-step-rail.tsx` (`AiStepRail`). The ad flow shows Format / Placement / Creative / Review / Payment. The progress line moves by transform only. |
+| 53–55 | The Review step is the payment page: `CampaignSummaryCard` (details, total, NGN note), a secure-checkout line, rules confirmation, and the CTA on the sticky `AiActionBar` (mobile). CTA states: "Continue to Payment" → "Preparing Payment…" → "Opening Secure Checkout…". The CTA is disabled while a request is in flight. |
+| 56–58 | `payment-return.tsx`: one status block per server state, with compact Payment / Verified / Live marks. "Paid" appears only when the server reports `success`. Pending, could-not-verify and failed each have their own copy. Leaving the page aborts the request (`AbortController`). There is no polling loop. |
+| 59 | When the quote expires, the flow stops on "Your payment session expired" and offers Review Campaign, which loads a fresh catalog. A server price that differs from the estimate is shown before payment. The price is never re-quoted silently. |
+| 60+ | Dark mode: every ad surface uses app tokens or `dark:` pairs. |
+| perf | The upload step is code-split and warmed one step early. `/advertise/create` dropped from 19.9 kB to 17.5 kB. |
+| follow-up | Every advertising button answers the first tap: `AiButtonLink tapOnce` → `TapOnceLink`, with the Earn button's pending look. The wizard shows "Saving…" and "Discarding…". This is pinned by `features/ads-platform/instant-buttons.test.ts`. |

@@ -141,7 +141,7 @@ describe("safe launch mode (§25)", () => {
 describe("nothing floats over the workspace's sticky bar (Part 9 rule, third offender found in Part 10)", () => {
   it("the install card, the push nudge and the Messages pill all stay off /studio/ai/character-replace", () => {
     const install = code("features/notifications/ios-install-prompt.tsx");
-    expect(install).toContain('const onWorkspace = (pathname ?? "").startsWith("/studio/ai/character-replace")');
+    expect(install).toContain('p.startsWith("/studio/ai/character-replace")');
     expect(install).toContain('{mode !== "hidden" && !onWorkspace ? (');
     expect(code("features/notifications/push-nudge.tsx")).toContain('if ((pathname ?? "").startsWith("/studio/ai/character-replace")) return;');
     expect(code("features/app-shell/floating-messages.tsx")).toContain('if (pathname.startsWith("/studio/ai/character-replace")) return null;');

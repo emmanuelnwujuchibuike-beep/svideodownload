@@ -666,9 +666,25 @@ END LANDING + DOWNLOAD TRANSFORMATION
 | 32 | Footer: Frenz AI, Reels, Wallpapers; new Business column (Advertise, Advertising Rules) |
 | 37 | Landing stays static (`○ /`): 2.81 → 2.98 kB route JS, 216 → 217 kB first load |
 
-### Phase 2 — next
+### Phase 2 — shipped (local commits, 2026-10-08)
 
-- §12/43 /advertise: placements, pricing/duration (live, from the catalog), creative requirements, FAQ, "Start Advertising" with sign-in context and return (§10/44).
-- §18 header nav: AI and Advertise (needs keys in all 50 catalogues — catalogue-integrity test).
-- §34 analytics events for the discovery clicks (batched, existing `track`).
-- §31 install banner vs CTAs on small phones; §46/47 full design + performance audit after Phase 2.
+| § | What |
+|---|---|
+| 12/43, 10/44 | /advertise: "Start Advertising", live placements + pricing from the catalog, creative minimums, FAQ (FAQPage JSON-LD), sign-in note before upload; choices kept across sign-in |
+| 18 | Header: "Products" → **Frenz AI** (/ai), **Advertise** after Pricing; 49 catalogues; one row at 1024/1280 px. Menu: Frenz AI under Discover, new Business group |
+| 34 | Discovery events (ai/reels/ai_reels/wallpapers/advertise clicks, application started/completed) through the batched `track` — one passive listener on `[data-track]` |
+| 31 | Install card: offset now `5rem + safe-area-inset-bottom`; off `/advertise/create` and `/advertise/payment`. It mounts only in the (app) shell, so it never sits over the landing or /advertise CTAs; engagement gate + decline cap unchanged (not aggressive) |
+| owner | Shortcut tray and Fast/Secure/Private pill removed; Promote card on landing + /downloads; credits strip on top of /downloads, small Earn button on the landing headline row; /quests explains what credits are for; every advertising button is tap-once with a pending look |
+
+### §46/47 audit (2026-10-08, local production build, cold cache, no throttling)
+
+| Page | Width | LCP | CLS | Requests | Own JS (wire) | Overflow-x |
+|---|---|---|---|---|---|---|
+| / | 390 | 0.79 s | 0.003 | 120 | 552 KB | 0 |
+| / | 1280 | 0.86 s | 0.003 | 136 | 576 KB | 0 |
+| /advertise | 390 | 0.38 s | 0.002 | 102 | 488 KB | 0 |
+| /advertise | 1280 | 0.39 s | 0.002 | 119 | 525 KB | 0 |
+
+- Landing stays static (`○ /`); first-load JS ≈ 217 kB. The rest of "own JS" is Next's idle-time viewport prefetch of the doors the page shows (/ai, /features, …) — not render-blocking, and it makes those taps instant.
+- /downloads redirects guests to sign-in, so this guest run measured the sign-in screen; the signed-in page was not measured here (needs a session).
+- Production adds third-party ad/analytics requests (§2 audit: 273 requests) — the ad slots were kept by owner decision.

@@ -216,7 +216,16 @@ export function IosInstallPrompt() {
     Messages pill. The card is not dismissed, only kept off this route: it
     comes back on the next page, and its engagement state is untouched.
   */
-  const onWorkspace = (pathname ?? "").startsWith("/studio/ai/character-replace") || (pathname ?? "").startsWith("/ai/character-replace");
+  const p = pathname ?? "";
+  /*
+    Landing brief §31 (2026-10-08): never over a payment button either. Today
+    the card mounts only in the (app) shell and the ad pages live in
+    (marketing), so this is a guard: the ad application's sticky "Continue to
+    Payment" bar sits in the same strip if the card is ever mounted there.
+    The bottom offset adds the safe-area inset so it clears the home bar.
+  */
+  const onWorkspace =
+    p.startsWith("/studio/ai/character-replace") || p.startsWith("/ai/character-replace") || p.startsWith("/advertise/create") || p.startsWith("/advertise/payment");
 
   return (
     <AnimatePresence>
@@ -226,7 +235,7 @@ export function IosInstallPrompt() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 96, opacity: 0 }}
           transition={{ type: "spring", stiffness: 380, damping: 32 }}
-          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-md lg:bottom-6"
+          className="fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[70] mx-auto max-w-md lg:bottom-6"
           role="dialog"
           aria-label="Install Frenz"
         >

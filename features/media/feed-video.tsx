@@ -137,7 +137,7 @@ export function FeedVideo({
   const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [burst, setBurst] = useState(0);
   const [muted, setMuted] = useState(true);
-  const [showPause, setShowPause] = useState(false);
+  const [, setShowPause] = useState(false);
   /*
     Whether the clip is paused RIGHT NOW, for the explicit play/pause control
     (owner, 2026-08-23: "Add a play button at the top of every video next to
@@ -181,6 +181,31 @@ export function FeedVideo({
   // element on `loadedmetadata` otherwise. Same function on both paths, so the
   // two cannot disagree and resize the card for no reason.
   const [ratio, setRatio] = useState<number | null>(() => clampRatio(width, height));
+  /*
+    🔴 FILL WHEN THE SHAPES AGREE (owner, 2026-10-08: "make feed video card not
+    to … show this black background line in the video"). The box is capped at
+    60vh, and a stored or measured ratio can differ from the box by a few
+    pixels, so `object-contain` left thin black bars down the sides or across
+    the ends — the wrapper's `bg-black` showing through. When the box and the
+    clip agree within 6%, the clip FILLS the box (`object-cover` crops at most
+    a sliver no one can see); when they truly differ (a tall clip under the
+    height cap), it stays `contain` and the gap shows the clip's own frame,
+    blurred, instead of black. Measured with one ResizeObserver, no polling.
+  */
+  const [fills, setFills] = useState(false);
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el || !ratio) return;
+    const check = () => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      setFills(Math.abs(r.width / r.height - ratio) / ratio < 0.06);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ratio]);
   const inViewRef = useRef(false);
   const readyRef = useRef(false);
 
@@ -561,7 +586,7 @@ export function FeedVideo({
           src={poster}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-30 blur-2xl"
+          className="pointer-events-none absolute inset-0 -z-10 h-full w-full scale-110 object-cover opacity-90 blur-2xl"
           onError={() => setPosterBroken(true)}
         />
       ) : null}
@@ -597,7 +622,7 @@ export function FeedVideo({
           the page whose stillness is load-bearing, and the pause indicator
           already gives the gesture unambiguous feedback.
         */
-        className="h-full max-h-[60vh] w-full touch-pan-y object-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[60vh] lg:w-auto"
+        className={cn("h-full max-h-[60vh] w-full touch-pan-y focus-visible:outline-none", fills ? "object-cover" : "object-contain", "focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset lg:h-auto lg:max-h-[60vh] lg:w-auto")}
         // Keyboard access (owner spec, 2026-08-17: "Keyboard users can still
         // open media") — purely additive: Enter/Space opens directly,
         // bypassing the tap/double-tap/hold pointer state machine above
@@ -662,19 +687,18 @@ export function FeedVideo({
           src={poster}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+          className={cn("pointer-events-none absolute inset-0 h-full w-full", fills ? "object-cover" : "object-contain")}
           onError={() => setPosterBroken(true)}
         />
       ) : null}
 
-      {/* Paused-while-holding indicator */}
-      {showPause ? (
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-md">
-            <Pause className="h-7 w-7 fill-white" />
-          </span>
-        </span>
-      ) : null}
+      {/*
+        🔴 NO CENTRE PAUSE OVERLAY (owner, 2026-10-08: "make feed video card not
+        to show hover"). Press-and-hold still pauses while held, but the big
+        disc it drew in the middle of the frame appeared on every resting
+        finger — including the start of a scroll — and sat over the picture.
+        The top-right Play/Pause control already shows the state.
+      */}
 
       {/*
         Play/pause + mute, as one control cluster in the top-right (owner,

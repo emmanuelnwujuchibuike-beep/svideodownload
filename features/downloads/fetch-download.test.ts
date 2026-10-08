@@ -64,15 +64,31 @@ describe("worker-direct (the default): one request to the worker, never Vercel",
     expect(JSON.parse(String(calls[0]!.init?.body)).accessToken).toBe("eyJ.member.token");
   });
 
-  it("network failure: one retry at the worker, then an honest 503 — no same-origin request", async () => {
+  it("worker unreachable (or a pre-direct worker mid-deploy): the ticket door — bytes still from the worker, never via the Vercel proxy", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
       calls.push(u);
-      throw new TypeError("Failed to fetch");
+      if (u === WORKER) throw new TypeError("Failed to fetch");
+      if (u === TICKET) return new Response("bytes");
+      return ticketResponse();
     }));
     const res = await fetchDownload("/api/download?url=u&formatId=f", new AbortController().signal);
-    expect(res.status).toBe(503);
-    expect(calls).toEqual([WORKER, WORKER]);
+    expect(await res.text()).toBe("bytes");
+    expect(calls).toEqual([WORKER, "/api/download?url=u&formatId=f&direct=1", TICKET]);
+    expect(calls).not.toContain("/api/download?url=u&formatId=f");
+  });
+
+  it("a pre-direct worker's 403 (no CORS header) is recognised and routed to the ticket door", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      calls.push(u);
+      if (u === WORKER) return new Response(JSON.stringify({ error: "Forbidden", code: "INTERNAL" }), { status: 403, headers: { "content-type": "application/json" } });
+      if (u === TICKET) return new Response("bytes");
+      return ticketResponse();
+    }));
+    const res = await fetchDownload("/api/download?url=u&formatId=f", new AbortController().signal);
+    expect(await res.text()).toBe("bytes");
+    expect(calls).toEqual([WORKER, "/api/download?url=u&formatId=f&direct=1", TICKET]);
   });
 
   it("our JSON refusal (429 daily cap) is returned as-is, not retried", async () => {

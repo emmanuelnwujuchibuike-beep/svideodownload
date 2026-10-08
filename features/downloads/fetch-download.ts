@@ -1,4 +1,4 @@
-import { postDirectDownload, workerDirectEnabled } from "./worker-direct";
+import { isOldWorkerRefusal, postDirectDownload, workerDirectEnabled } from "./worker-direct";
 
 /**
  * The download's bytes — from the worker DIRECTLY when the server allows it.
@@ -47,15 +47,21 @@ export async function fetchDownload(target: string, signal: AbortSignal): Promis
     Same retry rule as below: one more attempt, never Vercel.
   */
   if (workerDirectEnabled()) {
-    for (let attempt = 0; attempt < DIRECT_ATTEMPTS; attempt++) {
+    let oldWorker = false;
+    for (let attempt = 0; attempt < DIRECT_ATTEMPTS && !oldWorker; attempt++) {
       try {
         const res = await postDirectDownload(target, signal);
-        if (isOurAnswer(res)) return res;
+        if (isOldWorkerRefusal(res)) oldWorker = true;
+        else if (isOurAnswer(res)) return res;
       } catch (e) {
         if (signal.aborted) throw e;
+        // an old worker's 403 has no CORS header, so it surfaces as a network error
+        oldWorker = true;
       }
     }
-    return unreachable();
+    // Only a worker that predates the direct path (mid-deploy) gets here: the
+    // ticket door below still keeps the bytes off Vercel.
+    if (!oldWorker) return unreachable();
   }
 
   for (let attempt = 0; attempt < DIRECT_ATTEMPTS; attempt++) {

@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { LayoutGrid } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -109,6 +110,34 @@ export function ReelTabs({
   feedHref?: string;
 }) {
   const tabs = REEL_TABS.filter((t) => available.includes(t.id));
+  const rowRef = useRef<HTMLDivElement>(null);
+  /*
+    Which edges have more tabs beyond them — drives the soft edge fade, so an
+    overflowing row reads as "scroll for more" instead of being cut off (or,
+    as it was, running under the Close and ••• buttons). Measured on scroll
+    and resize only; no timer, no per-frame work.
+  */
+  const [edges, setEdges] = useState({ start: false, end: false });
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const measure = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      setEdges({ start: el.scrollLeft > 2, end: max - el.scrollLeft > 2 });
+    };
+    measure();
+    el.addEventListener("scroll", measure, { passive: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", measure);
+      ro.disconnect();
+    };
+  }, []);
+  // the active tab is always the one in view
+  useEffect(() => {
+    rowRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [active]);
   // A single destination is not a choice — rendering one tab is chrome that
   // teaches nothing and still costs the safe-area strip it sits in. The Feed
   // link (when present) still renders on its own below, since it isn't a
@@ -117,11 +146,28 @@ export function ReelTabs({
 
   return (
     <div
+      ref={rowRef}
       role="tablist"
       aria-label="Reels feeds"
+      data-edge-start={edges.start || undefined}
+      data-edge-end={edges.end || undefined}
       className={cn(
-        "fixed left-1/2 top-[max(0.75rem,var(--frenz-safe-top))] flex max-w-[min(92vw,26rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-full px-1.5 py-1",
+        /*
+          🔴 FITTED BETWEEN THE CORNER BUTTONS (owner, 2026-10-08: "this reels
+          tray are over flowing to X button and on smaller device is worst").
+
+          Close and ••• are 2.5rem circles 1rem in from each edge
+          (reel-viewer.tsx), so 4rem on each side is theirs: the row may use
+          `100vw - 8rem`, never more. It shares their top and their height
+          (h-10), so the three read as ONE bar, centred on the same line. What
+          does not fit scrolls, with a soft fade at the edge that has more — the
+          mask is only applied to an edge that actually overflows.
+        */
+        "fixed left-1/2 top-[max(1rem,var(--frenz-safe-top))] flex h-10 max-w-[min(calc(100vw-8rem),26rem)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto scroll-px-2 px-1",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "data-[edge-end]:[mask-image:linear-gradient(to_right,#000_calc(100%-1.75rem),transparent)]",
+        "data-[edge-start]:[mask-image:linear-gradient(to_right,transparent,#000_1.75rem)]",
+        "data-[edge-start]:data-[edge-end]:[mask-image:linear-gradient(to_right,transparent,#000_1.75rem,#000_calc(100%-1.75rem),transparent)]",
         /*
           🔴 NO GLASS PANEL BEHIND THIS ROW (owner, 2026-08-25: "i want the glass
           background of the reels top nav to be removed, the black glass
@@ -161,13 +207,13 @@ export function ReelTabs({
             aria-selected={on}
             onClick={() => onChange(t.id)}
             className={cn(
-              "relative shrink-0 rounded-full px-3 py-1 outline-none transition active:scale-95",
+              "relative shrink-0 rounded-full px-2.5 py-1.5 outline-none transition active:scale-95 min-[380px]:px-3",
               "focus-visible:ring-2 focus-visible:ring-white/80",
             )}
           >
             <span
               className={cn(
-                "relative z-[1] whitespace-nowrap text-[13px] font-semibold transition-colors",
+                "relative z-[1] whitespace-nowrap text-[13px] font-semibold tracking-[-0.01em] transition-colors",
                 // Sits directly on video now that the panel is gone — same
                 // shadow as every other on-video glyph, so an inactive label
                 // never dissolves into a bright frame.
@@ -213,13 +259,14 @@ export function ReelTabs({
           <Link
             href={feedHref}
             className={cn(
-              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-[13px] font-semibold text-white/70 outline-none transition hover:text-white/90 active:scale-95",
+              // under 380px the word steps aside for its grid icon (still named for screen readers)
+              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-white/70 outline-none transition hover:text-white/90 active:scale-95 min-[380px]:px-3",
               "focus-visible:ring-2 focus-visible:ring-white/80",
               GLYPH_SHADOW,
             )}
           >
             <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-            Feed
+            <span className="max-[379px]:sr-only">Feed</span>
           </Link>
         </>
       ) : null}

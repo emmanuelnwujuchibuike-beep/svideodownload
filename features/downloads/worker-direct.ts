@@ -37,12 +37,33 @@ async function accessToken(): Promise<string | null> {
   }
 }
 
+/**
+ * A worker that predates the direct path refuses a secret-less call with 403
+ * `{"code":"INTERNAL"}`. During a deploy the site can go live minutes before
+ * the worker does (measured 2026-10-08), so that one answer means "use the old
+ * door this time" — and the moment the new worker is up, the direct path takes
+ * over by itself. Any other answer is the worker's own and is returned as-is.
+ */
+export function isOldWorkerRefusal(res: Response): boolean {
+  return res.status === 403 && !(res.headers.get("access-control-allow-origin") ?? "");
+}
+
+function sameOriginMetadata(url: string, signal?: AbortSignal): Promise<Response> {
+  return fetch("/api/metadata", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal });
+}
+
 /** POST /api/metadata — the preview. Same JSON answer as the old same-origin route. */
-export function postMetadata(url: string, signal?: AbortSignal): Promise<Response> {
-  if (!workerDirectEnabled()) {
-    return fetch("/api/metadata", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }), signal });
+export async function postMetadata(url: string, signal?: AbortSignal): Promise<Response> {
+  if (!workerDirectEnabled()) return sameOriginMetadata(url, signal);
+  try {
+    const res = await fetch(`${DOWNLOAD_ORIGIN}/api/metadata`, { method: "POST", headers: SIMPLE, body: JSON.stringify({ url }), signal, mode: "cors", credentials: "omit" });
+    return isOldWorkerRefusal(res) ? sameOriginMetadata(url, signal) : res;
+  } catch (e) {
+    if (signal?.aborted) throw e;
+    // An old worker's 403 carries no CORS header, so the browser reports it as a
+    // network error, not a 403 — the same compatibility door applies.
+    return sameOriginMetadata(url, signal);
   }
-  return fetch(`${DOWNLOAD_ORIGIN}/api/metadata`, { method: "POST", headers: SIMPLE, body: JSON.stringify({ url }), signal, mode: "cors", credentials: "omit" });
 }
 
 /**

@@ -8,21 +8,28 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 | Area | State |
 |---|---|
-| **Self-serve ad platform** | Parts 1–3 shipped: engine, advertiser application, payments. Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. **Next: Part 4** (render live campaigns on the site), then admin screens (Part 6). |
+| **Self-serve ad platform** | Parts 1–6 shipped: engine, advertiser application, payments, serving on the **shared slots** (Part 5; the old "Part 4 rendering" was folded into it), advertiser dashboard with live edits, pause/resume and extensions (Part 6, migration 0198). Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. **Next: Part 7 = admin screens** (slots + provider order, `ad_advertiser_controls`, prices, campaigns, refunds). Upgrade the existing admin Ads panel; never build a second one. The owner sends the Part 7 brief. |
+| Slots | One physical slot, many providers: `lib/ads-platform/slot-registry.ts` + `resolveSlotProvider`; order in `settings.ad_slot_provider_order`. A paid ad never adds a container. |
 | Payments | Paystack + Bachs as two rails under one router (`lib/payments/router.ts`, purposes `wallet_topup`, `ai_subscription`, `ad_campaign`). See `docs/PAYMENTS.md`. |
-| Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. |
+| Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. Since 0199, transfers keep their kind: the sender picks withdrawable or non-withdrawable and the recipient gets the same kind. The split shows on `/ai/usage` and the rewards dashboard; totals show elsewhere. |
+| Social | Stories PWA reply band + ••• options; follow links to TikTok/Instagram/X (`components/social/follow-links.tsx`). |
 
 ### Ad platform: owner decisions still open
 
-1. **Reward ads on AI saves.** The `ai_video_save_reward` placement exists
-   because the ad brief asks for it, but it conflicts with the earlier
-   standing rule "no reward ads for AI, ever". If kept, it must **never gate**
-   a save: no ad available means the save proceeds.
-2. **Does pausing extend a campaign's end date?** Today it does not.
-3. **The example brand in ad previews** is Frenz AI. Real third-party brands
+1. **Reward ads on AI saves.** The `ai_video_save_reward` placement and the
+   `ai_save_moment` slot exist because the ad brief asks for them, but they
+   conflict with the earlier standing rule "no reward ads for AI, ever". It is
+   built **non-gating**: no ad available means the save proceeds. Keep or drop?
+2. **Three network-ad duplicates from before Part 5** (`docs/AD_PLATFORM.md`,
+   Part 5 slot table #2/#3, #11, #16). Consolidating them changes live revenue.
+3. **Does pausing extend a campaign's end date?** Today it does not.
+4. **The example brand in ad previews** is Frenz AI. Real third-party brands
    were declined, because they would read as that company advertising here.
-4. **Refunds are issued in the provider dashboards for now.** An admin refund
-   button is planned.
+5. **Refunds are issued in the provider dashboards for now.** An admin refund
+   button is Part 7.
+
+Declined (keep declined): a hidden analytics multiplier for advertisers.
+Advertisers see the database's real counts.
 
 ### Ad platform: to go live
 
@@ -39,7 +46,16 @@ See "To go live" in `docs/AD_PLATFORM.md`:
 ## 2 · How to verify ad-platform SQL without a database
 
 Supabase migrations auto-apply on push (GitHub integration), so a broken
-migration reaches production. Before pushing, execute new SQL in **PGlite**
+migration reaches production.
+
+⚠️ **A local migration can reach production before any push.** On 2026-10-08,
+0199 was found already applied in production while `origin` was still at
+`d80aba1`, which did not contain it. Something applies local migration files
+to the live database. Treat a file in `supabase/migrations/` as live the moment
+it exists. PGlite-test it **before** writing it there, and keep site code and
+migration compatible in either deploy order.
+
+Execute new SQL in **PGlite**
 (`npm i @electric-sql/pglite` in a scratch folder, not in this repo):
 
 - stub `auth.users`, `auth.uid()` (reading `request.jwt.claim.sub`),
@@ -98,4 +114,10 @@ and bucket), not just one.
 - Part 1: `02cbc1d`
 - Part 2: `8ea15b9`
 - Admin Bachs field fix: `9b2a010`
-- Part 3: see `git log --grep "ads"`
+- Part 3: `49f3b1c`, UI extension `b4f7bc5`
+- Part 5: `773f297`, perf `f50266c`, admin slot list `c950db3`
+- Part 6: `075ee4e` (migration 0198)
+- Stories reply band: `e86c021`; follow links: `d80aba1`
+- Credit kinds on transfer: `cc33ad0` (migration 0199)
+- 0198 + 0199 were probed live (read-only) on 2026-10-08: every object is
+  present, and the browser is refused on the write functions.

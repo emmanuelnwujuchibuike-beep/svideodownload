@@ -26,6 +26,8 @@ export function POST(request: Request) {
       quoteId: str(body.quoteId, 64),
       market: paymentMarket(request.headers),
       preferredProvider: body.provider,
+      // Part 6: an extension of a running campaign - the quote says so and the database re-checks it
+      extension: body.extension === true,
     });
     if (r.kind === "refused") throw new AdApplicationError(r.code, r.status);
     return r.kind === "redirect" ? { url: r.url, reference: r.reference } : { verifying: true, reference: r.reference };

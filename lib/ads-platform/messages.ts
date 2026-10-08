@@ -113,6 +113,37 @@ export function adMessage(code: string, f: MessageFacts = {}): string {
       return "We couldn't find that payment.";
     case "payment_not_started":
       return "Payment could not be started. Your campaign has not been charged.";
+    /* ── Part 6: managing a paid campaign ── */
+    case "stale":
+      return "This campaign changed in another tab or window. We've reloaded it — please make your change again.";
+    case "campaign_ended":
+    case "expired":
+      return "This campaign has ended. Create a new campaign to run this ad again.";
+    case "blocked":
+      return "This ad was stopped by Frenzsave, so it can't be edited. Please contact support.";
+    case "edit_not_allowed":
+      return "This change isn't available for running campaigns right now.";
+    case "control_not_allowed":
+      return "Pausing and resuming isn't available right now.";
+    case "extension_not_allowed":
+      return "Extending campaigns isn't available right now.";
+    case "not_extendable":
+      return "Only a running or paused campaign that hasn't ended can be extended.";
+    case "payment_open":
+      return "A payment for this campaign is already in progress. Finish or cancel it first.";
+    case "not_live":
+      return "Only a live campaign can be paused.";
+    case "not_paused":
+      return "This campaign isn't paused.";
+    case "paused_by_frenzsave":
+      return "Frenzsave paused this campaign, so only our team can resume it. Please contact support.";
+    case "resume_flagged":
+      return "Your campaign couldn't go live again yet — it needs a quick check. We'll let you know as soon as it's live.";
+    case "not_ready":
+    case "format_mismatch":
+      return "The new file didn't pass the checks, so your current ad stays live.";
+    case "nothing_to_change":
+      return "Nothing changed.";
     default:
       return "Something went wrong on our side. Please try again.";
   }

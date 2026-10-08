@@ -13,6 +13,8 @@ import { routePayment } from "@/lib/payments/router";
 import { initializeAdCheckout, paystackEnabled, paystackFailureIsDefinite, verifyTransaction } from "@/lib/paystack/paystack";
 import { SITE_URL } from "@/lib/site";
 
+import { notifyAdvertiser } from "./ad-notify";
+
 import { activateCampaign, checkDestination } from "./server";
 
 /**
@@ -114,7 +116,7 @@ const returnUrl = (reference: string) => `${SITE_URL}/advertise/payment?referenc
  */
 export async function createAdCampaignPayment(
   db: Db,
-  input: { userId: string; email: string; campaignId: string; quoteId: string; market: PaymentMarket; preferredProvider?: unknown },
+  input: { userId: string; email: string; campaignId: string; quoteId: string; market: PaymentMarket; preferredProvider?: unknown; extension?: boolean },
 ): Promise<PaymentStart> {
   const { data: settings } = await db.from("ad_platform_settings").select("payments_enabled").limit(1);
   if (settings?.[0]?.payments_enabled !== true) return { kind: "refused", code: "payments_disabled", status: 503 };
@@ -122,7 +124,9 @@ export async function createAdCampaignPayment(
   const { data: head } = await db.from("ad_campaigns").select("id, application_id, advertisers!inner(user_id)").eq("id", input.campaignId).maybeSingle();
   const owner = (head as { advertisers?: { user_id?: string } } | null)?.advertisers?.user_id;
   if (!head || owner !== input.userId) return { kind: "refused", code: "not_found", status: 404 };
-  const applicationId = (head.application_id as string | null) ?? (head.id as string);
+  // Part 6: an extension is paid against the campaign ITSELF (its quote is keyed to it),
+  // through the same attempt ledger, providers, webhooks and settle
+  const applicationId = input.extension ? (head.id as string) : ((head.application_id as string | null) ?? (head.id as string));
 
   // an open checkout? hand it back (double tap, two tabs, a retry)
   const open = await openAttempt(db, applicationId);
@@ -349,7 +353,18 @@ export async function settleVerified(db: Db, s: SettleInput): Promise<Rpc> {
   const r = data as Rpc;
   if (r.ok) {
     if (!r.already) log("payment_verified", { reference: s.reference, provider: s.provider, via: s.via });
-    await activatePaidCampaigns(db, (r.campaign_ids as string[] | null) ?? []);
+    const ext = r.extension as { ok?: boolean; reason?: string; campaign_id?: string; new_end_at?: string; already?: boolean } | true | undefined;
+    if (ext && typeof ext === "object") {
+      // Part 6: an extension payment moves its campaign's end, once (ad_apply_extension)
+      if (ext.campaign_id && !ext.already) {
+        log(ext.ok ? "campaign_extended" : "extension_held", { reference: s.reference, campaignId: ext.campaign_id, endAt: ext.new_end_at });
+        await notifyAdvertiser(db, ext.campaign_id, ext.ok ? { kind: "extended", endAt: ext.new_end_at ?? null } : { kind: "extension_held" });
+      }
+    } else if (!ext) {
+      const ids = (r.campaign_ids as string[] | null) ?? [];
+      if (!r.already) for (const id of ids) await notifyAdvertiser(db, id, { kind: "payment_verified" });
+      await activatePaidCampaigns(db, ids);
+    }
   } else if (r.reason === "mismatch") {
     console.error("[ads-pay] payment_mismatch", { reference: s.reference, provider: s.provider, detail: r.detail, paid: s.paidAmount, currency: s.paidCurrency });
   } else {
@@ -370,8 +385,14 @@ export async function activatePaidCampaigns(db: Db, campaignIds: readonly string
       log("campaign_activation_started", { campaignId: id });
       const r = await activateCampaign(db, id, { id: null, role: "system" });
       if (r.ok) {
-        if (!r.already_active) log("campaign_activated", { campaignId: id, slot: r.slot, end: r.end_at });
-      } else console.warn("[ads-pay] campaign_activation_failed", { campaignId: id, reason: r.reason, flags: r.flags });
+        if (!r.already_active) {
+          log("campaign_activated", { campaignId: id, slot: r.slot, end: r.end_at });
+          await notifyAdvertiser(db, id, { kind: "activated", endAt: (r.end_at as string | null) ?? null });
+        }
+      } else {
+        console.warn("[ads-pay] campaign_activation_failed", { campaignId: id, reason: r.reason, flags: r.flags });
+        if (r.reason === "flagged") await notifyAdvertiser(db, id, { kind: "needs_review" });
+      }
     } catch (e) {
       console.error("[ads-pay] campaign_activation_failed", { campaignId: id, error: String(e).slice(0, 200) });
     }
@@ -390,6 +411,8 @@ export interface PaymentView {
   providerAmount: number | null;
   providerCurrency: string | null;
   campaigns: { id: string; name: string; status: string; startAt: string | null; endAt: string | null; durationDays: number | null; extraDays: number; placement: string | null; format: string | null }[];
+  /** Part 6: present when this payment extends an existing campaign */
+  extension?: { status: string; days: number; extraDays: number; newEndAt: string | null } | null;
 }
 
 /**
@@ -407,14 +430,16 @@ export async function adPaymentStatus(db: Db, userId: string, reference: string)
     a = (await load()) ?? a;
   }
 
-  const { data: rows } = await db
-    .from("ad_campaigns")
-    .select("id, name, status, start_at, end_at, duration_days, extra_days, ad_placements(name, format_code)")
-    .eq("application_id", a.item_id)
-    .eq("payment_reference", reference);
+  // Part 6: an extension payment belongs to ONE existing campaign (item_id), not to an application
+  const { data: extRow } = await db.from("ad_campaign_extensions").select("status, days, extra_days, new_end_at").eq("payment_reference", reference).maybeSingle();
+  const ext = extRow as { status: string; days: number; extra_days: number; new_end_at: string | null } | null;
+  const base = db.from("ad_campaigns").select("id, name, status, start_at, end_at, duration_days, extra_days, ad_placements(name, format_code)");
+  const { data: rows } = ext ? await base.eq("id", a.item_id) : await base.eq("application_id", a.item_id).eq("payment_reference", reference);
   const campaigns = ((rows ?? []) as unknown as { id: string; name: string; status: string; start_at: string | null; end_at: string | null; duration_days: number | null; extra_days: number; ad_placements: { name: string; format_code: string } | null }[]).map((c) => ({
     id: c.id, name: c.name, status: c.status, startAt: c.start_at, endAt: c.end_at, durationDays: c.duration_days, extraDays: c.extra_days ?? 0, placement: c.ad_placements?.name ?? null, format: c.ad_placements?.format_code ?? null,
   }));
+
+  if (ext) return { ...view(a, campaigns), extension: { status: ext.status, days: ext.days, extraDays: ext.extra_days, newEndAt: ext.new_end_at } };
 
   // paid but not live yet: activation is retried here (idempotent)
   if (a.status === "success" && campaigns.some((c) => c.status === "paid")) {

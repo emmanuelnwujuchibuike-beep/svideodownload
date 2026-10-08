@@ -483,3 +483,91 @@ rotation.
 | `ai_save_moment` vs the standing "no reward ads for AI" rule | built non-gating; **owner decision** stays open (HANDOFF) |
 | Slot id on ad_events rows | derivable (campaign → placement → slot); `track_ad_events` unchanged |
 | Device + throttled-network measurements | not run in this environment |
+
+# Part 6 — the advertiser dashboard and campaign management (2026-10-08)
+
+Brief: docs/AD_PLATFORM_PART6_BRIEF.md (verbatim). Shared-slot rules apply:
+campaigns use the canonical slots; nothing here creates a slot.
+
+## Reused (audit)
+
+The existing pieces, all reused: the member session (no separate advertiser
+login) and `advertiserRoute` (session, rate limit, plain-word refusals); the
+campaigns, creatives, quotes and the `ai_topup_attempts` ledger, with
+Paystack and Bachs, their webhooks and `ad_payment_settle`; `activate_ad_campaign`
+(now also the advertiser's resume); signed uploads into the private staging
+bucket and the server-side byte probe; `ad_campaign_daily_stats` (aggregates);
+`ad_campaign_events` (audit); `sendSmartPush` (push + Notification Center) and
+`sendProductEmail`; the Frenz AI panels, chips and buttons; the existing
+/advertise/campaigns page, upgraded in place.
+
+## What was added
+
+| Piece | What |
+|---|---|
+| `supabase/migrations/0198_ad_platform_dashboard.sql` | creative status `staged`; `ad_swap_creative`, `ad_edit_creative_details`, `ad_advertiser_pause` (owner, row lock, expected version, audit); `ad_campaign_extensions`; `ad_price_for` (the ONE price rule, now also behind `ad_campaign_quote`); `ad_extension_quote`; `ad_apply_extension`; extension branches in `ad_payment_begin` / `ad_payment_settle` (copied from 0197, then extended); `ad_my_summary` / `ad_my_payments` (owner-scoped, browser-callable). Write functions are service-role only. |
+| `lib/ads-platform/campaign-manage.ts` | replacement ticket and finalize-then-swap, details edit (link checked server-side, never fetched), pause/resume, extension quote; admin policy `settings.ad_advertiser_controls` |
+| `lib/ads-platform/ad-notify.ts` | push + in-app + **email** for: payment verified, live, needs review, creative approved/rejected, paused, resumed, extended, extension held. Each channel is guarded on its own; never able to break money. |
+| `POST /api/ads/advertiser/manage` | the one action endpoint; reads never come here |
+| `features/ads-platform/my-campaigns.tsx` (upgraded) + `dashboard/*` | Overview · Campaigns (search, filter, sort, pagination) · Analytics (7 / 30 / lifetime) · Payments · Rules & help; campaign detail in place (`?c=<id>`) |
+
+## How a live edit works
+
+1. **Replace the image or video:** the new file is staged (never served). Its
+   bytes are probed exactly like a new ad's. If valid, `ad_swap_creative`
+   swaps it in one transaction: the old creative becomes `removed` (row and
+   file kept for audit), the new one becomes `active`. The campaign id,
+   payment, slot, start and end are unchanged. If the file is invalid, nothing
+   changes and the advertiser is told.
+2. **Headline, description, link:** the link is checked (https only, no
+   scripts or credentials, admin blocklist; never fetched, so there is no SSRF
+   surface), then applied in one statement. A refused link leaves the old one.
+3. Every write takes the version the advertiser saw; a concurrent edit is
+   refused as `stale`, never silently overwritten. Blocked or expired
+   campaigns can't edit.
+
+## Extensions
+
+`ad_extension_quote` prices placement × duration from the admin rows (same
+promotion rule), opens one quote, and checks out through the same Paystack/Bachs
+path. `ad_payment_settle` applies it once (`ad_apply_extension`): the end
+moves by days plus bonus; the id, start and payment record stay. A duplicate
+webhook returns `already`. A payment that lands after the campaign stopped is
+`held` for a person, not lost or applied. Changing placement or format on a
+live campaign is NOT offered: that is a new campaign (the platform cannot move
+a paid slot safely).
+
+## Verified
+
+- **SQL executed** in PGlite with the real 0151/0186/0188/0195–0198: **48/48**
+  checks. They cover staged-not-served, refused swap keeping the old creative,
+  IDOR, stale, blocked, the atomic swap, an admin pause the advertiser can't
+  lift, resume through activation, extension quote → begin → short payment
+  refused → settle (+7 days, same id and start) → duplicate webhook ignored,
+  expired campaign, owner-scoped summary and payments, and grants. Two mutants
+  (no validation check on swap; no owner check) each failed.
+- `lib/ads-platform/part6-dashboard.test.ts` (28) + full suite green.
+- Browser (local production build, fake signed-in advertiser and fake data at
+  the network layer), 390 px and 1280 px: overview totals, campaigns,
+  analytics, payments, detail; an edit sends only the changed field with the
+  version; the extension shows the server's price first; an expired campaign
+  shows no edit actions; someone else's id shows "Campaign not found"; no
+  horizontal overflow. Every dashboard read went browser → Supabase; the only
+  app function the dashboard called was the edit action.
+- Budgets: /advertise/campaigns is static (177 kB first load); all route budgets
+  pass.
+
+Not run: a real upload + swap against live storage, and a real extension
+payment on a sandbox (needs keys). Both reuse code paths verified in Parts 2–3.
+
+## Gaps (Part 6)
+
+| Item | Status |
+|---|---|
+| Destination reputation (phishing / malware feeds, redirect chase) | still syntax + admin blocklist (as Part 2); a feed is a Part 7 decision |
+| "Approaching expiry" reminder | not sent: there is no cron by design; could ride the lifecycle sync later |
+| Refund of an extension | via the provider dashboard, then the admin (Part 7) |
+| Old creative files | kept for audit (rows `removed`); no cleanup job yet |
+| Hidden analytics multiplier | **declined**: advertisers see the database's real counts |
+| Admin screens for `ad_advertiser_controls`, slots, prices, campaigns | **Part 7** (upgrade the existing admin) |
+| 0198 applied to production | on push, then a live probe (runner hard law) |

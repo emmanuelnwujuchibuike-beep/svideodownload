@@ -214,7 +214,7 @@ export async function discardDraft(db: Db, userId: string, campaignId: string): 
 
 /* ─────────────────────────────────── uploads ────────────────────────────────── */
 
-async function formatOfCampaign(db: Db, placementId: string): Promise<FormatRow & { enabled: boolean }> {
+export async function formatOfCampaign(db: Db, placementId: string): Promise<FormatRow & { enabled: boolean }> {
   const { data: pl } = await db.from("ad_placements").select("format_code").eq("id", placementId).maybeSingle();
   const { data: f } = await db
     .from("ad_formats")
@@ -243,6 +243,24 @@ export async function uploadTicket(db: Db, userId: string, input: TicketInput) {
   const app = await loadOwnApplication(db, userId, input.campaignId);
   if (app.primary.status !== "draft") refuse("not_editable", 409);
   const f = await formatOfCampaign(db, app.primary.placement_id);
+  return stageCreative(db, userId, app.primary.id, f, input, { status: "active" });
+}
+
+/**
+ * A signed PUT target for a new creative of one campaign (shared by a draft's
+ * upload and a live campaign's replacement, Part 6). Checks the declared type
+ * and size against the CURRENT format first; the real bytes are checked again
+ * in probeAndPublish. A replacement is `staged`: nothing serves it, and the
+ * live creative stays exactly as it is until the swap.
+ */
+export async function stageCreative(
+  db: Db,
+  userId: string,
+  campaignId: string,
+  f: FormatRow & { code: string },
+  input: Pick<TicketInput, "mediaType" | "mimeType" | "sizeBytes">,
+  row: { status: "active" | "staged"; destination_url?: string; headline?: string | null; description?: string | null },
+) {
   if (input.mediaType !== "image" && input.mediaType !== "video") refuse("mime_not_allowed");
   if (!f.media_types.includes(input.mediaType)) refuse("media_type_not_allowed", 400, { mediaType: input.mediaType });
   const allowed: readonly string[] = input.mediaType === "video" ? VIDEO_MIME_TYPES : IMAGE_MIME_TYPES;
@@ -254,23 +272,26 @@ export async function uploadTicket(db: Db, userId: string, input: TicketInput) {
 
   // Abandoned earlier attempts on this application are cleared here, on the
   // hot path - no cron, and staging never accumulates per application.
-  const { data: stale } = await db.from("ad_creatives").select("id, storage_path").eq("campaign_id", app.primary.id).eq("validation_status", "pending").neq("status", "removed");
+  const { data: stale } = await db.from("ad_creatives").select("id, storage_path").eq("campaign_id", campaignId).eq("validation_status", "pending").eq("status", row.status);
   if (stale?.length) {
     await db.storage.from(STAGING_BUCKET).remove(stale.flatMap((s) => (s.storage_path ? [s.storage_path, posterPath(s.storage_path)] : [])));
     await db.from("ad_creatives").update({ status: "removed" }).in("id", stale.map((s) => s.id));
   }
 
   const creativeId = randomUUID();
-  const path = `${userId}/${app.primary.id}/${creativeId}.${EXT[input.mimeType]}`;
+  const path = `${userId}/${campaignId}/${creativeId}.${EXT[input.mimeType]}`;
   const { error: insErr } = await db.from("ad_creatives").insert({
     id: creativeId,
-    campaign_id: app.primary.id,
+    campaign_id: campaignId,
     format_code: f.code,
     media_type: input.mediaType,
     mime_type: input.mimeType,
     storage_path: path,
-    status: "active",
+    status: row.status,
     validation_status: "pending",
+    ...(row.destination_url ? { destination_url: row.destination_url, url_validation_status: "valid" } : {}),
+    ...(row.headline !== undefined ? { headline: row.headline } : {}),
+    ...(row.description !== undefined ? { description: row.description } : {}),
   });
   if (insErr) throw new Error(`ad_creatives insert: ${insErr.message}`);
 
@@ -354,6 +375,21 @@ export async function finalizeUpload(db: Db, userId: string, creativeId: string)
   if (app.primary.id !== cr.campaign_id || !cr.storage_path.startsWith(`${userId}/${app.primary.id}/`)) refuse("not_found", 404);
   if (app.primary.status !== "draft") refuse("not_editable", 409);
   const f = await formatOfCampaign(db, app.primary.placement_id);
+  const result = await probeAndPublish(db, cr as { id: string; storage_path: string }, f);
+  // one creative per application: the new one replaces any earlier one
+  if (result.ok) await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", cr.campaign_id).neq("id", cr.id).neq("status", "removed");
+  return result;
+}
+
+/**
+ * Decide on a staged upload from its BYTES (shared by a draft's upload and a
+ * live campaign's replacement, Part 6). Valid ⇒ copied into the public bucket
+ * (inside Supabase - no bytes through here), the staging copy removed, the row
+ * marked valid. Invalid ⇒ the staging copy removed and the reasons written
+ * down. It never touches any OTHER creative: what happens to those is the
+ * caller's decision (a draft drops them; a live campaign swaps atomically).
+ */
+export async function probeAndPublish(db: Db, cr: { id: string; storage_path: string }, f: FormatRow & { code: string }): Promise<FinalizeResult> {
   const limits = formatLimits(f);
   const outLimits = { maxDurationSeconds: limits.maxDurationSeconds, maxFileBytes: limits.maxFileBytes, minWidth: limits.minWidth ?? null, minHeight: limits.minHeight ?? null, maxWidth: limits.maxWidth, maxHeight: limits.maxHeight };
 
@@ -402,8 +438,6 @@ export async function finalizeUpload(db: Db, userId: string, creativeId: string)
   await db.storage.from(STAGING_BUCKET).remove([cr.storage_path, posterPath(cr.storage_path)]);
   const mediaUrl = db.storage.from(PUBLIC_BUCKET).getPublicUrl(cr.storage_path).data.publicUrl;
 
-  // one creative per application: the new one replaces any earlier one
-  await db.from("ad_creatives").update({ status: "removed" }).eq("campaign_id", cr.campaign_id).neq("id", cr.id).neq("status", "removed");
   await db.from("ad_creatives").update({
     media_url: mediaUrl, thumbnail_url: thumbnailUrl, mime_type: facts!.mime, file_size_bytes: size,
     width: facts!.width, height: facts!.height, duration_seconds: facts!.durationSeconds,

@@ -37,6 +37,8 @@ interface View {
   providerAmount: number | null;
   providerCurrency: string | null;
   campaigns: { id: string; name: string; status: string; startAt: string | null; endAt: string | null; durationDays: number | null; extraDays: number; placement: string | null; format: string | null }[];
+  /** Part 6: this payment extends an existing campaign */
+  extension?: { status: string; days: number; extraDays: number; newEndAt: string | null } | null;
 }
 
 const SETTLING: View["state"][] = ["verifying", "paid", "activating"];
@@ -244,6 +246,18 @@ export function PaymentReturn() {
         <div className="mt-4">
           <Notice icon={CircleAlert} tone="rose">
             {error}
+          </Notice>
+        </div>
+      ) : null}
+
+      {view?.extension ? (
+        <div className="mt-4">
+          <Notice icon={view.extension.status === "applied" ? BadgeCheck : Clock} tone={view.extension.status === "applied" ? "emerald" : "amber"}>
+            {view.extension.status === "applied"
+              ? `Campaign extended by ${view.extension.days + view.extension.extraDays} days${view.extension.newEndAt ? ` — it now runs until ${new Date(view.extension.newEndAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : ""}.`
+              : view.extension.status === "held"
+                ? "We received your payment, but the campaign had stopped before it arrived. Our team will contact you."
+                : "Your extension starts as soon as the payment is confirmed."}
           </Notice>
         </div>
       ) : null}

@@ -67,12 +67,15 @@ describe("the landing page structure", () => {
     expect(page).toContain("const ads = await getPublicAdSummary();");
   });
 
-  it("the landing hides the empty stat tiles and shows the shortcut row under the tiles; /downloads carries the small Promote door", () => {
-    expect(src("components/landing/hero.tsx")).toMatch(/hideEmptyStats\s+quickActions=\{\{ promote: ads\.enabled \}\}/);
-    // the row never repeats the two big tiles above it
-    const qa = src("components/landing/quick-actions.tsx");
-    expect(qa).not.toContain('href: "/ai"');
-    expect(qa).not.toContain('href: "/wallpapers"');
-    expect(src("features/downloads/downloads-page.tsx")).toMatch(/<DownloadPageCore\s+promoteCta/);
+  it("owner 2026-10-08: no shortcut row; the Promote card sits where the trust pill was, and the pill moved under the paste box", () => {
+    expect(src("components/landing/hero.tsx")).toMatch(/hideEmptyStats/);
+    expect(src("components/landing/hero.tsx")).not.toContain("quickActions");
+    const hero = src("features/downloads/downloads-sections.tsx");
+    expect(hero).toContain('<PromoteCard className="mt-4" />');
+    const core = src("features/downloads/download-page-core.tsx");
+    // the pill comes right after the paste box section
+    expect(core.indexOf("<TrustPills")).toBeGreaterThan(core.indexOf('<section id="download"'));
+    // one Promote door per page: the hero's — no second row lower down
+    expect(core).not.toContain("promoteCta");
   });
 });

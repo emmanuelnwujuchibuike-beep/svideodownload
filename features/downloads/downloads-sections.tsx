@@ -26,6 +26,7 @@ import { QUICK_ACTIONS } from "@/features/downloads/quick-actions";
 import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/usage";
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
+import { PromoteCard } from "@/features/downloads/promote-card";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -73,6 +74,21 @@ import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
  * asked that nothing be removed, and it never rendered on a phone anyway, which
  * is why it is absent from the reference.
  */
+/** Fast · Secure · Private — moved below the paste box on 2026-10-08 (owner). */
+export function TrustPills({ className }: { className?: string }) {
+  return (
+    <div className={className}>
+      <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
+        <Pill icon={Zap} label="Fast" />
+        <Divider />
+        <Pill icon={Lock} label="Secure" />
+        <Divider />
+        <Pill icon={Shield} label="Private" />
+      </span>
+    </div>
+  );
+}
+
 export function DownloadsHero() {
   return (
     <section className="relative px-1 pt-1">
@@ -129,15 +145,12 @@ export function DownloadsHero() {
             visible set of destinations rather than a button that opened a sheet
             over them.
           */}
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
-              <Pill icon={Zap} label="Fast" />
-              <Divider />
-              <Pill icon={Lock} label="Secure" />
-              <Divider />
-              <Pill icon={Shield} label="Private" />
-            </span>
-          </div>
+          {/*
+            2026-10-08 (owner): "replace this fast secure private card with the
+            promote card, and move the fast secure private downward" — the pill is
+            now `TrustPills`, rendered under the paste box (download-page-core).
+          */}
+          <PromoteCard className="mt-4" />
         </div>
 
         {/* The reference's cloud illustration, drawn rather than shipped as an

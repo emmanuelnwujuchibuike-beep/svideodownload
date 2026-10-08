@@ -132,7 +132,22 @@ export function useVisualViewportPin(): ViewportPin | null {
         no keyboard at all.
       */
       const heightGap = window.innerHeight - vv.height;
-      if (heightGap < 80) {
+      /*
+        🔴 NO FOCUSED FIELD ⇒ NO KEYBOARD ⇒ NO PIN (owner, 2026-10-08: "this
+        large space keeps appearing when I enter chat, I have to exit and come
+        back twice before it goes away" — a screenshot of the thread pinned
+        short, the composer mid-screen, blank space and the bottom nav below).
+
+        iOS can report a shrunken visual viewport that is NOT the keyboard —
+        the keyboard just dismissed (the inbox's search field), PWA start-up,
+        returning from another app — and does not always send the `resize`
+        that would undo it, so the pin stuck. The keyboard can only be up
+        while an editable element has focus; that is a certainty where the
+        height gap is a guess, so it now gates the pin as well.
+      */
+      const ae = document.activeElement;
+      const editing = ae instanceof HTMLElement && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName));
+      if (heightGap < 80 || !editing) {
         setPin(null);
         return;
       }
@@ -156,10 +171,19 @@ export function useVisualViewportPin(): ViewportPin | null {
     // would re-anchor once and then drift back off.
     vv.addEventListener("scroll", update);
     desktop.addEventListener("change", update);
+    // Focus is the signal iOS never drops: a field losing focus means the
+    // keyboard is going away (checked next frame, once activeElement settled).
+    const onFocusChange = () => requestAnimationFrame(update);
+    document.addEventListener("focusin", onFocusChange);
+    document.addEventListener("focusout", onFocusChange);
+    window.addEventListener("resize", update);
     return () => {
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
       desktop.removeEventListener("change", update);
+      document.removeEventListener("focusin", onFocusChange);
+      document.removeEventListener("focusout", onFocusChange);
+      window.removeEventListener("resize", update);
     };
   }, []);
 

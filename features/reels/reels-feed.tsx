@@ -482,7 +482,7 @@ export function ReelsFeed({
         onChange={(id) => switchTab(id as Tab)}
         available={["for_you", "following", "ai"]}
         className="lg:left-[calc(50%-4.5rem)]"
-        feedHref="/feed"
+        // No Feed link (owner, 2026-10-08: "remove the feed button from the reels tray, the X button already leads to feed").
       />
 
       {switching ? (

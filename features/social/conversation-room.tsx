@@ -2141,7 +2141,10 @@ export function ConversationRoom({
                                   {frameless && attIdx === m.attachments.length - 1 ? <MediaMetaScrim>{bubbleMeta}</MediaMetaScrim> : null}
                                 </span>
                               ) : att.kind === "audio" ? (
-                                <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} />
+                                // Frameless (owner, 2026-10-08: "make record card frameless like the
+                                // media card"): no inner bordered card — the player sits on the
+                                // bubble itself, one surface, in the bubble's own theme colour.
+                                <VoiceMessage key={att.id} url={att.url} durationMs={att.durationMs} waveform={att.waveform} surface="bg-transparent !px-2 !pb-0.5 !pt-1" onColor={m.mine} />
                               ) : (
                                 <DocumentAttachmentCard key={att.id} url={att.url} filename={att.filename} sizeBytes={att.sizeBytes} mine={m.mine} />
                               ),

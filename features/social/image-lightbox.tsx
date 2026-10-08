@@ -26,7 +26,7 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Image" onClick={onClose} className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
-      <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
+      <button type="button" onClick={onClose} aria-label="Close" className="absolute right-4 top-[calc(var(--frenz-safe-top,0px)+0.75rem)] z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20">
         <X className="h-5 w-5" />
       </button>
       {/* eslint-disable-next-line @next/next/no-img-element */}

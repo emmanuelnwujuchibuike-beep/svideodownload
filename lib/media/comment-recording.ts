@@ -7,10 +7,18 @@
 
 export const VOICE_MAX_MS = 180_000; // 3 minutes
 
+/**
+ * MP4/AAC FIRST (2026-10-08 — owner: "see why voice note is not playing").
+ * Every stored note was WebM/Opus because WebM led this list, and many iPhones
+ * cannot play WebM audio back — so a note could be silent for the person it was
+ * sent to. AAC in MP4 plays on every phone and browser, and Chrome, Safari and
+ * Edge all record it now; WebM stays as the fallback for a browser that cannot.
+ */
 export const AUDIO_MIME_CANDIDATES = [
+  "audio/mp4;codecs=mp4a.40.2",
+  "audio/mp4",
   "audio/webm;codecs=opus",
   "audio/webm",
-  "audio/mp4",
   "audio/mpeg",
   "audio/ogg",
 ];

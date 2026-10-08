@@ -39,6 +39,31 @@ import { cn } from "@/lib/utils";
  * drawn at its full height: a member sees their figures, a guest sees the
  * sign-in line in the same box. Nothing below it moves when it fills.
  */
+/**
+ * Earn → the daily and weekly quests (owner, 2026-10-07). One definition for the
+ * strip's compact pill and the landing's large one (owner, 2026-10-08: "put only
+ * the earn button at the top of the landing page where it will be fully
+ * noticeable"). Same colours, same destination; `size="lg"` always names itself.
+ */
+export function EarnButton({ size = "sm", className }: { size?: "sm" | "lg"; className?: string }) {
+  return (
+    <TapOnceLink
+      href="/quests"
+      aria-label="Earn credits"
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full bg-gradient-to-r from-amber-400 to-orange-400 font-bold text-white transition-[transform,opacity] duration-200 active:scale-90 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100",
+        size === "sm"
+          ? "h-9 gap-1 px-2.5 text-[12.5px] shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)]"
+          : "h-12 gap-2 px-5 text-[15px] shadow-[0_12px_26px_-12px_rgba(249,115,22,0.95)] active:scale-95",
+        className,
+      )}
+    >
+      <Coins className={size === "sm" ? "h-3.5 w-3.5" : "h-5 w-5"} aria-hidden />
+      {size === "sm" ? <span className="hidden min-[400px]:inline">Earn</span> : <span>Earn credits</span>}
+    </TapOnceLink>
+  );
+}
+
 export function AiCreditStrip({ base, className }: { base: string; className?: string }) {
   const [who, setWho] = useState<"unknown" | "guest" | "member">("unknown");
   const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
@@ -128,10 +153,7 @@ export function AiCreditStrip({ base, className }: { base: string; className?: s
               </span>
             </span>
             {/* 2026-10-07 (owner): "an earn credits button" — the daily and weekly quests */}
-            <TapOnceLink href="/quests" aria-label="Earn credits" className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-2.5 text-[12.5px] font-bold text-white shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)] transition-[transform,opacity] duration-200 active:scale-90 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100">
-              <Coins className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden min-[400px]:inline">Earn</span>
-            </TapOnceLink>
+            <EarnButton />
             <TapOnceLink href={`${base}/usage`} className="ai-strip-cta data-[pending]:opacity-80">
               <span className="min-[400px]:hidden">Credits</span>
               <span className="hidden min-[400px]:inline">View credits</span> <ArrowRight className="h-3.5 w-3.5" aria-hidden />

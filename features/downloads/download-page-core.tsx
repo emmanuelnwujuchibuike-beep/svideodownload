@@ -4,6 +4,7 @@ import { ArrowRight, Compass } from "lucide-react";
 import Link from "next/link";
 
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
+import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
 import type { AiPromo } from "@/lib/ai/promo/config";
@@ -83,6 +84,7 @@ export function DownloadPageCore({
   installBanner = true,
   multiFormatSlot = false,
   hideEmptyStats = false,
+  topCredits = null,
   /**
    * 🔴 Whether the FRENZ AI tile appears at all.
    *
@@ -133,11 +135,20 @@ export function DownloadPageCore({
    * Cloud storage card stays: for a guest it is the 5 GB offer.
    */
   hideEmptyStats?: boolean;
+  /**
+   * What sits ABOVE the headline (owner, 2026-10-08): the full Frenz AI credits
+   * strip on /downloads ("put this card in the Download page top"), only the
+   * Earn button on the landing ("only the earn button at the top of the
+   * landing page where it will be fully noticeable").
+   */
+  topCredits?: "strip" | "earn" | null;
 }) {
   const { items } = useHistory();
 
   return (
     <>
+      {topCredits === "strip" ? <AiCreditStrip base="/ai" className="mb-4" /> : null}
+      {topCredits === "earn" ? <EarnButton size="lg" className="mb-4" /> : null}
       <DownloadsHero />
 
       {/*

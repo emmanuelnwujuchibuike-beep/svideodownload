@@ -98,6 +98,7 @@ export async function Hero() {
         showFrenzAi
         aiPromo={aiPromo}
         hideEmptyStats
+        topCredits="earn"
       />
     </section>
   );

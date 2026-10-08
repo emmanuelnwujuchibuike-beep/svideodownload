@@ -78,4 +78,13 @@ describe("the landing page structure", () => {
     // one Promote door per page: the hero's — no second row lower down
     expect(core).not.toContain("promoteCta");
   });
+
+  it("owner 2026-10-08: the full credits strip tops /downloads; only the Earn button tops the landing", () => {
+    expect(src("features/downloads/downloads-page.tsx")).toMatch(/<DownloadPageCore\s+topCredits="strip"/);
+    expect(src("components/landing/hero.tsx")).toContain('topCredits="earn"');
+    const core = src("features/downloads/download-page-core.tsx");
+    expect(core.indexOf('topCredits === "earn"')).toBeLessThan(core.indexOf("<DownloadsHero />"));
+    // one Earn definition, shared by the strip and the landing
+    expect(src("features/ai/design/ai-credit-strip.tsx")).toContain("<EarnButton />");
+  });
 });

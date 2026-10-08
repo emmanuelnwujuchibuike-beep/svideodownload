@@ -214,7 +214,7 @@ export const DATA_DOMAINS: DataDomain[] = [
     name: "Monetization",
     owner: "lib/monetization, lib/paystack",
     description:
-      "Subscriptions, ads, affiliates, API access and offer gateways. The self-serve advertising platform (0195, lib/ads-platform) lives here too: `advertisers` (a member who buys ads — business name, display name, contact, status), `ad_campaigns` (a paid placement for an admin-set duration, with its price snapshot and the reference of the payment that verified it — never card data), `ad_creatives` (the image or video, its link and its validation verdicts — the media itself is in the public ad-creatives storage bucket), `ad_slots` (the 10-position rotation per placement), `ad_campaign_events` (the status and operator audit), `ad_events` (viewer events, deduplicated, pruned after 35 days) and `ad_campaign_daily_stats` (the durable per-day counters). Configuration — `ad_platform_settings`, `ad_formats`, `ad_placements`, `ad_durations`, `ad_pricing_plans`, `ad_promotions` — is admin data about no one.",
+      "Subscriptions, ads, affiliates, API access and offer gateways. The self-serve advertising platform (0195, lib/ads-platform) lives here too: `advertisers` (a member who buys ads — business name, display name, contact, status), `ad_campaigns` (a paid placement for an admin-set duration, with its price snapshot and the reference of the payment that verified it — never card data), `ad_creatives` (the image or video, its link and its validation verdicts — the media itself is in the public ad-creatives storage bucket), `ad_slots` (the 10-position rotation per placement), `ad_campaign_events` (the status and operator audit), `ad_events` (viewer events, deduplicated, pruned after 35 days) and `ad_campaign_daily_stats` (the durable per-day counters). Configuration — `ad_platform_settings`, `ad_formats`, `ad_placements`, `ad_durations`, `ad_pricing_plans`, `ad_promotions` — is admin data about no one. `ad_blocked_domains` (0196) is the admin list of destinations an ad may never link to (link shorteners are seeded) — domains and a reason, nothing about anyone. Uploads land first in the PRIVATE `ad-creatives-staging` bucket and only a creative whose bytes passed the server check is copied into the public bucket.",
     tables: [
       "subscriptions",
       "ads",
@@ -242,6 +242,7 @@ export const DATA_DOMAINS: DataDomain[] = [
       "ad_campaign_events",
       "ad_events",
       "ad_campaign_daily_stats",
+      "ad_blocked_domains",
     ],
     storage: ["relational", "object"],
   },

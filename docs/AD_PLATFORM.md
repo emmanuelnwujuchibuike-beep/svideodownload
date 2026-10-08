@@ -184,3 +184,49 @@ go browser → Supabase and never pass through Vercel or Railway memory.
 | ⚠️ Impression counts are client-reported. Dedupe stops replays and double fires, but a determined script can still forge views. Per-visitor caps and anomaly flags are planned. | risk |
 | ⚠️ Propagation: an admin switch reaches visitors within one 5-minute bucket (+60 s stale-while-revalidate), not instantly. | by design |
 | ⚠️ 0195 must be **probed live after the push**: every table, function, the bucket and the purpose constraint (runner hard laws). | open until pushed |
+
+---
+
+# Part 2 — the advertiser application (2026-10-07)
+
+- Migration: `0196_ad_platform_applications.sql`
+- Pages: `/advertise` (the product), `/advertise/create` (the application), `/advertise/rules`
+- Entry points: the footer ("Advertise") and Account → Advertise. No new navigation.
+
+## Flow
+
+**Format → Placement → Duration → Creative → Details → Preview → Rules → Review.**
+
+- Everything is on one page, in client state that is persisted to
+  sessionStorage. A sign-in round trip or a reload loses nothing.
+- Guests can explore the first three steps. Sign-in (the existing Frenzsave
+  account) is asked for at the upload step.
+- Choosing a format immediately shows an **example preview** of that format.
+  The example brand is Frenz AI: a real third-party brand would read as that
+  company advertising here.
+- The upload step shows the same preview with the real file once uploaded.
+
+## What the server decides
+
+| Checkpoint | Route | What it does |
+|---|---|---|
+| Save draft | `POST /api/ads/advertiser/draft` | Re-checks format, placements and duration against the current catalogue. One campaign per placement, grouped by `application_id`. |
+| Upload ticket | `POST /api/ads/advertiser/upload` | A signed PUT target in the **private** `ad-creatives-staging` bucket. The declared type and size are checked only to refuse early. |
+| Finalize | `POST /api/ads/advertiser/upload/finalize` | Reads the **real bytes** by range (`media-probe.ts`): magic-byte type, true size, dimensions with EXIF/matrix rotation, MP4 moov or WebM duration. It validates against the current format row, then copies a passing file into the public bucket (inside Supabase) or deletes it. |
+| Submit | `POST /api/ads/advertiser/submit` | Requires the rules checkbox plus its version, checks the destination (syntax + `ad_blocked_domains`, never fetched, so there is no SSRF surface), requires a valid creative, then **locks the price** per campaign with `ad_campaign_quote`. Moves the application to `awaiting_payment`. |
+
+The menu is read straight from Postgres (`rpc/ad_catalog`, public, one read
+per visit, cached for 5 minutes). It contains only enabled, priced options and
+live promotions. The browser price is an estimate that follows the SQL rule
+for rule; the locked amount comes from the database.
+
+## Gap Ledger (Part 2)
+
+| Item | Status |
+|---|---|
+| Payment (Bachs + Paystack checkout, webhooks, activation) | Part 3 |
+| Resumable (TUS) uploads: today it is a single signed PUT with progress | planned |
+| MOV (QuickTime) uploads: refused with "export as MP4" | decision |
+| Orphan cleanup of abandoned public creatives / staging uploads: staging is cleared per application on the next ticket | planned |
+| Reputation check of destinations (safe-browsing): today syntax + admin blocklist | planned |
+| Admin screens for prices, durations, promotions, blocklist | Part 6 |

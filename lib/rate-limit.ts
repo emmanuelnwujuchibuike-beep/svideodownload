@@ -200,6 +200,15 @@ export const aiJobReadLimiter: Limiter = buildLimiter(
   Number(process.env.RATE_LIMIT_AI_JOB_READ_PER_MIN || 60),
 );
 /**
+ * 2026-10-07: the advertiser application (lib/ads-platform/advertiser-server)
+ * — draft checkpoints, upload tickets, upload checks and submissions. A whole
+ * application is about five calls, so thirty a minute is generous for a person
+ * and a ceiling for a script farming upload tickets.
+ */
+export const adApplicationLimiter: Limiter = buildLimiter(
+  Number(process.env.RATE_LIMIT_AD_APPLICATION_PER_MIN || 30),
+);
+/**
  * 2026-09-20: the media preflight (lib/ai/preflight) — a worker run of ten
  * seconds and, in the ambiguous band, a vision model. Per HOUR, per member,
  * so the analysis cannot be farmed (brief §14); a refresh of the same files

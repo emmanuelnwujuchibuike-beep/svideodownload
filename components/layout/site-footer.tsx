@@ -136,6 +136,7 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
             ["Download", "/downloads"],
             ["Community", "/home"],
             ["Pricing", "/pricing"],
+            ["Advertise", "/advertise"],
             ["Developers", "/developers"],
           ]}
         />

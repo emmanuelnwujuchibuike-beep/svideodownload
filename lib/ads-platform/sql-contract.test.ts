@@ -168,3 +168,31 @@ describe("RLS and grants", () => {
     expect(s).not.toMatch(/contact_email|business_name|total_amount|payment_reference|price|review_flags|status_reason|storage_path/);
   });
 });
+
+describe("0196 — the application layer", () => {
+  const M = readFileSync(join(process.cwd(), "supabase/migrations/0196_ad_platform_applications.sql"), "utf8");
+  it("the catalog is public, the blocklist lookup is server-only", () => {
+    expect(M).toContain("grant execute on function public.ad_catalog() to anon, authenticated, service_role;");
+    expect(M).toContain("revoke all on function public.ad_domain_blocked(text) from public, anon, authenticated;");
+  });
+  it("the catalog sells only enabled, priced rows and live promotions", () => {
+    const c = M.slice(M.indexOf("create or replace function public.ad_catalog()"));
+    expect(c).toContain("from public.ad_formats f where f.enabled");
+    expect(c).toContain("where p.enabled and f.enabled");
+    expect(c).toContain("from public.ad_durations d where d.enabled");
+    expect(c).toMatch(/join public\.ad_placements p on p\.id = pr\.placement_id and p\.enabled[\s\S]*join public\.ad_durations d on d\.id = pr\.duration_id and d\.enabled[\s\S]*where pr\.enabled/);
+    expect(c).toContain("where pm.enabled and (pm.starts_at is null or pm.starts_at <= now()) and (pm.ends_at is null or pm.ends_at > now())");
+    expect(c).not.toMatch(/advertisers|ad_campaigns|contact_email/);
+  });
+  it("nothing reaches payment without the rules on record", () => {
+    expect(M).toMatch(/constraint ad_campaigns_rules_chk check \(\s*status in \('draft', 'cancelled', 'removed', 'rejected'\)\s*or \(rules_accepted_at is not null and rules_version is not null\)\);/);
+  });
+  it("uploads land in a PRIVATE staging bucket", () => {
+    expect(M).toMatch(/values \('ad-creatives-staging', 'ad-creatives-staging', false,/);
+    expect(M).toContain("set public = false");
+  });
+  it("an admin's own wording is never overwritten (coalesce, and placement copy only over the untouched seed)", () => {
+    expect(M).toContain("description = coalesce(description,");
+    expect(M).toMatch(/where code = 'global_top_banner' and description = 'The 32 px strip at the top of every page\.'/);
+  });
+});

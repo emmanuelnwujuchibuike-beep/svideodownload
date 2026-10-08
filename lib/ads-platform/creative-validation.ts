@@ -25,7 +25,7 @@ export interface CreativeFacts {
   fileSizeBytes?: number | null;
   width?: number | null;
   height?: number | null;
-  destinationUrl: string;
+  destinationUrl: string | null;
   headline?: string | null;
   description?: string | null;
 }
@@ -37,12 +37,27 @@ export interface CreativeLimits {
   maxFileBytes: number;
   maxWidth: number;
   maxHeight: number;
+  /** 0196: the smallest acceptable creative, and its shape (width ÷ height) within ± tolerance. Null = no rule. */
+  minWidth?: number | null;
+  minHeight?: number | null;
+  aspectRatio?: number | null;
+  aspectTolerance?: number | null;
 }
 
 export type CreativeVerdict = { status: "valid"; errors: [] } | { status: "invalid"; errors: string[] };
 
-const IMAGE_MIME = new Set(["image/webp", "image/jpeg", "image/png", "image/avif"]);
-const VIDEO_MIME = new Set(["video/mp4", "video/webm"]);
+/** What the ad-creatives buckets accept (0195/0196). The ACCEPT lists the browser offers in its file picker. */
+export const IMAGE_MIME_TYPES = ["image/webp", "image/jpeg", "image/png", "image/avif"] as const;
+export const VIDEO_MIME_TYPES = ["video/mp4", "video/webm"] as const;
+const IMAGE_MIME = new Set<string>(IMAGE_MIME_TYPES);
+const VIDEO_MIME = new Set<string>(VIDEO_MIME_TYPES);
+
+/** Is width ÷ height within the format's shape? True when the format has no shape rule. */
+export function aspectFits(width: number, height: number, ratio: number | null | undefined, tolerance: number | null | undefined): boolean {
+  if (!ratio || !(width > 0) || !(height > 0)) return true;
+  const t = tolerance ?? 0;
+  return Math.abs(width / height / ratio - 1) <= t + 1e-9;
+}
 
 export function validateCreative(facts: CreativeFacts, limits: CreativeLimits): CreativeVerdict {
   const errors: string[] = [];
@@ -56,7 +71,11 @@ export function validateCreative(facts: CreativeFacts, limits: CreativeLimits): 
   if (facts.fileSizeBytes == null || !(facts.fileSizeBytes > 0)) errors.push("size_unknown");
   else if (facts.fileSizeBytes > limits.maxFileBytes) errors.push("file_too_large");
   if (facts.width == null || facts.height == null || !(facts.width > 0) || !(facts.height > 0)) errors.push("dimensions_unknown");
-  else if (facts.width > limits.maxWidth || facts.height > limits.maxHeight) errors.push("dimensions_too_large");
+  else {
+    if (facts.width > limits.maxWidth || facts.height > limits.maxHeight) errors.push("dimensions_too_large");
+    if ((limits.minWidth && facts.width < limits.minWidth) || (limits.minHeight && facts.height < limits.minHeight)) errors.push("dimensions_too_small");
+    if (!aspectFits(facts.width, facts.height, limits.aspectRatio, limits.aspectTolerance)) errors.push("wrong_shape");
+  }
   if (facts.mediaType === "video") {
     const d = facts.durationSeconds;
     if (d == null || !(d > 0)) errors.push("duration_unknown");
@@ -64,7 +83,8 @@ export function validateCreative(facts: CreativeFacts, limits: CreativeLimits): 
   }
   if (facts.headline && facts.headline.length > 90) errors.push("headline_too_long");
   if (facts.description && facts.description.length > 240) errors.push("description_too_long");
-  if (checkDestinationUrl(facts.destinationUrl).status !== "valid") errors.push("destination_not_valid");
+  // the destination is checked only once it is known - a creative is uploaded before its link is typed
+  if (facts.destinationUrl !== null && checkDestinationUrl(facts.destinationUrl).status !== "valid") errors.push("destination_not_valid");
   return errors.length ? { status: "invalid", errors } : { status: "valid", errors: [] };
 }
 

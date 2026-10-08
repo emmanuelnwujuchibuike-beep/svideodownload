@@ -65,6 +65,7 @@ export const NOT_EXPORTED: Record<string, string> = {
   ad_pricing_plans: "The ad price list. Not personal data.",
   ad_promotions: "Ad promotions on offer. Not personal data.",
   ad_slots: "Positions in an ad rotation. Not personal data.",
+  ad_blocked_domains: "Destinations ads may not link to. Not personal data.",
   /*
     A campaign belongs to an ADVERTISER, and advertiser_id is not a user column,
     so the generic exporter cannot reach these rows by an owner column. The

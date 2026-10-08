@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { cdnBucket } from "@/lib/net/cdn-bucket";
 
 import type { CampaignStatus } from "./catalog";
-import { checkDestinationUrl, validateCreative } from "./creative-validation";
+import { checkDestinationUrl, validateCreative, type CreativeLimits } from "./creative-validation";
 import type { ServingSnapshot } from "./eligibility";
 import { buildServingPayload, type ServingPayload } from "./serving-payload";
 
@@ -65,19 +65,23 @@ interface CreativeRow {
   file_size_bytes: number | null;
   width: number | null;
   height: number | null;
-  destination_url: string;
+  destination_url: string | null;
   headline: string | null;
   description: string | null;
   validation_status: string;
 }
 
-interface FormatRow {
+export interface FormatRow {
   code: string;
   media_types: string[];
   max_duration_seconds: number | null;
   max_file_bytes: number;
   max_width: number;
   max_height: number;
+  min_width: number | null;
+  min_height: number | null;
+  aspect_ratio: number | string | null;
+  aspect_tolerance: number | string | null;
 }
 
 /**
@@ -95,7 +99,7 @@ export async function validateCampaignCreatives(db: Db, campaignId: string): Pro
   const creatives = (rows ?? []) as CreativeRow[];
   const codes = [...new Set(creatives.map((c) => c.format_code))];
   const { data: fmts, error: fErr } = codes.length
-    ? await db.from("ad_formats").select("code, media_types, max_duration_seconds, max_file_bytes, max_width, max_height").in("code", codes)
+    ? await db.from("ad_formats").select("code, media_types, max_duration_seconds, max_file_bytes, max_width, max_height, min_width, min_height, aspect_ratio, aspect_tolerance").in("code", codes)
     : { data: [], error: null };
   if (fErr) throw new Error(`ad_formats: ${fErr.message}`);
   const byCode = new Map(((fmts ?? []) as FormatRow[]).map((f) => [f.code, f]));
@@ -123,10 +127,11 @@ export async function validateCampaignCreatives(db: Db, campaignId: string): Pro
             headline: cr.headline,
             description: cr.description,
           },
-          { code: f.code, mediaTypes: f.media_types, maxDurationSeconds: f.max_duration_seconds, maxFileBytes: f.max_file_bytes, maxWidth: f.max_width, maxHeight: f.max_height },
+          formatLimits(f),
         )
       : ({ status: "invalid", errors: ["format_unknown"] } as const);
-    const url = checkDestinationUrl(cr.destination_url);
+    // syntax AND the admin blocklist - an empty link (not typed yet) is never valid
+    const url = cr.destination_url ? await checkDestination(db, cr.destination_url) : ({ status: "blocked", code: "url_invalid", reason: "missing" } as const);
     const { error: wErr } = await db
       .from("ad_creatives")
       .update({
@@ -143,6 +148,35 @@ export async function validateCampaignCreatives(db: Db, campaignId: string): Pro
     else invalid++;
   }
   return { valid, invalid };
+}
+
+/** The validator's limits from an ad_formats row - the ONE mapping, used by Part 1 and Part 2. */
+export function formatLimits(f: FormatRow): CreativeLimits {
+  return {
+    code: f.code,
+    mediaTypes: f.media_types,
+    maxDurationSeconds: f.max_duration_seconds,
+    maxFileBytes: Number(f.max_file_bytes),
+    maxWidth: f.max_width,
+    maxHeight: f.max_height,
+    minWidth: f.min_width,
+    minHeight: f.min_height,
+    aspectRatio: f.aspect_ratio === null ? null : Number(f.aspect_ratio),
+    aspectTolerance: f.aspect_tolerance === null ? null : Number(f.aspect_tolerance),
+  };
+}
+
+/* ─────────────────────────────── destinations ─────────────────────────────── */
+
+/** Syntactic check, then the admin's blocklist. Never fetches the URL (no SSRF surface at all). */
+export async function checkDestination(db: Db, raw: string): Promise<{ status: "valid" } | { status: "blocked"; code: string; reason: string }> {
+  const syntax = checkDestinationUrl(raw);
+  if (syntax.status !== "valid") return { status: "blocked", code: "url_invalid", reason: syntax.reason };
+  const host = new URL(raw.trim()).hostname.toLowerCase();
+  const { data, error } = await db.rpc("ad_domain_blocked", { p_host: host });
+  if (error) throw new Error(`ad_domain_blocked: ${error.message}`);
+  if (typeof data === "string" && data) return { status: "blocked", code: "destination_blocked", reason: data };
+  return { status: "valid" };
 }
 
 /* ───────────────────────────── activation ───────────────────────────── */

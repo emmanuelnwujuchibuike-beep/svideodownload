@@ -16,6 +16,7 @@ import {
   LayoutGrid,
   Lock,
   LogOut,
+  Megaphone,
   Palette,
   Search,
   ShieldCheck,
@@ -216,6 +217,7 @@ export default async function AccountPage() {
            it links to. Analytics keeps its own row — it is Business-gated and
            people already know where it is. */
         { href: "/studio", Icon: Sparkles, title: "Creator Studio", sub: "Content, audience, calendar & goals", tint: "amber" },
+        { href: "/advertise", Icon: Megaphone, title: "Advertise", sub: "Promote your business on Frenzsave", tint: "rose" },
         { href: "/account/analytics", Icon: BarChart3, title: "Analytics", sub: "Your performance", tint: "emerald" },
         {
           href: "/account/personalization",

@@ -25,6 +25,7 @@ import type { CharacterReplaceBalance, CharacterReplaceTransaction } from "@/lib
 import { formatCredits, formatLedgerAmount, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { formatDate, formatTime } from "@/lib/i18n/format";
 import { haptic } from "@/lib/motion/haptics";
+import { getClient } from "@/lib/supabase/client-lazy";
 import { cn } from "@/lib/utils";
 
 /**
@@ -104,6 +105,8 @@ export function FrenzAIUsagePage({
   slides?: ShowcaseSlide[];
 }) {
   const [balance, setBalance] = useState<CharacterReplaceBalance | null>(null);
+  /* 0199 (owner, 2026-10-08): the two kinds are shown apart HERE (and on the rewards dashboard) — the download and AI welcome cards show only the total */
+  const [withdrawable, setWithdrawable] = useState<number | null>(null);
   /* 2026-09-20: a tap on the figure hides it (kept per browser); a tap on a line opens it in full */
   const [hidden, toggleHidden] = useBalanceHidden();
   const [openLine, setOpenLine] = useState<LedgerRow | null>(null);
@@ -127,6 +130,11 @@ export function FrenzAIUsagePage({
     }
     setBalance(wallet.balance);
     setLedger(wallet.transactions);
+    // the member's own balance row (RLS) — no server function for one number
+    void getClient()
+      .then((sb) => sb.from("ai_product_balances").select("withdrawable_cents").eq("product", "character_replace").maybeSingle())
+      .then((r) => setWithdrawable(Math.min(Number((r.data as { withdrawable_cents?: number } | null)?.withdrawable_cents ?? 0), wallet.balance.balanceCents)))
+      .catch(() => setWithdrawable(null));
   }, []);
 
   useEffect(() => {
@@ -298,6 +306,11 @@ export function FrenzAIUsagePage({
                     {hidden ? <span aria-hidden>{HIDDEN_AMOUNT}</span> : formatCredits(balance.balanceCents)}
                   </button>
                   <p className="mt-1 text-[11.5px] text-white/60">{hidden ? "Tap to show" : "Tap to hide"}</p>
+                  {!hidden && withdrawable !== null ? (
+                    <p className="mt-2 text-[12.5px] text-white/85 tabular-nums">
+                      <span className="font-semibold">{formatCredits(withdrawable)}</span> withdrawable · <span className="font-semibold">{formatCredits(Math.max(0, balance.balanceCents - withdrawable))}</span> non-withdrawable
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -369,7 +382,7 @@ export function FrenzAIUsagePage({
             </Link>
 
             {/* 0193 (owner 2026-10-07): send credits to a wallet number, and the transfer history */}
-            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} onChanged={() => void load()} />
+            <TransferPanel className="mt-4" rules={balance?.offer?.transfers ?? null} balance={balance?.balanceCents ?? null} withdrawable={withdrawable} onChanged={() => void load()} />
 
             {/* ── three figures, from the statement itself ─────────────────── */}
             {figures ? (

@@ -57,8 +57,8 @@ describe("🔴 a reward is shown only after the server granted it", () => {
 
 describe("two credit classes, said plainly", () => {
   const page = code("features/rewards/rewards-page.tsx");
-  it("AI Credits and Withdrawable are separate figures", () => {
-    expect(page).toContain('label="AI Credits" value={wallet.usableCredits}');
+  it("Non-withdrawable and Withdrawable are separate figures (renamed 2026-10-08 to match transfers)", () => {
+    expect(page).toContain('label="Non-withdrawable" value={wallet.usableCredits}');
     expect(page).toContain('label="Withdrawable" value={wallet.withdrawableCredits}');
   });
   it("before qualifying: the brief's sentence, and that earlier rewards never become withdrawable", () => {

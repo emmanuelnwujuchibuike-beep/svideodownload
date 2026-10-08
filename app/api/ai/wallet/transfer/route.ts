@@ -18,6 +18,8 @@ const schema = z
     credits: z.number().int().positive().max(100_000_000),
     idempotencyKey: z.string().max(80),
     note: z.string().max(200).nullable().optional(),
+    // 0199: which credits to send — the recipient receives the same kind
+    creditClass: z.enum(["usable", "withdrawable"]).optional(),
   })
   .strict()
   .refine((b) => !!b.accountNumber !== !!b.recipientUserId, { message: "one recipient" });
@@ -29,10 +31,14 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Please sign in." }, { status: 401 });
-  const [settings, balance] = await Promise.all([getLandingSettings(), getCharacterReplaceBalanceCents(user.id).catch(() => null)]);
+  const [settings, balance, withdrawable] = await Promise.all([
+    getLandingSettings(),
+    getCharacterReplaceBalanceCents(user.id).catch(() => null),
+    supabase.from("ai_product_balances").select("withdrawable_cents").eq("user_id", user.id).eq("product", "character_replace").maybeSingle().then((r) => Number((r.data as { withdrawable_cents?: number } | null)?.withdrawable_cents ?? 0), () => 0),
+  ]);
   const t = settings.frenzAiPlans.wallet.transfers;
   return NextResponse.json(
-    { rules: t.enabled ? { feePercent: t.feePercent, minCredits: t.minCredits, maxCredits: t.maxCredits, dailyMaxCredits: t.dailyMaxCredits } : null, balance },
+    { rules: t.enabled ? { feePercent: t.feePercent, minCredits: t.minCredits, maxCredits: t.maxCredits, dailyMaxCredits: t.dailyMaxCredits } : null, balance, withdrawable: balance === null ? null : Math.min(withdrawable, balance) },
     { headers: { "cache-control": "no-store" } },
   );
 }
@@ -70,6 +76,7 @@ export async function POST(request: Request) {
     idempotencyKey: parsed.data.idempotencyKey,
     note: parsed.data.note ?? null,
     config: settings.frenzAiPlans.wallet.transfers,
+    creditClass: parsed.data.creditClass ?? "usable",
   });
   if (!out.ok) return NextResponse.json({ error: out.error, reason: out.reason }, { status: out.status });
   return NextResponse.json(out, { headers: { "cache-control": "no-store" } });

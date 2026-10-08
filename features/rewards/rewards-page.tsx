@@ -95,7 +95,7 @@ export function RewardsPage({ summary }: { summary: Summary }) {
 
         {/* ── the two classes, side by side ── */}
         <section aria-label="Your credits" className="mt-5 grid grid-cols-2 gap-3">
-          <Figure icon={<Sparkles className="h-4 w-4" aria-hidden />} label="AI Credits" value={wallet.usableCredits} hint="For any Frenz AI tool" />
+          <Figure icon={<Sparkles className="h-4 w-4" aria-hidden />} label="Non-withdrawable" value={wallet.usableCredits} hint="For any Frenz AI tool — not cashable" />
           <Figure icon={<Wallet className="h-4 w-4" aria-hidden />} label="Withdrawable" value={wallet.withdrawableCredits} hint="Rewards you can cash out" accent={wallet.withdrawableCredits > 0} />
         </section>
 

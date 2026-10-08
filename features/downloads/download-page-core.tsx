@@ -148,8 +148,8 @@ export function DownloadPageCore({
   return (
     <>
       {topCredits === "strip" ? <AiCreditStrip base="/ai" className="mb-4" /> : null}
-      {topCredits === "earn" ? <EarnButton size="lg" className="mb-4" /> : null}
-      <DownloadsHero />
+      {/* /downloads (the strip page) shows no headline — owner, 2026-10-08 */}
+      <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} headline={topCredits !== "strip"} />
 
       {/*
         🔴 Install moved BELOW the paste box (owner, 2026-08-25, with a

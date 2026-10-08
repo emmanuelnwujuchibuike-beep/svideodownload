@@ -83,7 +83,11 @@ describe("the landing page structure", () => {
     expect(src("features/downloads/downloads-page.tsx")).toMatch(/<DownloadPageCore\s+topCredits="strip"/);
     expect(src("components/landing/hero.tsx")).toContain('topCredits="earn"');
     const core = src("features/downloads/download-page-core.tsx");
-    expect(core.indexOf('topCredits === "earn"')).toBeLessThan(core.indexOf("<DownloadsHero />"));
+    // 2026-10-08 (owner): smaller, on the headline's row — it no longer pushes the headline down
+    expect(core).toContain('<DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined}');
+    // /downloads alone drops the on-screen headline and its line, keeping an sr-only H1 (owner, 2026-10-08)
+    expect(core).toContain('headline={topCredits !== "strip"}');
+    expect(src("features/downloads/downloads-sections.tsx")).toContain('<h1 className="sr-only">Download</h1>');
     // one Earn definition, shared by the strip and the landing
     expect(src("features/ai/design/ai-credit-strip.tsx")).toContain("<EarnButton />");
   });

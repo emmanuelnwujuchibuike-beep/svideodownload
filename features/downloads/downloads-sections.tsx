@@ -27,6 +27,7 @@ import { estimateBytes, limitForPlan, totalUsedBytes } from "@/features/history/
 import { BRAND_ICONS } from "@/lib/platform-icons";
 import type { DownloadRecord } from "@/types";
 import { PromoteCard } from "@/features/downloads/promote-card";
+import type { ReactNode } from "react";
 import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
 
 /**
@@ -89,7 +90,7 @@ export function TrustPills({ className }: { className?: string }) {
   );
 }
 
-export function DownloadsHero() {
+export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactNode; headline?: boolean } = {}) {
   return (
     <section className="relative px-1 pt-1">
       {/*
@@ -103,20 +104,40 @@ export function DownloadsHero() {
         <div className="min-w-0 flex-1">
           {/* The same clamp ramp as the landing H1, so the three words stay on
               one line from a 320px phone up without a single breakpoint. */}
-          <h1 className="flex flex-nowrap items-baseline gap-[0.3em] text-[clamp(1.05rem,5.2vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white">
-            <span className="whitespace-nowrap">Save.</span>
-            <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
-              Discover.
-            </span>
-            {/* "Create." (Landing + Download brief §4, owner 2026-10-08): the concept stays
-                Save · Discover, and the third word now names Frenz AI. Shorter than
-                "Explore.", so the one-line clamp above still holds at 320px. */}
-            <span className="whitespace-nowrap">Create.</span>
-          </h1>
-          <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
-            Save from the platforms you already use, discover what people share, and create with AI — all in{" "}
-            <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
-          </p>
+          {/*
+            The headline row carries an optional right-hand slot (owner, 2026-10-08:
+            "move it to the right opposite the save, discover, create so it doesn't
+            push it downward") — the landing's Earn pill. `min-w-0` on the H1 side
+            and `shrink-0` on the slot keep the three words on one line.
+          */}
+          {/*
+            /downloads drops the headline and its line (owner, 2026-10-08: "remove the
+            section from the Download page alone") — the landing keeps them. The page
+            still has its H1, for screen readers and search, just not on screen.
+          */}
+          {headline ? (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <h1 className="flex flex-nowrap items-baseline gap-[0.3em] text-[clamp(1.05rem,5.2vw,2.25rem)] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white">
+                  <span className="whitespace-nowrap">Save.</span>
+                  <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
+                    Discover.
+                  </span>
+                  {/* "Create." (Landing + Download brief §4, owner 2026-10-08): the concept stays
+                      Save · Discover, and the third word now names Frenz AI. Shorter than
+                      "Explore.", so the one-line clamp above still holds at 320px. */}
+                  <span className="whitespace-nowrap">Create.</span>
+                </h1>
+                {trailing ? <div className="shrink-0">{trailing}</div> : null}
+              </div>
+              <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
+                Save from the platforms you already use, discover what people share, and create with AI — all in{" "}
+                <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
+              </p>
+            </>
+          ) : (
+            <h1 className="sr-only">Download</h1>
+          )}
           {/*
             The trust pills, alone on their row again.
 

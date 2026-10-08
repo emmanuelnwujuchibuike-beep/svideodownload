@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft, Bookmark, CalendarDays, Check, Clapperboard, Coins, Download, Heart, Music4, Sparkles, Sun, UserPlus, Video } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { ArrowLeft, Banknote, Bookmark, CalendarDays, Check, Clapperboard, Coins, Crown, Download, Heart, Music4, Send, Sparkles, Sun, UserPlus, Video } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
@@ -144,6 +145,8 @@ export function QuestsPage() {
           </div>
         </div>
 
+        <CreditUses />
+
         {guest ? (
           <div className="ai-glass mt-6 rounded-[1.6rem] p-5 text-slate-900 ring-1 ring-inset ring-white/70">
             <p className="text-[15px] font-semibold">Sign in to see your quests.</p>
@@ -200,6 +203,46 @@ export function QuestsPage() {
         :root[data-a11y-motion="reduce"] .quest-badge{animation:none}
       `}</style>
     </div>
+  );
+}
+
+/**
+ * What a credit buys (owner, 2026-10-08: "the page that it opens should show
+ * what credits can be used for"). Shown to everyone — a guest arriving from the
+ * landing's Earn button sees why it is worth signing in. Only uses that exist:
+ * every AI tool charges credits (f367dc8), AI plans are paid with them
+ * (84c3a3a), they move between wallets by wallet number (b083330), and earned
+ * credits become withdrawable once the account is approved (ab5684e).
+ */
+const CREDIT_USES: { icon: LucideIcon; title: string; body: string; href: string }[] = [
+  { icon: Sparkles, title: "Create with Frenz AI", body: "AI videos, photo-to-video, voices, audio and lip sync.", href: "/ai" },
+  { icon: Crown, title: "Pay for an AI plan", body: "Unlock more creations each month.", href: "/ai/usage" },
+  { icon: Send, title: "Send to friends", body: "Transfer credits by wallet number.", href: "/ai/usage" },
+  { icon: Banknote, title: "Withdraw as cash", body: "Once your account is approved for withdrawals.", href: "/rewards" },
+];
+
+function CreditUses() {
+  return (
+    <section aria-labelledby="credit-uses" className="mt-5">
+      <h2 id="credit-uses" className="text-[15px] font-semibold">What credits are for</h2>
+      <ul className="mt-2.5 grid grid-cols-2 gap-2.5">
+        {CREDIT_USES.map(({ icon: Icon, title, body, href }) => (
+          <li key={title}>
+            <Link
+              href={href}
+              prefetch={false}
+              className="flex h-full flex-col gap-1.5 rounded-[1.3rem] bg-card p-3.5 ring-1 ring-inset ring-black/[0.07] transition-colors hover:ring-indigo-200 dark:ring-white/10"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 text-orange-600 ring-1 ring-inset ring-orange-100 dark:from-amber-500/15 dark:to-orange-500/10 dark:text-amber-300 dark:ring-amber-400/20" aria-hidden>
+                <Icon className="h-[18px] w-[18px]" />
+              </span>
+              <span className="text-[13.5px] font-semibold leading-tight">{title}</span>
+              <span className="text-[12px] leading-snug text-muted-foreground">{body}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

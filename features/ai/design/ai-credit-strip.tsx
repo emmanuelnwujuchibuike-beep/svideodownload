@@ -45,7 +45,7 @@ import { cn } from "@/lib/utils";
  * the earn button at the top of the landing page where it will be fully
  * noticeable"). Same colours, same destination; `size="lg"` always names itself.
  */
-export function EarnButton({ size = "sm", className }: { size?: "sm" | "lg"; className?: string }) {
+export function EarnButton({ size = "sm", className }: { size?: "sm" | "md" | "lg"; className?: string }) {
   return (
     <TapOnceLink
       href="/quests"
@@ -54,12 +54,15 @@ export function EarnButton({ size = "sm", className }: { size?: "sm" | "lg"; cla
         "inline-flex shrink-0 items-center rounded-full bg-gradient-to-r from-amber-400 to-orange-400 font-bold text-white transition-[transform,opacity] duration-200 active:scale-90 data-[pending]:scale-95 data-[pending]:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 motion-reduce:active:scale-100",
         size === "sm"
           ? "h-9 gap-1 px-2.5 text-[12.5px] shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)]"
-          : "h-12 gap-2 px-5 text-[15px] shadow-[0_12px_26px_-12px_rgba(249,115,22,0.95)] active:scale-95",
+          : size === "md"
+            ? // the landing's headline-row pill (owner, 2026-10-08: "too big, make it smaller")
+              "h-8 gap-1 px-3 text-[12.5px] shadow-[0_6px_14px_-8px_rgba(249,115,22,0.9)]"
+            : "h-12 gap-2 px-5 text-[15px] shadow-[0_12px_26px_-12px_rgba(249,115,22,0.95)] active:scale-95",
         className,
       )}
     >
-      <Coins className={size === "sm" ? "h-3.5 w-3.5" : "h-5 w-5"} aria-hidden />
-      {size === "sm" ? <span className="hidden min-[400px]:inline">Earn</span> : <span>Earn credits</span>}
+      <Coins className={size === "lg" ? "h-5 w-5" : "h-3.5 w-3.5"} aria-hidden />
+      {size === "sm" ? <span className="hidden min-[400px]:inline">Earn</span> : size === "md" ? <span>Earn</span> : <span>Earn credits</span>}
     </TapOnceLink>
   );
 }

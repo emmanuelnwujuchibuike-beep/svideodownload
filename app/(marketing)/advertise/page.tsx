@@ -41,7 +41,7 @@ export default function AdvertisePage() {
       <SiteHeader />
       <main className="bg-background">
         <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-[calc(var(--frenz-safe-top)+5.5rem)] sm:px-6 sm:pt-[calc(var(--frenz-safe-top)+7rem)]">
-          <p className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[12px] font-semibold text-indigo-700">
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[12px] font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200">
             <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> Frenzsave Ads
           </p>
           <AiDisplayTitle
@@ -59,7 +59,7 @@ export default function AdvertisePage() {
               Advertising Rules
             </AiButtonLink>
           </div>
-          <Link href="/advertise/campaigns" prefetch={false} className="mt-3 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700">
+          <Link href="/advertise/campaigns" prefetch={false} className="mt-3 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
             My campaigns →
           </Link>
 
@@ -69,8 +69,8 @@ export default function AdvertisePage() {
             </h2>
             <ol className="mt-4 grid gap-3 sm:grid-cols-2">
               {STEPS.map(({ icon: Icon, title, body }, i) => (
-                <li key={title} className="flex gap-3.5 rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07]">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-50 to-sky-50 text-indigo-600 ring-1 ring-inset ring-indigo-100" aria-hidden>
+                <li key={title} className="flex gap-3.5 rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-50 to-sky-50 text-indigo-600 ring-1 ring-inset ring-indigo-100 dark:from-indigo-500/15 dark:to-sky-500/10 dark:text-indigo-300 dark:ring-indigo-400/20" aria-hidden>
                     <Icon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0">
@@ -101,7 +101,7 @@ export default function AdvertisePage() {
             </h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-3">
               {TRUST.map(({ icon: Icon, title, body }) => (
-                <li key={title} className="rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07]">
+                <li key={title} className="rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
                   <Icon className="h-5 w-5 text-indigo-600" aria-hidden />
                   <p className="mt-2 text-[14.5px] font-semibold">{title}</p>
                   <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{body}</p>

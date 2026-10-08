@@ -297,7 +297,8 @@ describe("advertising rules", () => {
   it("unchecked by default, payment button disabled until checked, and the server refuses without it", () => {
     const wiz = readFileSync(join(process.cwd(), "features/ads-platform/advertise-wizard.tsx"), "utf8");
     expect(wiz).toContain("const [rulesAccepted, setRulesAccepted] = useState(false);");
-    expect(wiz).toMatch(/>\s*Continue to secure payment\s*</);
+    // §55: the CTA's resting label; disabled until the rules are accepted
+    expect(wiz).toContain(': "Continue to Payment";');
     expect(wiz).toMatch(/disabled=\{!rulesAccepted \|\|/);
     // never persisted: a reload asks again
     expect(wiz).not.toMatch(/rulesAccepted[^\n]*sessionStorage|sessionStorage[^\n]*rulesAccepted/);

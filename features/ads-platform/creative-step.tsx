@@ -180,8 +180,8 @@ export function CreativeStep({
       />
 
       {current && phase.kind === "idle" ? (
-        <div className="mt-4 flex items-center gap-3 rounded-[1.4rem] bg-emerald-50/70 p-3.5 ring-1 ring-inset ring-emerald-200">
-          <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white">
+        <div className="mt-4 flex items-center gap-3 rounded-[1.4rem] bg-emerald-50/70 p-3.5 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:ring-emerald-400/25">
+          <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-card">
             {current.thumbnailUrl || current.mediaType === "image" ? (
               // eslint-disable-next-line @next/next/no-img-element -- the validated public copy, small
               <img src={(current.thumbnailUrl ?? current.mediaUrl)!} alt="" className="h-full w-full object-cover" />
@@ -195,7 +195,7 @@ export function CreativeStep({
               {[current.width && current.height ? `${current.width} × ${current.height}` : null, current.durationSeconds ? `${Math.round(current.durationSeconds * 10) / 10} s` : null, current.sizeBytes ? formatBytes(current.sizeBytes) : null].filter(Boolean).join(" · ")}
             </p>
           </div>
-          <label htmlFor={inputId} className="inline-flex min-h-[2.75rem] cursor-pointer items-center gap-1 px-2 text-[13px] font-semibold text-indigo-700">
+          <label htmlFor={inputId} className="inline-flex min-h-[2.75rem] cursor-pointer items-center gap-1 px-2 text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden /> Replace
           </label>
         </div>
@@ -204,7 +204,7 @@ export function CreativeStep({
           htmlFor={inputId}
           className={cn(
             "mt-4 flex min-h-[11rem] cursor-pointer flex-col items-center justify-center rounded-[1.6rem] border-2 border-dashed p-6 text-center transition-colors",
-            working ? "cursor-default border-indigo-200 bg-indigo-50/40" : "border-indigo-200 bg-gradient-to-b from-white to-indigo-50/40 hover:border-indigo-400",
+            working ? "cursor-default border-indigo-200 bg-indigo-50/40 dark:border-indigo-400/30 dark:bg-indigo-500/10" : "border-indigo-200 bg-gradient-to-b from-white to-indigo-50/40 hover:border-indigo-400 dark:border-indigo-400/30 dark:from-white/[0.02] dark:to-indigo-500/10",
           )}
         >
           {phase.kind === "uploading" ? (
@@ -221,7 +221,7 @@ export function CreativeStep({
                   e.preventDefault();
                   abortRef.current?.abort();
                 }}
-                className="mt-2 inline-flex min-h-[2.75rem] items-center gap-1 text-[13px] font-semibold text-slate-600"
+                className="mt-2 inline-flex min-h-[2.75rem] items-center gap-1 text-[13px] font-semibold text-muted-foreground"
               >
                 <X className="h-3.5 w-3.5" aria-hidden /> Cancel
               </button>

@@ -79,7 +79,7 @@ export function MyCampaigns() {
       </AiPanel>
     );
   }
-  if (rows === null) return <div className="space-y-3" aria-busy>{[0, 1].map((i) => <span key={i} className="block h-40 animate-pulse rounded-[1.75rem] bg-slate-100" />)}</div>;
+  if (rows === null) return <div className="space-y-3" aria-busy>{[0, 1].map((i) => <span key={i} className="block h-40 animate-pulse rounded-[1.75rem] bg-muted motion-reduce:animate-none" />)}</div>;
   if (rows.length === 0) {
     return (
       <AiPanel className="text-center">
@@ -109,7 +109,7 @@ export function MyCampaigns() {
               <Row label="Ends" value={date(c.end_at)} />
             </div>
             {c.status === "draft" || c.status === "awaiting_payment" ? (
-              <Link href="/advertise/create" prefetch={false} className="mt-2 inline-flex min-h-[2.75rem] items-center text-[13px] font-semibold text-indigo-700">
+              <Link href="/advertise/create" prefetch={false} className="mt-2 inline-flex min-h-[2.75rem] items-center text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
                 Continue this ad →
               </Link>
             ) : null}

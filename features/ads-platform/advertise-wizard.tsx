@@ -1,10 +1,12 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BadgeCheck, CalendarClock, CircleAlert, Clock, FileCheck2, Gift, Globe, Info, LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, CalendarClock, CircleAlert, Clock, FileCheck2, Gift, Globe, Info, LoaderCircle, Lock, LogIn, RefreshCw, ShieldCheck } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AiButton } from "@/features/ai/design/ai-button";
+import { AiActionBar } from "@/features/ai/design/ai-generate";
 import { AiPanel } from "@/features/ai/design/ai-surface";
 import { useUser } from "@/features/auth/use-user";
 import {
@@ -14,7 +16,6 @@ import {
   destinationHost,
   detailsProblems,
   normalizeDestination,
-  STEP_LABELS,
   TEXT_LIMITS,
   type ApplicationStep,
 } from "@/lib/ads-platform/application";
@@ -38,9 +39,9 @@ import { ADVERTISING_RULES, ADVERTISING_RULES_VERSION, AUTOMATED_VALIDATION_NOTI
 import { cn } from "@/lib/utils";
 
 import { AdPreview } from "./ad-preview";
-import { Chip, formatIcon, Notice, OptionCard, Row, Stepper, StepTitle } from "./advertise-ui";
+import { AdFlowRail, CampaignSummaryCard, Chip, FIRST_STEP_OF, formatIcon, Notice, OptionCard, phaseOf, Row, runtimeLabel, StepTitle } from "./advertise-ui";
 import { loadAdCatalog } from "./catalog-client";
-import { CreativeStep, type UploadedCreative } from "./creative-step";
+import type { UploadedCreative } from "./creative-step";
 import { loadMyApplications, type MyApplication } from "./my-applications-client";
 
 /**
@@ -54,6 +55,18 @@ import { loadMyApplications, type MyApplication } from "./my-applications-client
  */
 
 const STORE = "frenz.advertise.form.v1";
+
+/**
+ * The upload step (file reading, posters, the signed PUT with progress) is only
+ * needed at step 4, so it is its own chunk (owner brief §64) — fetched while the
+ * advertiser is on Duration, one step ahead, so it is normally ready on arrival.
+ * The placeholder has the drop zone's height, so nothing jumps when it lands.
+ */
+const loadCreativeStep = () => import("./creative-step").then((m) => m.CreativeStep);
+const CreativeStep = dynamic(loadCreativeStep, {
+  ssr: false,
+  loading: () => <div aria-hidden className="mt-4 h-[11rem] animate-pulse rounded-[1.6rem] bg-muted motion-reduce:animate-none" />,
+});
 
 interface Form {
   step: ApplicationStep;
@@ -146,7 +159,21 @@ export function AdvertiseWizard() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [mine, setMine] = useState<MyApplication[] | null>(null);
   const [localPreview, setLocalPreview] = useState<{ src: string; mediaType: "image" | "video" } | null>(null);
+  /** §59: the held price ran out before payment opened — say so, never re-quote silently. */
+  const [sessionExpired, setSessionExpired] = useState(false);
+  /** The server's price differed from the estimate on screen — shown, then the next tap pays it. */
+  const [priceUpdated, setPriceUpdated] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
+
+  // §69: a local preview is an object URL — release it when the page goes
+  const previewUrl = useRef<string | null>(null);
+  previewUrl.current = localPreview?.src ?? null;
+  useEffect(
+    () => () => {
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    },
+    [],
+  );
 
   // the menu (one cached read) and the saved form
   useEffect(() => {
@@ -180,9 +207,24 @@ export function AdvertiseWizard() {
     });
   }, [user, mine]);
 
+  // a message that answers a tap on the sticky CTA must not sit hidden under it
+  useEffect(() => {
+    if (!sessionExpired && !priceUpdated && !error) return;
+    const el = [...(topRef.current?.querySelectorAll("[data-pay-alert]") ?? [])].at(-1);
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => el?.scrollIntoView({ block: "center", behavior: smooth ? "smooth" : "auto" }));
+  }, [sessionExpired, priceUpdated, error]);
+
+  // warm the upload chunk one step early (no request of our own — a static file)
+  useEffect(() => {
+    if (form.step === "duration" || form.step === "creative") void loadCreativeStep();
+  }, [form.step]);
+
   const update = useCallback((patch: Partial<Form>) => {
     setError(null);
     setLocked(null);
+    setPriceUpdated(false);
+    setSessionExpired(false);
     setForm((f) => ({ ...f, ...patch }));
   }, []);
 
@@ -241,25 +283,45 @@ export function AdvertiseWizard() {
   };
 
   /**
-   * "Continue to secure payment" — ONE tap: lock the price (a server quote),
-   * then ask the server for the checkout the payment router chose, and go.
-   * The button stays disabled from the first tap until the page leaves, so a
-   * double tap can never open two payments (the server refuses a second one
-   * too). The amount is never sent - only which campaign and which quote.
+   * "Continue to Payment" — ONE tap: lock the price (a server quote), then ask
+   * the server for the checkout the payment router chose, and go. The button
+   * stays disabled from the first tap until the page leaves, so a double tap
+   * can never open two payments (the server refuses a second one too). The
+   * amount is never sent — only which campaign and which quote.
+   *
+   * Two stops, both shown rather than worked around (owner brief §59):
+   *  · a held price that has run out → "Your payment session expired", and the
+   *    advertiser reviews the campaign again; never a silent re-quote;
+   *  · a server price that differs from the estimate on screen (the menu is
+   *    cached for five minutes) → the new price is shown, and the NEXT tap pays
+   *    it. The price a person sees is the price they pay.
    */
   const pay = async () => {
-    if (!form.campaignId || !rulesAccepted || busy) return;
-    let quote = locked && Date.parse(locked.expiresAt) > Date.now() + 30_000 ? locked : null;
+    if (!form.campaignId || !rulesAccepted || busy || !est) return;
+    let quote = locked;
+    if (quote && Date.parse(quote.expiresAt) <= Date.now() + 30_000) {
+      setLocked(null);
+      setSessionExpired(true);
+      return;
+    }
     if (!quote) {
       quote = await submit();
       if (!quote) return;
+      if (quote.total !== est.total || quote.currency !== est.currency) {
+        setPriceUpdated(true);
+        return;
+      }
     }
     setBusy("pay");
     const r = await api<{ url?: string; verifying?: boolean; reference: string }>("/api/ads/payment/create", "POST", { campaignId: form.campaignId, quoteId: quote.quoteId });
     if (!r.ok) {
       setBusy(null);
+      if (r.code === "quote_expired" || r.code === "quote_invalid" || r.code === "not_payable") {
+        setLocked(null);
+        setSessionExpired(true);
+        return;
+      }
       setError(r.code === "server" || r.code === "network" ? adMessage("payment_not_started") : r.message);
-      if (r.code === "quote_expired" || r.code === "quote_invalid" || r.code === "not_payable") setLocked(null);
       return;
     }
     if (r.data.url) {
@@ -267,6 +329,22 @@ export function AdvertiseWizard() {
       return; // stays busy: the page is leaving
     }
     window.location.assign(`/advertise/payment?reference=${encodeURIComponent(r.data.reference)}`);
+  };
+
+  /** §59 "Review Campaign": a fresh menu (prices and promotions may have moved), then the review again. */
+  const reviewAgain = async () => {
+    setBusy("refresh");
+    const fresh = await loadAdCatalog(Date.now(), { fresh: true });
+    setBusy(null);
+    if (fresh) {
+      const r = reconcile(form, fresh);
+      setCat(fresh);
+      setForm(r.form);
+      setNotes(r.notes);
+    }
+    setSessionExpired(false);
+    setPriceUpdated(false);
+    requestAnimationFrame(() => topRef.current?.scrollIntoView({ block: "start", behavior: "smooth" }));
   };
 
   const submit = async (): Promise<{ total: number; currency: string; quoteId: string; expiresAt: string } | null> => {
@@ -346,7 +424,7 @@ export function AdvertiseWizard() {
 
   return (
     <div ref={topRef} className="scroll-mt-20">
-      <Stepper index={stepIndex} total={APPLICATION_STEPS.length} label={STEP_LABELS[form.step]} />
+      <AdFlowRail phase={phaseOf(form.step)} onGo={(ph) => ph !== "payment" && go(FIRST_STEP_OF[ph])} />
 
       {notes.length ? (
         <div className="mt-4 space-y-2">
@@ -467,12 +545,12 @@ export function AdvertiseWizard() {
                   onClick={() => update({ durationId: d.id })}
                   className={cn(
                     "relative flex min-h-[6.5rem] flex-col items-start justify-between rounded-[1.3rem] bg-card p-3.5 text-left ring-1 ring-inset transition-[box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
-                    on ? "ring-2 ring-indigo-500 shadow-[0_12px_30px_-20px_rgba(79,70,229,0.6)]" : "ring-black/[0.08] hover:ring-indigo-200",
+                    on ? "ring-2 ring-indigo-500 shadow-[0_12px_30px_-20px_rgba(79,70,229,0.6)]" : "ring-black/[0.08] hover:ring-indigo-200 dark:ring-white/10",
                   )}
                 >
                   <span className="text-[17px] font-bold tracking-[-0.02em]">{d.name}</span>
                   {promo && promo.extra_days > 0 ? (
-                    <span className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-bold text-emerald-700">
+                    <span className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-bold text-emerald-700 dark:text-emerald-300">
                       <Gift className="h-3 w-3" aria-hidden /> +{promo.extra_days} bonus {promo.extra_days === 1 ? "day" : "days"}
                     </span>
                   ) : null}
@@ -548,7 +626,7 @@ export function AdvertiseWizard() {
                 className={inputClass}
               />
               {host ? (
-                <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-700">
+                <p className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-300">
                   <Globe className="h-3.5 w-3.5" aria-hidden /> Destination: {host}
                 </p>
               ) : null}
@@ -584,7 +662,7 @@ export function AdvertiseWizard() {
       {form.step === "rules" ? (
         <section>
           <StepTitle title="Advertising Rules" sub="Every ad on Frenzsave follows these rules, so people can trust what they tap." />
-          <AiPanel className="mt-4 divide-y divide-slate-100 p-0 sm:p-0">
+          <AiPanel className="mt-4 divide-y divide-border/70 p-0 dark:ring-white/10 sm:p-0">
             {ADVERTISING_RULES.map((r) => (
               <details key={r.id} className="group px-4 py-3">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[14px] font-semibold [&::-webkit-details-marker]:hidden">
@@ -611,45 +689,96 @@ export function AdvertiseWizard() {
         </section>
       ) : null}
 
-      {/* ── 8 · review ── */}
+      {/* ── 8 · review: the payment page (owner brief §53) ── */}
       {form.step === "review" && format ? (
         <section>
-          <StepTitle title="Review and continue" sub="Check everything once more. The price is confirmed by our server when you continue." />
-          <AiPanel className="mt-4">
-            <Row label="Campaign" value={form.name} />
-            <Row label="Format" value={format.name} />
-            <Row label="Placement" value={form.placementCodes.map((c) => cat.placements.find((p) => p.code === c)?.name ?? c).join(", ")} />
-            <Row label="Duration" value={cat.durations.find((d) => d.id === form.durationId)?.name ?? "—"} />
-            <Row label="Creative" value={form.creative ? `${form.creative.mediaType === "video" ? "Video" : "Image"}${form.creative.width ? ` · ${form.creative.width} × ${form.creative.height}` : ""}${form.creative.durationSeconds ? ` · ${Math.round(form.creative.durationSeconds)} s` : ""}` : "—"} />
-            <Row label="Destination" value={host ?? "—"} />
-          </AiPanel>
-          {est ? <PriceBreakdown cat={cat} est={est} durationName={cat.durations.find((d) => d.id === form.durationId)?.name ?? ""} /> : <div className="mt-3"><Notice icon={CircleAlert} tone="rose">{adMessage("no_price")}</Notice></div>}
-          <div className="mt-3 flex items-center gap-2 text-[13.5px] font-semibold text-emerald-700">
-            <BadgeCheck className="h-4 w-4" aria-hidden /> Advertising Rules {rulesAccepted ? "accepted" : "not accepted yet"}
-          </div>
-          <div className="mt-3">
-            <Notice icon={ShieldCheck}>{AUTOMATED_VALIDATION_NOTICE}</Notice>
-          </div>
-          {locked ? (
-            <AiPanel className="mt-4 ring-emerald-200">
-              <p className="flex items-center gap-2 text-[15px] font-bold text-emerald-700">
-                <FileCheck2 className="h-5 w-5" aria-hidden /> Price confirmed: {formatMoney(locked.total, locked.currency as AdCatalog["settings"]["display_currency"])}
-              </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
-                Held for you until {new Date(locked.expiresAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}. You haven&apos;t been charged.
-              </p>
-            </AiPanel>
+          <StepTitle title="Review and pay" sub="Check your campaign once more. You'll pay on a secure checkout page." />
+          {(() => {
+            const duration = cat.durations.find((d) => d.id === form.durationId) ?? null;
+            const promo = est?.lines.find((l) => l.promotion)?.promotion ?? null;
+            const extra = est ? Math.max(0, ...est.lines.map((l) => l.extraDays)) : 0;
+            const total = locked ? formatMoney(locked.total, locked.currency as AdCatalog["settings"]["display_currency"]) : est ? formatMoney(est.total, est.currency) : null;
+            return (
+              <CampaignSummaryCard
+                className="mt-4"
+                name={form.name}
+                placements={form.placementCodes.map((c) => cat.placements.find((p) => p.code === c)?.name ?? c)}
+                format={format.name}
+                runtime={runtimeLabel(duration?.days, extra)}
+                promotion={promo ? `${promo.name}${est && est.discount > 0 ? ` · ${formatMoney(est.discount, est.currency)} off` : ""}` : null}
+                total={total}
+                was={!locked && est && est.discount > 0 ? formatMoney(est.subtotal, est.currency) : null}
+                details={
+                  <div className="space-y-0.5">
+                    {est && est.lines.length > 1
+                      ? est.lines.map((l) => (
+                          <Row key={l.placementCode} muted label={cat.placements.find((p) => p.code === l.placementCode)?.name ?? l.placementCode} value={formatMoney(l.list, est.currency)} />
+                        ))
+                      : null}
+                    <Row muted label="Creative" value={form.creative ? `${form.creative.mediaType === "video" ? "Video" : "Image"}${form.creative.width ? ` · ${form.creative.width} × ${form.creative.height}` : ""}${form.creative.durationSeconds ? ` · ${Math.round(form.creative.durationSeconds)} s` : ""}` : "—"} />
+                    <Row muted label="Destination" value={host ?? "—"} />
+                  </div>
+                }
+              />
+            );
+          })()}
+          {!est ? (
+            <div className="mt-3">
+              <Notice icon={CircleAlert} tone="rose">
+                {adMessage("no_price")}
+              </Notice>
+            </div>
           ) : null}
-          {busy === "submit" || busy === "pay" ? (
-            <p className="mt-3 flex items-center gap-2 text-[13px] font-semibold text-indigo-700" role="status" aria-live="polite">
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> {busy === "submit" ? "Preparing payment…" : "Opening secure checkout…"}
-            </p>
+
+          {/* payment method — the provider's own page; no SDK is loaded here (§65) */}
+          <div className="mt-3 flex items-start gap-3 rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-indigo-600 dark:text-indigo-300" aria-hidden>
+              <Lock className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[14px] font-semibold">Secure checkout</span>
+              <span className="mt-0.5 block text-[12.5px] leading-snug text-muted-foreground">You&apos;ll choose how to pay on our payment partner&apos;s secure page. Nothing is charged until you confirm there.</span>
+            </span>
+          </div>
+
+          <p className="mt-3 flex items-center gap-2 text-[13px] font-semibold text-emerald-700 dark:text-emerald-300">
+            <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden /> Advertising Rules {rulesAccepted ? "accepted" : "not accepted yet"}
+          </p>
+          <p className="mt-2 text-[12.5px] leading-snug text-muted-foreground">
+            <ShieldCheck className="mr-1 inline h-3.5 w-3.5 -translate-y-px text-indigo-600 dark:text-indigo-300" aria-hidden />
+            {AUTOMATED_VALIDATION_NOTICE}
+          </p>
+
+          {locked && !sessionExpired ? (
+            <div className="mt-3" data-pay-alert={priceUpdated ? "" : undefined}>
+              <Notice icon={FileCheck2} tone="emerald">
+                {priceUpdated ? (
+                  <>
+                    <strong>The price was updated to {formatMoney(locked.total, locked.currency as AdCatalog["settings"]["display_currency"])}.</strong> This is the price you&apos;ll pay. Continue when you&apos;re ready.
+                  </>
+                ) : (
+                  <>Price confirmed and held until {new Date(locked.expiresAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}. You haven&apos;t been charged.</>
+                )}
+              </Notice>
+            </div>
+          ) : null}
+
+          {sessionExpired ? (
+            <div data-pay-alert className="mt-4 rounded-[1.4rem] bg-card p-4 ring-1 ring-inset ring-amber-200 dark:ring-amber-400/30" role="alert">
+              <p className="flex items-center gap-2 text-[15px] font-bold">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" aria-hidden /> Your payment session expired
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">The campaign price or promotion may have changed. You haven&apos;t been charged.</p>
+              <AiButton variant="secondary" size="sm" className="mt-3" onClick={() => void reviewAgain()} disabled={!!busy} icon={busy === "refresh" ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="h-4 w-4" />}>
+                Review Campaign
+              </AiButton>
+            </div>
           ) : null}
         </section>
       ) : null}
 
       {error ? (
-        <div className="mt-4">
+        <div className="mt-4" data-pay-alert>
           <Notice icon={CircleAlert} tone="rose">
             {error}
           </Notice>
@@ -657,28 +786,68 @@ export function AdvertiseWizard() {
       ) : null}
 
       {/* ── actions ── */}
-      <div className="mt-6 flex items-center gap-2.5">
-        {stepIndex > 0 ? (
-          <AiButton variant="secondary" onClick={() => go(APPLICATION_STEPS[stepIndex - 1]!)} icon={<ArrowLeft className="h-4 w-4" />} aria-label="Back">
-            Back
-          </AiButton>
-        ) : null}
-        <div className="flex-1" />
-        {form.step === "review" ? (
-          <AiButton size="lg" onClick={() => void pay()} disabled={!rulesAccepted || !!busy || !est} aria-busy={busy === "submit" || busy === "pay"} iconEnd={busy === "submit" || busy === "pay" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}>
-            Continue to secure payment
-          </AiButton>
-        ) : (
+      {form.step === "review" ? (
+        <>
+          <div className="mt-5">
+            <AiButton variant="secondary" size="sm" onClick={() => go("rules")} disabled={!!busy} icon={<ArrowLeft className="h-4 w-4" />}>
+              Back
+            </AiButton>
+          </div>
+          {/*
+            The Frenz AI sticky action bar (the generate screens' own), so the
+            payment CTA stays in reach on a phone (§60). Its glass is the AI
+            surface's light fill; on this page it follows the app's theme.
+          */}
+          <AiActionBar className="dark:[&_.ai-glass]:bg-card/90 dark:[&_.ai-glass]:ring-white/10">
+            {(() => {
+              const shown = locked && !sessionExpired ? { total: locked.total, currency: locked.currency as AdCatalog["settings"]["display_currency"] } : est;
+              const label = busy === "save" || busy === "submit" ? "Preparing Payment…" : busy === "pay" ? "Opening Secure Checkout…" : "Continue to Payment";
+              const working = busy === "save" || busy === "submit" || busy === "pay";
+              return (
+                <>
+                  {/* the total steps aside while the button speaks, so its label is never cut (the price is in the card above) */}
+                  {shown && !working ? (
+                    <span className="min-w-0 shrink-0 max-[359px]:hidden">
+                      <span className="block text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Total</span>
+                      <span className="block font-brand text-[1.15rem] font-bold leading-tight tabular-nums">{formatMoney(shown.total, shown.currency)}</span>
+                    </span>
+                  ) : null}
+                  <AiButton
+                    size="lg"
+                    className="min-w-0 flex-1 max-[379px]:px-4 max-[379px]:text-[15px]"
+                    onClick={() => void pay()}
+                    disabled={!rulesAccepted || !!busy || !est || sessionExpired}
+                    aria-busy={working}
+                    iconEnd={working ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <ArrowRight className="h-4 w-4" />}
+                  >
+                    {label}
+                  </AiButton>
+                  <span className="sr-only" role="status" aria-live="polite">
+                    {working ? label : ""}
+                  </span>
+                </>
+              );
+            })()}
+          </AiActionBar>
+        </>
+      ) : (
+        <div className="mt-6 flex items-center gap-2.5">
+          {stepIndex > 0 ? (
+            <AiButton variant="secondary" onClick={() => go(APPLICATION_STEPS[stepIndex - 1]!)} icon={<ArrowLeft className="h-4 w-4" />} aria-label="Back">
+              Back
+            </AiButton>
+          ) : null}
+          <div className="flex-1" />
           <AiButton
             size="lg"
             onClick={() => void next()}
             disabled={!canContinue[form.step] || !!busy || (form.step === "creative" && !user)}
-            iconEnd={busy === "save" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+            iconEnd={busy === "save" ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <ArrowRight className="h-4 w-4" />}
           >
             Continue
           </AiButton>
-        )}
-      </div>
+        </div>
+      )}
 
       {est && stepIndex >= 2 && form.step !== "review" ? (
         <p className="mt-3 text-right text-[12.5px] text-muted-foreground">
@@ -687,7 +856,7 @@ export function AdvertiseWizard() {
       ) : null}
 
       {user && form.campaignId ? (
-        <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-[12.5px] text-muted-foreground">
+        <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/70 pt-4 text-[12.5px] text-muted-foreground">
           <span>{savedAt ? "Draft saved" : "Saved as a draft"}</span>
           <span className="flex items-center gap-1">
             <button type="button" onClick={() => void checkpoint(true)} disabled={!!busy} className="min-h-[2.75rem] px-2 font-semibold text-indigo-700">
@@ -704,7 +873,7 @@ export function AdvertiseWizard() {
 }
 
 const inputClass =
-  "h-12 w-full rounded-2xl bg-white px-4 text-[15px] ring-1 ring-inset ring-black/[0.1] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "h-12 w-full rounded-2xl bg-card px-4 text-[15px] ring-1 ring-inset ring-black/[0.1] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:ring-white/15 dark:placeholder:text-slate-500";
 
 function Field({ label, htmlFor, hint, error, count, children }: { label: string; htmlFor: string; hint?: string; error?: string | null; count?: [number, number]; children: React.ReactNode }) {
   return (
@@ -725,7 +894,7 @@ function Field({ label, htmlFor, hint, error, count, children }: { label: string
 /** A quiet frame around a live preview, with its honest caption. */
 function HowItLooks({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-[1.4rem] bg-gradient-to-b from-slate-50 to-indigo-50/50 px-4 pb-3 pt-4 ring-1 ring-inset ring-slate-200/70">
+    <div className="rounded-[1.4rem] bg-gradient-to-b from-slate-50 to-indigo-50/50 px-4 pb-3 pt-4 ring-1 ring-inset ring-slate-200/70 dark:from-white/[0.03] dark:to-indigo-500/[0.06] dark:ring-white/10">
       <p className="mb-3 text-center text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">How your ad will look</p>
       {children}
       <p className="mt-3 text-center text-[11.5px] text-muted-foreground">Preview — actual placement may vary slightly by device.</p>
@@ -735,7 +904,7 @@ function HowItLooks({ children }: { children: React.ReactNode }) {
 
 function RulesCheckbox({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className={cn("mt-4 flex cursor-pointer items-start gap-3 rounded-[1.3rem] p-4 ring-1 ring-inset transition-colors", checked ? "bg-indigo-50/60 ring-indigo-300" : "bg-card ring-black/[0.1]")}>
+    <label className={cn("mt-4 flex cursor-pointer items-start gap-3 rounded-[1.3rem] p-4 ring-1 ring-inset transition-colors", checked ? "bg-indigo-50/60 ring-indigo-300 dark:bg-indigo-500/12 dark:ring-indigo-400/40" : "bg-card ring-black/[0.1] dark:ring-white/15")}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-indigo-600" />
       <span className="text-[13.5px] leading-relaxed">{RULES_CHECKBOX_TEXT}</span>
     </label>
@@ -756,25 +925,6 @@ function PromoLine({ cat, placement, durationId }: { cat: AdCatalog; placement: 
   );
 }
 
-function PriceBreakdown({ cat, est, durationName }: { cat: AdCatalog; est: NonNullable<ReturnType<typeof estimate>>; durationName: string }) {
-  const promo = est.lines.find((l) => l.promotion)?.promotion ?? null;
-  const extra = Math.max(0, ...est.lines.map((l) => l.extraDays));
-  return (
-    <AiPanel className="mt-3">
-      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Price</p>
-      <div className="mt-1">
-        {est.lines.map((l) => (
-          <Row key={l.placementCode} label={`${durationName} · ${cat.placements.find((p) => p.code === l.placementCode)?.name ?? l.placementCode}`} value={formatMoney(l.list, est.currency)} />
-        ))}
-        <Row label="Subtotal" value={formatMoney(est.subtotal, est.currency)} muted />
-        {promo ? <Row label={`${promo.name}${extra ? ` · +${extra} bonus ${extra === 1 ? "day" : "days"}` : ""}`} value={est.discount > 0 ? `−${formatMoney(est.discount, est.currency)}` : "Included"} muted /> : null}
-        <div className="border-t border-slate-100" />
-        <Row label="Total" value={formatMoney(est.total, est.currency)} strong />
-      </div>
-    </AiPanel>
-  );
-}
-
 function Drafts({ apps, cat, onResume }: { apps: MyApplication[]; cat: AdCatalog; onResume: (a: MyApplication) => void }) {
   return (
     <div className="mb-6 mt-4">
@@ -787,7 +937,7 @@ function Drafts({ apps, cat, onResume }: { apps: MyApplication[]; cat: AdCatalog
               key={a.id}
               type="button"
               onClick={() => onResume(a)}
-              className="flex w-full items-center gap-3 rounded-[1.2rem] bg-card p-3 text-left ring-1 ring-inset ring-black/[0.08] hover:ring-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="flex w-full items-center gap-3 rounded-[1.2rem] bg-card p-3 text-left ring-1 ring-inset ring-black/[0.08] hover:ring-indigo-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 dark:ring-white/10"
             >
               <span className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-violet-100 to-sky-100">
                 {a.creative?.thumbnail_url || (a.creative?.media_type === "image" && a.creative.media_url) ? (
@@ -833,20 +983,23 @@ function Unavailable() {
   );
 }
 
+/** The rail and the first step's shape, so nothing jumps when the menu arrives (§67). */
 function WizardSkeleton() {
   return (
-    <div aria-busy className="animate-pulse">
-      <div className="flex gap-1">
-        {APPLICATION_STEPS.map((s) => (
-          <span key={s} className="h-1 flex-1 rounded-full bg-slate-200" />
+    <div aria-busy className="animate-pulse motion-reduce:animate-none">
+      <div className="flex justify-between px-2">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <span key={i} className="flex min-h-[44px] flex-col items-center">
+            <span className="h-7 w-7 rounded-full bg-secondary" />
+          </span>
         ))}
       </div>
-      <span className="mt-4 block h-7 w-2/3 rounded-full bg-slate-200" />
-      <span className="mt-2 block h-4 w-1/2 rounded-full bg-slate-100" />
+      <span className="mx-[10%] mt-1 block h-[3px] rounded-full bg-secondary" />
+      <span className="mt-4 block h-7 w-2/3 rounded-full bg-secondary" />
+      <span className="mt-2 block h-4 w-1/2 rounded-full bg-muted" />
       {[0, 1, 2].map((i) => (
-        <span key={i} className="mt-3 block h-24 rounded-[1.4rem] bg-slate-100" />
+        <span key={i} className="mt-3 block h-24 rounded-[1.4rem] bg-muted" />
       ))}
     </div>
   );
 }
-

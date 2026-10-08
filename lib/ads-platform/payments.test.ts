@@ -130,9 +130,38 @@ describe("the advertiser sees the server's truth", () => {
     const page = src("features/ads-platform/payment-return.tsx");
     expect(page).toContain("const BACKOFF_MS = [0, 2_000, 4_000, 8_000, 15_000, 30_000];");
     expect(page).not.toMatch(/setInterval\(/);
-    expect(page).toContain('paid: "Payment successful"');
-    // "Payment successful" is only shown once the SERVER says the payment is paid
+    // "Payment verified" / "Campaign Live" only once the SERVER says so (§80.13–14)
+    expect(page).toMatch(/case "paid":\s*case "activating":\s*return \{ title: "Payment verified"/);
+    expect(page).toMatch(/case "live":\s*return \{ title: "Campaign Live"/);
     expect(page).toMatch(/const state = view\?\.state \?\? "verifying";/);
+    // §69: leaving the page cancels the timer AND the request in flight
+    expect(page).toContain("if (timer.current) clearTimeout(timer.current);");
+    expect(page).toContain("inflight.current?.abort();");
+    // a manual check can never stack on one already running
+    expect(page).toContain("if (!reference || inflight.current) return null;");
+    expect(page).toMatch(/disabled=\{checking\}/);
+  });
+  it("§58 an uncertain payment says 'do not pay again' rather than offering a fresh payment first", () => {
+    const page = src("features/ads-platform/payment-return.tsx");
+    expect(page).toContain('if (paymentStatus === "verification_required")');
+    expect(page).toContain('"Payment could not be verified"');
+    expect(page).toContain("You don't need to pay again yet.");
+    // "Paid" is the server's word only: an unconfirmed payment is an "Amount"
+    expect(page).toContain('const paid = view?.paymentStatus === "success";');
+    expect(page).toContain('totalLabel={paid ? "Paid" : "Amount"}');
+    expect(page).toContain('"Payment failed", body: "Your campaign was not activated. No campaign credit was applied."');
+    expect(page).toContain('"Your payment session expired", body: "The campaign price or promotion may have changed."');
+  });
+  it("§59 an expired quote stops and asks for a review; a changed price is shown before it is paid", () => {
+    const wiz = src("features/ads-platform/advertise-wizard.tsx");
+    // the held price ran out: no silent re-quote
+    expect(wiz).toMatch(/if \(quote && Date\.parse\(quote\.expiresAt\) <= Date\.now\(\) \+ 30_000\) \{\s*setLocked\(null\);\s*setSessionExpired\(true\);\s*return;/);
+    // the server's price differs from the estimate on screen: show it, do not pay it on this tap
+    expect(wiz).toMatch(/if \(quote\.total !== est\.total \|\| quote\.currency !== est\.currency\) \{\s*setPriceUpdated\(true\);\s*return;/);
+    // the server refusing a stale quote lands on the same screen
+    expect(wiz).toMatch(/r\.code === "quote_expired" \|\| r\.code === "quote_invalid" \|\| r\.code === "not_payable"\) \{\s*setLocked\(null\);\s*setSessionExpired\(true\);/);
+    expect(wiz).toContain("Your payment session expired");
+    expect(wiz).toContain("loadAdCatalog(Date.now(), { fresh: true })");
   });
   it("T19/T21 the browser sends a campaign and a quote - never an amount, currency, duration or status", () => {
     const wiz = src("features/ads-platform/advertise-wizard.tsx");
@@ -143,9 +172,12 @@ describe("the advertiser sees the server's truth", () => {
   });
   it("T18 the pay button is disabled from the first tap until the page leaves", () => {
     const wiz = src("features/ads-platform/advertise-wizard.tsx");
-    expect(wiz).toContain("if (!form.campaignId || !rulesAccepted || busy) return;");
+    expect(wiz).toContain("if (!form.campaignId || !rulesAccepted || busy || !est) return;");
     expect(wiz).toContain("return; // stays busy: the page is leaving");
-    expect(wiz).toMatch(/onClick=\{\(\) => void pay\(\)\} disabled=\{!rulesAccepted \|\| !!busy \|\| !est\}/);
+    expect(wiz).toMatch(/onClick=\{\(\) => void pay\(\)\}\s*disabled=\{!rulesAccepted \|\| !!busy \|\| !est \|\| sessionExpired\}/);
+    // §55: while it is disabled, the label says what is happening
+    expect(wiz).toContain('"Preparing Payment…"');
+    expect(wiz).toContain('"Opening Secure Checkout…"');
   });
 });
 

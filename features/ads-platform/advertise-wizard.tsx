@@ -42,6 +42,7 @@ import { AdPreview } from "./ad-preview";
 import { AdFlowRail, CampaignSummaryCard, Chip, FIRST_STEP_OF, formatIcon, Notice, OptionCard, phaseOf, Row, runtimeLabel, StepTitle } from "./advertise-ui";
 import { loadAdCatalog } from "./catalog-client";
 import type { UploadedCreative } from "./creative-step";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { loadMyApplications, type MyApplication } from "./my-applications-client";
 
 /**
@@ -382,7 +383,10 @@ export function AdvertiseWizard() {
   };
 
   const discard = async () => {
+    if (busy) return;
+    setBusy("discard");
     if (form.campaignId) await api("/api/ads/advertiser/draft", "DELETE", { campaignId: form.campaignId });
+    setBusy(null);
     setForm(EMPTY);
     setLocalPreview(null);
     setRulesAccepted(false);
@@ -868,11 +872,14 @@ export function AdvertiseWizard() {
         <div className="mt-5 flex items-center justify-between gap-3 border-t border-border/70 pt-4 text-[12.5px] text-muted-foreground">
           <span>{savedAt ? "Draft saved" : "Saved as a draft"}</span>
           <span className="flex items-center gap-1">
-            <button type="button" onClick={() => void checkpoint(true)} disabled={!!busy} className="min-h-[2.75rem] px-2 font-semibold text-indigo-700">
-              Save draft
+            {/* instant feedback on the server-backed actions (owner, 2026-10-08: "respond instantly … show the button loading") */}
+            <button type="button" onClick={() => void checkpoint(true)} disabled={!!busy} aria-busy={busy === "save"} className="inline-flex min-h-[2.75rem] items-center gap-1.5 px-2 font-semibold text-indigo-700 disabled:opacity-60 dark:text-indigo-300">
+              {busy === "save" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+              {busy === "save" ? "Saving…" : "Save draft"}
             </button>
-            <button type="button" onClick={() => void discard()} disabled={!!busy} className="min-h-[2.75rem] px-2 font-semibold text-rose-600">
-              Discard
+            <button type="button" onClick={() => void discard()} disabled={!!busy} aria-busy={busy === "discard"} className="inline-flex min-h-[2.75rem] items-center gap-1.5 px-2 font-semibold text-rose-600 disabled:opacity-60">
+              {busy === "discard" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+              {busy === "discard" ? "Discarding…" : "Discard"}
             </button>
           </span>
         </div>
@@ -975,9 +982,9 @@ function SignInCard() {
       <LogIn className="mx-auto h-6 w-6 text-indigo-600" aria-hidden />
       <p className="mt-2 text-[15px] font-semibold">Sign in to upload your creative</p>
       <p className="mt-1 text-[13px] text-muted-foreground">Use your Frenzsave account — the same one you use every day. Your choices so far are kept.</p>
-      <Link href={`/login?next=${encodeURIComponent("/advertise/create")}`} prefetch={false} className="ai-btn ai-btn--primary mt-4 inline-flex">
+      <TapOnceLink href={`/login?next=${encodeURIComponent("/advertise/create")}`} className="ai-btn ai-btn--primary mt-4 inline-flex">
         Sign in to continue
-      </Link>
+      </TapOnceLink>
     </AiPanel>
   );
 }

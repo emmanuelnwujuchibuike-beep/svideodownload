@@ -1,7 +1,6 @@
 "use client";
 
 import { BadgeCheck, CalendarClock, Check, CircleAlert, Clock, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AiButton, AiButtonLink } from "@/features/ai/design/ai-button";
@@ -12,6 +11,7 @@ import { formatMoney } from "@/lib/ads-platform/offer";
 import { cn } from "@/lib/utils";
 
 import { AdFlowRail, CampaignSummaryCard, Notice, Row, runtimeLabel } from "./advertise-ui";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 
 /**
  * Back from the hosted checkout. The redirect proves NOTHING: this page asks
@@ -205,9 +205,9 @@ export function PaymentReturn() {
     return (
       <AiPanel className="text-center dark:ring-white/10">
         <p className="text-[15px] font-semibold">Sign in to see your payment</p>
-        <Link href={`/login?next=${encodeURIComponent(`/advertise/payment?reference=${reference}`)}`} prefetch={false} className="ai-btn ai-btn--primary mt-4 inline-flex">
+        <TapOnceLink href={`/login?next=${encodeURIComponent(`/advertise/payment?reference=${reference}`)}`} className="ai-btn ai-btn--primary mt-4 inline-flex">
           Sign in
-        </Link>
+        </TapOnceLink>
       </AiPanel>
     );
   }
@@ -281,7 +281,7 @@ export function PaymentReturn() {
           </AiButton>
         ) : null}
         {live ? (
-          <AiButtonLink href="/advertise/campaigns" prefetch={false} size="lg" block icon={<CalendarClock className="h-4 w-4" />}>
+          <AiButtonLink tapOnce href="/advertise/campaigns" prefetch={false} size="lg" block icon={<CalendarClock className="h-4 w-4" />}>
             View Campaign
           </AiButtonLink>
         ) : null}
@@ -299,22 +299,22 @@ export function PaymentReturn() {
           </AiButton>
         ) : null}
         {view?.paymentStatus === "verification_required" && state === "verifying" ? (
-          <AiButtonLink href="/advertise/create" prefetch={false} variant="secondary" size="lg" block>
+          <AiButtonLink tapOnce href="/advertise/create" prefetch={false} variant="secondary" size="lg" block>
             Try Again
           </AiButtonLink>
         ) : null}
         {state === "failed" || state === "cancelled" ? (
-          <AiButtonLink href="/advertise/create" prefetch={false} size="lg" block>
+          <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="lg" block>
             Try Payment Again
           </AiButtonLink>
         ) : null}
         {state === "expired" ? (
-          <AiButtonLink href="/advertise/create" prefetch={false} size="lg" block>
+          <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="lg" block>
             Review Campaign
           </AiButtonLink>
         ) : null}
         {!live ? (
-          <AiButtonLink href="/advertise/campaigns" prefetch={false} variant="secondary" size="lg" block>
+          <AiButtonLink tapOnce href="/advertise/campaigns" prefetch={false} variant="secondary" size="lg" block>
             My campaigns
           </AiButtonLink>
         ) : null}

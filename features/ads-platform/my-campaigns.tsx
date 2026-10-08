@@ -1,7 +1,6 @@
 "use client";
 
 import { Megaphone } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AiButtonLink } from "@/features/ai/design/ai-button";
@@ -10,6 +9,7 @@ import { useUser } from "@/features/auth/use-user";
 import { getClient } from "@/lib/supabase/client-lazy";
 
 import { Chip, Row } from "./advertise-ui";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 
 /**
  * The advertiser's campaigns, read straight from Postgres with their own
@@ -73,9 +73,9 @@ export function MyCampaigns() {
     return (
       <AiPanel className="text-center">
         <p className="text-[15px] font-semibold">Sign in to see your campaigns</p>
-        <Link href={`/login?next=${encodeURIComponent("/advertise/campaigns")}`} prefetch={false} className="ai-btn ai-btn--primary mt-4 inline-flex">
+        <TapOnceLink href={`/login?next=${encodeURIComponent("/advertise/campaigns")}`} className="ai-btn ai-btn--primary mt-4 inline-flex">
           Sign in
-        </Link>
+        </TapOnceLink>
       </AiPanel>
     );
   }
@@ -85,7 +85,7 @@ export function MyCampaigns() {
       <AiPanel className="text-center">
         <Megaphone className="mx-auto h-6 w-6 text-indigo-600" aria-hidden />
         <p className="mt-2 text-[15px] font-semibold">No campaigns yet</p>
-        <AiButtonLink href="/advertise/create" prefetch={false} className="mt-4">Create an Ad</AiButtonLink>
+        <AiButtonLink tapOnce href="/advertise/create" prefetch={false} className="mt-4">Create an Ad</AiButtonLink>
       </AiPanel>
     );
   }
@@ -109,9 +109,9 @@ export function MyCampaigns() {
               <Row label="Ends" value={date(c.end_at)} />
             </div>
             {c.status === "draft" || c.status === "awaiting_payment" ? (
-              <Link href="/advertise/create" prefetch={false} className="mt-2 inline-flex min-h-[2.75rem] items-center text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
+              <TapOnceLink href="/advertise/create" className="mt-2 inline-flex min-h-[2.75rem] items-center text-[13px] font-semibold text-indigo-700 dark:text-indigo-300">
                 Continue this ad →
-              </Link>
+              </TapOnceLink>
             ) : null}
           </AiPanel>
         );

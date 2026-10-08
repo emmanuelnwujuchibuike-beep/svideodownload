@@ -1,6 +1,5 @@
 import { ArrowRight, BadgeCheck, CreditCard, Eye, ImageUp, LayoutGrid, Lock, ShieldCheck, Zap } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -9,6 +8,7 @@ import { AdvertisePlacementsPricing } from "@/features/ads-platform/advertise-pl
 import { AiButtonLink } from "@/features/ai/design/ai-button";
 import { AiDisplayTitle } from "@/features/ai/design/ai-surface";
 import { AUTOMATED_VALIDATION_NOTICE } from "@/lib/ads-platform/rules";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { jsonLd } from "@/lib/seo/json-ld";
 
 /*
@@ -86,10 +86,10 @@ export default function AdvertisePage() {
             className="mt-4"
           />
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
-            <AiButtonLink href="/advertise/create" prefetch={false} size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
+            <AiButtonLink tapOnce href="/advertise/create" prefetch={false} size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
               Start Advertising
             </AiButtonLink>
-            <AiButtonLink href="/advertise/rules" prefetch={false} variant="secondary" size="lg">
+            <AiButtonLink tapOnce href="/advertise/rules" prefetch={false} variant="secondary" size="lg">
               Advertising Rules
             </AiButtonLink>
           </div>
@@ -101,9 +101,9 @@ export default function AdvertisePage() {
           <p className="mt-3 text-[13px] leading-snug text-muted-foreground">
             No account needed to explore formats, places and prices. You&apos;ll sign in with your Frenzsave account when you upload your ad — your choices are kept.
           </p>
-          <Link href="/advertise/campaigns" prefetch={false} className="mt-1 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
+          <TapOnceLink href="/advertise/campaigns" className="mt-1 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
             My campaigns →
-          </Link>
+          </TapOnceLink>
 
           <section className="mt-12" aria-labelledby="how">
             <h2 id="how" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">
@@ -159,9 +159,9 @@ export default function AdvertisePage() {
 
           <p className="mt-4 text-[13.5px]">
             Read the full{" "}
-            <Link href="/advertise/rules" prefetch={false} className="font-semibold text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-300">
+            <TapOnceLink href="/advertise/rules" className="font-semibold text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-300">
               Advertising Rules
-            </Link>{" "}
+            </TapOnceLink>{" "}
             before you apply.
           </p>
 
@@ -195,7 +195,7 @@ export default function AdvertisePage() {
           <div className="mt-12 rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 p-6 text-white">
             <p className="font-brand text-[1.3rem] font-bold tracking-[-0.03em]">Ready when you are</p>
             <p className="mt-1 text-[14px] text-white/85">Use the Frenzsave account you already have — or create one in a minute.</p>
-            <AiButtonLink href="/advertise/create" prefetch={false} variant="secondary" className="mt-4" iconEnd={<ArrowRight className="h-4 w-4" />}>
+            <AiButtonLink tapOnce href="/advertise/create" prefetch={false} variant="secondary" className="mt-4" iconEnd={<ArrowRight className="h-4 w-4" />}>
               Start Advertising
             </AiButtonLink>
           </div>

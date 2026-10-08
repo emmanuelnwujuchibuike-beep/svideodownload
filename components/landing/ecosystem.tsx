@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { AiButtonLink } from "@/features/ai/design/ai-button";
 import type { PublicAdSummary } from "@/lib/ads-platform/public-summary";
 import { SHOWCASE_TARGETS } from "@/lib/ai/showcase/slides";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { cn } from "@/lib/utils";
 
 /**
@@ -190,12 +191,12 @@ export function PromoteSection({ ads }: { ads: PublicAdSummary }) {
           </p>
         ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <AiButtonLink href="/advertise" prefetch={false} data-track="advertise_clicked" iconEnd={<ArrowRight className="h-4 w-4" />}>
+          <AiButtonLink tapOnce href="/advertise" prefetch={false} data-track="advertise_clicked" iconEnd={<ArrowRight className="h-4 w-4" />}>
             Advertise on Frenzsave
           </AiButtonLink>
-          <Link href="/advertise/rules" prefetch={false} className="inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
+          <TapOnceLink href="/advertise/rules" className="inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
             Advertising rules
-          </Link>
+          </TapOnceLink>
         </div>
       </div>
     </section>

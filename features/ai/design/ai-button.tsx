@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
 
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { cn } from "@/lib/utils";
 
 /**
@@ -66,8 +67,25 @@ export function AiButtonLink({
   block,
   className,
   children,
+  tapOnce,
   ...rest
-}: Common & Omit<ComponentProps<typeof Link>, "className" | "children">) {
+}: Common &
+  Omit<ComponentProps<typeof Link>, "className" | "children"> & {
+    /**
+     * Respond on the FIRST tap (owner, 2026-10-08: "make the buttons in the promote
+     * page respond instantly … show the button loading like the earn button"):
+     * the button shows its pending state at once, warms the route on press, and
+     * a second tap cannot fire while the next page is still on its way.
+     */
+    tapOnce?: boolean;
+  }) {
+  if (tapOnce && typeof rest.href === "string") {
+    return (
+      <TapOnceLink {...rest} href={rest.href} className={aiButtonClass({ variant, size, block, className: cn("data-[pending]:opacity-80", className) })}>
+        <Inner icon={icon} iconEnd={iconEnd}>{children}</Inner>
+      </TapOnceLink>
+    );
+  }
   return (
     <Link {...rest} className={aiButtonClass({ variant, size, block, className })}>
       <Inner icon={icon} iconEnd={iconEnd}>{children}</Inner>

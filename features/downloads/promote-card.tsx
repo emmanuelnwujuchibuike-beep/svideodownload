@@ -1,5 +1,5 @@
 import { ArrowRight, Megaphone } from "lucide-react";
-import Link from "next/link";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 
 import { cn } from "@/lib/utils";
 
@@ -13,12 +13,11 @@ import { cn } from "@/lib/utils";
  */
 export function PromoteCard({ className }: { className?: string }) {
   return (
-    <Link
+    <TapOnceLink
       href="/advertise"
-      prefetch={false}
       data-track="advertise_clicked"
       className={cn(
-        "flex items-center gap-3 rounded-[1.4rem] bg-card px-4 py-3 ring-1 ring-inset ring-black/[0.07] transition-colors hover:ring-indigo-200 dark:ring-white/10",
+        "flex items-center gap-3 rounded-[1.4rem] transition-opacity data-[pending]:opacity-75 bg-card px-4 py-3 ring-1 ring-inset ring-black/[0.07] transition-colors hover:ring-indigo-200 dark:ring-white/10",
         className,
       )}
     >
@@ -28,6 +27,6 @@ export function PromoteCard({ className }: { className?: string }) {
         <span className="block truncate text-[12.5px] text-muted-foreground">Put your brand in front of the Frenzsave audience.</span>
       </span>
       <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-    </Link>
+    </TapOnceLink>
   );
 }

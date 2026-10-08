@@ -45,7 +45,7 @@ export default function AdvertisingRulesPage() {
             ))}
           </div>
           <div className="mt-10">
-            <AiButtonLink href="/advertise/create" prefetch={false}>
+            <AiButtonLink tapOnce href="/advertise/create" prefetch={false}>
               Create an Ad
             </AiButtonLink>
           </div>

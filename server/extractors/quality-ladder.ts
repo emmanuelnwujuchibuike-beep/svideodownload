@@ -33,10 +33,33 @@ function heightOf(f: MediaFormat): number | null {
  * pieces of content (story slide 1, 2, 3…) whose ORDER is meaningful, not a
  * quality ladder to rank.
  */
+/**
+ * A format whose codec we KNOW does not play as video on Chrome/Android, so the
+ * download re-encodes it (download-service's compatibility branch) — 16 s for a
+ * TikTok 1920p tier on production, 2026-10-08, against ~1 s for the H.264 one.
+ * Unknown codec (yt-dlp formats) is not "converts": nothing is assumed.
+ */
+function convertsOnDownload(f: MediaFormat): boolean {
+  return !!f.vcodec && /^(bytevc1|hevc|h265|hvc1|hev1|vp0?9|av0?1)/i.test(f.vcodec);
+}
+
 function bestFirst(videos: MediaFormat[]): MediaFormat[] {
   const ladder = videos.filter((f) => !f.isSeparateItem);
   const separate = videos.filter((f) => f.isSeparateItem);
   const sorted = [...ladder].sort((a, b) => {
+    /*
+      🔴 STREAMABLE BEFORE "CONVERTS ON DOWNLOAD" (2026-10-08). The client
+      downloads `formats[0]` by default, and a pure height sort put TikTok's
+      bytevc1 1920p tier first — overriding tiktok.ts's deliberate "H.264
+      first" order (owner, 2026-08-09: default to the stream that does not need
+      re-encoding). While TikWM answered this never showed; once the native
+      route carried every TikTok extraction, every default download paid a
+      full re-encode. The converting tier is still offered right below, and
+      still labelled with what it costs.
+    */
+    const ca = convertsOnDownload(a) ? 1 : 0;
+    const cb = convertsOnDownload(b) ? 1 : 0;
+    if (ca !== cb) return ca - cb;
     const ha = heightOf(a);
     const hb = heightOf(b);
     if (ha != null && hb != null && ha !== hb) return hb - ha;

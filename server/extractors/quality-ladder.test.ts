@@ -59,6 +59,29 @@ describe("withQualityLadder — enforces best-first ordering unconditionally", (
     expect(out.map((f) => f.formatId)).toEqual(["high-tbr", "low-tbr", "filler", "no-height"]);
   });
 
+  it("puts a streamable tier ahead of one that converts on download (production TikTok shape, 2026-10-08)", () => {
+    // native TikTok: bytevc1 1920p + 1280p, H.264 1024p — the default pick was the 16 s re-encode
+    const formats = [
+      video({ formatId: "tt-0", resolution: "1024p", vcodec: "h264" }),
+      video({ formatId: "tt-1", resolution: "1920p", vcodec: "hevc" }),
+      video({ formatId: "tt-2", resolution: "1280p", vcodec: "hevc" }),
+      video({ formatId: "tt-3", resolution: "540p", vcodec: "av1" }),
+    ];
+    const out = withQualityLadder(formats).filter((f) => f.kind === "video");
+    expect(out.map((f) => f.formatId)).toEqual(["tt-0", "tt-1", "tt-2", "tt-3"]);
+  });
+
+  it("an unknown codec is not assumed to convert (yt-dlp formats keep the height order)", () => {
+    const formats = [
+      video({ formatId: "1440", resolution: "1440p", vcodec: null }),
+      video({ formatId: "2160", resolution: "2160p", vcodec: null }),
+      video({ formatId: "720", resolution: "720p", vcodec: "h264" }),
+      video({ formatId: "480", resolution: "480p", vcodec: "h264" }),
+    ];
+    const out = withQualityLadder(formats).filter((f) => f.kind === "video");
+    expect(out.map((f) => f.formatId)).toEqual(["2160", "1440", "720", "480"]);
+  });
+
   it("never reorders isSeparateItem entries relative to each other — order is content, not quality", () => {
     const formats = [
       video({ formatId: "story-1", resolution: "480p", isSeparateItem: true }),

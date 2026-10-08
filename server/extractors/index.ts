@@ -66,8 +66,10 @@ const METADATA_TTL_SECONDS = Number(
  * v4 — 2026-10-08: TikTok native formats carry the page's cookies. A v3
  * snapshot holds the cookieless CDN URLs that 403, so without this bump every
  * TikTok link previewed before the deploy would keep failing for 30 minutes.
+ * v5 — 2026-10-08: streamable tiers sort ahead of "converts on download"
+ * (quality-ladder.ts) — the ORDER is cached, and the default is formats[0].
  */
-const EXTRACTOR_SHAPE_VERSION = "v4";
+const EXTRACTOR_SHAPE_VERSION = "v5";
 
 function metadataKey(url: string): string {
   return `meta:${EXTRACTOR_SHAPE_VERSION}:${url}`;

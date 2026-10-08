@@ -4,8 +4,8 @@ import { fetchDownload } from "@/features/downloads/fetch-download";
 
 /**
  * FOT brief (owner, 2026-10-06): a download's bytes come from the worker
- * directly when the server hands out a ticket, and from the old proxied path
- * whenever anything about the direct path does not work.
+ * directly when the server hands out a ticket. Owner, 2026-10-08: a failure is
+ * retried at the worker with a fresh ticket — never through the Vercel proxy.
  */
 
 const TICKET = "https://worker.example/api/download/direct?ticket=abc";
@@ -42,26 +42,45 @@ describe("fetchDownload", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("falls back to the proxied path when the worker cannot be reached (CORS / network)", async () => {
+  it("worker unreachable: ONE fresh ticket and the worker again — never the Vercel proxy (owner, 2026-10-08)", async () => {
+    const calls: string[] = [];
+    let workerTries = 0;
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      calls.push(u);
+      if (u === TICKET) {
+        workerTries += 1;
+        if (workerTries === 1) throw new TypeError("Failed to fetch");
+        return new Response("bytes");
+      }
+      return ticketResponse();
+    }));
+    const res = await fetchDownload("/api/download?url=x", new AbortController().signal);
+    expect(await res.text()).toBe("bytes");
+    expect(calls).toEqual(["/api/download?url=x&direct=1", TICKET, "/api/download?url=x&direct=1", TICKET]);
+  });
+
+  it("worker unreachable twice: an honest 503 JSON error, still no request without direct=1", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
       calls.push(u);
       if (u === TICKET) throw new TypeError("Failed to fetch");
-      return u.endsWith("&direct=1") ? ticketResponse() : new Response("proxied");
+      return ticketResponse();
     }));
     const res = await fetchDownload("/api/download?url=x", new AbortController().signal);
-    expect(await res.text()).toBe("proxied");
-    expect(calls).toEqual(["/api/download?url=x&direct=1", TICKET, "/api/download?url=x"]);
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe("DOWNLOAD_FAILED");
+    expect(calls.filter((u) => u === "/api/download?url=x")).toHaveLength(0);
   });
 
   it("never follows a ticket that is not https", async () => {
     const calls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (u: string) => {
       calls.push(u);
-      return u.endsWith("&direct=1") ? ticketResponse("javascript:alert(1)") : new Response("proxied");
+      return ticketResponse("javascript:alert(1)");
     }));
-    await fetchDownload("/api/download?url=x", new AbortController().signal);
-    expect(calls).toEqual(["/api/download?url=x&direct=1", "/api/download?url=x"]);
+    const res = await fetchDownload("/api/download?url=x", new AbortController().signal);
+    expect(res.status).toBe(503);
+    expect(calls.every((u) => u === "/api/download?url=x&direct=1")).toBe(true);
   });
 
   it("passes a refusal (429) straight back for its own message", async () => {
@@ -81,21 +100,23 @@ describe("fetchDownload", () => {
   });
 });
 
-describe("a broken direct door never fails a download", () => {
-  it("a 404 / gateway page from the worker falls back to the proxied path", async () => {
+describe("a broken direct door gets one more ticket, never Vercel", () => {
+  it("a 404 / gateway page from the worker is retried once with a fresh ticket", async () => {
     for (const bad of [
       new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } }),
       new Response("<html>502</html>", { status: 502, headers: { "content-type": "text/html" } }),
     ]) {
       const calls: string[] = [];
+      let n = 0;
       vi.stubGlobal("fetch", vi.fn(async (u: string) => {
         calls.push(u);
-        if (u === TICKET) return bad;
-        return u.endsWith("&direct=1") ? ticketResponse() : new Response("proxied");
+        if (u === TICKET) return n++ === 0 ? bad : new Response("bytes");
+        return ticketResponse();
       }));
       const res = await fetchDownload("/api/download?url=x", new AbortController().signal);
-      expect(await res.text()).toBe("proxied");
-      expect(calls).toHaveLength(3);
+      expect(await res.text()).toBe("bytes");
+      expect(calls).toHaveLength(4);
+      expect(calls).not.toContain("/api/download?url=x");
     }
   });
 

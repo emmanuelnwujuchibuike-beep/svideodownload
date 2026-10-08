@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FollowLinks } from "@/components/social/follow-links";
 import { AuthPanel } from "@/features/auth/auth-panel";
 import { LoginCollage } from "@/features/auth/login-collage";
 import { createClient } from "@/lib/supabase/server";
@@ -98,7 +99,10 @@ export default async function LoginPage({
             footnote rather than a message. `text-pretty` keeps the brand list
             from breaking into a lonely orphan on the last line.
           */}
-          <p className="mt-5 text-pretty text-center text-[10px] leading-[1.5] text-muted-foreground/60">
+          {/* Our official accounts (owner, 2026-10-08) — above the footnote, quiet. */}
+          <FollowLinks variant="compact" className="mt-5" />
+
+          <p className="mt-4 text-pretty text-center text-[10px] leading-[1.5] text-muted-foreground/60">
             Frenzsave is an independent service and is not affiliated with, endorsed by, or
             sponsored by TikTok, Instagram, LinkedIn, Snapchat, Facebook, or X. All
             trademarks and logos are the property of their respective owners.

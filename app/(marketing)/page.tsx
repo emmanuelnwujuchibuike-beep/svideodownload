@@ -5,12 +5,12 @@ import { Faq } from "@/components/landing/faq";
 import { FeaturesGrid } from "@/components/landing/features-grid";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
-import { ProductGrid } from "@/components/landing/product-grid";
-import { PlatformShowcase } from "@/components/landing/platform-showcase";
+import { DiscoverSection, FrenzAiSection, PromoteSection } from "@/components/landing/ecosystem";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { RecommendedTools } from "@/components/monetization/recommended-tools";
 import { DownloaderLinks } from "@/components/seo/downloader-links";
+import { getPublicAdSummary } from "@/lib/ads-platform/public-summary";
 import { productJsonLd } from "@/lib/content/genome/queries";
 import { jsonLd } from "@/lib/seo/json-ld";
 import { SITE_URL } from "@/lib/site";
@@ -89,7 +89,9 @@ function SectionAd() {
   );
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  // read at the page's (re)generation — never per visitor (brief §27, §35)
+  const ads = await getPublicAdSummary();
   return (
     <>
       {/*
@@ -239,18 +241,39 @@ export default function HomePage() {
           inside would sit on a ground it was not designed for.
         */}
 
-        {/* Everything you need — the six-feature grid. */}
+        {/*
+          ══ THE ECOSYSTEM, BY HIERARCHY (Landing + Download brief, owner 2026-10-08) ══
+          "DOWNLOAD · CREATE · DISCOVER · PROMOTE — through hierarchy rather
+          than clutter." The hero above is Download; then one row of
+          shortcuts, Frenz AI as the one large panel (PRIMARY), three small
+          Discover cards (SECONDARY), one quiet Promote band (BUSINESS), and
+          the downloader's own story after them. See components/landing/ecosystem.tsx.
+
+          REMOVED on the audit, not lost:
+           · ProductGrid ("One Platform. Unlimited Possibilities.") — the
+             Discover/AI/Promote sections say the same thing, with real doors.
+             Discover keeps its #products anchor for the header link.
+           · PlatformShowcase ("Save from 11 Platforms") — the THIRD listing of
+             the same platforms on one page (the hero's chips and the SEO link
+             list below both stay).
+        */}
+        <FrenzAiSection />
+
+        <SectionAd />
+
+        <DiscoverSection />
+
+        <PromoteSection ads={ads} />
+
+        <SectionAd />
+
+        {/* Everything you need — the six-feature grid (the trust story: fast, private, every device). */}
         <FeaturesGrid />
 
         <SectionAd />
 
         {/* How it works — 3 simple steps. */}
         <HowItWorks />
-
-        <SectionAd />
-
-        {/* Ecosystem grid (Product Genome). */}
-        <ProductGrid />
 
         {/*
           🔴 THE EXOCLICK MULTI-FORMAT SLOT IS NOT HERE ANY MORE (owner,
@@ -274,10 +297,6 @@ export default function HomePage() {
         <div className="container max-w-5xl px-3 py-2">
           <AdSurface zone="homepage_top" maxWidth="max-w-3xl" />
         </div>
-
-        <PlatformShowcase />
-
-        <SectionAd />
 
         {/* Admin-managed recommended tools (renders nothing when empty) */}
         <Suspense fallback={null}>

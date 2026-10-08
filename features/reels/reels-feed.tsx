@@ -274,6 +274,21 @@ export function ReelsFeed({
   );
 
   /*
+    `/reels?tab=ai` opens straight on AI Reels (2026-10-08 — the landing page's
+    "Explore AI Reels", Landing brief §8). Once, on arrival: the server-ranked
+    For You deck is what the page rendered, so this is the same switch a tap
+    on the tab would make.
+  */
+  const deepLinkedTab = useRef(false);
+  useEffect(() => {
+    if (deepLinkedTab.current) return;
+    deepLinkedTab.current = true;
+    const wanted = searchParams.get("tab");
+    if ((wanted === "ai" || wanted === "following") && wanted !== tab) void switchTab(wanted);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
+
+  /*
     ═══════════════════════════════════════════════════════════════════════════
      REVERSED (owner, 2026-08-16) — A RESUMED OPEN IS SKIPPED ENTIRELY
     ═══════════════════════════════════════════════════════════════════════════

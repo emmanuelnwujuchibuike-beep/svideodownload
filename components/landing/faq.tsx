@@ -46,6 +46,15 @@ const FAQS: { q: string; a: string }[] = [
     a: "No — it works right in your browser on any device, desktop or mobile. A native app is on our roadmap.",
   },
   {
+    // Landing + Download brief §28 (2026-10-08): the ecosystem's two other doors, answered in plain words.
+    q: "What is Frenz AI?",
+    a: "Frenz AI is Frenzsave's creation studio: turn text into video, bring photos to life, make natural AI audio, clone a voice and lip-sync a clip. Open it from the AI section on this page; you sign in when you create.",
+  },
+  {
+    q: "Can I advertise on Frenzsave?",
+    a: "Yes. Choose a format and where it appears — such as the Feed, Reels, AI pages or downloads — upload your image or video, preview it and pay securely. Every ad is checked against our Advertising Rules before it goes live. Start at frenzsave.com/advertise.",
+  },
+  {
     q: "Is saving videos legal?",
     a: "The tool itself is legal. You're responsible for only saving content you own or have permission to keep, and for respecting each platform's terms and copyright law.",
   },

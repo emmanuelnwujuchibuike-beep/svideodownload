@@ -104,7 +104,7 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
       {/* Six tracks, not five — the Learn column was added and an explicit
           template silently overflows if the count drifts from the children.
           Three-up at md keeps the columns readable before the full row fits. */}
-      <div className="container grid gap-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-[1.3fr_1fr_1fr_1fr_1fr_1.5fr]">
+      <div className="container grid gap-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-[1.3fr_1fr_1fr_1fr_1fr_1fr_1.5fr]">
         <div>
           <SecretAdminGesture className="inline-flex items-center gap-2 text-lg font-bold tracking-tight">
             <FrenzLogo size={28} />
@@ -132,12 +132,22 @@ export function SiteFooter({ locale = DEFAULT_LOCALE }: { locale?: LocaleCode } 
 
         <FooterColumn
           title={t("footer.products")}
+          // Landing + Download brief §32 (2026-10-08): the ecosystem's doors — only routes that exist.
           links={[
             ["Download", "/downloads"],
+            ["Frenz AI", "/ai"],
+            ["Reels", "/reels"],
+            ["Wallpapers", "/wallpapers"],
             ["Community", "/home"],
             ["Pricing", "/pricing"],
-            ["Advertise", "/advertise"],
             ["Developers", "/developers"],
+          ]}
+        />
+        <FooterColumn
+          title="Business"
+          links={[
+            ["Advertise on Frenzsave", "/advertise"],
+            ["Advertising Rules", "/advertise/rules"],
           ]}
         />
         <FooterColumn

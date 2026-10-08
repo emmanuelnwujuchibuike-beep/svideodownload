@@ -92,10 +92,13 @@ export function DownloadsHero() {
             <span className="whitespace-nowrap bg-gradient-to-r from-blue-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400">
               Discover.
             </span>
-            <span className="whitespace-nowrap">Explore.</span>
+            {/* "Create." (Landing + Download brief §4, owner 2026-10-08): the concept stays
+                Save · Discover, and the third word now names Frenz AI. Shorter than
+                "Explore.", so the one-line clamp above still holds at 320px. */}
+            <span className="whitespace-nowrap">Create.</span>
           </h1>
           <p className="mt-2.5 max-w-md text-pretty text-sm leading-relaxed text-slate-600 dark:text-white/70">
-            Save from the platforms you already use, then share, connect and explore — all in{" "}
+            Save from the platforms you already use, discover what people share, and create with AI — all in{" "}
             <span className="font-medium text-blue-600 dark:text-blue-300">one super app.</span>
           </p>
           {/*

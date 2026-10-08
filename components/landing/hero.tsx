@@ -4,6 +4,7 @@ import { getAiPromo } from "@/lib/ai/promo/server";
 import { getLandingSettings } from "@/lib/landing/settings";
 import { getPlatformStatus } from "@/lib/platform-status-store";
 import { listWallpapers } from "@/lib/wallpapers-server";
+import { getPublicAdSummary } from "@/lib/ads-platform/public-summary";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -49,7 +50,7 @@ export async function Hero() {
     the tile falls back to the admin's own static pick, exactly like before
     this existed.
   */
-  const [landing, platformStatus, recentWallpaperUrls, multiLink, aiPromo] = await Promise.all([
+  const [landing, platformStatus, recentWallpaperUrls, multiLink, aiPromo, ads] = await Promise.all([
     getLandingSettings(),
     getPlatformStatus(),
     listWallpapers(null, 10)
@@ -60,6 +61,7 @@ export async function Hero() {
     getMultiLinkSettings(),
     // Brief C: the landing promotion, baked into this static page (cached; refreshed only by an admin save).
     getAiPromo(),
+    getPublicAdSummary(),
   ]);
 
   return (
@@ -97,6 +99,8 @@ export async function Hero() {
         */
         showFrenzAi
         aiPromo={aiPromo}
+        hideEmptyStats
+        quickActions={{ promote: ads.enabled }}
       />
     </section>
   );

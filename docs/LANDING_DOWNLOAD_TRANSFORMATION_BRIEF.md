@@ -641,7 +641,34 @@ END LANDING + DOWNLOAD TRANSFORMATION
 
 ## Status ledger
 
-| Item | State |
+### §2 Audit (2026-10-08, production build, 390 px)
+
+- Landing = 10,859 px (~13 phone screens), 273 requests / ~4.9 MB on load — most of it third-party ads/analytics, not our code.
+- The hero IS the Download page's top section (`DownloadPageCore`, shared with /downloads by owner decision 2026-08-16) — upgrades land on both.
+- A guest saw ~1.5 screens of nothing: four stat tiles reading "0" / "—" (members are redirected to /home at the edge, so the landing is anonymous by construction).
+- The platform list appeared THREE times (hero chips, "Save from 11 Platforms" grid, SEO link list).
+- "One Platform. Unlimited Possibilities." restated the ecosystem without real doors.
+- Missing entirely: a Frenz AI section, AI Reels, Reels/Feed discovery, a Promote/Advertise section (only a footer link).
+- Seven ad slots between sections (kept — revenue; not changed unasked).
+
+### Phase 1 — shipped
+
+| § | What |
 |---|---|
-| Brief received | 2026-10-08 |
-| §2 audit | not started |
+| 4 | H1 "Save. Discover. Create." + subtitle naming AI (shared hero, so /downloads too; shorter than "Explore.", one line at 320 px) |
+| 5 | Shortcut row under the paste box tiles: Reels · AI Reels · Feed · Promote (the two big tiles above are Frenz AI and Wallpapers — never the same door twice) |
+| 6–8 | Frenz AI panel: live tools from `SHOWCASE_TARGETS`, Explore Frenz AI + Watch AI Reels (`/reels?tab=ai` now deep-links the AI tab) |
+| 9, 13–16, 27, 35–36 | Promote band: hidden when ads are off; enabled placements by human name (5 + "and more"); a promotion only while live; data from `getPublicAdSummary()` at page regeneration — no ad engine, no per-visitor request |
+| 22 | Discover: Reels · Feed · Wallpapers (keeps `#products` for the header link) |
+| 2/23 | Removed: ProductGrid, PlatformShowcase (files kept); empty stat tiles hidden on the landing only |
+| 21/42 | /downloads: small "Promote on Frenzsave" row |
+| 28 | FAQ: "What is Frenz AI?", "Can I advertise on Frenzsave?" (FAQPage JSON-LD) |
+| 32 | Footer: Frenz AI, Reels, Wallpapers; new Business column (Advertise, Advertising Rules) |
+| 37 | Landing stays static (`○ /`): 2.81 → 2.98 kB route JS, 216 → 217 kB first load |
+
+### Phase 2 — next
+
+- §12/43 /advertise: placements, pricing/duration (live, from the catalog), creative requirements, FAQ, "Start Advertising" with sign-in context and return (§10/44).
+- §18 header nav: AI and Advertise (needs keys in all 50 catalogues — catalogue-integrity test).
+- §34 analytics events for the discovery clicks (batched, existing `track`).
+- §31 install banner vs CTAs on small phones; §46/47 full design + performance audit after Phase 2.

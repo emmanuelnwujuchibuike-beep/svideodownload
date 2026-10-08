@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowRight, Compass } from "lucide-react";
+import { ArrowRight, Compass, Megaphone } from "lucide-react";
 import Link from "next/link";
 
+import { QuickActions } from "@/components/landing/quick-actions";
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
 import { ExploreFeaturesBar, FrenzAICta } from "@/features/downloads/frenz-ai-cta";
@@ -81,6 +82,9 @@ export function DownloadPageCore({
   multiLink,
   installBanner = true,
   multiFormatSlot = false,
+  hideEmptyStats = false,
+  promoteCta = false,
+  quickActions = null,
   /**
    * 🔴 Whether the FRENZ AI tile appears at all.
    *
@@ -123,6 +127,22 @@ export function DownloadPageCore({
    * component onto another route is how the duplicate-zone bug comes back.
    */
   multiFormatSlot?: boolean;
+  /**
+   * Hide the stat tiles while the visitor has no downloads (Landing brief §2,
+   * 2026-10-08). On the landing — anonymous by construction: members are
+   * redirected to /home at the edge — four tiles reading "0" and "—" were a
+   * screen of nothing between the hero and the ecosystem sections. The
+   * Cloud storage card stays: for a guest it is the 5 GB offer.
+   */
+  hideEmptyStats?: boolean;
+  /**
+   * The small "Promote on Frenzsave" door (Landing + Download brief §21/§42,
+   * 2026-10-08) — /downloads only. The landing has its own Promote section, so
+   * this would be the same door twice there.
+   */
+  promoteCta?: boolean;
+  /** Landing only: the shortcut row under the tiles (Landing brief §5). */
+  quickActions?: { promote: boolean } | null;
 }) {
   const { items } = useHistory();
 
@@ -191,6 +211,8 @@ export function DownloadPageCore({
         <WallpaperCta variant="card" backgroundUrl={ctaWallpaperUrl} rotateUrls={rotateUrls} />
       </div>
 
+      {quickActions ? <QuickActions promote={quickActions.promote} className="mt-3" /> : null}
+
       {/* The full-width Features bar exists only where Frenz AI took its slot
           above. On the landing page Features IS that slot, and repeating it
           would put the same door on the screen twice. */}
@@ -198,6 +220,22 @@ export function DownloadPageCore({
         <div className="mt-3">
           <ExploreFeaturesBar />
         </div>
+      ) : null}
+
+      {promoteCta ? (
+        // §21: compact, after the download task — a row, never a card that competes with the paste box
+        <Link
+          href="/advertise"
+          prefetch={false}
+          className="mt-3 flex items-center gap-3 rounded-[1.4rem] bg-card px-4 py-3 ring-1 ring-inset ring-black/[0.07] transition-colors hover:ring-indigo-200 dark:ring-white/10"
+        >
+          <Megaphone className="h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-300" aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-semibold">Promote on Frenzsave</span>
+            <span className="block truncate text-[12.5px] text-muted-foreground">Put your brand in front of the Frenzsave audience.</span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        </Link>
       ) : null}
 
       {/*
@@ -262,9 +300,11 @@ export function DownloadPageCore({
       */}
       <AdSurface zone="under_download" fullBleed className="mt-6" />
 
-      <div className="mt-3">
-        <DownloadStats items={items} />
-      </div>
+      {hideEmptyStats && items.length === 0 ? null : (
+        <div className="mt-3">
+          <DownloadStats items={items} />
+        </div>
+      )}
 
       <div className="mt-3">
         <RecentDownloads items={items} />

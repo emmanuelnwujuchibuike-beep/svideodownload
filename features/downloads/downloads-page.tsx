@@ -190,6 +190,7 @@ export function DownloadsPage({
         hero is the paste box and nothing else — the same shape as the landing.
       */}
       <DownloadPageCore
+        promoteCta
         platformStatus={platformStatus}
         ctaWallpaperUrl={ctaWallpaperUrl}
         frenzAiTileImageUrl={frenzAiTileImageUrl}

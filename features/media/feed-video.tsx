@@ -531,7 +531,10 @@ export function FeedVideo({
         // in-flow block inside the caption's own column again, so there is
         // no extra horizontal slack to manage with a margin trick — it
         // simply fills that column's width like any other block element.
-        "group relative overflow-hidden rounded-2xl bg-black",
+        // `isolate`: the blurred backdrop below is `-z-10`; without its own
+        // stacking context it rendered BEHIND this box's black and was never
+        // seen — the side bars stayed black (owner, 2026-10-08).
+        "group relative isolate overflow-hidden rounded-2xl bg-black",
         // Twitter-style: full width, the media's OWN true aspect ratio — a
         // HEIGHT ceiling, never a ratio clamp, so it can't disagree with the
         // clip's true shape (no letterboxing/cropping). A same-day tightening

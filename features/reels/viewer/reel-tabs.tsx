@@ -129,6 +129,8 @@ export function ReelTabs({
     el.addEventListener("scroll", measure, { passive: true });
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    // the labels change width when the web font lands — the row's own box does not
+    for (const child of Array.from(el.children)) ro.observe(child);
     return () => {
       el.removeEventListener("scroll", measure);
       ro.disconnect();
@@ -163,11 +165,11 @@ export function ReelTabs({
           does not fit scrolls, with a soft fade at the edge that has more — the
           mask is only applied to an edge that actually overflows.
         */
-        "fixed left-1/2 top-[max(1rem,var(--frenz-safe-top))] flex h-10 max-w-[min(calc(100vw-8rem),26rem)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto scroll-px-2 px-1",
+        "fixed left-1/2 top-[max(1rem,var(--frenz-safe-top))] flex h-10 max-w-[min(calc(100vw_-_8rem),26rem)] -translate-x-1/2 items-center gap-0 overflow-x-auto scroll-px-2 px-1 min-[420px]:gap-0.5",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-        "data-[edge-end]:[mask-image:linear-gradient(to_right,#000_calc(100%-1.75rem),transparent)]",
+        "data-[edge-end]:[mask-image:linear-gradient(to_right,#000_calc(100%_-_1.75rem),transparent)]",
         "data-[edge-start]:[mask-image:linear-gradient(to_right,transparent,#000_1.75rem)]",
-        "data-[edge-start]:data-[edge-end]:[mask-image:linear-gradient(to_right,transparent,#000_1.75rem,#000_calc(100%-1.75rem),transparent)]",
+        "data-[edge-start]:data-[edge-end]:[mask-image:linear-gradient(to_right,transparent,#000_1.75rem,#000_calc(100%_-_1.75rem),transparent)]",
         /*
           🔴 NO GLASS PANEL BEHIND THIS ROW (owner, 2026-08-25: "i want the glass
           background of the reels top nav to be removed, the black glass
@@ -207,7 +209,7 @@ export function ReelTabs({
             aria-selected={on}
             onClick={() => onChange(t.id)}
             className={cn(
-              "relative shrink-0 rounded-full px-2.5 py-1.5 outline-none transition active:scale-95 min-[380px]:px-3",
+              "relative shrink-0 rounded-full px-2.5 py-1.5 outline-none transition active:scale-95 min-[420px]:px-3",
               "focus-visible:ring-2 focus-visible:ring-white/80",
             )}
           >
@@ -259,14 +261,14 @@ export function ReelTabs({
           <Link
             href={feedHref}
             className={cn(
-              // under 380px the word steps aside for its grid icon (still named for screen readers)
-              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-white/70 outline-none transition hover:text-white/90 active:scale-95 min-[380px]:px-3",
+              // under 420px the word steps aside for its grid icon (still named for screen readers) — so the whole row fits a 390px phone
+              "relative flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-semibold text-white/70 outline-none transition hover:text-white/90 active:scale-95 min-[420px]:px-3",
               "focus-visible:ring-2 focus-visible:ring-white/80",
               GLYPH_SHADOW,
             )}
           >
             <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-            <span className="max-[379px]:sr-only">Feed</span>
+            <span className="max-[419px]:sr-only">Feed</span>
           </Link>
         </>
       ) : null}

@@ -15,6 +15,8 @@ import {
 import type { AdRecord } from "@/lib/monetization/ads";
 import { cn } from "@/lib/utils";
 
+import { AdSlotsPanelLazy } from "./ad-slots-panel-lazy";
+
 type Zone = (typeof AD_ZONES)[number];
 type Format = (typeof AD_FORMATS)[number];
 
@@ -237,6 +239,9 @@ export function AdManager({ ads }: { ads: AdRecord[] }) {
           <Plus className="h-4 w-4" /> Add
         </button>
       </div>
+
+      {/* Ad Platform Part 6: the canonical slots and who may fill each — above the network rows it decides between. */}
+      <AdSlotsPanelLazy />
       <p className="mb-4 text-sm text-muted-foreground">
         One row per placement, <strong>grouped by network</strong>. Pick the format that matches the
         code your network gave you — a <strong>banner</strong> and a <strong>Social Bar</strong> use

@@ -75,21 +75,6 @@ import { cn, formatBytes, formatCompactNumber } from "@/lib/utils";
  * asked that nothing be removed, and it never rendered on a phone anyway, which
  * is why it is absent from the reference.
  */
-/** Fast · Secure · Private — moved below the paste box on 2026-10-08 (owner). */
-export function TrustPills({ className }: { className?: string }) {
-  return (
-    <div className={className}>
-      <span className="inline-flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold shadow-[0_2px_10px_-4px_rgba(15,23,42,0.15)] ring-1 ring-inset ring-slate-900/[0.06] dark:bg-white/[0.06] dark:ring-white/10">
-        <Pill icon={Zap} label="Fast" />
-        <Divider />
-        <Pill icon={Lock} label="Secure" />
-        <Divider />
-        <Pill icon={Shield} label="Private" />
-      </span>
-    </div>
-  );
-}
-
 export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactNode; headline?: boolean } = {}) {
   return (
     <section className="relative px-1 pt-1">
@@ -171,7 +156,8 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
             promote card, and move the fast secure private downward" — the pill is
             now `TrustPills`, rendered under the paste box (download-page-core).
           */}
-          <PromoteCard className="mt-4" />
+          {/* no headline above it on /downloads ⇒ no top margin: the strip's own gap is enough (owner, 2026-10-08: "too much space between these two cards") */}
+          <PromoteCard className={headline ? "mt-4" : undefined} />
         </div>
 
         {/* The reference's cloud illustration, drawn rather than shipped as an
@@ -191,18 +177,6 @@ export function DownloadsHero({ trailing, headline = true }: { trailing?: ReactN
       </div>
     </section>
   );
-}
-
-function Pill({ icon: Icon, label }: { icon: typeof Zap; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 px-1.5">
-      <Icon className="h-3.5 w-3.5 text-primary" /> {label}
-    </span>
-  );
-}
-
-function Divider() {
-  return <span aria-hidden className="h-3 w-px bg-border" />;
 }
 
 /* ───────────────────────────── Cloud storage ─────────────────────────────── */

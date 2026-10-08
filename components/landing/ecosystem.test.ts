@@ -71,10 +71,11 @@ describe("the landing page structure", () => {
     expect(src("components/landing/hero.tsx")).toMatch(/hideEmptyStats/);
     expect(src("components/landing/hero.tsx")).not.toContain("quickActions");
     const hero = src("features/downloads/downloads-sections.tsx");
-    expect(hero).toContain('<PromoteCard className="mt-4" />');
+    expect(hero).toContain('<PromoteCard className={headline ? "mt-4" : undefined} />');
     const core = src("features/downloads/download-page-core.tsx");
-    // the pill comes right after the paste box section
-    expect(core.indexOf("<TrustPills")).toBeGreaterThan(core.indexOf('<section id="download"'));
+    // later the same day (owner): "remove this fast, secure and private card entirely"
+    expect(core).not.toContain("<TrustPills");
+    expect(hero).not.toContain("export function TrustPills");
     // one Promote door per page: the hero's — no second row lower down
     expect(core).not.toContain("promoteCta");
   });

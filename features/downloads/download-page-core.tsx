@@ -18,7 +18,6 @@ import {
   DownloadsHero,
   DownloadStats,
   RecentDownloads,
-  TrustPills,
 } from "@/features/downloads/downloads-sections";
 import { useHistory } from "@/features/history/use-history";
 import { AdSurface } from "@/features/monetization/ad-surface";
@@ -147,7 +146,7 @@ export function DownloadPageCore({
 
   return (
     <>
-      {topCredits === "strip" ? <AiCreditStrip base="/ai" className="mb-4" /> : null}
+      {topCredits === "strip" ? <AiCreditStrip base="/ai" className="mb-3" /> : null}
       {/* /downloads (the strip page) shows no headline — owner, 2026-10-08 */}
       <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} headline={topCredits !== "strip"} />
 
@@ -171,8 +170,7 @@ export function DownloadPageCore({
         </div>
       </section>
 
-      {/* Fast · Secure · Private — below the paste box (owner, 2026-10-08); the Promote card took its place up top */}
-      <TrustPills className="mt-3" />
+      {/* The Fast · Secure · Private pill is gone (owner, 2026-10-08: "remove this fast, secure and private card entirely") */}
 
       {/*
         ═══════════════════════════════════════════════════════════════════════

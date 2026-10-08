@@ -5,9 +5,11 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { AdvertiseFormats } from "@/features/ads-platform/advertise-formats";
+import { AdvertisePlacementsPricing } from "@/features/ads-platform/advertise-placements-pricing";
 import { AiButtonLink } from "@/features/ai/design/ai-button";
 import { AiDisplayTitle } from "@/features/ai/design/ai-surface";
 import { AUTOMATED_VALIDATION_NOTICE } from "@/lib/ads-platform/rules";
+import { jsonLd } from "@/lib/seo/json-ld";
 
 /*
   Static: the page reads no cookie and no price at build. The live part — the
@@ -35,6 +37,38 @@ const TRUST = [
   { icon: Eye, title: "Honest ads", body: "No fake buttons, fake urgency or misleading claims." },
 ];
 
+/**
+ * §43 FAQ (owner, 2026-10-08). Answers describe how the platform actually works
+ * (Parts 1–3): server-confirmed price, automated validation, refunds through the
+ * payment provider, one placement per ad unless the admin allows more.
+ */
+const AD_FAQ: { q: string; a: string }[] = [
+  {
+    q: "How quickly does my ad go live?",
+    a: "Usually right after payment. Your ad goes live automatically once the payment is confirmed and it passes our automated validation and safety checks. If something needs a closer look, we review it and let you know.",
+  },
+  {
+    q: "How is the price decided?",
+    a: "It depends on the format, where the ad appears and how many days it runs. You see the exact total — including any promotion — before you pay, and that is the price you are charged.",
+  },
+  {
+    q: "How do I pay?",
+    a: "On a secure checkout page from our payment partner. You can pay by card or bank transfer depending on your country. Nothing is charged until you confirm there.",
+  },
+  {
+    q: "What can't I advertise?",
+    a: "Scams and fraud, phishing, anything that asks people for passwords, one-time codes or card details, malicious or deceptive links, misleading claims or fake buttons, and any content prohibited by law or by Frenzsave policy. The Advertising Rules list everything.",
+  },
+  {
+    q: "Do I need a Frenzsave account?",
+    a: "Only to upload your ad and pay, so the campaign belongs to you. You can explore formats, places and prices without one.",
+  },
+  {
+    q: "Can I get a refund?",
+    a: "If your ad is refused before it starts, or a payment problem occurs, contact support and we will help. Refunds are returned through the payment provider you paid with.",
+  },
+];
+
 export default function AdvertisePage() {
   return (
     <>
@@ -53,13 +87,21 @@ export default function AdvertisePage() {
           />
           <div className="mt-6 flex flex-wrap items-center gap-2.5">
             <AiButtonLink href="/advertise/create" prefetch={false} size="lg" iconEnd={<ArrowRight className="h-4 w-4" />}>
-              Create an Ad
+              Start Advertising
             </AiButtonLink>
             <AiButtonLink href="/advertise/rules" prefetch={false} variant="secondary" size="lg">
               Advertising Rules
             </AiButtonLink>
           </div>
-          <Link href="/advertise/campaigns" prefetch={false} className="mt-3 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
+          {/*
+            §10/§44 (owner, 2026-10-08): say up front when an account comes in, so
+            the sign-in is never a surprise. The application keeps every choice in
+            the browser and the sign-in returns straight to it (next=/advertise/create).
+          */}
+          <p className="mt-3 text-[13px] leading-snug text-muted-foreground">
+            No account needed to explore formats, places and prices. You&apos;ll sign in with your Frenzsave account when you upload your ad — your choices are kept.
+          </p>
+          <Link href="/advertise/campaigns" prefetch={false} className="mt-1 inline-flex min-h-[2.75rem] items-center text-[13.5px] font-semibold text-indigo-700 dark:text-indigo-300">
             My campaigns →
           </Link>
 
@@ -87,13 +129,18 @@ export default function AdvertisePage() {
 
           <section className="mt-12" aria-labelledby="formats">
             <h2 id="formats" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">
-              Ad formats
+              Ad formats and creative requirements
             </h2>
             <p className="mt-1.5 text-[14px] text-muted-foreground">Sizes, limits and prices shown here are always the current ones.</p>
             <div className="mt-4">
               <AdvertiseFormats />
             </div>
           </section>
+
+          {/* §13–§16, §43: placements and pricing — the admin's live configuration, never hard-coded */}
+          <div className="mt-12">
+            <AdvertisePlacementsPricing />
+          </div>
 
           <section className="mt-12" aria-labelledby="trust">
             <h2 id="trust" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">
@@ -110,11 +157,46 @@ export default function AdvertisePage() {
             </ul>
           </section>
 
+          <p className="mt-4 text-[13.5px]">
+            Read the full{" "}
+            <Link href="/advertise/rules" prefetch={false} className="font-semibold text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-300">
+              Advertising Rules
+            </Link>{" "}
+            before you apply.
+          </p>
+
+          <section className="mt-12" aria-labelledby="faq">
+            <h2 id="faq" className="font-brand text-[1.35rem] font-bold tracking-[-0.03em]">
+              Questions advertisers ask
+            </h2>
+            <div className="mt-4 divide-y divide-border/70 rounded-[1.4rem] bg-card ring-1 ring-inset ring-black/[0.07] dark:ring-white/10">
+              {AD_FAQ.map(({ q, a }) => (
+                <details key={q} className="group px-4 py-3">
+                  <summary className="flex min-h-[2.75rem] cursor-pointer list-none items-center justify-between gap-3 text-[14.5px] font-semibold [&::-webkit-details-marker]:hidden">
+                    {q}
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
+                  </summary>
+                  <p className="pb-1 text-[13.5px] leading-relaxed text-muted-foreground">{a}</p>
+                </details>
+              ))}
+            </div>
+            <script
+              type="application/ld+json"
+              dangerouslySetInnerHTML={{
+                __html: jsonLd({
+                  "@context": "https://schema.org",
+                  "@type": "FAQPage",
+                  mainEntity: AD_FAQ.map(({ q, a }) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+                }),
+              }}
+            />
+          </section>
+
           <div className="mt-12 rounded-[1.75rem] bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 p-6 text-white">
             <p className="font-brand text-[1.3rem] font-bold tracking-[-0.03em]">Ready when you are</p>
-            <p className="mt-1 text-[14px] text-white/85">Use the Frenzsave account you already have.</p>
+            <p className="mt-1 text-[14px] text-white/85">Use the Frenzsave account you already have — or create one in a minute.</p>
             <AiButtonLink href="/advertise/create" prefetch={false} variant="secondary" className="mt-4" iconEnd={<ArrowRight className="h-4 w-4" />}>
-              Create an Ad
+              Start Advertising
             </AiButtonLink>
           </div>
         </div>

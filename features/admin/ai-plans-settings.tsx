@@ -298,7 +298,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                         <option value="yearly">Yearly</option>
                       </select>
                     </Field>
-                    <Field id={`${id}-code`} label="Paystack plan code" hint="Paystack dashboard → Payments → Plans → the plan → Plan code (PLN_…). Not the payment-page link. Empty = coming soon.">
+                    <Field id={`${id}-code`} className="col-span-2" label="Paystack plan code" hint="Paystack dashboard → Payments → Plans → the plan → Plan code (PLN_…). Not the payment-page link. Empty = coming soon.">
                       <div className="mt-1 flex gap-2">
                         <input id={`${id}-code`} value={p.code} onChange={(e) => set({ code: e.target.value })} className={cn(input, "mt-0 min-w-0 flex-1")} placeholder="PLN_…" />
                         <button type="button" onClick={() => checkCode(id)} disabled={codeCheck[id].busy || !p.code.trim()} className="shrink-0 rounded-xl border border-border px-3 text-xs font-semibold disabled:opacity-50">
@@ -311,7 +311,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                     <Field id={`${id}-credits-price`} label="Price when paid with credits" hint="Credits for one period of this plan. Empty = the plan price at the normal credit rate.">
                       <input id={`${id}-credits-price`} inputMode="numeric" value={p.creditsPrice} onChange={(e) => set({ creditsPrice: e.target.value.replace(/[^0-9]/g, "") })} placeholder="Normal rate" className={small} />
                     </Field>
-                    <Field id={`${id}-bachs`} label="Bachs product (prod_…)" hint="Bachs dashboard → Products → this plan's RECURRING product (monthly, same price) → its id. Not a payment link: the id lets us tie the payment to the member. Empty = Bachs does not sell this plan.">
+                    <Field id={`${id}-bachs`} className="col-span-2" label="Bachs product (prod_…)" hint="Bachs dashboard → Products → this plan's RECURRING product (monthly, same price) → its id. Not a payment link: the id lets us tie the payment to the member. Empty = Bachs does not sell this plan.">
                       <div className="mt-1 flex gap-2">
                         <input id={`${id}-bachs`} value={p.bachs} onChange={(e) => set({ bachs: e.target.value })} className={cn(input, "mt-0 min-w-0 flex-1")} placeholder="prod_…" />
                         <button type="button" onClick={() => checkBachs(id)} disabled={bachsCheck[id].busy || !p.bachs.trim()} className="shrink-0 rounded-xl border border-border px-3 text-xs font-semibold disabled:opacity-50">
@@ -515,7 +515,7 @@ export function AiPlansSettingsPanel({ settings }: { settings: LandingSettings }
                   return (
                     <div key={`${m}-${pp}`} className="rounded-xl border border-border/60 px-3 py-2">
                       <p className="text-xs font-semibold">
-                        {m === "NG" ? "Nigeria" : "Other countries"} · {pp === "wallet_topup" ? "Credit top-ups" : "AI plans"}
+                        {m === "NG" ? "Nigeria" : "Other countries"} · {pp === "wallet_topup" ? "Credit top-ups" : pp === "ad_campaign" ? "Ad campaigns" : "AI plans"}
                       </p>
                       <div className="mt-1 flex flex-wrap gap-2">
                         <label className="text-[11px] text-muted-foreground">
@@ -599,9 +599,9 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
+function Field({ id, label, hint, children, className }: { id: string; label: string; hint?: string; children: React.ReactNode; className?: string }) {
   return (
-    <label htmlFor={id} className="block">
+    <label htmlFor={id} className={cn("block", className)}>
       <span className="block text-xs font-semibold text-muted-foreground">{label}</span>
       {children}
       {hint ? <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground/80">{hint}</span> : null}

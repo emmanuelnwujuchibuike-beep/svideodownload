@@ -37,6 +37,6 @@ export async function POST(request: Request) {
     const msg = String(e);
     const scope = /products:read|FORBIDDEN|403/.test(msg);
     const missing = /404/.test(msg);
-    return NextResponse.json({ ok: false, error: scope ? "The Bachs API key cannot read products (it needs the products:read scope). The id can still be saved; it is checked again when a member subscribes." : missing ? "Bachs does not know this product on the configured account (live vs sandbox?)." : "Bachs did not answer. Try again in a moment." }, { status: 200 });
+    return NextResponse.json({ ok: false, error: scope ? "Bachs refused (403): the BACHS_SECRET_KEY on the server does not have the products:read permission. In the Bachs dashboard, open the API key, add products:read (checkouts also need payments:read and payments:write), or create a new key with them and update BACHS_SECRET_KEY on Vercel. The id can still be saved." : missing ? "Bachs does not know this product on the configured account (live vs sandbox?)." : "Bachs did not answer. Try again in a moment." }, { status: 200 });
   }
 }

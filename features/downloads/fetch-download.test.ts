@@ -102,6 +102,27 @@ describe("worker-direct (the default): one request to the worker, never Vercel",
     expect(n).toBe(1);
   });
 
+  it("an ANONYMOUS reward download takes the ticket door (the reward is owned by the site's view of the IP)", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      calls.push(u);
+      return u === TICKET ? new Response("bytes") : ticketResponse();
+    }));
+    await fetchDownload("/api/download?rewardToken=R&itemIndex=0&t=1", new AbortController().signal);
+    expect(calls).toEqual(["/api/download?rewardToken=R&itemIndex=0&t=1&direct=1", TICKET]);
+  });
+
+  it("a SIGNED-IN reward download goes direct (owned by account, not IP)", async () => {
+    sessionToken = "eyJ.member.token";
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (u: string) => {
+      calls.push(u);
+      return new Response("bytes");
+    }));
+    await fetchDownload("/api/download?rewardToken=R&itemIndex=0&t=1", new AbortController().signal);
+    expect(calls).toEqual([WORKER]);
+  });
+
   it("forwards only the manager's own parameters", () => {
     expect(directDownloadBody("/api/download?rewardToken=R&itemIndex=2&b=B&evil=1&direct=1", null)).toEqual({ rewardToken: "R", itemIndex: "2", b: "B" });
   });

@@ -27,7 +27,7 @@ export function workerDirectEnabled(): boolean {
 const SIMPLE = { "Content-Type": "text/plain;charset=UTF-8" } as const;
 
 /** The signed-in member's access token, read locally (no request); null when signed out. */
-async function accessToken(): Promise<string | null> {
+export async function accessToken(): Promise<string | null> {
   try {
     const supabase = await getClient();
     const { data } = await supabase.auth.getSession();
@@ -83,8 +83,21 @@ export function directDownloadBody(target: string, token: string | null): Record
   return body;
 }
 
+/**
+ * An ANONYMOUS reward download goes through the ticket door, not direct.
+ * The reward session was recorded with the IP the SITE saw — through
+ * Cloudflare, often an IPv6 address or an edge address — while the worker sees
+ * the visitor's own IPv4 (measured 2026-10-08: 104.23.x vs 105.118.x), so the
+ * ownership check could never match there. The site still verifies it with its
+ * own view and the bytes still come from the worker. A signed-in member is
+ * matched by account, not IP, and goes direct.
+ */
+export function needsSiteForReward(target: string, token: string | null): boolean {
+  return !token && new URL(target, "https://x.invalid").searchParams.has("rewardToken");
+}
+
 /** POST /api/download on the worker: the checks and the file in ONE response. */
-export async function postDirectDownload(target: string, signal: AbortSignal): Promise<Response> {
-  const body = directDownloadBody(target, await accessToken());
+export async function postDirectDownload(target: string, signal: AbortSignal, token?: string | null): Promise<Response> {
+  const body = directDownloadBody(target, token === undefined ? await accessToken() : token);
   return fetch(`${DOWNLOAD_ORIGIN}/api/download`, { method: "POST", headers: SIMPLE, body: JSON.stringify(body), signal, mode: "cors", credentials: "omit" });
 }

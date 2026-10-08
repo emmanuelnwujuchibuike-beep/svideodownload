@@ -1,4 +1,4 @@
-import { isOldWorkerRefusal, postDirectDownload, workerDirectEnabled } from "./worker-direct";
+import { accessToken, isOldWorkerRefusal, needsSiteForReward, postDirectDownload, workerDirectEnabled } from "./worker-direct";
 
 /**
  * The download's bytes — from the worker DIRECTLY when the server allows it.
@@ -46,11 +46,12 @@ export async function fetchDownload(target: string, signal: AbortSignal): Promis
     file in one response — no ticket call first (see ./worker-direct.ts).
     Same retry rule as below: one more attempt, never Vercel.
   */
-  if (workerDirectEnabled()) {
+  const token = workerDirectEnabled() ? await accessToken() : null;
+  if (workerDirectEnabled() && !needsSiteForReward(target, token)) {
     let oldWorker = false;
     for (let attempt = 0; attempt < DIRECT_ATTEMPTS && !oldWorker; attempt++) {
       try {
-        const res = await postDirectDownload(target, signal);
+        const res = await postDirectDownload(target, signal, token);
         if (isOldWorkerRefusal(res)) oldWorker = true;
         else if (isOurAnswer(res)) return res;
       } catch (e) {

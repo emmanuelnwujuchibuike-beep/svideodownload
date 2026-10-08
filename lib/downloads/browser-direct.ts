@@ -71,7 +71,14 @@ export function trustedClientIp(headers: Headers): string {
 let authClient: SupabaseClient | null = null;
 function auth(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  /*
+    🔴 The production worker has NO anon key (measured 2026-10-08 with
+    /api/health?whoami=1) — with only that, every member was anonymous here and
+    got the free caps. `getClaims` verifies against the project's PUBLISHED
+    ES256 keys; the client key only addresses the project, so the service key
+    the worker does have serves. It never leaves this process.
+  */
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   authClient ??= createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   return authClient;

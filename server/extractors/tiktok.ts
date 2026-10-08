@@ -144,12 +144,42 @@ function findItemStruct(state: unknown): TikTokItem {
   return item;
 }
 
-/** Image (photo / slideshow) post → one downloadable image per slide. */
-function buildImageFormats(item: TikTokItem): MediaFormat[] {
-  const headers: Record<string, string> = {
+/**
+ * The headers a NATIVE format is fetched with.
+ *
+ * 🔴 THE PAGE'S COOKIES ARE THE KEY TO THE CDN (outage 2026-10-08, and the open
+ * item of 2026-09-28). TikTok's media hosts (`v16-webapp-prime…`) answer Akamai
+ * 403 unless the request carries the cookies the video PAGE just set —
+ * `tt_chain_token` above all. yt-dlp works for exactly this reason: its cookie
+ * jar replays them. We dropped them, so a native extraction "succeeded" and every
+ * video download from it failed; only audio (a different host) still worked.
+ * Carried here, native's formats are downloadable on their own, and TikTok video
+ * no longer depends on TikWM answering (its free tier is one request per second
+ * per IP — one shared worker IP loses that race under ordinary traffic).
+ *
+ * The worker fetches the page and the media from the same egress, and the
+ * download reads the metadata it cached at preview time, so these are the
+ * cookies of the session that produced the URLs.
+ */
+export function nativeHeaders(pageCookie: string | null): Record<string, string> {
+  return {
     "User-Agent": DESKTOP_UA,
     Referer: "https://www.tiktok.com/",
+    ...(pageCookie ? { Cookie: pageCookie } : {}),
   };
+}
+
+/** `Set-Cookie` lines → one `Cookie` header value (name=value pairs only). */
+export function cookieFromSetCookie(lines: readonly string[]): string | null {
+  const pairs = lines
+    .map((l) => l.split(";")[0]?.trim() ?? "")
+    .filter((kv) => /^[^=s;]+=[^;]*$/.test(kv));
+  return pairs.length ? pairs.join("; ") : null;
+}
+
+/** Image (photo / slideshow) post → one downloadable image per slide. */
+function buildImageFormats(item: TikTokItem, pageCookie: string | null = null): MediaFormat[] {
+  const headers = nativeHeaders(pageCookie);
   const images = item.imagePost?.images ?? [];
   const formats: MediaFormat[] = [];
   images.forEach((img, i) => {
@@ -209,12 +239,9 @@ function buildImageFormats(item: TikTokItem): MediaFormat[] {
   return formats;
 }
 
-export function buildFormats(item: TikTokItem): MediaFormat[] {
+export function buildFormats(item: TikTokItem, pageCookie: string | null = null): MediaFormat[] {
   const video = item.video!;
-  const headers: Record<string, string> = {
-    "User-Agent": DESKTOP_UA,
-    Referer: "https://www.tiktok.com/",
-  };
+  const headers = nativeHeaders(pageCookie);
 
   const formats: MediaFormat[] = [];
 
@@ -669,7 +696,10 @@ async function tikwmExtract(
         },
         "tiktok",
       );
-      if (!res.ok) return null;
+      if (!res.ok) {
+        console.warn("[tiktok] TikWM HTTP", res.status);
+        return null;
+      }
       return (await res.json()) as { code?: number; msg?: string; data?: TikWmData };
     };
 
@@ -681,7 +711,10 @@ async function tikwmExtract(
       if (!controller.signal.aborted) j = await call();
     }
 
-    if (!j || j.code !== 0 || !j.data) return null;
+    if (!j || j.code !== 0 || !j.data) {
+      console.warn("[tiktok] TikWM gave no answer", { code: j?.code ?? null, msg: (j?.msg ?? (j ? "" : "http error")).slice(0, 120) });
+      return null;
+    }
     const d = j.data;
     const formats = buildTikWmFormats(d);
     if (formats.length === 0) return null;
@@ -723,6 +756,7 @@ async function nativeExtract(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIKTOK_TIMEOUT_MS);
   let html: string;
+  let pageCookie: string | null = null;
   try {
     const res = await extractorFetch(
       resolved,
@@ -731,6 +765,7 @@ async function nativeExtract(
     );
     if (!res.ok) throw new ExtractionError(`TikTok responded ${res.status}`);
     html = await res.text();
+    pageCookie = cookieFromSetCookie(res.headers.getSetCookie?.() ?? []);
   } finally {
     clearTimeout(timer);
   }
@@ -761,7 +796,7 @@ async function nativeExtract(
       viewCount: item.stats?.playCount ?? null,
       likeCount: item.stats?.diggCount ?? null,
       webpageUrl: resolved,
-      formats: isPhoto ? buildImageFormats(item) : buildFormats(item),
+      formats: isPhoto ? buildImageFormats(item, pageCookie) : buildFormats(item, pageCookie),
       extractor: "tiktok",
     };
 }

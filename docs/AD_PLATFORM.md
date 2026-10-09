@@ -571,3 +571,136 @@ payment on a sandbox (needs keys). Both reuse code paths verified in Parts 2–3
 | Hidden analytics multiplier | **declined**: advertisers see the database's real counts |
 | Admin screens for `ad_advertiser_controls`, slots, prices, campaigns | **Part 7** (upgrade the existing admin) |
 | 0198 applied to production | on push, then a live probe (runner hard law) |
+
+---
+
+# Part 7 — the admin side (2026-10-09)
+
+No separate brief exists. The scope is every item that the Gap Ledgers of
+Parts 1–6 assigned to "Part 7 / the admin". It was built by upgrading the
+existing Admin → Ads panel, with no second admin. Slots and campaign lengths
+keep their places in Ad placements. Campaign payments keeps its tab.
+
+- Migration: `0204_ad_admin_moderation.sql`
+- Admin → Ads → **Campaigns** (`features/admin/ad-campaigns-desk.tsx`) and
+  **Self-serve rules** (`features/admin/ad-platform-controls.tsx`). Both load
+  lazily, fetch only once their tab is shown, and never poll.
+- Routes (admin-only, 404 otherwise):
+  - `/api/admin/ads/campaigns`
+  - `/api/admin/ads/advertisers`
+  - `/api/admin/ads/platform`
+  - `/api/admin/ads/pricing`
+- Server code:
+  - `lib/ads-platform/admin-campaigns.ts`
+  - `lib/ads-platform/admin-platform.ts`
+  - `lib/ads-platform/admin-shared.ts` (client-safe)
+
+## What the admin can do
+
+**Campaigns** has four views: Needs review (paid or validating), Live & paused,
+Refunds owed, and All. Each campaign card shows:
+
+- the advertiser and their status, the placement, the length, and the money
+- the creatives (image or video preview, headline, link, media and link check
+  states)
+- the review flags in plain words, delivery totals, and the audit history
+
+The actions each run one database call (`admin_moderate_ad_campaign`) under a
+row lock, using the version the admin saw:
+
+| Action | From | What happens |
+|---|---|---|
+| Approve | paid, validating | Checks that were only **pending** (media, link) pass. Invalid or blocked ones stay refused. Then `activate_ad_campaign` reruns every check. If something still blocks the campaign, the admin sees why in plain words. |
+| Pause | active | `admin_paused`. The advertiser cannot lift it (0198 only lifts `advertiser_paused`). |
+| Resume | paused | Through activation again. The original dates and the slot are kept. |
+| Reject | paid, validating | A reason is required and shown to the advertiser. A refund is owed. |
+| Remove | anything not removed | A reason is required, and the admin must confirm. A refund is owed if it was paid. |
+
+The advertiser hears about each decision by push and email (`ad-notify`). New
+notices: `paused_by_frenzsave`, `rejected`, and `removed`. The last two
+mention the refund when one is owed.
+
+**Refunds owed.** On reject or remove of a paid campaign, `ad_refund_owed`
+records what is owed:
+
+- the whole amount if the campaign never started
+- otherwise the unused share of its paid time, rounded down
+
+Nothing is paid automatically. The admin sends the refund in the Paystack or
+Bachs dashboard, then clicks **Mark refunded** (or **Waive**, with a note). The
+provider's refund webhook already updates the payment record
+(`ad_payment_reverse`, 0197). The decision can be made once.
+
+**Advertisers.** The admin can set an advertiser to active, restricted,
+suspended or disabled (`admin_set_advertiser_status`). Any status other than
+active needs a reason and pauses that advertiser's live campaigns at once.
+Reactivating resumes nothing automatically: the admin resumes each campaign.
+
+**Self-serve rules** puts the 0195/0197 columns on screen:
+
+- **Switches:** the kill switch (`ads_enabled`), applications open, and
+  checkout open
+- **Numbers:** slot count, quote lifetime, and the late-checkout window
+- **Policies:** the refund-after-start policy and the chargeback action
+- **Advertiser controls:** the five `settings.ad_advertiser_controls` switches
+- **Blocked destinations:** a host and its subdomains, normalized from
+  whatever the admin pastes
+- **Prices:** a placement × length grid in USD (quotes are USD, 0198)
+- **Promotions:** create, edit, and on/off. The database applies the biggest
+  matching discount.
+
+## A bug fixed on the way
+
+0195's `activate_ad_campaign` moved a **paused** campaign that failed a check
+(for example, its placement was switched off) to `validating`. The next
+activation then treated it as new: a second slot and fresh start and end
+dates, which is free time. 0204 re-creates the function, copied whole, with
+one change: a paused campaign keeps its status and records the flags.
+Advertiser resumes (0198) benefit too.
+
+## Verified
+
+- **0204 executed in PGlite** on the real 0195–0198, applied twice, with 20
+  checks:
+  - approve passes pending checks and goes live
+  - approve cannot lift an invalid creative
+  - a stale version is refused
+  - an admin pause cannot be lifted by the advertiser
+  - a paused campaign failing a check stays paused, and resumes with its
+    original end and one slot
+  - remove needs a reason
+  - removed halfway, the campaign is owed 499 of 1000
+  - rejected before it ran, it is owed 1000
+  - a refund is marked once and cannot be waived afterwards
+  - a suspension needs a reason and pauses live campaigns
+  - a suspended advertiser's campaign cannot resume
+  - grants are service-role only
+
+  Four mutants each turned the run red: the 0195 paused rule, a full refund
+  after a start, approve lifting invalid media, and suspension without pausing.
+- `lib/ads-platform/part7-admin.test.ts` pins:
+  - the SQL rules, with teeth
+  - the desk offering only legal transitions, with teeth
+  - words for every activation flag
+  - blocked-domain normalization
+  - every handler gated, with teeth
+  - the lazy, show-only fetching
+- The full suite and the build are green. Every route budget passes (`/admin`
+  is 372 kB first load).
+
+Not run:
+- A browser pass on the two panels. The admin page needs a real admin
+  session, which this container cannot reach.
+- A live probe of 0204 (production is blocked from here). It is listed in
+  HANDOFF.
+
+## Gaps (Part 7)
+
+| Item | Status |
+|---|---|
+| Paying a refund through the provider's API (Paystack has `/refund`, Bachs is unknown) | **not built**. The admin refunds in the dashboard. Automating it moves money and needs the owner's say. |
+| Refund of an **extension** on its own | still through the provider dashboard. The campaign's owed amount covers the base payment only. |
+| Destination reputation feed (phishing / malware) | **decision needed**. Today there is the syntactic check plus the admin blocklist, which is now editable. |
+| A paused campaign's clock keeps running | still **decision needed** (Part 1 ledger). |
+| Bulk actions, an admin email to an advertiser, CSV export | not built (no ask yet) |
+| 0204 applied to production | on push, then a live probe |

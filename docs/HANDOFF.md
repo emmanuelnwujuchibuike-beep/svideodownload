@@ -1,4 +1,4 @@
-# Hand-off — start here in a new session (updated 2026-10-08)
+# Hand-off — start here in a new session (updated 2026-10-09)
 
 For AI assistants and engineers picking this repo up without prior context.
 Read `AGENTS.md` first, then this file. This is the **current state**; the
@@ -8,10 +8,10 @@ governing rules live in `AGENTS.md`, `docs/CONSTITUTION.md` and the registries.
 
 | Area | State |
 |---|---|
-| **Self-serve ad platform** | Parts 1–6 shipped (engine, application, payments, serving through the shared slots, advertiser dashboard). Slot management groundwork is in the existing Ad placements tab (`c950db3`). Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. **Next: Part 7** (the admin side), built by upgrading the existing admin under the shared-slot rules. The owner has an interim change list to do first. |
+| **Self-serve ad platform** | Parts 1–7 shipped (engine, application, payments, serving through the shared slots, advertiser dashboard, and the admin side). Part 7 (0204) adds two tabs to Admin → Ads: **Campaigns** (review queue, live/paused, refunds owed, advertisers) and **Self-serve rules** (kill switch, advertiser controls, blocked links, prices, promotions). Slots and campaign lengths stay in Ad placements. Full write-up and Gap Ledgers: `docs/AD_PLATFORM.md`. |
 | Payments | Paystack + Bachs as two rails under one router (`lib/payments/router.ts`, purposes `wallet_topup`, `ai_subscription`, `ad_campaign`). See `docs/PAYMENTS.md`. |
 | Frenz AI credits | One wallet in CREDIT units (`ai_product_balances` / `ai_product_ledger`). Ads are **not** paid from credits. The balance has a withdrawable part (`withdrawable_cents`, 0187), and the rest is non-withdrawable. |
-| Credit transfers | 0193 + **0199**: the sender chooses non-withdrawable or withdrawable. The amount and the fee come only from that kind, and the recipient receives the same kind. Cashing out still needs the recipient's own approval (0191). The credits page (`/ai/usage`) shows the two kinds apart. The AI and download credit strip keeps the total. The 6-argument 0193 function is kept for the deploy window. |
+| Credit transfers | 0193 + **0199**: the sender chooses non-withdrawable or withdrawable. The amount and the fee come only from that kind, and the recipient receives the same kind. Cashing out still needs the recipient's own approval (0191). The credits page (`/ai/usage`) shows the two kinds apart. The AI and download credit strip keeps the total. Only the 7-argument function exists (`p_class`). 0202 re-applies its revoke/grant. |
 
 | One experience | Since 2026-10-09 there is no Full Bleed / Downloader mode. The `frenz_mode` cookie, the switcher and the switch prompt are gone. Members' bottom nav: Home (`/downloads`), Feed (`/home`, the complete feed), History, Chats, Profile. Guests: Home, Earn (`/quests`), History, Support, Profile. Every tab has a label. |
 | Chat streaks | 0200 `conversation_streaks`, kept by a trigger on `messages`. A day counts when BOTH people sent a message (UTC). The flame shows beside a chat from 2 days. The streak left the site and app headers. Every streak celebration is the card-less `StreakFireBurst`. |
@@ -30,9 +30,16 @@ were not probed live from here. Probe each object after the push:
 - **0202:** `ai_product_balances.deposited_cents`, the `ai_product_balances_deposited_clamp` trigger, and a test deposit landing as withdrawable + deposited.
 - **0203:** `ad_placements` rows `hd_download_reward` and `batch_download_reward`.
 - **0200:** `conversation_streaks` (`.select("conversation_id").limit(1)`) and the `bump_conversation_streak_trg` trigger. Send a message in a test chat from both sides and read the row back.
+- **0204:** columns `ad_campaigns.refund_status` / `refund_owed_minor`; functions `admin_moderate_ad_campaign`, `admin_set_ad_refund`, `admin_set_advertiser_status`, `ad_refund_owed`; and the re-created `activate_ad_campaign` (call it with role `advertiser` and expect `not_permitted`). Open Admin → Ads → Campaigns and check that it loads.
 - **0199:** `credit_transfers.credit_class` (`.select("credit_class").limit(1)`). Also call the 7-argument `transfer_credits` through the service role with a bad kind and expect `{ok:false, reason:"invalid"}`.
 
 ### Ad platform: owner decisions still open
+
+0. **Part 7 refund rule (my default, please confirm).** When a paid campaign
+   is rejected or removed, the full amount is owed if it never ran. If it ran,
+   the unused share of its paid time is owed, rounded down. Refunds are sent
+   in the Paystack/Bachs dashboard and then marked in the admin. Nothing is
+   paid out automatically.
 
 1. **Reward ads on AI saves.** The `ai_video_save_reward` placement exists
    because the ad brief asks for it, but it conflicts with the earlier

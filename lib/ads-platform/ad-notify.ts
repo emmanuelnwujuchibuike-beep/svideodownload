@@ -26,7 +26,11 @@ export type AdNotice =
   | { kind: "paused" }
   | { kind: "resumed" }
   | { kind: "extended"; endAt: string | null }
-  | { kind: "extension_held" };
+  | { kind: "extension_held" }
+  /* Part 7: the admin's decisions */
+  | { kind: "paused_by_frenzsave" }
+  | { kind: "rejected"; reason: string | null; refundOwed: boolean }
+  | { kind: "removed"; reason: string | null; refundOwed: boolean };
 
 const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 
@@ -50,6 +54,12 @@ function words(n: AdNotice, name: string): { title: string; body: string; money:
       return { title: "Campaign extended", body: `“${name}” now runs${day(n.endAt) ? ` until ${day(n.endAt)}` : " longer"}.`, money: true };
     case "extension_held":
       return { title: "Extension needs a check", body: `We received your extension payment for “${name}”, but the campaign had already stopped. Our team will contact you.`, money: true };
+    case "paused_by_frenzsave":
+      return { title: "Ad paused by Frenzsave", body: `“${name}” is paused while our team takes a look. We'll let you know when it can run again.`, money: false };
+    case "rejected":
+      return { title: "Ad not approved", body: `“${name}” wasn't approved${n.reason ? `: ${n.reason}` : "."}${n.refundOwed ? " Your payment will be refunded." : ""}`, money: n.refundOwed };
+    case "removed":
+      return { title: "Ad removed", body: `“${name}” was removed${n.reason ? `: ${n.reason}` : "."}${n.refundOwed ? " The unused part of your payment will be refunded." : ""}`, money: n.refundOwed };
   }
 }
 

@@ -27,7 +27,9 @@ import {
 import { Suspense } from "react";
 
 import { AdCampaignPaymentsLazy } from "@/features/admin/ad-campaign-payments-lazy";
+import { AdCampaignsDeskLazy } from "@/features/admin/ad-campaigns-desk-lazy";
 import { AdManager } from "@/features/admin/ad-manager";
+import { AdPlatformControlsLazy } from "@/features/admin/ad-platform-controls-lazy";
 import { AdminPanel, AdminShell } from "@/features/admin/admin-shell";
 import { AdminSubsections } from "@/features/admin/section-tabs";
 import { SupportInbox } from "@/features/admin/support-inbox";
@@ -396,8 +398,12 @@ export default async function AdminPage() {
             <AdminSubsections
               groups={[
                 { id: "placements", label: "Ad placements", content: <AdManager ads={adRecords} /> },
+                /* Ad Platform Part 7: review, pause, remove and refund self-serve campaigns; advertisers. Loads when shown. */
+                { id: "campaigns", label: "Campaigns", content: <AdCampaignsDeskLazy /> },
                 /* Self-serve campaigns paid through Paystack/Bachs (Part 3) - loads when shown. */
                 { id: "campaign-payments", label: "Campaign payments", content: <AdCampaignPaymentsLazy /> },
+                /* Part 7: kill switch, advertiser controls, blocked links, prices, promotions. */
+                { id: "self-serve-rules", label: "Self-serve rules", content: <AdPlatformControlsLazy /> },
                 {
                   id: "settings",
                   label: "Ad settings",

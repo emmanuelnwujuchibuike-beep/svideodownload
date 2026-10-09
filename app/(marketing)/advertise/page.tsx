@@ -20,7 +20,9 @@ export const dynamic = "force-static";
 
 export const metadata: Metadata = {
   title: "Advertise on Frenzsave — create an ad in minutes",
-  description: "Promote your business on Frenzsave. Choose a format and placement, upload your image or video, preview it and go live after payment.",
+  /* Owner 2026-10-09 asked for "reach millions of users globally". The global reach is
+     said; the "millions" figure waits for a measured source (reality-ledger rule). */
+  description: "Promote your business to Frenzsave users around the world. Choose a format and placement, upload your image or video, preview it and go live after payment.",
   alternates: { canonical: "/advertise" },
 };
 
@@ -82,7 +84,7 @@ export default function AdvertisePage() {
             title="Advertise on"
             highlight="Frenzsave"
             stack
-            subtitle="Put your business in front of people downloading, creating and scrolling on Frenzsave. Set up an ad in a few minutes."
+            subtitle="Reach users around the world — people downloading, creating and scrolling on Frenzsave every day. Set up an ad in a few minutes."
             className="mt-4"
           />
           <div className="mt-6 flex flex-wrap items-center gap-2.5">

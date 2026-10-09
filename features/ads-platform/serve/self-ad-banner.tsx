@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { EligibleAd, FormatRules } from "@/lib/ads-platform/eligibility";
-import { creativeFailed } from "@/lib/ads-platform/serving-state";
+import { creativeFailed, nextFromPool, recordShown } from "@/lib/ads-platform/serving-state";
 import { cn } from "@/lib/utils";
 
 import type { AdView } from "../ad-events-client";
@@ -23,6 +23,11 @@ import { SelfAdCreative } from "./self-ad-creative";
  *     only when it is an image (a video is never preloaded)
  *   · a creative that fails is skipped at once and the rotation continues
  *   · reduced motion keeps the swap but drops the cross-fade
+ *   · 0205 (owner, 2026-10-09): coming back to the app moves a timed banner on
+ *     at once ("top banner rotates every 15 seconds or every time the user
+ *     comes back to the app")
+ *   · a format WITHOUT a timer (the download result card) shows a different ad
+ *     each time it mounts — every download — never the one shown last
  */
 export function SelfAdBanner({
   ads,
@@ -39,14 +44,26 @@ export function SelfAdBanner({
   variant: "strip" | "card";
   className?: string;
 }) {
-  const [index, setIndex] = useState(0);
+  const seconds = rules?.rotationSeconds ?? null;
+  // Per-show formats start on the ad after the one this placement showed last (persisted across visits).
+  const [index, setIndex] = useState(() => {
+    if (seconds && seconds > 0) return 0;
+    const pick = nextFromPool(placement, ads.filter((a) => !creativeFailed(a.cr)));
+    const at = pick ? ads.filter((a) => !creativeFailed(a.cr)).indexOf(pick) : 0;
+    return at < 0 ? 0 : at;
+  });
   const [, bump] = useState(0);
   const viewRef = useRef<AdView | null>(null);
 
   const live = ads.filter((a) => !creativeFailed(a.cr));
   const count = live.length;
   const current = count ? live[index % count]! : null;
-  const seconds = rules?.rotationSeconds ?? null;
+
+  // Remember what a per-show placement showed, so the NEXT download starts after it.
+  useEffect(() => {
+    if (!current || (seconds && seconds > 0)) return;
+    recordShown(placement, current.cr);
+  }, [current, seconds, placement]);
 
   useEffect(() => {
     if (count <= 1 || !seconds || seconds <= 0) return;
@@ -59,8 +76,10 @@ export function SelfAdBanner({
       }, seconds * 1000);
     };
     const onVis = () => {
-      if (document.visibilityState === "visible") arm();
-      else if (timer) {
+      if (document.visibilityState === "visible") {
+        // back in the app: the next ad now (the effect re-arms the timer for it)
+        setIndex((i) => (i + 1) % count);
+      } else if (timer) {
         clearTimeout(timer);
         timer = null;
       }

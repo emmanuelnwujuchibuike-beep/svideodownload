@@ -222,6 +222,8 @@ export function formatSpecs(f: CatalogFormat): string[] {
   if (f.media_types.includes("video") && f.max_duration_seconds) out.push(`Video up to ${f.max_duration_seconds} s`);
   out.push(`Up to ${formatBytes(f.max_file_bytes)}`);
   if (f.rotation_seconds) out.push(`Rotates every ${f.rotation_seconds} s`);
+  // 0205 (owner, 2026-10-09): formats without a timer change on every show (every download, every break)
+  else out.push("A new ad each time it shows");
   return out;
 }
 

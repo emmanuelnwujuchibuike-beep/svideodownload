@@ -93,7 +93,7 @@ export function poolFor(payload: ServingPayload | null, placement: string, page:
   return ads.length ? { ads, rules: p.rules } : { ads: [], rules: p.rules };
 }
 
-/* ─────────────────────── no-repeat + frequency (session) ─────────────────────── */
+/* ─────────────────────── no-repeat + frequency (per device) ─────────────────────── */
 
 const LAST_KEY = "frenz.ads.self.last.v1";
 
@@ -104,9 +104,14 @@ interface Last {
   at: number;
 }
 
+/*
+ * localStorage (was sessionStorage) since 0205 (owner, 2026-10-09: "rotate on
+ * every download"): the next download — even in a new visit — starts after the
+ * ad shown last. One tiny entry per placement, never a history.
+ */
 function readLast(): Record<string, Last> {
   try {
-    const raw = sessionStorage.getItem(LAST_KEY);
+    const raw = localStorage.getItem(LAST_KEY);
     const v = raw ? (JSON.parse(raw) as unknown) : null;
     return v && typeof v === "object" ? (v as Record<string, Last>) : {};
   } catch {
@@ -119,7 +124,7 @@ export function recordShown(placement: string, creativeId: string, now: number =
   const all = readLast();
   all[placement] = { cr: creativeId, at: now };
   try {
-    sessionStorage.setItem(LAST_KEY, JSON.stringify(all));
+    localStorage.setItem(LAST_KEY, JSON.stringify(all));
   } catch {
     /* private mode: the in-page state still prevents an immediate repeat */
   }
@@ -156,7 +161,7 @@ export function __resetServingState(): void {
   for (const k of Object.keys(memoryLast)) delete memoryLast[k];
   __resetMomentClaims();
   try {
-    sessionStorage.removeItem(LAST_KEY);
+    localStorage.removeItem(LAST_KEY);
   } catch {
     /* ignore */
   }

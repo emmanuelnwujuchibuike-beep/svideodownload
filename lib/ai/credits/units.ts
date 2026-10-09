@@ -33,6 +33,25 @@ export function formatCredits(credits: number, opts: { short?: boolean } = {}): 
   return `${shown} ${Math.abs(n) === 1 ? "credit" : "credits"}`;
 }
 
+/**
+ * A balance for a tight space (owner, 2026-10-09: "credit should be counted as K
+ * when it reach 1000"). Below 1,000 it is the whole number; from 1,000 it is K,
+ * from a million M, with one decimal. Rounded DOWN, never up: 1,999 is "1.9K",
+ * because showing a member more than they hold is a fabricated figure.
+ * `1500` → `"1.5K"`, `2000` → `"2K"`, `999` → `"999"`.
+ */
+export function formatCompactCredits(credits: number): string {
+  const n = Number.isFinite(credits) ? Math.round(credits) : 0;
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs < 1000) return `${sign}${abs}`;
+  const [div, suffix] = abs < 1_000_000 ? [1000, "K"] : abs < 1_000_000_000 ? [1_000_000, "M"] : [1_000_000_000, "B"];
+  const tenths = Math.floor((abs * 10) / div);
+  const whole = Math.floor(tenths / 10);
+  const dec = tenths % 10;
+  return `${sign}${whole}${dec ? `.${dec}` : ""}${suffix}`;
+}
+
 /** What N credits cost in USD cents at the operator's rate — a pack's price before any provider conversion. */
 export function creditsToUsdCents(credits: number, centsPerCredit: number): number {
   return Math.max(0, Math.round(credits)) * Math.max(1, Math.round(centsPerCredit));

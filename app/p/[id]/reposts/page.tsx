@@ -66,7 +66,7 @@ export default async function RepostsPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SiteHeader />
-      <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-4">
+      <main className="mx-auto w-full max-w-2xl px-4 pb-[calc(var(--frenz-nav-clearance)+1.5rem)] pt-4 lg:pb-6">
         <Link
           href={`/p/${id}`}
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground transition hover:text-foreground"

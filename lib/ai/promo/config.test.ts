@@ -65,10 +65,14 @@ describe("the landing pays nothing up front (§8–§9, §19)", () => {
     expect(hero).toContain("aiPromo={aiPromo}");
     expect(hero).toMatch(/\n\s*showFrenzAi\n/);
   });
-  it("the tile's name rotation is CSS — the tile itself ships no client script", () => {
+  it("the tile ships no client script and runs no animation at rest (2026-10-09)", () => {
     const tile = read("features/downloads/frenz-ai-cta.tsx");
     expect(tile).not.toContain('"use client"');
-    expect(tile).toContain("rotorCss(PROMO_FEATURES.length)");
+    // The 15 s name rotor and the three drifting ambient blobs are gone: a still
+    // subtitle and one static wash, so an always-visible tile never animates.
+    expect(tile).toContain("Create amazing videos with AI");
+    expect(tile).not.toMatch(/rotorCss|frenz-ai-ambient|animation:[^"]*infinite/);
+    expect(read("app/globals.css")).not.toMatch(/@keyframes frenz-ai-ambient/);
   });
   it("the media driver starts at hydration like the Wallpapers tile (owner 2026-10-07), and never polls", () => {
     const loader = read("features/downloads/ai-promo-loader.tsx");

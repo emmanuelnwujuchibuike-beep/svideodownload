@@ -175,3 +175,13 @@ export function detectPlatform(rawUrl: string): Platform {
 export function getPlatform(id: PlatformId): Platform {
   return PLATFORMS[id];
 }
+
+/**
+ * "a TikTok link", "an Instagram link", "an X link" — the platform's short name
+ * (no "(Twitter)", no "Spotlight") with the right article, for the paste box's
+ * placeholder and each platform tile's accessible name.
+ */
+export function platformLinkPhrase(id: PlatformId): string {
+  const name = (PLATFORMS[id]?.name ?? id).replace(/\s*\(.*\)$/, "").replace(/ Spotlight$/, "");
+  return `${/^[AEIOUX]/i.test(name) ? "an" : "a"} ${name} link`;
+}

@@ -321,33 +321,45 @@ describe("the primary action reads as primary", () => {
   });
 });
 
-describe("the intro's description is hidden until asked for", () => {
+describe("the Multi-Link card: one row that explains itself (2026-10-09 reference)", () => {
   /*
-    Owner, 2026-08-25: "hide the multilink gray description … the gray
-    description occupied a lot of space in hero section … show like a display
-    mock when a learn more button near the H1 is clicked, and a hide button
-    should show when it display and it should auto hide after 3secs, so it
-    doesnt occupy space".
+    Download page refinement, 2026-10-09 ("Multiple links — clearer explanation,
+    shows Pro requirement, less confusion"). This replaces the 2026-08-25 design
+    — a "Save multiple links" heading whose "?" floated the explanation for
+    three seconds over a "＋ Multiple Links" row. The sentence is now the row's
+    own subtitle, so there is nothing to open and no timer.
   */
   const intro = read("features/downloader/multi-link/multi-link-intro.tsx");
-  /* Comments stripped — the file DOCUMENTS the class it moved away from, and a
-     bare `not.toMatch` would fail on the very explanation of why it is gone.
-     Same reason as the button block above. */
   const introCode = intro.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-  it("starts hidden", () => {
-    expect(intro).toMatch(/const \[showDetail, setShowDetail\] = useState\(false\)/);
+  /** The card's rules as a function of its source, so the teeth can run them on a broken copy. */
+  function cardOk(src: string): boolean {
+    return (
+      src.includes("Download multiple links") &&
+      /Add up to \{sourceLimit\} links and process them together\./.test(src) &&
+      /Up to \{showPro \? proLimit : sourceLimit\}/.test(src) &&
+      (src.match(/showPro \? <ProBadge \/> : null/g) ?? []).length === 2 &&
+      /aria-expanded=\{open\}/.test(src) &&
+      /aria-controls="multi-link-panel"/.test(src) &&
+      !/HelpCircle|showDetail|setTimeout/.test(src)
+    );
+  }
+
+  it("title, the visitor's own limit in the subtitle, and the Pro limit + badge on the right", () => {
+    expect(cardOk(introCode)).toBe(true);
   });
 
-  it("auto-hides after exactly 3 seconds", () => {
-    expect(intro).toMatch(/setTimeout\(\(\) => setShowDetail\(false\), 3000\)/);
+  it("teeth: dropping the badge, the subtitle, or bringing back the timed popover fails", () => {
+    expect(cardOk(introCode.replaceAll("<ProBadge />", "null"))).toBe(false);
+    // …and losing it on either layout (the narrow one under the subtitle) fails too.
+    expect(cardOk(introCode.replace("<ProBadge />", "null"))).toBe(false);
+    expect(cardOk(introCode.replace("process them together.", "at once"))).toBe(false);
+    expect(cardOk(introCode + "\nconst [showDetail] = [false];")).toBe(false);
   });
 
-  it("is opened by a ? beside the heading, not a Learn more link", () => {
-    // Owner: "no need for the learn me there, you just put a question mark at
-    // the top of the multi link H1 text".
-    expect(introCode).toMatch(/<HelpCircle/);
-    expect(introCode).not.toMatch(/Learn more/);
+  it("the badge only claims a Pro requirement when Pro actually allows more", () => {
+    expect(introCode).toMatch(/const showPro = isPro \|\| proLimit > sourceLimit;/);
+    expect(read("features/downloader/multi-link/multi-link-button.tsx")).toMatch(/proLimit=\{Math\.max\(config\.proSourceLimit, sourceLimit\)\}/);
   });
 
   it("does NOT draw the daily allowance in the collapsed card", () => {
@@ -359,22 +371,7 @@ describe("the intro's description is hidden until asked for", () => {
     );
   });
 
-  it("carries the Up to N pill from the reference", () => {
-    expect(introCode).toMatch(/Up to \{sourceLimit\}/);
-  });
-
   it("🔴 no longer renders the three capability chips", () => {
-    /*
-      Owner, 2026-08-25, with a screenshot of the row: "remove this section from
-      the multi link card". They came from the reference and were kept for a
-      day; every one of them restated the sentence that is already behind the
-      "?", so at rest they cost three rows of the hero and taught nothing the
-      control below does not already say.
-
-      Asserted on the LABELS and on the icon imports both: dropping the markup
-      but leaving `Link2`/`Shuffle`/`Package` imported is the shape a partial
-      revert takes.
-    */
     for (const chip of ["Same platform", "Mixed platforms", "Batch download"]) {
       expect(introCode).not.toContain(chip);
     }
@@ -418,110 +415,24 @@ describe("the intro's description is hidden until asked for", () => {
     expect(page).toMatch(/<SiteHeader landing \/>/);
     expect(read("components/landing/hero.tsx")).toMatch(/installBanner=\{false\}/);
   });
+});
 
-  it("🔴 never centres with a transform while an animation owns transform", () => {
-    /*
-      Owner reported the popup hanging off the right edge of the screen.
-
-      Cause: `left-1/2 -translate-x-1/2` and `animate-fade-up` both write the
-      SAME `transform` property, and the animation wins for as long as it is
-      applied — its keyframes end at `translateY(0)`, silently discarding the
-      `translateX(-50%)`. The card was therefore positioned with its LEFT edge
-      at the midpoint and ran off from there.
-
-      Centre through the LAYOUT (`inset-x-0 mx-auto`) so the two never touch
-      the same property. This assertion is what stops the transform version
-      coming back the next time someone reaches for the familiar idiom.
-    */
-    expect(introCode).toMatch(/inset-x-0 top-full z-20 mx-auto/);
-    expect(introCode).not.toMatch(/-translate-x-1\/2/);
-  });
-
-  it("floats above the layout so it occupies no space", () => {
-    /*
-      The requirement is literally "so it doesnt occupy space". A block that
-      expands in place occupies space by definition and would push the paste
-      box down — a layout shift on the page whose CLS was measured at 0.684
-      once already.
-    */
-    expect(introCode).toMatch(/absolute inset-x-0 top-full/);
-  });
-
-  it("keeps the heading, without the trailing clause", () => {
-    /*
-      Owner, 2026-08-25: remove "the all in once place text". The heading ITSELF
-      stays — the "?" is anchored beside it by the owner's earlier instruction
-      ("you just put a question mark at the top of the multi link H1 text"), so
-      deleting the H1 would orphan the affordance holding the description.
-    */
-    /*
-      The three words are no longer one string: "multiple" is wrapped in its own
-      gradient span (hero-H1 style, see the test below), so the literal
-      "Save multiple links" does not appear in the source any more. The first
-      word became "Save" on 2026-09-03 ("replace all the word download with save
-      ... so google crawler doesnt flag it as a pure downloader"); it tracks the
-      hero H1 it was built to mirror, which moved in the same change. Asserted
-      as the words in ORDER instead — which is the thing that actually matters
-      and survives the next styling change to any one of them.
-    */
-    expect(introCode).toMatch(/Save[\s\S]{0,600}?multiple[\s\S]{0,200}?links/);
-    expect(introCode).not.toMatch(/all in one place/i);
-  });
-
-  it("sets the heading in the BRAND face, and adds no font of its own", () => {
-    /*
-      This setting went through two reversals, so the assertion records where it
-      landed rather than how it got there:
-
-        1. `font-brand` (Outfit, the wordmark face) — chosen to avoid a new
-           webfont on a page with a 1.6s LCP budget.
-        2. Owner: "dont use the frenzsave brand font, use a more premium stylish
-           font that havent been used before" → Playfair Display was added.
-        3. Owner: "is best to reuse the frenzsave brand font that is at the top
-           of the download page" → back to `font-brand`, and Playfair REMOVED.
-
-      The negative assertions are the valuable half. A third face left loaded
-      but unused would be pure weight on every route, and it is exactly the kind
-      of thing a revert leaves behind.
-    */
-    expect(introCode).toMatch(/font-brand/);
-    const layout = read("app/layout.tsx");
-    expect(layout).not.toMatch(/Playfair/);
-    expect(layout).not.toMatch(/luxeDisplay|--font-luxe/);
-    expect(read("app/globals.css")).not.toMatch(/\.font-luxe/);
-    // Exactly two faces ship: the UI sans and the one display face.
-    expect(layout).toMatch(/import \{ Inter, Outfit \} from "next\/font\/google"/);
-  });
-
-  it("🔴 colours ONE word, hero-H1 style — not the whole line", () => {
-    /*
-      Owner, 2026-08-25: "the multi link text shouldnt carry all colored, only
-      the middle text should be colored, just the Save. Discover. Explore
-      Hero H1 style."
-
-      The hero gives the gradient to `Discover.` alone and sets the words either
-      side in ink. That works BECAUSE it is one word — a gradient across a whole
-      line has nothing to contrast against, so it stops reading as emphasis and
-      becomes merely a coloured heading, which is what the previous version did.
-
-      So: the `<h3>` itself must carry an INK colour (not `text-transparent`),
-      and exactly one inner span carries the clip.
-    */
-    expect(introCode).toMatch(/id="multi-link-heading"[\s\S]{0,400}?text-slate-900/);
-    // The heading element itself is not the clipped one any more.
-    expect(introCode).not.toMatch(/id="multi-link-heading"[\s\S]{0,300}?bg-clip-text/);
-    // Exactly one gradient span in the file, and it uses the hero's own stops
-    // rather than a second near-identical ramp.
-    expect(introCode.match(/bg-clip-text/g) ?? []).toHaveLength(1);
-    expect(introCode).toMatch(/from-blue-600 via-violet-600 to-fuchsia-600/);
-    expect(introCode).toMatch(/dark:from-blue-400 dark:via-violet-400 dark:to-fuchsia-400/);
-    // Same stops as the hero H1 it is imitating — one source of truth by eye.
-    expect(read("features/downloads/downloads-sections.tsx")).toMatch(
-      /from-blue-600 via-violet-600 to-fuchsia-600/,
-    );
-  });
-
-  it("the timer doesn't run out while it is being read", () => {
-    expect(intro).toMatch(/onMouseEnter=\{\(\) => \{[\s\S]{0,160}clearTimeout\(hideTimer\.current\)/);
+describe("the platform grid names a platform properly (2026-10-09)", () => {
+  it("short name with the right article", async () => {
+    const { platformLinkPhrase, PLATFORMS } = await import("@/lib/platforms");
+    expect(platformLinkPhrase("tiktok")).toBe("a TikTok link");
+    expect(platformLinkPhrase("instagram")).toBe("an Instagram link");
+    expect(platformLinkPhrase("twitter")).toBe("an X link");
+    expect(platformLinkPhrase("snapchat")).toBe("a Snapchat link");
+    // Truth rule: only platforms the extractor handles — never YouTube (AdSense)
+    // and never the reference's WhatsApp tile.
+    const grid = read("components/landing/supported-platforms.tsx");
+    const list = (name: string) =>
+      [...(grid.match(new RegExp(`export const ${name}: PlatformId\\[\\] = \\[([\\s\\S]*?)\\];`))?.[1] ?? "").replace(/\/\/.*$/gm, "").matchAll(/"(\w+)"/g)].map((m) => m[1]!);
+    const shown = [...list("SUPPORTED_PLATFORMS"), ...list("MORE_PLATFORMS")];
+    expect(shown.length).toBe(11);
+    expect(shown).not.toContain("youtube");
+    expect(shown).not.toContain("whatsapp");
+    for (const id of shown) expect(Object.keys(PLATFORMS), id).toContain(id);
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import NextImage from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BACKDROP_QUALITY } from "@/components/wallpapers/backdrop-quality";
 import { cn } from "@/lib/utils";
@@ -67,32 +67,65 @@ import { cn } from "@/lib/utils";
  */
 export function RotatingWallpaperLayers({ urls, sizes }: { urls: string[]; sizes: string }) {
   const [active, setActive] = useState(0);
-  // The other nine images are added to the DOM only after this flips —
-  // never before mount, so they can never be an LCP candidate.
   const [revealed, setRevealed] = useState(false);
+  const root = useRef<HTMLSpanElement | null>(null);
 
+  /*
+    🔴 IT ONLY TURNS WHILE SOMEONE CAN SEE IT (Download page refinement,
+    2026-10-09: "pause or suspend nonessential work when the page is hidden …
+    minimal CPU/GPU activity").
+
+    The interval used to run from mount to unmount, skipping a tick when the tab
+    was hidden but still waking the page every 2 s — and still crossfading, and
+    decoding the next photo, while the tile was scrolled far out of view. Now the
+    timer exists only while the tile intersects the viewport AND the tab is
+    visible; it is cleared, not skipped, the rest of the time.
+  */
   useEffect(() => {
     if (urls.length < 2) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
     const revealTimer = setTimeout(() => setRevealed(true), 50);
-    const intervalId = setInterval(() => {
-      // Paused, not merely slowed, while backgrounded — a tab nobody is
-      // looking at has no reason to keep decoding new images.
-      if (document.hidden) return;
-      setActive((i) => (i + 1) % urls.length);
-    }, 2000);
-
+    let onScreen = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const sync = () => {
+      const run = onScreen && !document.hidden;
+      if (run && intervalId === null) intervalId = setInterval(() => setActive((i) => (i + 1) % urls.length), 2000);
+      if (!run && intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const io =
+      typeof IntersectionObserver === "function" && root.current
+        ? new IntersectionObserver(([entry]) => {
+            onScreen = !!entry?.isIntersecting;
+            sync();
+          })
+        : null;
+    if (io && root.current) io.observe(root.current);
+    document.addEventListener("visibilitychange", sync);
+    sync();
     return () => {
       clearTimeout(revealTimer);
-      clearInterval(intervalId);
+      if (intervalId !== null) clearInterval(intervalId);
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", sync);
     };
   }, [urls.length]);
 
+  /*
+    Only three frames are ever mounted — the one fading out, the one showing and
+    the one coming next (so it is fetched and decoded before its turn). All ten
+    used to stay in the DOM, which kept ten decoded photos in memory for a tile
+    that shows one. A frame that comes round again is in the HTTP cache already.
+  */
+  const n = urls.length;
+  const keep = (i: number) => (revealed ? i === active || i === (active + 1) % n || i === (active - 1 + n) % n : i === 0);
+
   return (
-    <>
+    <span ref={root} aria-hidden className="pointer-events-none absolute inset-0">
       {urls.map((url, i) => {
-        if (i > 0 && !revealed) return null;
+        if (!keep(i)) return null;
         return (
           <NextImage
             key={url}
@@ -124,6 +157,6 @@ export function RotatingWallpaperLayers({ urls, sizes }: { urls: string[]; sizes
           />
         );
       })}
-    </>
+    </span>
   );
 }

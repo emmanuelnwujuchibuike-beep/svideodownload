@@ -51,10 +51,14 @@ describe("the promote card is a floating, draggable, lazy side bubble", () => {
   it("the hero mounts the lazy loader; the bubble is portalled, labelled Ad, draggable and remembered", () => {
     expect(code("features/downloads/downloads-sections.tsx")).toContain("<PromoteBubbleLazy />");
     const b = code("features/downloads/promote-bubble.tsx");
-    expect(b).toContain("<Portal>");
-    expect(b).toContain(">\n          Ad\n");
+    // Portalled: into its dock beside the credits card by default (the improved
+    // reference, 2026-10-09), or to <body> once dragged off to float.
+    expect(b).toContain("createPortal(<span className={drag ? \"invisible\" : undefined}>{button(false)}</span>, dock)");
+    expect(b).toContain("document.body)");
+    expect(b).toMatch(/>\n\s*Ad\n\s*<\/span>/);
     expect(b).toContain('const KEY = "frenz:promote-bubble:v1";');
     expect(b).toContain("if (!s.moved && Math.hypot(dx, dy) < 6) return;");
+    expect(code("features/downloads/download-page-core.tsx")).toContain('<div id="frenz-promote-dock" className="flex h-10 w-10 shrink-0 items-center justify-center" />');
     expect(code("features/downloads/promote-bubble-lazy.tsx")).toContain("requestIdleCallback");
   });
 });

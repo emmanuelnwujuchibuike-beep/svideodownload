@@ -1,8 +1,5 @@
 "use client";
 
-import { ArrowRight, Compass } from "lucide-react";
-import Link from "next/link";
-
 import { DownloadDisclaimer } from "@/components/legal/download-disclaimer";
 import { AiCreditStrip, EarnButton } from "@/features/ai/design/ai-credit-strip";
 import { WallpaperCta } from "@/components/wallpapers/wallpaper-cta";
@@ -147,7 +144,18 @@ export function DownloadPageCore({
 
   return (
     <>
-      {topCredits === "strip" ? <AiCreditStrip base="/ai" className="mb-3" /> : null}
+      {topCredits === "strip" ? (
+        /*
+          The credits card with the promote button docked beside it, as the
+          improved reference draws them (2026-10-09). The slot is reserved at its
+          full size from the first paint, so the lazily loaded button fills it
+          without moving anything; see promote-bubble.tsx for the dock.
+        */
+        <div className="mb-3 flex items-center gap-2">
+          <AiCreditStrip base="/ai" className="min-w-0 flex-1" />
+          <div id="frenz-promote-dock" className="flex h-10 w-10 shrink-0 items-center justify-center" />
+        </div>
+      ) : null}
       {/* /downloads (the strip page) shows no headline — owner, 2026-10-08 */}
       <DownloadsHero trailing={topCredits === "earn" ? <EarnButton size="md" /> : undefined} headline={topCredits !== "strip"} />
 

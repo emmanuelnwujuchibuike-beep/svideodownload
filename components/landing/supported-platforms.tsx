@@ -1,7 +1,9 @@
+import { Plus } from "lucide-react";
+
 import { PlatformStatusDot } from "@/components/platform/platform-status-dot";
 import { BRAND_ICONS, BRAND_MARKS } from "@/lib/platform-icons";
 import { statusOf, type PlatformStatusMap } from "@/lib/platform-status";
-import { PLATFORMS } from "@/lib/platforms";
+import { PLATFORMS, platformLinkPhrase } from "@/lib/platforms";
 import { cn } from "@/lib/utils";
 import type { PlatformId } from "@/types";
 
@@ -56,9 +58,10 @@ import type { PlatformId } from "@/types";
  * Copying the markup for the second tone is how the two drift — the same trap
  * the Wallpaper CTA was just collapsed out of — so the surface is a prop.
  *
- * ── Zero client JavaScript ───────────────────────────────────────────────────
- * A plain server component. The landing has no headroom in its cold-entry
- * budget, and this is static markup with no behaviour; it must never gain any.
+ * ── No state of its own ──────────────────────────────────────────────────────
+ * It holds no state and imports no hooks. Its one caller (`DownloadBox`, a
+ * client component) owns the "+" toggle and the tap handler and passes them in,
+ * so the markup stays a pure function of its props and adds no module weight.
  *
  * ── Why the list is a constant and not derived ───────────────────────────────
  * `lib/platforms` knows about more platforms than a visitor needs to see in a
@@ -66,10 +69,12 @@ import type { PlatformId } from "@/types";
  * The full list lives one tap away on the downloader pages.
  */
 export const SUPPORTED_PLATFORMS: PlatformId[] = [
+  // The improved reference's order (2026-10-09): two rows of five, the "+"
+  // closing the second.
   "tiktok",
+  "instagram",
   "twitter",
   "snapchat",
-  "instagram",
   "facebook",
   "pinterest",
   // youtube swapped for linkedin 2026-08-25 — AdSense "low value content"
@@ -77,7 +82,18 @@ export const SUPPORTED_PLATFORMS: PlatformId[] = [
   // the trigger. See config/seoPages.ts's removal note for the full picture.
   "linkedin",
   "telegram",
+  // Reddit joins (2026-10-09): a real extractor (lib/platforms) with its own
+  // downloader page. The reference's WhatsApp tile is NOT drawn — nothing here
+  // downloads from WhatsApp, and a logo is a claim of support.
+  "reddit",
 ];
+
+/**
+ * Behind the "+" tile: platforms the extractor also handles (each has its own
+ * downloader page) but that do not need a spot in the first two rows. YouTube is
+ * deliberately absent here too, for the AdSense reason above.
+ */
+export const MORE_PLATFORMS: PlatformId[] = ["threads", "vimeo"];
 
 export function SupportedPlatforms({
   /**
@@ -98,12 +114,43 @@ export function SupportedPlatforms({
    * so an unmigrated caller renders exactly what it did before.
    */
   statuses,
+  /**
+   * Makes every tile a button (Download page refinement, 2026-10-09: "all icons
+   * interactive"). Tapping a platform hands its id back — the paste box uses it
+   * to focus itself and name the platform in its placeholder. Omitted, the tiles
+   * stay plain marks, so a caller without a paste box draws exactly what it did.
+   */
+  onPick,
+  /** Whether the MORE_PLATFORMS row is open. Only meaningful with `onToggleMore`. */
+  expanded = false,
+  /** Draws the "+" tile, which toggles the MORE_PLATFORMS row. */
+  onToggleMore,
 }: {
   surface?: "light" | "onGradient";
   className?: string;
   statuses?: PlatformStatusMap;
+  onPick?: (id: PlatformId) => void;
+  expanded?: boolean;
+  onToggleMore?: () => void;
 }) {
   const onGradient = surface === "onGradient";
+  const ids = onToggleMore && expanded ? [...SUPPORTED_PLATFORMS, ...MORE_PLATFORMS] : SUPPORTED_PLATFORMS;
+  /*
+    ── ONE TILE, EVERY SIZE THE SAME (Download page refinement, 2026-10-09:
+    "consistent size & style, even visual weight") ──────────────────────────
+    Five columns, so two rows of five hold nine platforms and the "+" — and each
+    tile is a fifth of the width (~47 px on a 320 px phone, capped by the grid's
+    max width on a wide card), which is also a comfortable tap target now that
+    the tiles can be tapped. Same radius, same hairline ring, same glyph size on
+    every tile; the brand colour is the only thing that differs.
+  */
+  const tileClass = cn(
+    // `relative` is what the status light positions against — see PlatformStatusDot.
+    "relative flex aspect-square w-full items-center justify-center rounded-[26%] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
+    !onGradient && "ring-1 ring-inset ring-slate-200/80 dark:ring-white/10",
+  );
+  const interactive = "transition-transform duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:transition-none";
+  const glyph = "h-[clamp(17px,5.2vw,22px)] w-[clamp(17px,5.2vw,22px)]";
   return (
     /*
       ONE line that scrolls, never a wrapping grid.
@@ -193,13 +240,18 @@ export function SupportedPlatforms({
       >
         Supported platforms
       </span>
-      <div className="grid w-full max-w-md grid-cols-8 gap-1.5 sm:gap-2">
-        {SUPPORTED_PLATFORMS.map((id) => {
+      <div className="grid w-full max-w-[22rem] grid-cols-5 gap-2.5">
+        {ids.map((id) => {
           const Icon = BRAND_ICONS[id];
           const mark = BRAND_MARKS[id];
+          const name = PLATFORMS[id]?.name ?? id;
+          const Tile = onPick ? "button" : "span";
           return Icon ? (
-            <span
+            <Tile
               key={id}
+              {...(onPick
+                ? { type: "button" as const, onClick: () => onPick(id), "aria-label": `Paste ${platformLinkPhrase(id)}`, title: name }
+                : {})}
               /*
                 ── Squircle tiles, brand colour (public/landingnew.jpg) ────────
                 Owner, 2026-08-10: "use the way icons are on the button in the
@@ -243,19 +295,14 @@ export function SupportedPlatforms({
                 iOS uses for its own app icons, which is the look this row is
                 imitating.
               */
-              className={cn(
-                // `relative` is what the status light positions against — see
-                // PlatformStatusDot. Nothing else about the tile changes.
-                "relative flex aspect-square w-full items-center justify-center rounded-[26%] bg-white shadow-sm",
-                !onGradient && "ring-1 ring-inset ring-slate-200/70 dark:ring-white/10",
-              )}
+              className={cn(tileClass, onPick && interactive)}
               style={mark?.bg ? { background: mark.bg } : undefined}
             >
               {/* The glyph tracks the tile down rather than staying 18px and
                   crowding it at the narrow end — clamped so it never becomes a
                   speck on a small phone or bloats on a wide card. */}
               <Icon
-                className="h-[clamp(13px,3.6vw,18px)] w-[clamp(13px,3.6vw,18px)]"
+                className={glyph}
                 style={mark ? { color: mark.fg } : undefined}
               />
               {/* The status light. Renders NOTHING for a healthy platform — a
@@ -264,12 +311,23 @@ export function SupportedPlatforms({
                   is tappable and explains itself; see the component. */}
               <PlatformStatusDot
                 status={statusOf(statuses, id)}
-                platformName={PLATFORMS[id]?.name ?? id}
+                platformName={name}
                 size="sm"
               />
-            </span>
+            </Tile>
           ) : null;
         })}
+        {onToggleMore ? (
+          <button
+            type="button"
+            onClick={onToggleMore}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Show fewer platforms" : "Show more supported platforms"}
+            className={cn(tileClass, interactive, "text-slate-400 dark:bg-white/5 dark:text-white/60")}
+          >
+            <Plus className={cn(glyph, "transition-transform duration-200 motion-reduce:transition-none", expanded && "rotate-45")} strokeWidth={1.75} aria-hidden />
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { formatCredits, formatLedgerAmount, walletShortfall, WALLET_UNIT } from "@/lib/ai/credits/units";
+import { formatCompactCredits, formatCredits, formatLedgerAmount, walletShortfall, WALLET_UNIT } from "@/lib/ai/credits/units";
 import { AI_WALLET_DEFAULTS, creditsForPayment, normalizeAiWalletConfig, publicWalletOffer, resolvePurchase } from "@/lib/ai/credits/wallet-config";
 
 /**
@@ -93,6 +93,20 @@ describe("display", () => {
     expect(formatCredits(1)).toBe("1 credit");
     expect(formatCredits(1234)).toBe("1,234 credits");
     expect(formatCredits(12.6)).toBe("13 credits");
+  });
+  it("counts a balance in K from 1,000 (owner, 2026-10-09), rounding DOWN so it never overstates", () => {
+    expect(formatCompactCredits(0)).toBe("0");
+    expect(formatCompactCredits(101)).toBe("101");
+    expect(formatCompactCredits(999)).toBe("999");
+    expect(formatCompactCredits(1000)).toBe("1K");
+    expect(formatCompactCredits(1050)).toBe("1K");
+    expect(formatCompactCredits(1500)).toBe("1.5K");
+    expect(formatCompactCredits(1999)).toBe("1.9K");
+    expect(formatCompactCredits(12_345)).toBe("12.3K");
+    expect(formatCompactCredits(999_999)).toBe("999.9K");
+    expect(formatCompactCredits(1_000_000)).toBe("1M");
+    expect(formatCompactCredits(2_500_000)).toBe("2.5M");
+    expect(formatCompactCredits(Number.NaN)).toBe("0");
   });
   it("prints every statement row in its OWN unit", () => {
     expect(formatLedgerAmount(-13, WALLET_UNIT, { signed: true })).toBe("−13 credits");

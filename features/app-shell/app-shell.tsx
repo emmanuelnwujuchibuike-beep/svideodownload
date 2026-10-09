@@ -32,7 +32,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <AppTopbar />
         <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 px-3 sm:px-4">
-          <main className="min-w-0 flex-1 pb-24 pt-4 lg:pb-6">{children}</main>
+          <main className="min-w-0 flex-1 pb-[calc(var(--frenz-nav-clearance)+1.5rem)] pt-4 lg:pb-6">{children}</main>
           {rightRail ?? <RightRail profile={profile ?? null} suggestions={suggestions ?? []} />}
         </div>
       </div>

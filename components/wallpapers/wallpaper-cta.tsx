@@ -346,7 +346,8 @@ function WallpaperCard({
       className={cn(
         "frenz-wp group relative flex min-h-[11rem] flex-col overflow-hidden rounded-3xl p-4 text-left",
         "bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 text-white",
-        "ring-1 ring-inset ring-white/15 shadow-md",
+        // The Frenz AI tile's own shadow (2026-10-09: "consistent corner radii and subtle shadows").
+        "ring-1 ring-inset ring-white/15 shadow-[0_10px_30px_-14px_rgba(15,23,42,0.22)]",
         "transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:scale-[0.995]",
         className,
       )}
@@ -436,11 +437,17 @@ function WallpaperCard({
       */}
       <span className="relative z-[1] mt-auto flex items-end justify-between gap-3 pt-4">
         <span className="min-w-0">
-          <span className="block text-base font-bold leading-tight text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
+          <span className="block text-[1.05rem] font-bold leading-tight text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
             Wallpapers
           </span>
+          {/* One short line back (2026-10-09, the improved reference: "HD wallpapers
+              for your screen") — it pairs with the Frenz AI tile's subtitle so the
+              two tiles read as a set. It wraps to two lines on a phone, as drawn. */}
+          <span className="mt-1 block text-xs leading-snug text-white/85 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+            HD wallpapers for your screen
+          </span>
         </span>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 transition group-hover:bg-white/30">
+        <span className="flex h-[2.6rem] w-[2.6rem] shrink-0 items-center justify-center rounded-full bg-white/20 ring-1 ring-inset ring-white/25 transition group-hover:bg-white/30">
           <ArrowRight className="h-4 w-4 text-white transition-transform group-hover:translate-x-0.5" />
         </span>
       </span>

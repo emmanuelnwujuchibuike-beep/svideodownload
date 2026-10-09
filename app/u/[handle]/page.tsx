@@ -44,6 +44,7 @@ import { getUserPlan } from "@/lib/monetization/plan";
 import { friendsCount, friendshipState, mutualFriendsCount } from "@/lib/social/friends";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewableCollectionsCount } from "@/lib/social/collections";
+import { existingDirectConversationId } from "@/lib/social/messages";
 import { listLikedPosts, listSavedPosts, listUserPosts, listUserReposts } from "@/lib/social/posts";
 import { accentHex, getPrivacySettings, getProfileExtras, getProfileMedia, getPublicProfile, getReputationBonus, tabVisible } from "@/lib/social/profile";
 import { IdentityMedia } from "@/features/profile/identity-media";
@@ -254,6 +255,7 @@ async function ProfileData({
     details,
     credentials,
     offerings,
+    directChatId,
   ] = await Promise.all([
     getUserPlan(profile.id),
     isViewer ? friendshipState(me!, profile.id) : Promise.resolve("none" as const),
@@ -280,6 +282,8 @@ async function ProfileData({
     getProfileDetails(profile.id),
     listCredentials(profile.id),
     listOfferings(profile.id),
+    // Message opens an existing chat directly (owner, 2026-10-08) — no get-or-create redirect
+    isViewer ? existingDirectConversationId(me!, profile.id) : Promise.resolve(null),
   ]);
   /*
     ── The Layout Studio theme now reaches the profile ─────────────────────
@@ -1042,8 +1046,11 @@ async function ProfileData({
                          the natural primary action, so Message leads (filled) between
                          friends and stays a calm secondary otherwise. Share/QR/•••
                          moved to the utility row above — see the comment there. */
+                      /* An existing chat opens directly: one route, pushed (back returns
+                         here), no redirect (owner, 2026-10-08). A first chat still goes
+                         through /messages/new/, which gates and creates it. */
                       <Link
-                        href={`/messages/new/${profile.id}`}
+                        href={directChatId ? `/messages/${directChatId}` : `/messages/new/${profile.id}`}
                         className={`btn-lux min-w-0 flex-1 justify-center sm:flex-none ${friendState === "friends" ? "btn-lux-primary" : "btn-lux-secondary"}`}
                       >
                         <MessageCircle className="h-4 w-4" /> Message

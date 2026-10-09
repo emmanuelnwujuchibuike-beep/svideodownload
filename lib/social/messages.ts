@@ -118,6 +118,36 @@ async function memberRole(db: Db, conversationId: string, userId: string): Promi
   return (data?.role as MemberRole | undefined) ?? null;
 }
 
+/**
+ * The viewer's EXISTING direct chat with `otherId`, or null (owner, 2026-10-08:
+ * "Message on a profile should open the chat directly"). One indexed read, run
+ * in the profile's parallel wave, so its Message button can link straight to
+ * `/messages/<id>` instead of the get-or-create redirect. Only a thread the
+ * viewer is already a member of; anything else (none yet, a fault) answers null
+ * and the button keeps the `/messages/new/` route, which gates and creates.
+ * Opening adds nothing: the same thread is in the viewer's inbox, and sending
+ * is still gated (blocks) on the server.
+ */
+export async function existingDirectConversationId(viewerId: string, otherId: string): Promise<string | null> {
+  if (!hasSupabase || viewerId === otherId) return null;
+  try {
+    const [low, high] = pair(viewerId, otherId);
+    const { data, error } = await createAdminClient()
+      .from("conversations")
+      .select("id, conversation_members!inner(user_id)")
+      .eq("user_low", low)
+      .eq("user_high", high)
+      .eq("type", "direct")
+      .eq("conversation_members.user_id", viewerId)
+      .is("conversation_members.left_at", null)
+      .maybeSingle();
+    if (error || !data) return null;
+    return (data as { id: string }).id;
+  } catch {
+    return null;
+  }
+}
+
 /** Can `senderId` start/continue a DIRECT conversation with `recipientId`? */
 export async function canMessage(senderId: string, recipientId: string): Promise<MessageGate> {
   if (!hasSupabase) return { ok: false, reason: "unavailable" };

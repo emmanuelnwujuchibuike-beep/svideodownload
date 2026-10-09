@@ -2,7 +2,7 @@
 
 import { PenSquare, UsersRound, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { CreateGroupSheet } from "@/features/social/create-group-sheet";
@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
  * navigates instead of toggling a multi-select checkmark) rather than
  * duplicating its search/avatar-grid rendering.
  */
-export function ComposeLauncher({ className }: { className?: string }) {
+export function ComposeLauncher({ className, iconClassName = "h-[18px] w-[18px]", strokeWidth }: { className?: string; iconClassName?: string; strokeWidth?: number }) {
   const [open, setOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [people, setPeople] = useState<Person[] | null>(null);
@@ -39,11 +39,22 @@ export function ComposeLauncher({ className }: { className?: string }) {
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open || people) return;
-    loadPeople()
+  // the people list starts loading on finger-DOWN (2026-10-08, owner: "respond instantly"),
+  // so the sheet is usually full when it opens — one request, however it was started
+  const peopleLoad = useRef<Promise<void> | null>(null);
+  const primePeople = () => {
+    if (people || peopleLoad.current) return;
+    peopleLoad.current = loadPeople()
       .then(setPeople)
-      .catch(() => setPeople([]));
+      .catch(() => {
+        peopleLoad.current = null;
+        setPeople([]);
+      });
+  };
+  useEffect(() => {
+    if (open) primePeople();
+    // primePeople reads only refs and `people`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, people]);
 
   const startDirect = (id: string) => {
@@ -56,18 +67,17 @@ export function ComposeLauncher({ className }: { className?: string }) {
     <>
       <button
         type="button"
+        onPointerDown={primePeople}
         onClick={() => {
           haptic("light");
           setOpen(true);
         }}
         aria-label="New message"
         title="New message"
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground",
-          className,
-        )}
+        // a caller's className is the whole look (the inbox's glass circle); the default is the plain icon button
+        className={className ? cn("flex shrink-0 items-center justify-center", className) : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-secondary hover:text-foreground"}
       >
-        <PenSquare className="h-[18px] w-[18px]" />
+        <PenSquare className={iconClassName} strokeWidth={strokeWidth} aria-hidden />
       </button>
 
       {open

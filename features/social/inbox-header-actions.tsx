@@ -1,22 +1,29 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Lock, MoreVertical } from "lucide-react";
+import { Lock, MoreVertical, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { UserMenu } from "@/features/auth/user-menu";
-import { SuggestionsLauncher } from "@/features/friends/suggestions-launcher";
 import { ComposeLauncher } from "@/features/social/compose-launcher";
 import { MessageSearchLauncher } from "@/features/social/message-search-launcher";
 import { NotificationSettingsPicker } from "@/features/social/notification-settings-picker";
 import { PresenceStatusPicker } from "@/features/social/presence-status-picker";
+import { TapOnceLink } from "@/features/ui/tap-once-link";
 import { haptic } from "@/lib/motion/haptics";
 import { playSound } from "@/lib/notifications/sound-fx";
 import { springs } from "@/lib/motion/springs";
 
-const CIRCLE = "frenz-inbox-action glass h-10 w-10 rounded-full text-foreground/80 hover:text-foreground";
+/* 2026-10-08 (owner: "more premium, glassy, bolder a bit, but light weight … respond
+   instantly like the earn button"): the look is `.frenz-inbox-action` in globals.css,
+   with no extra JS. It presses on finger-DOWN (:active / data-pending), and the icons
+   use a heavier stroke. */
+// below 360 px the row was 12 px wider than the screen (the avatar clipped): 36 px circles and 4 px gaps there
+const CIRCLE = "frenz-inbox-action flex h-9 w-9 items-center justify-center rounded-full text-foreground min-[360px]:h-10 min-[360px]:w-10";
+const ICON = "h-[19px] w-[19px]";
+const STROKE = 2.3;
 const MENU_WIDTH = 248;
 
 /**
@@ -56,23 +63,34 @@ export function InboxHeaderActions() {
   };
 
   return (
-    <span className="ml-auto flex items-center gap-1.5">
+    <span className="ml-auto flex shrink-0 items-center gap-1 min-[360px]:gap-1.5">
       {/* Owner mockup's top-right cluster: add-friends, compose, "…", avatar. */}
-      <SuggestionsLauncher className={CIRCLE} />
-      <ComposeLauncher className={CIRCLE} />
-      <motion.button
+      {/* 2026-10-08 (owner): Add friends opens the main Friends page, and it goes once, at once, like Earn */}
+      <TapOnceLink
+        href="/friends"
+        spinner={false}
+        aria-label="Add friends"
+        title="Add friends"
+        onClick={() => {
+          haptic("light");
+          playSound("tap");
+        }}
+        className={CIRCLE}
+      >
+        <UserPlus className={ICON} strokeWidth={STROKE} aria-hidden />
+      </TapOnceLink>
+      <ComposeLauncher className={CIRCLE} iconClassName={ICON} strokeWidth={STROKE} />
+      <button
         ref={triggerRef}
         type="button"
         aria-label={open ? "Hide tools" : "More tools"}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={toggle}
-        whileTap={{ scale: 0.9 }}
-        transition={springs.press}
-        className={`flex items-center justify-center ${CIRCLE}`}
+        className={CIRCLE}
       >
-        <MoreVertical className="h-[18px] w-[18px]" />
-      </motion.button>
+        <MoreVertical className={ICON} strokeWidth={STROKE} aria-hidden />
+      </button>
       <UserMenu />
 
       {open && pos

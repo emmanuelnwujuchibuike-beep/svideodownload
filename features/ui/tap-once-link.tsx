@@ -23,7 +23,18 @@ import { useEffect, useRef, useState, type ComponentProps } from "react";
  *     a moment to arrive, but the button never looks dead while it does.
  * Scoped to the links that use it — nothing global, nothing that patches history.
  */
-export function TapOnceLink({ href, onClick, className, children, ...rest }: ComponentProps<typeof Link> & { href: string }) {
+export function TapOnceLink({
+  href,
+  onClick,
+  className,
+  children,
+  spinner = true,
+  ...rest
+}: ComponentProps<typeof Link> & {
+  href: string;
+  /** false for an icon-only circle: the spinner would push the icon off-centre, so its `data-pending` style shows the press instead. */
+  spinner?: boolean;
+}) {
   const router = useRouter();
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -69,7 +80,7 @@ export function TapOnceLink({ href, onClick, className, children, ...rest }: Com
       }}
     >
       {children}
-      {busy ? <span aria-hidden className="ml-1 inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" /> : null}
+      {busy && spinner ? <span aria-hidden className="ml-1 inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent motion-reduce:animate-none" /> : null}
     </Link>
   );
 }

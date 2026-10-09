@@ -66,7 +66,7 @@ export function InboxMobileChrome() {
     >
       <div className="mb-3.5 flex items-start justify-between gap-2">
         <div className="pl-1">
-          <h1 className="flex items-center gap-1.5 text-[28px] font-bold leading-tight tracking-[-0.03em]">
+          <h1 className="flex items-center gap-1.5 text-[24px] font-bold leading-tight min-[360px]:text-[28px] tracking-[-0.03em]">
             Messages
             <InboxUnreadDot />
           </h1>

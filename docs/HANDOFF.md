@@ -67,8 +67,11 @@ See "To go live" in `docs/AD_PLATFORM.md`:
 
 ## 2 · How to verify ad-platform SQL without a database
 
-Supabase migrations auto-apply on push (GitHub integration), so a broken
-migration reaches production. Before pushing, execute new SQL in **PGlite**
+The owner RUNS migrations by hand, in order, after a push (corrected
+2026-10-09 - they do not auto-apply). Check which number production is on
+before assuming a feature's table exists: as of 2026-10-09 production is at
+**0199**, and 0200-0206 are on main waiting to be run, in order. A broken
+migration still costs a production fix, so before pushing, execute new SQL in **PGlite**
 (`npm i @electric-sql/pglite` in a scratch folder, not in this repo):
 
 - stub `auth.users`, `auth.uid()` (reading `request.jwt.claim.sub`),

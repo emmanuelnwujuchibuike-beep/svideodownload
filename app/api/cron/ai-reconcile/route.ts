@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { reconcilePendingAdPayments } from "@/lib/ads-platform/payment-server";
 import { sweepAiJobs } from "@/lib/ai/recovery";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cronAuthorized } from "@/lib/cron/auth";
 
 export const runtime = "nodejs";
@@ -27,7 +29,9 @@ async function run(request: Request) {
   if (!(await cronAuthorized(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  return NextResponse.json(await sweepAiJobs());
+  // 2026-10-09: ad payments whose provider webhook never arrived are confirmed every 10 minutes too
+  const [ai, adPayments] = await Promise.all([sweepAiJobs(), reconcilePendingAdPayments(createAdminClient()).catch((e: unknown) => ({ error: String(e).slice(0, 160) }))]);
+  return NextResponse.json({ ...ai, adPayments });
 }
 
 export const GET = run;

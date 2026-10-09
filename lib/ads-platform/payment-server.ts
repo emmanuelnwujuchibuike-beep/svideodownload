@@ -604,3 +604,42 @@ async function reverse(db: Db, reference: string, kind: "refund" | "chargeback" 
   console.warn(`[ads-pay] ${kind === "refund" ? "payment_refunded" : "payment_chargeback"}`, { reference, kind, status: r.status, ok: r.ok, reason: r.reason });
   return `ad ${kind}: ${r.ok ? r.status : r.reason}`;
 }
+
+/* ─────────────────────────────── reconciliation ─────────────────────────────── */
+
+/**
+ * Confirm pending ad payments with the PROVIDER, with nobody watching
+ * (2026-10-09: an advertiser's Bachs payment succeeded, the webhook never
+ * arrived, and the attempt stayed "pending" because the only fallback check
+ * ran while the return page was open — and the page stops asking after a
+ * minute). Run by the 10-minute reconcile cron and the hourly housekeeping.
+ *
+ * Bounded: attempts between 2 minutes (give the webhook its chance) and 48
+ * hours old, at most 25 per run, oldest first. Each goes through the same
+ * askProvider → settleVerified → activation path the return page uses, so the
+ * provider stays the only authority and a run can never double-settle.
+ */
+export async function reconcilePendingAdPayments(db: Db, now: number = Date.now()): Promise<{ checked: number; settled: number }> {
+  const { data } = await db
+    .from("ai_topup_attempts")
+    .select(ATTEMPT_COLUMNS)
+    .eq("purpose", "ad_campaign")
+    .in("status", ["pending", "verification_required"])
+    .lt("created_at", new Date(now - 2 * 60_000).toISOString())
+    .gt("created_at", new Date(now - 48 * 3_600_000).toISOString())
+    .order("created_at", { ascending: true })
+    .limit(25);
+  const attempts = (data ?? []) as Attempt[];
+  let settled = 0;
+  for (const a of attempts) {
+    try {
+      await askProvider(db, a);
+      const { data: after } = await db.from("ai_topup_attempts").select("status").eq("reference", a.reference).maybeSingle();
+      if (after?.status === "success") settled += 1;
+    } catch (e) {
+      console.warn("[ads-pay] reconcile check failed", { reference: a.reference, error: String(e).slice(0, 160) });
+    }
+  }
+  if (attempts.length) console.info("[ads-pay] reconciled", { checked: attempts.length, settled });
+  return { checked: attempts.length, settled };
+}

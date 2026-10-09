@@ -267,3 +267,16 @@ describe("0197 — the money state in the database", () => {
     expect(grants).not.toMatch(/to anon|to authenticated/);
   });
 });
+
+describe("2026-10-09: pending ad payments are confirmed with nobody watching", () => {
+  it("both scheduled jobs run the provider check; bounded by age and count", () => {
+    const pay = src("lib/ads-platform/payment-server.ts");
+    expect(pay).toContain("export async function reconcilePendingAdPayments(");
+    expect(pay).toContain('.in("status", ["pending", "verification_required"])');
+    expect(pay).toContain(".lt(\"created_at\", new Date(now - 2 * 60_000).toISOString())");
+    expect(pay).toContain(".limit(25);");
+    expect(pay).toMatch(/for \(const a of attempts\) \{\s*try \{\s*await askProvider\(db, a\);/);
+    expect(src("lib/ads-platform/housekeeping.ts")).toContain("out.payments = await reconcilePendingAdPayments(db, now)");
+    expect(src("app/api/cron/ai-reconcile/route.ts")).toContain("reconcilePendingAdPayments(createAdminClient())");
+  });
+});

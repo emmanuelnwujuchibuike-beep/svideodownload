@@ -136,7 +136,8 @@ export function Downloader({
 } = {}) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [phIndex, setPhIndex] = useState(0);
+  // the paste field — its placeholder rotates WITHOUT a React render (Part 10, below)
+  const urlInputRef = useRef<HTMLInputElement | null>(null);
   const { status, metadata, error, fetchMetadata, reset } = useDownloader();
   const previewRef = useRef<HTMLDivElement | null>(null);
 
@@ -320,18 +321,27 @@ export function Downloader({
     rotation is a homepage idea (we support many platforms); on a platform page
     the answer is already known, so the interval never starts.
   */
+  /*
+    🔴 PART 10 (2026-10-09): the rotation used to be React STATE — every 2.2 s,
+    for as long as the page was open, it re-rendered this whole component (and
+    everything under it) to change one word in a placeholder, on the two
+    busiest pages in the app, hidden tab or not. It now writes the attribute on
+    the input directly: no render at all, and no tick while the tab is hidden,
+    the field is focused or it already holds a link.
+  */
   useEffect(() => {
     if (platformId) return;
-    const id = setInterval(
-      () => setPhIndex((i) => (i + 1) % PLACEHOLDER_PLATFORMS.length),
-      2200,
-    );
+    let i = 0;
+    const id = setInterval(() => {
+      const el = urlInputRef.current;
+      if (!el || document.hidden || el.value || document.activeElement === el) return;
+      i = (i + 1) % PLACEHOLDER_PLATFORMS.length;
+      el.placeholder = `Paste your ${PLACEHOLDER_PLATFORMS[i]} link…`;
+    }, 2200);
     return () => clearInterval(id);
   }, [platformId]);
 
-  const placeholderPlatform = platformId
-    ? PLATFORMS[platformId].name
-    : PLACEHOLDER_PLATFORMS[phIndex];
+  const placeholderPlatform = platformId ? PLATFORMS[platformId].name : PLACEHOLDER_PLATFORMS[0];
 
   const handlePaste = async () => {
     try {
@@ -396,6 +406,7 @@ export function Downloader({
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
             <input
+              ref={urlInputRef}
               type="url"
               inputMode="url"
               autoComplete="off"

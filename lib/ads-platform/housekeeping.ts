@@ -6,6 +6,7 @@ import { alertEmailHtml, sendAdminAlertOnce } from "@/lib/notify";
 import { SITE_URL } from "@/lib/site";
 
 import { PUBLIC_BUCKET, STAGING_BUCKET } from "./advertiser-server";
+import { reconcilePendingAdPayments } from "./payment-server";
 
 /**
  * Part 8 — the hourly ad housekeeping (app/api/cron/ad-housekeeping, clocked by
@@ -40,6 +41,8 @@ export async function runAdHousekeeping(db: Db, now: number = Date.now()) {
 
   out.assets = await cleanAssets(db, now).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
   out.alerts = await alertOpenFlags(db).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
+  // 2026-10-09: a paid checkout whose webhook never arrived is confirmed with the provider here too
+  out.payments = await reconcilePendingAdPayments(db, now).catch((e: unknown) => ({ error: String(e).slice(0, 160) }));
   return out;
 }
 

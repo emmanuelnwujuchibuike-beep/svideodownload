@@ -5,6 +5,7 @@ import Link from "next/link";
 import { type ComponentType, useState } from "react";
 
 import { MyDiamondCrownBadge } from "@/components/badges/my-diamond-crown-badge";
+import { StableAvatar } from "@/components/ui/stable-avatar";
 import type { MenuUser } from "@/features/profile/profile-menu-panel";
 
 import { useEntitlements } from "./use-entitlements";
@@ -78,8 +79,7 @@ export function UserMenu() {
   // stranger's face.
   if (loading) {
     return realAvatarUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={realAvatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+      <StableAvatar src={realAvatarUrl} className="h-9 w-9 rounded-full object-cover" />
     ) : (
       <div className="h-9 w-9 animate-pulse rounded-full bg-secondary" />
     );
@@ -104,8 +104,7 @@ export function UserMenu() {
     // use-user's onAuthStateChange), so a genuinely signed-out visitor still
     // gets the CTA immediately.
     if (realAvatarUrl) {
-      // eslint-disable-next-line @next/next/no-img-element
-      return <img src={realAvatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />;
+      return <StableAvatar src={realAvatarUrl} className="h-9 w-9 rounded-full object-cover" />;
     }
     /*
       Owner (2026-08-04): "what I meant by remove the fingerprint button from
@@ -156,8 +155,7 @@ export function UserMenu() {
       >
         <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-secondary">
           {avatar ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatar} alt="" className="h-full w-full object-cover" />
+            <StableAvatar src={avatar} className="h-full w-full object-cover" />
           ) : (
             // A real profile icon, not a letter initial (owner correction,
             // 2026-07-14) — no picture set is a genuinely common, normal

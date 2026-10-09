@@ -37,6 +37,13 @@ export interface QueryOptions<T = unknown> {
    * mount and still updates on explicit `revalidate()`/`mutate()` calls.
    */
   revalidateOnFocus?: boolean;
+  /**
+   * Fetch when the component mounts. Default true. Set false where a remount
+   * is not news — a back-swipe to the inbox — and the cache is kept current
+   * by realtime + explicit `revalidate()`. Only skipped when the cache ALREADY
+   * holds data for the key; a cold key always loads.
+   */
+  revalidateOnMount?: boolean;
 }
 
 /**
@@ -45,7 +52,7 @@ export interface QueryOptions<T = unknown> {
  * focus/reconnect. The fetcher usually calls the SDK (`getApi().…`).
  */
 export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: QueryOptions<T> = {}): QueryResult<T> {
-  const { enabled = true, dedupeMs, initialData, revalidateOnFocus = true } = options;
+  const { enabled = true, dedupeMs, initialData, revalidateOnFocus = true, revalidateOnMount = true } = options;
 
   const entry = useSyncExternalStore(
     (cb) => subscribe(key, cb),
@@ -63,9 +70,10 @@ export function useQuery<T>(key: string, fetcher: () => Promise<T>, options: Que
     if (!enabled) return;
     ensureGlobalRevalidation();
     registerFetcher(key, () => fetcherRef.current(), revalidateOnFocus);
-    void refetch().catch(() => {});
+    const warm = getEntry<T>(key).data !== undefined;
+    if (revalidateOnMount || !warm) void refetch().catch(() => {});
     return () => unregisterFetcher(key, revalidateOnFocus);
-  }, [key, enabled, refetch, revalidateOnFocus]);
+  }, [key, enabled, refetch, revalidateOnFocus, revalidateOnMount]);
 
   return {
     // Fall back to the SSR seed until the cache is populated, so content paints

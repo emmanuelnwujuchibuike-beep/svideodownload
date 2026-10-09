@@ -27,6 +27,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { StableAvatar, warmAvatars } from "@/components/ui/stable-avatar";
 import { mutate, revalidate, useQuery } from "@/features/data";
 import { usePresence } from "@/features/friends/use-presence";
 import { isThreadWarm, warmThread } from "@/features/social/thread-cache";
@@ -203,11 +204,26 @@ export function ConversationList({
   // on an iOS back-swipe / app resume (owner, 2026-07-21: "the message body
   // should only revalidate when a new message comes … never reload during back
   // swipe"). The blanket focus refetch was the visible reload.
+  //
+  // `revalidateOnMount: false` (owner, 2026-10-09: "should only revalidate when
+  // there is a new information … no unnecessary reload or polling"): a
+  // back-swipe remounts this list, and that alone used to fire a fresh inbox
+  // fetch every time. With a warm cache it no longer does — new messages reach
+  // the cache through the realtime tracker, and opening a chat revalidates it
+  // (conversation-room). A cold start, with nothing cached, still fetches.
   const { data } = useQuery<Inbox>(INBOX_KEY, loadInbox, {
     initialData: { conversations: initial, unread: initial.filter((c) => c.unread).length },
     revalidateOnFocus: false,
+    revalidateOnMount: false,
   });
   const conversations = data?.conversations ?? initial;
+
+  // Decode every row's avatar once, below-the-fold rows included, so a row
+  // mounting later (scroll, back-swipe) paints its face in the same frame.
+  const avatarKey = conversations.map((c) => c.avatarUrl ?? c.other?.avatarUrl ?? "").join("|");
+  useEffect(() => {
+    warmAvatars(avatarKey.split("|"));
+  }, [avatarKey]);
   const router = useRouter();
 
   // Owner ask: "all chats should download automatically... to avoid load
@@ -662,10 +678,8 @@ export function ConversationList({
                             trick stories-row.tsx already uses. */}
                         <span className="bg-brand block rounded-full p-[2.5px]">
                           {c.avatarUrl || (!isGroup && c.other!.avatarUrl) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={(isGroup ? c.avatarUrl : c.other!.avatarUrl) ?? undefined}
-                              alt=""
+                            <StableAvatar
+                              src={(isGroup ? c.avatarUrl : (c.other!.avatarUrl ?? c.avatarUrl)) ?? ""}
                               className="h-14 w-14 rounded-full object-cover ring-2 ring-card"
                             />
                           ) : (
@@ -902,8 +916,7 @@ function ConversationRow({
           <span className="bg-brand block rounded-full p-[2.5px]">
             {isGroup ? (
               c.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
+                <StableAvatar src={c.avatarUrl} className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
               ) : (
                 // The inbox list doesn't fetch per-member avatars (would add a
                 // query per group just for this) — a group without a custom
@@ -914,8 +927,7 @@ function ConversationRow({
                 </span>
               )
             ) : c.other!.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.other!.avatarUrl} alt="" className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
+              <StableAvatar src={c.other!.avatarUrl} className="h-[52px] w-[52px] rounded-full object-cover ring-2 ring-card" />
             ) : (
               <span className="bg-brand flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-2 ring-card">
                 {name.charAt(0).toUpperCase()}

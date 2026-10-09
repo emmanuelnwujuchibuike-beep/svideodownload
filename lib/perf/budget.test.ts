@@ -520,8 +520,20 @@ function landingChunks(): string[] {
  * campaign-length panel, the rotating ad stack, the chat streak burst). /home's
  * own code did not grow. Signed-in route, never a cold visit. ENTRY_CEILING
  * untouched (landing measured 215,362 of 218 kB).
+ *
+ * ── 2026-10-09 (history grid ads): → 373 kB (/(app)/home measured 381,072) ───
+ *
+ * +1,111 B on /home, measured with `routeWeights()` directly. No single chunk
+ * jumped; the bytes are spread across the paid History-grid tile (one more
+ * slot-registry row, the `history_grid` placement and `history` page codes,
+ * the grid wiring), `StableAvatar` in the header (owner: avatars must "never
+ * reload on backswipe"), `useQuery`'s `revalidateOnMount`, and the webpack
+ * runtime's chunk map gaining the new lazy chunks. The tile's creative code
+ * (SelfAdBanner) and the paid engine stay behind dynamic imports. Signed-in
+ * route, never a cold visit. ENTRY_CEILING untouched (landing measured
+ * 216,534 of 218 kB).
  */
-const GLOBAL_CEILING = 372 * 1024;
+const GLOBAL_CEILING = 373 * 1024;
 
 /**
  * First-visit entry routes, held tighter.

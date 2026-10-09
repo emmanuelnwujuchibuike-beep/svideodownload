@@ -71,6 +71,7 @@ export const COMPONENTS: ComponentDef[] = [
   /* ── Surfaces ── */
   { id: "card", name: "Card", category: "surface", source: "", status: "convention", a11y: "Semantic sectioning; heading hierarchy preserved.", motion: "Optional compositor-only hover lift.", note: "rounded-3xl border bg-card shadow-soft/-card pattern on the tokens." },
   { id: "usage-dashboard", name: "Usage dashboard", category: "surface", source: "features/downloads/usage-dashboard.tsx", status: "live", a11y: "Labelled section; meter values in text, never bar-only.", motion: "Width transitions on the meter; none under reduced-motion." },
+  { id: "stable-avatar", name: "Stable avatar", category: "surface", source: "components/ui/stable-avatar.tsx", status: "live", a11y: "Decorative by default (alt=\"\"); the control around it carries the name.", motion: "None — a seen avatar paints in the frame it mounts (sync decode), never pops in." },
   { id: "history-panel", name: "Download history panel", category: "surface", source: "features/history/history-panel.tsx", status: "live", a11y: "Search input labelled; icon buttons carry aria-labels.", motion: "None beyond hover." },
 
   /* ── Overlays ── */
